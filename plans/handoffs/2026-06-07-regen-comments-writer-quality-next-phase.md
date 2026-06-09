@@ -823,6 +823,26 @@ as blank gaps) -- could route them to preserve. `[[genre-orthogonal-to-voice-tes
   OPEN/MINOR: method + --all not yet exercised via the SKILL's own in-session orchestrator (the underlying
   scripts are validated); a preserved section-divider lands near the top, not at its original line.
 
+### 2026-06-09 (cont. 3) — reattach placement fix + --all validated end-to-end (`0ce93fce`)
+Closes both cont. 2 OPEN/MINOR items.
+- **Reattach placement (correctness fix):** reattach.py dumped EVERY inline preserve item after the module
+  docstring -- functionally WRONG for a `# noqa` / `# type: ignore` (must ride its own code line) and it
+  relocated a `# -- section --` divider away from its tests. Since the finished file's executable code is
+  byte-identical to the original, each inline item now carries `anchor_code` (the exact code line it belongs
+  to) + `attach` (trailing|above): reattach restores a trailing directive VERBATIM on its line, or inserts a
+  standalone comment above it; no usable/unique anchor -> the old doc-relative spot (safe fallback, never
+  worse). The comment lens (COMMENT_OUT schema + prompt) now emits anchor_code + attach. VALIDATED: the lens
+  captured BOTH `# noqa` lines in config/tests/test_config.py with the right anchor_code + attach=trailing;
+  reattach restores a trailing noqa verbatim, a divider above its def, header at top, all CODE IDENTICAL.
+  (Contract gotcha found + fixed: the lens stores `line` as the FULL original line, so trailing = restore the
+  verbatim line, NOT append.)
+- **--all VALIDATED end-to-end** (bounded, on the smallest complete library `compat`): phase0 library facts ->
+  per-lane regen_batch phase1 (`--kind` + `--lib`, fresh mkdtemp room, per-lane manifest read before the next
+  overwrites) -> ONE parallel batch phase2 over all four rooms (each used its OWN genre from phase1.json) ->
+  verify_code each. ALL FOUR lanes (code/test/functional_test/example) PASS, 4 distinct rooms, no collisions.
+  Driver: /tmp/regen-cr/all_validate.py. The user need NOT run --all cold.
+  `[[--all-is-phase0-plus-per-lane-batch-then-parallel-phase2; reattach-anchors-inline-items-to-their-code-line]]`
+
 ### STATE (current)
 Committed: ... -> **22643cfc** (cut_cruft dropped) -> **c96fbfcf** (plain-English register + anti-jargon +
 drop-"tight") -> **f8804a6c** (verify_code helper + de-named voices + selector floor + paragraph docstrings +
@@ -835,7 +855,9 @@ menu + picker sized to fact count + invariant-2 hard limits) -> **c03b5497** (ro
 nudge; writers_wf.js + SKILL.md Step 4) -> **cfc4e82b** (GENRE dimension test/functional_test/example +
 targeting model + atomic mkdtemp rooms; genre.py + rooms.py added) -> **7fb78760** (method scope regen_method.py + genre ledger.json bare-array
 fix + reattach #-guarantee fix + TESTPLAN.md) -> a SKILL.md doc-ref follow-up (method-scope refs ->
-regen_method, reference list + TESTPLAN entry). Protected and NEVER committed (pre-existing working-tree mods): CLAUDE.md, .idea/chumicro.iml,
+regen_method, reference list + TESTPLAN entry) -> **eff7e4e0** (same) -> **0ce93fce** (reattach anchors
+inline preserve items to their code line via anchor_code+attach; comment lens emits them; --all validated
+end-to-end on compat). Protected and NEVER committed (pre-existing working-tree mods): CLAUDE.md, .idea/chumicro.iml,
 heartbeat.py. Harness: `.scratch/regen-comments/writer-quality/round{6..31}.py + *_run.sh + render*.py +
 report*.html + rooms{6..31}`; validated rooms /tmp/regen-cr/{qr-r28,qr-r29,qr-fixB,qr-ht}; key report
 report_r31_lean_vs_bloated.html. The writer-quality arc (tasks #6/#7/#8, summarizer-beats-writer) is CONVERGED
