@@ -20,7 +20,21 @@ Rebuild docstrings and inline comments for Python file(s) **from the code's beha
 - **Passes:** **4** writer passes, then a best-of-4 selection (the most readable whole pass wins).
 
 ### The voice pick menu (when no `--voice`)
-The FIRST human gate — it precedes everything else. Print an **in-session numbered text menu** built from `voices.json`, NOT an `AskUserQuestion`: the registry holds more voices than the tool's 4-option cap allows, and cramming it into four options is what made the old menu error out mid-run. List **every** voice in registry order with `plain` first, marked **(default, voiceless — reads cleanest)**; for each, show its one-line persona from `voices` plus the **first sentence** of its cached `previews` sample as a taste (offer to print any voice's full sample on request). Close with *"type a number (or a voice key) to pick — most runs take 1 (plain)"*, then stop and wait for the user's reply. Map the reply to the voice key and proceed. `--voice <key>` skips this menu entirely.
+The FIRST human gate — it precedes everything else. Print an **in-session numbered text menu** built from `voices.json`, NOT an `AskUserQuestion`: the registry holds more voices than the tool's 4-option cap allows, and cramming it into four options is what made the old menu error out mid-run. List **every** voice in registry order with `plain` first, marked **(default, voiceless — reads cleanest)**; for each, show its one-line persona from `voices` plus the **first sentence** of its cached `previews` sample as a taste (offer to print any voice's full sample on request). **Render it spaced so the options don't run together — a blank line between each numbered entry, the persona on the number's line, the preview taste on its own indented line beneath, and a blank line before the closing prompt:**
+
+```
+  1. plain   (default, voiceless — reads cleanest)
+       e.g. <first sentence of plain's cached preview>
+
+  2. cantrill   — a direct, opinionated systems-engineering voice that names what is fragile and why
+       e.g. <first sentence of cantrill's cached preview>
+
+  … (one spaced block per voice) …
+
+type a number (or a voice key) to pick — most runs take 1 (plain).
+```
+
+Then stop and wait for the user's reply. Map the reply to the voice key and proceed. `--voice <key>` skips this menu entirely.
 
 ### Targeting, genre, and scope
 The orchestrator resolves what the user said — prose, a path, or a flag — into a **target**, a **genre**, and a **scope**, then confirms all three at the gate (with the voice pick) before any phase runs. The user never types `--lib`: name the library, file, method, or folder and the orchestrator finds it.
