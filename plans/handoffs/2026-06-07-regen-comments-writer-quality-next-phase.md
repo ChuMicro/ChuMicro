@@ -741,7 +741,7 @@ drop-"tight") -> **f8804a6c** (verify_code helper + de-named voices + selector f
 plain ledger; round27/28 folded) -> **25030a55** (exclusive docstring/inline division + ledger general
 strengthen + regenerated previews) -> **72ca1fa0** (LEAN 238-word writer +
 ledger citation fix + flag_legibility.py + render_report legibility section + regen_phase2 flagger call +
-SKILL.md) -> **[round32b voice-forward commit, pending]** (writers_wf.js: voice replaces register + runs free +
+SKILL.md) -> **a9b1212b** (writers_wf.js: voice replaces register + runs free +
 richest-not-flattest selector; SKILL.md Step 4 synced + de-duped). Protected and NEVER committed (pre-existing working-tree mods): CLAUDE.md, .idea/chumicro.iml,
 heartbeat.py. Harness: `.scratch/regen-comments/writer-quality/round{6..31}.py + *_run.sh + render*.py +
 report*.html + rooms{6..31}`; validated rooms /tmp/regen-cr/{qr-r28,qr-r29,qr-fixB,qr-ht}; key report
