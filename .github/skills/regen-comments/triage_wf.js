@@ -102,8 +102,8 @@ const COMMENT_OUT = {
       properties: { fact: { type: 'string' }, why_non_derivable: { type: 'string' }, source_site: { type: 'string' }, confidence: { type: 'string', enum: ['high', 'med', 'low'] } },
       required: ['fact', 'why_non_derivable', 'source_site', 'confidence'] } },
     preserve: { type: 'array', items: { type: 'object', additionalProperties: false,
-      properties: { line: { type: 'string' }, placement: { type: 'string', enum: ['header-top', 'inline'] }, orig_site: { type: 'string' }, reason: { type: 'string' } },
-      required: ['line', 'placement', 'orig_site', 'reason'] } },
+      properties: { line: { type: 'string' }, placement: { type: 'string', enum: ['header-top', 'inline'] }, anchor_code: { type: 'string' }, attach: { type: 'string', enum: ['trailing', 'above', 'none'] }, orig_site: { type: 'string' }, reason: { type: 'string' } },
+      required: ['line', 'placement', 'anchor_code', 'attach', 'orig_site', 'reason'] } },
     discard: { type: 'array', items: { type: 'object', additionalProperties: false,
       properties: { gist: { type: 'string' }, category: { type: 'string', enum: ['stale-archaeology', 'redundant-with-code', 'wrong-contradicts-code', 'decorative', 'banter', 'other'] } },
       required: ['gist', 'category'] } },
@@ -129,7 +129,12 @@ const commentPrompt =
   + 'NOT discard it as banter. For each set placement = "header-top" (copyright/author/license) or '
   + '"inline" (a directive/note/TODO tied to a code location) and orig_site. Store the line VERBATIM '
   + 'INCLUDING its leading # comment marker, exactly as written -- never strip the # down to the inner '
-  + 'text, or it reattaches as bare code and breaks the file.\n'
+  + 'text, or it reattaches as bare code and breaks the file. For an INLINE item ALSO set anchor_code + '
+  + 'attach so it reattaches at the RIGHT line (the finished file has the SAME executable code): anchor_code '
+  + '= the exact source text of the code line it belongs to, and attach = "trailing" when the directive '
+  + 'rides the end of a code line (a `# noqa` on `x = f()  # noqa` -> anchor_code `x = f()`, attach '
+  + '"trailing") or "above" when it is a standalone comment on its own line (anchor_code = the FIRST code '
+  + 'line just below it, attach "above"). For a HEADER-TOP item set anchor_code to "" and attach to "none".\n'
   + '(3) DISCARD -- everything else w/ a category: stale-archaeology, redundant-with-code, '
   + 'wrong-contradicts-code, decorative, banter, other.\n'
   + 'Be skeptical. Do not promote a redundant or wrong comment into the ledger.\n\n'
