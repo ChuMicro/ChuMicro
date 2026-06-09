@@ -689,15 +689,51 @@ A cold user run surfaced four things; addressed in order:
   "summarizer-as-spine" prototype was offered and declined -- seeding risks pasting a trap-blind sentence + narrows
   voice). The summarizer reads clean only because it omits the ledger; it is the BAR, not the documenter.
 
+### 2026-06-08 (cont.) — ROOT CAUSE found, citation fix, legibility flagger, LEAN consolidation (772 -> 238)
+A cold user run kept producing one convoluted sentence on the Component dataclass: "Whether `extension_api` is
+present rather than its version value is what routes the comparison...". User pushed hard for the ROOT CAUSE,
+rejecting "stochastic" hand-waving.
+- **ROOT CAUSE (proven, not stochastic): the writer MIRRORS the ledger, phrasing AND placement.** The ledger
+  cited that routing fact at `(pick:39-45, Component:22)` -- Component:22 is just where `extension_api` is
+  DECLARED. The writer honored the citation and put a BEHAVIORAL fact (routing) on a data record, which has no
+  behavior, so the only way to attach a verb to that noun is the contortion. SAME fact placed on `pick` (the
+  method that routes) reads clean ("When exactly one has an extension, the choice turns on..."). The summarizer
+  never hits this -- it describes each symbol's OWN purpose, never inherits a cited fact. `[[writer-mirrors-ledger
+  -misplacement-forces-convolution]]`.
+- **FIX 1 (source): ledger citation fix (triage_wf.js).** Cite a behavioral fact at the function/method that
+  performs it, NOT at a data declaration it merely reads. Validated end-to-end (Test B): a fresh ledger has ZERO
+  Component cites, and the shipped Component came out clean with 0 legibility flags + CODE IDENTICAL. This is the
+  real cure (writer place-by-behavior alone was too weak -- 3/4 garbled on the old bad ledger).
+- **FIX 2 (net): flag_legibility.py.** A clean-room pass that FLAGS (never rewrites) any sentence that reads
+  awkwardly, into legibility.json, surfaced atop report.html for the human to fix in the refine loop. Conservative
+  (empty list = normal). Caught the exact Component garble + a second one cold. Runs at the tail of phase 2;
+  render_report surfaces it; SKILL.md Step 6b + runbook wired. `[[legibility-flagger-flag-only-net-for-the-rare-roll]]`.
+- **THE BIG ONE -- LEAN consolidation (round31).** User: the writer prompt had bloated to 772 words / 5.6x the
+  summarizer, and we KNOW more prompt degrades comments (`[[summarizer-key]]`); my fixes kept ADDING. Audited both
+  prompts verbatim, cut the writer to **238 words** built on the summarizer's own framing + BEHAVIOR-not-mechanism
+  spine + only the 3 round26-proven extras (anti-jargon, don't-restate, no-back-refs), near-caps-free calm tone
+  (caps shout -> stiff output). CUT: flowing-paragraph explainer, class-rollup, name-oversells-one-clause,
+  anti-padding, say-it-aloud examples, intro-terms, the long place-by-behavior (the citation fix handles the
+  source). Head-to-head on the SAME ledger (round31, n=4 each): LEAN reads BETTER (QualityRanking stays high-level
+  like the summarizer; bloated walls up + reproduced the garble), and the cuts were SAFE -- 0/4 enum re-listing,
+  0/4 back-refs, 0/4 Component garble (only "pairwise" leaked 2/4, the pre-existing ledger stickiness). User: "near
+  perfect in legibility... reads great". CORRECTNESS audit: ALL ~11 load-bearing traps present + correct, split
+  cleanly (behavior/contract in docstring, line-mechanics inline). `[[lean-beats-bloated-ship-the-238-word-writer]]`.
+- Style angles to TEST NEXT (user, post-ship): no sentence starts with the/this/that/thats; be warm; reach for a
+  synonym when repeating a word; plain English but not dull.
+
 ### STATE (current)
 Committed: ... -> **22643cfc** (cut_cruft dropped) -> **c96fbfcf** (plain-English register + anti-jargon +
 drop-"tight") -> **f8804a6c** (verify_code helper + de-named voices + selector floor + paragraph docstrings +
 plain ledger; round27/28 folded) -> **25030a55** (exclusive docstring/inline division + ledger general
-strengthen + regenerated previews). Protected and NEVER committed (pre-existing working-tree mods): CLAUDE.md,
-.idea/chumicro.iml, heartbeat.py. Harness: `.scratch/regen-comments/writer-quality/round{6..29}.py + r28_run.sh +
-r29_run.sh + render*.py + report*.html + rooms{6..29}`; validated rooms /tmp/regen-cr/qr-r28, qr-r29.
-The writer-quality arc (tasks #6/#7/#8, summarizer-beats-writer) is CONVERGED and shipped: writer reads like the
-summarizer at the contract level, traps as inline comments, class rolls up, selector rejects garbled traps,
-verify_code guards code-identity. Phase 2 = 4 parallel writer passes + selector + mechanical copy/polish/reattach.
-OPEN/MINOR: "pairwise" sticky in the ledger (never leaks); the option-1 CLASS rollup is the largest body (user
-can dial back to a terse class later if desired); previews regenerated for all 10 de-named voices.
+strengthen + regenerated previews) -> **[lean-ship commit, pending confirm run]** (LEAN 238-word writer +
+ledger citation fix + flag_legibility.py + render_report legibility section + regen_phase2 flagger call +
+SKILL.md). Protected and NEVER committed (pre-existing working-tree mods): CLAUDE.md, .idea/chumicro.iml,
+heartbeat.py. Harness: `.scratch/regen-comments/writer-quality/round{6..31}.py + *_run.sh + render*.py +
+report*.html + rooms{6..31}`; validated rooms /tmp/regen-cr/{qr-r28,qr-r29,qr-fixB,qr-ht}; key report
+report_r31_lean_vs_bloated.html. The writer-quality arc (tasks #6/#7/#8, summarizer-beats-writer) is CONVERGED
+and shipped: the writer is now a LEAN 238-word prompt that reads as well as the summarizer with all traps intact;
+the ledger citation fix keeps behavioral facts off data records; flag_legibility nets the rare convoluted roll;
+verify_code guards code-identity. Phase 2 = 4 parallel writer passes + selector + copy/polish/reattach + flagger.
+NEXT (user, after ship): a fresh experiment round on 4 style angles (no the/this/that opener; warmth; synonym
+variety; plain-but-not-dull). OPEN/MINOR: "pairwise" sticky in the ledger (never leaks to the docstring).

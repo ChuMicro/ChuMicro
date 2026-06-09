@@ -138,6 +138,22 @@ def main():
                 + (f" of {n_passes}" if n_passes else "")
                 + f"</b> — {_esc(why)}{concern_html}</div>") if winner is not None else ""
 
+    # Legibility flags (flag_legibility.py): sentences that read awkwardly, for the human to fix in the
+    # refine loop. Surfaced prominently because nothing else catches a rare convoluted roll.
+    legib = _load(os.path.join(rundir, "legibility.json"), {})
+    flags = legib.get("flags", []) if isinstance(legib, dict) else []
+    if flags:
+        items = "".join(
+            f"<li><code>{_esc(f.get('symbol'))}</code> <span class='meta'>({_esc(f.get('why'))})</span>"
+            f"<div class='flagsent'>{_esc(f.get('sentence'))}</div></li>" for f in flags)
+        legib_html = (f"<div class='card legib'><b>⚠ {len(flags)} sentence(s) flagged for legibility</b> — "
+                      f"review these in the refine loop. They read awkwardly even when the facts are right."
+                      f"<ul class='flags'>{items}</ul></div>")
+    elif os.path.exists(os.path.join(rundir, "legibility.json")):
+        legib_html = "<div class='card legib ok'>✓ legibility: no sentences flagged.</div>"
+    else:
+        legib_html = ""
+
     doc = f"""<!doctype html><html><head><meta charset="utf-8">
 <title>regen-comments report — {_esc(os.path.basename(original))}</title>
 <style>
@@ -166,6 +182,10 @@ def main():
  .facts{{margin:8px 0;padding-left:18px}} .facts .meta{{color:#8a93a0}}
  .why{{margin-top:6px;color:#33405a}}
  .sel{{color:#33405a}} .concern{{margin-top:8px;color:#9a4a10;font-weight:600}}
+ .legib{{border-left:4px solid #e0a020;background:#fffaf0;color:#7a3a00}}
+ .legib.ok{{border-left-color:#1a7a3c;background:#f3fbf5;color:#1a7a3c}}
+ .legib .flags{{margin:8px 0 0;padding-left:18px}} .legib .flagsent{{font-style:italic;margin:2px 0 8px}}
+ .legib .meta{{color:#8a93a0;font-style:normal}}
 </style></head><body><div class="wrap">
  <h1>regen-comments — <code>{_esc(os.path.basename(original))}</code></h1>
  <div class="sub">voice: <b>{_esc(voice)}</b> · <span class="badge {badge_cls}">{_esc(badge)}</span>{' · library-aware' if has_lib else ''}</div>
@@ -177,6 +197,7 @@ def main():
  </div>
 
  {sel_html}
+ {legib_html}
 
  <details class="card ledger"><summary><b>Validated ledger</b> — {len(ledger)} facts (click to expand)</summary>
    <table><tr><th>fact (telegraphic stub)</th><th>sites</th><th>lenses</th><th>conf</th></tr>{ledger_rows}</table>

@@ -75,6 +75,10 @@ def main():
     else:
         shutil.copy(merged, final)
 
+    # legibility watcher: flag (never rewrite) any sentence that reads awkwardly, so the rare convoluted roll
+    # surfaces in the report for the human to fix in the refine loop instead of shipping silently
+    subprocess.run([sys.executable, os.path.join(SKILL, "flag_legibility.py"), rundir, voice], check=False)
+
     print("=== PHASE 2 COMPLETE ===")
     print(f"  finished file: {final}")
     print("  Present it for the human's final review. Do NOT auto-commit / auto-apply.")

@@ -20,19 +20,16 @@ const VOICE_PARA = "__VOICE_PARA__"
 
 const GEN_SCHEMA = { type: 'object', additionalProperties: false, properties: { path: { type: 'string' } }, required: ['path'] }
 
-// The writer (converged rounds 7-27): the SUMMARIZER's own framing -- "explain what the file does in the real
-// world; each symbol's purpose + non-obvious behavior" -- which introduces-not-catalogs on its own, so the
-// explicit cold-reader block was DROPPED as redundant (round24 confirmed no cataloging without it). Reads code
-// + ledger TOGETHER in one pass (no two-step). Round27 collapsed the old summary+body split that the summarizer
-// never had: the DOCSTRING is a short plain-prose PARAGRAPH like the summarizer writes -- a substantive lead
-// sentence (what it does + the factors it does it by) plus an optional caller-contract sentence, Args/Returns
-// kept simple. Round29 made the docstring/inline DIVISION exclusive: the docstring is the caller-eye view
-// (purpose + contract), line-level implementation mechanics (an inclusive boundary, a sign, a stand-in
-// substitution) ride ONLY as inline `#` comments ABOVE their line, and each fact lives in exactly ONE place --
-// fixing the double-stating where the body restated what the inline comments already said. Comments only the
-// non-obvious (never restates self-evident code like enum members), stands alone (no pointers to other
-// symbols). Voice is OPTIONAL: VOICE_PARA empty -> voiceless (the default, reads cleanest); non-empty -> a
-// persona layered on, yielding to clarity.
+// The writer (converged rounds 7-31): the SUMMARIZER's own framing -- "explain in plain English what the code
+// does; each symbol's purpose + non-obvious behavior". Round31 CUT the prompt from 772 words back to ~230: a
+// head-to-head on the SAME ledger showed the lean version reads BETTER ([[summarizer-key]] -- more prompt
+// degrades the comments, so the writer is kept near the summarizer's size and calm, near-caps-free tone).
+// Keeps the BEHAVIOR-not-mechanism spine (docstring = what it does + the caller's contract; a line-level
+// mechanic -- an inclusive boundary, a sign, a stand-in substitution -- rides ONLY as an inline `#` comment)
+// plus the three round26-proven extras (anti-jargon, don't-restate-self-evident, no back-refs). Two siblings
+// carry what the lean prompt drops: the triage_wf.js citation fix keeps a behavioral fact off a data record at
+// the source, and flag_legibility.py flags the rare convoluted roll for the human. Voice is OPTIONAL:
+// VOICE_PARA empty -> voiceless (the default, reads cleanest); non-empty -> a persona layered on.
 function genPrompt(n) {
   const voiceBlock = VOICE_PARA.trim()
     ? (VOICE_PARA + ' Let this shape your word choice and rhythm, but the first-time reader\'s understanding '
@@ -40,44 +37,21 @@ function genPrompt(n) {
     : ''
   return voiceBlock
     + 'Read the code at ' + FILE + ' and the nuance ledger at ' + LEDGER + ' together. The ledger holds the '
-    + 'non-obvious behavior a plain reading of the code misses, read it as part of understanding the '
-    + 'code.\n\n'
-    + 'Then explain what the code does, in plain English, the way you would explain it to a colleague. For '
-    + 'the module, what the file does in the real world. For each class, function, and method, write the '
-    + 'docstring as a short paragraph of plain prose: lead with ONE sentence saying what the thing does and, '
-    + 'where it fits naturally, the main factors or rules it does it by, then add a sentence only for a '
-    + 'non-obvious behavior a CALLER must know to use it right, like what the result means or a contract to '
-    + 'honor, NOT for how a particular line computes. The docstring is the caller-eye view, purpose and '
-    + 'contract, so line-level implementation mechanics stay OUT of it and ride as inline `#` comments '
-    + 'instead (see below). For a CLASS, roll the work of its methods up into that lead the way a good '
-    + 'summary does, saying what it decides and the factors it decides by, rather than leading with one '
-    + 'narrow local fact. If nothing non-obvious remains for a caller, the lead sentence is the whole '
-    + 'docstring. When a real fact is that the code does NOT do '
-    + 'something its name suggests, lead with what it positively does, then give the not-this as ONE plain '
-    + 'clause, never a pile of negations. Do not restate the lead sentence in other words to fill space, a '
-    + 'single accurate sentence beats a thin one plus filler. Use plain, ordinary words and lead with a '
-    + 'simple description of what the '
-    + 'thing does, not a compressed technical label: prefer "a cache that remembers what it already computed" '
-    + 'over "a memoization layer", and never reach for a denser or more technical word to sound precise or to '
-    + 'save space. Comment only what a reader cannot already see in the code: never restate self-evident '
-    + 'names or values, such as re-listing an enum\'s members when their names already say what they are. For '
-    + 'something like that, add only the non-obvious part, or nothing if there is none.\n\n'
-    + 'Put a LINE-LEVEL gotcha as a short `#` comment on its OWN LINE ABOVE the line it concerns, not '
-    + 'trailing it. A subtle implementation detail, like a boundary that is inclusive, a value compared one '
-    + 'way and not another, or a stand-in substitution, belongs as a comment right at that code line where a '
-    + 'reader meets it. Comment only the genuinely non-obvious lines, never narrate ordinary code. State '
-    + 'each fact in exactly ONE place: a caller-facing contract in the docstring, a line-level mechanic as '
-    + 'an inline comment, the same fact never in both.\n\n'
+    + 'non-obvious behavior a plain reading of the code misses.\n\n'
+    + 'Explain in plain English what the code does. For the module, what the file does in the real world. For '
+    + 'each class, function, and method, its purpose and any non-obvious behavior: what it does and the '
+    + 'contract a caller relies on, not how a particular line computes. Use plain, ordinary words, not a '
+    + 'denser technical label (say "a cache that remembers what it already computed", not "a memoization '
+    + 'layer"). Do not restate what the code already shows, like an enum\'s members when their names already '
+    + 'say it, do not point the reader to other symbols by name, and do not invent.\n\n'
+    + 'A line-level mechanic, such as an inclusive boundary, a value compared one way and not another, or a '
+    + 'stand-in substitution, rides as a short `#` comment on its own line above that line, not in the '
+    + 'docstring. State each fact once.\n\n'
     + 'If a library ledger exists at ' + RUNDIR + '/LIBRARY_FACTS.md, use it for cross-file context and '
     + 'shared vocabulary.\n\n'
-    + 'Each comment stands on its own, so say what a symbol does in plain terms rather than pointing the '
-    + 'reader to other symbols by name or to its caller. Do not invent, state only what the code and the '
-    + 'ledger support.\n\n'
-    + 'Give the docstring Args and Returns (or Raises) for the functions and methods that have them, each a '
-    + 'short plain description, since the paragraph already carries the explanation and these only name what '
-    + 'each argument and the return value are. '
-    + 'No em-dashes or semicolons or the words `canonical` or `shape`. Wrap code expressions in double '
-    + 'backticks and keep lines to 100 characters. Add docstrings and comments only.\n\n'
+    + 'Give Args and Returns (or Raises) for the functions and methods that have them, each a short plain '
+    + 'description. No em-dashes or semicolons or the words `canonical` or `shape`. Wrap code expressions in '
+    + 'double backticks and keep lines to 100 characters. Add docstrings and comments only.\n\n'
     + 'Write the marked-up file to ' + RUNDIR + '/runs/run-' + n + '.py. After writing, reply DONE.'
 }
 
