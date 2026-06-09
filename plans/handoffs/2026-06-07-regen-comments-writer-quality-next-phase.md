@@ -726,7 +726,7 @@ rejecting "stochastic" hand-waving.
 Committed: ... -> **22643cfc** (cut_cruft dropped) -> **c96fbfcf** (plain-English register + anti-jargon +
 drop-"tight") -> **f8804a6c** (verify_code helper + de-named voices + selector floor + paragraph docstrings +
 plain ledger; round27/28 folded) -> **25030a55** (exclusive docstring/inline division + ledger general
-strengthen + regenerated previews) -> **[lean-ship commit, pending confirm run]** (LEAN 238-word writer +
+strengthen + regenerated previews) -> **72ca1fa0** (LEAN 238-word writer +
 ledger citation fix + flag_legibility.py + render_report legibility section + regen_phase2 flagger call +
 SKILL.md). Protected and NEVER committed (pre-existing working-tree mods): CLAUDE.md, .idea/chumicro.iml,
 heartbeat.py. Harness: `.scratch/regen-comments/writer-quality/round{6..31}.py + *_run.sh + render*.py +
