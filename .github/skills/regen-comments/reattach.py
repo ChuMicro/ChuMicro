@@ -16,9 +16,23 @@ import json
 import sys
 
 
+def _as_comment(line):
+    """Guarantee a preserved line reattaches as a valid comment.
+
+    Preserve items are always comments (copyright, license, TODO, attributed notes). When the comment lens
+    slips and stores a line WITHOUT its leading ``#`` (it stripped a ``# -- section --`` divider down to its
+    inner text), inserting it verbatim drops bare text into the file and breaks compilation. Prepend ``# ``
+    when the marker is missing; drop a blank line entirely.
+    """
+    s = line.strip()
+    if not s:
+        return None
+    return line if s.startswith("#") else "# " + line
+
+
 def reattach(written_src, preserve):
-    header = [p["line"] for p in preserve if p.get("placement") == "header-top"]
-    inline = [p["line"] for p in preserve if p.get("placement") == "inline"]
+    header = [c for c in (_as_comment(p["line"]) for p in preserve if p.get("placement") == "header-top") if c]
+    inline = [c for c in (_as_comment(p["line"]) for p in preserve if p.get("placement") == "inline") if c]
     lines = written_src.splitlines()
     doc_end = 0
     try:

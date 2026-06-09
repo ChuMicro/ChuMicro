@@ -94,6 +94,10 @@ def main():
         return json.load(open(fp)) if os.path.exists(fp) else default
 
     ledger = _load("ledger.json", [])
+    # tolerate either shape: the writers emit a bare array of facts, but unwrap a stray {facts:[...]} object
+    # so a shape slip can never crash the questionable-facts scan below
+    if isinstance(ledger, dict):
+        ledger = ledger.get("facts", [])
     comments = _load(os.path.join("findings", "comments.json"), {})
     val = _load("validation.json", {})
     # preserve lane: the mechanical header (copyright/license/author) is ALWAYS captured, regardless of
