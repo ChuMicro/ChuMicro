@@ -6,8 +6,9 @@ Runs the writer workflow (the chosen voice, 4 passes + a best-of-4 voice selecto
 `claude -p` from the run room, copies the selected pass to merged.py, then mechanically reattaches the
 preserve lane. Produces the finished file.
 
-Usage: regen_phase2.py <rundir> <voice_key>
+Usage: regen_phase2.py <rundir> <voice_key> [--kind <genre>]
 Precondition: <rundir>/ledger_final.md exists (assembled by the orchestrator after the picker).
+The genre is read from <rundir>/phase1.json by default; --kind overrides it.
 """
 import json
 import os
@@ -18,6 +19,7 @@ import sys
 SKILL = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, SKILL)
 from preflight import require_claude  # noqa: E402
+from genre import GENRES  # noqa: E402
 
 
 def claude_p_workflow(rundir, wf_name):
@@ -33,8 +35,16 @@ def claude_p_workflow(rundir, wf_name):
 
 def main():
     require_claude()
-    rundir = os.path.abspath(sys.argv[1])
-    voice = sys.argv[2]
+    args = sys.argv[1:]
+    kind = args[args.index("--kind") + 1] if "--kind" in args else None
+    pos = [a for a in args if not a.startswith("--") and a != kind]
+    rundir = os.path.abspath(pos[0])
+    voice = pos[1]
+    # genre selects the writer shape; phase 1 recorded it in phase1.json, --kind overrides
+    p1 = os.path.join(rundir, "phase1.json")
+    genre = kind or (json.load(open(p1)).get("genre") if os.path.exists(p1) else None) or "code"
+    if genre not in GENRES:
+        sys.exit(f"unknown --kind '{genre}'. Known: {', '.join(GENRES)}.")
     if not os.path.exists(os.path.join(rundir, "ledger_final.md")):
         sys.exit("ledger_final.md missing — run the picker + assemble it before phase 2.")
     voices = json.load(open(os.path.join(SKILL, "voices.json")))["voices"]
@@ -44,7 +54,8 @@ def main():
 
     # writer workflow: chosen voice, 4 passes + best-of-N selector (the selector only emits a winner number)
     src = open(os.path.join(SKILL, "writers_wf.js")).read()
-    src = src.replace("__RUNDIR__", rundir).replace("__VOICE_PARA__", voices[voice])
+    src = (src.replace("__RUNDIR__", rundir).replace("__VOICE_PARA__", voices[voice])
+              .replace("__GENRE__", genre))
     open(os.path.join(rundir, "writers_wf.js"), "w").write(src)
     claude_p_workflow(rundir, "writers_wf.js")
 
@@ -80,7 +91,7 @@ def main():
     subprocess.run([sys.executable, os.path.join(SKILL, "flag_legibility.py"), rundir, voice], check=False)
 
     print("=== PHASE 2 COMPLETE ===")
-    print(f"  finished file: {final}")
+    print(f"  finished file: {final}   genre: {genre}")
     print("  Present it for the human's final review. Do NOT auto-commit / auto-apply.")
 
 

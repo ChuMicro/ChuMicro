@@ -17,6 +17,10 @@ const FILE = RUNDIR + '/stripped.py'
 const LEDGER = RUNDIR + '/ledger_final.md'
 const PASSES = 4
 const VOICE_PARA = "__VOICE_PARA__"
+// GENRE selects the writer shape: 'code' (default) = behavior + caller contract; 'test'/'functional_test' =
+// one-sentence claim docstrings (no Args/Returns); 'example' = dense near-line annotation. Voice still
+// applies as a register, but the genre shape leads.
+const GENRE = "__GENRE__"
 
 const GEN_SCHEMA = { type: 'object', additionalProperties: false, properties: { path: { type: 'string' } }, required: ['path'] }
 
@@ -36,7 +40,69 @@ const GEN_SCHEMA = { type: 'object', additionalProperties: false, properties: { 
 // docstring on the baseline and stays off voiced runs so it cannot fight the voice. The SELECTOR picks the
 // RICHEST, best-worded pass, not the flattest (flat is wrong);
 // legibility is its only floor, correctness its secondary one -- a garbled or backwards pass still loses.
+// GENRE writer (test / functional_test / example). The code-genre writer below is unchanged; these genres
+// have a different shape entirely -- a test docstring names the claim (no Args/Returns, no body), an example
+// is annotated densely line by line -- so genrePrompt is self-contained and genPrompt returns it early.
+// Voice still applies as a register (voiceLead), but the genre shape leads.
+function genrePrompt(genre, n) {
+  const out = RUNDIR + '/runs/run-' + n + '.py'
+  const voiced = VOICE_PARA.trim()
+  const register = voiced ? 'in that voice' : 'in plain English'
+  const voiceLead = voiced
+    ? (VOICE_PARA + ' Let the voice come through in word choice and rhythm, but keep the genre shape below, '
+       + 'and every docstring and comment must stay clear and usable.\n\n')
+    : ''
+  const bans =
+    '\n\nNo em-dashes or semicolons or the words `canonical` or `shape`. Wrap code identifiers and literals '
+    + 'in double backticks and keep lines to 100 characters. Add docstrings and comments only -- never '
+    + 'change code, imports, or signatures.\n\nWrite the marked-up file to ' + out + '. After writing, reply '
+    + 'DONE.'
+  const head = 'Read the code at ' + FILE + ' and the ledger at ' + LEDGER + ' together.\n\n'
+  if (genre === 'example') {
+    return voiceLead + head
+      + 'This is an EXAMPLE -- tutorial code a reader copies to learn the library. Document it DENSELY '
+      + register + '. The ledger gives an annotation plan (what each line does and why it is in the '
+      + 'example).\n\n'
+      + 'Module docstring: a verb-led summary of what the example demonstrates (user intent, e.g. "Pack and '
+      + 'unpack a settings dictionary."), then a short body -- when a reader reaches for this pattern, and '
+      + 'how to run it (name what to install or import, but do NOT write a specific script filename in the run '
+      + 'command: you are given a stripped copy, not the real filename, so say e.g. "run it with `python`"). '
+      + 'Use the ledger\'s use-case and how-to-run facts. Do NOT invent example output.\n\n'
+      + 'INLINE COMMENTS, DENSE: put a short comment (one or two sentences, on the line(s) directly above) '
+      + 'on NEARLY EVERY meaningful line -- each import, assignment, call, and print. Each comment says WHAT '
+      + 'the line does (its real effect in the demo) AND WHY it is in the example (the teaching point, why a '
+      + 'caller would do it this way). State effect and intent, NEVER bare syntax: write `# integer keys each '
+      + 'encode in a single byte, versus several for a quoted string, so use them when you want maximum '
+      + 'compactness`, not `# build the settings dict`. The reader is learning, so `you` is fine in inline '
+      + 'comments. If a line needs more than two sentences, the example is doing too much -- keep it short.\n\n'
+      + 'Preserve EVERY import exactly (the import block is the contract a reader copies). Do not add '
+      + 'functions, classes, or an `if __name__ == "__main__"` guard -- keep it the flat script it is.'
+      + bans
+  }
+  const altitude = genre === 'functional_test'
+    ? ' These are functional / end-to-end tests, so each claim is at SCENARIO altitude -- the behavior '
+      + 'exercised against the real runtime, device, or socket, not a unit assertion.'
+    : ''
+  return voiceLead + head
+    + 'This is a TEST file. Write docstrings and minimal above-line comments ' + register + '. The ledger '
+    + 'gives, per test, the CLAIM it verifies.' + altitude + '\n\n'
+    + 'Module docstring: one sentence naming what the file tests (lead with a verb or the subject area). If '
+    + 'the ledger notes cross-runtime or a harness, add one short second line for it. No more.\n\n'
+    + 'Each test function: ONE summary sentence naming the CLAIM the subject under test verifies -- the '
+    + 'behavior, in domain terms, with the subject acting (e.g. "``ticks_diff`` returns the plain gap for a '
+    + 'forward difference."). Do NOT narrate the test body (fakes, the assert order, ``raises()``). Do NOT '
+    + 'open with "Tests that", "Verifies that", "Ensures", or "Checks that" -- let the subject act. NO Args, '
+    + 'NO Returns, NO Raises, and NO body paragraph: a test takes no contract parameters and returns nothing, '
+    + 'so the whole docstring is the one-sentence claim.\n\n'
+    + 'Above-line comment: add ONE short line ONLY where a setup value\'s meaning is non-obvious (the ledger '
+    + 'flags these), e.g. `# one tick before the period`. Default to no comment; never restate the code.\n\n'
+    + 'Preserve every decorator, marker, fixture, and harness call (``@pytest.fixture``, ``@pytest.mark.*``, '
+    + '``__chumicro_runtimes__``, the harness ``skip``) exactly.'
+    + bans
+}
+
 function genPrompt(n) {
+  if (GENRE === 'test' || GENRE === 'functional_test' || GENRE === 'example') return genrePrompt(GENRE, n)
   const voiced = VOICE_PARA.trim()
   const voiceBlock = voiced
     ? (VOICE_PARA + ' Write the docstrings and comments FULLY in that voice -- let it come through in word '
@@ -83,31 +149,52 @@ const SELECT_SCHEMA = {
 }
 function selectPrompt() {
   const runs = Array.from({ length: PASSES }, (_, i) => '  ' + (i + 1) + ': ' + RUNDIR + '/runs/run-' + (i + 1) + '.py').join('\n')
-  return 'You are a SELECTOR (fixture-agnostic — no trap list, no prior knowledge of this file). '
+  const preamble = 'You are a SELECTOR (fixture-agnostic — no trap list, no prior knowledge of this file). '
     + PASSES + ' candidate commented versions of the SAME file were written in one voice, each a COMPLETE '
-    + 'file. Read all of them, plus the stripped code ' + FILE + ' and the nuance ledger ' + LEDGER + ' for '
+    + 'file. Read all of them, plus the stripped code ' + FILE + ' and the ledger ' + LEDGER + ' for '
     + 'context. Pick the ONE best complete file by its number. You do NOT edit, merge, rewrite, or combine '
     + 'files — you only choose one. The chosen file is taken exactly as written.\n\n'
     + 'Candidates (number: path):\n' + runs + '\n\n'
     + 'If a library ledger exists at ' + RUNDIR + '/LIBRARY_FACTS.md, use it as a vocabulary reference: '
     + 'prefer a file that uses the shared terms correctly.\n\n'
-    + 'YOUR PRIMARY JOB IS HOW THE COMMENTS READ. Pick the file whose comments are the RICHEST and '
-    + 'best-worded -- the most alive, vivid, and characterful, the one a reader would actually enjoy. Do NOT '
-    + 'pick the flattest or most bare option because it feels safe: flat is wrong, richness wins. A file with '
-    + 'character, varied wording, and well-turned sentences beats a thin, generic one. The ONLY floor is '
-    + 'legibility: every sentence must still read clearly as a proper docstring a caller could use. A '
-    + 'sentence that is garbled, so dense or comma-ridden it confuses, or contorted past being understood is '
-    + 'not rich, it is broken, and it loses -- but a vivid metaphor or a strong turn of phrase that reads '
-    + 'clearly IS richness, and it wins.\n\n'
-    + 'Correctness is a SECONDARY sanity check, not a completeness test. Among the well-written files, reject '
-    + 'one that MISLEADS about what the code does: a comment that states the opposite of the code, pins a '
-    + 'result on the wrong thing, or garbles a non-obvious behavior into a statement that cannot hold '
-    + 'together. But do NOT punish a rich file for leaving out a minor detail. When two files read about '
-    + 'equally well, prefer the one that gets the non-derivable traps right.\n\n'
-    + 'Write {winner, why, concern} to ' + RUNDIR + '/pick.json — winner = the chosen number from 1 to '
-    + PASSES + ', why = one or two sentences on why it reads best, concern = any correctness issue you '
-    + 'noticed in the chosen file (so a human can double-check it), or "" if none. Return the same object. '
-    + 'Do not write any other file. Reply only after pick.json is written.'
+  const footer = '\n\nWrite {winner, why, concern} to ' + RUNDIR + '/pick.json — winner = the chosen number '
+    + 'from 1 to ' + PASSES + ', why = one or two sentences on why it won, concern = any correctness issue '
+    + 'you noticed in the chosen file (so a human can double-check it), or "" if none. Return the same '
+    + 'object. Do not write any other file. Reply only after pick.json is written.'
+  let job
+  if (GENRE === 'test' || GENRE === 'functional_test') {
+    job = 'YOUR JOB: pick the file whose test docstrings best NAME THE CLAIM each test verifies -- the '
+      + 'subject under test acting, in domain terms, in one clean sentence (e.g. "``ticks_diff`` returns the '
+      + 'plain gap for a forward difference."), not how the test does it. REJECT a file that narrates the '
+      + 'test body (fakes, assert order, ``raises()``), opens with "Tests that / Verifies that / Ensures", '
+      + 'adds Args / Returns / Raises or a body paragraph to a test, or misstates what a test actually '
+      + 'asserts. Among the clean ones prefer the sharpest, most specific claims and the tightest module '
+      + 'docstring; an above-line comment should appear only on a genuinely non-obvious setup value, never '
+      + 'restating code.'
+  } else if (GENRE === 'example') {
+    job = 'YOUR JOB: pick the file that TEACHES best. An example is read to learn the library, so the winner '
+      + 'carries a short comment on NEARLY EVERY meaningful line, each giving what the line does AND why it '
+      + 'is in the example (the teaching point), plus a verb-led module docstring with a useful when-to-use '
+      + 'and how-to-run body. REJECT a file that is sparse or under-annotated (lines left bare), restates '
+      + 'syntax ("# build the dict", "# loop over items") instead of giving effect + intent, or invents '
+      + 'example output. Among the well-annotated ones prefer the one whose comments most clearly explain why '
+      + 'a caller would make each choice, each kept to one or two sentences.'
+  } else {
+    job = 'YOUR PRIMARY JOB IS HOW THE COMMENTS READ. Pick the file whose comments are the RICHEST and '
+      + 'best-worded -- the most alive, vivid, and characterful, the one a reader would actually enjoy. Do NOT '
+      + 'pick the flattest or most bare option because it feels safe: flat is wrong, richness wins. A file with '
+      + 'character, varied wording, and well-turned sentences beats a thin, generic one. The ONLY floor is '
+      + 'legibility: every sentence must still read clearly as a proper docstring a caller could use. A '
+      + 'sentence that is garbled, so dense or comma-ridden it confuses, or contorted past being understood is '
+      + 'not rich, it is broken, and it loses -- but a vivid metaphor or a strong turn of phrase that reads '
+      + 'clearly IS richness, and it wins.\n\n'
+      + 'Correctness is a SECONDARY sanity check, not a completeness test. Among the well-written files, reject '
+      + 'one that MISLEADS about what the code does: a comment that states the opposite of the code, pins a '
+      + 'result on the wrong thing, or garbles a non-obvious behavior into a statement that cannot hold '
+      + 'together. But do NOT punish a rich file for leaving out a minor detail. When two files read about '
+      + 'equally well, prefer the one that gets the non-derivable traps right.'
+  }
+  return preamble + job + footer
 }
 
 // Independent summarizer: plain-English purpose per symbol, read from the CODE only (never the generated

@@ -11,11 +11,14 @@ load — keep it low (2-3) to avoid oversubscribing the API. The human pickers b
 stay sequential and in-session: batch phase 1 for all files, do the pickers, then batch phase 2.
 
 Usage:
-  regen_batch.py phase1 <concurrency> [--lib <LIBRARY_FACTS.md>] <file1.py> <file2.py> ...
+  regen_batch.py phase1 <concurrency> [--lib <LIBRARY_FACTS.md>] [--kind <genre>] <file1.py> <file2.py> ...
   regen_batch.py phase2 <concurrency> <voice> <rundir1> <rundir2> ...
 
-phase1 writes /tmp/regen-cr/batch_manifest.json mapping each file to its run room (the orchestrator reads it
-to drive the pickers + phase 2).
+--kind sets the genre for every file in the batch (code | test | functional_test | example); omit it and
+each file detects its genre from its own path. Phase 2 reads the genre back from each room's phase1.json, so
+it takes no --kind. phase1 writes /tmp/regen-cr/batch_manifest.json mapping each file to its run room (the
+orchestrator reads it to drive the pickers + phase 2). For --all (whole library), the orchestrator runs one
+batch per lane (source/test/functional_test/example), reading each lane's manifest before the next overwrites it.
 """
 import concurrent.futures as cf
 import json
@@ -26,6 +29,7 @@ import sys
 SKILL = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, SKILL)
 from preflight import require_claude  # noqa: E402
+from rooms import new_room  # noqa: E402
 
 BASE = "/tmp/regen-cr"
 
@@ -51,18 +55,25 @@ def _run_jobs(jobs, concurrency):
 def phase1(argv):
     concurrency = int(argv[0])
     rest = argv[1:]
-    lib = None
-    if rest and rest[0] == "--lib":
-        lib, rest = rest[1], rest[2:]
+    lib = kind = None
+    while rest and rest[0] in ("--lib", "--kind"):
+        if rest[0] == "--lib":
+            lib, rest = rest[1], rest[2:]
+        else:
+            kind, rest = rest[1], rest[2:]
     files = rest
     jobs, manifest = [], {}
-    for i, f in enumerate(files):
+    for f in files:
         stem = os.path.splitext(os.path.basename(f))[0]
-        rundir = os.path.join(BASE, f"{stem}-{i}")
+        # mkdtemp a FRESH unique room per file so parallel files (and re-runs) never collide; the genre
+        # prefix keeps an --all run's four lanes visually distinct under /tmp/regen-cr
+        rundir = new_room(f"{kind + '-' if kind else ''}{stem}")
         manifest[os.path.abspath(f)] = rundir
         cmd = [sys.executable, os.path.join(SKILL, "regen_phase1.py"), os.path.abspath(f), rundir]
         if lib:
             cmd += ["--lib", os.path.abspath(lib)]
+        if kind:
+            cmd += ["--kind", kind]
         jobs.append(cmd)
     _run_jobs(jobs, concurrency)
     os.makedirs(BASE, exist_ok=True)
