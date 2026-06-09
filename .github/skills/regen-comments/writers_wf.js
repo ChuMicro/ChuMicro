@@ -31,7 +31,10 @@ const GEN_SCHEMA = { type: 'object', additionalProperties: false, properties: { 
 // the source, and flag_legibility.py flags the rare convoluted roll for the human. Voice is OPTIONAL and
 // round32 made it FORWARD: VOICE_PARA empty -> the plain-English register (the default); non-empty -> the
 // voice REPLACES that register and runs free (no "yields to clarity" restraint), the one limit being a clear,
-// usable docstring. The SELECTOR picks the RICHEST, best-worded pass, not the flattest (flat is wrong);
+// usable docstring. round33 added a VOICELESS-ONLY flowing-summary clause (weave a non-obvious behavior into a
+// smooth summary instead of over-compressing into a thin body) -- it trims the occasional under-written
+// docstring on the baseline and stays off voiced runs so it cannot fight the voice. The SELECTOR picks the
+// RICHEST, best-worded pass, not the flattest (flat is wrong);
 // legibility is its only floor, correctness its secondary one -- a garbled or backwards pass still loses.
 function genPrompt(n) {
   const voiced = VOICE_PARA.trim()
@@ -46,6 +49,14 @@ function genPrompt(n) {
       + 'it already computed", not "a memoization layer"). '
     : 'Use plain, ordinary words, not a denser technical label (say "a cache that remembers what it already '
       + 'computed", not "a memoization layer"). '
+  // round33 (voiceless ONLY): a flowing-summary nudge cut the occasional thin / over-compressed docstring
+  // (control under-wrote _resolve_mixed / _rank_key bodies, collapsing them into Returns; flowing kept full
+  // bodies). Kept OFF voiced runs -- "write in plain sentences" would fight the voice-forward "FULLY in that
+  // voice". Tested round33 head-to-head vs lean control: legibility + correctness held, ban arm REJECTED.
+  const flowingClause = voiced
+    ? ''
+    : ' Write in plain, smooth, flowing sentences, and when a non-obvious behavior can be woven into the '
+      + 'summary itself, do that rather than compressing the summary and spilling into a separate body paragraph.'
   return voiceBlock
     + 'Read the code at ' + FILE + ' and the nuance ledger at ' + LEDGER + ' together. The ledger holds the '
     + 'non-obvious behavior a plain reading of the code misses.\n\n'
@@ -53,7 +64,7 @@ function genPrompt(n) {
     + 'each class, function, and method, its purpose and any non-obvious behavior: what it does and the '
     + 'contract a caller relies on, not how a particular line computes. ' + wordChoice + 'Do not restate '
     + 'what the code already shows, like an enum\'s members when their names already '
-    + 'say it, do not point the reader to other symbols by name, and do not invent.\n\n'
+    + 'say it, do not point the reader to other symbols by name, and do not invent.' + flowingClause + '\n\n'
     + 'A line-level mechanic, such as an inclusive boundary, a value compared one way and not another, or a '
     + 'stand-in substitution, rides as a short `#` comment on its own line above that line, not in the '
     + 'docstring. State each fact once.\n\n'
