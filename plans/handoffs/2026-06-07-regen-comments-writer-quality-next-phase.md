@@ -763,6 +763,39 @@ good but "sometimes degrade weirdly" (over-compress); proposed two default-voice
   high-confidence core (load-bearing traps) is stable run-to-run. Tightening the raw count = raising the
   ledger-writer's recordable-fact bar, a separate triage-side thread, deferred unless the user asks.
 
+### 2026-06-09 (cont.) — GENRE dimension + flexible targeting + atomic run rooms (`cfc4e82b`)
+The skill now handles four file KINDS, not just production code. **GENRE** (orthogonal to voice) selects the
+phase-1 triage aim AND the phase-2 writer shape:
+- **test / functional_test**: phase 1 emits a per-test CLAIM ledger; the writer writes one-sentence claim
+  docstrings (subject under test acting, domain terms), NO Args/Returns/body, above-line comments only on a
+  non-obvious setup value; functional_test states claims at end-to-end / scenario altitude.
+- **example**: phase 1 emits a near-line ANNOTATION PLAN; the writer documents DENSELY -- a short comment on
+  nearly every line giving what it does AND why it is in the example, plus a verb-led module summary +
+  use-case + how-to-run, imports preserved, flat script, no invented output. Derived FRESH from the skill's
+  spine + the user's words; the old `commenter-tests`/`commenter-examples` agents were explicitly NOT used
+  (user: "those commenters are old and wrong").
+- **code**: unchanged (3 trap lenses + validator loop + behavior/contract docstrings).
+IMPLEMENTATION: triage_wf.js + writers_wf.js branch on a `__GENRE__` substitution (code path byte-unchanged;
+genres take a lighter triage -- one genre-ledger pass + comment lens + a single validate, same ledger.json
+shape so picker + phase 2 are unchanged -- and their own genPrompt/selectPrompt). genre.py detects from the
+path; `--kind` threads through regen_phase1/phase2/batch; phase1.json records the genre, phase2 reads it.
+TARGETING MODEL (SKILL.md "Targeting, genre, and scope", user-driven): the user names the target in prose / a
+path / a flag and the orchestrator resolves (target, genre, scope) and confirms at the gate. "<lib> library"
+-> source (`code`); "<lib> unit tests" / `--tests` -> that lib's `tests/` (verify it exists); `--functional-tests`,
+`--examples` likewise; a folder path -> its genre; a method -> that ONE symbol only (regen_symbol); `--all` ->
+all four lanes (push back on cost). `--lib` is INTERNAL (orchestrator-supplied), never user-typed. Voice gate
+unchanged (always pick, or `--voice`).
+ROOM COLLISIONS (user: "two parallel runs wound up in the same room"): **rooms.py** mints a fresh unique
+`mkdtemp` room per run; regen_batch one per file; regen_phase1 REFUSES a room already holding a prior run's
+`phase1.json`/`FINAL_*`. SKILL.md runbook: `RUN=$(rooms.py new <slug>)`, never hand-build `<slug>-<n>`.
+VALIDATED read-only on real files (auto-keep ledger, no picker): example (`libraries/msgpack/examples/
+packb_basic.py`) -- dense per-line what+why incl. each dict entry; test (`libraries/timing/tests/test_ticks.py`)
+-- sharp subject-acting claims, no Args/Returns; functional_test (`.../functional_tests/test_ticks_arithmetic.py`)
+-- scenario-altitude claims. ALL THREE: CODE IDENTICAL. One fix mid-validation: the example how-to-run leaked
+the clean-room `stripped.py` name -> the example prompt now forbids naming a script file. OPEN/MINOR: method
+scope + `--all` not yet validated end-to-end; test section-divider comments (`# -- ... --`) are dropped (left
+as blank gaps) -- could route them to preserve. `[[genre-orthogonal-to-voice-test-claim-example-dense-fresh-rooms]]`
+
 ### STATE (current)
 Committed: ... -> **22643cfc** (cut_cruft dropped) -> **c96fbfcf** (plain-English register + anti-jargon +
 drop-"tight") -> **f8804a6c** (verify_code helper + de-named voices + selector floor + paragraph docstrings +
@@ -772,7 +805,8 @@ ledger citation fix + flag_legibility.py + render_report legibility section + re
 SKILL.md) -> **a9b1212b** (writers_wf.js: voice replaces register + runs free +
 richest-not-flattest selector; SKILL.md Step 4 synced + de-duped) -> **5789abad** (gate fixes: voice TEXT
 menu + picker sized to fact count + invariant-2 hard limits) -> **c03b5497** (round33 voiceless flowing-summary
-nudge; writers_wf.js + SKILL.md Step 4). Protected and NEVER committed (pre-existing working-tree mods): CLAUDE.md, .idea/chumicro.iml,
+nudge; writers_wf.js + SKILL.md Step 4) -> **cfc4e82b** (GENRE dimension test/functional_test/example +
+targeting model + atomic mkdtemp rooms; genre.py + rooms.py added). Protected and NEVER committed (pre-existing working-tree mods): CLAUDE.md, .idea/chumicro.iml,
 heartbeat.py. Harness: `.scratch/regen-comments/writer-quality/round{6..31}.py + *_run.sh + render*.py +
 report*.html + rooms{6..31}`; validated rooms /tmp/regen-cr/{qr-r28,qr-r29,qr-fixB,qr-ht}; key report
 report_r31_lean_vs_bloated.html. The writer-quality arc (tasks #6/#7/#8, summarizer-beats-writer) is CONVERGED
