@@ -796,6 +796,33 @@ the clean-room `stripped.py` name -> the example prompt now forbids naming a scr
 scope + `--all` not yet validated end-to-end; test section-divider comments (`# -- ... --`) are dropped (left
 as blank gaps) -- could route them to preserve. `[[genre-orthogonal-to-voice-test-claim-example-dense-fresh-rooms]]`
 
+### 2026-06-09 (cont. 2) — method scope, --all, 2 genre-path correctness fixes, TEST PLAN (`7fb78760`)
+- **Method scope** (`regen_method.py`, NEW): an invocation scoped to ONE symbol. phase 1 + phase 2 run on the
+  whole file (the writer needs the surrounding code + ledger), then regen_method splices ONLY the target
+  symbol's docstring+comments from the regenerated candidate onto the ORIGINAL file (every other symbol keeps
+  its existing comments) + verify_code. VALIDATED on quality_ranking.py: 11 symbols compared, EXACTLY
+  `QualityRanking.pick` changed, CODE IDENTICAL. Distinct from `regen_symbol.py` (which splices onto the
+  in-progress FINAL during refinement).
+- **Folder / --all**: validated the per-lane batch mechanism -- `regen_batch.py phase1 --kind <genre>` mints a
+  fresh `mkdtemp` room per file, records the genre in each room's phase1.json, no cross-lane collisions
+  (test + example lanes -> distinct genre-prefixed rooms).
+- **FIX 1 (genre phase-1 crash):** the genre triage wrote `ledger.json` as `{facts:[...]}` but regen_phase1
+  expects a BARE ARRAY -> `'str' has no attribute 'get'`, so phase1.json was never written and the picker
+  broke on EVERY real test/example run. The single-file gvalidate driver MASKED it (ignored phase 1's exit
+  code). Fix: genre writes `ledger.json` as a bare array (matches the code path) + phase1 defensively unwraps
+  a stray `{facts:[...]}`. Surfaced by the batch run's exit-code check; gvalidate.sh now asserts phase1.json.
+- **FIX 2 (reattach compile break):** the comment lens stored a `# -- section --` divider preserve item
+  WITHOUT its leading `#`, so reattach inserted bare text and the finished file failed to compile (verify_code
+  caught it, but the run aborted). Fix: reattach prepends `# ` to any preserved line missing its marker; the
+  comment lens is told to store the line verbatim WITH the `#`. Re-validated CODE IDENTICAL.
+- **TESTPLAN.md** (NEW, skill dir): layer A mechanical checks (A1-A7, all pass), layer B clean-room
+  per-genre + per-scope validations, layer C cold-session script for the human to drive the skill's gates;
+  a handy-targets table that avoids the protected `heartbeat.py`.
+- **END-TO-END:** a clean test-genre run with both fixes -> phase1.json written, CODE IDENTICAL, compiles.
+  `[[method-scope-splices-onto-original; genre-ledger-json-is-a-bare-array; reattach-guarantees-a-comment]]`
+  OPEN/MINOR: method + --all not yet exercised via the SKILL's own in-session orchestrator (the underlying
+  scripts are validated); a preserved section-divider lands near the top, not at its original line.
+
 ### STATE (current)
 Committed: ... -> **22643cfc** (cut_cruft dropped) -> **c96fbfcf** (plain-English register + anti-jargon +
 drop-"tight") -> **f8804a6c** (verify_code helper + de-named voices + selector floor + paragraph docstrings +
@@ -806,7 +833,9 @@ SKILL.md) -> **a9b1212b** (writers_wf.js: voice replaces register + runs free +
 richest-not-flattest selector; SKILL.md Step 4 synced + de-duped) -> **5789abad** (gate fixes: voice TEXT
 menu + picker sized to fact count + invariant-2 hard limits) -> **c03b5497** (round33 voiceless flowing-summary
 nudge; writers_wf.js + SKILL.md Step 4) -> **cfc4e82b** (GENRE dimension test/functional_test/example +
-targeting model + atomic mkdtemp rooms; genre.py + rooms.py added). Protected and NEVER committed (pre-existing working-tree mods): CLAUDE.md, .idea/chumicro.iml,
+targeting model + atomic mkdtemp rooms; genre.py + rooms.py added) -> **7fb78760** (method scope regen_method.py + genre ledger.json bare-array
+fix + reattach #-guarantee fix + TESTPLAN.md) -> a SKILL.md doc-ref follow-up (method-scope refs ->
+regen_method, reference list + TESTPLAN entry). Protected and NEVER committed (pre-existing working-tree mods): CLAUDE.md, .idea/chumicro.iml,
 heartbeat.py. Harness: `.scratch/regen-comments/writer-quality/round{6..31}.py + *_run.sh + render*.py +
 report*.html + rooms{6..31}`; validated rooms /tmp/regen-cr/{qr-r28,qr-r29,qr-fixB,qr-ht}; key report
 report_r31_lean_vs_bloated.html. The writer-quality arc (tasks #6/#7/#8, summarizer-beats-writer) is CONVERGED
