@@ -719,8 +719,21 @@ rejecting "stochastic" hand-waving.
   0/4 back-refs, 0/4 Component garble (only "pairwise" leaked 2/4, the pre-existing ledger stickiness). User: "near
   perfect in legibility... reads great". CORRECTNESS audit: ALL ~11 load-bearing traps present + correct, split
   cleanly (behavior/contract in docstring, line-mechanics inline). `[[lean-beats-bloated-ship-the-238-word-writer]]`.
-- Style angles to TEST NEXT (user, post-ship): no sentence starts with the/this/that/thats; be warm; reach for a
-  synonym when repeating a word; plain English but not dull.
+- **round32a — style angles (tested, REJECTED).** Four angles one-per-arm (no the/this/that opener; warm;
+  thesaurus; not-dull), verbatim, vs lean control. no_openers + not_dull added energy for free (0 term drift);
+  warm + thesaurus drifted the code's own nouns (component->build, base->core). User verdict: "no benefit from
+  any of them" -> nothing folded in.
+- **round32b — VOICE FORWARD (validated, shipping).** User: voices were too muted; three directives -- (1) a
+  picked voice REPLACES the plain-English register (not layered on top); (2) the selector picks the RICHEST /
+  best-worded, never the flattest ("flat is wrong"), legibility the only floor; (3) drop the "voice yields to
+  clarity" restraint, the one limit being a valid readable docstring. Implemented in writers_wf.js (voiced flag
+  -> register swap + wordChoice swap + no-yield voiceBlock; selectPrompt rewritten richest-not-flattest).
+  RESULT: voices came ALIVE and distinct -- bourdain sustains a bouncer-at-the-bar metaphor, linus (Sebastian)
+  a GPU-benchmark-shootout; the richest selector PICKED the vivid runs (v1's selector had tossed them as
+  "performing") and STILL enforced correctness (linus selector rejected a run that misattributed T7). Floor
+  held: linus 0 flags, bourdain 1 (a real garble caught), CODE IDENTICAL both. DEFAULT regression (plain with
+  the new richest selector): clean, 0 flags, code identical, and it FILLED the previously-empty QualityFlags
+  docstring (the richest selector fixed the under-writing). `[[voice-forward-replace-register-richest-selector]]`.
 
 ### STATE (current)
 Committed: ... -> **22643cfc** (cut_cruft dropped) -> **c96fbfcf** (plain-English register + anti-jargon +
@@ -728,7 +741,8 @@ drop-"tight") -> **f8804a6c** (verify_code helper + de-named voices + selector f
 plain ledger; round27/28 folded) -> **25030a55** (exclusive docstring/inline division + ledger general
 strengthen + regenerated previews) -> **72ca1fa0** (LEAN 238-word writer +
 ledger citation fix + flag_legibility.py + render_report legibility section + regen_phase2 flagger call +
-SKILL.md). Protected and NEVER committed (pre-existing working-tree mods): CLAUDE.md, .idea/chumicro.iml,
+SKILL.md) -> **[round32b voice-forward commit, pending]** (writers_wf.js: voice replaces register + runs free +
+richest-not-flattest selector; SKILL.md Step 4 synced + de-duped). Protected and NEVER committed (pre-existing working-tree mods): CLAUDE.md, .idea/chumicro.iml,
 heartbeat.py. Harness: `.scratch/regen-comments/writer-quality/round{6..31}.py + *_run.sh + render*.py +
 report*.html + rooms{6..31}`; validated rooms /tmp/regen-cr/{qr-r28,qr-r29,qr-fixB,qr-ht}; key report
 report_r31_lean_vs_bloated.html. The writer-quality arc (tasks #6/#7/#8, summarizer-beats-writer) is CONVERGED
