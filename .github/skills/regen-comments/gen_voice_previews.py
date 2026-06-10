@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generate per-voice preview samples for the pick menu (one-time, and on each voice add).
 
-Renders every voice against a FIXED neutral subject (a write-ahead log) in free prose — no code — so the
+Renders every voice against a FIXED neutral subject (a FIFO buffer) in free prose — no code — so the
 sample exposes the true voice. Runs the preview workflow as one clean-room `claude -p`, then merges the
 samples into voices.json under "previews". Re-run after adding a voice; by default it fills only the missing
 previews (`--all` regenerates every voice).

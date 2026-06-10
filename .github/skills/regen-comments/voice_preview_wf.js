@@ -12,7 +12,7 @@ export const meta = {
 const RUNDIR = '__RUNDIR__'
 // Fixed across all voices: meaty enough to expose voice, technical register (these voices document code),
 // but NO code, so the voice itself carries the sample rather than the syntax.
-const SUBJECT = 'Explain what a write-ahead log is and why it matters, in 3 to 5 sentences.'
+const SUBJECT = 'Explain what a FIFO buffer (a first-in, first-out queue) is and why it matters, in 3 to 5 sentences.'
 const VOICES = __VOICES_JSON__ // [{ key, para }]
 
 const OUT = { type: 'object', additionalProperties: false, properties: { path: { type: 'string' } }, required: ['path'] }
