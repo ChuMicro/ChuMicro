@@ -1,20 +1,22 @@
 # torvalds — real-text samples
 
 - Person: Linus Torvalds
-- Register: written public mailing-list release announcements; shortlogs omitted and "Linus" sign-offs trimmed so the name stays out of writer prompts
-- Source for Excerpt 1: "Linux 6.0", LKML, October 2, 2022; https://lkml.org/lkml/2022/10/2/255 (fetched via Wayback Machine; lkml.org and lore.kernel.org challenge automated fetches)
-- Source for Excerpt 2: "Linux 6.14", LKML, March 24, 2025; https://lkml.iu.edu/hypermail/linux/kernel/2503.3/00718.html (the IU hypermail mirror serves plain HTML with no bot challenge — best fetch route for future LKML samples)
-- Rights: public mailing-list posts
+- Register: written posts — a forum argument and a release announcement; his typos preserved verbatim, shortlogs omitted, "Linus" sign-offs trimmed so the name stays out of writer prompts
+- Source for Excerpt 1: RealWorldTech forum thread "Alder Lake and AVX-512", July 11, 2020; https://www.realworldtech.com/forum/?threadid=193189&curpostid=193190 (RealWorldTech serves plain HTML, fetch-friendly)
+- Source for Excerpt 2: "Linux 6.14", LKML, March 24, 2025; https://lkml.iu.edu/hypermail/linux/kernel/2503.3/00718.html (the IU hypermail mirror serves plain HTML with no bot challenge — best fetch route for LKML samples)
+- Rights: public forum and mailing-list posts
 
 ## Excerpt 1
 
-So, as is hopefully clear to everybody, the major version number change is more about me running out of fingers and toes than it is about any big fundamental changes.
+I hope AVX512 dies a painful death, and that Intel starts fixing real problems instead of trying to create magic instructions to then create benchmarks that they can look good on.
 
-But of course there's a lot of various changes in 6.0 - we've got over 15k non-merge commits in there in total, after all, and as such 6.0 is one of the bigger releases at least in numbers of commits in a while.
+I hope Intel gets back to basics: gets their process working again, and concentrate more on regular code that isn't HPC or some other pointless special case.
 
-The shortlog of changes below is only the last week since 6.0-rc7. A little bit of everything, although the diffstat is dominated by drm (mostly amd new chip support) and networking drivers.
+I've said this before, and I'll say it again: in the heyday of x86, when Intel was laughing all the way to the bank and killing all their competition, absolutely everybody else did better than Intel on FP loads. Intel's FP performance sucked (relatively speaking), and it matter not one iota.
 
-And this obviously means that tomorrow I'll open the merge window for 6.1. Which - unlike 6.0 - has a number of fairly core new things lined up. But for now, please do give this most recent kernel version a whirl,
+Because absolutely nobody cares outside of benchmarks.
+
+The same is largely true of AVX512 now - and in the future. Yes, you can find things that care. No, those things don't sell machines in the big picture.
 
 ## Excerpt 2
 
