@@ -35,6 +35,13 @@ TIC_PATTERNS = [
     (r"\bthat'?s the (?:thing|kicker|catch|rub|magic|beauty|gist)\b", "filler ('that's the …')"),
     (r"\bit'?s not (?:just )?\w[\w '-]{0,28}?,? it'?s\b", "false-insight frame ('it's not X, it's Y')"),
     (r"\bnot just \w[\w '-]{0,28}? but\b", "false-insight frame ('not just X but Y')"),
+    # setup scaffolding -- the "let me prepare you for a fact" frame. Surfaced 2026-06-10: a heartbeat run
+    # shipped "One thing to know going in:" unflagged, and the same family ran 4-deep in the older arm
+    # ("The honesty up front:", "One more thing the name hides:", "Two details worth knowing.").
+    (r"\bone thing to know\b", "setup scaffolding ('one thing to know …')"),
+    (r"\bone more thing\b", "setup scaffolding ('one more thing …')"),
+    (r"\bworth (?:knowing|noting)\b", "setup scaffolding ('… worth knowing/noting')"),
+    (r"\b(?:to know|knowing|honesty|truth) (?:going in|up front)\b", "setup scaffolding ('… going in / up front')"),
 ]
 
 STOP = set(
