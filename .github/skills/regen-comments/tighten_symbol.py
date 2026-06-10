@@ -28,13 +28,17 @@ def main():
     final = os.path.join(rundir, f"FINAL_{voice}.py")
     if not os.path.exists(final):
         sys.exit("no finished file yet — run phase 2 before tightening.")
-    # a --tight run has no sections to keep; telling the agent to KEEP Args/Returns there would re-grow them
+    # a --tight run has no sections to keep (telling the agent to KEEP Args/Returns there would re-grow
+    # them); a --less run keeps the sections but its summary must stay at 1-2 sentences
     p2 = os.path.join(rundir, "phase2.json")
-    tight = os.path.exists(p2) and bool(json.load(open(p2)).get("tight"))
-    keep_sections = (
-        "at most 1-2 short sentences and NO Args/Returns/Raises sections (this run is in tight mode)"
-        if tight else "the Args/Returns/Raises sections"
-    )
+    cfg = json.load(open(p2)) if os.path.exists(p2) else {}
+    if cfg.get("tight"):
+        keep_sections = "at most 1-2 short sentences and NO Args/Returns/Raises sections (this run is in tight mode)"
+    elif cfg.get("less"):
+        keep_sections = ("the Args/Returns/Raises sections, with the summary staying at most 1-2 short "
+                         "sentences and no body paragraphs (this run is in less mode)")
+    else:
+        keep_sections = "the Args/Returns/Raises sections"
 
     prompt = (
         "Read ./FINAL_" + voice + ".py and the nuance ledger ./ledger_final.md. Produce a copy of the file "

@@ -59,7 +59,8 @@ def main():
     genre = cfg.get("genre") or (json.load(open(p1)).get("genre") if os.path.exists(p1) else None) or "code"
     src = open(os.path.join(SKILL, "writers_wf.js")).read()
     src = (src.replace("__RUNDIR__", rundir).replace("__VOICE_PARA__", voices[voice])
-              .replace("__GENRE__", genre).replace("__TIGHT__", "1" if cfg.get("tight") else "0"))
+              .replace("__GENRE__", genre).replace("__TIGHT__", "1" if cfg.get("tight") else "0")
+              .replace("__LESS__", "1" if cfg.get("less") else "0"))
     open(os.path.join(rundir, "writers_wf.js"), "w").write(src)
     claude_p_workflow(rundir, "writers_wf.js")
 

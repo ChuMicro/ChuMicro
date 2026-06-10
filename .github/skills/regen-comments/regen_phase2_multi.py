@@ -35,14 +35,15 @@ def run_voice(rundir, voice):
     return voice, sub, os.path.exists(final), r.returncode, (r.stdout or "")[-400:] + (r.stderr or "")[-300:]
 
 
-EXTRA = []  # set by main(): ["--tight"] when the run is tight mode
+EXTRA = []  # set by main(): ["--tight"] / ["--less"] when the run is in that mode
 
 
 def main():
     rundir = os.path.abspath(sys.argv[1])
-    if "--tight" in sys.argv:
-        sys.argv.remove("--tight")
-        EXTRA.append("--tight")
+    for flag in ("--tight", "--less"):
+        if flag in sys.argv:
+            sys.argv.remove(flag)
+            EXTRA.append(flag)
     voices = sys.argv[2:5]                          # up to 3
     if not 1 <= len(voices) <= 3:
         sys.exit("give 1 to 3 voices: regen_phase2_multi.py <rundir> <voice1> [voice2] [voice3]")
