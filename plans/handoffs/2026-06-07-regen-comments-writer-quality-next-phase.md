@@ -881,7 +881,10 @@ fix + reattach #-guarantee fix + TESTPLAN.md) -> a SKILL.md doc-ref follow-up (m
 regen_method, reference list + TESTPLAN entry) -> **eff7e4e0** (same) -> **0ce93fce** (reattach anchors
 inline preserve items to their code line via anchor_code+attach; comment lens emits them; --all validated
 end-to-end on compat) -> **70ec7a07** (voice menu spacing) -> **2a6361c3** (descriptive-persona voices +
-FIFO previews) -> **20055425** (compare up to 3 voices: regen_phase2_multi.py + render_compare.py). Protected and NEVER committed (pre-existing working-tree mods): CLAUDE.md, .idea/chumicro.iml,
+FIFO previews) -> **20055425** (compare up to 3 voices: regen_phase2_multi.py + render_compare.py) -> **e26227ea** (richer 'who'-form voice
+prose + refreshed FIFO previews; quality-checked all 9 voices on quality_ranking.py -- NO degradation, every
+voice vivid, bourdain's bouncer metaphor intact; chose rich-'who' over 'You are'/'voice that' to keep the
+richness without role-assignment theatrics risk). Protected and NEVER committed (pre-existing working-tree mods): CLAUDE.md, .idea/chumicro.iml,
 heartbeat.py. Harness: `.scratch/regen-comments/writer-quality/round{6..31}.py + *_run.sh + render*.py +
 report*.html + rooms{6..31}`; validated rooms /tmp/regen-cr/{qr-r28,qr-r29,qr-fixB,qr-ht}; key report
 report_r31_lean_vs_bloated.html. The writer-quality arc (tasks #6/#7/#8, summarizer-beats-writer) is CONVERGED
