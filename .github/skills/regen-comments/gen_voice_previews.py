@@ -18,6 +18,7 @@ import tempfile
 SKILL = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, SKILL)
 from preflight import require_claude  # noqa: E402
+from voice_sample import load_voice_sample  # noqa: E402
 
 
 def main():
@@ -34,7 +35,7 @@ def main():
 
     room = tempfile.mkdtemp(prefix="regen-vp-")
     os.makedirs(os.path.join(room, "previews"), exist_ok=True)
-    vjson = json.dumps([{"key": k, "para": voices[k]} for k in need])
+    vjson = json.dumps([{"key": k, "para": voices[k], "sample": load_voice_sample(k)} for k in need])
     src = open(os.path.join(SKILL, "voice_preview_wf.js")).read()
     src = src.replace("__RUNDIR__", room).replace("__VOICES_JSON__", vjson)
     open(os.path.join(room, "voice_preview_wf.js"), "w").write(src)

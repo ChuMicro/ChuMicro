@@ -9,3 +9,14 @@ Consumption: `voice_sample.py` extracts the `## Excerpt` prose (never this heade
 Rights: `hemingway` is public domain in the USA; `torvalds` is a public mailing-list post; the rest are short attributed excerpts held as internal prompt data. Keep excerpts short, and trim further before any public release of this tree.
 
 Transcript caveats: `linus` and `pewdiepie` are YouTube auto-captions, so expect ASR punctuation and occasional mis-hearings; each file's header notes any corrections or trims. The `linus` source show is two-host, so excerpts are cut to monologue stretches that are safely his.
+
+## Sourcing a sample (when adding a voice)
+
+The hunt is in-session orchestrator work (web search plus judgment), not script work. Rules that held up in practice:
+
+- Real text only, in the person's natural domain. Pick the era whose register matches the persona — early and late writing by the same person can differ more than two different people (the bourdain file documents that swap).
+- 1–3 whole paragraphs, unmodified, roughly 150–400 words total. Cut at paragraph boundaries; never flatten or clip mid-sentence — pacing carries the voice. Obvious OCR or ASR mis-hearings may be corrected with a note in the header.
+- No person's name inside the excerpt prose. The loader strips only the header, so trim sign-offs and bylines and note the trim in the header.
+- Attribution (person, source title, date, URL, register, rights) lives ONLY in the header bullets.
+- Fetch routes that worked: LKML via the IU hypermail mirror (`lkml.iu.edu`, plain HTML — lkml.org and lore.kernel.org block automated fetches, and the Wayback Machine gets past both); `textutil -convert txt` extracts article HTML; YouTube transcripts via `youtube-transcript-api` in a `.scratch/` venv (current auto-captions carry punctuation; older MANUAL caption tracks are often fan-made with editorial jokes that are not the speaker's words); paywalled Substack pages serve a different post's free preview, so verify the text matches the post you asked for.
+- Verify before relying on it: `python3 ../voice_sample.py <key>` must print prose only.
