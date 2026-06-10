@@ -1,21 +1,20 @@
 #!/usr/bin/env python3
-"""Live progress for regen-comments runs, watching run-room artifacts (no stream parsing).
+"""Live progress for audit-code runs, watching run-room artifacts (no stream parsing).
 
-A clean-room phase runs as one `claude -p` that prints nothing until it finishes. But each stage drops a file
-into the run room as it completes, so those files ARE the progress. The orchestrator runs the phase in the
-background and arms a Monitor on this script — each line printed below becomes a chat event — so progress
+The evaluation runs as one `claude -p` that prints nothing until it finishes, but its stages drop files
+into the run room as they complete — those files ARE the progress. The orchestrator launches the phase in
+the background and arms a Monitor on this script; each line printed becomes a chat event, so progress
 streams into the session with no second terminal. A human can also run it directly.
 
-Watches ANY number of rooms (a library batch runs one room per file; pass them all — a single watcher on one
-room misses the other files' events entirely). Events are prefixed with the room's tag. Exits when EVERY room
-has produced the terminal artifact:
+Watches ANY number of rooms (library/folder mode runs one room per file; pass them all — a single watcher
+misses every other file's events). Events are prefixed with the room's tag. Exits when EVERY room has
+produced the terminal artifact:
 
     progress_watch.py <rundir> [<rundir> ...] [--until <glob>]
 
---until defaults to FINAL_*.py (a phase-2 / full-run watch). For a batch phase-1 watch pass
-`--until phase1.json` — without it a phase-1 watch has no terminal artifact and idles to the deadline.
-Comparison runs: pass the voice rooms (`$RUN/v/<voice>`) as the rooms. Reports only files touched AFTER the
-watch starts, so a re-used room's stale artifacts are ignored.
+--until defaults to phase1.json (the evaluation's last write). For a phase-0 library-triage watch pass the
+LIBROOM with `--until LIBRARY_FACTS.md`. Reports only files touched AFTER the watch starts, so a re-used
+room's stale artifacts are ignored.
 """
 import glob
 import os
@@ -27,28 +26,21 @@ STEPS = [
     ("lib", "library source stripped + laid out (phase 0, mechanical)"),
     ("LIBRARY_FACTS.md", "library triage complete (phase 0)"),
     ("stripped.py", "stripped the target (mechanical)"),
-    ("findings/trap.json", "lens: trap"),
-    ("findings/trace.json", "lens: trace"),
-    ("findings/naming.json", "lens: naming"),
-    ("findings/comments.json", "lens: comments"),
-    ("ledger_provisional.md", "ledger written"),
-    ("validation.json", "validator ran"),
-    ("phase1.json", "phase 1 grounding complete"),
-    ("ledger_final.md", "ledger finalized (picker done)"),
-    ("runs/run-1.py", "writer pass 1"),
-    ("runs/run-2.py", "writer pass 2"),
-    ("runs/run-3.py", "writer pass 3"),
-    ("runs/run-4.py", "writer pass 4"),
+    ("tests.py", "tests located + concatenated"),
+    ("commented.py", "commented copy staged for the drift lens"),
+    ("findings/*.json", "lens findings landing"),
     ("summary.json", "independent summarizer"),
-    ("pick.json", "selector picked best of N files"),
-    ("merged.py", "chosen file copied"),
-    ("FINAL_*.py", "DONE: final file ready"),
+    ("eval.json", "merger: numbered fact ledger written"),
+    ("validation.json", "validator ran"),
+    ("patches.json", "patcher: apply-ready before/after per finding"),
+    ("written.json", "reader prose written"),
+    ("phase1.json", "DONE: evaluation complete"),
 ]
 
 
 def main():
     args = sys.argv[1:]
-    until = "FINAL_*.py"
+    until = "phase1.json"
     if "--until" in args:
         i = args.index("--until")
         until = args[i + 1]
@@ -66,7 +58,7 @@ def main():
           f"(reports only artifacts touched from now on; Ctrl-C to stop)", flush=True)
     for r in rooms:
         print(f"  - {tags[r]}", flush=True)
-    deadline = start + 7200  # safety cap; long comparison/library runs legitimately take over an hour
+    deadline = start + 7200  # safety cap; library runs legitimately take over an hour
     while time.time() < deadline:
         for room in rooms:
             for rel, label in STEPS:
