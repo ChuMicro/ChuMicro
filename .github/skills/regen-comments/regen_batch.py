@@ -85,10 +85,13 @@ def phase1(argv):
 
 
 def phase2(argv):
+    tight = "--tight" in argv
+    argv = [a for a in argv if a != "--tight"]
     concurrency = int(argv[0])
     voice = argv[1]
     rundirs = argv[2:]
-    jobs = [[sys.executable, os.path.join(SKILL, "regen_phase2.py"), os.path.abspath(rd), voice] for rd in rundirs]
+    extra = ["--tight"] if tight else []
+    jobs = [[sys.executable, os.path.join(SKILL, "regen_phase2.py"), os.path.abspath(rd), voice] + extra for rd in rundirs]
     _run_jobs(jobs, concurrency)
     print(f"=== BATCH PHASE2 DONE: {len(rundirs)} room(s) ===")
 
@@ -97,7 +100,7 @@ def main():
     require_claude()
     if len(sys.argv) < 2 or sys.argv[1] not in ("phase1", "phase2"):
         sys.exit("usage: regen_batch.py phase1 <conc> [--lib <facts>] <file...>  |  "
-                 "phase2 <conc> <voice> <rundir...>")
+                 "phase2 <conc> <voice> [--tight] <rundir...>")
     {"phase1": phase1, "phase2": phase2}[sys.argv[1]](sys.argv[2:])
 
 

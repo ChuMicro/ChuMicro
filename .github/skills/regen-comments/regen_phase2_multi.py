@@ -29,14 +29,20 @@ def run_voice(rundir, voice):
         src = os.path.join(rundir, f)
         if os.path.exists(src):
             shutil.copy(src, os.path.join(sub, f))
-    r = subprocess.run([sys.executable, os.path.join(SKILL, "regen_phase2.py"), sub, voice],
+    r = subprocess.run([sys.executable, os.path.join(SKILL, "regen_phase2.py"), sub, voice] + EXTRA,
                        capture_output=True, text=True)
     final = os.path.join(sub, f"FINAL_{voice}.py")
     return voice, sub, os.path.exists(final), r.returncode, (r.stdout or "")[-400:] + (r.stderr or "")[-300:]
 
 
+EXTRA = []  # set by main(): ["--tight"] when the run is tight mode
+
+
 def main():
     rundir = os.path.abspath(sys.argv[1])
+    if "--tight" in sys.argv:
+        sys.argv.remove("--tight")
+        EXTRA.append("--tight")
     voices = sys.argv[2:5]                          # up to 3
     if not 1 <= len(voices) <= 3:
         sys.exit("give 1 to 3 voices: regen_phase2_multi.py <rundir> <voice1> [voice2] [voice3]")
