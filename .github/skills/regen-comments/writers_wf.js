@@ -123,10 +123,19 @@ function genPrompt(n) {
     ? ''
     : ' Write in plain, smooth, flowing sentences, and when a non-obvious behavior can be woven into the '
       + 'summary itself, do that rather than compressing the summary and spilling into a separate body paragraph.'
+  // round34 (voiceless ONLY): an altitude reword closed the diagnosed MODULE gap. Plain crammed the per-method
+  // drift rule into the module summary (mechanism-creep) where the summarizer stayed high-level and named the
+  // file's structure. The reworded arm read at the summarizer's altitude (2/3 runs), did not bloat the methods,
+  // and held correctness (no T7 inversion). Kept OFF voiced runs: untested there, and the default voice path
+  // wants its own canary before extending it.
+  const moduleClause = voiced
+    ? 'For the module, what the file does in the real world. '
+    : 'For the module, what the file does in the real world and how it is organized. Keep it high-level -- '
+      + 'the per-method rules, conditions, and thresholds belong on those methods, not in the module docstring. '
   return voiceBlock
     + 'Read the code at ' + FILE + ' and the nuance ledger at ' + LEDGER + ' together. The ledger holds the '
     + 'non-obvious behavior a plain reading of the code misses.\n\n'
-    + 'Explain ' + register + ' what the code does. For the module, what the file does in the real world. For '
+    + 'Explain ' + register + ' what the code does. ' + moduleClause + 'For '
     + 'each class, function, and method, its purpose and any non-obvious behavior: what it does and the '
     + 'contract a caller relies on, not how a particular line computes. ' + wordChoice + 'Do not restate '
     + 'what the code already shows, like an enum\'s members when their names already '
