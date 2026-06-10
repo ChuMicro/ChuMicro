@@ -1,4 +1,16 @@
-# regen-comments bench35 + tight mode — in-flight state (2026-06-10)
+# regen-comments bench35 + tight mode — RESULTS (2026-06-10)
+
+## Outcome (bench complete; same file/voice as the stuffed live run)
+| arm | docstring lines | inline # | Args/Ret sections | max sentences | bare symbols |
+|---|---|---|---|---|---|
+| baseline (live cutler) | 120 | 7 | 6 | 14 | 0 |
+| default (anti-stuffing) | 77 | 5 | 5 | 7 | 0 |
+| tight (--tight) | 2 (module only) | 17 | 0 | 1 | 7 |
+
+Both CODE IDENTICAL. Phase-1 parsimony: 11 -> 5 facts, glosses present. Default-arm autoroute fired
+for real (3 symbols routed to pass 1), bans.json = 0. Selector whys cite altitude/no-docstrings-on-evident.
+CALIBRATION QUESTION for the user: tight arm put the caller contract in #-comments ABOVE defs and zero
+symbol docstrings; possibly want 1-sentence docstrings (help()-visible) + # comments for line facts instead.
 
 ## What's running (background, this machine)
 - Bench of the anti-stuffing prompt changes (commit e49295dd) + new --tight mode, on
