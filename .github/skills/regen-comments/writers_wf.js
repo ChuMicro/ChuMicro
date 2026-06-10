@@ -27,6 +27,9 @@ const GENRE = "__GENRE__"
 // TIGHT mode (opt-in --tight): summary-only docstrings, 1-2 sentences, no body/sections; a
 // self-documenting symbol gets NO docstring. The strict-no-body rule chosen 2026-05-26, as a run mode.
 const TIGHT = '__TIGHT__' === '1'
+// LESS mode (opt-in --less): the same 1-2 sentence summary discipline as tight, but the Args / Returns /
+// Raises sections STAY (short entries, no body paragraphs between summary and sections).
+const LESS = '__LESS__' === '1'
 
 const GEN_SCHEMA = { type: 'object', additionalProperties: false, properties: { path: { type: 'string' } }, required: ['path'] }
 
@@ -118,80 +121,91 @@ function genrePrompt(genre, n) {
     + bans
 }
 
+// round35: the tight/less writer runs LEAN (~150 words vs the prior ~400). An A/B/C/D bourdain bench
+// (2026-06-10, same ledger/selector, all modes) found the accreted rule pile flattened the voice while
+// this shape read the most alive, with ZERO ledger-fact misses and ZERO mechanical-ban violations across
+// every arm (13-arm audit). n=1 arms vs the measured 57-70% run-noise floor, so directional -- the queued
+// variance bench (n>=5, deterministic counts) is the rigorous confirm. Two short guards ride along for
+// known failure modes: the above-def `#` block (a live-run bug) and notation-style comments.
 function tightPrompt(n) {
   const voiced = VOICE_PARA.trim()
   const voiceBlock = voiced
-    ? (VOICE_PARA + ' Write in that voice -- word choice, rhythm, attitude -- inside the limits below. '
-       + 'The voice changes the register, never the length.\n\n' + sampleBlock())
+    ? (VOICE_PARA + ' Every docstring and comment is fully in that voice.\n\n' + sampleBlock())
     : ''
   const register = voiced ? 'in that voice' : 'in plain English'
   return voiceBlock
-    + 'Read the code at ' + FILE + ' and the nuance ledger at ' + LEDGER + ' together. The ledger holds the '
-    + 'non-obvious behavior a plain reading of the code misses.\n\n'
-    + 'TIGHT MODE -- summaries only, as DOCSTRINGS. Each class, function, and method gets a DOCSTRING of '
-    + 'AT MOST one or two short sentences ' + register + ': the purpose and the contract a caller relies '
-    + 'on. NO body paragraphs. NO Args / Returns / Raises sections, ever. Do not stuff: never chain extra '
-    + 'clauses into a sentence to smuggle detail past the limit -- if a detail does not change what a '
-    + 'caller does, it does not ride. Only a symbol whose name and signature already say everything AND '
-    + 'that carries no ledger fact about its contract gets no docstring. NEVER write a `#` comment block '
-    + 'above a `def` or `class` line as a stand-in for its docstring -- that text is invisible to `help()` '
-    + 'and IDE hovers; if it is worth saying about the symbol, it goes IN the docstring. '
-    + 'The module docstring is one to three sentences on what the file does.\n\n'
-    + 'Every kept ledger fact still lands exactly once: in the symbol\'s docstring sentence when it is '
-    + 'about the CONTRACT, or as a short `#` comment INSIDE the body, on its own line directly above the '
-    + 'specific line it describes, when it is a line-level mechanic. Never drop a ledger fact.\n\n'
+    + 'Read the code at ' + FILE + ' and the nuance ledger at ' + LEDGER + ' (the non-obvious behavior a '
+    + 'plain reading misses). Each class, function, and method: a one-or-two-sentence docstring ' + register
+    + ' -- purpose and caller contract, complete sentences only, the first a proper summary line. No body '
+    + 'paragraphs. '
+    + (LESS
+        ? 'Short Args and Returns (or Raises) sections where they apply, each entry a SINGLE short '
+          + 'sentence, never padded into prose; omit entries that just restate a name and type. '
+        : 'No Args / Returns / Raises sections. ')
+    + 'A self-evident symbol gets no docstring; contract text always lives IN the docstring (where '
+    + '`help()` sees it), never as a `#` block above the `def`. Every ledger fact lands exactly once: '
+    + 'contract facts in the docstring, line facts as `#` sentences above their lines, in the same '
+    + 'register -- never notation or `->` arrows. Drop none.\n\n'
+    + 'If a library ledger exists at ' + RUNDIR + '/LIBRARY_FACTS.md, use it for shared vocabulary.\n\n'
+    + 'No em-dashes, semicolons, `canonical`, or `shape`. Code in double backticks, lines under 100 '
+    + 'characters. Add docstrings and comments only -- never change code.\n\n'
+    + 'Write the marked-up file to ' + RUNDIR + '/runs/run-' + n + '.py. After writing, reply DONE.'
+}
+
+// round35 (voiced ONLY): the voiced code-genre writer runs LEAN (~175 words vs the accreted ~490). The
+// A/B/C/D bourdain head-to-head (2026-06-10, same ledger/selector) found the instruction pile flattened
+// the voice while this shape read the most alive; sampleBlock() carries the register from real prose
+// (the own-words framing held n-gram copy-signal at 0 in every arm), and the mechanical audit showed
+// zero ledger-fact misses and zero ban violations. n=1 arms vs the 57-70% noise floor -- directional;
+// the queued variance bench is the rigorous confirm. The voiceless path below stays on the fuller
+// round26-34 wording: benched there, near-parity in today's plain A-vs-D arms (where the lean arm even
+// leaked a prompt phrase once), and its two voiceless-only nudges still earn their keep.
+function voicedPrompt(n) {
+  return VOICE_PARA + ' Every docstring and comment is fully in that voice.\n\n' + sampleBlock()
+    + 'Read the code at ' + FILE + ' and the nuance ledger at ' + LEDGER + ' (the non-obvious behavior a '
+    + 'plain reading misses). Explain in that voice what the code does: each symbol\'s purpose and the '
+    + 'contract a caller relies on, never how a line computes. A line-level mechanic goes as a `#` sentence '
+    + 'above its line, in the same register. Each ledger fact lands exactly once; drop none. Length follows '
+    + 'the symbol\'s complexity: simple symbols get one sentence, and the sample never adds length.\n\n'
+    + 'Keep the FORM a proper docstring: the first line is a complete summary sentence, every sentence is '
+    + 'complete (no fragments), and functions and methods get short Args and Returns (or Raises) sections '
+    + 'where they apply -- omit a Returns for nothing and entries that just restate a name and type.\n\n'
     + 'If a library ledger exists at ' + RUNDIR + '/LIBRARY_FACTS.md, use it for cross-file context and '
     + 'shared vocabulary.\n\n'
-    + 'No em-dashes or semicolons or the words `canonical` or `shape`. Wrap code expressions in double '
-    + 'backticks and keep lines to 100 characters. Add docstrings and comments only.\n\n'
+    + 'No em-dashes, semicolons, `canonical`, or `shape`. Code in double backticks, lines under 100 '
+    + 'characters. Add docstrings and comments only -- never change code.\n\n'
     + 'Write the marked-up file to ' + RUNDIR + '/runs/run-' + n + '.py. After writing, reply DONE.'
 }
 
 function genPrompt(n) {
   if (GENRE === 'test' || GENRE === 'functional_test' || GENRE === 'example') return genrePrompt(GENRE, n)
-  if (TIGHT) return tightPrompt(n)
-  const voiced = VOICE_PARA.trim()
-  const voiceBlock = voiced
-    ? (VOICE_PARA + ' Write the docstrings and comments FULLY in that voice -- let it come through in word '
-       + 'choice, rhythm, and attitude, do not hold it back. The voice changes the REGISTER, never the '
-       + 'altitude or the length: it does not add content, repeat a fact in different costumes for flavor, '
-       + 'or pad a trivial symbol into a body paragraph. The other limit is that each docstring stays a '
-       + 'clear, usable docstring a caller could rely on, never garbled or obscure.\n\n' + sampleBlock())
-    : ''
-  const register = voiced ? 'in that voice' : 'in plain English'
-  const wordChoice = voiced
-    ? 'Keep it clear and do not let dense jargon slip in to sound precise (say "a cache that remembers what '
-      + 'it already computed", not "a memoization layer"). '
-    : 'Use plain, ordinary words, not a denser technical label (say "a cache that remembers what it already '
-      + 'computed", not "a memoization layer"). '
-  // round33 (voiceless ONLY): a flowing-summary nudge cut the occasional thin / over-compressed docstring
-  // (control under-wrote _resolve_mixed / _rank_key bodies, collapsing them into Returns; flowing kept full
-  // bodies). Kept OFF voiced runs -- "write in plain sentences" would fight the voice-forward "FULLY in that
-  // voice". Tested round33 head-to-head vs lean control: legibility + correctness held, ban arm REJECTED.
-  const flowingClause = voiced
-    ? ''
-    : ' Write in plain, smooth, flowing sentences, and when a non-obvious behavior can be woven into the '
-      + 'summary itself, do that rather than compressing the summary and spilling into a separate body paragraph.'
-  // round34 (voiceless ONLY): an altitude reword closed the diagnosed MODULE gap. Plain crammed the per-method
-  // drift rule into the module summary (mechanism-creep) where the summarizer stayed high-level and named the
-  // file's structure. The reworded arm read at the summarizer's altitude (2/3 runs), did not bloat the methods,
-  // and held correctness (no T7 inversion). Kept OFF voiced runs: untested there, and the default voice path
-  // wants its own canary before extending it.
-  const moduleClause = voiced
-    ? 'For the module, what the file does in the real world. '
-    : 'For the module, what the file does in the real world and how it is organized. Keep it high-level -- '
-      + 'the per-method rules, conditions, and thresholds belong on those methods, not in the module docstring. '
-  return voiceBlock
-    + 'Read the code at ' + FILE + ' and the nuance ledger at ' + LEDGER + ' together. The ledger holds the '
+  if (TIGHT || LESS) return tightPrompt(n)
+  if (VOICE_PARA.trim()) return voicedPrompt(n)
+  // VOICELESS path -- the round26-34 benched wording, kept fuller than voicedPrompt on purpose: with no
+  // voice to fill the space the structure still earns its keep.
+  // round33: the flowing-summary nudge cut the occasional thin / over-compressed docstring (control
+  // under-wrote _resolve_mixed / _rank_key bodies, collapsing them into Returns; flowing kept full
+  // bodies). Head-to-head vs lean control: legibility + correctness held, ban arm REJECTED.
+  // round34: the module-altitude reword closed the diagnosed MODULE gap (plain crammed the per-method
+  // drift rule into the module summary where the summarizer stayed high-level); held correctness.
+  return 'Read the code at ' + FILE + ' and the nuance ledger at ' + LEDGER + ' together. The ledger holds the '
     + 'non-obvious behavior a plain reading of the code misses.\n\n'
-    + 'Explain ' + register + ' what the code does. ' + moduleClause + 'For '
+    + 'Explain in plain English what the code does. For the module, what the file does in the real world '
+    + 'and how it is organized. Keep it high-level -- the per-method rules, conditions, and thresholds '
+    + 'belong on those methods, not in the module docstring. For '
     + 'each class, function, and method, its purpose and any non-obvious behavior: what it does and the '
-    + 'contract a caller relies on, not how a particular line computes. ' + wordChoice + 'Do not restate '
+    + 'contract a caller relies on, not how a particular line computes. Use plain, ordinary words, not a '
+    + 'denser technical label (say "a cache that remembers what it already computed", not "a memoization '
+    + 'layer"). Do not restate '
     + 'what the code already shows, like an enum\'s members when their names already '
-    + 'say it, do not point the reader to other symbols by name, and do not invent.' + flowingClause + '\n\n'
+    + 'say it, do not point the reader to other symbols by name, and do not invent. Write in plain, '
+    + 'smooth, flowing sentences, and when a non-obvious behavior can be woven into the '
+    + 'summary itself, do that rather than compressing the summary and spilling into a separate body paragraph.\n\n'
     + 'A line-level mechanic, such as an inclusive boundary, a value compared one way and not another, or a '
     + 'stand-in substitution, rides as a short `#` comment on its own line above that line, not in the '
-    + 'docstring. State each fact once.\n\n'
+    + 'docstring. State each fact once. An inline comment is a short REAL SENTENCE in the same register as '
+    + 'the docstrings -- it speaks, it is not a compressed note: never echo the ledger\'s notation, never '
+    + 'splice fragments with colons, never use `->` arrows.\n\n'
     + 'PROPORTION: a docstring\'s length follows the symbol\'s complexity, and most symbols are simple. A '
     + 'pass-through, a delegation, an accessor, or a body of a few plainly-readable lines gets ONE clear '
     + 'sentence and stops. Save body paragraphs for the few symbols whose behavior genuinely needs them. '
@@ -226,15 +240,22 @@ function selectPrompt() {
     + 'you noticed in the chosen file (so a human can double-check it), or "" if none. Return the same '
     + 'object. Do not write any other file. Reply only after pick.json is written.'
   let job
-  if (TIGHT && GENRE !== 'test' && GENRE !== 'functional_test' && GENRE !== 'example') {
-    job = 'YOUR JOB (TIGHT MODE): pick the file whose one-or-two-sentence DOCSTRINGS are the sharpest and '
-      + 'most exact. REJECT a file that writes a body paragraph or an Args / Returns / Raises section '
-      + 'anywhere, stuffs extra clauses into a sentence to smuggle detail past the limit, replaces a '
+  if ((TIGHT || LESS) && GENRE !== 'test' && GENRE !== 'functional_test' && GENRE !== 'example') {
+    job = 'YOUR JOB (' + (LESS ? 'LESS' : 'TIGHT') + ' MODE): pick the file whose one-or-two-sentence '
+      + 'summary DOCSTRINGS are the sharpest and most exact. REJECT a file that writes '
+      + (LESS
+          ? 'a body paragraph anywhere (short Args / Returns / Raises sections are REQUIRED where they '
+            + 'apply and are not a violation, but an entry padded into prose is)'
+          : 'a body paragraph or an Args / Returns / Raises section anywhere')
+      + ', stuffs extra clauses into a sentence to smuggle detail past the limit, replaces a '
       + 'docstring with a `#` comment block above the `def`/`class` line (contract text must be IN the '
-      + 'docstring where `help()` sees it), or docstrings a symbol with nothing to say. Among the compliant files '
+      + 'docstring where `help()` sees it), writes `#` comments that read like compressed notes (fragment '
+      + 'chains spliced with colons, `->` arrows) instead of short sentences in the file\'s register, '
+      + 'or docstrings a symbol with nothing to say. Among the compliant files '
       + 'prefer the one that says the necessary thing in the fewest, best words while keeping the ledger '
-      + 'facts placed (in the summary when they are the contract, else as `#` comments at their lines). '
-      + 'Thin is correct here; missing the caller contract is not.'
+      + 'facts placed (in the docstring when they are the contract, else as `#` comments at their lines). '
+      + 'Thin is correct here; missing the caller contract is not -- and a pass that reads clipped or '
+      + 'amputated loses to one that spends a full second sentence where the contract earns it.'
   } else if (GENRE === 'test' || GENRE === 'functional_test') {
     job = 'YOUR JOB: pick the file whose test docstrings best NAME THE CLAIM each test verifies -- the '
       + 'subject under test acting, in domain terms, in one clean sentence (e.g. "``ticks_diff`` returns the '
@@ -263,7 +284,10 @@ function selectPrompt() {
       + 'best-turned wording wins. The other floor is legibility: every sentence must still read clearly '
       + 'as a proper docstring a caller could use. A sentence that is garbled, so dense or comma-ridden it '
       + 'confuses, or contorted past being understood is not rich, it is broken, and it loses -- but a '
-      + 'vivid metaphor or a strong turn of phrase that reads clearly IS good wording, and it wins.\n\n'
+      + 'vivid metaphor or a strong turn of phrase that reads clearly IS good wording, and it wins. The '
+      + 'same wording bar covers the inline `#` comments: they are short sentences in the file\'s register; '
+      + 'a file whose comments read like compressed notes (fragment chains spliced with colons, `->` '
+      + 'arrows) loses to one whose comments speak.\n\n'
       + 'Correctness is a SECONDARY sanity check, not a completeness test. Among the well-written files, reject '
       + 'one that MISLEADS about what the code does: a comment that states the opposite of the code, pins a '
       + 'result on the wrong thing, or garbles a non-obvious behavior into a statement that cannot hold '
