@@ -22,6 +22,7 @@ import re
 import sys
 
 SKILL = os.path.dirname(os.path.abspath(__file__))
+VOICES_DIR = os.path.normpath(os.path.join(SKILL, os.pardir, "_shared", "voices"))
 sys.path.insert(0, SKILL)
 from flag_tics import scan, signatures, symbol_spans  # noqa: E402
 from splice_symbol import splice, _code_only, _find  # noqa: E402
@@ -75,7 +76,7 @@ def main():
     src = open(target).read()
     spath = os.path.join(rundir, "stripped.py")
     code = open(spath).read().lower() if os.path.exists(spath) else ""
-    descriptor = json.load(open(os.path.join(SKILL, "voices.json")))["voices"].get(voice, "")
+    descriptor = json.load(open(os.path.join(VOICES_DIR, "voices.json")))["voices"].get(voice, "")
     sigs = signatures(descriptor) if descriptor else set()
 
     flags = scan(src, sigs, code)

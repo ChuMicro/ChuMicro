@@ -10,12 +10,12 @@ treats as sample-off.
 import os
 import re
 
-SKILL = os.path.dirname(os.path.abspath(__file__))
+VOICES_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 def load_voice_sample(voice_key):
     """Return the excerpt text from voice_samples/<voice_key>.md, or "" when there is none."""
-    path = os.path.join(SKILL, "voice_samples", f"{voice_key}.md")
+    path = os.path.join(VOICES_DIR, "voice_samples", f"{voice_key}.md")
     if not os.path.exists(path):
         return ""
     kept = []

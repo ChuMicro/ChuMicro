@@ -16,7 +16,9 @@ import sys
 import tempfile
 
 SKILL = os.path.dirname(os.path.abspath(__file__))
+VOICES_DIR = os.path.normpath(os.path.join(SKILL, os.pardir, "_shared", "voices"))
 sys.path.insert(0, SKILL)
+sys.path.insert(0, VOICES_DIR)
 from preflight import require_claude  # noqa: E402
 from voice_sample import load_voice_sample  # noqa: E402
 
@@ -24,7 +26,7 @@ from voice_sample import load_voice_sample  # noqa: E402
 def main():
     require_claude()
     regen_all = "--all" in sys.argv
-    vpath = os.path.join(SKILL, "voices.json")
+    vpath = os.path.join(VOICES_DIR, "voices.json")
     data = json.load(open(vpath))
     voices = data["voices"]
     previews = data.get("previews", {})

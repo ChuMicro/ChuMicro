@@ -32,11 +32,12 @@ TEST_DIRS = ("tests", "functional_tests")
 
 
 def voice_persona(key):
-    """The persona string for a voice key from voices.json (empty for plain / unknown / None)."""
+    """The persona string for a voice key from the shared registry (empty for plain / unknown / None)."""
     if not key or key == "plain":
         return ""
     try:
-        return json.load(open(os.path.join(SKILL, "voices.json"))).get("voices", {}).get(key, "")
+        from voices import REG
+        return json.load(open(REG)).get("voices", {}).get(key, "")
     except OSError:
         return ""
 
