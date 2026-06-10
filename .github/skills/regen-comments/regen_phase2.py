@@ -6,7 +6,8 @@ Runs the writer workflow (the chosen voice, 4 passes + a best-of-4 voice selecto
 `claude -p` from the run room, copies the selected pass to merged.py, then mechanically reattaches the
 preserve lane. Produces the finished file.
 
-Usage: regen_phase2.py <rundir> <voice_key> [--kind <genre>]
+Usage: regen_phase2.py <rundir> <voice_key> [--kind <genre>] [--tight]
+--tight = summary-only docstrings (1-2 sentences, no body/sections; self-documenting symbols get none).
 Precondition: <rundir>/ledger_final.md exists (assembled by the orchestrator after the picker).
 The genre is read from <rundir>/phase1.json by default; --kind overrides it.
 """
@@ -37,6 +38,7 @@ def main():
     require_claude()
     args = sys.argv[1:]
     kind = args[args.index("--kind") + 1] if "--kind" in args else None
+    tight = "--tight" in args
     pos = [a for a in args if not a.startswith("--") and a != kind]
     rundir = os.path.abspath(pos[0])
     voice = pos[1]
@@ -55,7 +57,7 @@ def main():
     # writer workflow: chosen voice, 4 passes + best-of-N selector (the selector only emits a winner number)
     src = open(os.path.join(SKILL, "writers_wf.js")).read()
     src = (src.replace("__RUNDIR__", rundir).replace("__VOICE_PARA__", voices[voice])
-              .replace("__GENRE__", genre))
+              .replace("__GENRE__", genre).replace("__TIGHT__", "1" if tight else "0"))
     open(os.path.join(rundir, "writers_wf.js"), "w").write(src)
     claude_p_workflow(rundir, "writers_wf.js")
 

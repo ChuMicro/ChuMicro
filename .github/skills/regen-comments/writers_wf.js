@@ -21,6 +21,9 @@ const VOICE_PARA = "__VOICE_PARA__"
 // one-sentence claim docstrings (no Args/Returns); 'example' = dense near-line annotation. Voice still
 // applies as a register, but the genre shape leads.
 const GENRE = "__GENRE__"
+// TIGHT mode (opt-in --tight): summary-only docstrings, 1-2 sentences, no body/sections; a
+// self-documenting symbol gets NO docstring. The strict-no-body rule chosen 2026-05-26, as a run mode.
+const TIGHT = '__TIGHT__' === '1'
 
 const GEN_SCHEMA = { type: 'object', additionalProperties: false, properties: { path: { type: 'string' } }, required: ['path'] }
 
@@ -101,8 +104,35 @@ function genrePrompt(genre, n) {
     + bans
 }
 
+function tightPrompt(n) {
+  const voiced = VOICE_PARA.trim()
+  const voiceBlock = voiced
+    ? (VOICE_PARA + ' Write in that voice -- word choice, rhythm, attitude -- inside the limits below. '
+       + 'The voice changes the register, never the length.\n\n')
+    : ''
+  const register = voiced ? 'in that voice' : 'in plain English'
+  return voiceBlock
+    + 'Read the code at ' + FILE + ' and the nuance ledger at ' + LEDGER + ' together. The ledger holds the '
+    + 'non-obvious behavior a plain reading of the code misses.\n\n'
+    + 'TIGHT MODE -- summaries only. Explain ' + register + ' what each class, function, and method does in '
+    + 'AT MOST one or two short sentences: the purpose and the contract a caller relies on. NO body '
+    + 'paragraphs. NO Args / Returns / Raises sections, ever. Do not stuff: never chain extra clauses into '
+    + 'a sentence to smuggle detail past the limit -- if a detail does not change what a caller does, it '
+    + 'does not ride. A symbol whose name and signature already say everything gets NO docstring at all. '
+    + 'The module docstring is one to three sentences on what the file does.\n\n'
+    + 'Every kept ledger fact still lands exactly once: woven into the summary sentence when it IS the '
+    + 'caller contract, otherwise as a short `#` comment on its own line above the line it describes. '
+    + 'Never drop a ledger fact.\n\n'
+    + 'If a library ledger exists at ' + RUNDIR + '/LIBRARY_FACTS.md, use it for cross-file context and '
+    + 'shared vocabulary.\n\n'
+    + 'No em-dashes or semicolons or the words `canonical` or `shape`. Wrap code expressions in double '
+    + 'backticks and keep lines to 100 characters. Add docstrings and comments only.\n\n'
+    + 'Write the marked-up file to ' + RUNDIR + '/runs/run-' + n + '.py. After writing, reply DONE.'
+}
+
 function genPrompt(n) {
   if (GENRE === 'test' || GENRE === 'functional_test' || GENRE === 'example') return genrePrompt(GENRE, n)
+  if (TIGHT) return tightPrompt(n)
   const voiced = VOICE_PARA.trim()
   const voiceBlock = voiced
     ? (VOICE_PARA + ' Write the docstrings and comments FULLY in that voice -- let it come through in word '
@@ -179,7 +209,15 @@ function selectPrompt() {
     + 'you noticed in the chosen file (so a human can double-check it), or "" if none. Return the same '
     + 'object. Do not write any other file. Reply only after pick.json is written.'
   let job
-  if (GENRE === 'test' || GENRE === 'functional_test') {
+  if (TIGHT && GENRE !== 'test' && GENRE !== 'functional_test' && GENRE !== 'example') {
+    job = 'YOUR JOB (TIGHT MODE): pick the file whose one-or-two-sentence summaries are the sharpest and '
+      + 'most exact. REJECT a file that writes a body paragraph or an Args / Returns / Raises section '
+      + 'anywhere, stuffs extra clauses into a sentence to smuggle detail past the limit, or puts a '
+      + 'docstring on a symbol whose name and signature already say everything. Among the compliant files '
+      + 'prefer the one that says the necessary thing in the fewest, best words while keeping the ledger '
+      + 'facts placed (in the summary when they are the contract, else as `#` comments at their lines). '
+      + 'Thin is correct here; missing the caller contract is not.'
+  } else if (GENRE === 'test' || GENRE === 'functional_test') {
     job = 'YOUR JOB: pick the file whose test docstrings best NAME THE CLAIM each test verifies -- the '
       + 'subject under test acting, in domain terms, in one clean sentence (e.g. "``ticks_diff`` returns the '
       + 'plain gap for a forward difference."), not how the test does it. REJECT a file that narrates the '
