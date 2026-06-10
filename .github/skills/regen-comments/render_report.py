@@ -393,7 +393,14 @@ def build_file_section(rundir, voice, original, ns="f0"):
     flags = legib.get("flags", []) if isinstance(legib, dict) else []
     ticj = _load(os.path.join(rundir, "tics.json"), {})
     tflags = ticj.get("flags", []) if isinstance(ticj, dict) else []
+    banj = _load(os.path.join(rundir, "bans.json"), {})
+    bflags = banj.get("flags", []) if isinstance(banj, dict) else []
     flagged_syms = {f.get("symbol") for f in flags} | {f.get("symbol") for f in tflags}
+    for b in bflags:                              # mechanical-ban leftovers badge their symbols too
+        w = b.get("where", "")
+        if w.startswith("docstring:"):
+            short = w.split(":", 1)[1]
+            flagged_syms |= {q for q in after if q.split(".")[-1] == short} or {short}
 
     fname = os.path.basename(original)
     rows = []
@@ -509,6 +516,21 @@ def build_file_section(rundir, voice, original, ns="f0"):
     else:
         tics_html = ""
 
+    # mechanical-ban leftovers (bans.json, written by polish.py): violations that survived ban-aware
+    # autoroute + the single polish round because every cached pass was dirty — the human fixes these
+    # via the picker/edit
+    if bflags:
+        bitems = "".join(
+            f"<li><code>{_esc(b.get('where'))}</code> <span class='tk tk-leak'>{_esc(b.get('kind'))}</span>"
+            f"<div class='flagsent'>{_esc(b.get('text'))}</div></li>" for b in bflags)
+        bans_html = (f"<div class='card legib'><b>⚠ {len(bflags)} mechanical-ban violation(s) remain</b> — "
+                     f"no cached pass had a clean take and one polish round did not clear them; fix via "
+                     f"pick-a-different-take or edit-it-myself.<ul class='flags'>{bitems}</ul></div>")
+    elif os.path.exists(os.path.join(rundir, "bans.json")):
+        bans_html = "<div class='card legib ok'>✓ mechanical bans: clean.</div>"
+    else:
+        bans_html = ""
+
     section = f"""
  <div class="sub">voice: <b>{_esc(voice)}</b> · <span class="badge {badge_cls}">{_esc(badge)}</span>{' · library-aware' if has_lib else ''}</div>
 
@@ -521,6 +543,7 @@ def build_file_section(rundir, voice, original, ns="f0"):
  {sel_html}
  {legib_html}
  {tics_html}
+ {bans_html}
 
  <details class="card ledger"><summary><b>Validated ledger</b> — {len(ledger)} facts (click to expand)</summary>
    <table><tr><th>fact (telegraphic stub)</th><th>sites</th><th>lenses</th><th>conf</th></tr>{ledger_rows}</table>
