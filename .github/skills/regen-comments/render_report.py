@@ -154,6 +154,25 @@ def main():
     else:
         legib_html = ""
 
+    # Tic / leak flags (flag_tics.py, deterministic — no LLM): AI discourse-marker tics + voice-descriptor
+    # leaks (a phrase from the voice's persona that landed in a comment but isn't in the code). Flag-only.
+    ticj = _load(os.path.join(rundir, "tics.json"), {})
+    tflags = ticj.get("flags", []) if isinstance(ticj, dict) else []
+    if tflags:
+        titems = "".join(
+            f"<li><code>{_esc(f.get('symbol'))}</code> <span class='tk tk-{_esc(f.get('kind'))}'>{_esc(f.get('kind'))}</span> "
+            f"<span class='meta'>({_esc(f.get('why'))})</span>"
+            f"<div class='flagsent'>{_esc(f.get('text'))}</div></li>" for f in tflags)
+        nt = sum(1 for f in tflags if f.get("kind") == "tic")
+        nl = sum(1 for f in tflags if f.get("kind") == "leak")
+        tics_html = (f"<div class='card legib'><b>⚠ {nt} AI-tic(s) + {nl} voice-leak(s) flagged</b> — "
+                     f"formulaic phrasing and voice-descriptor words that slipped into the comments; cut them "
+                     f"in the refine loop.<ul class='flags'>{titems}</ul></div>")
+    elif os.path.exists(os.path.join(rundir, "tics.json")):
+        tics_html = "<div class='card legib ok'>✓ no AI-tics or voice-leaks flagged.</div>"
+    else:
+        tics_html = ""
+
     doc = f"""<!doctype html><html><head><meta charset="utf-8">
 <title>regen-comments report — {_esc(os.path.basename(original))}</title>
 <style>
@@ -186,6 +205,8 @@ def main():
  .legib.ok{{border-left-color:#1a7a3c;background:#f3fbf5;color:#1a7a3c}}
  .legib .flags{{margin:8px 0 0;padding-left:18px}} .legib .flagsent{{font-style:italic;margin:2px 0 8px}}
  .legib .meta{{color:#8a93a0;font-style:normal}}
+ .tk{{font-size:10.5px;padding:1px 6px;border-radius:3px;font-weight:700;text-transform:uppercase}}
+ .tk-tic{{background:#e8e0ff;color:#5b3a9a}} .tk-leak{{background:#ffe0e0;color:#a8323f}}
 </style></head><body><div class="wrap">
  <h1>regen-comments — <code>{_esc(os.path.basename(original))}</code></h1>
  <div class="sub">voice: <b>{_esc(voice)}</b> · <span class="badge {badge_cls}">{_esc(badge)}</span>{' · library-aware' if has_lib else ''}</div>
@@ -198,6 +219,7 @@ def main():
 
  {sel_html}
  {legib_html}
+ {tics_html}
 
  <details class="card ledger"><summary><b>Validated ledger</b> — {len(ledger)} facts (click to expand)</summary>
    <table><tr><th>fact (telegraphic stub)</th><th>sites</th><th>lenses</th><th>conf</th></tr>{ledger_rows}</table>
