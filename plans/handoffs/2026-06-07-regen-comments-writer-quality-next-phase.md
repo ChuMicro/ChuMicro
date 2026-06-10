@@ -887,6 +887,43 @@ the flags. OPEN/OPTIONAL: a writer-prompt clause ("the description is the voice'
 content; never quote its words/numbers") would attack the leak at the source, but it's a prompt change so it
 needs a clean-room A/B first -- deferred. `[[who-framing-minimizes-tics-and-leaks; flag_tics-deterministic-flag-only]]`
 
+### 2026-06-09 (cont. 6) — PLAIN < summarizer (reopened); reword test PREPARED (round34); seed as fallback. ←NEXT
+User (twice — the original `[[summarizer-key]]` problem): "the summarizer always writes better than plain."
+EVIDENCE (compared g-method/summary.json vs g-method/FINAL_plain.py): the gap is CONCENTRATED, not uniform.
+- plain's METHODS (pick, _resolve_mixed) are competitive or BETTER -- more behavioral, carry Args/Returns, do
+  NOT name internal helpers (the summarizer's pick leaks `_resolve_mixed` + `disable_extension=False`).
+- plain LOSES at the MODULE docstring: it spills the per-method drift rule into the module summary and gets
+  verbose, where the summarizer stays high-level (what the file does + how it is structured). Plus AI-tics.
+  This is the `[[summarizer-key]]` burden made visible: the writer carries the ledger traps -> mechanism-creep
+  at module level; the summarizer has no ledger so it stays clean.
+DECISION: try a light REWORD of plain FIRST (cheaper, lower-risk than re-architecting). The seed-from-
+summarizer idea is a worthwhile FALLBACK, but the user rightly worries the writer's SPLIT/expand step (clean
+paragraph -> module summary + per-symbol docstrings + Args/Returns) is exactly where tics creep back -- seeding
+protects the words, not the restructuring.
+**PREPARED TEST** -- `.scratch/regen-comments/writer-quality/round34.py` (round-style, summarizer as the bar),
+4 arms on the fixture, n=3 each:
+  control  = current shipped voiceless plain prompt
+  altitude = + "For the module, what the file does in the real world AND how it is organized -- keep it
+             high-level; the per-method rules, conditions, and thresholds belong on those methods, not in the
+             module docstring."
+  antitic  = + "Write directly; avoid filler-emphasis scaffolding -- 'that's the whole X' / 'here's the thing'
+             / 'the one thing' / 'this is the X that'."
+  both     = altitude + antitic
+GROUNDING: SRC=`/tmp/regen-cr/qr-reword` (stripped.py + ledger_final.md + summary.json, copied from g-method).
+If missing: `mkdir -p /tmp/regen-cr/qr-reword && for f in stripped.py ledger_final.md summary.json; do cp
+/tmp/regen-cr/g-method/$f /tmp/regen-cr/qr-reword/; done`. If g-method is also gone, re-run phase1+phase2 on
+`.scratch/regen-comments/voice-test/quality_ranking.py` (code genre, voice plain) to regenerate the grounding.
+RUN: `cd .scratch/regen-comments/writer-quality && .venv/bin/python3 round34.py gen` (~10-12 min, 12 runs at
+concurrency 4 via `round6.r.run_claude`), then `round34.py render` -> report_r34_reword_plain.html. VERIFIED:
+compiles, round6 harness imports, the 4 prompt arms differ. READ: does a reworded arm read at the summarizer's
+level (esp. the MODULE), and does antitic cut tics WITHOUT flattening? (Opener-bans failed in round32/33, but
+these are SEMANTIC frames, may differ.) IF a winner closes the module gap + holds legibility/correctness ->
+fold the reword into `writers_wf.js` genPrompt's VOICELESS branch (the `MODULE_DEFAULT`/altitude text + the
+antitic line) and clean-room re-validate; the seed experiment then becomes unnecessary. IF NOT -> run the
+seed-from-summarizer test (summarizer runs FIRST; writer expands its per-symbol prose keeping wording/altitude,
+only adding Args/Returns + pushing line-mechanics to inline `#`). NB: flag_tics.py already NETS plain's tics in
+the report regardless. `[[plain-loses-to-summarizer-at-MODULE-altitude; reword-test-round34-prepared; seed-is-fallback]]`
+
 ### STATE (current)
 Committed: ... -> **22643cfc** (cut_cruft dropped) -> **c96fbfcf** (plain-English register + anti-jargon +
 drop-"tight") -> **f8804a6c** (verify_code helper + de-named voices + selector floor + paragraph docstrings +
