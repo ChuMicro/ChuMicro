@@ -4,7 +4,7 @@ One file per `voices.json` key, except `plain` (voiceless by design). Each file 
 
 Why natural-domain prose and not code comments: none of these people wrote docstrings, so the only real text that exists is in their own genre. Why unmodified: sentence breaks and pacing carry the voice, and flattening or clipping a sample destroys the signal it exists to provide.
 
-Intended use: grounding input for a voice. Distill concrete mechanics from the excerpt (sentence rhythm, mode of address, lexical register, what the writer notices), then generate in-genre exemplar docstrings for human curation. No script consumes these files yet.
+Consumption: `voice_sample.py` extracts the `## Excerpt` prose (never this header metadata), and `regen_phase2.py` / `regen_symbol.py` substitute it into `writers_wf.js`, where voiced writer prompts carry it as a register sample — word choice, rhythm, and attitude, with the genre shape rules still owning the format. A second use stays open: distilling concrete mechanics from the excerpt into richer personas or curated in-genre exemplar docstrings.
 
 Rights: `hemingway` is public domain in the USA; `torvalds` is a public mailing-list post; the rest are short attributed excerpts held as internal prompt data. Keep excerpts short, and trim further before any public release of this tree.
 
