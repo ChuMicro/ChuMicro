@@ -22,6 +22,7 @@ import sys
 SKILL = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, SKILL)
 from preflight import require_claude  # noqa: E402
+from voice_sample import load_voice_sample  # noqa: E402
 
 
 def claude_p_workflow(rundir, wf_name):
@@ -61,6 +62,7 @@ def main():
     genre = cfg.get("genre") or (json.load(open(p1)).get("genre") if os.path.exists(p1) else None) or "code"
     src = open(os.path.join(SKILL, "writers_wf.js")).read()
     src = (src.replace("__RUNDIR__", rundir).replace("__VOICE_PARA__", voices[voice])
+              .replace('"__VOICE_SAMPLE__"', json.dumps(load_voice_sample(voice)))
               .replace("__GENRE__", genre).replace("__TIGHT__", "1" if cfg.get("tight") else "0")
               .replace("__LESS__", "1" if cfg.get("less") else "0"))
     open(os.path.join(rundir, "writers_wf.js"), "w").write(src)

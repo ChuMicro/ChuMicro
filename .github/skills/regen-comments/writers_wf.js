@@ -17,6 +17,9 @@ const FILE = RUNDIR + '/stripped.py'
 const LEDGER = RUNDIR + '/ledger_final.md'
 const PASSES = 4
 const VOICE_PARA = "__VOICE_PARA__"
+// VOICE_SAMPLE is a real-prose excerpt of the chosen voice, substituted as a JSON string literal from
+// voice_samples/<key>.md (excerpt text only -- attribution never reaches the prompt). Empty = no sample.
+const VOICE_SAMPLE = "__VOICE_SAMPLE__"
 // GENRE selects the writer shape: 'code' (default) = behavior + caller contract; 'test'/'functional_test' =
 // one-sentence claim docstrings (no Args/Returns); 'example' = dense near-line annotation. Voice still
 // applies as a register, but the genre shape leads.
@@ -47,13 +50,23 @@ const GEN_SCHEMA = { type: 'object', additionalProperties: false, properties: { 
 // have a different shape entirely -- a test docstring names the claim (no Args/Returns, no body), an example
 // is annotated densely line by line -- so genrePrompt is self-contained and genPrompt returns it early.
 // Voice still applies as a register (voiceLead), but the genre shape leads.
+// sampleBlock() builds the optional voice-sample section of a voiced prompt: VOICE_SAMPLE framed so the
+// writer absorbs word choice, rhythm, and attitude from real prose while the genre shape and limits keep
+// owning the format. Empty when the run is voiceless or the voice has no sample on file.
+function sampleBlock() {
+  if (!VOICE_PARA.trim() || !VOICE_SAMPLE.trim()) return ''
+  return 'A sample of that voice, in its own genre rather than code comments. Take the word choice, '
+    + 'rhythm, and attitude from it -- never its paragraph length or format. Every shape and length rule '
+    + 'below still applies as written:\n\n' + VOICE_SAMPLE.trim() + '\n\n'
+}
+
 function genrePrompt(genre, n) {
   const out = RUNDIR + '/runs/run-' + n + '.py'
   const voiced = VOICE_PARA.trim()
   const register = voiced ? 'in that voice' : 'in plain English'
   const voiceLead = voiced
     ? (VOICE_PARA + ' Let the voice come through in word choice and rhythm, but keep the genre shape below, '
-       + 'and every docstring and comment must stay clear and usable.\n\n')
+       + 'and every docstring and comment must stay clear and usable.\n\n' + sampleBlock())
     : ''
   const bans =
     '\n\nNo em-dashes or semicolons or the words `canonical` or `shape`. Wrap code identifiers and literals '
@@ -108,7 +121,7 @@ function tightPrompt(n) {
   const voiced = VOICE_PARA.trim()
   const voiceBlock = voiced
     ? (VOICE_PARA + ' Write in that voice -- word choice, rhythm, attitude -- inside the limits below. '
-       + 'The voice changes the register, never the length.\n\n')
+       + 'The voice changes the register, never the length.\n\n' + sampleBlock())
     : ''
   const register = voiced ? 'in that voice' : 'in plain English'
   return voiceBlock
@@ -142,7 +155,7 @@ function genPrompt(n) {
        + 'choice, rhythm, and attitude, do not hold it back. The voice changes the REGISTER, never the '
        + 'altitude or the length: it does not add content, repeat a fact in different costumes for flavor, '
        + 'or pad a trivial symbol into a body paragraph. The other limit is that each docstring stays a '
-       + 'clear, usable docstring a caller could rely on, never garbled or obscure.\n\n')
+       + 'clear, usable docstring a caller could rely on, never garbled or obscure.\n\n' + sampleBlock())
     : ''
   const register = voiced ? 'in that voice' : 'in plain English'
   const wordChoice = voiced
