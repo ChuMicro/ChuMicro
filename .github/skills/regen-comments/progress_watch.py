@@ -1,16 +1,21 @@
 #!/usr/bin/env python3
-"""Live progress for a regen-comments run, watching the run room's artifacts (no stream parsing).
+"""Live progress for regen-comments runs, watching run-room artifacts (no stream parsing).
 
 A clean-room phase runs as one `claude -p` that prints nothing until it finishes. But each stage drops a file
 into the run room as it completes, so those files ARE the progress. The orchestrator runs the phase in the
 background and arms a Monitor on this script — each line printed below becomes a chat event — so progress
-streams into the session with no second terminal. A human can also run it directly:
+streams into the session with no second terminal. A human can also run it directly.
 
-    python3 progress_watch.py <rundir>
+Watches ANY number of rooms (a library batch runs one room per file; pass them all — a single watcher on one
+room misses the other files' events entirely). Events are prefixed with the room's tag. Exits when EVERY room
+has produced the terminal artifact:
 
-It prints each pipeline artifact as it lands, then exits when the final file appears (so a Monitor on it ends
-cleanly the moment the phase is done). It reports only files touched AFTER it starts, so a re-used run room's
-stale artifacts from an earlier run are ignored.
+    progress_watch.py <rundir> [<rundir> ...] [--until <glob>]
+
+--until defaults to FINAL_*.py (a phase-2 / full-run watch). For a batch phase-1 watch pass
+`--until phase1.json` — without it a phase-1 watch has no terminal artifact and idles to the deadline.
+Comparison runs: pass the voice rooms (`$RUN/v/<voice>`) as the rooms. Reports only files touched AFTER the
+watch starts, so a re-used room's stale artifacts are ignored.
 """
 import glob
 import os
@@ -26,6 +31,7 @@ STEPS = [
     ("findings/comments.json", "lens: comments"),
     ("ledger_provisional.md", "ledger written"),
     ("validation.json", "validator ran"),
+    ("phase1.json", "phase 1 grounding complete"),
     ("ledger_final.md", "ledger finalized (picker done)"),
     ("runs/run-1.py", "writer pass 1"),
     ("runs/run-2.py", "writer pass 2"),
@@ -39,28 +45,49 @@ STEPS = [
 
 
 def main():
-    if len(sys.argv) < 2:
-        sys.exit("usage: progress_watch.py <rundir>")
-    rundir = os.path.abspath(sys.argv[1])
+    args = sys.argv[1:]
+    until = "FINAL_*.py"
+    if "--until" in args:
+        i = args.index("--until")
+        until = args[i + 1]
+        del args[i:i + 2]
+    rooms = [os.path.abspath(a) for a in args]
+    if not rooms:
+        sys.exit("usage: progress_watch.py <rundir> [<rundir> ...] [--until <glob>]")
+
     start = time.time()
-    seen = set()
-    # flush every line: stdout is block-buffered when piped to a file/tail, so a live watcher must flush
-    print(f"watching {rundir}\n(reports only artifacts touched from now on; Ctrl-C to stop)", flush=True)
-    deadline = start + 1800  # 30-minute safety cap
+    seen = set()           # (room, rel) pairs already reported
+    done = set()           # rooms whose terminal artifact landed
+    tags = {r: os.path.basename(r) for r in rooms}
+    # flush every line: stdout is block-buffered when piped, so a live watcher must flush
+    print(f"watching {len(rooms)} room(s), until {until!r} in each "
+          f"(reports only artifacts touched from now on; Ctrl-C to stop)", flush=True)
+    for r in rooms:
+        print(f"  - {tags[r]}", flush=True)
+    deadline = start + 7200  # safety cap; long comparison/library runs legitimately take over an hour
     while time.time() < deadline:
-        for rel, label in STEPS:
-            if rel in seen:
-                continue
-            fresh = [m for m in glob.glob(os.path.join(rundir, rel))
-                     if os.path.getmtime(m) >= start - 1]
-            if fresh:
-                seen.add(rel)
-                print(f"  [{time.strftime('%H:%M:%S')}] ok  {label}", flush=True)
-                if rel.startswith("FINAL"):
-                    print("  run complete.", flush=True)
-                    return
+        for room in rooms:
+            for rel, label in STEPS:
+                key = (room, rel)
+                if key in seen:
+                    continue
+                fresh = [m for m in glob.glob(os.path.join(room, rel))
+                         if os.path.getmtime(m) >= start - 1]
+                if fresh:
+                    seen.add(key)
+                    print(f"  [{time.strftime('%H:%M:%S')}] {tags[room]}: {label}", flush=True)
+            if room not in done:
+                hit = [m for m in glob.glob(os.path.join(room, until))
+                       if os.path.getmtime(m) >= start - 1]
+                if hit:
+                    done.add(room)
+                    print(f"  [{time.strftime('%H:%M:%S')}] {tags[room]}: reached {until} "
+                          f"({len(done)}/{len(rooms)} rooms done)", flush=True)
+        if len(done) == len(rooms):
+            print("  all rooms complete.", flush=True)
+            return
         time.sleep(2)
-    print("  (watch timed out after 30 min)", flush=True)
+    print("  (watch timed out after 2 h)", flush=True)
 
 
 if __name__ == "__main__":
