@@ -46,7 +46,9 @@ def main():
         sys.exit("ledger_final.md missing — run the picker + assemble it before phase 2.")
     # concurrency 2: each voice is its own 4-pass claude -p fan-out, so 2 at a time avoids oversubscribing
     results = []
-    with cf.ThreadPoolExecutor(max_workers=min(2, len(voices))) as ex:
+    # one wave for up to 3 voices: each voice is ~5 internal agents, so 3 voices ~= 15 concurrent,
+    # the same scale regen_batch already sanctions; capping at 2 made a 3-voice run take two waves
+    with cf.ThreadPoolExecutor(max_workers=min(3, len(voices))) as ex:
         for res in ex.map(lambda v: run_voice(rundir, v), voices):
             results.append(res)
 
