@@ -1,0 +1,64 @@
+#!/usr/bin/env python3
+"""Serve a run room's report over localhost and loop the page's Submit button back to the session.
+
+The rendered pages (report.html / library_report.html / compare.html) carry a Copy-selection bar
+whose blob the human pastes back into the session. Served over http, the same bar also shows a
+**Submit to session** button: it POSTs the selection blob here, and this server writes it to
+<dir>/selection.txt and prints one `SELECTION RECEIVED -> <path>` line to stdout. The orchestrator
+runs this server in the background with a Monitor on its stdout, so a submit arrives in the session
+as an event — the same blob, the same in-session `apply_selection.py` parse and invariant-7 read as
+a paste. The server is transport only: it never reads, applies, or rewrites a FINAL.
+
+Binds 127.0.0.1 on a free port. Auto-opens the page unless REGEN_NO_OPEN is set.
+
+Usage: serve_report.py <dir> [<page>]      (default page: report.html)
+Stdout: `SERVING <url>` once on start, then one `SELECTION RECEIVED -> <path>` line per submit.
+"""
+import http.server
+import os
+import sys
+import webbrowser
+
+
+def main():
+    directory = os.path.abspath(sys.argv[1])
+    page = sys.argv[2] if len(sys.argv) > 2 else "report.html"
+    if not os.path.exists(os.path.join(directory, page)):
+        print(f"refusing to serve: {directory}/{page} does not exist", flush=True)
+        raise SystemExit(2)
+    sink = os.path.join(directory, "selection.txt")
+
+    class ReportHandler(http.server.SimpleHTTPRequestHandler):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, directory=directory, **kwargs)
+
+        def log_message(self, *args):  # stdout is the Monitor's event stream; keep request noise off it
+            pass
+
+        def do_POST(self):
+            if self.path.rstrip("/") != "/selection":
+                self.send_error(404)
+                return
+            length = int(self.headers.get("Content-Length", 0))
+            blob = self.rfile.read(length).decode("utf-8", "replace")
+            with open(sink, "w") as handle:
+                handle.write(blob)
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(b'{"ok": true}')
+            print(f"SELECTION RECEIVED -> {sink}", flush=True)
+
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), ReportHandler)
+    url = f"http://127.0.0.1:{server.server_port}/{page}"
+    print(f"SERVING {url}", flush=True)
+    if not os.environ.get("REGEN_NO_OPEN"):
+        try:
+            webbrowser.open(url)
+        except Exception:  # noqa: BLE001 - headless/SSH: the printed URL is the fallback
+            pass
+    server.serve_forever()
+
+
+if __name__ == "__main__":
+    main()

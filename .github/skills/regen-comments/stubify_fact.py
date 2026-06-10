@@ -24,6 +24,8 @@ def main():
     require_claude()
     rundir = os.path.abspath(sys.argv[1])
     fact = sys.argv[2]
+    # announce before the silent clean-room call so a chained refine sequence self-narrates
+    print("validating the supplied fact against the code (one clean-room claude -p, ~1 min)...", flush=True)
     prompt = (
         "You convert a human-supplied fact into a telegraphic LEDGER STUB and VALIDATE it against the code. "
         "Reason only from the code.\n\nCODE: ./stripped.py\n\nThe human asserts:\n\"\"\"" + fact + "\"\"\"\n\n"

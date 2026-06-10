@@ -28,6 +28,8 @@ def main():
     final = os.path.join(rundir, f"FINAL_{voice}.py")
     if not os.path.exists(final):
         sys.exit("no finished file yet — run phase 2 before tightening.")
+    # announce before the silent clean-room call so a chained refine sequence self-narrates
+    print(f"tightening {qual!r}, fact-preserving (one clean-room claude -p, ~1 min)...", flush=True)
     # a --tight run has no sections to keep (telling the agent to KEEP Args/Returns there would re-grow
     # them); a --less run keeps the sections but its summary must stay at 1-2 sentences
     p2 = os.path.join(rundir, "phase2.json")

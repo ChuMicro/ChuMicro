@@ -114,15 +114,30 @@ VOICE_SCRIPT = """
   }
   function copy() {
     var blob = buildBlob();
+    // the execCommand fallback (file:// pages: no clipboard API) needs the textarea visible + selected
+    var bw = document.querySelector('.blobwrap'); if (bw && !bw.open) bw.open = true;
     var ta = document.getElementById('blob'); ta.value = blob; ta.select();
     var done = function () { var b = document.getElementById('copybtn'); var o = b.textContent; b.textContent = 'copied \\u2713'; setTimeout(function () { b.textContent = o; }, 1400); };
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(blob).then(done, function () { try { document.execCommand('copy'); done(); } catch (e) {} });
     } else { try { document.execCommand('copy'); done(); } catch (e) {} }
   }
+  function submitSel() {
+    var sb = document.getElementById('submitbtn'); var o = sb.textContent;
+    var flash = function (t) { sb.textContent = t; setTimeout(function () { sb.textContent = o; }, 2200); };
+    fetch('/selection', { method: 'POST', body: buildBlob() })
+      .then(function (r) { flash(r.ok ? 'submitted \\u2713 (return to the session)' : 'failed: use Copy selection'); })
+      .catch(function () { flash('failed: use Copy selection'); });
+  }
   radios.forEach(function (r) { r.addEventListener('change', persist); });
   notes.forEach(function (t) { t.addEventListener('input', persist); });
   document.getElementById('copybtn').addEventListener('click', copy);
+  // Submit posts the same blob to the serving session; a file:// page has no server, so it stays hidden.
+  var sb = document.getElementById('submitbtn');
+  if (sb) {
+    if (location.protocol === 'http:' || location.protocol === 'https:') sb.hidden = false;
+    sb.addEventListener('click', submitSel);
+  }
   refresh();
 })();
 </script>"""
@@ -200,9 +215,11 @@ def main():
             + "".join(sections)
             + """
  <div class="card selbar">
-   <div class="row"><span class="grow" id="vstate">no voice selected</span><button class="primary" id="copybtn">Copy selection</button></div>
+   <div class="row"><span class="grow" id="vstate">no voice selected</span><button class="primary" id="submitbtn" hidden>Submit to session</button><button class="primary" id="copybtn">Copy selection</button></div>
+   <details class="blobwrap"><summary>selection blob + how to hand it back</summary>
    <textarea id="blob" readonly></textarea>
-   <div class="sub" style="margin:8px 0 0">Pick a voice above, then copy this blob and paste it back into the Claude session — the per-symbol picker report for that voice comes next.</div>
+   <div class="sub" style="margin:8px 0 0">Pick a voice above, then Submit to session (when served) or copy this blob and paste it back into the Claude session — the per-symbol picker report for that voice comes next.</div>
+   </details>
  </div>""")
 
     out = os.path.join(rundir, "compare.html")

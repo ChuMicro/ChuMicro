@@ -31,6 +31,8 @@ def main():
     final = f"FINAL_{voice}.py"
     if not os.path.exists(os.path.join(rundir, final)):
         sys.exit(f"{final} missing -- run phase 2 first.")
+    # announce before the silent clean-room call so a chained refine sequence self-narrates
+    print("scanning the finished file for awkward sentences (one clean-room claude -p, ~1 min)...", flush=True)
     prompt = (
         "Read the finished Python file ./" + final + ". Judge ONLY how the docstrings and `#` comments READ "
         "as English. Not their correctness, not their completeness, not the code itself.\n\n"

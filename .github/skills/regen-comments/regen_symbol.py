@@ -46,6 +46,8 @@ def main():
     voices = json.load(open(os.path.join(SKILL, "voices.json")))["voices"]
     if voice not in voices:
         sys.exit(f"unknown voice {voice!r}")
+    # announce before the silent clean-room call so a chained refine sequence self-narrates
+    print(f"regenerating {qual!r} against the current ledger (one clean-room claude -p, ~1-2 min)...", flush=True)
 
     # keep the human's accepted file to splice onto; re-run the writer against the (edited) ledger_final.md
     current = os.path.join(rundir, "current.py")

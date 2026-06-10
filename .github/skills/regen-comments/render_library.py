@@ -40,7 +40,12 @@ def main():
         flag_chip = f"<span class='tflag'>⚠ {meta['n_flags']}</span>" if meta["n_flags"] else ""
         tabs.append(f"<button data-pane='{k}'{' class=active' if k == 0 else ''}>"
                     f"{_esc(meta['file'])}{flag_chip}</button>")
-        panes.append(f"<div class='filepane{' active' if k == 0 else ''}' id='pane-{k}'>{section}</div>")
+        # every pane leads with its own filename: with the sticky tab bar this makes the active file
+        # unmistakable at any scroll depth (panes can otherwise open on similar-looking summary cards)
+        panes.append(f"<div class='filepane{' active' if k == 0 else ''}' id='pane-{k}'>"
+                     f"<div class='panehead'><code>{_esc(meta['file'])}</code>"
+                     f"<span class='panemeta'>{meta['symbols']} symbols · {meta['ledger']} ledger facts</span></div>"
+                     f"{section}</div>")
 
     gen = hashlib.sha1("".join(m["hash"] for m in metas).encode()).hexdigest()[:10]
     n_flagged = sum(1 for m in metas if m["n_flags"])
