@@ -95,19 +95,11 @@ def symbol_spans(tree):
     return spans
 
 
-def main():
-    rundir = os.path.abspath(sys.argv[1])
-    voice = sys.argv[2]
-    final = os.path.join(rundir, f"FINAL_{voice}.py")
-    out = os.path.join(rundir, "tics.json")
-    if not os.path.exists(final):
-        json.dump({"flags": []}, open(out, "w"))
-        return
-    src = open(final).read()
-    spath = os.path.join(rundir, "stripped.py")
-    code = open(spath).read().lower() if os.path.exists(spath) else ""
-    descriptor = json.load(open(os.path.join(SKILL, "voices.json")))["voices"].get(voice, "")
+def scan(src, sigs, code):
+    """Flag every tic/leak in src's docstrings + comments — the reusable core of this watcher.
 
+    Also used by autoroute_tics.py to test whether an alternative pass's take on a symbol is clean.
+    """
     tree, units = comment_units(src)
     spans = symbol_spans(tree)
 
@@ -118,7 +110,6 @@ def main():
                 best = (q, s)
         return best[0]
 
-    sigs = signatures(descriptor) if descriptor else set()
     flags, seen = [], set()
     for line, text in units:
         low = text.lower()
@@ -138,7 +129,24 @@ def main():
                 seen.add(key)
                 flags.append({"symbol": sym, "kind": "leak", "text": text,
                               "why": f"voice-descriptor phrase \"{sig}\" leaked into a comment (not in the code)"})
+    return flags
 
+
+def main():
+    rundir = os.path.abspath(sys.argv[1])
+    voice = sys.argv[2]
+    final = os.path.join(rundir, f"FINAL_{voice}.py")
+    out = os.path.join(rundir, "tics.json")
+    if not os.path.exists(final):
+        json.dump({"flags": []}, open(out, "w"))
+        return
+    src = open(final).read()
+    spath = os.path.join(rundir, "stripped.py")
+    code = open(spath).read().lower() if os.path.exists(spath) else ""
+    descriptor = json.load(open(os.path.join(SKILL, "voices.json")))["voices"].get(voice, "")
+
+    sigs = signatures(descriptor) if descriptor else set()
+    flags = scan(src, sigs, code)
     json.dump({"flags": flags}, open(out, "w"), indent=2)
     nt = sum(1 for f in flags if f["kind"] == "tic")
     nl = sum(1 for f in flags if f["kind"] == "leak")

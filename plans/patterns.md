@@ -1150,3 +1150,13 @@ When a cross-runtime test file is too large to run on a freshly-reset Pi Pico W 
 - **Slice size is bench-determined per library, not guessed** — the ceiling is library-weight-dependent (requests `_wire` fits 89 tests/file; websockets `_wire` OOMs ~30). Start conservative, ladder down only the slices that OOM. A single test whose *own* allocation exceeds the board (not co-residency) is loud-skipped per the Decision 0072 §3 exception, not split.
 
 Related: Decision 0072, the `chumicro-pytest-device` `--per-file` staging path.
+
+## Interactive-report → clipboard blob round trip (agent skills)
+
+When a skill needs richer human selection than `AskUserQuestion`'s 4-option cap allows (per-item checkboxes/radios, free-text edits, notes), render a local HTML report whose only scripted layer serializes the choices into a plain-text blob behind a **Copy selection** button; the human pastes the blob back into the session and a mechanical parser applies it under guards. Proven in `/audit-code` (`eval.html`, finding ids) and `/regen-comments` (`report.html` / `library_report.html` / `compare.html`, per-symbol picks + fenced `#edit` blocks).
+
+- **Blob grammar:** one header per file — `<skill> apply (<file>): sym=run-N, sym=edit` — then fenced bodies (`<<<EDIT … EDIT>>>`) and `#note sym: …` lines. Multi-file pages emit one section per touched file; the parser splits on headers and the applier refuses a multi-file blob without a basename filter.
+- **`file://` pages cannot write to disk** — clipboard is the transport. A local-server "Submit" button is an additive upgrade, never the baseline.
+- **Persist in-page state to localStorage keyed by a CONTENT HASH of the artifact**, not the run id: a mid-review reload restores picks; an applied change starts the page clean instead of restoring stale radios (bit us 2026-06-09).
+- **Namespace radio groups + state keys per section** when composing multiple files into one page (tabs), or one tab's picks uncheck another's.
+- The apply side is mechanical and guarded (for comment work: AST code-identity via `splice_symbol`-style fingerprint); judgment calls (lossy edits, contradicted facts) stay in-session as push-backs after parsing, never in the page.

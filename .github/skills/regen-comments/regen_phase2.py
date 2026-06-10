@@ -74,6 +74,11 @@ def main():
     print(f"  selected run-{winner}: {pick.get('why', '')}")
     if pick.get("concern"):
         print(f"  selector concern: {pick['concern']}")
+    # deterministic auto-route (no LLM): if the winner carries a tic/leak on a symbol but another cached
+    # pass has a clean take, splice that take in verbatim (code-identity guarded, recorded in pick.json,
+    # surfaced in the report). Runs before polish so routed-in raw text still gets the ban-fix loop.
+    subprocess.run([sys.executable, os.path.join(SKILL, "autoroute_tics.py"), rundir, voice, merged],
+                   check=False)
     # verify: enforce the mechanical tic bans before reattach (no-op when already clean)
     # (the cut/dedup pass was dropped: an ~8-min LLM call to delete the rare duplicate sentence is not worth
     # it; the writer states each fact once, and a rare slip is minor cosmetic redundancy caught in review)
