@@ -843,6 +843,29 @@ Closes both cont. 2 OPEN/MINOR items.
   Driver: /tmp/regen-cr/all_validate.py. The user need NOT run --all cold.
   `[[--all-is-phase0-plus-per-lane-batch-then-parallel-phase2; reattach-anchors-inline-items-to-their-code-line]]`
 
+### 2026-06-09 (cont. 4) — voice overhaul, FIFO previews, menu spacing, compare up to 3 voices
+- **Voices rewritten (`2a6361c3`):** all 10 named voices moved to a consistent DESCRIPTIVE-PERSONA form
+  ('A [role/traits] who ...', NO proper name, NO 'adopt', NO imperative) -- richer + more distinct than the
+  old bland trait-clusters, keeping the no-theatrics property. The USER authored the prose; I converted two
+  imperative drafts ('Speak/Think...') to the descriptive form (flagged it against their earlier "drop the
+  adopt bit"). Validated: the new cutler on real code produced vivid + legible + correct docstrings ('The
+  name says ranking. The name is aspirational. ... No list, no sort, no fleet ordering anywhere.'). The
+  registry `_comment` was updated to the new convention.
+- **FIFO previews (`2a6361c3`):** preview subject switched write-ahead-log -> FIFO buffer; all 10 regenerated
+  (`gen_voice_previews.py --all`). Each renders the voice cleanly + distinctly (cantrill 'borrows time',
+  cutler 'a memory leak with latency on top', hemingway clipped, linus tears into a USB-serial chip,
+  pewdiepie taco-truck bouncer, attenborough's burrow).
+- **Menu spacing (`70ec7a07`):** the voice pick menu renders spaced (blank line between entries, the preview
+  taste on its own indented line) so options don't run together.
+- **Compare up to 3 voices (`20055425`):** the voice gate accepts up to 3 picks ('2 5 8' / `--voice a,b,c`).
+  A comparison run generates each voice in its OWN isolated room `<rundir>/v/<voice>/` (`regen_phase2_multi.py`
+  copies the shared phase-1 inputs + runs `regen_phase2.py` per voice, concurrency 2), so per-voice
+  runs/pick/FINAL don't clobber and the Step 8 refine tools work on the chosen voice's room unchanged.
+  `render_compare.py` shows the up-to-3 voices' docstrings per symbol side by side + the summarizer bar +
+  each voice's rationale + legibility flags; the human applies ONE (Runbook 5b). The single-voice path is
+  untouched. VALIDATED: cutler + hemingway on the fixture -> both CODE IDENTICAL, genuinely distinct voices,
+  report well-formed. `[[voices-are-descriptive-personas; previews-on-FIFO; up-to-3-voices-compare-in-isolated-rooms]]`
+
 ### STATE (current)
 Committed: ... -> **22643cfc** (cut_cruft dropped) -> **c96fbfcf** (plain-English register + anti-jargon +
 drop-"tight") -> **f8804a6c** (verify_code helper + de-named voices + selector floor + paragraph docstrings +
@@ -857,7 +880,8 @@ targeting model + atomic mkdtemp rooms; genre.py + rooms.py added) -> **7fb78760
 fix + reattach #-guarantee fix + TESTPLAN.md) -> a SKILL.md doc-ref follow-up (method-scope refs ->
 regen_method, reference list + TESTPLAN entry) -> **eff7e4e0** (same) -> **0ce93fce** (reattach anchors
 inline preserve items to their code line via anchor_code+attach; comment lens emits them; --all validated
-end-to-end on compat). Protected and NEVER committed (pre-existing working-tree mods): CLAUDE.md, .idea/chumicro.iml,
+end-to-end on compat) -> **70ec7a07** (voice menu spacing) -> **2a6361c3** (descriptive-persona voices +
+FIFO previews) -> **20055425** (compare up to 3 voices: regen_phase2_multi.py + render_compare.py). Protected and NEVER committed (pre-existing working-tree mods): CLAUDE.md, .idea/chumicro.iml,
 heartbeat.py. Harness: `.scratch/regen-comments/writer-quality/round{6..31}.py + *_run.sh + render*.py +
 report*.html + rooms{6..31}`; validated rooms /tmp/regen-cr/{qr-r28,qr-r29,qr-fixB,qr-ht}; key report
 report_r31_lean_vs_bloated.html. The writer-quality arc (tasks #6/#7/#8, summarizer-beats-writer) is CONVERGED
