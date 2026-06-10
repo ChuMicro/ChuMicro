@@ -45,6 +45,13 @@ STEPS = [
     ("FINAL_*.py", "DONE: final file ready"),
 ]
 
+# artifacts a loop re-writes after their first landing; a re-touch means another iteration is running
+RETOUCH = [
+    ("ledger_provisional.md", "ledger re-written (validator retry loop)"),
+    ("validation.json", "validator re-ran (retry loop)"),
+    ("merged.py", "polish fix round re-wrote the merged file"),
+]
+
 
 def main():
     args = sys.argv[1:]
@@ -60,6 +67,7 @@ def main():
     start = time.time()
     seen = set()           # (room, rel) pairs already reported
     done = set()           # rooms whose terminal artifact landed
+    mtimes = {}            # (room, rel) -> last reported mtime, for the retry-loop re-touch globs
     tags = {r: os.path.basename(r) for r in rooms}
     # flush every line: stdout is block-buffered when piped, so a live watcher must flush
     print(f"watching {len(rooms)} room(s), until {until!r} in each "
@@ -77,7 +85,20 @@ def main():
                          if os.path.getmtime(m) >= start - 1]
                 if fresh:
                     seen.add(key)
+                    mtimes[key] = max(os.path.getmtime(m) for m in fresh)
                     print(f"  [{time.strftime('%H:%M:%S')}] {tags[room]}: {label}", flush=True)
+            # retry loops re-WRITE artifacts the first-touch scan above already reported; without this a
+            # validator/ledger cycle (or a polish fix round) looks like a hang
+            for rel, again in RETOUCH:
+                key = (room, rel)
+                if key not in seen:
+                    continue
+                hits = glob.glob(os.path.join(room, rel))
+                if hits:
+                    mt = max(os.path.getmtime(m) for m in hits)
+                    if mt > mtimes.get(key, 0) + 1:
+                        mtimes[key] = mt
+                        print(f"  [{time.strftime('%H:%M:%S')}] {tags[room]}: {again}", flush=True)
             if room not in done:
                 hit = [m for m in glob.glob(os.path.join(room, until))
                        if os.path.getmtime(m) >= start - 1]
