@@ -20,7 +20,9 @@ import subprocess
 import sys
 
 SKILL = os.path.dirname(os.path.abspath(__file__))
+VOICES_DIR = os.path.normpath(os.path.join(SKILL, os.pardir, "_shared", "voices"))
 sys.path.insert(0, SKILL)
+sys.path.insert(0, VOICES_DIR)
 from preflight import require_claude  # noqa: E402
 from genre import GENRES  # noqa: E402
 from voice_sample import load_voice_sample  # noqa: E402
@@ -55,7 +57,7 @@ def main():
         sys.exit(f"unknown --kind '{genre}'. Known: {', '.join(GENRES)}.")
     if not os.path.exists(os.path.join(rundir, "ledger_final.md")):
         sys.exit("ledger_final.md missing — run the picker + assemble it before phase 2.")
-    voices = json.load(open(os.path.join(SKILL, "voices.json")))["voices"]
+    voices = json.load(open(os.path.join(VOICES_DIR, "voices.json")))["voices"]
     if voice not in voices:
         sys.exit(f"unknown voice '{voice}'. Known: {', '.join(voices)} (or add via --create-voice).")
     os.makedirs(os.path.join(rundir, "runs"), exist_ok=True)

@@ -20,7 +20,9 @@ import subprocess
 import sys
 
 SKILL = os.path.dirname(os.path.abspath(__file__))
+VOICES_DIR = os.path.normpath(os.path.join(SKILL, os.pardir, "_shared", "voices"))
 sys.path.insert(0, SKILL)
+sys.path.insert(0, VOICES_DIR)
 from preflight import require_claude  # noqa: E402
 from voice_sample import load_voice_sample  # noqa: E402
 
@@ -44,7 +46,7 @@ def main():
     final = os.path.join(rundir, f"FINAL_{voice}.py")
     if not os.path.exists(final):
         sys.exit("no finished file yet — run phase 2 before refining.")
-    voices = json.load(open(os.path.join(SKILL, "voices.json")))["voices"]
+    voices = json.load(open(os.path.join(VOICES_DIR, "voices.json")))["voices"]
     if voice not in voices:
         sys.exit(f"unknown voice {voice!r}")
     # announce before the silent clean-room call so a chained refine sequence self-narrates

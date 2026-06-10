@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""audit-code — voice registry access (shared shape with regen-comments' voices.json).
+"""audit-code — voice registry access (reads the shared registry at `_shared/voices/voices.json`).
 
 A voice tunes the REGISTER the findings are written in; it never changes the facts or the consequence. The
 default is `plain` (voiceless) — clearest, no persona. The orchestrator prints the menu at the gate and looks
@@ -13,7 +13,8 @@ import json
 import os
 import sys
 
-REG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "voices.json")
+REG = os.path.normpath(os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), os.pardir, "_shared", "voices", "voices.json"))
 
 
 def _voices():

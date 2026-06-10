@@ -31,7 +31,9 @@ import sys
 import tempfile
 
 SKILL = os.path.dirname(os.path.abspath(__file__))
+VOICES_DIR = os.path.normpath(os.path.join(SKILL, os.pardir, "_shared", "voices"))
 sys.path.insert(0, SKILL)
+sys.path.insert(0, VOICES_DIR)
 from preflight import require_claude  # noqa: E402
 from voice_sample import load_voice_sample  # noqa: E402
 
@@ -49,7 +51,7 @@ def _examples(voices, n=3):
 def gen(name):
     """Draft a persona sentence for <name> in the registry's house style (clean-room)."""
     require_claude()
-    voices = json.load(open(os.path.join(SKILL, "voices.json")))["voices"]
+    voices = json.load(open(os.path.join(VOICES_DIR, "voices.json")))["voices"]
     room = tempfile.mkdtemp(prefix="regen-cv-")
     prompt = (
         "Write ONE persona sentence for a code docstring/comment writer, capturing how " + name + " would "
@@ -77,7 +79,7 @@ def gen(name):
 
 
 def add(key, persona):
-    vpath = os.path.join(SKILL, "voices.json")
+    vpath = os.path.join(VOICES_DIR, "voices.json")
     data = json.load(open(vpath))
     if key in data["voices"]:
         sys.exit(f"voice {key!r} already exists — pick another key or edit voices.json directly.")
@@ -94,7 +96,7 @@ def add(key, persona):
     data["voices"][key] = persona
     json.dump(data, open(vpath, "w"), indent=2, ensure_ascii=False)
     print(f"=== ADDED voice {key!r} to voices.json ===")
-    sample_path = os.path.join(SKILL, "voice_samples", f"{key}.md")
+    sample_path = os.path.join(VOICES_DIR, "voice_samples", f"{key}.md")
     if not os.path.exists(sample_path):
         print(f"  NOTE: no voice_samples/{key}.md — the voice runs persona-only until a sample exists. "
               "Sourcing rules: voice_samples/README.md.")
