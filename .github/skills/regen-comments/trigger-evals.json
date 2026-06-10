@@ -1,0 +1,96 @@
+{
+  "skill_name": "regen-comments",
+  "purpose": "Routing evals for the description + when_to_use frontmatter. Half should route here; half are near-misses that belong to a sibling skill or to a plain edit. TESTPLAN section D describes how to run them. Re-run after any description/when_to_use edit or when a sibling skill's scope moves closer to comments/docstrings.",
+  "evals": [
+    {
+      "query": "rewrite the docstrings in libraries/kvstore/src/chumicro_kvstore/_mp_nvm.py — they've drifted and I don't trust them, rebuild from what the code actually does",
+      "should_trigger": true
+    },
+    {
+      "query": "hey the comments in chumicro_timing's testing.py are kinda garbage, redo them plz",
+      "should_trigger": true
+    },
+    {
+      "query": "regenerate the docstring for the pick method in _mp_nvm.py only, leave the rest of the file alone",
+      "should_trigger": true
+    },
+    {
+      "query": "can you redo the msgpack examples with comments on basically every line so a beginner can follow them",
+      "should_trigger": true
+    },
+    {
+      "query": "clean up the docstrings across the whole sockets library, source and tests, plain voice is fine",
+      "should_trigger": true
+    },
+    {
+      "query": "I want connector.py's comments rewritten in the cantrill voice",
+      "should_trigger": true
+    },
+    {
+      "query": "the unit tests in libraries/timing/tests have one-word docstrings, write real ones that say what each test actually asserts",
+      "should_trigger": true
+    },
+    {
+      "query": "refresh the comments in libraries/msgpack/src/chumicro_msgpack/_unpack.py",
+      "should_trigger": true
+    },
+    {
+      "query": "strip and rebuild every comment in heartbeat.py from the code's behavior, the old ones lie",
+      "should_trigger": true
+    },
+    {
+      "query": "write docstrings for chumicro_kvstore, half the public methods have none",
+      "should_trigger": true
+    },
+    {
+      "query": "are the comments in _mp_nvm.py still accurate after the refactor? audit them",
+      "should_trigger": false,
+      "expected_route": "audit-comments"
+    },
+    {
+      "query": "check whether a cold reader can actually understand the docstrings in chumicro_timing — don't rewrite anything yet",
+      "should_trigger": false,
+      "expected_route": "audit-comments"
+    },
+    {
+      "query": "the kvstore README reads like AI slop, fix it up",
+      "should_trigger": false,
+      "expected_route": "audit-docs"
+    },
+    {
+      "query": "write a user guide for the msgpack library",
+      "should_trigger": false,
+      "expected_route": "guide-generation"
+    },
+    {
+      "query": "review my diff, I touched a bunch of docstrings in sockets",
+      "should_trigger": false,
+      "expected_route": "code-review"
+    },
+    {
+      "query": "does heartbeat.py actually do what its docstrings claim? pressure-test the whole file",
+      "should_trigger": false,
+      "expected_route": "audit-code"
+    },
+    {
+      "query": "add a comment above this 250ms timeout explaining why it's 250",
+      "should_trigger": false,
+      "expected_route": "none (single in-place comment is a plain Edit)"
+    },
+    {
+      "query": "regenerate the comments in deploy_helpers.ts",
+      "should_trigger": false,
+      "expected_route": "none (not a Python file)"
+    },
+    {
+      "query": "delete all the commented-out code in the workbench deploy tool",
+      "should_trigger": false,
+      "expected_route": "none (removal, not regeneration — plain Edit)"
+    },
+    {
+      "query": "our style guide's section on module docstrings is outdated, rewrite it",
+      "should_trigger": false,
+      "expected_route": "none (prose-doc edit, not Python comments)"
+    }
+  ]
+}
