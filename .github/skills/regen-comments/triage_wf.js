@@ -145,8 +145,8 @@ const LEDGER_OUT = {
   type: 'object', additionalProperties: false,
   properties: {
     facts: { type: 'array', items: { type: 'object', additionalProperties: false,
-      properties: { stub: { type: 'string' }, sites: { type: 'string' }, source_lenses: { type: 'array', items: { type: 'string' } }, confidence: { type: 'string', enum: ['high', 'med', 'low'] } },
-      required: ['stub', 'sites', 'source_lenses', 'confidence'] } },
+      properties: { stub: { type: 'string' }, gloss: { type: 'string' }, sites: { type: 'string' }, source_lenses: { type: 'array', items: { type: 'string' } }, confidence: { type: 'string', enum: ['high', 'med', 'low'] } },
+      required: ['stub', 'gloss', 'sites', 'source_lenses', 'confidence'] } },
     domain_purpose: { type: 'string' }, ledger_path: { type: 'string' },
   },
   required: ['facts', 'domain_purpose', 'ledger_path'],
@@ -222,7 +222,14 @@ function ledgerPrompt(codeResults, commentLedger, domain, feedback) {
     + 'NOT cite code line numbers for it, and NEVER add meta-commentary like "[UNVERIFIABLE]", "cannot '
     + 'ground", or "absent in file". If it is implausible as a domain rule, DROP it silently instead of '
     + 'annotating doubt.\n'
-    + '- For each fact: a telegraphic stub, code sites, source lens keys, a confidence.\n\n'
+    + '- For each fact: a telegraphic stub, code sites, source lens keys, a confidence.\n'
+    + '- GLOSS (for the human gate, never shown to writers): alongside each stub, write a `gloss` -- ONE '
+    + 'complete plain-English sentence a non-expert teammate reads cold and understands: what the fact claims '
+    + 'about the code and why a caller would care. Ordinary words, full grammar, no arrows or shorthand, no '
+    + 'jargon, no cleverness. The stub is compressed notation for the writer; the gloss is the same fact '
+    + 'said straight for a human deciding keep-or-drop. Example: stub `EAGAIN numeric differs by host: 11 '
+    + 'linux/MP/CP, 35 macOS` -> gloss `The would-block error number is different on macOS than on Linux and '
+    + 'the boards, so tests must match the error name rather than the number.`\n\n'
     + 'CODE (verify against it): ' + STRIPPED + '\n\n'
     + 'LENS FINDINGS:\n' + dump + cdump + '\n\n'
     + (feedback
@@ -233,8 +240,9 @@ function ledgerPrompt(codeResults, commentLedger, domain, feedback) {
         + 'VALIDATOR FEEDBACK:\n' + feedback + '\n\n'
       : '')
     + 'Write the merged ledger as a terse markdown stub list (one `- ` line per fact, sites in parens; every '
-    + 'line a fragment per STUB STYLE) to ' + EXP + '/ledger_provisional.md. ALSO write the SAME facts as a '
-    + 'pretty JSON array (each item {stub, sites, source_lenses, confidence}) to ' + EXP + '/ledger.json '
+    + 'line a fragment per STUB STYLE; NO glosses in the .md -- writers read it) to ' + EXP + '/ledger_provisional.md. '
+    + 'ALSO write the SAME facts as a pretty JSON array (each item {stub, gloss, sites, source_lenses, '
+    + 'confidence}) to ' + EXP + '/ledger.json '
     + '(the orchestrator reads this to find the questionable facts for the human picker). Set ledger_path to '
     + 'the .md, return the structured result. Set domain_purpose to: "' + (domain || '') + '".'
 }
@@ -278,13 +286,17 @@ function genreLedgerPrompt(genre) {
   const common =
     '\n\nRecord each fact as a TELEGRAPHIC FRAGMENT (symbols, arrows ->, shorthand), never a grammatical '
     + 'sentence a writer could paste. For each fact give stub, sites (the symbol or line it attaches to), '
-    + 'source_lenses set to ["' + genre + '"], and confidence (high unless genuinely unsure).\n'
+    + 'source_lenses set to ["' + genre + '"], confidence (high unless genuinely unsure), and a gloss -- ONE '
+    + 'complete plain-English sentence for the human gate (ordinary words, full grammar, no shorthand or '
+    + 'jargon) saying what the fact claims and why it matters; the stub is for the writer, the gloss is for '
+    + 'a non-expert teammate deciding keep-or-drop.\n'
     + 'CROSS-FILE: if a library ledger exists at ' + RUNDIR + '/LIBRARY_FACTS.md, use it to name the subject '
     + 'under test or the library API the example uses, but do not re-derive its facts.'
   const tail =
-    '\n\nWrite the ledger as a terse markdown stub list (one `- ` line per fact, sites in parens) to '
+    '\n\nWrite the ledger as a terse markdown stub list (one `- ` line per fact, sites in parens; NO glosses '
+    + 'in the .md -- writers read it) to '
     + EXP + '/ledger_provisional.md. ALSO write the SAME facts as a pretty JSON ARRAY (each item '
-    + '{stub, sites, source_lenses, confidence}) to ' + EXP + '/ledger.json -- a bare array, not an object '
+    + '{stub, gloss, sites, source_lenses, confidence}) to ' + EXP + '/ledger.json -- a bare array, not an object '
     + '(the orchestrator reads this array to find the questionable facts for the picker). Set ledger_path to '
     + 'the .md and return the structured object {facts, domain_purpose, ledger_path}.'
   if (genre === 'example') {
