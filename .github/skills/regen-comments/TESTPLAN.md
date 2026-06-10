@@ -1,11 +1,13 @@
 # regen-comments — test plan
 
-Two layers:
+Three layers:
 
 - **A + B (here):** an agent validates the machinery with mechanical checks and **read-only** clean-room runs
   (auto-keep the ledger, no human picker, never apply). These prove the engine without touching the repo.
 - **C (cold session):** the human invokes the skill end-to-end in a fresh session and drives the real gates
   (voice menu, picker, refine/apply/discard). Only layer C exercises the human gates and the apply path.
+- **D (routing):** trigger evals against the frontmatter — does the loader send the right requests here and
+  the near-miss requests to the sibling skill they belong to. Queries live in `trigger-evals.json`.
 
 `SKILL=.github/skills/regen-comments`. **Never modify or commit** `libraries/timing/src/chumicro_timing/heartbeat.py`, `CLAUDE.md`, or `.idea/` (reading is fine). Read-only runs land under `/tmp/regen-cr`.
 
@@ -44,6 +46,8 @@ Two layers:
 Pattern (no human picker — auto-keep every ledger fact): `regen_phase1.py <target> $RUN --kind <genre>` →
 `cp $RUN/ledger_provisional.md $RUN/ledger_final.md` → `regen_phase2.py $RUN plain` → `verify_code.py <target> $RUN/FINAL_plain.py`. (`/tmp/regen-cr/gvalidate.sh <target> <genre> <rundir>` runs the whole pattern.)
 
+After a B-run, also skim the phase's `claude -p` transcript (session log under `~/.claude/projects/` keyed by the room's cwd) for wasted motion — re-derived facts the ledger already carried, improvised helper scripts, retries. Waste that repeats across runs means a workflow prompt needs a tweak; the artifacts alone don't show it.
+
 | # | Genre / scope | Check |
 |---|---|---|
 | B1 | code | docstrings state behavior + caller contract, line-mechanics as inline `#`, Args/Returns present; `CODE IDENTICAL` |
@@ -57,6 +61,7 @@ Pattern (no human picker — auto-keep every ledger fact): `regen_phase1.py <tar
 
 ## C. Cold-session script (the human invokes the skill)
 Run each in a fresh session. Confirm the resolution + gates, then Discard (or Apply on one to test the write).
+Only a live interactive session can drive these gates — `claude -p` is headless (`AskUserQuestion` cannot fire there), so an agent cannot run layer C for you. What an agent CAN do afterward: each C-run leaves its room under `/tmp/regen-cr`, so a follow-up session can verify the mechanical outcomes from the artifacts (`verify_code.py` vs the original, distinct rooms across parallel runs, `bans.json` / `tics.json` / `legibility.json` contents, nothing committed).
 
 | # | Invocation | Expect |
 |---|---|---|
@@ -80,3 +85,10 @@ Gate-fix confirmations (call these out during the above):
 - **picker** with exactly 1 questionable fact → a 2-option **Keep / Drop** (not an error); with 5+ → a numbered text list to drop.
 - **two parallel invocations** of the skill → **distinct** rooms (no shared dir, no stale-artifact poisoning).
 - every run: `CODE IDENTICAL` reported before the report; the report auto-opens; **nothing is committed** automatically; apply writes to the working tree only on explicit confirm.
+
+## D. Trigger-routing evals (description-level)
+The loader routes on `description:` + `when_to_use` alone — the body never enters the routing decision. `trigger-evals.json` holds 20 realistic queries: 10 that should route here and 10 near-misses that belong to a sibling skill (`audit-comments`, `audit-docs`, `audit-code`, `guide-generation`, `code-review`) or to a plain edit. The near-misses are the load-bearing half — they share the words "comments" and "docstrings" with this skill and test the boundary, not the bullseye.
+
+To run: for each query, ask a fresh `claude -p` launched from the repo root (so the real skill list loads) — *"Which skill, if any, would you invoke for this request? Answer with the slug or `none`: <query>"* — 3 times per query to smooth variance. Pass = every `should_trigger: true` query routes to `regen-comments` in ≥ 2 of 3 runs, and every near-miss routes to its `expected_route` (or `none`) in ≥ 2 of 3.
+
+Run after any edit to this skill's `description` / `when_to_use`, and when a new sibling skill lands whose scope borders comments, docstrings, or voices. A near-miss that starts routing here means the two descriptions need sharper exclusions, not a pushier trigger list.
