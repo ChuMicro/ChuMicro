@@ -9,8 +9,7 @@
 
 Both CODE IDENTICAL. Phase-1 parsimony: 11 -> 5 facts, glosses present. Default-arm autoroute fired
 for real (3 symbols routed to pass 1), bans.json = 0. Selector whys cite altitude/no-docstrings-on-evident.
-CALIBRATION QUESTION for the user: tight arm put the caller contract in #-comments ABOVE defs and zero
-symbol docstrings; possibly want 1-sentence docstrings (help()-visible) + # comments for line facts instead.
+CALIBRATION RESOLVED: user confirmed above-def comments are not docstring behavior; tight prompt now requires 1-2 sentence summary DOCSTRINGS per symbol (contract in the docstring, # comments only for line facts inside bodies, bare only when nothing to say). Re-bench (tight2 room) verified: all symbols docstringed, 0 sections, CODE IDENTICAL, cutler voice intact.
 
 ## What's running (background, this machine)
 - Bench of the anti-stuffing prompt changes (commit e49295dd) + new --tight mode, on
