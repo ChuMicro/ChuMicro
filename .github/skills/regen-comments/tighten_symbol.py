@@ -10,6 +10,7 @@ orchestrator can push back before Apply if a kept fact would be lost.
 
 Usage: tighten_symbol.py <rundir> <voice> <qualname>
 """
+import json
 import os
 import subprocess
 import sys
@@ -27,12 +28,19 @@ def main():
     final = os.path.join(rundir, f"FINAL_{voice}.py")
     if not os.path.exists(final):
         sys.exit("no finished file yet — run phase 2 before tightening.")
+    # a --tight run has no sections to keep; telling the agent to KEEP Args/Returns there would re-grow them
+    p2 = os.path.join(rundir, "phase2.json")
+    tight = os.path.exists(p2) and bool(json.load(open(p2)).get("tight"))
+    keep_sections = (
+        "at most 1-2 short sentences and NO Args/Returns/Raises sections (this run is in tight mode)"
+        if tight else "the Args/Returns/Raises sections"
+    )
 
     prompt = (
         "Read ./FINAL_" + voice + ".py and the nuance ledger ./ledger_final.md. Produce a copy of the file "
         "where ONLY the symbol " + qual + " has its docstring TIGHTENED, written to ./tightened.py.\n"
         "Tighten = shorter and denser. KEEP: the lead sentence (and any sentence carrying a non-obvious "
-        "fact), the Args/Returns/Raises sections, the voice, and EVERY ledger fact that pertains to " + qual
+        "fact), " + keep_sections + ", the voice, and EVERY ledger fact that pertains to " + qual
         + " (including non-derivable / domain facts). CUT only wordy prose that merely restates the lead "
         "sentence or the Args, or padding about what the code does NOT do. Do NOT add facts. Do NOT "
         "change any executable code or any other symbol -- copy them verbatim.\n"

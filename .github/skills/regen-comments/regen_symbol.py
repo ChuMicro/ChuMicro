@@ -50,8 +50,16 @@ def main():
     # keep the human's accepted file to splice onto; re-run the writer against the (edited) ledger_final.md
     current = os.path.join(rundir, "current.py")
     shutil.copy(final, current)
+    # regenerate in the SAME shape phase 2 ran (genre + tight, recorded in phase2.json) -- substituting only
+    # rundir/voice left __GENRE__/__TIGHT__ literal, so a refine on a --tight or test/example-genre run
+    # produced a default-code-shape docstring inconsistent with the rest of the file
+    p2 = os.path.join(rundir, "phase2.json")
+    cfg = json.load(open(p2)) if os.path.exists(p2) else {}
+    p1 = os.path.join(rundir, "phase1.json")
+    genre = cfg.get("genre") or (json.load(open(p1)).get("genre") if os.path.exists(p1) else None) or "code"
     src = open(os.path.join(SKILL, "writers_wf.js")).read()
-    src = src.replace("__RUNDIR__", rundir).replace("__VOICE_PARA__", voices[voice])
+    src = (src.replace("__RUNDIR__", rundir).replace("__VOICE_PARA__", voices[voice])
+              .replace("__GENRE__", genre).replace("__TIGHT__", "1" if cfg.get("tight") else "0"))
     open(os.path.join(rundir, "writers_wf.js"), "w").write(src)
     claude_p_workflow(rundir, "writers_wf.js")
 

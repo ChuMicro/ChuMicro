@@ -53,6 +53,11 @@ def main():
     if voice not in voices:
         sys.exit(f"unknown voice '{voice}'. Known: {', '.join(voices)} (or add via --create-voice).")
     os.makedirs(os.path.join(rundir, "runs"), exist_ok=True)
+    # record the run shape so the refine-loop tools (regen_symbol, tighten_symbol) regenerate in the SAME
+    # shape -- without this, a mid-refine regen on a --tight or test/example-genre run silently fell back to
+    # the default code shape (the template's __GENRE__/__TIGHT__ placeholders were left unsubstituted)
+    json.dump({"voice": voice, "genre": genre, "tight": tight},
+              open(os.path.join(rundir, "phase2.json"), "w"))
 
     # writer workflow: chosen voice, 4 passes + best-of-N selector (the selector only emits a winner number)
     src = open(os.path.join(SKILL, "writers_wf.js")).read()

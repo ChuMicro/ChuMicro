@@ -10,7 +10,7 @@ it outright when the orchestrator passes the session's account.
 
 It also reports the resolved CLI path, version, and OS user (config/auth live under that user's ~/.claude).
 
-Usage: preflight.py [--expect-email <session-account-email>]   # exit 1 if missing / not logged in
+Usage: preflight.py [--expect-email <session-account-email>]   # exit 1 if missing / not logged in / mismatch
        from preflight import require_claude
 """
 import getpass
@@ -63,10 +63,14 @@ def check(expect_email=None):
     if info["logged_in"] is None and not auth:
         info["warnings"].append("could not read `claude auth status` — cannot confirm the CLI's account; verify it manually.")
     if expect_email and info["email"] and info["email"].lower() != expect_email.lower():
+        # a mismatch FAILS preflight (exit 1): the run would silently bill/execute under the CLI's account.
+        # The orchestrator may proceed only on the user's explicit go-ahead, never on its own.
         info["warnings"].append(
             f"ACCOUNT MISMATCH: the session runs as {expect_email}, but the `claude` CLI is logged in as "
             f"{info['email']} ({info['org']}). The clean-room `claude -p` work would run under the CLI's "
-            f"account, not yours. Reconcile before running (e.g. `claude auth login` as {expect_email}).")
+            f"account, not yours. Do NOT run the skill unless the user explicitly agrees; reconcile with "
+            f"`claude auth login` as {expect_email}.")
+        return False, info
     return True, info
 
 
