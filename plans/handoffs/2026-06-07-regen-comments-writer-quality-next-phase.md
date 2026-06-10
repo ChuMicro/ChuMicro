@@ -866,6 +866,27 @@ Closes both cont. 2 OPEN/MINOR items.
   untouched. VALIDATED: cutler + hemingway on the fixture -> both CODE IDENTICAL, genuinely distinct voices,
   report well-formed. `[[voices-are-descriptive-personas; previews-on-FIFO; up-to-3-voices-compare-in-isolated-rooms]]`
 
+### 2026-06-09 (cont. 5) — voice-FRAMING finding + deterministic tic/leak flagger (`f6395867`)
+User explored 3 prose framings (rich 'A [role] who…' SHIPPED, 'You are a…' Set A, 'A [role] voice that…' Set
+B), same rich content, on quality_ranking.py (3 voices x 3 forms; driver /tmp/regen-cr/form_test.py temporarily
+injects temp keys then RESTORES voices.json byte-for-byte). FINDING: the descriptive **'who' wins on TWO
+axes** -- (1) fewer AI discourse-marker TICS ("that's the whole X", "here's the thing", "this is the X
+that"), and (2) NO voice-descriptor LEAK, whereas 'You are'/'voice that' both pasted cutler's "3 a.m." (a
+phrase from its DESCRIPTOR, absent from the code) into a docstring. WHY (the mechanism, user asked for it):
+role-assignment framing ('you ARE this persona') pulls the model toward the casual-spoken-explainer register
+(YouTube/blog) that is saturated with these tics, AND blurs 'write in this style' into 'perform this persona
+using its words' -> descriptor phrases leak. Descriptive 'who' keeps the descriptor as STYLE, not CONTENT.
+(Refs: arXiv 'Rise of Verbal Tics in LLMs'; nanxstats/llm-cliches; Wikipedia 'Signs of AI writing'.)
+FLAGGER (`flag_tics.py`): deterministic, flag-only, no LLM. Tics via a curated regex list; leaks by extracting
+signature phrases from the active voice's descriptor (hyphenated compounds, clock phrases, content n-grams)
+and flagging any that appear in the comments but NOT the code (skipped for voiceless 'plain'). Runs
+automatically in phase 2 next to flag_legibility; render_report surfaces tics.json beside the legibility flags
+with tic/leak badges; cut in the refine loop, never auto-rewritten. Validated: caught the "3 a.m." leak + a
+"the whole thing" tic on the bad form-test file, 0 false positives on the clean shipped cutler, report renders
+the flags. OPEN/OPTIONAL: a writer-prompt clause ("the description is the voice's attitude to adopt, not
+content; never quote its words/numbers") would attack the leak at the source, but it's a prompt change so it
+needs a clean-room A/B first -- deferred. `[[who-framing-minimizes-tics-and-leaks; flag_tics-deterministic-flag-only]]`
+
 ### STATE (current)
 Committed: ... -> **22643cfc** (cut_cruft dropped) -> **c96fbfcf** (plain-English register + anti-jargon +
 drop-"tight") -> **f8804a6c** (verify_code helper + de-named voices + selector floor + paragraph docstrings +
@@ -884,7 +905,8 @@ end-to-end on compat) -> **70ec7a07** (voice menu spacing) -> **2a6361c3** (desc
 FIFO previews) -> **20055425** (compare up to 3 voices: regen_phase2_multi.py + render_compare.py) -> **e26227ea** (richer 'who'-form voice
 prose + refreshed FIFO previews; quality-checked all 9 voices on quality_ranking.py -- NO degradation, every
 voice vivid, bourdain's bouncer metaphor intact; chose rich-'who' over 'You are'/'voice that' to keep the
-richness without role-assignment theatrics risk). Protected and NEVER committed (pre-existing working-tree mods): CLAUDE.md, .idea/chumicro.iml,
+richness without role-assignment theatrics risk) -> **f6395867** (deterministic tic+leak flagger
+flag_tics.py; 3-form test confirmed 'who' minimizes both tics and descriptor leaks). Protected and NEVER committed (pre-existing working-tree mods): CLAUDE.md, .idea/chumicro.iml,
 heartbeat.py. Harness: `.scratch/regen-comments/writer-quality/round{6..31}.py + *_run.sh + render*.py +
 report*.html + rooms{6..31}`; validated rooms /tmp/regen-cr/{qr-r28,qr-r29,qr-fixB,qr-ht}; key report
 report_r31_lean_vs_bloated.html. The writer-quality arc (tasks #6/#7/#8, summarizer-beats-writer) is CONVERGED
