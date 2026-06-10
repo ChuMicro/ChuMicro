@@ -14,18 +14,18 @@ Three layers:
 ## Handy targets in this repo
 | Genre / scope | Target |
 |---|---|
-| code (source) | `libraries/kvstore/src/chumicro_kvstore/_mp_nvm.py` (not `heartbeat.py` — protected) |
+| code (source) | `libraries/kvstore/src/chumicro_kvstore/core.py`, or any trap-rich source file of similar size (not `heartbeat.py` — protected) |
 | test | `libraries/timing/tests/test_ticks.py` |
 | functional_test | `libraries/timing/functional_tests/test_ticks_arithmetic.py` |
 | example | `libraries/msgpack/examples/packb_basic.py` |
 | library (folder / --all) | `libraries/msgpack` (source + tests + functional_tests + examples, no protected files) |
-| multi-method (method scope) | `.scratch/regen-comments/voice-test/quality_ranking.py` → `QualityRanking.pick` |
+| multi-method (method scope) | a small multi-method file under `.scratch/` (machine-local; fabricate one if absent — a function plus a class with two methods is enough), targeting one method, e.g. `Counter.bump` |
 
 ## A. Mechanical checks (fast, no `claude -p`)
 | # | Command | Expected |
 |---|---|---|
 | A1 | `python3 -m py_compile $SKILL/*.py` | no output (all compile) |
-| A2 | wrap each `.js` in an async IIFE with stub `phase/agent/parallel/log`, rename `export const meta`→`const meta`, `node --check` | `triage_wf.js` + `writers_wf.js` OK |
+| A2 | wrap each `.js` in an async IIFE with stub `phase/agent/parallel/log`, rename `export const meta`→`const meta`, `node --check` (needs `node` on PATH; absent → record the row as blocked, don't skip silently) | `triage_wf.js` + `writers_wf.js` OK |
 | A3 | `python3 $SKILL/genre.py detect <path>` for a `tests/`, `functional_tests/`, `examples/`, and a source path | `test`, `functional_test`, `example`, `code` |
 | A4 | `python3 $SKILL/rooms.py new demo` twice | two **different** `/tmp/regen-cr/demo-*` paths |
 | A5 | `touch $ROOM/FINAL_plain.py`, then `python3 $SKILL/regen_phase1.py x.py $ROOM` | refused: "already holds a prior run's artifacts" |
@@ -41,10 +41,11 @@ Three layers:
 | A12d | `regen_phase2.py <room> plain --less` on a room with a kept ledger | summaries ≤ 2 sentences WITH short Args/Returns/Raises where they apply, zero body paragraphs, no entry padded into prose; `phase2.json` records `"less": true`; passing `--tight --less` together is **refused**; `CODE IDENTICAL` |
 | A13 | open report.html, pick a non-suggested take, reload (picks restored), then change FINAL and re-render | saved state keys on the FINAL content hash: same content restores picks, changed content starts clean; theme toggle persists across pages and defaults to the OS scheme |
 | A14 | `python3 $SKILL/preflight.py --expect-email nobody@example.com` (CLI logged in as anyone else) | **exit 1** + an `ACCOUNT MISMATCH` warning naming both accounts — a mismatch is a hard failure, not advisory; with the CLI's real email it exits 0 |
+| A15 | `REGEN_NO_OPEN=1 serve_report.py <fabricated room>` in the background, `curl` GET the report URL, then POST a blob to `/selection` | GET returns 200; stdout printed `SERVING <url>` then one `SELECTION RECEIVED -> <path>` line; `selection.txt` byte-equals the posted blob and `apply_selection.py parse` reads it; the room's FINAL is untouched by the server; renderers under `REGEN_NO_OPEN=1` print the link without opening a browser |
 
 ## B. Clean-room end-to-end (read-only; `claude -p`)
 Pattern (no human picker — auto-keep every ledger fact): `regen_phase1.py <target> $RUN --kind <genre>` →
-`cp $RUN/ledger_provisional.md $RUN/ledger_final.md` → `regen_phase2.py $RUN plain` → `verify_code.py <target> $RUN/FINAL_plain.py`. (`/tmp/regen-cr/gvalidate.sh <target> <genre> <rundir>` runs the whole pattern.)
+`cp $RUN/ledger_provisional.md $RUN/ledger_final.md` → `regen_phase2.py $RUN plain` → `verify_code.py <target> $RUN/FINAL_plain.py`. Script the pattern into a throwaway driver under `.scratch/` when running several rows; `/tmp` artifacts from prior sessions don't survive, so never depend on one.
 
 After a B-run, also skim the phase's `claude -p` transcript (session log under `~/.claude/projects/` keyed by the room's cwd) for wasted motion — re-derived facts the ledger already carried, improvised helper scripts, retries. Waste that repeats across runs means a workflow prompt needs a tweak; the artifacts alone don't show it.
 
@@ -54,9 +55,9 @@ After a B-run, also skim the phase's `claude -p` transcript (session log under `
 | B2 | test | each test docstring = one-sentence claim (subject acting, domain terms), NO Args/Returns/body; above-line comments only on non-obvious setup; `CODE IDENTICAL` |
 | B3 | functional_test | claims at end-to-end / scenario altitude; otherwise like B2 |
 | B4 | example | a short comment on nearly every meaningful line giving what + why; verb-led module summary + use-case + how-to-run (names no script file); imports preserved; `CODE IDENTICAL` |
-| B5 | **method** | run B1 on the multi-method fixture, then `regen_method.py <orig> $RUN plain QualityRanking.pick` → `METHOD_plain.py`; `diff` vs original shows ONLY `pick`'s span changed (other docstrings byte-identical); `CODE IDENTICAL` |
+| B5 | **method** | run B1 on the multi-method fixture, then `regen_method.py <orig> $RUN plain <Class.method>` → `METHOD_plain.py`; `diff` vs original shows ONLY that method's span changed (other docstrings byte-identical); `CODE IDENTICAL` |
 | B6 | **folder** | `regen_batch.py phase1 2 --kind test <two tests/ files>` → two **distinct** `mkdtemp` rooms, a `batch_manifest.json`, each room's `phase1.json` records `genre: test` |
-| B7 | **--all** | for each lane (`code` source / `test` / `functional_test` / `example`) of one library, run B6-style `regen_batch phase1 --kind <lane>` → fresh rooms per lane, **no collisions** across lanes (genre-prefixed room names) |
+| B7 | **--all** | for each lane (`code` source / `test` / `functional_test` / `example`) of one library, run B6-style `regen_batch phase1 --kind <lane>` — two files per lane (or the lane's full set when smaller); the row validates batching mechanics, not content, so don't burn a whole library on it → fresh rooms per lane, **no collisions** across lanes (genre-prefixed room names) |
 | B8 | **refine keeps the run shape** | on a finished `--tight` room, `regen_symbol.py $RUN plain <sym>` → that symbol is STILL ≤ 2 sentences with no sections (phase2.json honored — the old bug regenerated it in default code shape); same check on a `--less` room (sections stay, summary stays ≤ 2 sentences) and a `--kind test` room (stays a one-sentence claim); `CODE IDENTICAL` |
 
 ## C. Cold-session script (the human invokes the skill)
@@ -79,6 +80,7 @@ Only a live interactive session can drive these gates — `claude -p` is headles
 | C12 | `/regen-comments --create-voice` | name → clean-room draft → free-text edit → test run on a real target (report rendered, nothing applied) → save on accept; the new voice then appears in the menu with a preview |
 | C13 | `/regen-comments <file> --without-comment-triage` | runs purely from code (no comment lens); existing header (copyright/license) still preserved mechanically |
 | C14 | run preflight with a deliberately wrong `--expect-email` mid-C1 | the run **stops** at step 0 with the mismatch named; it proceeds only after you explicitly agree (never silently) |
+| C15 | any C1 run with the report served (Runbook step 7's serve loop) → click **Submit to session** in the browser | the `SELECTION RECEIVED` Monitor event lands in-session; the orchestrator parses, runs the invariant-7 read, applies, and re-renders with no paste; the round menu continues; Discard/Apply stops the server |
 
 Gate-fix confirmations (call these out during the above):
 - **voice menu** lists every voice and never errors (the old 5-option `AskUserQuestion` is gone).
