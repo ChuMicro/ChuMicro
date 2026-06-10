@@ -89,6 +89,9 @@ def main():
     # legibility watcher: flag (never rewrite) any sentence that reads awkwardly, so the rare convoluted roll
     # surfaces in the report for the human to fix in the refine loop instead of shipping silently
     subprocess.run([sys.executable, os.path.join(SKILL, "flag_legibility.py"), rundir, voice], check=False)
+    # deterministic flag-only pass (no LLM): AI discourse-marker tics + voice-descriptor leaks, surfaced in
+    # the report next to the legibility flags for the human to cut in the refine loop
+    subprocess.run([sys.executable, os.path.join(SKILL, "flag_tics.py"), rundir, voice], check=False)
 
     print("=== PHASE 2 COMPLETE ===")
     print(f"  finished file: {final}   genre: {genre}")
