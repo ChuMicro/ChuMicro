@@ -23,9 +23,42 @@ import sys
 
 SKILL = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, SKILL)
-from flag_tics import scan, signatures  # noqa: E402
+from flag_tics import scan, signatures, symbol_spans  # noqa: E402
 from splice_symbol import splice, _code_only, _find  # noqa: E402
 from apply_selection import set_docstring, _is_class  # noqa: E402
+from tics import detect  # noqa: E402
+
+
+def ban_symbols(src):
+    """Qualnames whose docstrings/comments carry a mechanical-ban violation (tics.py detect).
+
+    detect() names docstring sites by SHORT name and comments by line number; both map onto the
+    symbol spans flag_tics already computes. Mechanical bans route exactly like tics/leaks: swap the
+    symbol for an alternative pass's clean take instead of paying an LLM polish round for it.
+    """
+    tree = ast.parse(src)
+    spans = symbol_spans(tree)
+
+    def qual_for_line(line):
+        best = ("<module>", -1)
+        for q, s, e in spans:
+            if s <= line <= e and s > best[1]:
+                best = (q, s)
+        return best[0]
+
+    out = set()
+    for v in detect(src):
+        where = v.get("where", "")
+        if where.startswith("docstring:"):
+            short = where.split(":", 1)[1]
+            if short == "<module>":
+                out.add("<module>")
+            else:
+                # short name -> qualname(s); a name shared across classes flags each owner
+                out.update(q for q, _s, _e in spans if q.split(".")[-1] == short)
+        elif where.startswith("comment:L"):
+            out.add(qual_for_line(int(where.split("L", 1)[1])))
+    return out
 
 
 def main():
@@ -50,8 +83,11 @@ def main():
     for f in flags:
         if f["symbol"] not in flagged:
             flagged.append(f["symbol"])
+    for sym in sorted(ban_symbols(src)):   # mechanical bans (em-dash / semicolon / banned words) route too
+        if sym not in flagged:
+            flagged.append(sym)
     if not flagged:
-        print("autoroute: no tic/leak flags; nothing to route")
+        print("autoroute: no tic/leak/ban flags; nothing to route")
         return
 
     candidates = []
@@ -76,8 +112,8 @@ def main():
                 continue  # pass lacks the symbol / un-spliceable — try the next one
             if _code_only(trial) != fingerprint:
                 continue
-            if any(f["symbol"] == sym for f in scan(trial, sigs, code)):
-                continue  # this pass's take is flagged too
+            if any(f["symbol"] == sym for f in scan(trial, sigs, code)) or sym in ban_symbols(trial):
+                continue  # this pass's take is flagged (tic/leak) or ban-dirty too
             src = trial
             routed.append({"symbol": sym, "to_run": n})
             break
