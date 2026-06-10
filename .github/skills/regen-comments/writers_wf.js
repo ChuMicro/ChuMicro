@@ -55,9 +55,10 @@ const GEN_SCHEMA = { type: 'object', additionalProperties: false, properties: { 
 // owning the format. Empty when the run is voiceless or the voice has no sample on file.
 function sampleBlock() {
   if (!VOICE_PARA.trim() || !VOICE_SAMPLE.trim()) return ''
-  return 'A sample of that voice, in its own genre rather than code comments. Take the word choice, '
-    + 'rhythm, and attitude from it -- never its paragraph length or format. Every shape and length rule '
-    + 'below still applies as written:\n\n' + VOICE_SAMPLE.trim() + '\n\n'
+  return 'A sample of that voice, in its own genre rather than code comments. Absorb the rhythm, '
+    + 'attitude, and word choice from it, then write in your own words about this code -- never reuse '
+    + 'its phrases or subject matter, and never its paragraph length or format. Every shape and length '
+    + 'rule below still applies as written:\n\n' + VOICE_SAMPLE.trim() + '\n\n'
 }
 
 function genrePrompt(genre, n) {
