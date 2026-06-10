@@ -1,13 +1,17 @@
-# bourdain — real-text sample
+# bourdain — real-text samples
 
 - Person: Anthony Bourdain
-- Source: "Don't Eat Before Reading This", The New Yorker, April 19, 1999 issue
-- Original: https://www.newyorker.com/magazine/1999/04/19/dont-eat-before-reading-this
-- Register: written magazine prose
-- Rights: copyrighted; short excerpt, internal prompt data only
+- Register: written essays from the Parts Unknown years — travel-worn, reflective, wry, generous with people, allergic to pretension. Chosen over the showier 1999 New Yorker register, which read as provocation rather than hard-won-wisdom narration
+- Source for Excerpt 1: "Under the Volcano", May 3, 2014, written for the Parts Unknown Mexico episode; https://anthonybourdain.tumblr.com/post/84641290831/under-the-volcano
+- Source for Excerpt 2: "Bourdain's Field Notes: Detroit", originally Tumblr Nov 8, 2013, for Parts Unknown season 2; https://explorepartsunknown.com/detroit/bourdains-field-notes-detroit/ (the asterisks in the final line are that site's censoring, kept verbatim)
+- Rights: copyrighted; short excerpts, internal prompt data only
 
-## Excerpt
+## Excerpt 1
 
-Good food, good eating, is all about blood and organs, cruelty and decay. It's about sodium-loaded pork fat, stinky triple-cream cheeses, the tender thymus glands and distended livers of young animals. It's about danger—risking the dark, bacterial forces of beef, chicken, cheese, and shellfish. Your first two hundred and seven Wellfleet oysters may transport you to a state of rapture, but your two hundred and eighth may send you to bed with the sweats, chills, and vomits.
+It's a country I feel particularly attached to and grateful for. In nearly 30 years of cooking professionally, just about every time I walked into a new kitchen, it was a Mexican guy who looked after me, had my back, showed me what was what, was there—and on the case—when the cooks more like me, with backgrounds like mine—ran away to go skiing or surfing—or simply "flaked." I have been fortunate to track where some of those cooks come from, to go back home with them. To small towns populated mostly by women—where in the evening, families gather at the town's phone kiosk, waiting for calls from their husbands, sons and brothers who have left to work in our kitchens in the cities of the North. I have been fortunate enough to see where that affinity for cooking comes from, to experience moms and grandmothers preparing many delicious things, with pride and real love, passing that food made by hand, passed from their hands to mine.
 
-Gastronomy is the science of pain. Professional cooks belong to a secret society whose ancient rituals derive from the principles of stoicism in the face of humiliation, injury, fatigue, and the threat of illness. The members of a tight, well-greased kitchen staff are a lot like a submarine crew. Confined for most of their waking hours in hot, airless spaces, and ruled by despotic leaders, they often acquire the characteristics of the poor saps who were press-ganged into the royal navies of Napoleonic times—superstition, a contempt for outsiders, and a loyalty to no flag but their own.
+## Excerpt 2
+
+But I love Detroit. I think it's beautiful. I think it's one of the most beautiful cities in America—still. The same incompetence and neglect that led to its current state of affairs have at least left us with a cityscape that even now taunts us with the memories of our once outsize dreams. Unlike most other cities that ran into trouble when steel or textiles or industry left town, Detroit didn't (or couldn't) go on the usual idiot building spree, tearing down old buildings and paving over city centers with "pedestrian malls," ruining a city's character and stripping its center in favor of the "shopping district," convention center, and faux "ye Olde Towne" hubs. So many places imagined that all the building would revive their fortunes. Instead, it left their city centers empty, characterless, and without heart—looking like everyplace else.
+
+Detroit looks like nowhere else. Detroit looks like motherf****n' Detroit. As it should.
