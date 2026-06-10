@@ -129,7 +129,10 @@ def main():
               "in an AskUserQuestion with a free-text window before phase 2.")
     print(f"  QUESTIONABLE facts for the picker ({len(questionable)}):")
     for i, f in enumerate(questionable):
-        print(f"    [{i}] ({f.get('confidence')}, {','.join(f.get('source_lenses', []))}) {f.get('stub', '')[:120]}")
+        # gloss = the human-facing plain-English sentence; the stub is writer-facing compressed notation.
+        # Present the gloss at the gate; an old room without one falls back to the stub.
+        text = f.get("gloss") or f.get("stub", "")
+        print(f"    [{i}] ({f.get('confidence')}, {','.join(f.get('source_lenses', []))}) {text[:160]}")
     print("  Next (in-session): run the picker on these, write ledger_final.md = ledger_provisional.md "
           "minus the rejected facts, then run regen_phase2.py.")
 

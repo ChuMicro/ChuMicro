@@ -403,8 +403,9 @@ def build_file_section(rundir, voice, original, ns="f0"):
         doc_before = before.get(qual, {}).get("doc")
         pur = purpose.get(qual) or purpose.get(_short(qual)) or ""
         facts = _facts_for(qual, ledger)
+        # gloss (plain English) leads for the human; the writer-facing stub rides as secondary notation
         fact_html = "".join(
-            f"<li><code>{_esc(f.get('stub'))}</code> "
+            f"<li>{_esc(f.get('gloss')) + ' ' if f.get('gloss') else ''}<code>{_esc(f.get('stub'))}</code> "
             f"<span class='meta'>({_esc(f.get('confidence'))}, {_esc(','.join(f.get('source_lenses', [])))})</span></li>"
             for f in facts) or "<li class='none'>none mapped to this symbol</li>"
 
@@ -469,7 +470,7 @@ def build_file_section(rundir, voice, original, ns="f0"):
         </div>""")
 
     ledger_rows = "".join(
-        f"<tr><td><code>{_esc(f.get('stub'))}</code></td><td>{_esc(f.get('sites'))}</td>"
+        f"<tr><td>{_esc(f.get('gloss')) + '<br>' if f.get('gloss') else ''}<code>{_esc(f.get('stub'))}</code></td><td>{_esc(f.get('sites'))}</td>"
         f"<td>{_esc(','.join(f.get('source_lenses', [])))}</td><td class='c-{_esc(f.get('confidence'))}'>{_esc(f.get('confidence'))}</td></tr>"
         for f in ledger) or "<tr><td colspan=4 class=none>empty ledger</td></tr>"
 
