@@ -114,8 +114,14 @@ def main():
     # picker too involved. Low/med comment-derived facts still surface (they ARE low/med).
     questionable = [f for f in ledger if f.get("confidence") in ("low", "med")]
     needs_user = bool(val.get("any_wrong") or val.get("any_underspecified"))
+    # A zero-fact triage (small clean file under the parsimony rule) can leave the workflow without a
+    # ledger_provisional.md on disk, but phase1.json points at it and phase 2 refuses to run without a
+    # ledger_final.md derived from it. Guarantee the file exists, empty meaning "no facts ride".
+    provisional_path = os.path.join(rundir, "ledger_provisional.md")
+    if not os.path.exists(provisional_path):
+        open(provisional_path, "w").write("")
     json.dump({"genre": genre, "questionable": questionable, "validation": val, "needs_user": needs_user,
-               "ledger_provisional": os.path.join(rundir, "ledger_provisional.md"),
+               "ledger_provisional": provisional_path,
                "preserve_json": os.path.join(rundir, "preserve.json")},
               open(os.path.join(rundir, "phase1.json"), "w"), indent=2)
 

@@ -12,6 +12,7 @@ Usage: regen_phase2.py <rundir> <voice_key> [--kind <genre>] [--tight | --less]
 Precondition: <rundir>/ledger_final.md exists (assembled by the orchestrator after the picker).
 The genre is read from <rundir>/phase1.json by default; --kind overrides it.
 """
+import glob
 import json
 import os
 import shutil
@@ -83,6 +84,15 @@ def main():
         sys.exit(f"selector returned an invalid winner ({winner!r}); no runs/run-{winner}.py to copy.")
     merged = os.path.join(rundir, "merged.py")
     shutil.copy(win_file, merged)
+    # strip.py turns a docstring-only body into `pass`; a writer re-adding the docstring keeps that pass
+    # often enough that the FINAL gains a stray Pass node the original never had (verify then fails and
+    # an applied diff would carry `+ pass`). Normalize every cached pass + the merged copy to the
+    # docstring-only form so the splice/roll-the-dice candidates stay code-identical too.
+    sys.path.insert(0, SKILL)
+    from normalize_stub_pass import normalize  # noqa: E402
+    for candidate in glob.glob(os.path.join(rundir, "runs", "run-*.py")) + [merged]:
+        if normalize(candidate):
+            print(f"  normalized docstring-redundant pass: {os.path.basename(candidate)}")
     print(f"  selected run-{winner}: {pick.get('why', '')}")
     if pick.get("concern"):
         print(f"  selector concern: {pick['concern']}")
