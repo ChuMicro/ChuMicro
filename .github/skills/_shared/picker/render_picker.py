@@ -27,6 +27,8 @@ Spec schema:
       "title": "audit-skill report — git-commit",        // page heading
       "key": "audit-skill:git-commit:20260611T",          // localStorage namespace; change per run
       "blob_header": "audit-skill picks (git-commit)",    // first blob line after "PICKS — "
+      "subtitle": "4 findings · 1 high · validated",      // optional metadata line under the title (escaped);
+                                                          // use this for counts/status, not intro_html
       "intro_html": "<p>…</p>",                           // optional block above the cards (trusted HTML)
       "sections": [                                       // optional page-top context drop-downs,
         {"title": "What this file does",                  // rendered between intro and the decision
@@ -119,6 +121,7 @@ CSS = """
  h1{font-size:24px;font-weight:600;margin:0 44px 6px 0}
  .themebtn{position:fixed;top:14px;right:16px;font:inherit;font-size:13px;padding:6px 12px;border-radius:999px;
   border:1px solid var(--border);background:var(--card);color:var(--fg);cursor:pointer;z-index:10}
+ .subtitle{color:var(--faint);font-size:13.5px;margin:0 0 16px}
  .intro{color:var(--faint);font-size:15px;margin-bottom:10px}
  .intro pre{white-space:pre-wrap}
  .legend{font-size:14.5px;color:var(--faint);background:var(--card);border:1px solid var(--border);
@@ -141,41 +144,41 @@ CSS = """
  .tabpane{display:none} .tabpane.active{display:block}
  .tabdesc{color:var(--faint);font-size:14px;margin:2px 2px 10px}
  .legend b{color:var(--fg);font-weight:620}
- .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 15px;margin:9px 0}
+ .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:15px 17px;margin:12px 0}
  .cardhead{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap}
- .cardid{font-weight:700;color:var(--accent);font-size:16px}
+ .cardid{font-weight:700;color:var(--accent);font-size:17px}
  .cardtitle{font-weight:630}
  .badge{font-size:11px;font-weight:700;letter-spacing:.4px;padding:2px 8px;border-radius:999px;color:#fff;background:#64748b}
  .b-critical{background:#dc2626} .b-important{background:#d97706} .b-minor{background:#64748b} .b-ambiguous{background:#7c3aed}
  .srcchip{font-size:11.5px;color:var(--faint);background:var(--chip);border-radius:999px;padding:2px 9px}
- .cardmeta{margin:5px 0 0;font-size:12px;color:var(--faint)}
- .summary{margin:8px 0 0;font-size:14.5px}
- details.detail{margin:8px 0 0}
- details.detail>summary{cursor:pointer;font-size:13px;color:var(--accent)}
- details.detail .dtext{margin-top:5px;font-size:14px}
- .warning{margin:8px 0 0;background:color-mix(in srgb,#d97706 10%,transparent);
-  border:1px solid color-mix(in srgb,#d97706 35%,transparent);border-radius:8px;padding:6px 10px;font-size:13.5px}
- .field{display:flex;gap:10px;margin:8px 0 0;font-size:14px}
+ .cardmeta{margin:6px 0 0;font-size:12.5px;color:var(--faint)}
+ .summary{margin:10px 0 0;font-size:15.5px}
+ details.detail{margin:10px 0 0}
+ details.detail>summary{cursor:pointer;font-size:13.5px;color:var(--accent)}
+ details.detail .dtext{margin-top:6px;font-size:14.5px}
+ .warning{margin:10px 0 0;background:color-mix(in srgb,#d97706 10%,transparent);
+  border:1px solid color-mix(in srgb,#d97706 35%,transparent);border-radius:8px;padding:7px 10px;font-size:14px}
+ .field{display:flex;gap:10px;margin:11px 0 0;font-size:15px}
  .flabel{flex:0 0 auto;min-width:30px;text-align:center;font-size:11.5px;font-weight:800;letter-spacing:.6px;
   text-transform:uppercase;border-radius:6px;padding:3px 8px;align-self:flex-start;color:var(--faint);background:var(--chip)}
  .f-why .flabel{color:var(--why);background:color-mix(in srgb,var(--why) 13%,transparent)}
  .f-fix .flabel{color:var(--fix);background:color-mix(in srgb,var(--fix) 13%,transparent)}
  .f-fix{border-left:3px solid color-mix(in srgb,var(--fix) 45%,transparent);padding-left:9px;margin-left:-12px}
  .ftext{flex:1}
- .evidence{margin:8px 0 0;white-space:pre-wrap;background:var(--blob-bg);border:1px solid var(--border);
-  border-radius:8px;padding:7px 10px;font:12.5px/1.5 ui-monospace,Menlo,monospace;color:var(--faint)}
- .diffblock{margin:8px 0 0;border:1px solid var(--border);border-radius:8px;overflow:hidden;
-  font:12.5px/1.55 ui-monospace,Menlo,monospace}
+ .evidence{margin:9px 0 0;white-space:pre-wrap;background:var(--blob-bg);border:1px solid var(--border);
+  border-radius:8px;padding:8px 10px;font:13px/1.5 ui-monospace,Menlo,monospace;color:var(--faint)}
+ .diffblock{margin:9px 0 0;border:1px solid var(--border);border-radius:8px;overflow:hidden;
+  font:13px/1.55 ui-monospace,Menlo,monospace}
  .diffloc{padding:4px 10px;background:var(--blob-bg);color:var(--faint);font-size:12px;border-bottom:1px solid var(--border)}
  .dline{padding:5px 10px;white-space:pre-wrap}
  .dold{background:color-mix(in srgb,#dc2626 9%,transparent)}
  .dnew{background:color-mix(in srgb,#16a34a 10%,transparent)}
- .cardbody{margin:8px 0 0;font-size:14px}
- .opts{display:flex;gap:14px;flex-wrap:wrap;margin-top:9px}
- .opts label{cursor:pointer;display:flex;align-items:center;gap:6px;font-size:14px}
+ .cardbody{margin:9px 0 0;font-size:15px}
+ .opts{display:flex;gap:16px;flex-wrap:wrap;margin-top:12px}
+ .opts label{cursor:pointer;display:flex;align-items:center;gap:6px;font-size:15px}
  .opts input{accent-color:var(--accent)}
- .notes{width:100%;box-sizing:border-box;margin-top:8px;font:13.5px/1.5 inherit;border:1px solid var(--border);
-  border-radius:8px;padding:6px 9px;min-height:32px;background:var(--note-bg);color:var(--fg);resize:vertical}
+ .notes{width:100%;box-sizing:border-box;margin-top:10px;font:14.5px/1.5 inherit;border:1px solid var(--border);
+  border-radius:8px;padding:7px 9px;min-height:36px;background:var(--note-bg);color:var(--fg);resize:vertical}
  .selbar{position:fixed;bottom:0;left:0;right:0;background:var(--bar);backdrop-filter:blur(10px);
   border-top:1px solid var(--border);padding:10px 20px;font-size:14px}
  .selbar .row{display:flex;align-items:center;gap:12px;max-width:920px;margin-inline:auto;flex-wrap:wrap}
@@ -412,6 +415,7 @@ def main():
     else:
         cards = "\n".join(card_html(item, page_options, page_default) for item in spec["items"])
 
+    subtitle = f'<p class="subtitle">{html.escape(spec["subtitle"])}</p>' if spec.get("subtitle") else ""
     intro = f'<div class="intro">{spec["intro_html"]}</div>' if spec.get("intro_html") else ""
     sections = "".join(
         f'<details class="section"{" open" if section.get("open") else ""}>'
@@ -430,6 +434,7 @@ def main():
 <body>
 <button class="themebtn" id="themebtn">dark mode</button>
 <h1>{html.escape(spec.get("title", "decision page"))}</h1>
+{subtitle}
 {intro}
 {legend}
 {sections}

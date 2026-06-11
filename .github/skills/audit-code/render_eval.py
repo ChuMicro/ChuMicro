@@ -177,7 +177,7 @@ def main():
         "title": f"audit-code — {file_name}",
         "key": f"audit-code:{file_name}:{os.path.basename(rundir)}",
         "blob_header": f"audit-code apply ({file_name})",
-        "intro_html": f"<pre>{html.escape(' · '.join(intro_bits))}</pre>",
+        "subtitle": " · ".join(intro_bits),
         "options": ["apply", "discuss", "skip"],
         "default": "skip",
         "option_help": {
