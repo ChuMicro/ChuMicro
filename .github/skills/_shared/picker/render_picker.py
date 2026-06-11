@@ -28,6 +28,11 @@ Spec schema:
       "key": "audit-skill:git-commit:20260611T",          // localStorage namespace; change per run
       "blob_header": "audit-skill picks (git-commit)",    // first blob line after "PICKS — "
       "intro_html": "<p>…</p>",                           // optional block above the cards (trusted HTML)
+      "sections": [                                       // optional page-top context drop-downs,
+        {"title": "What this file does",                  // rendered between intro and the decision
+         "html": "<p>…</p>",                              // area (trusted HTML); open: true expands
+         "open": true}                                    // the section on load
+      ],
       "options": ["apply", "discuss", "skip"],            // page-wide option set
       "default": "skip",                                  // page-wide pre-checked option (omit for none)
       "option_help": {                                    // optional legend, rendered above the cards
@@ -118,6 +123,12 @@ CSS = """
  .intro pre{white-space:pre-wrap}
  .legend{font-size:14.5px;color:var(--faint);background:var(--card);border:1px solid var(--border);
   border-radius:10px;padding:9px 14px;margin-bottom:16px}
+ details.section{background:var(--card);border:1px solid var(--border);border-radius:12px;
+  padding:10px 16px;margin:10px 0}
+ details.section>summary{cursor:pointer;font-weight:620;font-size:15px}
+ details.section .sbody{margin-top:8px;font-size:14.5px}
+ .sbody small{color:var(--faint)}
+ .sbody code{font:13px ui-monospace,Menlo,monospace}
  .tabbar{display:flex;gap:4px;flex-wrap:wrap;margin:14px 0 16px;background:color-mix(in srgb,var(--chip) 80%,transparent);
   backdrop-filter:blur(12px) saturate(1.3);-webkit-backdrop-filter:blur(12px) saturate(1.3);border:1px solid var(--border);
   border-radius:12px;padding:4px;width:fit-content;max-width:100%;position:sticky;top:10px;z-index:9}
@@ -401,6 +412,12 @@ def main():
         cards = "\n".join(card_html(item, page_options, page_default) for item in spec["items"])
 
     intro = f'<div class="intro">{spec["intro_html"]}</div>' if spec.get("intro_html") else ""
+    sections = "".join(
+        f'<details class="section"{" open" if section.get("open") else ""}>'
+        f'<summary>{html.escape(section["title"])}</summary>'
+        f'<div class="sbody">{section["html"]}</div></details>'
+        for section in spec.get("sections", [])
+    )
     legend = legend_html(spec.get("option_help"))
     client_spec = json.dumps({"key": spec.get("key", ""), "blob_header": spec.get("blob_header", "")})
 
@@ -413,6 +430,7 @@ def main():
 <button class="themebtn" id="themebtn">dark mode</button>
 <h1>{html.escape(spec.get("title", "decision page"))}</h1>
 {intro}
+{sections}
 {legend}
 {cards}
 <div class="selbar">

@@ -11,9 +11,10 @@ meta line, the consequence as the amber "why" row, the suggested fix as the gree
 generated patch as an old→new diff (replace), a diff with only a + side (add), or evidence-block
 guidance (manual), the mechanism prose behind a collapsible detail, and a validator warning when a
 finding is unconfirmed. Tabs group findings by angle (trap / drift / coverage / clarity),
-severity-ordered within each; a trailing "understanding" tab carries informational cards — the
-independent module summary, the domain facts mined from comments, and the per-symbol summaries
-with finding back-references.
+severity-ordered within each, each tab opening with a help line naming its lens. Context lands
+above the decision area as collapsible page-top sections — the independent module summary (open
+on load), the domain facts mined from comments, and the per-symbol summaries with finding
+back-references.
 
 Defaults encode the apply policy: a validator-confirmed high-severity finding pre-selects apply,
 an unconfirmed finding pre-selects discuss (invariant 7's push-back, encoded in the page), and
@@ -39,7 +40,6 @@ TAB_HELP = {
     "drift": "comment/doc lens — claims a name, comment, or docstring makes that the code does not honor",
     "coverage": "test-gap lens — behaviors no test exercises, hollow tests, and tests that bless a bug",
     "clarity": "craft lens — confusing naming, hard-to-follow control flow, could-be-tighter",
-    "understanding": "context, not decisions — the independent module summary, domain facts mined from comments, and per-symbol summaries",
 }
 RENDERER = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, "_shared", "picker", "render_picker.py")
 
@@ -122,11 +122,12 @@ def main():
         item.update(patch_fields(patch_map.get(finding_id)))
         items.append(item)
 
+    sections = []
     if summary.get("module_summary"):
-        items.append({
-            "id": "module", "title": "What this file does",
-            "source": "summarizer — read from the code, independent of its comments",
-            "summary": summary["module_summary"], "options": [], "tab": "understanding",
+        sections.append({
+            "title": "What this file does — read from the code, independent of its comments",
+            "html": f"<p>{html.escape(summary['module_summary'])}</p>",
+            "open": True,
         })
     facts = evaluation.get("domain_facts", [])
     if facts:
@@ -135,26 +136,28 @@ def main():
             f"<small>({html.escape(str(fact.get('source_site', '')))}, {html.escape(str(fact.get('confidence', '')))})</small></p>"
             for fact in facts
         )
-        items.append({
-            "id": "facts", "title": "Domain facts",
-            "source": "drift lens — knowledge the comments carry that the code alone can't show",
-            "body_html": fact_lines, "options": [], "tab": "understanding",
+        sections.append({
+            "title": "Domain facts — knowledge the comments carry that the code alone can't show",
+            "html": fact_lines,
         })
-    finding_ids_by_symbol = {}
-    for finding in findings:
-        finding_ids_by_symbol.setdefault(finding.get("symbol"), []).append(finding.get("id"))
-    for index, symbol in enumerate(summary.get("symbols", [])):
-        qualname = symbol.get("qualname", "")
-        related = sorted(finding_ids_by_symbol.get(qualname, []))
-        item = {
-            "id": f"sym{index}", "title": qualname,
-            "meta": symbol.get("signature", ""),
-            "summary": symbol.get("summary", ""),
-            "options": [], "tab": "understanding",
-        }
-        if related:
-            item["evidence"] = "findings: " + ", ".join(f"#{finding_id}" for finding_id in related)
-        items.append(item)
+    symbols = summary.get("symbols", [])
+    if symbols:
+        finding_ids_by_symbol = {}
+        for finding in findings:
+            finding_ids_by_symbol.setdefault(finding.get("symbol"), []).append(finding.get("id"))
+        symbol_blocks = []
+        for symbol in symbols:
+            qualname = symbol.get("qualname", "")
+            related = sorted(finding_ids_by_symbol.get(qualname, []))
+            related_text = (" <small>findings: " + ", ".join(f"#{finding_id}" for finding_id in related) + "</small>") if related else ""
+            symbol_blocks.append(
+                f"<p><code>{html.escape(qualname)}</code> <small>{html.escape(symbol.get('signature', ''))}</small><br>"
+                f"{html.escape(symbol.get('summary', ''))}{related_text}</p>"
+            )
+        sections.append({
+            "title": "Per-symbol understanding",
+            "html": "".join(symbol_blocks),
+        })
 
     by_severity = phase1.get("by_severity", {})
     by_angle = phase1.get("by_angle", {})
@@ -183,7 +186,8 @@ def main():
             "skip": "leave as is",
         },
         "tabs": [{"name": name, "help": TAB_HELP[name]}
-                 for name in ("trap", "drift", "coverage", "clarity", "understanding")],
+                 for name in ("trap", "drift", "coverage", "clarity")],
+        "sections": sections,
         "items": items,
     }
     spec_path = os.path.join(rundir, "spec.json")
