@@ -25,17 +25,7 @@ sys.path.insert(0, SKILL)
 sys.path.insert(0, VOICES_DIR)
 from preflight import require_claude  # noqa: E402
 from voice_sample import load_voice_sample  # noqa: E402
-
-
-def claude_p_workflow(rundir, wf_name):
-    return subprocess.run(
-        ["claude", "-p",
-         f"Use the Workflow tool to run the workflow at ./{wf_name} (call Workflow with scriptPath "
-         f"./{wf_name}). Wait for full completion, then reply DONE.",
-         "--allowedTools", "Workflow", "Task", "Read", "Write",
-         "--permission-mode", "acceptEdits", "--model", "opus"],
-        cwd=rundir, capture_output=True, text=True,
-    )
+from wf_run import run_workflow, copy_winner, WRITER_ARTIFACTS  # noqa: E402
 
 
 def main():
@@ -68,11 +58,15 @@ def main():
               .replace("__GENRE__", genre).replace("__TIGHT__", "1" if cfg.get("tight") else "0")
               .replace("__LESS__", "1" if cfg.get("less") else "0"))
     open(os.path.join(rundir, "writers_wf.js"), "w").write(src)
-    claude_p_workflow(rundir, "writers_wf.js")
-
+    # freshness-guarded: the room already holds the prior run's candidates and merge, so a workflow that
+    # dies mid-flight leaves artifacts that pass bare existence checks -- the splice below would then take
+    # the OLD take and report success (observed 2026-06-10; only the human noticed nothing changed)
+    run_workflow(rundir, "writers_wf.js", required=WRITER_ARTIFACTS, marker="pick.json")
+    # the workflow only writes runs/ + pick.json; merged.py is the verbatim Python copy of the new winner
+    # (same anti-inversion copy phase 2 uses -- this script spliced the stale phase-2 merge before)
+    pick = copy_winner(rundir)
+    print(f"  fresh candidates selected run-{pick['winner']}: {pick.get('why', '')[:200]}")
     newmerged = os.path.join(rundir, "merged.py")
-    if not os.path.exists(newmerged):
-        sys.exit("writer produced no merged.py")
     # splice ONLY the target symbol from the new merge onto the human's file (guard rejects any code drift)
     subprocess.run(
         [sys.executable, os.path.join(SKILL, "splice_symbol.py"), current, newmerged, qual, final],

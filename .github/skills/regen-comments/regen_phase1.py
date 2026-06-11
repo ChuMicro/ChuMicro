@@ -27,18 +27,7 @@ sys.path.insert(0, SKILL)
 from strip import extract_header  # noqa: E402  (always-on mechanical header preservation)
 from preflight import require_claude  # noqa: E402
 from genre import detect_genre, GENRES  # noqa: E402
-
-
-def claude_p_workflow(rundir, wf_name):
-    """Run one clean-room `claude -p` from rundir that executes the named workflow to completion."""
-    return subprocess.run(
-        ["claude", "-p",
-         f"Use the Workflow tool to run the workflow at ./{wf_name} (call Workflow with scriptPath "
-         f"./{wf_name}). Wait for full completion, then reply DONE.",
-         "--allowedTools", "Workflow", "Task", "Read", "Write",
-         "--permission-mode", "acceptEdits", "--model", "opus"],
-        cwd=rundir, capture_output=True, text=True,
-    )
+from wf_run import run_workflow  # noqa: E402
 
 
 def _stage(wf_src, rundir, **subs):
@@ -85,8 +74,12 @@ def main():
 
     # 1. triage workflow (3 code lenses + comment lens + ledger-writer + validate/converge loop), one
     #    clean-room claude -p. The validator and its ledger-writer-retry loop live inside the workflow.
+    #    No `required` artifacts here: a zero-fact triage legitimately leaves the ledger files absent, and
+    #    the fresh-room guard above means stale leftovers can't masquerade as output (unlike the refine
+    #    loop, where wf_run's freshness check is load-bearing). A partial run degrades VISIBLY below
+    #    ("ledger facts: 0"), never silently.
     _stage("triage_wf.js", rundir, __RUNDIR__=rundir, __GENRE__=genre)
-    claude_p_workflow(rundir, "triage_wf.js")
+    run_workflow(rundir, "triage_wf.js")
 
     # 3. collect for the picker
     def _load(p, default):

@@ -54,12 +54,17 @@ def main():
         "'DROPPED:' (anything you could NOT keep while shortening -- empty if none). Reply DONE after both "
         "files exist.\n"
     )
+    # clear the previous round's outputs so the existence check below can't pass on a stale file when the
+    # agent produces nothing (same stale-artifact family as the regen_symbol merge bug, 2026-06-10)
+    tightened = os.path.join(rundir, "tightened.py")
+    for prior in (tightened, os.path.join(rundir, "tighten_report.txt")):
+        if os.path.exists(prior):
+            os.remove(prior)
     subprocess.run(
         ["claude", "-p", prompt, "--allowedTools", "Read", "Write",
          "--permission-mode", "acceptEdits", "--model", "opus"],
         cwd=rundir, capture_output=True, text=True,
     )
-    tightened = os.path.join(rundir, "tightened.py")
     if not os.path.exists(tightened):
         sys.exit("tighten produced no tightened.py — check the run room.")
 
