@@ -54,8 +54,9 @@ Spec schema:
           "source": "loader lens — frontmatter contract", // optional chip: what raised this item
           "meta": "effort: small · Foo.bar @ tick",       // optional faint line under the heading
           "summary": "plain-words description…",          // optional paragraph under the heading
-          "where": "Foo.bar — ticks_diff(a, b) >= 0",     // optional labeled row, mono — the code
-                                                          // location (symbol + quoted expression)
+          "where": {"place": "heartbeat.py · Foo.bar",    // optional labeled row: place renders as text,
+                    "code": "ticks_diff(a, b) >= 0"},     // the quoted code on its own mono line under it
+                                                          // (a bare string renders as one mono line)
           "why": "consequence in one sentence",           // optional labeled row
           "fix": "the exact proposed change",             // optional labeled row
           "detail": {                                     // optional collapsible block
@@ -215,12 +216,15 @@ CSS = """
   border:1px solid color-mix(in srgb,#d97706 35%,transparent);border-radius:8px;padding:7px 10px;font-size:14px}
  .warnflag{color:var(--why);font-size:15px;align-self:center;cursor:help}
  .field{display:flex;gap:10px;margin:11px 0 0;font-size:15px}
- .flabel{flex:0 0 auto;min-width:30px;text-align:center;font-size:11.5px;font-weight:800;letter-spacing:.6px;
-  text-transform:uppercase;border-radius:6px;padding:3px 8px;align-self:flex-start;color:var(--faint);background:var(--chip)}
+ .flabel{flex:0 0 auto;width:50px;box-sizing:border-box;text-align:center;font-size:11.5px;font-weight:800;
+  letter-spacing:.6px;text-transform:uppercase;border-radius:6px;padding:3px 6px;align-self:flex-start;
+  color:var(--faint);background:var(--chip)}
  .f-why .flabel{color:var(--why);background:color-mix(in srgb,var(--why) 13%,transparent)}
  .f-fix .flabel{color:var(--fix);background:color-mix(in srgb,var(--fix) 13%,transparent)}
  .f-where .flabel{color:var(--where);background:color-mix(in srgb,var(--where) 13%,transparent)}
- .f-where .ftext{font:13.5px/1.7 ui-monospace,Menlo,monospace;padding-top:2px}
+ .f-where .ftext{padding-top:1px;font-size:14.5px}
+ .f-where .ftext.mono{font:13.5px/1.7 ui-monospace,Menlo,monospace;padding-top:2px}
+ .fcode{font:13px/1.6 ui-monospace,Menlo,monospace;color:var(--faint);margin-top:3px;white-space:pre-wrap}
  .f-fix{border-left:3px solid color-mix(in srgb,var(--fix) 45%,transparent);padding-left:9px;margin-left:-12px}
  .ftext{flex:1}
  .evidence{margin:9px 0 0;white-space:pre-wrap;background:var(--blob-bg);border:1px solid var(--border);
@@ -523,9 +527,18 @@ def card_html(item, page_options, page_default):
     source = f'<span class="srcchip">{html.escape(item["source"])}</span>' if item.get("source") else ""
     meta = f'<div class="cardmeta">{html.escape(item["meta"])}</div>' if item.get("meta") else ""
     summary = f'<p class="summary">{html.escape(item["summary"])}</p>' if item.get("summary") else ""
-    fields = "".join(
-        f'<div class="field f-{key}"><span class="flabel">{label}</span><span class="ftext">{html.escape(item[key])}</span></div>'
-        for key, label in (("where", "where"), ("why", "why"), ("fix", "fix"))
+    where_html = ""
+    where_value = item.get("where")
+    if isinstance(where_value, dict):
+        code = f'<div class="fcode">{html.escape(where_value["code"])}</div>' if where_value.get("code") else ""
+        where_html = (f'<div class="field f-where"><span class="flabel">where</span>'
+                      f'<span class="ftext">{html.escape(where_value.get("place", ""))}{code}</span></div>')
+    elif where_value:
+        where_html = (f'<div class="field f-where"><span class="flabel">where</span>'
+                      f'<span class="ftext mono">{html.escape(where_value)}</span></div>')
+    fields = where_html + "".join(
+        f'<div class="field f-{key}"><span class="flabel">{key}</span><span class="ftext">{html.escape(item[key])}</span></div>'
+        for key in ("why", "fix")
         if item.get(key)
     )
     evidence = f'<div class="evidence">{html.escape(item["evidence"])}</div>' if item.get("evidence") else ""

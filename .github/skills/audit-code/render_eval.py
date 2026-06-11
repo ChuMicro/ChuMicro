@@ -7,10 +7,11 @@ shared picker schema (../_shared/picker/render_picker.py), then invokes that ren
 picker.html.
 
 The mapping: one decision card per finding — severity badge, angle chip, effort/confidence meta
-line, the symbol + quoted code as the blue "where" row, the consequence as the amber "why" row,
-the suggested fix as the green "fix" row, the generated patch as an old→new diff (replace), a
-diff with only a + side (add), or evidence-block guidance (manual), the mechanism prose behind a
-collapsible detail, and a validator warning when a finding is unconfirmed. The findings render as
+line, the writer's mechanism prose as the visible summary paragraph, the symbol as the blue
+"where" row's place line with the quoted code on a mono line under it, the consequence as the
+amber "why" row, the suggested fix as the green "fix" row, the generated patch as an old→new
+diff (replace), a diff with only a + side (add), or evidence-block guidance (manual), and a
+validator warning when a finding is unconfirmed. The findings render as
 one severity-ordered list narrowed by a facet bar — severity and angle chips (angle help on
 hover), plus file chips in merge mode — with a group-by row (angle, and file in merge mode) for
 sectioned reading. Context lands above the decision area as collapsible page-top sections.
@@ -140,15 +141,15 @@ def build_item(room, finding, namespace=None):
     severity = finding.get("severity", "low")
     verdict = room["validator_map"].get(finding_id, {})
     unconfirmed = is_unconfirmed(room, finding_id)
-    where = f"{finding.get('symbol', '?')} — {finding.get('site', '?')}"
     angle = finding.get("angle", "trap")
+    place = f"{room['file_name']} · {finding.get('symbol', '?')}" if namespace else finding.get("symbol", "?")
     item = {
         "id": f"{namespace}#{finding_id}" if namespace else str(finding_id),
         "title": finding["title"],
         "badge": severity,
         "source": angle,
         "meta": f"effort: {finding.get('effort', '?')} · confidence: {finding.get('confidence', '?')}",
-        "where": f"{room['file_name']} · {where}" if namespace else where,
+        "where": {"place": place, "code": finding.get("site", "")},
         "why": finding["consequence"],
         "fix": finding["suggested_fix"],
         "facets": {"severity": severity, "angle": angle},
@@ -157,8 +158,10 @@ def build_item(room, finding, namespace=None):
     if namespace:
         item["facets"]["file"] = room["file_name"]
         item["collapsed"] = True
+    # the writer's mechanism prose reads as the card summary, in view rather than behind a
+    # collapsible -- the reader sees how the code produces the defect without an extra click
     if finding.get("problem"):
-        item["detail"] = {"label": "how the code does this", "text": finding["problem"]}
+        item["summary"] = finding["problem"]
     if unconfirmed:
         tag = "problem unconfirmed" if not verdict.get("real", True) else "fix needs review"
         item["warning"] = f"Validator: {tag}. {verdict.get('note', '')}".strip()
