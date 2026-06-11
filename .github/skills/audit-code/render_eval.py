@@ -1,20 +1,29 @@
 #!/usr/bin/env python3
-"""audit-code — build the decision-page spec from a run room and render it via the shared picker.
+"""audit-code — build the decision-page spec from one or more run rooms and render it via the shared picker.
 
-Reads the run room's eval.json + written.json + summary.json + validation.json + patches.json +
-phase1.json, joins the writer's prose onto the fact ledger by id, and writes <rundir>/spec.json in
-the shared picker schema (../_shared/picker/render_picker.py), then invokes that renderer to
-produce <rundir>/picker.html.
+Reads each run room's eval.json + written.json + summary.json + validation.json + patches.json +
+phase1.json, joins the writer's prose onto the fact ledger by id, and writes spec.json in the
+shared picker schema (../_shared/picker/render_picker.py), then invokes that renderer to produce
+picker.html.
 
-The mapping: one decision card per finding — severity badge, angle chip, effort/confidence/site
-meta line, the consequence as the amber "why" row, the suggested fix as the green "fix" row, the
-generated patch as an old→new diff (replace), a diff with only a + side (add), or evidence-block
-guidance (manual), the mechanism prose behind a collapsible detail, and a validator warning when a
-finding is unconfirmed. Tabs group findings by angle (trap / drift / coverage / clarity),
-severity-ordered within each, each tab opening with a help line naming its lens. Context lands
-above the decision area as collapsible page-top sections — the independent module summary (open
-on load), the domain facts mined from comments, and the per-symbol summaries with finding
-back-references.
+The mapping: one decision card per finding — severity badge, effort/confidence meta line, the
+symbol + quoted code as the blue "where" row, the consequence as the amber "why" row, the
+suggested fix as the green "fix" row, the generated patch as an old→new diff (replace), a diff
+with only a + side (add), or evidence-block guidance (manual), the mechanism prose behind a
+collapsible detail, and a validator warning when a finding is unconfirmed. Tabs group findings by
+angle (trap / drift / coverage / clarity), severity-ordered within each, each tab opening with a
+help line naming its lens. Context lands above the decision area as collapsible page-top sections.
+
+Single-file mode (one room): sections are the independent module summary (open on load), the
+domain facts mined from comments, and the per-symbol summaries with finding back-references.
+
+Merge mode (--merge, library/folder scope): one page covers every room. Finding ids are
+namespaced per file (heartbeat#3) so the paste-back blob stays unambiguous; the where row leads
+with the file name; a chip row (all · heartbeat.py · …) narrows the page to one file; cards below
+high severity render collapsed to a strip so a long tab skims like a table; each file's context
+lands as one collapsed section (plus an open LIBRARY_FACTS section when --lib names one); and
+merged.json in the output dir maps each namespace back to its run room + target for the apply
+loop.
 
 Defaults encode the apply policy: a validator-confirmed high-severity finding pre-selects apply,
 an unconfirmed finding pre-selects discuss (invariant 7's push-back, encoded in the page), and
@@ -24,8 +33,12 @@ This script renders only. The orchestrator serves the page with ../_shared/picke
 (PICKER_NO_OPEN=1, background), opens the printed SERVING url itself, and watches the server's
 stdout for the submitted selection.
 
-Usage: render_eval.py <rundir> <target.py>   # writes <rundir>/spec.json + <rundir>/picker.html
-Stdout: the renderer's `RENDERED <path>` line, then `file://<path>` as the no-server fallback.
+Usage:
+  render_eval.py <rundir> <target.py>
+  render_eval.py --merge <outdir> <rundir> <target.py> [<rundir> <target.py> ...] [--lib <LIBRARY_FACTS.md>]
+
+Stdout: the renderer's `RENDERED <path>` line, `MERGED-MAP <path>` in merge mode, then
+`file://<path>` as the no-server fallback.
 """
 import html
 import json
@@ -42,6 +55,10 @@ TAB_HELP = {
     "clarity": "craft lens — confusing naming, hard-to-follow control flow, could-be-tighter",
 }
 RENDERER = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, "_shared", "picker", "render_picker.py")
+USAGE = (
+    "usage: render_eval.py <rundir> <target.py>\n"
+    "       render_eval.py --merge <outdir> <rundir> <target.py> [<rundir> <target.py> ...] [--lib <LIBRARY_FACTS.md>]"
+)
 
 
 def patch_fields(patch):
@@ -62,8 +79,10 @@ def patch_fields(patch):
     return fields
 
 
-def main():
-    rundir, target = os.path.abspath(sys.argv[1]), sys.argv[2]
+def load_room(rundir, target):
+    """Read one run room's artifacts, join the writer's prose onto the fact ledger by id, and
+    return everything the spec builder needs (findings sorted by severity then effort)."""
+    rundir = os.path.abspath(rundir)
 
     def load(name, default):
         path = os.path.join(rundir, name)
@@ -92,90 +111,140 @@ def main():
     findings.sort(key=lambda finding: (SEV_RANK.get(finding.get("severity"), 3),
                                        EFFORT_RANK.get(finding.get("effort"), 3), finding.get("id", 0)))
     validator_map = {entry.get("id"): entry for entry in validation.get("findings", [])}
-    converged = not (validation.get("any_unreal") or validation.get("any_fix_unsound"))
-    file_name = os.path.basename(target)
-    voice = phase1.get("voice", "plain")
+    return {
+        "rundir": rundir,
+        "target": target,
+        "file_name": os.path.basename(target),
+        "findings": findings,
+        "facts": evaluation.get("domain_facts", []),
+        "summary": summary,
+        "validator_map": validator_map,
+        "converged": not (validation.get("any_unreal") or validation.get("any_fix_unsound")),
+        "patch_map": patch_map,
+        "phase1": phase1,
+    }
 
-    items = []
-    for finding in findings:
-        finding_id = finding.get("id")
-        severity = finding.get("severity", "low")
-        angle = finding.get("angle", "trap")
-        verdict = validator_map.get(finding_id, {})
-        unconfirmed = bool(verdict) and (not verdict.get("real", True) or not verdict.get("fix_sound", True))
-        item = {
-            "id": str(finding_id),
-            "title": finding["title"],
-            "badge": severity,
-            "meta": f"effort: {finding.get('effort', '?')} · confidence: {finding.get('confidence', '?')}",
-            "where": f"{finding.get('symbol', '?')} — {finding.get('site', '?')}",
-            "why": finding["consequence"],
-            "fix": finding["suggested_fix"],
-            "tab": angle,
-            "default": "discuss" if unconfirmed else ("apply" if severity == "high" else "skip"),
-        }
-        if finding.get("problem"):
-            item["detail"] = {"label": "how the code does this", "text": finding["problem"]}
-        if unconfirmed:
-            tag = "problem unconfirmed" if not verdict.get("real", True) else "fix needs review"
-            item["warning"] = f"Validator: {tag}. {verdict.get('note', '')}".strip()
-        item.update(patch_fields(patch_map.get(finding_id)))
-        items.append(item)
 
-    sections = []
-    if summary.get("module_summary"):
-        sections.append({
-            "title": "What this file does — read from the code, independent of its comments",
-            "html": f"<p>{html.escape(summary['module_summary'])}</p>",
-            "open": True,
-        })
-    facts = evaluation.get("domain_facts", [])
-    if facts:
-        fact_lines = "".join(
-            f"<p>• {html.escape(str(fact.get('fact', '')))} "
-            f"<small>({html.escape(str(fact.get('source_site', '')))}, {html.escape(str(fact.get('confidence', '')))})</small></p>"
-            for fact in facts
+def is_unconfirmed(room, finding_id):
+    verdict = room["validator_map"].get(finding_id, {})
+    return bool(verdict) and (not verdict.get("real", True) or not verdict.get("fix_sound", True))
+
+
+def build_item(room, finding, namespace=None):
+    """Build one picker card from a finding. A namespace (merge mode) prefixes the id
+    (heartbeat#3), leads the where row with the file name, tags the card for the file-chip
+    filter, and collapses everything that is neither high severity nor unconfirmed."""
+    finding_id = finding.get("id")
+    severity = finding.get("severity", "low")
+    verdict = room["validator_map"].get(finding_id, {})
+    unconfirmed = is_unconfirmed(room, finding_id)
+    where = f"{finding.get('symbol', '?')} — {finding.get('site', '?')}"
+    item = {
+        "id": f"{namespace}#{finding_id}" if namespace else str(finding_id),
+        "title": finding["title"],
+        "badge": severity,
+        "meta": f"effort: {finding.get('effort', '?')} · confidence: {finding.get('confidence', '?')}",
+        "where": f"{room['file_name']} · {where}" if namespace else where,
+        "why": finding["consequence"],
+        "fix": finding["suggested_fix"],
+        "tab": finding.get("angle", "trap"),
+        "default": "discuss" if unconfirmed else ("apply" if severity == "high" else "skip"),
+    }
+    if namespace:
+        item["filter"] = room["file_name"]
+        if severity != "high" and not unconfirmed:
+            item["collapsed"] = True
+    if finding.get("problem"):
+        item["detail"] = {"label": "how the code does this", "text": finding["problem"]}
+    if unconfirmed:
+        tag = "problem unconfirmed" if not verdict.get("real", True) else "fix needs review"
+        item["warning"] = f"Validator: {tag}. {verdict.get('note', '')}".strip()
+    item.update(patch_fields(room["patch_map"].get(finding_id)))
+    return item
+
+
+def summary_section_html(room, namespace=None):
+    """One per-symbol understanding block: each symbol's qualname, signature, summary, and
+    back-references to the finding ids (namespaced in merge mode) raised against it."""
+    finding_ids_by_symbol = {}
+    for finding in room["findings"]:
+        finding_ids_by_symbol.setdefault(finding.get("symbol"), []).append(finding.get("id"))
+    symbol_blocks = []
+    for symbol in room["summary"].get("symbols", []):
+        qualname = symbol.get("qualname", "")
+        related = sorted(finding_ids_by_symbol.get(qualname, []))
+        labels = [f"{namespace}#{finding_id}" if namespace else f"#{finding_id}" for finding_id in related]
+        related_text = (" <small>findings: " + ", ".join(labels) + "</small>") if related else ""
+        symbol_blocks.append(
+            f"<p><code>{html.escape(qualname)}</code> <small>{html.escape(symbol.get('signature', ''))}</small><br>"
+            f"{html.escape(symbol.get('summary', ''))}{related_text}</p>"
         )
-        sections.append({
-            "title": "Domain facts — knowledge the comments carry that the code alone can't show",
-            "html": fact_lines,
-        })
-    symbols = summary.get("symbols", [])
-    if symbols:
-        finding_ids_by_symbol = {}
-        for finding in findings:
-            finding_ids_by_symbol.setdefault(finding.get("symbol"), []).append(finding.get("id"))
-        symbol_blocks = []
-        for symbol in symbols:
-            qualname = symbol.get("qualname", "")
-            related = sorted(finding_ids_by_symbol.get(qualname, []))
-            related_text = (" <small>findings: " + ", ".join(f"#{finding_id}" for finding_id in related) + "</small>") if related else ""
-            symbol_blocks.append(
-                f"<p><code>{html.escape(qualname)}</code> <small>{html.escape(symbol.get('signature', ''))}</small><br>"
-                f"{html.escape(symbol.get('summary', ''))}{related_text}</p>"
-            )
-        sections.append({
-            "title": "Per-symbol understanding",
-            "html": "".join(symbol_blocks),
-        })
+    return "".join(symbol_blocks)
 
-    by_severity = phase1.get("by_severity", {})
-    by_angle = phase1.get("by_angle", {})
+
+def facts_html(room):
+    return "".join(
+        f"<p>• {html.escape(str(fact.get('fact', '')))} "
+        f"<small>({html.escape(str(fact.get('source_site', '')))}, {html.escape(str(fact.get('confidence', '')))})</small></p>"
+        for fact in room["facts"]
+    )
+
+
+def severity_angle_lines(findings):
+    by_severity = {}
+    by_angle = {}
+    for finding in findings:
+        by_severity[finding.get("severity", "?")] = by_severity.get(finding.get("severity", "?"), 0) + 1
+        by_angle[finding.get("angle", "?")] = by_angle.get(finding.get("angle", "?"), 0) + 1
     severity_line = ", ".join(f"{by_severity[key]} {key}" for key in ("high", "med", "low") if by_severity.get(key))
     angle_line = ", ".join(f"{by_angle[key]} {key}" for key in ("trap", "drift", "coverage", "clarity") if by_angle.get(key))
-    status = "validated clean" if converged else "some findings left unconfirmed — they default to discuss"
-    intro_bits = [f"{len(findings)} findings"]
-    if severity_line:
-        intro_bits.append(severity_line)
-    if angle_line:
-        intro_bits.append(angle_line)
+    return severity_line, angle_line
+
+
+def render(spec, output_dir):
+    spec_path = os.path.join(output_dir, "spec.json")
+    with open(spec_path, "w") as handle:
+        json.dump(spec, handle, indent=1)
+    result = subprocess.run([sys.executable, RENDERER, spec_path, output_dir], capture_output=True, text=True)
+    sys.stdout.write(result.stdout)
+    if result.returncode != 0:
+        sys.stderr.write(result.stderr)
+        raise SystemExit(result.returncode)
+
+
+def main_single(rundir, target):
+    room = load_room(rundir, target)
+    items = [build_item(room, finding) for finding in room["findings"]]
+
+    sections = []
+    if room["summary"].get("module_summary"):
+        sections.append({
+            "title": "What this file does — read from the code, independent of its comments",
+            "html": f"<p>{html.escape(room['summary']['module_summary'])}</p>",
+            "open": True,
+        })
+    if room["facts"]:
+        sections.append({
+            "title": "Domain facts — knowledge the comments carry that the code alone can't show",
+            "html": facts_html(room),
+        })
+    symbols_html = summary_section_html(room)
+    if symbols_html:
+        sections.append({"title": "Per-symbol understanding", "html": symbols_html})
+
+    severity_line, angle_line = severity_angle_lines(room["findings"])
+    status = "validated clean" if room["converged"] else "some findings left unconfirmed — they default to discuss"
+    voice = room["phase1"].get("voice", "plain")
+    intro_bits = [f"{len(room['findings'])} findings"]
+    intro_bits += [part for part in (severity_line, angle_line) if part]
     if voice and voice != "plain":
         intro_bits.append(f"voice: {voice}")
     intro_bits.append(status)
 
-    spec = {
+    file_name = room["file_name"]
+    render({
         "title": f"audit-code — {file_name}",
-        "key": f"audit-code:{file_name}:{os.path.basename(rundir)}",
+        "key": f"audit-code:{file_name}:{os.path.basename(room['rundir'])}",
         "blob_header": f"audit-code apply ({file_name})",
         "subtitle": " · ".join(intro_bits),
         "options": ["apply", "discuss", "skip"],
@@ -185,21 +254,110 @@ def main():
             "discuss": "no change yet; talk it through in the session first (unconfirmed findings start here)",
             "skip": "leave as is",
         },
-        "tabs": [{"name": name, "help": TAB_HELP[name]}
-                 for name in ("trap", "drift", "coverage", "clarity")],
+        "tabs": [{"name": name, "help": TAB_HELP[name]} for name in ("trap", "drift", "coverage", "clarity")],
         "sections": sections,
         "items": items,
-    }
-    spec_path = os.path.join(rundir, "spec.json")
-    with open(spec_path, "w") as handle:
-        json.dump(spec, handle, indent=1)
+    }, room["rundir"])
+    print(f"file://{os.path.join(room['rundir'], 'picker.html')}", flush=True)
 
-    render = subprocess.run([sys.executable, RENDERER, spec_path, rundir], capture_output=True, text=True)
-    sys.stdout.write(render.stdout)
-    if render.returncode != 0:
-        sys.stderr.write(render.stderr)
-        raise SystemExit(render.returncode)
-    print(f"file://{os.path.join(rundir, 'picker.html')}", flush=True)
+
+def main_merge(output_dir, room_args, library_facts):
+    output_dir = os.path.abspath(output_dir)
+    rooms = []
+    used_namespaces = set()
+    for rundir, target in room_args:
+        room = load_room(rundir, target)
+        namespace = os.path.splitext(room["file_name"])[0]
+        bump = 2
+        while namespace in used_namespaces:
+            namespace = f"{os.path.splitext(room['file_name'])[0]}-{bump}"
+            bump += 1
+        used_namespaces.add(namespace)
+        room["namespace"] = namespace
+        rooms.append(room)
+
+    # one global ordering across files: worst first, then cheapest, so the top of every
+    # angle tab is the library's most pressing item regardless of which file it lives in
+    pairs = [(room, finding) for room in rooms for finding in room["findings"]]
+    pairs.sort(key=lambda pair: (SEV_RANK.get(pair[1].get("severity"), 3),
+                                 EFFORT_RANK.get(pair[1].get("effort"), 3),
+                                 pair[0]["namespace"], pair[1].get("id", 0)))
+    items = [build_item(room, finding, namespace=room["namespace"]) for room, finding in pairs]
+
+    sections = []
+    if library_facts and os.path.exists(library_facts):
+        with open(library_facts) as handle:
+            facts_text = handle.read()
+        sections.append({
+            "title": "Library facts — domain, cross-file contracts, glossary",
+            "html": f'<pre style="white-space:pre-wrap;font:13px/1.5 ui-monospace,Menlo,monospace">{html.escape(facts_text)}</pre>',
+            "open": True,
+        })
+    for room in rooms:
+        blocks = []
+        if room["summary"].get("module_summary"):
+            blocks.append(f"<p>{html.escape(room['summary']['module_summary'])}</p>")
+        blocks.append(facts_html(room))
+        blocks.append(summary_section_html(room, namespace=room["namespace"]))
+        body = "".join(blocks)
+        if body:
+            sections.append({"title": f"{room['file_name']} — what it does, facts, symbols", "html": body})
+
+    all_findings = [finding for _, finding in pairs]
+    severity_line, angle_line = severity_angle_lines(all_findings)
+    converged = all(room["converged"] for room in rooms)
+    status = "validated clean" if converged else "some findings left unconfirmed — they default to discuss"
+    voices = {room["phase1"].get("voice", "plain") for room in rooms}
+    intro_bits = [f"{len(rooms)} files", f"{len(all_findings)} findings"]
+    intro_bits += [part for part in (severity_line, angle_line) if part]
+    if len(voices) == 1 and "plain" not in voices:
+        intro_bits.append(f"voice: {voices.pop()}")
+    intro_bits.append(status)
+
+    file_names = [room["file_name"] for room in rooms]
+    title_scope = ", ".join(file_names) if len(file_names) <= 3 else f"{len(file_names)} files"
+    render({
+        "title": f"audit-code — {title_scope}",
+        "key": f"audit-code:merged:{os.path.basename(output_dir)}",
+        "blob_header": f"audit-code apply ({len(rooms)} files)",
+        "subtitle": " · ".join(intro_bits),
+        "options": ["apply", "discuss", "skip"],
+        "default": "skip",
+        "option_help": {
+            "apply": "apply the generated patch in-session, gated by the file's tests and a shown diff — a note adjusts it",
+            "discuss": "no change yet; talk it through in the session first (unconfirmed findings start here)",
+            "skip": "leave as is",
+        },
+        "tabs": [{"name": name, "help": TAB_HELP[name]} for name in ("trap", "drift", "coverage", "clarity")],
+        "sections": sections,
+        "items": items,
+    }, output_dir)
+
+    merged_map = {room["namespace"]: {"rundir": room["rundir"], "target": room["target"]} for room in rooms}
+    merged_path = os.path.join(output_dir, "merged.json")
+    with open(merged_path, "w") as handle:
+        json.dump(merged_map, handle, indent=1)
+    print(f"MERGED-MAP {merged_path}", flush=True)
+    print(f"file://{os.path.join(output_dir, 'picker.html')}", flush=True)
+
+
+def main():
+    arguments = sys.argv[1:]
+    if arguments and arguments[0] == "--merge":
+        arguments = arguments[1:]
+        library_facts = None
+        if "--lib" in arguments:
+            index = arguments.index("--lib")
+            library_facts = arguments[index + 1]
+            arguments = arguments[:index] + arguments[index + 2:]
+        if len(arguments) < 3 or len(arguments[1:]) % 2:
+            raise SystemExit(USAGE)
+        room_args = [(arguments[i], arguments[i + 1]) for i in range(1, len(arguments), 2)]
+        main_merge(arguments[0], room_args, library_facts)
+    elif len(arguments) == 2:
+        main_single(arguments[0], arguments[1])
+    else:
+        raise SystemExit(USAGE)
 
 
 if __name__ == "__main__":
