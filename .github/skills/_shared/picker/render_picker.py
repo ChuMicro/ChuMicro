@@ -295,17 +295,29 @@ SCRIPT = """
     });
     persist();
   });
-  // tab bar (absent on a flat page); hidden panes stay in the DOM, so the blob and tally cover every tab
+  // tab bar (absent on a flat page); hidden panes stay in the DOM, so the blob and tally cover every tab.
+  // The active tab persists per page key, so a reload (including a rerender-on-refresh) restores it.
   var tabs = document.querySelectorAll('.tabbar button');
+  var TABKEY = KEY + ':tab';
+  function activate(t) {
+    tabs.forEach(function (x) { x.classList.remove('active'); });
+    document.querySelectorAll('.tabpane').forEach(function (p) { p.classList.remove('active'); });
+    t.classList.add('active');
+    var pane = document.getElementById('pane-' + t.dataset.pane);
+    if (pane) pane.classList.add('active');
+  }
   tabs.forEach(function (t) {
     t.addEventListener('click', function () {
-      tabs.forEach(function (x) { x.classList.remove('active'); });
-      document.querySelectorAll('.tabpane').forEach(function (p) { p.classList.remove('active'); });
-      t.classList.add('active');
-      var pane = document.getElementById('pane-' + t.dataset.pane);
-      if (pane) pane.classList.add('active');
+      activate(t);
+      try { localStorage.setItem(TABKEY, t.dataset.pane); } catch (e) {}
     });
   });
+  var savedTab = null;
+  try { savedTab = localStorage.getItem(TABKEY); } catch (e) {}
+  if (savedTab !== null) {
+    var saved = Array.prototype.filter.call(tabs, function (t) { return t.dataset.pane === savedTab; })[0];
+    if (saved) activate(saved);
+  }
   refresh();
 })();
 </script>
