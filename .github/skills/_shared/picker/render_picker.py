@@ -77,35 +77,38 @@ Spec schema:
           "default": "medium",                            // optional per-item override
           "notes": true,                                  // notes box (default: true on decision cards,
                                                           // false on informational ones)
-          "tab": "loader",                                // optional: group cards into tabs
           "collapsed": true,                              // optional: start the card folded to a strip (title
                                                           // row + radios + diff if present). Every card
                                                           // folds/expands on a title-row click; this sets the
                                                           // initial state. For long pages a reader skims
-          "filter": "heartbeat.py"                        // optional facet value; any item carrying one makes
-                                                          // the page render a chip row (all · heartbeat.py · …)
-                                                          // that narrows the visible cards across every tab
+          "facets": {"severity": "high",                  // optional facet values, one per facet group the
+                     "angle": "trap",                     // page defines below; the facet bar narrows the
+                     "file": "heartbeat.py"}              // list to cards matching every selected group
         }
       ],
-      "tabs": [                                           // optional tab order; defaults to first appearance
-        {"name": "loader", "help": "frontmatter routing — would the loader fire on the right messages"},
-        "cold-walk"                                       // bare names are fine; help renders atop the pane
-      ]
+      "facets": [                                         // optional facet-bar definition: one chip row per
+        {"key": "severity",                               // group, in this order. values: explicit chip order
+         "values": ["high", "med", "low"]},               // (others append by first appearance); label:
+        {"key": "angle",                                  // row caption (defaults to key); help: hover text
+         "help": {"trap": "correctness lens — …"}}        // per chip value
+      ],
+      "group_by": ["angle", "file"]                       // optional grouping dimensions (facet keys); adds a
+                                                          // "group" row to the facet bar — picking one reorders
+                                                          // the list under sticky per-value headers, "none"
+                                                          // restores spec order
     }
 
-When any item carries `tab`, the page renders a sticky tab bar with per-tab item
-counts; hidden panes stay in the DOM, so the blob, tally, and Reset always cover
-every tab. A tab's `help` line names the pane's purpose for a reader who just
-clicked in — and makes a per-card `source` chip that merely repeats the tab name
-redundant (drop the chip in that case). Items render in spec order within a tab —
-ordering (e.g. by severity) is the spec author's job.
-
-When any item carries `filter`, a chip row renders under the tab bar — one chip
-per distinct value in first-appearance order, plus "all" — and a click narrows
-the visible cards to that value across every tab. Filtered-out cards stay in the
-DOM, so the blob, tally, and Reset still cover them. Counts stay live in both
-bars: a chip's count is scoped to the active tab and a tab's count to the active
-chip, so every number is what a click on that button would put on screen.
+The facet bar is the page's one narrowing mechanism — no tabs (a finding list is
+one dataset; tabs hide most of it and tax cross-tab comparison). Chips toggle:
+multi-select within a group reads as OR, groups combine as AND, an empty group
+means no narrowing. A card missing a value for a selected group is narrowed out.
+Hidden cards stay in the DOM, so the blob, tally, and Reset always cover them.
+A chip's live count ignores its own group's selection (standard faceted search),
+so within-group numbers stay stable while you multi-select; a clear-filters
+button appears while any chip is active. The `group_by` row reorders the list
+under sticky per-value headers without hiding anything — narrowing and grouping
+compose. Selections and the grouping choice persist per page key. Items render
+in spec order — ordering (e.g. by severity) is the spec author's job.
 
 Every card folds to a strip — title row, radios, and the diff when one exists —
 on a title-row click; `collapsed: true` sets the initial state, and fold changes
@@ -163,23 +166,20 @@ CSS = """
  details.section .sbody{margin-top:8px;font-size:14.5px}
  .sbody small{color:var(--faint)}
  .sbody code{font:13px ui-monospace,Menlo,monospace}
- .tabbar{display:flex;gap:5px;flex-wrap:wrap;margin:18px 0 16px;background:color-mix(in srgb,var(--chip) 80%,transparent);
-  backdrop-filter:blur(12px) saturate(1.3);-webkit-backdrop-filter:blur(12px) saturate(1.3);border:1px solid var(--border);
-  border-radius:13px;padding:5px;width:fit-content;max-width:100%;position:sticky;top:10px;z-index:9}
- .tabbar button{font:inherit;font-size:15px;font-weight:650;padding:9px 18px;border:none;border-radius:9px;
-  background:transparent;color:var(--faint);cursor:pointer;transition:color .15s,background .15s}
- .tabbar button:hover{color:var(--fg)}
- .tabbar button.active{background:#4f46e5;color:#fff;box-shadow:0 1px 6px rgba(0,0,0,.2)}
- .tabbar .tcount{font-size:11px;background:var(--chip);color:var(--faint);border-radius:999px;padding:1px 8px;margin-left:7px;font-weight:700}
- .tabbar button.active .tcount{background:color-mix(in srgb,#fff 28%,transparent);color:#fff}
- .tabpane{display:none} .tabpane.active{display:block}
- .tabdesc{color:var(--faint);font-size:14px;margin:2px 2px 10px}
- .filterbar{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 14px}
- .filterbar button{font:inherit;font-size:13px;padding:5px 13px;border-radius:999px;border:1px solid var(--border);
+ .facetbar{display:flex;flex-direction:column;gap:7px;margin:18px 0 16px;position:sticky;top:10px;z-index:9;
+  background:color-mix(in srgb,var(--card) 90%,transparent);backdrop-filter:blur(12px) saturate(1.3);
+  -webkit-backdrop-filter:blur(12px) saturate(1.3);border:1px solid var(--border);border-radius:13px;padding:10px 14px}
+ .fgroup{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+ .fglabel{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--faint);min-width:64px}
+ .fgroup button{font:inherit;font-size:13px;padding:4px 13px;border-radius:999px;border:1px solid var(--border);
   background:var(--card);color:var(--faint);cursor:pointer}
- .filterbar button:hover{color:var(--fg)}
- .filterbar button.active{border-color:var(--accent);color:var(--accent);font-weight:650}
- .filterbar .fcount{font-size:11px;margin-left:6px;opacity:.75}
+ .fgroup button:hover{color:var(--fg)}
+ .fgroup button.active{border-color:#4f46e5;background:#4f46e5;color:#fff;font-weight:650}
+ .fgroup .fcount{font-size:11px;margin-left:6px;opacity:.8}
+ .facetclear{align-self:flex-start;font:inherit;font-size:12px;border:none;background:none;
+  color:var(--accent);cursor:pointer;padding:0 2px}
+ .ghead{position:sticky;z-index:8;font-size:12.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;
+  color:var(--faint);background:var(--bg);padding:10px 2px 4px;margin-top:14px}
  .card.fhidden,.card.collapsed.fhidden{display:none}
  .legend b{color:var(--fg);font-weight:620}
  .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:15px 17px;margin:12px 0}
@@ -375,77 +375,118 @@ SCRIPT = """
     sections.forEach(function (d) { d.open = d.dataset.open0 === '1'; });
     persist();
   });
-  // tab bar (absent on a flat page); hidden panes stay in the DOM, so the blob and tally cover every tab.
-  // The active tab persists per page key, so a reload (including a rerender-on-refresh) restores it.
-  var tabs = document.querySelectorAll('.tabbar button');
-  var TABKEY = KEY + ':tab';
-  function activate(t) {
-    tabs.forEach(function (x) { x.classList.remove('active'); });
-    document.querySelectorAll('.tabpane').forEach(function (p) { p.classList.remove('active'); });
-    t.classList.add('active');
-    var pane = document.getElementById('pane-' + t.dataset.pane);
-    if (pane) pane.classList.add('active');
-  }
-  tabs.forEach(function (t) {
-    t.addEventListener('click', function () {
-      activate(t);
-      updateCounts();
-      try { localStorage.setItem(TABKEY, t.dataset.pane); } catch (e) {}
-    });
+  // facet bar: chips toggle — OR within a group, AND across groups, empty group = no narrowing.
+  // Hidden cards stay in the DOM, so the blob and tally cover them. Selections persist per page key.
+  var fchips = document.querySelectorAll('.facetbar .fchip');
+  var FACETKEY = KEY + ':facets';
+  var fsel = {};
+  try { fsel = JSON.parse(localStorage.getItem(FACETKEY) || '{}'); } catch (e) { fsel = {}; }
+  var cardlist = document.getElementById('cardlist');
+  var allCards = Array.prototype.slice.call(document.querySelectorAll('#cardlist .card'));
+  var facetsOf = new Map();
+  allCards.forEach(function (c) {
+    var f = {};
+    try { f = JSON.parse(c.dataset.facets || '{}'); } catch (e) {}
+    facetsOf.set(c, f);
   });
-  var savedTab = null;
-  try { savedTab = localStorage.getItem(TABKEY); } catch (e) {}
-  if (savedTab !== null) {
-    var saved = Array.prototype.filter.call(tabs, function (t) { return t.dataset.pane === savedTab; })[0];
-    if (saved) activate(saved);
-  }
-  // filter chips (absent unless items carry `filter`); filtered-out cards stay in the
-  // DOM, so the blob and tally cover them. The active chip persists like the active tab.
-  var chips = document.querySelectorAll('.filterbar button');
-  var FILTERKEY = KEY + ':filter';
-  function applyFilter(value) {
-    chips.forEach(function (b) { b.classList.toggle('active', b.dataset.filter === value); });
-    document.querySelectorAll('.card[data-filter]').forEach(function (c) {
-      c.classList.toggle('fhidden', value !== '' && c.dataset.filter !== value);
-    });
-  }
-  chips.forEach(function (b) {
-    b.addEventListener('click', function () {
-      applyFilter(b.dataset.filter);
-      updateCounts();
-      try { localStorage.setItem(FILTERKEY, b.dataset.filter); } catch (e) {}
-    });
-  });
-  if (chips.length) {
-    var savedFilter = null;
-    try { savedFilter = localStorage.getItem(FILTERKEY); } catch (e) {}
-    if (savedFilter) {
-      var known = Array.prototype.some.call(chips, function (b) { return b.dataset.filter === savedFilter; });
-      if (known) applyFilter(savedFilter);
+  var FKEYS = [];
+  fchips.forEach(function (b) { if (FKEYS.indexOf(b.dataset.key) === -1) FKEYS.push(b.dataset.key); });
+  function matches(c, skipKey) {
+    for (var k = 0; k < FKEYS.length; k++) {
+      if (FKEYS[k] === skipKey) continue;
+      var sel = fsel[FKEYS[k]] || [];
+      if (sel.length && sel.indexOf(facetsOf.get(c)[FKEYS[k]]) === -1) return false;
     }
+    return true;
   }
-  // live counts: a chip's count answers "how many in the tab I'm looking at",
-  // a tab's count answers "how many under the chip I picked" — each number
-  // is what a click on that button would put on screen
-  function updateCounts() {
-    var activePane = document.querySelector('.tabpane.active') || document;
-    var activeFilter = '';
-    chips.forEach(function (b) { if (b.classList.contains('active')) activeFilter = b.dataset.filter; });
-    chips.forEach(function (b) {
-      var value = b.dataset.filter;
+  function applyFacets() {
+    var any = false;
+    fchips.forEach(function (b) {
+      var sel = fsel[b.dataset.key] || [];
+      var on = sel.indexOf(b.dataset.value) !== -1;
+      b.classList.toggle('active', on);
+      if (on) any = true;
+    });
+    allCards.forEach(function (c) { c.classList.toggle('fhidden', !matches(c, null)); });
+    // a chip's count ignores its own group's selection (standard faceted search), so
+    // within-group numbers stay stable while you multi-select
+    fchips.forEach(function (b) {
       var n = 0;
-      activePane.querySelectorAll('.card').forEach(function (c) { if (!value || c.dataset.filter === value) n++; });
+      allCards.forEach(function (c) {
+        if (facetsOf.get(c)[b.dataset.key] === b.dataset.value && matches(c, b.dataset.key)) n++;
+      });
       var fc = b.querySelector('.fcount'); if (fc) fc.textContent = n;
     });
-    tabs.forEach(function (t) {
-      var pane = document.getElementById('pane-' + t.dataset.pane);
-      if (!pane) return;
-      var n = 0;
-      pane.querySelectorAll('.card').forEach(function (c) { if (!activeFilter || c.dataset.filter === activeFilter) n++; });
-      var tc = t.querySelector('.tcount'); if (tc) tc.textContent = n;
-    });
+    var clear = document.getElementById('facetclear'); if (clear) clear.hidden = !any;
   }
-  updateCounts();
+  fchips.forEach(function (b) {
+    b.addEventListener('click', function () {
+      var sel = fsel[b.dataset.key] || (fsel[b.dataset.key] = []);
+      var at = sel.indexOf(b.dataset.value);
+      if (at === -1) sel.push(b.dataset.value); else sel.splice(at, 1);
+      applyFacets();
+      try { localStorage.setItem(FACETKEY, JSON.stringify(fsel)); } catch (e) {}
+    });
+  });
+  var clearBtn = document.getElementById('facetclear');
+  if (clearBtn) clearBtn.addEventListener('click', function () {
+    fsel = {};
+    applyFacets();
+    try { localStorage.setItem(FACETKEY, '{}'); } catch (e) {}
+  });
+  // group row: reorders the list under sticky per-value headers; "none" restores spec order.
+  // Grouping moves DOM nodes (state rides along) and composes with the facet narrowing above.
+  var gchips = document.querySelectorAll('.facetbar .gchip');
+  var GROUPKEY = KEY + ':group';
+  var specOrder = allCards.slice();
+  function applyGroup(key) {
+    gchips.forEach(function (b) { b.classList.toggle('active', b.dataset.group === key); });
+    document.querySelectorAll('.ghead').forEach(function (h) { h.remove(); });
+    if (!key) {
+      specOrder.forEach(function (c) { cardlist.appendChild(c); });
+      return;
+    }
+    var bar = document.querySelector('.facetbar');
+    var headTop = (bar ? bar.offsetHeight + 14 : 10) + 'px';
+    var values = [];
+    fchips.forEach(function (b) { if (b.dataset.key === key && values.indexOf(b.dataset.value) === -1) values.push(b.dataset.value); });
+    specOrder.forEach(function (c) {
+      var v = facetsOf.get(c)[key];
+      if (v !== undefined && values.indexOf(v) === -1) values.push(v);
+    });
+    values.forEach(function (v) {
+      var members = specOrder.filter(function (c) { return facetsOf.get(c)[key] === v; });
+      if (!members.length) return;
+      var h = document.createElement('div');
+      h.className = 'ghead';
+      h.style.top = headTop;
+      h.textContent = v + ' \\u00b7 ' + members.length;
+      cardlist.appendChild(h);
+      members.forEach(function (c) { cardlist.appendChild(c); });
+    });
+    var rest = specOrder.filter(function (c) { return facetsOf.get(c)[key] === undefined; });
+    if (rest.length) {
+      var oh = document.createElement('div');
+      oh.className = 'ghead';
+      oh.style.top = headTop;
+      oh.textContent = 'other \\u00b7 ' + rest.length;
+      cardlist.appendChild(oh);
+      rest.forEach(function (c) { cardlist.appendChild(c); });
+    }
+  }
+  gchips.forEach(function (b) {
+    b.addEventListener('click', function () {
+      applyGroup(b.dataset.group);
+      try { localStorage.setItem(GROUPKEY, b.dataset.group); } catch (e) {}
+    });
+  });
+  if (fchips.length) applyFacets();
+  if (gchips.length) {
+    var savedGroup = '';
+    try { savedGroup = localStorage.getItem(GROUPKEY) || ''; } catch (e) {}
+    var knownGroup = Array.prototype.some.call(gchips, function (b) { return b.dataset.group === savedGroup; });
+    if (savedGroup && knownGroup) applyGroup(savedGroup);
+  }
   refresh();
 })();
 </script>
@@ -502,9 +543,11 @@ def card_html(item, page_options, page_default):
     card_classes = "card collapsible collapsed" if collapsed else "card collapsible"
     chevron = '<span class="chev">▸</span>'
     fold_attr = ' data-fold="1"' if collapsed else ""
-    filter_attr = f' data-filter="{html.escape(item["filter"])}"' if item.get("filter") else ""
+    facets_attr = ""
+    if item.get("facets"):
+        facets_attr = f' data-facets="{html.escape(json.dumps(item["facets"]), quote=True)}"'
     return (
-        f'<div class="{card_classes}" data-id="{html.escape(item_id)}" data-def="{html.escape(default or "")}"{fold_attr}{filter_attr}>'
+        f'<div class="{card_classes}" data-id="{html.escape(item_id)}" data-def="{html.escape(default or "")}"{fold_attr}{facets_attr}>'
         f'<div class="cardhead">{chevron}<span class="cardid">{html.escape(item_id)}</span>{badge}{warn_flag}{source}'
         f'<span class="cardtitle">{html.escape(item.get("title", ""))}</span></div>'
         f'<div class="cardfold">{meta}{summary}{fields}{evidence}{detail}{warning}{body}</div>'
@@ -530,57 +573,42 @@ def main():
     page_options = spec.get("options", ["apply", "discuss", "skip"])
     page_default = spec.get("default")
 
-    filter_values = []
-    for item in spec["items"]:
-        value = item.get("filter")
-        if value and value not in filter_values:
-            filter_values.append(value)
-    filterbar = ""
-    if filter_values:
-        counts = {value: 0 for value in filter_values}
+    facet_rows = []
+    for group in spec.get("facets", []):
+        key = group["key"]
+        values = list(group.get("values", []))
         for item in spec["items"]:
-            if item.get("filter") in counts:
-                counts[item["filter"]] += 1
-        chips = [f'<button class="active" data-filter="">all<span class="fcount">{len(spec["items"])}</span></button>'] + [
-            f'<button data-filter="{html.escape(value)}">{html.escape(value)}<span class="fcount">{counts[value]}</span></button>'
-            for value in filter_values
-        ]
-        filterbar = f'<div class="filterbar">{"".join(chips)}</div>\n'
+            value = (item.get("facets") or {}).get(key)
+            if value and value not in values:
+                values.append(value)
+        help_map = group.get("help", {})
+        counts = {value: 0 for value in values}
+        for item in spec["items"]:
+            value = (item.get("facets") or {}).get(key)
+            if value in counts:
+                counts[value] += 1
+        chips = "".join(
+            f'<button class="fchip" data-key="{html.escape(key)}" data-value="{html.escape(value)}"'
+            + (f' title="{html.escape(help_map[value])}"' if value in help_map else "")
+            + f'>{html.escape(value)}<span class="fcount">{counts[value]}</span></button>'
+            for value in values
+        )
+        facet_rows.append(
+            f'<div class="fgroup"><span class="fglabel">{html.escape(group.get("label", key))}</span>{chips}</div>'
+        )
+    if spec.get("group_by"):
+        group_chips = '<button class="gchip active" data-group="">none</button>' + "".join(
+            f'<button class="gchip" data-group="{html.escape(key)}">{html.escape(key)}</button>'
+            for key in spec["group_by"]
+        )
+        facet_rows.append(f'<div class="fgroup"><span class="fglabel">group</span>{group_chips}</div>')
+    facetbar = ""
+    if facet_rows:
+        facetbar = ('<div class="facetbar">' + "".join(facet_rows)
+                    + '<button class="facetclear" id="facetclear" hidden>clear filters ×</button></div>\n')
 
-    if any(item.get("tab") for item in spec["items"]):
-        # spec["tabs"] entries are names or {name, help}; help renders at the top of the pane
-        tab_order = []
-        tab_help = {}
-        for entry in spec.get("tabs", []):
-            if isinstance(entry, dict):
-                tab_order.append(entry["name"])
-                if entry.get("help"):
-                    tab_help[entry["name"]] = entry["help"]
-            else:
-                tab_order.append(entry)
-        for item in spec["items"]:
-            tab_name = item.get("tab", "general")
-            if tab_name not in tab_order:
-                tab_order.append(tab_name)
-        groups = {tab_name: [] for tab_name in tab_order}
-        for item in spec["items"]:
-            groups[item.get("tab", "general")].append(item)
-        buttons = []
-        panes = []
-        for index, tab_name in enumerate(tab_order):
-            if not groups[tab_name]:
-                continue
-            active = " active" if not buttons else ""
-            buttons.append(
-                f'<button class="tab{active}" data-pane="{index}">{html.escape(tab_name)}'
-                f'<span class="tcount">{len(groups[tab_name])}</span></button>'
-            )
-            description = f'<p class="tabdesc">{html.escape(tab_help[tab_name])}</p>' if tab_name in tab_help else ""
-            pane_cards = "\n".join(card_html(item, page_options, page_default) for item in groups[tab_name])
-            panes.append(f'<div class="tabpane{active}" id="pane-{index}">{description}{pane_cards}</div>')
-        cards = f'<div class="tabbar">{"".join(buttons)}</div>\n{filterbar}' + "\n".join(panes)
-    else:
-        cards = filterbar + "\n".join(card_html(item, page_options, page_default) for item in spec["items"])
+    card_list = "\n".join(card_html(item, page_options, page_default) for item in spec["items"])
+    cards = f'{facetbar}<div id="cardlist">\n{card_list}\n</div>'
 
     subtitle = f'<p class="subtitle">{html.escape(spec["subtitle"])}</p>' if spec.get("subtitle") else ""
     intro = f'<div class="intro">{spec["intro_html"]}</div>' if spec.get("intro_html") else ""
