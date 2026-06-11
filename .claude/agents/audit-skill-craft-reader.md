@@ -1,6 +1,6 @@
 ---
 name: audit-skill-craft-reader
-description: Audits a SKILL.md's craft — does it reach for the right tools at the right moments, does it ask the user enough questions, does it aggressively scope-expand in service of its stated goal, and are there focused-step opportunities the skill mashed together that would benefit from separation (e.g., drafting and self-reviewing in one phase when a fresh-eyes pass would catch more). Dispatched by /audit-skill Step 4 as one of five parallel cold-walk readers. Returns a tiered findings list (CRITICAL / IMPORTANT / MINOR / AMBIGUOUS).
+description: Audits a SKILL.md's craft — does it reach for the right tools at the right moments, does it ask the user enough questions, does it aggressively scope-expand in service of its stated goal, are there focused-step opportunities the skill mashed together that would benefit from separation (e.g., drafting and self-reviewing in one phase when a fresh-eyes pass would catch more), and does it make every invocation hand-build the same helper that should be a bundled script. Dispatched by /audit-skill Step 4 as one of five parallel cold-walk readers. Returns a tiered findings list (CRITICAL / IMPORTANT / MINOR / AMBIGUOUS).
 model: opus
 tools: Read
 ---
@@ -62,6 +62,12 @@ Some skills mash phases that would benefit from being separated. Classic example
 - **Investigating + judging in one phase.** Investigation gathers facts (Read, Grep). Judging evaluates them. A skill that runs both as one step lets the investigation bias the judgment. Splitting into investigate-then-judge (with the judgment phase blind to the investigation's narrative summary) catches more.
 
 Mashed phases the skill *could* split are **IMPORTANT**. Mashed phases where the inline workflow is genuinely tighter than splitting are not findings — focus on the cases where separation clearly helps.
+
+### Repeated work that should be a bundled script
+
+When the procedure makes every invocation hand-build the same helper — a parse loop, a report renderer, a probe driver, a validation pass written fresh each run — the skill should bundle that helper in its directory and the body should invoke it by path. The recognizer: a Process step that describes multi-line mechanical work in prose (*"write a script that…"*, *"build a table by…"*, *"for each file, extract…"*) where every run would produce the same code. Hand-building per run wastes the work and lets each run reinvent it slightly differently.
+
+A repeated-work step that clearly wants a bundled script is **IMPORTANT**. Mechanical work that genuinely differs per run (the variation is the task) is not a finding.
 
 ### Weak / under-specified directives
 

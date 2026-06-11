@@ -19,6 +19,7 @@ This blindness is the point. The director knows what the skill is supposed to do
 
 - An absolute path to the SKILL.md
 - Three example user messages the skill is meant to fire on
+- When the draft captured them: the near-miss messages it must NOT fire on, each with its expected route
 
 You read ONLY the frontmatter of that file — stop at the closing `---`. Do not open the body. Do not open any other file in the tree.
 
@@ -99,7 +100,9 @@ Extended trigger guidance, appended to `description` in the skill listing. Same 
 
 For each of the three example messages, ask: would a loader matching the user message against this description plausibly pick this skill? Mark ✓ or ✗ with a one-sentence reason.
 
-Also mentally draft one **near-miss query** — a message that shares the skill's keywords or concepts but actually needs something different. Ask whether the description is precise enough to *not* route it. When the description would fire on both the on-topic message and a near-miss, that is over-pushy phrasing.
+Also judge the **near-miss queries** — messages that share the skill's keywords or concepts but actually need something different. When the director's prompt supplies user-sourced near-misses (from the draft's trigger evals, each with an expected route), judge each one: would the description stay silent on it, and would the expected route plausibly win instead? When none are supplied, draft one yourself. When the description would fire on both the on-topic messages and a near-miss, that is over-pushy phrasing.
+
+Judge query realism while you're there: a calibration query should read the way a user actually types (a concrete path or symbol, some backstory, casual phrasing). An abstract query (*"format this data"*) measures nothing — flag it so the director replaces it.
 
 **Specialized-knowledge caveat:** agents tend to consult skills only for tasks that require knowledge or capabilities beyond what they can handle alone. A simple one-step request (*"read this PDF"*) may not trigger a PDF skill even when the description matches perfectly — that is the agent judging the task does not need specialized handling, not a description failure. When the three example messages include such a query, note that the trigger may not fire even on a correct description.
 
@@ -174,8 +177,8 @@ Apply the read-aloud gate and the structural rule (concrete subject, real verb) 
 Match: 1=<✓|✗>, 2=<✓|✗>, 3=<✓|✗>
   - <Per-message reason for each ✗>
 
-Near-miss probe: <the near-miss query you drafted>
-  Would route: <yes|no> — <one-sentence reason>
+Near-miss probe: <one line per supplied near-miss, or the query you drafted>
+  Would route: <yes|no> — <one-sentence reason; for supplied near-misses also name whether the expected route plausibly wins>
 
 Description quality findings:
   - <specific finding, or "none">

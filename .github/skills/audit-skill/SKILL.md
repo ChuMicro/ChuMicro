@@ -1,6 +1,6 @@
 ---
 description: Audits an existing skill on disk against the skill-writing rules in AGENTS.md and the skill's own stated goal. Use when a skill's flow feels off, contradicts itself, or routes wrong — or before relying on it for important work. Examples: "audit the audit-docs skill", "/audit-skill audit-library", "is the audit-library skill achieving its goal?".
-allowed-tools: Read, Edit, Grep, Bash(ls *), Bash(cp *), Bash(mkdir *), Bash(date *), AskUserQuestion, Agent
+allowed-tools: Read, Edit, Grep, Bash(ls *), Bash(cp *), Bash(mkdir *), Bash(date *), Bash(python3 *), AskUserQuestion, Agent
 argument-hint: "<slug-or-path>"
 arguments:
   - target
@@ -89,11 +89,12 @@ Print a structured inventory:
 ```bash
 ls <skill-dir>/*.md 2>/dev/null
 ls <skill-dir>/scripts/ 2>/dev/null
+ls <skill-dir>/trigger-evals.json 2>/dev/null
 grep -E 'subagent_type:|new-skill-|audit-skill-|.claude/agents/' <skill-dir>/SKILL.md
 grep -E '^description:.*Examples:' <skill-dir>/SKILL.md
 ```
 
-Capture: the SKILL.md path, any reference files in the skill directory, any bundled scripts, and any custom persona files the skill dispatches (cited by `subagent_type:` or a path under `.claude/agents/`). The fourth grep surfaces the `Examples: "<m1>", "<m2>", "<m3>"` block on the description line.
+Capture: the SKILL.md path, any reference files in the skill directory, any bundled scripts, any custom persona files the skill dispatches (cited by `subagent_type:` or a path under `.claude/agents/`), and whether a `trigger-evals.json` exists (it feeds the measured-routing lane in Step 4). The `Examples:` grep surfaces the `"<m1>", "<m2>", "<m3>"` block on the description line.
 
 If the description carries no `Examples:` block, salvage three trigger phrases from `when_to_use`. **If both sources are empty, surface a CRITICAL finding ("description carries no triggers") and stop before the Step 4 dispatch. Without trigger messages the loader-reader cannot run.**
 
@@ -131,7 +132,7 @@ Pass the three trigger messages extracted at Step 2 (from the audited SKILL.md's
 |---|---|---|
 | `audit-skill-loader-reader` | Frontmatter contract — description voice + length, `name` rules, `when_to_use`, per-message routing | absolute SKILL.md path; the three example user messages |
 | `audit-skill-cold-walker` | Body walkability + goal-derivability — per-step Success criteria, Done-when, reference-file links, AI-tic / hedging / moralizing patterns, stance | absolute SKILL.md path; reference-file paths from the inventory |
-| `audit-skill-craft-reader` | Tool-use at user-interaction moments (`AskUserQuestion`, `multiSelect`, `preview`, `SendUserFile`, `Agent`), scope coverage vs minimum-deliverable stop, focused-step opportunities, weak directives | absolute SKILL.md path |
+| `audit-skill-craft-reader` | Tool-use at user-interaction moments (`AskUserQuestion`, `multiSelect`, `preview`, `SendUserFile`, `Agent`), scope coverage vs minimum-deliverable stop, focused-step opportunities, repeated work that should be a bundled script, weak directives | absolute SKILL.md path |
 | `audit-skill-orchestration-reader` | Sub-agent dispatch correctness, one-message batching, model selection, director-bias warning, persona-file structure, hook-vs-skill routing | absolute SKILL.md path; persona-file paths from the inventory |
 | `audit-skill-ideas-reader` | Generative menu — alternative framings, adjacent problems to fold in, harness tools the skill could use but doesn't, scope expansion / contraction, lifecycle gaps, output-format rethinks, persona-lens reframings, cross-persona refactors | absolute SKILL.md path; persona-file paths from the inventory |
 
@@ -145,9 +146,17 @@ Step 9a greps the SKILL.md body for this exact string. When a paraphrase slips i
 
 Each dispatch prompt names: the absolute SKILL.md path, the auxiliary paths from the table (persona files for orchestration; reference files for cold-walker; the three trigger messages for loader), and one sentence framing the lens. The rules stay in each persona's system prompt rather than the dispatch prompt — a persona's system prompt stays in effect across the whole run, while a user-message rule gets diluted as the conversation grows.
 
-**Success criteria:** five `Agent` calls land in one assistant message (one tool-call batch); five reports back (four checklist reports + one ideas menu, which may be `Ideas: none`).
+**Measured-routing lane (when Step 2 found a `trigger-evals.json`).** In the same turn as the five dispatches, launch the shared probe runner in the background:
 
-**Execution:** sub-agents (`Agent` tool, five parallel dispatches).
+```bash
+python3 .github/skills/_shared/run_trigger_evals.py <skill-dir>/trigger-evals.json --workers 4
+```
+
+Use `Bash(run_in_background: true)` — 20 queries × 3 runs is a few minutes of wall clock, and it overlaps the readers. Each probe is a fresh `claude -p` whose loader sees the real sibling registry, so the result is a routing *measurement* where the loader-reader's report is a routing *judgment*. Collect the PASS/FAIL table before the Step 5 merge.
+
+**Success criteria:** five `Agent` calls land in one assistant message (one tool-call batch); five reports back (four checklist reports + one ideas menu, which may be `Ideas: none`); the probe table collected when a trigger-evals.json existed.
+
+**Execution:** sub-agents (`Agent` tool, five parallel dispatches), plus one background Bash task for the probes.
 
 **Rules:**
 - A sub-agent returning *no findings* is a valid clean lens — accept it.
@@ -159,8 +168,8 @@ Each dispatch prompt names: the absolute SKILL.md path, the auxiliary paths from
 
 For each finding from the four checklist sub-agents (the ideas-reader returns ideas, handled separately below), assign a tier:
 
-- **CRITICAL** — goal not derivable from cold read; core flow wrong for the stated purpose; frontmatter would not route any of the trigger messages; Done-when missing; a procedure that fires on a tool event (`PreToolUse` / `PostToolUse` / `Stop`) mis-classified as a skill instead of a hook. Any CRITICAL finding defaults the recommendation toward re-author.
-- **IMPORTANT** — missing per-step Success criteria on a non-trivial skill; `AskUserQuestion` missing at a clear user-input fork; sub-agent dispatch missing where the work needs cold-walk; AI-tic, defensive-hedging, or moralizing pattern in directives; persona file missing required frontmatter (`name`, `description`); persona tooling that breaks the persona's stated blindness contract.
+- **CRITICAL** — goal not derivable from cold read; core flow wrong for the stated purpose; frontmatter would not route any of the trigger messages (judged, or measured: every positive probe query fails); Done-when missing; a procedure that fires on a tool event (`PreToolUse` / `PostToolUse` / `Stop`) mis-classified as a skill instead of a hook. Any CRITICAL finding defaults the recommendation toward re-author.
+- **IMPORTANT** — missing per-step Success criteria on a non-trivial skill, or a Success criterion a clearly-wrong run would still satisfy; a measured routing failure (a positive query whose majority probe routes elsewhere, or a near-miss that routes here); `AskUserQuestion` missing at a clear user-input fork; sub-agent dispatch missing where the work needs cold-walk; AI-tic, defensive-hedging, or moralizing pattern in directives; persona file missing required frontmatter (`name`, `description`); persona tooling that breaks the persona's stated blindness contract.
 - **MINOR** — single AI-tic word swap; voodoo constant without explanation; first-person plural in body prose; reference file > 100 lines without a table of contents; could-use-preview suggestion.
 - **AMBIGUOUS** — sub-agents partially disagreed (2 / 4 or 3 / 4 agreement; 4 / 4 = clean finding, not AMBIGUOUS); the judgment isn't clearly in scope for the skill being audited; the rule the finding cites is itself a guideline rather than an absolute.
 
@@ -169,7 +178,7 @@ Compare sub-agent findings against the director's Step 3 expected-findings list:
 - Items in your expected-findings list that no checklist sub-agent touched become **director follow-up** notes.
 - Items in sub-agent findings absent from your expected-findings list are sub-agent finds — keep them in the punch-list at the tier the sub-agent's reasoning warrants; do not downgrade or omit on the basis that you didn't think of them yourself.
 
-Sub-agent findings outrank director observations.
+Sub-agent findings outrank director observations. On routing specifically, the measured probe table outranks both: when the loader-reader judges a message routable but the probes fail it (or the reverse), the measurement wins and the disagreement rides into the finding text.
 
 **Ideas channel.** The ideas-reader returns up to 5 ideas covering improvements the author probably did not consider: alternative framings, adjacent problems to fold in, harness tools the skill could use but doesn't, scope adjustments, lifecycle gaps, output-format rethinks. The cap keeps the menu short enough that the user can weigh each idea individually in the Step 6 per-idea questions. Ideas do not get tiered — the CRITICAL / IMPORTANT / MINOR / AMBIGUOUS labels describe defects, and an idea is not a defect. The menu prints as a separate block in the Step 6 report. The user decides per-idea whether to apply inline (an Edit on the audited skill, same machinery as Step 8 but on its own per-idea question), discuss first, or skip. Ideas do not file to `plans/next-up.md`; resolve them in this audit.
 
@@ -398,7 +407,7 @@ The trailing `Audit run:` footer carries the run's timestamp + headline recommen
 |---|---|---|---|
 | [`audit-skill-loader-reader`](../../../.claude/agents/audit-skill-loader-reader.md) | Frontmatter contract + description routing | `.claude/agents/audit-skill-loader-reader.md` | Step 4 |
 | [`audit-skill-cold-walker`](../../../.claude/agents/audit-skill-cold-walker.md) | Body walkability + goal-derivability | `.claude/agents/audit-skill-cold-walker.md` | Step 4 |
-| [`audit-skill-craft-reader`](../../../.claude/agents/audit-skill-craft-reader.md) | Tool-use, scope-expansion, focused-step opportunities | `.claude/agents/audit-skill-craft-reader.md` | Step 4 |
+| [`audit-skill-craft-reader`](../../../.claude/agents/audit-skill-craft-reader.md) | Tool-use, scope-expansion, focused-step opportunities, repeated-work-to-bundle | `.claude/agents/audit-skill-craft-reader.md` | Step 4 |
 | [`audit-skill-orchestration-reader`](../../../.claude/agents/audit-skill-orchestration-reader.md) | Sub-agent / parallel-dispatch / model-selection / persona structure | `.claude/agents/audit-skill-orchestration-reader.md` | Step 4 |
 | [`audit-skill-ideas-reader`](../../../.claude/agents/audit-skill-ideas-reader.md) | Generative menu — improvements the checklists miss, grounded in what the SKILL.md actually says | `.claude/agents/audit-skill-ideas-reader.md` | Step 4 |
 

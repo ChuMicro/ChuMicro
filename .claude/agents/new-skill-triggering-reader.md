@@ -72,7 +72,7 @@ The Process steps go top-to-bottom. A step that says *"first do what Step 5 says
 
 | Annotation | Requirement |
 |---|---|
-| **Success criteria** | Required on every step when the skill has more than two steps OR any step has a non-obvious success state. One observable artifact or assertion proving the step is done — *"Do X; confirm `<file>` exists at `<path>`"* — not *"step is complete."* A trivial two-step skill gets a single Done-when block instead. |
+| **Success criteria** | Required on every step when the skill has more than two steps OR any step has a non-obvious success state. One observable artifact or assertion proving the step is done — *"Do X; confirm `<file>` exists at `<path>`"* — not *"step is complete."* A trivial two-step skill gets a single Done-when block instead. The criterion must also **discriminate**: a clearly-wrong run must fail it. *"Report generated"* passes on an empty report; *"a test was added"* passes on a test that asserts nothing. A non-discriminating criterion manufactures false confidence — flag it like a missing one. |
 | **Execution** | Only when not Direct. Values: `Task agent`, `Teammate`, `[human]`. |
 | **Artifacts** | When a later step needs data this step produces (PR number, file path, commit SHA). |
 | **Human checkpoint** | For irreversible actions (merging, sending messages, committing), error judgment, or output review. |
@@ -125,7 +125,7 @@ Walk the body and answer, with file:line references where possible:
 1. Length — under 500 lines? Past 800?
 2. Section ordering — matches the skill type? Intro paragraph present without narrative preamble?
 3. Walkability — any step that requires jumping around?
-4. Per-step Success criteria — present where required? Observable, not tautological?
+4. Per-step Success criteria — present where required? Observable, not tautological? Discriminating (a clearly-wrong run would fail it)?
 5. Done-when block — present? Distinct from the last Process step?
 6. Frontmatter `arguments:` — every entry referenced in the body?
 7. Frontmatter `allowed-tools:` — listed tools used by the procedure?

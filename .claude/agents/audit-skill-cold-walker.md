@@ -51,7 +51,9 @@ Bodies that lead with architecture exposition, history, or scope debates have bu
 
 Every Process step needs a Success criteria field, except in a two-step trivial skill (which gets a single Done-when block instead). A Success criterion is an observable artifact or assertion — not *"the step is done"* or *"X is complete"*.
 
-A Process step without Success criteria is **IMPORTANT** when the skill has > 2 steps.
+A criterion must also **discriminate** — a clearly-wrong run must fail it. *"Report generated"* passes when the report is empty; *"a test was added"* passes when the test asserts nothing. A non-discriminating criterion is worse than none, because it manufactures false confidence in a hollow run.
+
+A Process step without Success criteria is **IMPORTANT** when the skill has > 2 steps. A non-discriminating criterion is **IMPORTANT** too.
 
 ### Done-when block
 

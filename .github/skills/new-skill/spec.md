@@ -263,6 +263,13 @@ def process_file(path):
     return open(path).read()  # fails opaquely, Claude has to figure it out
 ```
 
+### Bundled-script conduct — announce long work, guard the browser
+
+Two rules for any script a skill ships, both learned from real runs:
+
+- **A script about to make a multi-minute silent call announces itself first.**  A clean-room `claude -p`, a long subprocess, a network sweep — print one flushed line naming what is running and the rough duration (*"regenerating Foo.bar against the ledger (one clean-room claude -p, ~1-2 min)..."*) before the call.  Without it, a chained sequence of these scripts looks hung and the user interrupts healthy work.
+- **A script that opens a browser honors a headless guard.**  Auto-open via `open` / `webbrowser` is the right default on a desktop, and wrong in CI, cron, and background sessions.  Gate it behind an env var (the regen-comments renderers use `REGEN_NO_OPEN=1`) and write the artifact regardless, printing its path.
+
 ### Voodoo constants — document or drop
 
 Any magic number / path / threshold in a script needs a comment explaining the value.  Otherwise it's a "voodoo constant" — Claude can't reason about whether to change it.
