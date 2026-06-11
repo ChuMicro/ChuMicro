@@ -34,11 +34,12 @@ import sys
 
 SEV_RANK = {"high": 0, "med": 1, "low": 2}
 EFFORT_RANK = {"small": 0, "medium": 1, "large": 2}
-ANGLE_LABELS = {
-    "trap": "trap — correctness lens",
-    "drift": "drift — comment/doc lens",
-    "coverage": "coverage — test-gap lens",
-    "clarity": "clarity — craft lens",
+TAB_HELP = {
+    "trap": "correctness lens — inversions, off-by-ones, code that says one thing and does another, judged from comment-stripped code",
+    "drift": "comment/doc lens — claims a name, comment, or docstring makes that the code does not honor",
+    "coverage": "test-gap lens — behaviors no test exercises, hollow tests, and tests that bless a bug",
+    "clarity": "craft lens — confusing naming, hard-to-follow control flow, could-be-tighter",
+    "understanding": "context, not decisions — the independent module summary, domain facts mined from comments, and per-symbol summaries",
 }
 RENDERER = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, "_shared", "picker", "render_picker.py")
 
@@ -106,7 +107,6 @@ def main():
             "id": str(finding_id),
             "title": finding["title"],
             "badge": severity,
-            "source": ANGLE_LABELS.get(angle, angle),
             "meta": f"effort: {finding.get('effort', '?')} · confidence: {finding.get('confidence', '?')}"
                     f" · {finding.get('symbol', '?')} @ {finding.get('site', '?')}",
             "why": finding["consequence"],
@@ -182,7 +182,8 @@ def main():
             "discuss": "no change yet; talk it through in the session first (unconfirmed findings start here)",
             "skip": "leave as is",
         },
-        "tabs": ["trap", "drift", "coverage", "clarity", "understanding"],
+        "tabs": [{"name": name, "help": TAB_HELP[name]}
+                 for name in ("trap", "drift", "coverage", "clarity", "understanding")],
         "items": items,
     }
     spec_path = os.path.join(rundir, "spec.json")
