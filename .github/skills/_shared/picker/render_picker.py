@@ -71,7 +71,13 @@ Spec schema:
           "default": "medium",                            // optional per-item override
           "notes": true,                                  // notes box (default: true on decision cards,
                                                           // false on informational ones)
-          "tab": "loader"                                 // optional: group cards into tabs
+          "tab": "loader",                                // optional: group cards into tabs
+          "collapsed": true,                              // optional: fold the card to a strip (title row +
+                                                          // radios); a click on the title row expands it.
+                                                          // For long pages — items a reader only skims
+          "filter": "heartbeat.py"                        // optional facet value; any item carrying one makes
+                                                          // the page render a chip row (all · heartbeat.py · …)
+                                                          // that narrows the visible cards across every tab
         }
       ],
       "tabs": [                                           // optional tab order; defaults to first appearance
@@ -86,6 +92,14 @@ every tab. A tab's `help` line names the pane's purpose for a reader who just
 clicked in — and makes a per-card `source` chip that merely repeats the tab name
 redundant (drop the chip in that case). Items render in spec order within a tab —
 ordering (e.g. by severity) is the spec author's job.
+
+When any item carries `filter`, a chip row renders under the tab bar — one chip
+per distinct value in first-appearance order, plus "all" — and a click narrows
+the visible cards to that value across every tab. Filtered-out cards stay in the
+DOM, so the blob, tally, and Reset still cover them. A `collapsed` card folds to
+a strip (title row + radios) and expands on a title-row click; a card whose saved
+state carries a pick or a note reopens expanded, so a reload never hides work in
+progress. The active filter persists alongside the active tab.
 
 body_html and intro_html are written into the page unescaped — the spec author
 is the orchestrating session, not an untrusted source.
@@ -145,9 +159,24 @@ CSS = """
  .tabbar button.active .tcount{background:color-mix(in srgb,#fff 28%,transparent);color:#fff}
  .tabpane{display:none} .tabpane.active{display:block}
  .tabdesc{color:var(--faint);font-size:14px;margin:2px 2px 10px}
+ .filterbar{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 14px}
+ .filterbar button{font:inherit;font-size:13px;padding:5px 13px;border-radius:999px;border:1px solid var(--border);
+  background:var(--card);color:var(--faint);cursor:pointer}
+ .filterbar button:hover{color:var(--fg)}
+ .filterbar button.active{border-color:var(--accent);color:var(--accent);font-weight:650}
+ .filterbar .fcount{font-size:11px;margin-left:6px;opacity:.75}
+ .card.fhidden{display:none}
  .legend b{color:var(--fg);font-weight:620}
  .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:15px 17px;margin:12px 0}
  .cardhead{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap}
+ .chev{display:inline-block;color:var(--faint);font-size:12px;align-self:center;
+  transition:transform .15s;transform:rotate(90deg)}
+ .card.collapsible>.cardhead{cursor:pointer;user-select:none}
+ .card.collapsed{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:9px 15px}
+ .card.collapsed .chev{transform:rotate(0)}
+ .card.collapsed>.cardhead{flex:1 1 auto}
+ .card.collapsed>.cardfold,.card.collapsed>.notes{display:none}
+ .card.collapsed>.opts{margin:0;flex:0 0 auto}
  .cardid{font-weight:700;color:var(--accent);font-size:17px}
  .cardtitle{font-weight:630}
  .badge{font-size:11px;font-weight:700;letter-spacing:.4px;padding:2px 8px;border-radius:999px;color:#fff;background:#64748b}
@@ -222,6 +251,11 @@ SCRIPT = """
     var id = c.dataset.id;
     if (state['p:' + id]) { var r = c.querySelector('input[value="' + state['p:' + id] + '"]'); if (r) r.checked = true; }
     if (state['n:' + id]) { var n = c.querySelector('.notes'); if (n) n.value = state['n:' + id]; }
+    // a collapsed card with a saved pick or note reopens expanded — a reload never hides work in progress
+    if ((state['p:' + id] || state['n:' + id]) && c.classList.contains('collapsed')) c.classList.remove('collapsed');
+  });
+  document.querySelectorAll('.card.collapsible > .cardhead').forEach(function (h) {
+    h.addEventListener('click', function () { h.parentElement.classList.toggle('collapsed'); });
   });
   function persist() {
     var s = {};
@@ -318,6 +352,30 @@ SCRIPT = """
     var saved = Array.prototype.filter.call(tabs, function (t) { return t.dataset.pane === savedTab; })[0];
     if (saved) activate(saved);
   }
+  // filter chips (absent unless items carry `filter`); filtered-out cards stay in the
+  // DOM, so the blob and tally cover them. The active chip persists like the active tab.
+  var chips = document.querySelectorAll('.filterbar button');
+  var FILTERKEY = KEY + ':filter';
+  function applyFilter(value) {
+    chips.forEach(function (b) { b.classList.toggle('active', b.dataset.filter === value); });
+    document.querySelectorAll('.card[data-filter]').forEach(function (c) {
+      c.classList.toggle('fhidden', value !== '' && c.dataset.filter !== value);
+    });
+  }
+  chips.forEach(function (b) {
+    b.addEventListener('click', function () {
+      applyFilter(b.dataset.filter);
+      try { localStorage.setItem(FILTERKEY, b.dataset.filter); } catch (e) {}
+    });
+  });
+  if (chips.length) {
+    var savedFilter = null;
+    try { savedFilter = localStorage.getItem(FILTERKEY); } catch (e) {}
+    if (savedFilter) {
+      var known = Array.prototype.some.call(chips, function (b) { return b.dataset.filter === savedFilter; });
+      if (known) applyFilter(savedFilter);
+    }
+  }
   refresh();
 })();
 </script>
@@ -369,11 +427,15 @@ def card_html(item, page_options, page_default):
         if item.get("notes", bool(options))
         else ""
     )
+    collapsible = bool(item.get("collapsed"))
+    card_classes = "card collapsible collapsed" if collapsible else "card"
+    chevron = '<span class="chev">▸</span>' if collapsible else ""
+    filter_attr = f' data-filter="{html.escape(item["filter"])}"' if item.get("filter") else ""
     return (
-        f'<div class="card" data-id="{html.escape(item_id)}" data-def="{html.escape(default or "")}">'
-        f'<div class="cardhead"><span class="cardid">{html.escape(item_id)}</span>{badge}{source}'
+        f'<div class="{card_classes}" data-id="{html.escape(item_id)}" data-def="{html.escape(default or "")}"{filter_attr}>'
+        f'<div class="cardhead">{chevron}<span class="cardid">{html.escape(item_id)}</span>{badge}{source}'
         f'<span class="cardtitle">{html.escape(item.get("title", ""))}</span></div>'
-        f"{meta}{summary}{fields}{evidence}{diff_html}{detail}{warning}{body}"
+        f'<div class="cardfold">{meta}{summary}{fields}{evidence}{diff_html}{detail}{warning}{body}</div>'
         f"{opts}{notes}</div>"
     )
 
@@ -395,6 +457,23 @@ def main():
 
     page_options = spec.get("options", ["apply", "discuss", "skip"])
     page_default = spec.get("default")
+
+    filter_values = []
+    for item in spec["items"]:
+        value = item.get("filter")
+        if value and value not in filter_values:
+            filter_values.append(value)
+    filterbar = ""
+    if filter_values:
+        counts = {value: 0 for value in filter_values}
+        for item in spec["items"]:
+            if item.get("filter") in counts:
+                counts[item["filter"]] += 1
+        chips = [f'<button class="active" data-filter="">all<span class="fcount">{len(spec["items"])}</span></button>'] + [
+            f'<button data-filter="{html.escape(value)}">{html.escape(value)}<span class="fcount">{counts[value]}</span></button>'
+            for value in filter_values
+        ]
+        filterbar = f'<div class="filterbar">{"".join(chips)}</div>\n'
 
     if any(item.get("tab") for item in spec["items"]):
         # spec["tabs"] entries are names or {name, help}; help renders at the top of the pane
@@ -427,9 +506,9 @@ def main():
             description = f'<p class="tabdesc">{html.escape(tab_help[tab_name])}</p>' if tab_name in tab_help else ""
             pane_cards = "\n".join(card_html(item, page_options, page_default) for item in groups[tab_name])
             panes.append(f'<div class="tabpane{active}" id="pane-{index}">{description}{pane_cards}</div>')
-        cards = f'<div class="tabbar">{"".join(buttons)}</div>\n' + "\n".join(panes)
+        cards = f'<div class="tabbar">{"".join(buttons)}</div>\n{filterbar}' + "\n".join(panes)
     else:
-        cards = "\n".join(card_html(item, page_options, page_default) for item in spec["items"])
+        cards = filterbar + "\n".join(card_html(item, page_options, page_default) for item in spec["items"])
 
     subtitle = f'<p class="subtitle">{html.escape(spec["subtitle"])}</p>' if spec.get("subtitle") else ""
     intro = f'<div class="intro">{spec["intro_html"]}</div>' if spec.get("intro_html") else ""
