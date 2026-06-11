@@ -16,6 +16,7 @@ Not mirrored to a cold-walk persona — this is authoring guidance for skill wri
 - [Pattern 3 — Parallel dispatch](#pattern-3--parallel-dispatch) — 3a batch · 3b second-opinion
 - [Pattern 4 — Skill-of-skills](#pattern-4--skill-of-skills)
 - [Anti-pattern — Two agents pretending to be a director pattern](#anti-pattern--two-agents-pretending-to-be-a-director-pattern)
+- [Published pattern names](#published-pattern-names)
 - [Hook vs skill — the routing question](#hook-vs-skill--the-routing-question)
 
 ---
@@ -167,6 +168,15 @@ A skill that dispatches two agents but doesn't engineer blindness between them i
 - The director claims "I'll use two for second-opinion" without naming what the second is blind to → cargo-culted pattern
 
 The fix: either engineer the blindness (the second agent's task prompt names ONLY the working tree's final state, never the inputs the first agent saw), or collapse to single-agent.
+
+## Published pattern names
+
+The patterns above map onto the vocabulary in Anthropic's [Building Effective Agents](https://www.anthropic.com/research/building-effective-agents) and the runnable notebooks at [claude-cookbooks/patterns/agents](https://github.com/anthropics/claude-cookbooks/tree/main/patterns/agents).  Use the published names when searching for prior art or naming a design in discussion:
+
+- *Prompt chaining* and *routing* — Pattern 1 territory: one fork, sequential calls.
+- *Parallelization* — Pattern 3 (both shapes).
+- *Orchestrator-workers* — the director shape of Patterns 2 and 3.
+- *Evaluator-optimizer* — Pattern 2's re-dispatch rule.  The published version loops until the evaluator passes; this spec bounds the loop at 1–2 rounds before surfacing to the user.
 
 ## Hook vs skill — the routing question
 
