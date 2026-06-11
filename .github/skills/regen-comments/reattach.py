@@ -57,7 +57,12 @@ def reattach(written_src, preserve):
         if anchor and len(idxs) == 1:                       # unique code line to attach to
             i = idxs[0]
             if p.get("attach") == "trailing":               # ``# noqa`` rides the end of its code line:
-                lines[i] = p["line"]                        # restore the verbatim original line (code+directive)
+                # append only the directive suffix to the FILE's own code line -- restoring the lens's
+                # stored line verbatim once broke compilation when the lens recorded it with the wrong
+                # indentation (kvstore core.py 2026-06-10: an ``if`` re-indented 4->8 spaces)
+                suffix = p["line"][p["line"].index("#"):].rstrip() if "#" in p["line"] else ""
+                if suffix and suffix not in lines[i]:
+                    lines[i] = lines[i].rstrip() + "  " + suffix
             else:                                           # standalone comment on its own line above
                 above.append((i, _indent(lines[i]) + comment.strip()))
         else:                                               # no usable anchor -> legacy doc-relative spot
