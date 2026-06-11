@@ -72,8 +72,9 @@ Spec schema:
           "notes": true,                                  // notes box (default: true on decision cards,
                                                           // false on informational ones)
           "tab": "loader",                                // optional: group cards into tabs
-          "collapsed": true,                              // optional: fold the card to a strip (title row +
-                                                          // radios); a click on the title row expands it.
+          "collapsed": true,                              // optional: start the card folded to a strip (title
+                                                          // row + radios). Every card folds/expands on a
+                                                          // title-row click; this sets the initial state.
                                                           // For long pages — items a reader only skims
           "filter": "heartbeat.py"                        // optional facet value; any item carrying one makes
                                                           // the page render a chip row (all · heartbeat.py · …)
@@ -96,10 +97,16 @@ ordering (e.g. by severity) is the spec author's job.
 When any item carries `filter`, a chip row renders under the tab bar — one chip
 per distinct value in first-appearance order, plus "all" — and a click narrows
 the visible cards to that value across every tab. Filtered-out cards stay in the
-DOM, so the blob, tally, and Reset still cover them. A `collapsed` card folds to
-a strip (title row + radios) and expands on a title-row click; a card whose saved
-state carries a pick or a note reopens expanded, so a reload never hides work in
-progress. The active filter persists alongside the active tab.
+DOM, so the blob, tally, and Reset still cover them. Counts stay live in both
+bars: a chip's count is scoped to the active tab and a tab's count to the active
+chip, so every number is what a click on that button would put on screen.
+
+Every card folds to a strip (title row + radios) on a title-row click;
+`collapsed: true` sets the initial state. Fold changes persist in localStorage
+like picks and notes do, and a spec-collapsed card carrying a saved pick or note
+reopens expanded, so a reload never hides work in progress. Reset clears picks
+and notes only — the active tab, the active chip, and fold state are view state
+and survive it.
 
 body_html and intro_html are written into the page unescaped — the spec author
 is the orchestrating session, not an untrusted source.
@@ -254,8 +261,17 @@ SCRIPT = """
     // a collapsed card with a saved pick or note reopens expanded — a reload never hides work in progress
     if ((state['p:' + id] || state['n:' + id]) && c.classList.contains('collapsed')) c.classList.remove('collapsed');
   });
-  document.querySelectorAll('.card.collapsible > .cardhead').forEach(function (h) {
-    h.addEventListener('click', function () { h.parentElement.classList.toggle('collapsed'); });
+  // every card folds on a title-row click; spec sets the initial state (data-fold). A saved
+  // 'e:' key (1 = opened, 0 = folded) is a deviation from that default and wins on reload —
+  // including over the pick/note auto-expand above, so an explicitly folded card stays folded.
+  document.querySelectorAll('.card.collapsible').forEach(function (c) {
+    var saved = state['e:' + c.dataset.id];
+    if (saved === 1) c.classList.remove('collapsed');
+    else if (saved === 0) c.classList.add('collapsed');
+    c.querySelector('.cardhead').addEventListener('click', function () {
+      c.classList.toggle('collapsed');
+      persist();
+    });
   });
   function persist() {
     var s = {};
@@ -265,6 +281,10 @@ SCRIPT = """
       if (r && r.value !== c.dataset.def) s['p:' + id] = r.value;
       var n = c.querySelector('.notes');
       if (n && n.value.trim()) s['n:' + id] = n.value;
+    });
+    document.querySelectorAll('.card.collapsible').forEach(function (c) {
+      var folded = c.classList.contains('collapsed');
+      if (folded !== (c.dataset.fold === '1')) s['e:' + c.dataset.id] = folded ? 0 : 1;
     });
     save(s); refresh();
   }
@@ -343,6 +363,7 @@ SCRIPT = """
   tabs.forEach(function (t) {
     t.addEventListener('click', function () {
       activate(t);
+      updateCounts();
       try { localStorage.setItem(TABKEY, t.dataset.pane); } catch (e) {}
     });
   });
@@ -365,6 +386,7 @@ SCRIPT = """
   chips.forEach(function (b) {
     b.addEventListener('click', function () {
       applyFilter(b.dataset.filter);
+      updateCounts();
       try { localStorage.setItem(FILTERKEY, b.dataset.filter); } catch (e) {}
     });
   });
@@ -376,6 +398,28 @@ SCRIPT = """
       if (known) applyFilter(savedFilter);
     }
   }
+  // live counts: a chip's count answers "how many in the tab I'm looking at",
+  // a tab's count answers "how many under the chip I picked" — each number
+  // is what a click on that button would put on screen
+  function updateCounts() {
+    var activePane = document.querySelector('.tabpane.active') || document;
+    var activeFilter = '';
+    chips.forEach(function (b) { if (b.classList.contains('active')) activeFilter = b.dataset.filter; });
+    chips.forEach(function (b) {
+      var value = b.dataset.filter;
+      var n = 0;
+      activePane.querySelectorAll('.card').forEach(function (c) { if (!value || c.dataset.filter === value) n++; });
+      var fc = b.querySelector('.fcount'); if (fc) fc.textContent = n;
+    });
+    tabs.forEach(function (t) {
+      var pane = document.getElementById('pane-' + t.dataset.pane);
+      if (!pane) return;
+      var n = 0;
+      pane.querySelectorAll('.card').forEach(function (c) { if (!activeFilter || c.dataset.filter === activeFilter) n++; });
+      var tc = t.querySelector('.tcount'); if (tc) tc.textContent = n;
+    });
+  }
+  updateCounts();
   refresh();
 })();
 </script>
@@ -427,12 +471,13 @@ def card_html(item, page_options, page_default):
         if item.get("notes", bool(options))
         else ""
     )
-    collapsible = bool(item.get("collapsed"))
-    card_classes = "card collapsible collapsed" if collapsible else "card"
-    chevron = '<span class="chev">▸</span>' if collapsible else ""
+    collapsed = bool(item.get("collapsed"))
+    card_classes = "card collapsible collapsed" if collapsed else "card collapsible"
+    chevron = '<span class="chev">▸</span>'
+    fold_attr = ' data-fold="1"' if collapsed else ""
     filter_attr = f' data-filter="{html.escape(item["filter"])}"' if item.get("filter") else ""
     return (
-        f'<div class="{card_classes}" data-id="{html.escape(item_id)}" data-def="{html.escape(default or "")}"{filter_attr}>'
+        f'<div class="{card_classes}" data-id="{html.escape(item_id)}" data-def="{html.escape(default or "")}"{fold_attr}{filter_attr}>'
         f'<div class="cardhead">{chevron}<span class="cardid">{html.escape(item_id)}</span>{badge}{source}'
         f'<span class="cardtitle">{html.escape(item.get("title", ""))}</span></div>'
         f'<div class="cardfold">{meta}{summary}{fields}{evidence}{diff_html}{detail}{warning}{body}</div>'
