@@ -19,7 +19,7 @@ argument-hint: "[<slug>] [<free-form context>]"
 
 # New Skill
 
-Produce a skill at `<root>/.claude/skills/<slug>/` — the loader path; projects that keep skills under `.github/skills/` and symlink `.claude/skills` to it (this one does) get the files written there instead. The skill must be one a future agent can invoke cold and execute correctly on the first read. The route there: a real conversation about what the skill is, a draft on disk, five blind lenses plus measured routing probes against that draft, and fixes the user picks by number. The intake conversation is where vague descriptions get caught — once a SKILL.md lands wrong on disk, every later session that loads it inherits the drift.
+Produce a skill at `<root>/.claude/skills/<slug>/` — the loader path; projects that keep skills under `.github/skills/` and symlink `.claude/skills` to it (this one does) get the files written there instead. The skill must be one a future agent can invoke cold and execute correctly on the first read. The route there: a real conversation about what the skill is, a draft on disk, the six-lens workflow plus measured routing probes against that draft, and fixes the user picks by number. The intake conversation is where vague descriptions get caught — once a SKILL.md lands wrong on disk, every later session that loads it inherits the drift.
 
 ## Clean-slate rule
 
@@ -49,7 +49,7 @@ Every question you ask the user must be decidable from the question plus what th
 1. The `description:` routes the intake's trigger set — **measured** by the probe lane, not only judged.
 2. The body walks top-to-bottom with a discriminating Success criterion per step (a clearly-wrong run must fail it) and a Done-when block distinct from the last step.
 3. Every linked reference file exists; every code block ran in this session and succeeded.
-4. The five lenses ran against the on-disk draft; their findings were resolved by number or explicitly accepted.
+4. The lens workflow ran against the on-disk draft; its findings were resolved by number or explicitly accepted.
 5. `trigger-evals.json` sits next to the SKILL.md; driver-backed skills also ship TESTPLAN.md and the driver ran in-session.
 
 ## Process
@@ -84,12 +84,12 @@ Description first — it's the loader's only routing surface, so test it against
 
 ### 3. Validate — lenses and probes in one turn
 
-- **Lenses:** call `Workflow` with `scriptPath: .github/skills/_shared/audit_wf.js` and `args: {skillPath, referenceFiles, personaFiles, triggerMessages}` — the same five blind lenses `/audit-skill` runs (loader, cold-walk, craft, orchestration, ideas), each restricted to the files its prompt names, schema-forced to return evidence-carrying findings. Your own read is not a substitute: you know what the skill is supposed to say, so you fill its gaps; the lenses cannot.
+- **Lenses:** call `Workflow` with `scriptPath: .github/skills/_shared/audit_wf.js` and `args: {skillPath, referenceFiles, personaFiles, triggerMessages}` — the same six lenses `/audit-skill` runs: five blind (loader, cold-walk, craft, orchestration, ideas), each restricted to the files its prompt names, plus a web-searching research lens that sets prior art, an ideal-version sketch, and live Claude Code docs against the fresh draft. All six are schema-forced to return evidence-carrying output. Your own read is not a substitute: you know what the skill is supposed to say, so you fill its gaps; the lenses cannot.
 - **Probes:** `Bash(run_in_background: true)`: `python3 .github/skills/_shared/run_trigger_evals.py <skill-dir>/trigger-evals.json` — each probe is a fresh `claude -p` whose loader sees the draft competing against every sibling description: measured routing, which also covers sibling trigger overlap better than any judgment pass. When near siblings carry their own `trigger-evals.json`, re-run theirs too — a new description can steal queries that used to route to them, and only their evals show it.
 
 Verify all findings marked `harness_claim` in one message of parallel `claude-code-guide` dispatches (doc URL required for each) before presenting them — the lens rules snapshot the docs and lag the product. A contradicted rule becomes its own numbered item in the Step 4 report (*"lens rule outdated — proposed `_shared/audit_wf.js` fix: <exact change>"*) for the user to apply or skip; never edit the shared script unprompted.
 
-**Success criteria:** five lens objects and the probe table collected; every harness-claim resolved to confirmed-with-URL or contradicted-with-URL.
+**Success criteria:** six lens objects and the probe table collected; every harness-claim resolved to confirmed-with-URL or contradicted-with-URL.
 
 ### 4. Resolve by number
 

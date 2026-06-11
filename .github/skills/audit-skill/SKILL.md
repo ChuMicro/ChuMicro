@@ -17,7 +17,7 @@ when_to_use: |
 
 # Audit Skill
 
-Audits a SKILL.md, its reference files, and anything it dispatches (persona files, workflow scripts). One Workflow run fans out five blind lenses — loader routing, cold-walk, craft, orchestration, plus a generative ideas lens — each returning schema-validated findings that carry their own evidence. The director merges them with measured routing probes, prints one numbered evidence-first report, and applies only the fixes the user picks by number.
+Audits a SKILL.md, its reference files, and anything it dispatches (persona files, workflow scripts). One Workflow run fans out six lenses — five blind ones (loader routing, cold-walk, craft, orchestration, a generative ideas lens) plus an outward research lens that web-searches prior art and live Claude Code docs — each returning schema-validated output that carries its own evidence. The director merges them with measured routing probes, prints one numbered evidence-first report, and applies only the fixes the user picks by number.
 
 ## When to use this skill
 
@@ -78,12 +78,12 @@ From your own fresh top-to-bottom read, hold two things in chat: (a) a 2–3 sen
 
 In one turn:
 
-- **Lens workflow:** call `Workflow` with `scriptPath: .github/skills/_shared/audit_wf.js` (shared — `/new-skill` runs the same lenses over its drafts) and `args: {skillPath, referenceFiles, personaFiles, triggerMessages}` (absolute paths; empty arrays where the inventory found none). The script fans out five blind agents — loader, cold-walk, craft, orchestration, ideas — each restricted to the files its prompt names, each returning schema-validated findings that must carry tier, evidence (file:line + quote), consequence, and a proposed fix. The schema does the format enforcement; there is no re-dispatch-for-missing-tiers loop.
+- **Lens workflow:** call `Workflow` with `scriptPath: .github/skills/_shared/audit_wf.js` (shared — `/new-skill` runs the same lenses over its drafts) and `args: {skillPath, referenceFiles, personaFiles, triggerMessages}` (absolute paths; empty arrays where the inventory found none). The script fans out six agents. Five are blind lenses — loader, cold-walk, craft, orchestration, ideas — each restricted to the files its prompt names, each returning schema-validated findings that must carry tier, evidence (file:line + quote), consequence, and a proposed fix. The sixth is a research lens that reads only the audited files but searches outward: prior art for the skill's goal, an ideal-version sketch diffed against the actual, and live Claude Code docs for unexploited harness capabilities — every idea anchored to a URL or marked vision. The schema does the format enforcement; there is no re-dispatch-for-missing-tiers loop.
 - **Probe lane (when Step 2 found `trigger-evals.json`):** `Bash(run_in_background: true)`: `python3 .github/skills/_shared/run_trigger_evals.py <skill-dir>/trigger-evals.json --workers 4`. Each probe is a fresh `claude -p` whose loader sees the real sibling registry — a routing measurement to set against the loader lens's judgment.
 
 The Workflow runs in the background and notifies on completion; tell the user both are running and the rough duration (lenses a few minutes; probes similar).
 
-**Success criteria:** one Workflow call + (when applicable) one background probe task launched in the same turn; five lens objects and the probe table collected.
+**Success criteria:** one Workflow call + (when applicable) one background probe task launched in the same turn; six lens objects and the probe table collected.
 
 ### 5. Merge
 
@@ -91,7 +91,7 @@ The Workflow runs in the background and notifies on completion; tell the user bo
 - **Precedence:** lens findings outrank director observations; the measured probe table outranks both on routing.
 - **Harness claims:** any finding with `harness_claim: true` (or any you notice resting on documented Claude Code behavior) gets verified before it lands — dispatch `claude-code-guide` with the specific claim; require a doc URL. Confirmed → the finding stands with the URL. Contradicted → the audited skill is fine and the stale rule (in `_shared/audit_wf.js`'s lens prompts) becomes the finding. A claim already verified this session with a URL needs no re-dispatch.
 - **Director comparison:** predictions no lens touched become director follow-ups, labeled as yours and outranked accordingly.
-- Ideas are not findings: they join the report as a separately-numbered menu with the lens's `recommended_action` shown per idea.
+- Ideas are not findings: the ideas lens's file-anchored entries and the research lens's URL-or-vision-anchored entries join the report as one separately-numbered menu, each with its lens's `recommended_action`.
 
 **Success criteria:** one merged, numbered findings list + numbered ideas menu, every entry carrying evidence, consequence, and proposed fix.
 
@@ -155,7 +155,7 @@ DIRECTOR FOLLOW-UPS (mine — lenses outrank these)
 
 IDEAS (separately numbered; not defects)
  9. <title> [<kind>] [WILD]? — recommended: <action>
-    anchor: <file:line> · <what changes if it lands>
+    anchor: <file:line | URL | vision> · <what changes if it lands>
 
 Director-bias warning: the director read the source and is therefore biased.
 Lens findings outrank director observations; the probe table outranks both on routing.
