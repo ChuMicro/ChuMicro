@@ -1,19 +1,25 @@
 #!/usr/bin/env python3
 """Render a generic decision page (picker.html) from a JSON spec.
 
-One card per item, each with a radio group, an optional notes box, and a sticky
-selection bar that serializes every choice into a line-oriented paste-back blob:
+One card per item — id, severity badge, a source chip naming what raised the item,
+a plain-words summary, labeled why / fix rows, the evidence in a small mono block —
+plus a radio group and a notes box. A sticky bar serializes every choice into a
+line-oriented paste-back blob:
 
     PICKS — <blob_header>
     1 = apply
       note 1: <free text, newlines collapsed>
     2 = skip
 
+A note on an applied item is the user's wording adjustment — there is no separate
+"edit" option; the orchestrator honors apply-with-note as apply-with-this-wording.
+
 The page is self-contained (inline CSS + JS) and works from file:// — Copy
 selection always works; a Submit button appears only when the page is served
 over http (see serve_picker.py, which loops the POST back to the session).
 Choices and notes persist in localStorage under the spec's `key`, so a reload
-mid-review restores them.
+mid-review restores them. A theme button toggles light/dark (default follows
+the system).
 
 Spec schema:
 
@@ -22,14 +28,24 @@ Spec schema:
       "key": "audit-skill:git-commit:20260611T",          // localStorage namespace; change per run
       "blob_header": "audit-skill picks (git-commit)",    // first blob line after "PICKS — "
       "intro_html": "<p>…</p>",                           // optional block above the cards (trusted HTML)
-      "options": ["apply", "edit", "discuss", "skip"],    // page-wide option set
-      "default": "skip",                                  // pre-checked option (omit for none)
+      "options": ["apply", "discuss", "skip"],            // page-wide option set
+      "default": "skip",                                  // page-wide pre-checked option (omit for none)
+      "option_help": {                                    // optional legend, rendered above the cards
+        "apply": "make the proposed change (a note adjusts its wording)",
+        "discuss": "no change yet — talk it through in chat first",
+        "skip": "leave as is"
+      },
       "items": [
         {
           "id": "1",                                      // rides back in the blob; unique
-          "title": "[IMPORTANT · loader] vague stem",     // card heading (escaped)
+          "title": "vague description stem",              // card heading (escaped)
           "badge": "IMPORTANT",                           // optional pill; known severities get colors
-          "body_html": "<pre>evidence…</pre>",            // card body (trusted HTML from the orchestrator)
+          "source": "loader lens — frontmatter contract", // optional chip: what raised this item
+          "summary": "plain-words description…",          // optional paragraph under the heading
+          "why": "consequence in one sentence",           // optional labeled row
+          "fix": "the exact proposed change",             // optional labeled row
+          "evidence": "SKILL.md:3 \\"quote\\"",            // optional mono block
+          "body_html": "<p>…</p>",                        // optional extra block (trusted HTML)
           "options": ["high", "medium", "low"],           // optional per-item override
           "default": "medium",                            // optional per-item override
           "notes": true                                   // notes box (default true)
@@ -59,41 +75,53 @@ BADGE_CLASSES = {
 }
 
 CSS = """
- :root{color-scheme:light dark;
-  --bg:#f4f6f9; --fg:#1c2230; --faint:#6b7280; --card:#ffffff; --border:#dfe4ec;
-  --accent:#4f46e5; --blob-bg:#f8fafc; --bar:#ffffffeb; --note-bg:#fbfcfe}
- @media (prefers-color-scheme: dark){:root{
-  --bg:#11141b; --fg:#e3e7f0; --faint:#8a93a6; --card:#1a1f29; --border:#2a3242;
-  --accent:#8d97ff; --blob-bg:#11141b; --bar:#1a1f29eb; --note-bg:#161b24}}
- body{font:15px/1.55 -apple-system,'Segoe UI',sans-serif;background:var(--bg);color:var(--fg);
-  margin:0;padding:26px 20px 130px;max-width:900px;margin-inline:auto}
- h1{font-size:20px;margin:0 0 6px}
- .intro{color:var(--faint);font-size:13.5px;margin-bottom:18px}
+ :root{color-scheme:light;
+  --bg:#f4f6f9; --fg:#1c2230; --faint:#69707e; --card:#ffffff; --border:#dfe4ec;
+  --accent:#4f46e5; --accent-fg:#ffffff; --blob-bg:#f8fafc; --bar:#ffffffeb; --note-bg:#fbfcfe; --chip:#eef0f6}
+ :root[data-theme=dark]{color-scheme:dark;
+  --bg:#11141b; --fg:#e3e7f0; --faint:#97a0b3; --card:#1a1f29; --border:#2a3242;
+  --accent:#8d97ff; --accent-fg:#11141b; --blob-bg:#11141b; --bar:#1a1f29eb; --note-bg:#161b24; --chip:#232a38}
+ body{font:16px/1.55 -apple-system,'Segoe UI',sans-serif;background:var(--bg);color:var(--fg);
+  margin:0;padding:26px 20px 150px;max-width:920px;margin-inline:auto}
+ h1{font-size:21px;margin:0 44px 6px 0}
+ .themebtn{position:fixed;top:14px;right:16px;font:inherit;font-size:13px;padding:6px 12px;border-radius:999px;
+  border:1px solid var(--border);background:var(--card);color:var(--fg);cursor:pointer;z-index:10}
+ .intro{color:var(--faint);font-size:14px;margin-bottom:10px}
  .intro pre{white-space:pre-wrap}
- .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin:12px 0}
+ .legend{font-size:13.5px;color:var(--faint);background:var(--card);border:1px solid var(--border);
+  border-radius:10px;padding:9px 14px;margin-bottom:16px}
+ .legend b{color:var(--fg);font-weight:620}
+ .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:15px 17px;margin:12px 0}
  .cardhead{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap}
- .cardid{font-weight:700;color:var(--accent)}
- .cardtitle{font-weight:620}
- .badge{font-size:10.5px;font-weight:700;letter-spacing:.4px;padding:2px 8px;border-radius:999px;color:#fff;background:#64748b}
+ .cardid{font-weight:700;color:var(--accent);font-size:17px}
+ .cardtitle{font-weight:630}
+ .badge{font-size:11px;font-weight:700;letter-spacing:.4px;padding:2px 8px;border-radius:999px;color:#fff;background:#64748b}
  .b-critical{background:#dc2626} .b-important{background:#d97706} .b-minor{background:#64748b} .b-ambiguous{background:#7c3aed}
- .cardbody{margin:9px 0 2px;font-size:13.5px}
- .cardbody pre{white-space:pre-wrap;background:var(--blob-bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:12px}
- .opts{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px}
- .opts label{cursor:pointer;display:flex;align-items:center;gap:5px;font-size:13.5px}
+ .srcchip{font-size:11.5px;color:var(--faint);background:var(--chip);border-radius:999px;padding:2px 9px}
+ .summary{margin:8px 0 2px;font-size:14.5px}
+ .field{display:flex;gap:10px;margin:7px 0 0;font-size:14px}
+ .flabel{flex:0 0 38px;font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;
+  color:var(--faint);padding-top:3px}
+ .ftext{flex:1}
+ .evidence{margin:9px 0 0;white-space:pre-wrap;background:var(--blob-bg);border:1px solid var(--border);
+  border-radius:8px;padding:8px 10px;font:12.5px/1.5 ui-monospace,Menlo,monospace;color:var(--faint)}
+ .cardbody{margin:9px 0 0;font-size:14px}
+ .opts{display:flex;gap:16px;flex-wrap:wrap;margin-top:12px}
+ .opts label{cursor:pointer;display:flex;align-items:center;gap:6px;font-size:14.5px}
  .opts input{accent-color:var(--accent)}
- .notes{width:100%;box-sizing:border-box;margin-top:9px;font:12.5px/1.5 inherit;border:1px solid var(--border);
-  border-radius:8px;padding:7px 9px;min-height:34px;background:var(--note-bg);color:var(--fg);resize:vertical}
+ .notes{width:100%;box-sizing:border-box;margin-top:10px;font:13.5px/1.5 inherit;border:1px solid var(--border);
+  border-radius:8px;padding:7px 9px;min-height:36px;background:var(--note-bg);color:var(--fg);resize:vertical}
  .selbar{position:fixed;bottom:0;left:0;right:0;background:var(--bar);backdrop-filter:blur(10px);
-  border-top:1px solid var(--border);padding:10px 20px;font-size:13px}
- .selbar .row{display:flex;align-items:center;gap:12px;max-width:900px;margin-inline:auto;flex-wrap:wrap}
- .selbar button{font:inherit;padding:6px 14px;border-radius:8px;border:1px solid var(--border);
+  border-top:1px solid var(--border);padding:10px 20px;font-size:14px}
+ .selbar .row{display:flex;align-items:center;gap:12px;max-width:920px;margin-inline:auto;flex-wrap:wrap}
+ .selbar button{font:inherit;padding:7px 16px;border-radius:8px;border:1px solid var(--border);
   background:var(--card);color:var(--fg);cursor:pointer}
- .selbar button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+ .selbar button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg);font-weight:620}
  #count{color:var(--faint)}
- .blobwrap{max-width:900px;margin-inline:auto}
- .blobwrap>summary{font-size:11.5px;color:var(--faint);cursor:pointer;margin-top:6px}
- .hint{font-size:11.5px;color:var(--faint);margin:6px 0 0}
- #blob{width:100%;box-sizing:border-box;margin-top:8px;font:12px/1.5 ui-monospace,Menlo,monospace;
+ .blobwrap{max-width:920px;margin-inline:auto}
+ .blobwrap>summary{font-size:12px;color:var(--faint);cursor:pointer;margin-top:6px}
+ .hint{font-size:12px;color:var(--faint);margin:6px 0 0}
+ #blob{width:100%;box-sizing:border-box;margin-top:8px;font:12.5px/1.5 ui-monospace,Menlo,monospace;
   border:1px solid var(--border);border-radius:8px;padding:8px;min-height:46px;background:var(--blob-bg);color:var(--fg)}
 """
 
@@ -102,6 +130,15 @@ SCRIPT = """
 (function () {
   var KEY = 'picker:' + (window.SPEC.key || 'x');
   var HEADER = 'PICKS \\u2014 ' + (window.SPEC.blob_header || window.SPEC.key || 'selection');
+  var root = document.documentElement;
+  var savedTheme = null;
+  try { savedTheme = localStorage.getItem('picker:theme'); } catch (e) {}
+  var dark = savedTheme ? savedTheme === 'dark' : (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+  function setTheme(d) {
+    root.dataset.theme = d ? 'dark' : 'light';
+    document.getElementById('themebtn').textContent = d ? 'light mode' : 'dark mode';
+    try { localStorage.setItem('picker:theme', d ? 'dark' : 'light'); } catch (e) {}
+  }
   function load() { try { return JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) { return {}; } }
   function save(s) { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch (e) {} }
   var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));
@@ -162,12 +199,20 @@ SCRIPT = """
       .then(function (r) { flash(r.ok ? 'submitted \\u2713 (return to the session)' : 'failed: use Copy selection'); })
       .catch(function () { flash('failed: use Copy selection'); });
   }
+  setTheme(dark);
+  document.getElementById('themebtn').addEventListener('click', function () { setTheme(root.dataset.theme !== 'dark'); });
   document.querySelectorAll('.card input[type=radio]').forEach(function (r) { r.addEventListener('change', persist); });
   document.querySelectorAll('.notes').forEach(function (t) { t.addEventListener('input', persist); });
   document.getElementById('copybtn').addEventListener('click', copy);
+  // Submit is the primary action when the page is served; on a file:// page it stays
+  // hidden and Copy inherits the primary styling as the only hand-back path.
   var sb = document.getElementById('submitbtn');
-  if (location.protocol === 'http:' || location.protocol === 'https:') sb.hidden = false;
-  sb.addEventListener('click', submitSel);
+  if (location.protocol === 'http:' || location.protocol === 'https:') {
+    sb.hidden = false;
+    sb.addEventListener('click', submitSel);
+  } else {
+    document.getElementById('copybtn').classList.add('primary');
+  }
   document.getElementById('resetbtn').addEventListener('click', function () {
     cards.forEach(function (c) {
       c.querySelectorAll('input[type=radio]').forEach(function (r) { r.checked = (r.value === c.dataset.def); });
@@ -189,25 +234,42 @@ def card_html(item, page_options, page_default):
     if item.get("badge"):
         badge_class = BADGE_CLASSES.get(str(item["badge"]).lower(), "")
         badge = f'<span class="badge {badge_class}">{html.escape(str(item["badge"]))}</span>'
+    source = f'<span class="srcchip">{html.escape(item["source"])}</span>' if item.get("source") else ""
+    summary = f'<p class="summary">{html.escape(item["summary"])}</p>' if item.get("summary") else ""
+    fields = "".join(
+        f'<div class="field"><span class="flabel">{label}</span><span class="ftext">{html.escape(item[key])}</span></div>'
+        for key, label in (("why", "why"), ("fix", "fix"))
+        if item.get(key)
+    )
+    evidence = f'<div class="evidence">{html.escape(item["evidence"])}</div>' if item.get("evidence") else ""
+    body = f'<div class="cardbody">{item["body_html"]}</div>' if item.get("body_html") else ""
     radios = "".join(
         f'<label><input type="radio" name="pick:{html.escape(item_id)}" value="{html.escape(option)}"'
         f'{" checked" if option == default else ""}> {html.escape(option)}</label>'
         for option in options
     )
     notes = (
-        f'<textarea class="notes" placeholder="notes on {html.escape(item_id)} (ride back with the selection)…"></textarea>'
+        f'<textarea class="notes" placeholder="notes on {html.escape(item_id)} (on an apply, this adjusts the wording)…"></textarea>'
         if item.get("notes", True)
         else ""
     )
-    body = f'<div class="cardbody">{item["body_html"]}</div>' if item.get("body_html") else ""
     return (
         f'<div class="card" data-id="{html.escape(item_id)}" data-def="{html.escape(default or "")}">'
-        f'<div class="cardhead"><span class="cardid">{html.escape(item_id)}</span>{badge}'
+        f'<div class="cardhead"><span class="cardid">{html.escape(item_id)}</span>{badge}{source}'
         f'<span class="cardtitle">{html.escape(item.get("title", ""))}</span></div>'
-        f"{body}"
+        f"{summary}{fields}{evidence}{body}"
         f'<div class="opts">{radios}</div>'
         f"{notes}</div>"
     )
+
+
+def legend_html(option_help):
+    if not option_help:
+        return ""
+    parts = " &nbsp;·&nbsp; ".join(
+        f"<b>{html.escape(option)}</b> — {html.escape(meaning)}" for option, meaning in option_help.items()
+    )
+    return f'<div class="legend">{parts}</div>'
 
 
 def main():
@@ -216,10 +278,11 @@ def main():
         spec = json.load(handle)
     output_dir = os.path.abspath(sys.argv[2]) if len(sys.argv) > 2 else os.path.dirname(spec_path)
 
-    page_options = spec.get("options", ["apply", "edit", "discuss", "skip"])
+    page_options = spec.get("options", ["apply", "discuss", "skip"])
     page_default = spec.get("default")
     cards = "\n".join(card_html(item, page_options, page_default) for item in spec["items"])
     intro = f'<div class="intro">{spec["intro_html"]}</div>' if spec.get("intro_html") else ""
+    legend = legend_html(spec.get("option_help"))
     client_spec = json.dumps({"key": spec.get("key", ""), "blob_header": spec.get("blob_header", "")})
 
     page = f"""<!DOCTYPE html>
@@ -228,14 +291,16 @@ def main():
 <title>{html.escape(spec.get("title", "decision page"))}</title>
 <style>{CSS}</style></head>
 <body>
+<button class="themebtn" id="themebtn">dark mode</button>
 <h1>{html.escape(spec.get("title", "decision page"))}</h1>
 {intro}
+{legend}
 {cards}
 <div class="selbar">
  <div class="row">
   <span id="count"></span>
-  <button class="primary" id="copybtn">Copy selection</button>
-  <button id="submitbtn" hidden>Submit to session</button>
+  <button class="primary" id="submitbtn" hidden>Submit to session</button>
+  <button id="copybtn">Copy selection</button>
   <button id="resetbtn">Reset</button>
  </div>
  <details class="blobwrap"><summary>selection blob + how to hand it back</summary>
