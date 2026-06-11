@@ -37,6 +37,10 @@ Spec schema:
       ],
       "options": ["apply", "discuss", "skip"],            // page-wide option set
       "default": "skip",                                  // page-wide pre-checked option (omit for none)
+      "expand_on": ["discuss"],                           // optional: picking one of these options expands
+                                                          // the card and focuses its notes box — for options
+                                                          // whose substance lives in the note (a discussion
+                                                          // opener, a wording adjustment)
       "option_help": {                                    // optional legend, rendered above the cards
         "apply": "make the proposed change (a note adjusts its wording)",
         "discuss": "no change yet — talk it through in chat first",
@@ -75,9 +79,9 @@ Spec schema:
                                                           // false on informational ones)
           "tab": "loader",                                // optional: group cards into tabs
           "collapsed": true,                              // optional: start the card folded to a strip (title
-                                                          // row + radios). Every card folds/expands on a
-                                                          // title-row click; this sets the initial state.
-                                                          // For long pages — items a reader only skims
+                                                          // row + radios + diff if present). Every card
+                                                          // folds/expands on a title-row click; this sets the
+                                                          // initial state. For long pages a reader skims
           "filter": "heartbeat.py"                        // optional facet value; any item carrying one makes
                                                           // the page render a chip row (all · heartbeat.py · …)
                                                           // that narrows the visible cards across every tab
@@ -103,13 +107,14 @@ DOM, so the blob, tally, and Reset still cover them. Counts stay live in both
 bars: a chip's count is scoped to the active tab and a tab's count to the active
 chip, so every number is what a click on that button would put on screen.
 
-Every card folds to a strip (title row + radios) on a title-row click;
-`collapsed: true` sets the initial state. Fold changes persist in localStorage
-like picks and notes do, and a spec-collapsed card carrying a saved pick or note
-reopens expanded, so a reload never hides work in progress. Reset returns the
-page to its rendered defaults — picks to the default option, notes cleared,
-every card back to its spec fold state; only the active tab and the active chip
-(navigation, not decision state) survive it.
+Every card folds to a strip — title row, radios, and the diff when one exists —
+on a title-row click; `collapsed: true` sets the initial state, and fold changes
+persist in localStorage like picks and notes do. Picking an option listed in
+`expand_on` opens the card and focuses its notes box, for options whose
+substance lives in the note. Reset returns the page to its rendered defaults —
+picks to the default option, notes cleared, cards and page-top sections back to
+their spec fold state; only the active tab and the active chip (navigation, not
+decision state) survive it.
 
 body_html and intro_html are written into the page unescaped — the spec author
 is the orchestrating session, not an untrusted source.
@@ -182,11 +187,12 @@ CSS = """
  .chev{display:inline-block;color:var(--faint);font-size:12px;align-self:center;
   transition:transform .15s;transform:rotate(90deg)}
  .card.collapsible>.cardhead{cursor:pointer;user-select:none}
- .card.collapsed{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:9px 15px}
+ .card.collapsed{display:flex;align-items:center;gap:12px 16px;flex-wrap:wrap;padding:9px 15px}
  .card.collapsed .chev{transform:rotate(0)}
- .card.collapsed>.cardhead{flex:1 1 auto}
+ .card.collapsed>.cardhead{flex:1 1 auto;order:1}
  .card.collapsed>.cardfold,.card.collapsed>.notes{display:none}
- .card.collapsed>.opts{margin:0;flex:0 0 auto}
+ .card.collapsed>.opts{margin:0;flex:0 0 auto;order:2}
+ .card.collapsed>.diffblock{order:3;flex:1 1 100%;margin:0}
  .cardid{font-weight:700;color:var(--accent);font-size:17px}
  .cardtitle{font-weight:630}
  .badge{font-size:11px;font-weight:700;letter-spacing:.4px;padding:2px 8px;border-radius:999px;color:#fff;background:#64748b}
@@ -262,12 +268,9 @@ SCRIPT = """
     var id = c.dataset.id;
     if (state['p:' + id]) { var r = c.querySelector('input[value="' + state['p:' + id] + '"]'); if (r) r.checked = true; }
     if (state['n:' + id]) { var n = c.querySelector('.notes'); if (n) n.value = state['n:' + id]; }
-    // a collapsed card with a saved pick or note reopens expanded — a reload never hides work in progress
-    if ((state['p:' + id] || state['n:' + id]) && c.classList.contains('collapsed')) c.classList.remove('collapsed');
   });
   // every card folds on a title-row click; spec sets the initial state (data-fold). A saved
-  // 'e:' key (1 = opened, 0 = folded) is a deviation from that default and wins on reload —
-  // including over the pick/note auto-expand above, so an explicitly folded card stays folded.
+  // 'e:' key (1 = opened, 0 = folded) is a deviation from that default restored on reload.
   document.querySelectorAll('.card.collapsible').forEach(function (c) {
     var saved = state['e:' + c.dataset.id];
     if (saved === 1) c.classList.remove('collapsed');
@@ -334,7 +337,18 @@ SCRIPT = """
   }
   setTheme(dark);
   document.getElementById('themebtn').addEventListener('click', function () { setTheme(root.dataset.theme !== 'dark'); });
-  document.querySelectorAll('.card input[type=radio]').forEach(function (r) { r.addEventListener('change', persist); });
+  var EXPAND_ON = window.SPEC.expand_on || [];
+  document.querySelectorAll('.card input[type=radio]').forEach(function (r) {
+    r.addEventListener('change', function () {
+      // a pick whose substance lives in the note (e.g. discuss) opens the card and puts the cursor there
+      if (EXPAND_ON.indexOf(r.value) !== -1) {
+        var c = r.closest('.card');
+        c.classList.remove('collapsed');
+        var n = c.querySelector('.notes'); if (n) n.focus();
+      }
+      persist();
+    });
+  });
   document.querySelectorAll('.notes').forEach(function (t) { t.addEventListener('input', persist); });
   document.getElementById('copybtn').addEventListener('click', copy);
   // Submit is the primary action when the page is served; on a file:// page it stays
@@ -346,15 +360,19 @@ SCRIPT = """
   } else {
     document.getElementById('copybtn').classList.add('primary');
   }
+  // page-top sections record their rendered open/closed state before any user toggles, so Reset can restore it
+  var sections = document.querySelectorAll('details.section');
+  sections.forEach(function (d) { d.dataset.open0 = d.open ? '1' : ''; });
   document.getElementById('resetbtn').addEventListener('click', function () {
     cards.forEach(function (c) {
       c.querySelectorAll('input[type=radio]').forEach(function (r) { r.checked = (r.value === c.dataset.def); });
       var n = c.querySelector('.notes'); if (n) n.value = '';
     });
-    // fold state returns to each card's spec default too — Reset means "as first rendered"
+    // fold state returns to spec defaults too, cards and sections both — Reset means "as first rendered"
     document.querySelectorAll('.card.collapsible').forEach(function (c) {
       c.classList.toggle('collapsed', c.dataset.fold === '1');
     });
+    sections.forEach(function (d) { d.open = d.dataset.open0 === '1'; });
     persist();
   });
   // tab bar (absent on a flat page); hidden panes stay in the DOM, so the blob and tally cover every tab.
@@ -489,8 +507,8 @@ def card_html(item, page_options, page_default):
         f'<div class="{card_classes}" data-id="{html.escape(item_id)}" data-def="{html.escape(default or "")}"{fold_attr}{filter_attr}>'
         f'<div class="cardhead">{chevron}<span class="cardid">{html.escape(item_id)}</span>{badge}{warn_flag}{source}'
         f'<span class="cardtitle">{html.escape(item.get("title", ""))}</span></div>'
-        f'<div class="cardfold">{meta}{summary}{fields}{evidence}{diff_html}{detail}{warning}{body}</div>'
-        f"{opts}{notes}</div>"
+        f'<div class="cardfold">{meta}{summary}{fields}{evidence}{detail}{warning}{body}</div>'
+        f"{diff_html}{opts}{notes}</div>"
     )
 
 
@@ -573,7 +591,8 @@ def main():
         for section in spec.get("sections", [])
     )
     legend = legend_html(spec.get("option_help"))
-    client_spec = json.dumps({"key": spec.get("key", ""), "blob_header": spec.get("blob_header", "")})
+    client_spec = json.dumps({"key": spec.get("key", ""), "blob_header": spec.get("blob_header", ""),
+                              "expand_on": spec.get("expand_on", [])})
 
     page = f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8">
