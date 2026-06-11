@@ -182,9 +182,11 @@ CSS = """
  details.section .sbody{margin-top:8px;font-size:14.5px}
  .sbody small{color:var(--faint)}
  .sbody code{font:13px ui-monospace,Menlo,monospace}
- .facetbar{display:flex;flex-direction:column;gap:7px;margin:18px 0 16px;position:sticky;top:10px;z-index:9;
+ .facetbar{display:flex;flex-direction:column;gap:7px;margin:18px 0 16px;position:sticky;top:0;z-index:9;
   background:color-mix(in srgb,var(--card) 90%,transparent);backdrop-filter:blur(12px) saturate(1.3);
   -webkit-backdrop-filter:blur(12px) saturate(1.3);border:1px solid var(--border);border-radius:13px;padding:10px 14px}
+ .facetbar.stuck{border-radius:0 0 13px 13px;border-top-color:transparent;background:var(--bar);
+  box-shadow:0 4px 14px rgba(0,0,0,.14)}
  .fgroup{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
  .fglabel{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--faint);min-width:64px}
  .fgroup button{font:inherit;font-size:13px;padding:4px 13px;border-radius:999px;border:1px solid var(--border);
@@ -502,7 +504,7 @@ SCRIPT = """
       return;
     }
     var bar = document.querySelector('.facetbar');
-    var headTop = (bar ? bar.offsetHeight + 14 : 10) + 'px';
+    var headTop = (bar ? bar.offsetHeight + 6 : 6) + 'px';
     var values = [];
     fchips.forEach(function (b) { if (b.dataset.key === key && values.indexOf(b.dataset.value) === -1) values.push(b.dataset.value); });
     specOrder.forEach(function (c) {
@@ -546,10 +548,20 @@ SCRIPT = """
   // and viewport width — measure it and feed scroll-margin-top through a CSS variable
   function setAnchorClearance() {
     var bar = document.querySelector('.facetbar');
-    root.style.setProperty('--anchor-clear', (bar ? bar.offsetHeight + 26 : 40) + 'px');
+    root.style.setProperty('--anchor-clear', (bar ? bar.offsetHeight + 16 : 30) + 'px');
   }
   window.addEventListener('resize', setAnchorClearance);
   setAnchorClearance();
+  // the bar sticks flush to the viewport top: a sentinel above it reports when it is pinned,
+  // and the stuck state squares its top corners and switches to the bottom bar's frosted look
+  var stickyBar = document.querySelector('.facetbar');
+  if (stickyBar && window.IntersectionObserver) {
+    var sentinel = document.createElement('div');
+    stickyBar.parentNode.insertBefore(sentinel, stickyBar);
+    new IntersectionObserver(function (entries) {
+      stickyBar.classList.toggle('stuck', !entries[0].isIntersecting);
+    }).observe(sentinel);
+  }
   // a deep link from a context section can land on a folded card — unfold it, flash it, and let
   // the flash fade out. The hash is a transient navigation aid, not state: it clears as soon as
   // it is handled, so a reload replays nothing and a re-click of the same link is a fresh jump.
