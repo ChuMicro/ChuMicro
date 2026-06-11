@@ -263,8 +263,9 @@ CSS = """
   border-top:1px solid var(--border);padding:10px 20px;font-size:14px}
  .selbar .row{display:flex;align-items:center;gap:12px;max-width:920px;margin-inline:auto;flex-wrap:wrap}
  .selbar button{font:inherit;padding:7px 16px;border-radius:8px;border:1px solid var(--border);
-  background:var(--card);color:var(--fg);cursor:pointer}
+  background:var(--card);color:var(--fg);cursor:pointer;transition:background .5s,color .5s,border-color .5s}
  .selbar button.primary{background:#4f46e5;border-color:#4f46e5;color:#fff}
+ .selbar button.confirm{background:#15803d;border-color:#15803d;color:#fff;transition:none}
  #count{color:var(--faint)}
  .blobwrap{max-width:920px;margin-inline:auto}
  .blobwrap>summary{font-size:12px;color:var(--faint);cursor:pointer;margin-top:6px}
@@ -355,21 +356,39 @@ SCRIPT = """
     document.getElementById('submitbtn').textContent = summary ? 'Submit \\u2014 ' + summary : 'Submit to session';
     var b = document.getElementById('blob'); if (b) b.value = buildBlob();
   }
+  // one acknowledgment for every selbar button: swap the label, hold a green confirm tint,
+  // then let the tint fade back over the button's color transition
+  function confirmFlash(button, label) {
+    if (!button.dataset.restore) button.dataset.restore = button.textContent;
+    button.textContent = label;
+    button.classList.add('confirm');
+    clearTimeout(button.flashTimer);
+    button.flashTimer = setTimeout(function () {
+      button.classList.remove('confirm');
+      button.textContent = button.dataset.restore;
+      delete button.dataset.restore;
+      refresh();
+    }, 1500);
+  }
   function copy() {
     var blob = buildBlob();
-    var bw = document.querySelector('.blobwrap'); if (bw && !bw.open) bw.open = true;
-    var ta = document.getElementById('blob'); ta.value = blob; ta.select();
-    var done = function () { var b = document.getElementById('copybtn'); var o = b.textContent; b.textContent = 'copied \\u2713'; setTimeout(function () { b.textContent = o; }, 1400); };
+    var done = function () { confirmFlash(document.getElementById('copybtn'), 'copied \\u2713'); };
+    // the execCommand fallback needs a visible, selected textarea — only that path opens the blob drawer
+    var fallback = function () {
+      var bw = document.querySelector('.blobwrap'); if (bw && !bw.open) bw.open = true;
+      var ta = document.getElementById('blob'); ta.value = blob; ta.select();
+      try { document.execCommand('copy'); done(); } catch (e) {}
+    };
     if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(blob).then(done, function () { try { document.execCommand('copy'); done(); } catch (e) {} });
-    } else { try { document.execCommand('copy'); done(); } catch (e) {} }
+      navigator.clipboard.writeText(blob).then(done, fallback);
+    } else { fallback(); }
   }
   function submitSel() {
-    var sb = document.getElementById('submitbtn'); var o = sb.textContent;
-    var flash = function (t) { sb.textContent = t; setTimeout(function () { sb.textContent = o; }, 2200); };
+    var sb = document.getElementById('submitbtn');
+    var fail = function () { var o = sb.textContent; sb.textContent = 'failed: use Copy selection'; setTimeout(function () { sb.textContent = o; }, 2200); };
     fetch('/selection', { method: 'POST', body: buildBlob() })
-      .then(function (r) { flash(r.ok ? 'submitted \\u2713 (return to the session)' : 'failed: use Copy selection'); })
-      .catch(function () { flash('failed: use Copy selection'); });
+      .then(function (r) { if (r.ok) confirmFlash(sb, 'submitted \\u2713 (return to the session)'); else fail(); })
+      .catch(fail);
   }
   setTheme(dark);
   document.getElementById('themebtn').addEventListener('click', function () { setTheme(root.dataset.theme !== 'dark'); });
@@ -412,6 +431,7 @@ SCRIPT = """
     sections.forEach(function (d) { d.open = d.dataset.open0 === '1'; });
     persist();
     if (fchips.length) applyFacets();
+    confirmFlash(document.getElementById('resetbtn'), 'reset \\u2713');
   });
   // facet bar: chips toggle — OR within a group, AND across groups, empty group = no narrowing.
   // Hidden cards stay in the DOM, so the blob and tally cover them. Selections persist per page key.
