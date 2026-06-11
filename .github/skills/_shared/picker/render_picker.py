@@ -90,13 +90,14 @@ Spec schema:
                      "file": "heartbeat.py"}              // list to cards matching every selected group
         }
       ],
-      "facets": [                                         // optional facet-bar definition: one group per entry,
-        {"key": "severity",                               // groups flowing inline in this order. values:
-         "values": ["high", "med", "low"]},               // explicit order (others append by first appearance);
-        {"key": "angle",                                  // label: caption (defaults to key); help: hover text
-         "help": {"trap": "correctness lens — …"}},       // per chip value. style: "select" renders the group
-        {"key": "file", "style": "select"}                // as one dropdown — the right shape past ~6 values
-      ]                                                   // (a 10-file audit is one control, not ten chips)
+      "facets": [                                         // optional facet-bar definition: one row per group.
+        {"key": "severity",                               // values: explicit order (others append by first
+         "values": ["high", "med", "low"]},               // appearance); label: caption (defaults to key);
+        {"key": "angle",                                  // help: hover text per chip value. style: "select"
+         "help": {"trap": "correctness lens — …"}},       // renders the group as one dropdown — the right
+        {"key": "file", "style": "select"}                // shape past ~6 values. Chip rows render first (in
+      ]                                                   // spec order, then picked); select rows render last,
+                                                          // keeping the chips in one area
     }
 
 The facet bar is the page's one narrowing mechanism — no tabs (a finding list is
@@ -662,6 +663,7 @@ def main():
     page_default = spec.get("default")
 
     facet_rows = []
+    select_rows = []
     for group in spec.get("facets", []):
         key = group["key"]
         values = list(group.get("values", []))
@@ -684,7 +686,7 @@ def main():
                 for value in values
             ]
             control = f'<select class="fselect" data-key="{html.escape(key)}">{"".join(options)}</select>'
-            facet_rows.append(f'<div class="fgroup"><span class="fglabel">{label}</span>{control}</div>')
+            select_rows.append(f'<div class="fgroup"><span class="fglabel">{label}</span>{control}</div>')
         else:
             chips = "".join(
                 f'<button class="fchip" data-key="{html.escape(key)}" data-value="{html.escape(value)}"'
@@ -713,6 +715,8 @@ def main():
             for value in picked_values
         )
         facet_rows.append(f'<div class="fgroup"><span class="fglabel">picked</span>{picked_chips}</div>')
+    # select rows land after every chip row, so the chips read as one area
+    facet_rows += select_rows
     facetbar = ""
     if facet_rows:
         facetbar = ('<div class="facetbar">' + "".join(facet_rows)
