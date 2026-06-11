@@ -13,8 +13,8 @@ amber "why" row, the suggested fix as the green "fix" row, the generated patch a
 diff (replace), a diff with only a + side (add), or evidence-block guidance (manual), and a
 validator warning when a finding is unconfirmed. The findings render as
 one severity-ordered list narrowed by a facet bar — severity and angle chips (angle help on
-hover), plus file chips in merge mode — with a group-by row (angle, and file in merge mode) for
-sectioned reading. Context lands above the decision area as collapsible page-top sections.
+hover), plus a file dropdown in merge mode. Context lands above the decision area as collapsible
+page-top sections.
 
 Single-file mode (one room): sections are the independent module summary, the domain facts mined
 from comments, and the per-symbol summaries with finding back-references.
@@ -265,7 +265,6 @@ def main_single(rundir, target):
             {"key": "severity", "values": ["high", "med", "low"]},
             {"key": "angle", "values": ["trap", "drift", "coverage", "clarity"], "help": ANGLE_HELP},
         ],
-        "group_by": ["angle"],
         "sections": sections,
         "items": items,
     }, room["rundir"])
@@ -339,9 +338,8 @@ def main_merge(output_dir, room_args, library_facts):
         "facets": [
             {"key": "severity", "values": ["high", "med", "low"]},
             {"key": "angle", "values": ["trap", "drift", "coverage", "clarity"], "help": ANGLE_HELP},
-            {"key": "file", "values": file_names},
+            {"key": "file", "values": file_names, "style": "select"},
         ],
-        "group_by": ["angle", "file"],
         "sections": sections,
         "items": items,
     }, output_dir)
