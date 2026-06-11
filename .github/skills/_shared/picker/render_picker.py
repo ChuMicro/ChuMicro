@@ -45,13 +45,25 @@ Spec schema:
           "why": "consequence in one sentence",           // optional labeled row
           "fix": "the exact proposed change",             // optional labeled row
           "evidence": "SKILL.md:3 \\"quote\\"",            // optional mono block
+          "diff": {                                       // optional old→new block; when the fix is
+            "location": "SKILL.md:3",                     // replacement text, emit this INSTEAD of
+            "old": "current text",                        // the evidence + fix pair
+            "new": "proposed text"
+          },
           "body_html": "<p>…</p>",                        // optional extra block (trusted HTML)
           "options": ["high", "medium", "low"],           // optional per-item override
           "default": "medium",                            // optional per-item override
-          "notes": true                                   // notes box (default true)
+          "notes": true,                                  // notes box (default true)
+          "tab": "loader"                                 // optional: group cards into tabs
         }
-      ]
+      ],
+      "tabs": ["loader", "cold-walk"]                     // optional tab order; defaults to first appearance
     }
+
+When any item carries `tab`, the page renders a sticky tab bar with per-tab item
+counts; hidden panes stay in the DOM, so the blob, tally, and Reset always cover
+every tab. Items render in spec order within a tab — ordering (e.g. by severity)
+is the spec author's job.
 
 body_html and intro_html are written into the page unescaped — the spec author
 is the orchestrating session, not an untrusted source.
@@ -77,19 +89,30 @@ BADGE_CLASSES = {
 CSS = """
  :root{color-scheme:light;
   --bg:#f4f6f9; --fg:#1c2230; --faint:#69707e; --card:#ffffff; --border:#dfe4ec;
-  --accent:#4f46e5; --accent-fg:#ffffff; --blob-bg:#f8fafc; --bar:#ffffffeb; --note-bg:#fbfcfe; --chip:#eef0f6}
+  --accent:#4f46e5; --blob-bg:#f8fafc; --bar:#ffffffeb; --note-bg:#fbfcfe; --chip:#eef0f6;
+  --why:#b45309; --fix:#15803d}
  :root[data-theme=dark]{color-scheme:dark;
   --bg:#11141b; --fg:#e3e7f0; --faint:#97a0b3; --card:#1a1f29; --border:#2a3242;
-  --accent:#8d97ff; --accent-fg:#11141b; --blob-bg:#11141b; --bar:#1a1f29eb; --note-bg:#161b24; --chip:#232a38}
+  --accent:#8d97ff; --blob-bg:#11141b; --bar:#1a1f29eb; --note-bg:#161b24; --chip:#232a38;
+  --why:#fbbf24; --fix:#4ade80}
  body{font:16px/1.55 -apple-system,'Segoe UI',sans-serif;background:var(--bg);color:var(--fg);
   margin:0;padding:26px 20px 150px;max-width:920px;margin-inline:auto}
- h1{font-size:21px;margin:0 44px 6px 0}
+ h1{font-size:20px;font-weight:600;margin:0 44px 6px 0}
  .themebtn{position:fixed;top:14px;right:16px;font:inherit;font-size:13px;padding:6px 12px;border-radius:999px;
   border:1px solid var(--border);background:var(--card);color:var(--fg);cursor:pointer;z-index:10}
- .intro{color:var(--faint);font-size:14px;margin-bottom:10px}
+ .intro{color:var(--faint);font-size:15px;margin-bottom:10px}
  .intro pre{white-space:pre-wrap}
- .legend{font-size:13.5px;color:var(--faint);background:var(--card);border:1px solid var(--border);
+ .legend{font-size:14.5px;color:var(--faint);background:var(--card);border:1px solid var(--border);
   border-radius:10px;padding:9px 14px;margin-bottom:16px}
+ .tabbar{display:flex;gap:4px;flex-wrap:wrap;margin:14px 0 16px;background:color-mix(in srgb,var(--chip) 80%,transparent);
+  backdrop-filter:blur(12px) saturate(1.3);-webkit-backdrop-filter:blur(12px) saturate(1.3);border:1px solid var(--border);
+  border-radius:12px;padding:4px;width:fit-content;max-width:100%;position:sticky;top:10px;z-index:9}
+ .tabbar button{font:inherit;font-size:13.5px;font-weight:600;padding:7px 14px;border:none;border-radius:9px;
+  background:transparent;color:var(--faint);cursor:pointer;transition:color .15s,background .15s}
+ .tabbar button:hover{color:var(--fg)}
+ .tabbar button.active{background:var(--card);color:var(--accent);box-shadow:0 1px 5px rgba(0,0,0,.14)}
+ .tabbar .tcount{font-size:10.5px;background:var(--chip);color:var(--faint);border-radius:999px;padding:0 7px;margin-left:6px;font-weight:700}
+ .tabpane{display:none} .tabpane.active{display:block}
  .legend b{color:var(--fg);font-weight:620}
  .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:15px 17px;margin:12px 0}
  .cardhead{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap}
@@ -98,25 +121,34 @@ CSS = """
  .badge{font-size:11px;font-weight:700;letter-spacing:.4px;padding:2px 8px;border-radius:999px;color:#fff;background:#64748b}
  .b-critical{background:#dc2626} .b-important{background:#d97706} .b-minor{background:#64748b} .b-ambiguous{background:#7c3aed}
  .srcchip{font-size:11.5px;color:var(--faint);background:var(--chip);border-radius:999px;padding:2px 9px}
- .summary{margin:8px 0 2px;font-size:14.5px}
- .field{display:flex;gap:10px;margin:7px 0 0;font-size:14px}
- .flabel{flex:0 0 38px;font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;
-  color:var(--faint);padding-top:3px}
+ .summary{margin:10px 0 0;font-size:15.5px}
+ .field{display:flex;gap:10px;margin:11px 0 0;font-size:15px}
+ .flabel{flex:0 0 auto;min-width:30px;text-align:center;font-size:11.5px;font-weight:800;letter-spacing:.6px;
+  text-transform:uppercase;border-radius:6px;padding:3px 8px;align-self:flex-start;color:var(--faint);background:var(--chip)}
+ .f-why .flabel{color:var(--why);background:color-mix(in srgb,var(--why) 13%,transparent)}
+ .f-fix .flabel{color:var(--fix);background:color-mix(in srgb,var(--fix) 13%,transparent)}
+ .f-fix{border-left:3px solid color-mix(in srgb,var(--fix) 45%,transparent);padding-left:9px;margin-left:-12px}
  .ftext{flex:1}
  .evidence{margin:9px 0 0;white-space:pre-wrap;background:var(--blob-bg);border:1px solid var(--border);
-  border-radius:8px;padding:8px 10px;font:12.5px/1.5 ui-monospace,Menlo,monospace;color:var(--faint)}
- .cardbody{margin:9px 0 0;font-size:14px}
+  border-radius:8px;padding:8px 10px;font:13px/1.5 ui-monospace,Menlo,monospace;color:var(--faint)}
+ .diffblock{margin:9px 0 0;border:1px solid var(--border);border-radius:8px;overflow:hidden;
+  font:13px/1.55 ui-monospace,Menlo,monospace}
+ .diffloc{padding:4px 10px;background:var(--blob-bg);color:var(--faint);font-size:12px;border-bottom:1px solid var(--border)}
+ .dline{padding:5px 10px;white-space:pre-wrap}
+ .dold{background:color-mix(in srgb,#dc2626 9%,transparent)}
+ .dnew{background:color-mix(in srgb,#16a34a 10%,transparent)}
+ .cardbody{margin:9px 0 0;font-size:15px}
  .opts{display:flex;gap:16px;flex-wrap:wrap;margin-top:12px}
- .opts label{cursor:pointer;display:flex;align-items:center;gap:6px;font-size:14.5px}
+ .opts label{cursor:pointer;display:flex;align-items:center;gap:6px;font-size:15px}
  .opts input{accent-color:var(--accent)}
- .notes{width:100%;box-sizing:border-box;margin-top:10px;font:13.5px/1.5 inherit;border:1px solid var(--border);
+ .notes{width:100%;box-sizing:border-box;margin-top:10px;font:14.5px/1.5 inherit;border:1px solid var(--border);
   border-radius:8px;padding:7px 9px;min-height:36px;background:var(--note-bg);color:var(--fg);resize:vertical}
  .selbar{position:fixed;bottom:0;left:0;right:0;background:var(--bar);backdrop-filter:blur(10px);
   border-top:1px solid var(--border);padding:10px 20px;font-size:14px}
  .selbar .row{display:flex;align-items:center;gap:12px;max-width:920px;margin-inline:auto;flex-wrap:wrap}
  .selbar button{font:inherit;padding:7px 16px;border-radius:8px;border:1px solid var(--border);
   background:var(--card);color:var(--fg);cursor:pointer}
- .selbar button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg);font-weight:620}
+ .selbar button.primary{background:#4f46e5;border-color:#4f46e5;color:#fff}
  #count{color:var(--faint)}
  .blobwrap{max-width:920px;margin-inline:auto}
  .blobwrap>summary{font-size:12px;color:var(--faint);cursor:pointer;margin-top:6px}
@@ -220,6 +252,17 @@ SCRIPT = """
     });
     persist();
   });
+  // tab bar (absent on a flat page); hidden panes stay in the DOM, so the blob and tally cover every tab
+  var tabs = document.querySelectorAll('.tabbar button');
+  tabs.forEach(function (t) {
+    t.addEventListener('click', function () {
+      tabs.forEach(function (x) { x.classList.remove('active'); });
+      document.querySelectorAll('.tabpane').forEach(function (p) { p.classList.remove('active'); });
+      t.classList.add('active');
+      var pane = document.getElementById('pane-' + t.dataset.pane);
+      if (pane) pane.classList.add('active');
+    });
+  });
   refresh();
 })();
 </script>
@@ -237,11 +280,18 @@ def card_html(item, page_options, page_default):
     source = f'<span class="srcchip">{html.escape(item["source"])}</span>' if item.get("source") else ""
     summary = f'<p class="summary">{html.escape(item["summary"])}</p>' if item.get("summary") else ""
     fields = "".join(
-        f'<div class="field"><span class="flabel">{label}</span><span class="ftext">{html.escape(item[key])}</span></div>'
+        f'<div class="field f-{key}"><span class="flabel">{label}</span><span class="ftext">{html.escape(item[key])}</span></div>'
         for key, label in (("why", "why"), ("fix", "fix"))
         if item.get(key)
     )
     evidence = f'<div class="evidence">{html.escape(item["evidence"])}</div>' if item.get("evidence") else ""
+    diff_html = ""
+    if item.get("diff"):
+        diff = item["diff"]
+        location = f'<div class="diffloc">{html.escape(diff["location"])}</div>' if diff.get("location") else ""
+        old_line = f'<div class="dline dold">− {html.escape(diff["old"])}</div>' if diff.get("old") else ""
+        new_line = f'<div class="dline dnew">+ {html.escape(diff["new"])}</div>' if diff.get("new") else ""
+        diff_html = f'<div class="diffblock">{location}{old_line}{new_line}</div>'
     body = f'<div class="cardbody">{item["body_html"]}</div>' if item.get("body_html") else ""
     radios = "".join(
         f'<label><input type="radio" name="pick:{html.escape(item_id)}" value="{html.escape(option)}"'
@@ -257,7 +307,7 @@ def card_html(item, page_options, page_default):
         f'<div class="card" data-id="{html.escape(item_id)}" data-def="{html.escape(default or "")}">'
         f'<div class="cardhead"><span class="cardid">{html.escape(item_id)}</span>{badge}{source}'
         f'<span class="cardtitle">{html.escape(item.get("title", ""))}</span></div>'
-        f"{summary}{fields}{evidence}{body}"
+        f"{summary}{fields}{evidence}{diff_html}{body}"
         f'<div class="opts">{radios}</div>'
         f"{notes}</div>"
     )
@@ -280,7 +330,32 @@ def main():
 
     page_options = spec.get("options", ["apply", "discuss", "skip"])
     page_default = spec.get("default")
-    cards = "\n".join(card_html(item, page_options, page_default) for item in spec["items"])
+
+    if any(item.get("tab") for item in spec["items"]):
+        tab_order = list(spec.get("tabs", []))
+        for item in spec["items"]:
+            tab_name = item.get("tab", "general")
+            if tab_name not in tab_order:
+                tab_order.append(tab_name)
+        groups = {tab_name: [] for tab_name in tab_order}
+        for item in spec["items"]:
+            groups[item.get("tab", "general")].append(item)
+        buttons = []
+        panes = []
+        for index, tab_name in enumerate(tab_order):
+            if not groups[tab_name]:
+                continue
+            active = " active" if not buttons else ""
+            buttons.append(
+                f'<button class="tab{active}" data-pane="{index}">{html.escape(tab_name)}'
+                f'<span class="tcount">{len(groups[tab_name])}</span></button>'
+            )
+            pane_cards = "\n".join(card_html(item, page_options, page_default) for item in groups[tab_name])
+            panes.append(f'<div class="tabpane{active}" id="pane-{index}">{pane_cards}</div>')
+        cards = f'<div class="tabbar">{"".join(buttons)}</div>\n' + "\n".join(panes)
+    else:
+        cards = "\n".join(card_html(item, page_options, page_default) for item in spec["items"])
+
     intro = f'<div class="intro">{spec["intro_html"]}</div>' if spec.get("intro_html") else ""
     legend = legend_html(spec.get("option_help"))
     client_spec = json.dumps({"key": spec.get("key", ""), "blob_header": spec.get("blob_header", "")})

@@ -99,7 +99,7 @@ The Workflow runs in the background and notifies on completion; tell the user bo
 
 Render the report in the [Output format](#output-format) below — full evidence inline, nothing the user must take on trust. Write it to `.scratch/skill-audits/<slug>-<UTC>.md` (`date -u +%Y%m%dT%H%M%SZ`), `open` it, and print it in chat.
 
-**Decision page (when more than ~8 findings + ideas are open).** Picking dozens of items by typed number is clerical work a page does better. Build a picker spec next to the report — one card per finding/idea with id = report number, title, tier badge, `source` naming the lens that raised it, and the structured `summary` / `why` / `fix` / `evidence` fields (never one mashed body block). Options are `apply / discuss / skip` with an `option_help` legend; there is no edit option because a note on an applied item *is* the wording adjustment. Defaults: CRITICAL and IMPORTANT findings pre-select `apply`; MINOR, AMBIGUOUS, and ideas pre-select `skip`. Then:
+**Decision page — always, when at least one finding or idea is open.** The evidence-rich layout (lens tabs, why/fix rows, diffs, per-item notes) earns its keep even for a single item; only a fully clean pass skips it. Build a picker spec next to the report — one card per finding/idea with id = report number, title, tier badge, `source` naming the lens that raised it, and the structured `summary` / `why` / `fix` / `evidence` fields (never one mashed body block). When the proposed fix is replacement text, emit a `diff` ({location, old, new} — old from the evidence quote) instead of the evidence + fix pair; instruction-style fixes keep the fix row, where a fabricated diff would mislead. Group items into one `tab` per lens, severity-ordered within each. Options are `apply / discuss / skip` with an `option_help` legend; there is no edit option because a note on an applied item *is* the wording adjustment. Defaults: CRITICAL and IMPORTANT findings pre-select `apply`; MINOR, AMBIGUOUS, and ideas pre-select `skip`. Then:
 
 ```bash
 python3 .github/skills/_shared/picker/render_picker.py <report-dir>/spec.json
@@ -118,7 +118,7 @@ Then fire **one** `AskUserQuestion`:
 > - "Route to re-author" — only shown when ≥ 2 CRITICAL findings or any CRITICAL goal-derivability finding landed
 > - "Report only — no action"
 
-**Success criteria:** report file written and opened, report in scrollback, decision page served when the item count warranted it, mode picked. No filesystem change on the audited skill yet.
+**Success criteria:** report file written and opened, report in scrollback, decision page served whenever at least one item is open, mode picked. No filesystem change on the audited skill yet.
 
 ### 7. Apply by number
 
