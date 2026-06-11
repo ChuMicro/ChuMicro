@@ -232,9 +232,9 @@ CSS = """
   border:1px solid color-mix(in srgb,#d97706 35%,transparent);border-radius:8px;padding:7px 10px;font-size:14px}
  .warnflag{color:var(--why);font-size:15px;align-self:center;cursor:help}
  .field{display:flex;gap:10px;margin:11px 0 0;font-size:15px}
- .flabel{flex:0 0 auto;width:50px;box-sizing:border-box;text-align:center;font-size:11.5px;font-weight:800;
+ .flabel{flex:0 0 auto;width:60px;box-sizing:border-box;text-align:center;font-size:11.5px;font-weight:800;
   letter-spacing:.6px;text-transform:uppercase;border-radius:6px;padding:3px 6px;align-self:flex-start;
-  color:var(--faint);background:var(--chip)}
+  color:var(--faint);background:var(--chip);overflow:hidden}
  .f-why .flabel{color:var(--why);background:color-mix(in srgb,var(--why) 13%,transparent)}
  .f-fix .flabel{color:var(--fix);background:color-mix(in srgb,var(--fix) 13%,transparent)}
  .f-where .flabel{color:var(--where);background:color-mix(in srgb,var(--where) 13%,transparent)}
