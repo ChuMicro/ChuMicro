@@ -179,10 +179,11 @@ CSS = """
  details.section .sbody{margin-top:8px;font-size:14.5px}
  .sbody small{color:var(--faint)}
  .sbody code{font:13px ui-monospace,Menlo,monospace}
- .facetbar{display:flex;flex-wrap:wrap;align-items:center;gap:7px 22px;margin:18px 0 16px;
-  background:var(--card);border:1px solid var(--border);border-radius:13px;padding:8px 12px}
+ .facetbar{display:flex;flex-direction:column;gap:7px;margin:18px 0 16px;
+  background:var(--card);border:1px solid var(--border);border-radius:13px;padding:10px 14px}
  .fgroup{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
- .fglabel{font-size:11px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--fg);opacity:.75}
+ .fglabel{font-size:11px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--fg);
+  opacity:.75;min-width:64px}
  .fgroup button{font:inherit;font-size:13px;padding:3px 11px;border-radius:999px;border:1px solid var(--border);
   background:var(--card);color:var(--faint);cursor:pointer}
  .fgroup button:hover{color:var(--fg)}
@@ -193,7 +194,7 @@ CSS = """
   margin:12px 0;color:var(--faint);font-size:15px;text-align:center}
  .nomatch button{font:inherit;font-size:13px;border:none;background:none;color:var(--accent);
   cursor:pointer;padding:0 2px}
- .facetclear{font:inherit;font-size:12px;border:none;background:none;
+ .facetclear{align-self:flex-start;font:inherit;font-size:12px;border:none;background:none;
   color:var(--accent);cursor:pointer;padding:0 2px}
  .fselect{font:inherit;font-size:13px;padding:3px 8px;border-radius:8px;border:1px solid var(--border);
   background:var(--card);color:var(--fg)}
@@ -257,7 +258,8 @@ CSS = """
  .selbar{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:calc(100% - 24px);max-width:920px;
   box-sizing:border-box;background:var(--bar);backdrop-filter:blur(10px);border:1px solid var(--border);
   border-bottom:none;border-radius:13px 13px 0 0;padding:8px 16px;font-size:14px;
-  box-shadow:0 -4px 14px rgba(0,0,0,.08)}
+  box-shadow:0 -8px 28px rgba(0,0,0,.20)}
+ :root[data-theme=dark] .selbar{box-shadow:0 -8px 28px rgba(0,0,0,.55)}
  .selbar .row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
  .selbar button{font:inherit;padding:7px 16px;border-radius:8px;border:1px solid var(--border);
   background:var(--card);color:var(--fg);cursor:pointer;transition:background .5s,color .5s,border-color .5s}
