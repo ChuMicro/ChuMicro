@@ -133,7 +133,8 @@ def is_unconfirmed(room, finding_id):
 def build_item(room, finding, namespace=None):
     """Build one picker card from a finding. A namespace (merge mode) prefixes the id
     (heartbeat#3), leads the where row with the file name, tags the card for the file-chip
-    filter, and collapses everything that is neither high severity nor unconfirmed."""
+    filter, and collapses everything below high severity — an unconfirmed card folds like its
+    peers and signals "go deeper" through the warning flag the picker puts on its strip."""
     finding_id = finding.get("id")
     severity = finding.get("severity", "low")
     verdict = room["validator_map"].get(finding_id, {})
@@ -152,7 +153,7 @@ def build_item(room, finding, namespace=None):
     }
     if namespace:
         item["filter"] = room["file_name"]
-        if severity != "high" and not unconfirmed:
+        if severity != "high":
             item["collapsed"] = True
     if finding.get("problem"):
         item["detail"] = {"label": "how the code does this", "text": finding["problem"]}
