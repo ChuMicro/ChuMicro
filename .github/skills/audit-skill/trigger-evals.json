@@ -1,0 +1,51 @@
+{
+  "skill_name": "audit-skill",
+  "purpose": "Routing evals for the description + when_to_use frontmatter. Half should route here; half are near-misses that belong to a sibling skill. Re-run after any description/when_to_use edit or when a sibling skill's scope moves closer to skill auditing.",
+  "evals": [
+    {
+      "query": "audit the audit-docs skill",
+      "should_trigger": true
+    },
+    {
+      "query": "/audit-skill audit-library",
+      "should_trigger": true
+    },
+    {
+      "query": "is the audit-library skill achieving its goal?",
+      "should_trigger": true
+    },
+    {
+      "query": "something feels off in the new-decision skill, its steps kind of contradict each other — can you check it over",
+      "should_trigger": true
+    },
+    {
+      "query": "before i lean on guide-generation for the release docs, validate that skill against our skill rules",
+      "should_trigger": true
+    },
+    {
+      "query": "audit the README in libraries/mqtt for stale claims",
+      "should_trigger": false,
+      "expected_route": "audit-docs"
+    },
+    {
+      "query": "the docstrings in kvstore's core.py have drifted, audit the comments there",
+      "should_trigger": false,
+      "expected_route": "audit-comments"
+    },
+    {
+      "query": "audit libraries/timing for dead code and duplication",
+      "should_trigger": false,
+      "expected_route": "audit-library"
+    },
+    {
+      "query": "write me a skill that flashes firmware to a board and verifies the version",
+      "should_trigger": false,
+      "expected_route": "new-skill"
+    },
+    {
+      "query": "review my current diff before i commit it",
+      "should_trigger": false,
+      "expected_route": "code-review"
+    }
+  ]
+}
