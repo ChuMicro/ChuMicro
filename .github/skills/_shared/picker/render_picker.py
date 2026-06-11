@@ -104,8 +104,11 @@ multi-select within a group reads as OR, groups combine as AND, an empty group
 means no narrowing. A card missing a value for a selected group is narrowed out.
 Hidden cards stay in the DOM, so the blob, tally, and Reset always cover them.
 A chip's live count ignores its own group's selection (standard faceted search),
-so within-group numbers stay stable while you multi-select; a clear-filters
-button appears while any chip is active. The `group_by` row reorders the list
+so within-group numbers stay stable while you multi-select; a non-active chip
+whose count drops to zero dims and stops responding, so a dead-end combination
+is visible before the click, and a selection that empties the whole list shows a
+"nothing matches" state with its own clear button; a clear-filters button
+appears in the bar while any chip is active. The `group_by` row reorders the list
 under sticky per-value headers without hiding anything — narrowing and grouping
 compose. Selections and the grouping choice persist per page key. Items render
 in spec order — ordering (e.g. by severity) is the spec author's job.
@@ -175,7 +178,12 @@ CSS = """
   background:var(--card);color:var(--faint);cursor:pointer}
  .fgroup button:hover{color:var(--fg)}
  .fgroup button.active{border-color:#4f46e5;background:#4f46e5;color:#fff;font-weight:650}
+ .fgroup button.dead{opacity:.35;pointer-events:none}
  .fgroup .fcount{font-size:11px;margin-left:6px;opacity:.8}
+ .nomatch{background:var(--card);border:1px dashed var(--border);border-radius:12px;padding:18px;
+  margin:12px 0;color:var(--faint);font-size:15px;text-align:center}
+ .nomatch button{font:inherit;font-size:13px;border:none;background:none;color:var(--accent);
+  cursor:pointer;padding:0 2px}
  .facetclear{align-self:flex-start;font:inherit;font-size:12px;border:none;background:none;
   color:var(--accent);cursor:pointer;padding:0 2px}
  .ghead{position:sticky;z-index:8;font-size:12.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;
@@ -407,17 +415,25 @@ SCRIPT = """
       b.classList.toggle('active', on);
       if (on) any = true;
     });
-    allCards.forEach(function (c) { c.classList.toggle('fhidden', !matches(c, null)); });
+    var visible = 0;
+    allCards.forEach(function (c) {
+      var hide = !matches(c, null);
+      c.classList.toggle('fhidden', hide);
+      if (!hide) visible++;
+    });
     // a chip's count ignores its own group's selection (standard faceted search), so
-    // within-group numbers stay stable while you multi-select
+    // within-group numbers stay stable while you multi-select. A non-active chip whose
+    // count is zero dims and stops responding — a dead-end combination shows before the click.
     fchips.forEach(function (b) {
       var n = 0;
       allCards.forEach(function (c) {
         if (facetsOf.get(c)[b.dataset.key] === b.dataset.value && matches(c, b.dataset.key)) n++;
       });
       var fc = b.querySelector('.fcount'); if (fc) fc.textContent = n;
+      b.classList.toggle('dead', n === 0 && !b.classList.contains('active'));
     });
     var clear = document.getElementById('facetclear'); if (clear) clear.hidden = !any;
+    var nomatch = document.getElementById('nomatch'); if (nomatch) nomatch.hidden = visible !== 0;
   }
   fchips.forEach(function (b) {
     b.addEventListener('click', function () {
@@ -428,11 +444,14 @@ SCRIPT = """
       try { localStorage.setItem(FACETKEY, JSON.stringify(fsel)); } catch (e) {}
     });
   });
-  var clearBtn = document.getElementById('facetclear');
-  if (clearBtn) clearBtn.addEventListener('click', function () {
+  function clearFacets() {
     fsel = {};
     applyFacets();
     try { localStorage.setItem(FACETKEY, '{}'); } catch (e) {}
+  }
+  ['facetclear', 'nomatchclear'].forEach(function (id) {
+    var b = document.getElementById(id);
+    if (b) b.addEventListener('click', clearFacets);
   });
   // group row: reorders the list under sticky per-value headers; "none" restores spec order.
   // Grouping moves DOM nodes (state rides along) and composes with the facet narrowing above.
@@ -608,7 +627,11 @@ def main():
                     + '<button class="facetclear" id="facetclear" hidden>clear filters ×</button></div>\n')
 
     card_list = "\n".join(card_html(item, page_options, page_default) for item in spec["items"])
-    cards = f'{facetbar}<div id="cardlist">\n{card_list}\n</div>'
+    nomatch = ""
+    if facetbar:
+        nomatch = ('<div class="nomatch" id="nomatch" hidden>Nothing matches the current filters. '
+                   '<button id="nomatchclear">clear filters</button></div>')
+    cards = f'{facetbar}<div id="cardlist">\n{card_list}\n</div>{nomatch}'
 
     subtitle = f'<p class="subtitle">{html.escape(spec["subtitle"])}</p>' if spec.get("subtitle") else ""
     intro = f'<div class="intro">{spec["intro_html"]}</div>' if spec.get("intro_html") else ""
