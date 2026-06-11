@@ -104,9 +104,10 @@ chip, so every number is what a click on that button would put on screen.
 Every card folds to a strip (title row + radios) on a title-row click;
 `collapsed: true` sets the initial state. Fold changes persist in localStorage
 like picks and notes do, and a spec-collapsed card carrying a saved pick or note
-reopens expanded, so a reload never hides work in progress. Reset clears picks
-and notes only — the active tab, the active chip, and fold state are view state
-and survive it.
+reopens expanded, so a reload never hides work in progress. Reset returns the
+page to its rendered defaults — picks to the default option, notes cleared,
+every card back to its spec fold state; only the active tab and the active chip
+(navigation, not decision state) survive it.
 
 body_html and intro_html are written into the page unescaped — the spec author
 is the orchestrating session, not an untrusted source.
@@ -346,6 +347,10 @@ SCRIPT = """
     cards.forEach(function (c) {
       c.querySelectorAll('input[type=radio]').forEach(function (r) { r.checked = (r.value === c.dataset.def); });
       var n = c.querySelector('.notes'); if (n) n.value = '';
+    });
+    // fold state returns to each card's spec default too — Reset means "as first rendered"
+    document.querySelectorAll('.card.collapsible').forEach(function (c) {
+      c.classList.toggle('collapsed', c.dataset.fold === '1');
     });
     persist();
   });
