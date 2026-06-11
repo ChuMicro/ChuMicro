@@ -304,17 +304,28 @@ def main_merge(output_dir, room_args, library_facts):
             "html": f'<pre style="white-space:pre-wrap;font:13px/1.5 ui-monospace,Menlo,monospace">{html.escape(facts_text)}</pre>',
         })
     # one drop-down per file would stack into a wall at library scale; every file nests
-    # inside a single top-level section instead
+    # inside a single top-level section, each row titled with the summarizer's first sentence
+    # so the collapsed list already says what each file is
     per_file = []
     for room in rooms:
+        module_summary = room["summary"].get("module_summary", "")
         blocks = []
-        if room["summary"].get("module_summary"):
-            blocks.append(f"<p>{html.escape(room['summary']['module_summary'])}</p>")
+        if module_summary:
+            blocks.append(f"<p>{html.escape(module_summary)}</p>")
         blocks.append(facts_html(room))
         blocks.append(summary_section_html(room, namespace=room["namespace"]))
         body = "".join(blocks)
-        if body:
-            per_file.append({"title": f"{room['file_name']} — what it does, facts, symbols", "html": body})
+        if not body:
+            continue
+        title = room["file_name"]
+        if module_summary:
+            # the gist is the summary's first clause: cut at a colon (summaries often lead
+            # "Implements X: details…"), else at the first sentence, capped as a backstop
+            gist = module_summary.split(". ")[0].split(":")[0].rstrip(".")
+            if len(gist) > 90:
+                gist = gist[:87].rstrip() + "…"
+            title = f"{room['file_name']} — {gist}"
+        per_file.append({"title": title, "html": body})
     if per_file:
         sections.append({"title": f"Per-file understanding — {len(per_file)} files", "sections": per_file})
 
