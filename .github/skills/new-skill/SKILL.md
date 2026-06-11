@@ -272,6 +272,8 @@ AMBIGUOUS findings surface in the same loop but never auto-apply — the option 
 
 Your context from the interview (user intent, the conversation arc, why each paragraph reads the way it does) is the right input for proposing fix wording — that's where the director's context earns its keep. The bias check is per-finding user sign-off, not removal of the director from the loop.
 
+When a finding rests on a documented-Claude-Code-behavior assertion — a frontmatter field's support status, a cap value, loader or tool semantics — verify it via the `claude-code-guide` agent (with a doc URL) before proposing the fix. The spec files snapshot the docs and lag the product; a contradicted rule means the fix is to `spec-loader-reader.md` and its mirroring persona, not to the draft.
+
 Apply via `Edit` to the in-memory draft. Drafts live in the chat context until Step 8.
 
 **Ideas channel — separate from the per-finding sign-off.** When the ideas-reader returned ≥ 1 idea, walk the menu after the findings loop closes. Fire one `AskUserQuestion` with `multiSelect: true`:

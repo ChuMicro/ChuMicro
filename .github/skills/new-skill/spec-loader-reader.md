@@ -2,6 +2,8 @@
 
 Frontmatter rules the loader-reader cold-walk persona judges against.  When this file changes, [`.claude/agents/new-skill-loader-reader.md`](../../.claude/agents/new-skill-loader-reader.md) changes in lockstep.
 
+The field semantics, caps, and loader mechanics below snapshot the Claude Code documentation and lag the product as it ships.  When a judgment hinges on one of these documented behaviors (not on prose quality), the director verifies it against current docs via the `claude-code-guide` agent; a contradiction means this file gets corrected, not worked around.
+
 For body-structure, per-step, patterns-to-avoid, and stance rules see [`spec-triggering-reader.md`](spec-triggering-reader.md).  For sibling-overlap and reference-file rules see [`spec-sibling-author.md`](spec-sibling-author.md).  For general authoring guidance (degrees of freedom, authoring patterns, driver / harness, widget selection, orchestration) see [`spec.md`](spec.md).
 
 ## Table of contents
