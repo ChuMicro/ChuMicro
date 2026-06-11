@@ -41,9 +41,15 @@ Spec schema:
           "title": "vague description stem",              // card heading (escaped)
           "badge": "IMPORTANT",                           // optional pill; known severities get colors
           "source": "loader lens — frontmatter contract", // optional chip: what raised this item
+          "meta": "effort: small · Foo.bar @ tick",       // optional faint line under the heading
           "summary": "plain-words description…",          // optional paragraph under the heading
           "why": "consequence in one sentence",           // optional labeled row
           "fix": "the exact proposed change",             // optional labeled row
+          "detail": {                                     // optional collapsible block
+            "label": "how the code does this",
+            "text": "mechanism prose…"
+          },
+          "warning": "Validator: fix needs review …",     // optional amber callout
           "evidence": "SKILL.md:3 \\"quote\\"",            // optional mono block
           "diff": {                                       // optional old→new block; when the fix is
             "location": "SKILL.md:3",                     // replacement text, emit this INSTEAD of
@@ -51,9 +57,11 @@ Spec schema:
             "new": "proposed text"
           },
           "body_html": "<p>…</p>",                        // optional extra block (trusted HTML)
-          "options": ["high", "medium", "low"],           // optional per-item override
+          "options": ["high", "medium", "low"],           // optional per-item override; [] makes the card
+                                                          // informational: no radios, no blob/tally entry
           "default": "medium",                            // optional per-item override
-          "notes": true,                                  // notes box (default true)
+          "notes": true,                                  // notes box (default: true on decision cards,
+                                                          // false on informational ones)
           "tab": "loader"                                 // optional: group cards into tabs
         }
       ],
@@ -83,6 +91,7 @@ BADGE_CLASSES = {
     "ambiguous": "b-ambiguous",
     "high": "b-critical",
     "medium": "b-important",
+    "med": "b-important",
     "low": "b-minor",
 }
 
@@ -121,7 +130,13 @@ CSS = """
  .badge{font-size:11px;font-weight:700;letter-spacing:.4px;padding:2px 8px;border-radius:999px;color:#fff;background:#64748b}
  .b-critical{background:#dc2626} .b-important{background:#d97706} .b-minor{background:#64748b} .b-ambiguous{background:#7c3aed}
  .srcchip{font-size:11.5px;color:var(--faint);background:var(--chip);border-radius:999px;padding:2px 9px}
+ .cardmeta{margin:6px 0 0;font-size:12.5px;color:var(--faint)}
  .summary{margin:10px 0 0;font-size:15.5px}
+ details.detail{margin:10px 0 0}
+ details.detail>summary{cursor:pointer;font-size:13.5px;color:var(--accent)}
+ details.detail .dtext{margin-top:6px;font-size:14.5px}
+ .warning{margin:10px 0 0;background:color-mix(in srgb,#d97706 10%,transparent);
+  border:1px solid color-mix(in srgb,#d97706 35%,transparent);border-radius:8px;padding:7px 10px;font-size:14px}
  .field{display:flex;gap:10px;margin:11px 0 0;font-size:15px}
  .flabel{flex:0 0 auto;min-width:30px;text-align:center;font-size:11.5px;font-weight:800;letter-spacing:.6px;
   text-transform:uppercase;border-radius:6px;padding:3px 8px;align-self:flex-start;color:var(--faint);background:var(--chip)}
@@ -173,7 +188,10 @@ SCRIPT = """
   }
   function load() { try { return JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) { return {}; } }
   function save(s) { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch (e) {} }
-  var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));
+  // informational cards (options: []) carry no radios; they stay out of the blob, tally, and Reset
+  var cards = Array.prototype.slice.call(document.querySelectorAll('.card')).filter(function (c) {
+    return c.querySelector('input[type=radio]');
+  });
   var state = load();
   cards.forEach(function (c) {
     var id = c.dataset.id;
@@ -272,12 +290,13 @@ SCRIPT = """
 def card_html(item, page_options, page_default):
     item_id = str(item["id"])
     options = item.get("options", page_options)
-    default = item.get("default", page_default)
+    default = item.get("default", page_default) if options else None
     badge = ""
     if item.get("badge"):
         badge_class = BADGE_CLASSES.get(str(item["badge"]).lower(), "")
         badge = f'<span class="badge {badge_class}">{html.escape(str(item["badge"]))}</span>'
     source = f'<span class="srcchip">{html.escape(item["source"])}</span>' if item.get("source") else ""
+    meta = f'<div class="cardmeta">{html.escape(item["meta"])}</div>' if item.get("meta") else ""
     summary = f'<p class="summary">{html.escape(item["summary"])}</p>' if item.get("summary") else ""
     fields = "".join(
         f'<div class="field f-{key}"><span class="flabel">{label}</span><span class="ftext">{html.escape(item[key])}</span></div>'
@@ -292,24 +311,33 @@ def card_html(item, page_options, page_default):
         old_line = f'<div class="dline dold">− {html.escape(diff["old"])}</div>' if diff.get("old") else ""
         new_line = f'<div class="dline dnew">+ {html.escape(diff["new"])}</div>' if diff.get("new") else ""
         diff_html = f'<div class="diffblock">{location}{old_line}{new_line}</div>'
+    detail = ""
+    if item.get("detail"):
+        detail = (
+            f'<details class="detail"><summary>{html.escape(item["detail"].get("label", "more"))}</summary>'
+            f'<div class="dtext">{html.escape(item["detail"].get("text", ""))}</div></details>'
+        )
+    warning = f'<div class="warning">{html.escape(item["warning"])}</div>' if item.get("warning") else ""
     body = f'<div class="cardbody">{item["body_html"]}</div>' if item.get("body_html") else ""
-    radios = "".join(
-        f'<label><input type="radio" name="pick:{html.escape(item_id)}" value="{html.escape(option)}"'
-        f'{" checked" if option == default else ""}> {html.escape(option)}</label>'
-        for option in options
-    )
+    opts = ""
+    if options:
+        radios = "".join(
+            f'<label><input type="radio" name="pick:{html.escape(item_id)}" value="{html.escape(option)}"'
+            f'{" checked" if option == default else ""}> {html.escape(option)}</label>'
+            for option in options
+        )
+        opts = f'<div class="opts">{radios}</div>'
     notes = (
         f'<textarea class="notes" placeholder="notes on {html.escape(item_id)} (on an apply, this adjusts the wording)…"></textarea>'
-        if item.get("notes", True)
+        if item.get("notes", bool(options))
         else ""
     )
     return (
         f'<div class="card" data-id="{html.escape(item_id)}" data-def="{html.escape(default or "")}">'
         f'<div class="cardhead"><span class="cardid">{html.escape(item_id)}</span>{badge}{source}'
         f'<span class="cardtitle">{html.escape(item.get("title", ""))}</span></div>'
-        f"{summary}{fields}{evidence}{diff_html}{body}"
-        f'<div class="opts">{radios}</div>'
-        f"{notes}</div>"
+        f"{meta}{summary}{fields}{evidence}{diff_html}{detail}{warning}{body}"
+        f"{opts}{notes}</div>"
     )
 
 
