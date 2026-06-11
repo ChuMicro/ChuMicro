@@ -36,8 +36,10 @@ Spec schema:
       "sections": [                                       // optional page-top context drop-downs,
         {"title": "What this file does",                  // rendered between intro and the decision
          "html": "<p>…</p>",                              // area (trusted HTML); open: true expands
-         "open": true}                                    // the section on load
-      ],
+         "open": true},                                   // the section on load
+        {"title": "Per-file understanding — 10 files",    // a section may nest child sections instead of
+         "sections": [{"title": "a.py", "html": "…"}]}    // (or alongside) html — ten files stay one
+      ],                                                  // top-level row, expanding to one row per file
       "options": ["apply", "discuss", "skip"],            // page-wide option set
       "default": "skip",                                  // page-wide pre-checked option (omit for none)
       "expand_on": ["discuss"],                           // optional: picking one of these options expands
@@ -178,6 +180,8 @@ CSS = """
   padding:10px 16px;margin:10px 0}
  details.section>summary{cursor:pointer;font-weight:620;font-size:15px}
  details.section .sbody{margin-top:8px;font-size:14.5px}
+ .sbody>details.section{background:var(--bg);margin:8px 0}
+ .sbody>details.section>summary{font-size:14px}
  .sbody small{color:var(--faint)}
  .sbody code{font:13px ui-monospace,Menlo,monospace}
  .facetbar{display:flex;flex-direction:column;gap:7px;margin:18px 0 16px;
@@ -732,12 +736,16 @@ def main():
 
     subtitle = f'<p class="subtitle">{html.escape(spec["subtitle"])}</p>' if spec.get("subtitle") else ""
     intro = f'<div class="intro">{spec["intro_html"]}</div>' if spec.get("intro_html") else ""
-    sections = "".join(
-        f'<details class="section"{" open" if section.get("open") else ""}>'
-        f'<summary>{html.escape(section["title"])}</summary>'
-        f'<div class="sbody">{section["html"]}</div></details>'
-        for section in spec.get("sections", [])
-    )
+
+    def section_html(section):
+        children = "".join(section_html(child) for child in section.get("sections", []))
+        return (
+            f'<details class="section"{" open" if section.get("open") else ""}>'
+            f'<summary>{html.escape(section["title"])}</summary>'
+            f'<div class="sbody">{section.get("html", "")}{children}</div></details>'
+        )
+
+    sections = "".join(section_html(section) for section in spec.get("sections", []))
     legend = legend_html(spec.get("option_help"))
     client_spec = json.dumps({"key": spec.get("key", ""), "blob_header": spec.get("blob_header", ""),
                               "expand_on": spec.get("expand_on", [])})

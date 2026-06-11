@@ -21,11 +21,12 @@ from comments, and the per-symbol summaries with finding back-references.
 
 Merge mode (--merge, library/folder scope): one page covers every room. Finding ids are
 namespaced per file (heartbeat#3) so the paste-back blob stays unambiguous; the where row leads
-with the file name; every card renders folded to a strip (title row, radios, diff) so a long
-list skims like a table — the badge and the warning flag say what deserves a click, nothing
-starts open; each file's context lands as one collapsed section (plus a LIBRARY_FACTS section
-when --lib names one); and merged.json in the output dir maps each namespace back to its run
-room + target for the apply loop.
+with the file name; every card renders folded to a strip (title row, summary, radios, diff) so a
+long list skims like a table — the badge and the warning flag say what deserves a click, nothing
+starts open; every file's context nests inside one "Per-file understanding" section (plus a
+LIBRARY_FACTS section when --lib names one), so the page top stays two drop-downs at any file
+count; and merged.json in the output dir maps each namespace back to its run room + target for
+the apply loop.
 
 Defaults encode the apply policy: a validator-confirmed high-severity finding pre-selects apply,
 an unconfirmed finding pre-selects discuss (invariant 7's push-back, encoded in the page), and
@@ -302,6 +303,9 @@ def main_merge(output_dir, room_args, library_facts):
             "title": "Library facts — domain, cross-file contracts, glossary",
             "html": f'<pre style="white-space:pre-wrap;font:13px/1.5 ui-monospace,Menlo,monospace">{html.escape(facts_text)}</pre>',
         })
+    # one drop-down per file would stack into a wall at library scale; every file nests
+    # inside a single top-level section instead
+    per_file = []
     for room in rooms:
         blocks = []
         if room["summary"].get("module_summary"):
@@ -310,7 +314,9 @@ def main_merge(output_dir, room_args, library_facts):
         blocks.append(summary_section_html(room, namespace=room["namespace"]))
         body = "".join(blocks)
         if body:
-            sections.append({"title": f"{room['file_name']} — what it does, facts, symbols", "html": body})
+            per_file.append({"title": f"{room['file_name']} — what it does, facts, symbols", "html": body})
+    if per_file:
+        sections.append({"title": f"Per-file understanding — {len(per_file)} files", "sections": per_file})
 
     converged = all(room["converged"] for room in rooms)
     status = "validated clean" if converged else "some findings left unconfirmed — they default to discuss"
