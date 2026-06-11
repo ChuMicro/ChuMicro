@@ -129,14 +129,15 @@ CSS = """
  details.section .sbody{margin-top:8px;font-size:14.5px}
  .sbody small{color:var(--faint)}
  .sbody code{font:13px ui-monospace,Menlo,monospace}
- .tabbar{display:flex;gap:4px;flex-wrap:wrap;margin:14px 0 16px;background:color-mix(in srgb,var(--chip) 80%,transparent);
+ .tabbar{display:flex;gap:5px;flex-wrap:wrap;margin:18px 0 16px;background:color-mix(in srgb,var(--chip) 80%,transparent);
   backdrop-filter:blur(12px) saturate(1.3);-webkit-backdrop-filter:blur(12px) saturate(1.3);border:1px solid var(--border);
-  border-radius:12px;padding:4px;width:fit-content;max-width:100%;position:sticky;top:10px;z-index:9}
- .tabbar button{font:inherit;font-size:13.5px;font-weight:600;padding:7px 14px;border:none;border-radius:9px;
+  border-radius:13px;padding:5px;width:fit-content;max-width:100%;position:sticky;top:10px;z-index:9}
+ .tabbar button{font:inherit;font-size:15px;font-weight:650;padding:9px 18px;border:none;border-radius:9px;
   background:transparent;color:var(--faint);cursor:pointer;transition:color .15s,background .15s}
  .tabbar button:hover{color:var(--fg)}
- .tabbar button.active{background:var(--card);color:var(--accent);box-shadow:0 1px 5px rgba(0,0,0,.14)}
- .tabbar .tcount{font-size:10.5px;background:var(--chip);color:var(--faint);border-radius:999px;padding:0 7px;margin-left:6px;font-weight:700}
+ .tabbar button.active{background:#4f46e5;color:#fff;box-shadow:0 1px 6px rgba(0,0,0,.2)}
+ .tabbar .tcount{font-size:11px;background:var(--chip);color:var(--faint);border-radius:999px;padding:1px 8px;margin-left:7px;font-weight:700}
+ .tabbar button.active .tcount{background:color-mix(in srgb,#fff 28%,transparent);color:#fff}
  .tabpane{display:none} .tabpane.active{display:block}
  .tabdesc{color:var(--faint);font-size:14px;margin:2px 2px 10px}
  .legend b{color:var(--fg);font-weight:620}
