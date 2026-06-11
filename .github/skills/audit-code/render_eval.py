@@ -14,16 +14,16 @@ collapsible detail, and a validator warning when a finding is unconfirmed. Tabs 
 angle (trap / drift / coverage / clarity), severity-ordered within each, each tab opening with a
 help line naming its lens. Context lands above the decision area as collapsible page-top sections.
 
-Single-file mode (one room): sections are the independent module summary (open on load), the
-domain facts mined from comments, and the per-symbol summaries with finding back-references.
+Single-file mode (one room): sections are the independent module summary, the domain facts mined
+from comments, and the per-symbol summaries with finding back-references.
 
 Merge mode (--merge, library/folder scope): one page covers every room. Finding ids are
 namespaced per file (heartbeat#3) so the paste-back blob stays unambiguous; the where row leads
-with the file name; a chip row (all · heartbeat.py · …) narrows the page to one file; cards below
-high severity render collapsed to a strip so a long tab skims like a table; each file's context
-lands as one collapsed section (plus an open LIBRARY_FACTS section when --lib names one); and
-merged.json in the output dir maps each namespace back to its run room + target for the apply
-loop.
+with the file name; a chip row (all · heartbeat.py · …) narrows the page to one file; every card
+renders folded to a strip (title row, radios, diff) so a long tab skims like a table — the badge
+and the warning flag say what deserves a click, nothing starts open; each file's context lands as
+one collapsed section (plus a LIBRARY_FACTS section when --lib names one); and merged.json in the
+output dir maps each namespace back to its run room + target for the apply loop.
 
 Defaults encode the apply policy: a validator-confirmed high-severity finding pre-selects apply,
 an unconfirmed finding pre-selects discuss (invariant 7's push-back, encoded in the page), and
@@ -133,8 +133,8 @@ def is_unconfirmed(room, finding_id):
 def build_item(room, finding, namespace=None):
     """Build one picker card from a finding. A namespace (merge mode) prefixes the id
     (heartbeat#3), leads the where row with the file name, tags the card for the file-chip
-    filter, and collapses everything below high severity — an unconfirmed card folds like its
-    peers and signals "go deeper" through the warning flag the picker puts on its strip."""
+    filter, and folds the card to a strip — nothing starts open; the severity badge and the
+    warning flag the picker puts on an unconfirmed card's strip say what deserves a click."""
     finding_id = finding.get("id")
     severity = finding.get("severity", "low")
     verdict = room["validator_map"].get(finding_id, {})
@@ -153,8 +153,7 @@ def build_item(room, finding, namespace=None):
     }
     if namespace:
         item["filter"] = room["file_name"]
-        if severity != "high":
-            item["collapsed"] = True
+        item["collapsed"] = True
     if finding.get("problem"):
         item["detail"] = {"label": "how the code does this", "text": finding["problem"]}
     if unconfirmed:
@@ -222,7 +221,6 @@ def main_single(rundir, target):
         sections.append({
             "title": "What this file does — read from the code, independent of its comments",
             "html": f"<p>{html.escape(room['summary']['module_summary'])}</p>",
-            "open": True,
         })
     if room["facts"]:
         sections.append({
@@ -250,6 +248,7 @@ def main_single(rundir, target):
         "subtitle": " · ".join(intro_bits),
         "options": ["apply", "discuss", "skip"],
         "default": "skip",
+        "expand_on": ["discuss"],
         "option_help": {
             "apply": "apply the generated patch in-session, gated by the file's tests and a shown diff — a note adjusts it",
             "discuss": "no change yet; talk it through in the session first (unconfirmed findings start here)",
@@ -292,7 +291,6 @@ def main_merge(output_dir, room_args, library_facts):
         sections.append({
             "title": "Library facts — domain, cross-file contracts, glossary",
             "html": f'<pre style="white-space:pre-wrap;font:13px/1.5 ui-monospace,Menlo,monospace">{html.escape(facts_text)}</pre>',
-            "open": True,
         })
     for room in rooms:
         blocks = []
@@ -324,6 +322,7 @@ def main_merge(output_dir, room_args, library_facts):
         "subtitle": " · ".join(intro_bits),
         "options": ["apply", "discuss", "skip"],
         "default": "skip",
+        "expand_on": ["discuss"],
         "option_help": {
             "apply": "apply the generated patch in-session, gated by the file's tests and a shown diff — a note adjusts it",
             "discuss": "no change yet; talk it through in the session first (unconfirmed findings start here)",
