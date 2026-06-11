@@ -1,6 +1,6 @@
 ---
 description: Audits an existing skill on disk against the skill-writing rules in AGENTS.md and the skill's own stated goal. Use when a skill's flow feels off, contradicts itself, or routes wrong — or before relying on it for important work. Examples: "audit the audit-docs skill", "/audit-skill audit-library", "is the audit-library skill achieving its goal?".
-allowed-tools: Read, Write, Edit, Grep, Bash(ls *), Bash(cp *), Bash(mkdir *), Bash(date *), Bash(python3 *), Bash(open *), AskUserQuestion, Agent, Workflow
+allowed-tools: Read, Write, Edit, Grep, Bash(ls *), Bash(cp *), Bash(mkdir *), Bash(date *), Bash(python3 *), Bash(open *), AskUserQuestion, Agent, Workflow, Monitor
 argument-hint: "<slug-or-path>"
 arguments:
   - target
@@ -97,18 +97,32 @@ The Workflow runs in the background and notifies on completion; tell the user bo
 
 ### 6. Report, then one fork
 
-Render the report in the [Output format](#output-format) below — full evidence inline, nothing the user must take on trust. Write it to `.scratch/skill-audits/<slug>-<UTC>.md` (`date -u +%Y%m%dT%H%M%SZ`), `open` it, and print it in chat. Then fire **one** `AskUserQuestion`:
+Render the report in the [Output format](#output-format) below — full evidence inline, nothing the user must take on trust. Write it to `.scratch/skill-audits/<slug>-<UTC>.md` (`date -u +%Y%m%dT%H%M%SZ`), `open` it, and print it in chat.
+
+**Decision page (when more than ~8 findings + ideas are open).** Picking dozens of items by typed number is clerical work a page does better. Build a picker spec next to the report (one card per finding/idea: id = report number, title, tier badge, evidence/why/fix as the body; findings get `apply / edit / discuss / skip` defaulting to skip, ideas get `apply / apply-with-edits / discuss / skip`), then:
+
+```bash
+python3 .github/skills/_shared/picker/render_picker.py <report-dir>/spec.json
+PICKER_NO_OPEN=1 python3 .github/skills/_shared/picker/serve_picker.py <report-dir>   # run_in_background
+open <url>   # from the server's SERVING line. The session is the only opener — the server's own
+             # auto-open is unreliable from a sandboxed background process (silent failure, or a
+             # late duplicate tab), so it stays disabled here.
+```
+
+Watch the server's stdout (`Monitor`) — a browser submit prints `SELECTION RECEIVED -> <path>` and the blob at that path uses the same selection language as a typed reply (`<id> = <choice>` lines, `note <id>:` riders). Echo the received vector into chat before acting so the transcript stays self-documenting. The page never replaces chat: Copy-selection paste-back and plain typed numbers stay valid the whole time.
+
+Then fire **one** `AskUserQuestion`:
 
 > "Report open. How do you want to act on it?" `header: Mode`
-> - "Apply by number" — type the numbers in chat; I apply each visibly and re-verify substantive rewrites
+> - "Apply by number" — pick in the served page or type the numbers in chat; I apply each visibly and re-verify substantive rewrites
 > - "Route to re-author" — only shown when ≥ 2 CRITICAL findings or any CRITICAL goal-derivability finding landed
 > - "Report only — no action"
 
-**Success criteria:** report file written and opened, report in scrollback, mode picked. No filesystem change on the audited skill yet.
+**Success criteria:** report file written and opened, report in scrollback, decision page served when the item count warranted it, mode picked. No filesystem change on the audited skill yet.
 
 ### 7. Apply by number
 
-The user types selections in plain chat: `apply 1, 3, 5` · `discuss 2` · `edit 4: <their wording>` · `skip the rest`. For each applied number: re-read the touched region (earlier fixes shift line numbers), apply via `Edit` so the change is visible, and honor any per-number note. Ideas apply the same way by their numbers; an idea anchored in goal-bearing prose (description, opening paragraph, Done-when, a blindness contract) gets one explicit confirm first. A substantive rewrite (not a word swap) gets one re-verification: dispatch a fresh `Agent` (general-purpose) with the finding text + the post-edit file, asking *confirmed resolved / not resolved / new finding*; cap one re-dispatch per finding, unresolved ones land in the report tail. Git is the recovery path — nothing is committed by this skill.
+Selections arrive as typed chat (`apply 1, 3, 5` · `discuss 2` · `edit 4: <their wording>` · `skip the rest`) or as the picker blob — same semantics, and picker notes count as per-number notes. For each applied number: re-read the touched region (earlier fixes shift line numbers), apply via `Edit` so the change is visible, and honor any per-number note. Ideas apply the same way by their numbers; an idea anchored in goal-bearing prose (description, opening paragraph, Done-when, a blindness contract) gets one explicit confirm first. A substantive rewrite (not a word swap) gets one re-verification: dispatch a fresh `Agent` (general-purpose) with the finding text + the post-edit file, asking *confirmed resolved / not resolved / new finding*; cap one re-dispatch per finding, unresolved ones land in the report tail. Git is the recovery path — nothing is committed by this skill.
 
 **Success criteria:** every picked number applied or explicitly bounced with a reason; re-verification verdicts collected for substantive rewrites; unpicked numbers untouched.
 
