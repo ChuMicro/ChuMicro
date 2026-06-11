@@ -8,6 +8,7 @@ allowed-tools:
   - Bash(ls *)
   - Bash(grep *)
   - Bash(find *)
+  - Bash(python3 *)
   - AskUserQuestion
   - Agent
 when_to_use: Use when the user wants to author a new skill, regenerate an existing skill from scratch, capture a repeatable session as a skill, build a slash command, or skillify a workflow — including when the user describes the pattern without using the word "skill", as long as the intent is clearly to capture it for reuse. Trigger phrases include "write a skill", "make a skill that", "skillify", "turn this into a slash command", "I want a /<name> that…", "new skill for", "build a skill", "regenerate /<existing>". Do NOT use to edit an existing SKILL.md in place — that's a normal Edit task; the pre-flight in Step 1a catches slug collisions and routes to the right adjacent path. The interview is the only place vague descriptions get caught — once a SKILL.md lands wrong on disk, every later session that loads it inherits the drift.
@@ -27,6 +28,7 @@ This skill carries the following references:
 - **Deep interview.** [`interview.md`](interview.md).
 - **Starter skeleton.** [`template.md`](template.md).
 - **Worked walkthrough.** [`examples.md`](examples.md).
+- **Test-plan skeleton.** [`testplan.md`](testplan.md) — the layered TESTPLAN.md a driver-backed skill ships with, and the row-discipline rules (every row discriminates; every row runnable from the file alone).
 
 ## Clean-slate rule
 
@@ -65,6 +67,7 @@ You are done when all of these are true:
 5. **Four sub-agents walked the draft cold** (loader, triggering, sibling-author, ideas). The first three return findings; the gaps they raised were fixed before write. The fourth returns a curated ideas menu; the user picked which (if any) to fold in.
 6. **If the skill needs a driver,** the script exists, you ran it in this session, and the SKILL.md documents the invocation.
 7. **Every code block in the generated SKILL.md is a command you ran this session and saw succeed.** Not from the README, not inferred. Setup commands carry the version that worked.
+8. **Routing is measured, not just judged.** `trigger-evals.json` (Phase 1's positives + near-misses) sits next to the SKILL.md, and at the full-lifecycle tier the Step 8b probe run printed its PASS/FAIL table. A skill that bundles scripts also ships a TESTPLAN.md per [`testplan.md`](testplan.md).
 
 When (1) or (3) is missing at write time, stop. Run the interview from `interview.md` until they land.
 
@@ -217,7 +220,7 @@ Three of the four readers enforce closed checklists and return findings. The fou
 
 | Sub-agent | What it judges (full rules inline in the persona body) | Per-invocation inputs |
 |---|---|---|
-| [`new-skill-loader-reader`](../../../.claude/agents/new-skill-loader-reader.md) | Per-message routing (incl. near-miss probe); description-text quality; name + when_to_use rules | Absolute path to the SKILL.md, the three example user messages |
+| [`new-skill-loader-reader`](../../../.claude/agents/new-skill-loader-reader.md) | Per-message routing (incl. near-miss probe); description-text quality; name + when_to_use rules | Absolute path to the SKILL.md, the three example user messages, the Phase 1 near-misses with expected routes |
 | [`new-skill-triggering-reader`](../../../.claude/agents/new-skill-triggering-reader.md) | Body length / section ordering / walkability; per-step Success criteria; frontmatter-vs-body consistency; patterns-to-avoid; stance | Absolute path to the SKILL.md |
 | [`new-skill-sibling-author`](../../../.claude/agents/new-skill-sibling-author.md) | Trigger overlap; restated content from siblings or spec; reading-rule violations; reference-file layout; MCP tool naming | Absolute path to the SKILL.md, the sibling `<path>: description: …` list from Step 1b |
 | [`new-skill-ideas-reader`](../../../.claude/agents/new-skill-ideas-reader.md) | Generative menu — alternative framings, adjacent problems to fold in, harness affordances not reached for, scope expansion / contraction, lifecycle gaps, output-shape rethinks, persona-lens reframings, cross-persona refactors | Absolute path to the SKILL.md, absolute paths to every custom persona file the draft dispatches |
@@ -308,6 +311,7 @@ Step 5b applied fixes the cold-walk surfaced. Each fix can introduce its own reg
 - Every `allowed-tools` entry is invoked by some Process step
 - Every persona file the body references exists at `.claude/agents/<name>.md`
 - Every reference-file link (`[<file>](<file>.md)`) resolves in the skill directory
+- The trigger-evals draft parses and carries ≥ 3 positive and ≥ 3 near-miss queries, each near-miss with an `expected_route`
 
 Print the sweep results as a labeled PASS / FAIL block. For any FAIL, route back to Step 5b's per-finding sign-off loop with the regression as a new finding.
 
@@ -388,6 +392,8 @@ Create the directory and write the files at the agreed paths. Multi-file output 
 | Output file | When written | Path |
 |---|---|---|
 | `SKILL.md` | Always | `<skill-dir>/<slug>/SKILL.md` |
+| `trigger-evals.json` | Always (Phase 1's positives + near-misses, regen-comments schema: `skill_name`, `evals: [{query, should_trigger, expected_route?}]`) | Next to `SKILL.md` |
+| `TESTPLAN.md` | When the skill bundles scripts or a driver — layered per [`testplan.md`](testplan.md) | Next to `SKILL.md` |
 | Reference files (`interview.md`, `spec.md`, `template.md`, `examples.md`, …) | When the SKILL.md links to them | Next to `SKILL.md` (one hop deep) |
 | Bundled scripts | When Phase 6 specified one or more | `<skill-dir>/<slug>/scripts/<entry>.<ext>` |
 | Custom agent persona files | When the interview's agent-architecture branch (Phase 6b) authored new personas | `.claude/agents/<agent-name>.md` — at the repo root, not inside the skill directory |
@@ -395,6 +401,18 @@ Create the directory and write the files at the agreed paths. Multi-file output 
 Agent files live alongside other agents (`.claude/agents/`), not inside the skill that dispatches them. The skill body cites them by `subagent_type` name; the harness loads them from `.claude/agents/` at dispatch time.
 
 **Success criteria:** every file in the agreed plan exists at the agreed path; `ls <skill-dir>` shows the SKILL.md + reference files; `ls .claude/agents/<agent-name>.md` confirms each new persona. No agent file the SKILL.md references is missing from `.claude/agents/`.
+
+### 8b. Measure routing (full-lifecycle tier; offer at lower tiers)
+
+The cold-walk *judged* routing; this step *measures* it. The probes need the file on disk — each one is a fresh `claude -p` from the repo root whose loader sees the new skill competing against every sibling description, which is what production routing actually is.
+
+```bash
+python3 .github/skills/_shared/run_trigger_evals.py <skill-dir>/<slug>/trigger-evals.json --workers 4
+```
+
+Roughly 15–60 s per probe; 8 queries × 3 runs at 4 workers lands in a few minutes. Tell the user it's running, then read the table. For each FAIL: a positive query routing elsewhere means the description is under-pushy for that phrasing — revise the `description` / `when_to_use`, re-run the failed rows (`--limit` after reordering, or the full set), and show the user the before/after. A near-miss routing here means over-pushy — same loop. A FAIL the user decides to accept (the query was unrealistic, the overlap is intentional) gets that reason said aloud, not silence.
+
+**Success criteria:** the probe table printed with a PASS/FAIL row per query; every FAIL either resolved by a description revision + re-run or explicitly accepted by the user with a stated reason.
 
 ### 9. Tell the user what to do next
 
@@ -489,6 +507,8 @@ Stop if:
 - `name` ≤ 64 chars, lowercase + digits + hyphens, not `anthropic` or `claude`.
 - `description` ≤ 1024 chars (hard validation cap). Written in third person.
 - The `description:` line, read in isolation, would route the three example user messages from Phase 1.
+- `trigger-evals.json` sits next to the SKILL.md with Phase 1's positives and near-misses; at the full-lifecycle tier, the Step 8b probe table is in the chat scrollback with every FAIL resolved or user-accepted.
+- When the skill bundles scripts or a driver, TESTPLAN.md exists per [`testplan.md`](testplan.md) — every row discriminating and runnable from the file alone.
 - Every Process step carries a Success criteria field (or the skill is a two-step trivial one with a Done-when block only).
 - The body carries a Done-when block distinct from the last Process step.
 - When the skill uses a director pattern, the body carries the director-bias warning (sub-agent findings outrank director observations).

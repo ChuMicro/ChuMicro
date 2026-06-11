@@ -120,6 +120,10 @@ When judging a description, do not test only against the messages it should fire
 
 A description that fires on the first message but stays silent on the latter two is calibrated.  A description that fires on all three is too pushy.  A description that fires on none is too narrow.
 
+**Query realism.**  Calibration queries — positive and near-miss — should read the way users actually type: a concrete file path or symbol name, some backstory, casual phrasing, the occasional lowercase or typo.  Abstract requests (*"format this data"*, *"extract text from PDF"*) measure nothing, because no real message looks like that.  Obviously-irrelevant negatives test nothing either — every near-miss should be a query a naive keyword match would route wrong.
+
+**Persisted evals.**  The interview's Phase 1 queries (three positives + three-to-five near-misses with `expected_route`) persist as `trigger-evals.json` next to the SKILL.md, in the regen-comments schema (`skill_name`, `evals: [{query, should_trigger, expected_route?}]`).  `.github/skills/_shared/run_trigger_evals.py` probes them against the live skill registry; re-run after any `description` / `when_to_use` edit or when a sibling's scope moves closer.
+
 ### `when_to_use` (optional)
 
 - Extended trigger guidance appended to `description` in the skill listing.  Combined with `description`, counts toward the 1536-char listing truncation.

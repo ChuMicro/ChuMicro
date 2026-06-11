@@ -95,6 +95,8 @@ Every step in the Process section carries these annotations:
 
 Steps with success criteria like *"the step is complete"* are tautological.  Push back.
 
+A criterion must also **discriminate** — a clearly-wrong run must fail it.  *"Report generated"* passes when the report is empty; *"a test was added"* passes when the test asserts nothing.  A non-discriminating criterion is worse than none, because it manufactures false confidence.  Name the property that separates success from a hollow pass: *"report lists ≥ 1 finding per dimension, or states a clean pass per dimension"*, *"the added test fails when the fix is reverted."*
+
 ---
 
 ## Patterns to avoid

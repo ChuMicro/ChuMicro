@@ -155,7 +155,7 @@ If *"Ready"* — exit AskUserQuestion and say in plain text: *"Paste the spec no
 
 ## Phase 1: Trigger discovery
 
-**Goal.**  Three example user messages the skill should fire on.  These are the loader test material for Phase 4 and the cold-walk in Phase 10.
+**Goal.**  Three example user messages the skill should fire on, plus three-to-five near-miss messages it should NOT fire on.  These are the loader test material for Phase 4 and the cold-walk in Phase 10, and they persist as `trigger-evals.json` next to the written SKILL.md (so routing stays re-testable after every later description edit).
 
 **The phase 1 question is the most load-bearing in the interview.**  Spend the pushback budget here.  A skill with a vague description never fires — no other phase fixes that.
 
@@ -214,7 +214,11 @@ Then fire a single-pick `AskUserQuestion`:
 > - "Drop one — it's actually a different skill"
 > - "Edit one — I'll say which"
 
-**Exit artifact.**  Three user-message strings.  These travel through every later phase.
+**Q1c — near-miss negatives.**  After the positive set is confirmed, draft three-to-five **near-miss** messages yourself and present them for the user to confirm, edit, or replace: messages that share the skill's keywords or concepts but belong to a sibling skill or to a plain edit.  Obviously-irrelevant negatives (*"write a fibonacci function"* for a deploy skill) test nothing — every negative should be one a naive keyword match would route wrong.  For each, name the `expected_route` (the sibling slug from the Step 1b survey, or `none`).  Write all queries — positive and negative — the way a user actually types: a concrete file path or symbol name, some backstory, casual phrasing, the occasional lowercase or typo.  Abstract requests (*"format this data"*) measure nothing.
+
+> *"These near-misses should NOT fire the skill: (1) `<msg>` → `<sibling|none>` … Confirm, edit, or add your own?"*
+
+**Exit artifact.**  Three positive user-message strings plus three-to-five near-miss strings with expected routes.  These travel through every later phase and become `trigger-evals.json` at write time.
 
 ---
 
