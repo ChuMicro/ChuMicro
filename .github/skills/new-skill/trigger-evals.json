@@ -1,0 +1,51 @@
+{
+  "skill_name": "new-skill",
+  "purpose": "Routing evals for the description + when_to_use frontmatter. Half should route here; half are near-misses that belong to a sibling skill or to a plain edit. Re-run after any description/when_to_use edit or when a sibling skill's scope moves closer to skill authoring.",
+  "evals": [
+    {
+      "query": "write a skill that automates our release-notes drafting from the git log",
+      "should_trigger": true
+    },
+    {
+      "query": "that deploy-then-tail-then-verify dance we just did — skillify it so next session doesn't reinvent it",
+      "should_trigger": true
+    },
+    {
+      "query": "make this a slash command, something like /flash-board that deploys firmware and verifies the version string",
+      "should_trigger": true
+    },
+    {
+      "query": "i want a /triage-defects that walks plans/next-up.md and ranks the hardware bullets",
+      "should_trigger": true
+    },
+    {
+      "query": "regenerate /audit-docs from scratch, the current one has drifted too far to patch",
+      "should_trigger": true
+    },
+    {
+      "query": "fix the wording in new-library's step 3, it says circup where it means mip",
+      "should_trigger": false,
+      "expected_route": "none"
+    },
+    {
+      "query": "audit the guide-generation skill, i think its steps contradict each other",
+      "should_trigger": false,
+      "expected_route": "audit-skill"
+    },
+    {
+      "query": "write a python script that lints our yaml files for tab indentation",
+      "should_trigger": false,
+      "expected_route": "none"
+    },
+    {
+      "query": "whenever i commit, automatically run preflight first — set that up",
+      "should_trigger": false,
+      "expected_route": "update-config"
+    },
+    {
+      "query": "write the user guide for the timing library",
+      "should_trigger": false,
+      "expected_route": "guide-generation"
+    }
+  ]
+}

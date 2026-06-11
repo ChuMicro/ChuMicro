@@ -283,6 +283,6 @@ A condensed checklist when filling the scaffold above.  Full rules live in `spec
 **Reference files** (optional, one hop deep only):
 
 - `interview.md` — deep question bank for interview-style skills.
-- `spec.md` (+ `spec-*.md` siblings) — rules / criteria the skill enforces; split by persona-mirror boundary when a single file grows past the splitting threshold.
+- `spec.md` (+ `spec-*.md` siblings) — rules / criteria the skill enforces; split by topic when a single file grows past the splitting threshold.
 - `examples.md` — one or two worked walkthroughs.
 - `scripts/` — bundled executable scripts for action skills; entry-point file names match the job (`driver.<ext>`, `smoke.sh`, `validate.py`).
