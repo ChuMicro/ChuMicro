@@ -135,10 +135,9 @@ function tightPrompt(n) {
   const register = voiced ? 'in that voice' : 'in plain English'
   return voiceBlock
     + 'Read the code at ' + FILE + ' and the nuance ledger at ' + LEDGER + ' (the non-obvious behavior a '
-    + 'plain reading misses). Each class, function, and method: a one-or-two-sentence docstring ' + register
-    + ' -- purpose and caller contract, complete sentences only, the first a proper summary line in the '
-    + 'same voice. No body '
-    + 'paragraphs. '
+    + 'plain reading misses). Each class, function, and method: a PEP 257 docstring ' + register + ' -- a '
+    + 'single sentence summary line in the same voice carrying purpose and caller contract, then, in a '
+    + 'few spots where a fact earns it, a tiny body of a sentence or two, never on most symbols. '
     + (LESS
         ? 'Short Args and Returns (or Raises) sections where they apply, each entry a single short '
           + 'sentence, never padded into prose; omit entries that just restate a name and type. '
@@ -250,13 +249,15 @@ function selectPrompt() {
     + 'object. Do not write any other file. Reply only after pick.json is written.'
   let job
   if ((TIGHT || LESS) && GENRE !== 'test' && GENRE !== 'functional_test' && GENRE !== 'example') {
-    job = 'YOUR JOB (' + (LESS ? 'LESS' : 'TIGHT') + ' MODE): pick the file whose one-or-two-sentence '
-      + 'summary DOCSTRINGS are the sharpest and most exact, in the voice throughout -- a flat summary '
+    job = 'YOUR JOB (' + (LESS ? 'LESS' : 'TIGHT') + ' MODE): pick the file whose single sentence '
+      + 'summary lines are the sharpest and most exact, in the voice throughout -- a flat summary '
       + 'loses to an alive one saying the same thing. REJECT a file that writes '
+      + 'bodies on most symbols or any body past a couple of sentences (a tiny body in a few spots is '
+      + 'fine), '
       + (LESS
-          ? 'a body paragraph anywhere (short Args / Returns / Raises sections are REQUIRED where they '
-            + 'apply and are not a violation, but an entry padded into prose is)'
-          : 'a body paragraph or an Args / Returns / Raises section anywhere')
+          ? 'pads an Args / Returns / Raises entry into prose (short single sentence entries are '
+            + 'REQUIRED where they apply)'
+          : 'writes any Args / Returns / Raises section')
       + ', stuffs extra clauses into a sentence to smuggle detail past the limit, replaces a '
       + 'docstring with a `#` comment block above the `def`/`class` line (contract text must be IN the '
       + 'docstring where `help()` sees it), writes `#` comments that read like compressed notes (fragment '
