@@ -165,7 +165,7 @@ CSS = """
  .filterbar button:hover{color:var(--fg)}
  .filterbar button.active{border-color:var(--accent);color:var(--accent);font-weight:650}
  .filterbar .fcount{font-size:11px;margin-left:6px;opacity:.75}
- .card.fhidden{display:none}
+ .card.fhidden,.card.collapsed.fhidden{display:none}
  .legend b{color:var(--fg);font-weight:620}
  .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:15px 17px;margin:12px 0}
  .cardhead{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap}
