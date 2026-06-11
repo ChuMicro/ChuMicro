@@ -45,6 +45,7 @@ Stdout: the renderer's `RENDERED <path>` line, `MERGED-MAP <path>` in merge mode
 import html
 import json
 import os
+import re
 import subprocess
 import sys
 
@@ -169,9 +170,16 @@ def build_item(room, finding, namespace=None):
     return item
 
 
+def card_anchor(item_id):
+    """Mirror of the shared picker's per-card element id (card-heartbeat-3): every
+    non-alphanumeric in the card id becomes a dash."""
+    return "card-" + re.sub(r"[^A-Za-z0-9_-]", "-", item_id)
+
+
 def summary_section_html(room, namespace=None):
     """One per-symbol understanding block: each symbol's qualname, signature, summary, and
-    back-references to the finding ids (namespaced in merge mode) raised against it."""
+    back-references to the finding ids (namespaced in merge mode) raised against it, each
+    linking to its decision card."""
     finding_ids_by_symbol = {}
     for finding in room["findings"]:
         finding_ids_by_symbol.setdefault(finding.get("symbol"), []).append(finding.get("id"))
@@ -179,8 +187,12 @@ def summary_section_html(room, namespace=None):
     for symbol in room["summary"].get("symbols", []):
         qualname = symbol.get("qualname", "")
         related = sorted(finding_ids_by_symbol.get(qualname, []))
-        labels = [f"{namespace}#{finding_id}" if namespace else f"#{finding_id}" for finding_id in related]
-        related_text = (" <small>findings: " + ", ".join(labels) + "</small>") if related else ""
+        links = []
+        for finding_id in related:
+            card_id = f"{namespace}#{finding_id}" if namespace else str(finding_id)
+            label = card_id if namespace else f"#{finding_id}"
+            links.append(f'<a href="#{card_anchor(card_id)}">{html.escape(label)}</a>')
+        related_text = (" <small>findings: " + ", ".join(links) + "</small>") if links else ""
         symbol_blocks.append(
             f"<p><code>{html.escape(qualname)}</code> <small>{html.escape(symbol.get('signature', ''))}</small><br>"
             f"{html.escape(symbol.get('summary', ''))}{related_text}</p>"
@@ -194,17 +206,6 @@ def facts_html(room):
         f"<small>({html.escape(str(fact.get('source_site', '')))}, {html.escape(str(fact.get('confidence', '')))})</small></p>"
         for fact in room["facts"]
     )
-
-
-def severity_angle_lines(findings):
-    by_severity = {}
-    by_angle = {}
-    for finding in findings:
-        by_severity[finding.get("severity", "?")] = by_severity.get(finding.get("severity", "?"), 0) + 1
-        by_angle[finding.get("angle", "?")] = by_angle.get(finding.get("angle", "?"), 0) + 1
-    severity_line = ", ".join(f"{by_severity[key]} {key}" for key in ("high", "med", "low") if by_severity.get(key))
-    angle_line = ", ".join(f"{by_angle[key]} {key}" for key in ("trap", "drift", "coverage", "clarity") if by_angle.get(key))
-    return severity_line, angle_line
 
 
 def render(spec, output_dir):
@@ -237,11 +238,11 @@ def main_single(rundir, target):
     if symbols_html:
         sections.append({"title": "Per-symbol understanding", "html": symbols_html})
 
-    severity_line, angle_line = severity_angle_lines(room["findings"])
+    # severity and angle counts live on the facet chips below the title; the subtitle keeps
+    # only what the bar cannot say
     status = "validated clean" if room["converged"] else "some findings left unconfirmed — they default to discuss"
     voice = room["phase1"].get("voice", "plain")
     intro_bits = [f"{len(room['findings'])} findings"]
-    intro_bits += [part for part in (severity_line, angle_line) if part]
     if voice and voice != "plain":
         intro_bits.append(f"voice: {voice}")
     intro_bits.append(status)
@@ -312,13 +313,10 @@ def main_merge(output_dir, room_args, library_facts):
         if body:
             sections.append({"title": f"{room['file_name']} — what it does, facts, symbols", "html": body})
 
-    all_findings = [finding for _, finding in pairs]
-    severity_line, angle_line = severity_angle_lines(all_findings)
     converged = all(room["converged"] for room in rooms)
     status = "validated clean" if converged else "some findings left unconfirmed — they default to discuss"
     voices = {room["phase1"].get("voice", "plain") for room in rooms}
-    intro_bits = [f"{len(rooms)} files", f"{len(all_findings)} findings"]
-    intro_bits += [part for part in (severity_line, angle_line) if part]
+    intro_bits = [f"{len(rooms)} files", f"{len(pairs)} findings"]
     if len(voices) == 1 and "plain" not in voices:
         intro_bits.append(f"voice: {voices.pop()}")
     intro_bits.append(status)
