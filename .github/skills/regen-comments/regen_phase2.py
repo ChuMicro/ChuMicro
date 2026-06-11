@@ -12,7 +12,6 @@ Usage: regen_phase2.py <rundir> <voice_key> [--kind <genre>] [--tight | --less]
 Precondition: <rundir>/ledger_final.md exists (assembled by the orchestrator after the picker).
 The genre is read from <rundir>/phase1.json by default; --kind overrides it.
 """
-import glob
 import json
 import os
 import shutil
@@ -26,17 +25,7 @@ sys.path.insert(0, VOICES_DIR)
 from preflight import require_claude  # noqa: E402
 from genre import GENRES  # noqa: E402
 from voice_sample import load_voice_sample  # noqa: E402
-
-
-def claude_p_workflow(rundir, wf_name):
-    return subprocess.run(
-        ["claude", "-p",
-         f"Use the Workflow tool to run the workflow at ./{wf_name} (call Workflow with scriptPath "
-         f"./{wf_name}). Wait for full completion, then reply DONE.",
-         "--allowedTools", "Workflow", "Task", "Read", "Write",
-         "--permission-mode", "acceptEdits", "--model", "opus"],
-        cwd=rundir, capture_output=True, text=True,
-    )
+from wf_run import run_workflow, copy_winner, WRITER_ARTIFACTS  # noqa: E402
 
 
 def main():
@@ -74,30 +63,14 @@ def main():
               .replace("__GENRE__", genre).replace("__TIGHT__", "1" if tight else "0")
               .replace("__LESS__", "1" if less else "0"))
     open(os.path.join(rundir, "writers_wf.js"), "w").write(src)
-    claude_p_workflow(rundir, "writers_wf.js")
+    run_workflow(rundir, "writers_wf.js", required=WRITER_ARTIFACTS, marker="pick.json")
 
-    # The selector picked one whole file by number; copy it here in Python. The copy — not the agent — makes
-    # merged.py byte-identical to the chosen pass, so no agent rewrite can slip a reworded inversion through.
-    pick_path = os.path.join(rundir, "pick.json")
-    if not os.path.exists(pick_path):
-        sys.exit("writer phase produced no pick.json — check the run room.")
-    pick = json.load(open(pick_path))
-    winner = pick.get("winner")
-    win_file = os.path.join(rundir, "runs", f"run-{winner}.py")
-    if not isinstance(winner, int) or not os.path.exists(win_file):
-        sys.exit(f"selector returned an invalid winner ({winner!r}); no runs/run-{winner}.py to copy.")
+    # The selector picked one whole file by number; the verbatim Python copy (plus stub-`pass`
+    # normalization, since strip.py turns a docstring-only body into `pass` that a writer often keeps)
+    # lives in wf_run.copy_winner, shared with the refine loop's regen_symbol.
+    pick = copy_winner(rundir)
     merged = os.path.join(rundir, "merged.py")
-    shutil.copy(win_file, merged)
-    # strip.py turns a docstring-only body into `pass`; a writer re-adding the docstring keeps that pass
-    # often enough that the FINAL gains a stray Pass node the original never had (verify then fails and
-    # an applied diff would carry `+ pass`). Normalize every cached pass + the merged copy to the
-    # docstring-only form so the splice/roll-the-dice candidates stay code-identical too.
-    sys.path.insert(0, SKILL)
-    from normalize_stub_pass import normalize  # noqa: E402
-    for candidate in glob.glob(os.path.join(rundir, "runs", "run-*.py")) + [merged]:
-        if normalize(candidate):
-            print(f"  normalized docstring-redundant pass: {os.path.basename(candidate)}")
-    print(f"  selected run-{winner}: {pick.get('why', '')}")
+    print(f"  selected run-{pick['winner']}: {pick.get('why', '')}")
     if pick.get("concern"):
         print(f"  selector concern: {pick['concern']}")
     # deterministic auto-route (no LLM): if the winner carries a tic/leak on a symbol but another cached
