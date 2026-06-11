@@ -50,6 +50,8 @@ Spec schema:
           "source": "loader lens — frontmatter contract", // optional chip: what raised this item
           "meta": "effort: small · Foo.bar @ tick",       // optional faint line under the heading
           "summary": "plain-words description…",          // optional paragraph under the heading
+          "where": "Foo.bar — ticks_diff(a, b) >= 0",     // optional labeled row, mono — the code
+                                                          // location (symbol + quoted expression)
           "why": "consequence in one sentence",           // optional labeled row
           "fix": "the exact proposed change",             // optional labeled row
           "detail": {                                     // optional collapsible block
@@ -111,11 +113,11 @@ CSS = """
  :root{color-scheme:light;
   --bg:#f4f6f9; --fg:#1c2230; --faint:#69707e; --card:#ffffff; --border:#dfe4ec;
   --accent:#4f46e5; --blob-bg:#f8fafc; --bar:#ffffffeb; --note-bg:#fbfcfe; --chip:#eef0f6;
-  --why:#b45309; --fix:#15803d}
+  --why:#b45309; --fix:#15803d; --where:#1d4ed8}
  :root[data-theme=dark]{color-scheme:dark;
   --bg:#11141b; --fg:#e3e7f0; --faint:#97a0b3; --card:#1a1f29; --border:#2a3242;
   --accent:#8d97ff; --blob-bg:#11141b; --bar:#1a1f29eb; --note-bg:#161b24; --chip:#232a38;
-  --why:#fbbf24; --fix:#4ade80}
+  --why:#fbbf24; --fix:#4ade80; --where:#93b4ff}
  body{font:16px/1.55 -apple-system,'Segoe UI',sans-serif;background:var(--bg);color:var(--fg);
   margin:0;padding:26px 20px 150px;max-width:920px;margin-inline:auto}
  h1{font-size:24px;font-weight:600;margin:0 44px 6px 0}
@@ -163,6 +165,8 @@ CSS = """
   text-transform:uppercase;border-radius:6px;padding:3px 8px;align-self:flex-start;color:var(--faint);background:var(--chip)}
  .f-why .flabel{color:var(--why);background:color-mix(in srgb,var(--why) 13%,transparent)}
  .f-fix .flabel{color:var(--fix);background:color-mix(in srgb,var(--fix) 13%,transparent)}
+ .f-where .flabel{color:var(--where);background:color-mix(in srgb,var(--where) 13%,transparent)}
+ .f-where .ftext{font:13.5px/1.7 ui-monospace,Menlo,monospace;padding-top:2px}
  .f-fix{border-left:3px solid color-mix(in srgb,var(--fix) 45%,transparent);padding-left:9px;margin-left:-12px}
  .ftext{flex:1}
  .evidence{margin:9px 0 0;white-space:pre-wrap;background:var(--blob-bg);border:1px solid var(--border);
@@ -321,7 +325,7 @@ def card_html(item, page_options, page_default):
     summary = f'<p class="summary">{html.escape(item["summary"])}</p>' if item.get("summary") else ""
     fields = "".join(
         f'<div class="field f-{key}"><span class="flabel">{label}</span><span class="ftext">{html.escape(item[key])}</span></div>'
-        for key, label in (("why", "why"), ("fix", "fix"))
+        for key, label in (("where", "where"), ("why", "why"), ("fix", "fix"))
         if item.get(key)
     )
     evidence = f'<div class="evidence">{html.escape(item["evidence"])}</div>' if item.get("evidence") else ""

@@ -107,8 +107,8 @@ def main():
             "id": str(finding_id),
             "title": finding["title"],
             "badge": severity,
-            "meta": f"effort: {finding.get('effort', '?')} · confidence: {finding.get('confidence', '?')}"
-                    f" · {finding.get('symbol', '?')} @ {finding.get('site', '?')}",
+            "meta": f"effort: {finding.get('effort', '?')} · confidence: {finding.get('confidence', '?')}",
+            "where": f"{finding.get('symbol', '?')} — {finding.get('site', '?')}",
             "why": finding["consequence"],
             "fix": finding["suggested_fix"],
             "tab": angle,
