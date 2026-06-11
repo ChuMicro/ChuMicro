@@ -167,7 +167,7 @@ CSS = """
   --accent:#8d97ff; --blob-bg:#11141b; --bar:#1a1f29eb; --note-bg:#161b24; --chip:#232a38;
   --why:#fbbf24; --fix:#4ade80; --where:#93b4ff}
  body{font:16px/1.55 -apple-system,'Segoe UI',sans-serif;background:var(--bg);color:var(--fg);
-  margin:0;padding:26px 20px 150px;max-width:920px;margin-inline:auto}
+  margin:0;padding:26px 20px 110px;max-width:920px;margin-inline:auto}
  h1{font-size:24px;font-weight:600;margin:0 44px 6px 0}
  .themebtn{position:fixed;top:14px;right:16px;font:inherit;font-size:13px;padding:6px 12px;border-radius:999px;
   border:1px solid var(--border);background:var(--card);color:var(--fg);cursor:pointer;z-index:10}
@@ -182,14 +182,14 @@ CSS = """
  details.section .sbody{margin-top:8px;font-size:14.5px}
  .sbody small{color:var(--faint)}
  .sbody code{font:13px ui-monospace,Menlo,monospace}
- .facetbar{display:flex;flex-direction:column;gap:7px;margin:18px 0 16px;position:sticky;top:0;z-index:9;
-  background:color-mix(in srgb,var(--card) 90%,transparent);backdrop-filter:blur(12px) saturate(1.3);
-  -webkit-backdrop-filter:blur(12px) saturate(1.3);border:1px solid var(--border);border-radius:13px;padding:10px 14px}
+ .facetbar{display:flex;flex-wrap:wrap;align-items:center;gap:7px 22px;margin:18px 0 16px;position:sticky;top:0;
+  z-index:9;background:color-mix(in srgb,var(--card) 90%,transparent);backdrop-filter:blur(12px) saturate(1.3);
+  -webkit-backdrop-filter:blur(12px) saturate(1.3);border:1px solid var(--border);border-radius:13px;padding:8px 12px}
  .facetbar.stuck{border-radius:0 0 13px 13px;border-top-color:transparent;background:var(--bar);
   box-shadow:0 4px 14px rgba(0,0,0,.14)}
  .fgroup{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
- .fglabel{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--faint);min-width:64px}
- .fgroup button{font:inherit;font-size:13px;padding:4px 13px;border-radius:999px;border:1px solid var(--border);
+ .fglabel{font-size:11px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--fg);opacity:.75}
+ .fgroup button{font:inherit;font-size:13px;padding:3px 11px;border-radius:999px;border:1px solid var(--border);
   background:var(--card);color:var(--faint);cursor:pointer}
  .fgroup button:hover{color:var(--fg)}
  .fgroup button.active{border-color:#4f46e5;background:#4f46e5;color:#fff;font-weight:650}
@@ -199,7 +199,7 @@ CSS = """
   margin:12px 0;color:var(--faint);font-size:15px;text-align:center}
  .nomatch button{font:inherit;font-size:13px;border:none;background:none;color:var(--accent);
   cursor:pointer;padding:0 2px}
- .facetclear{align-self:flex-start;font:inherit;font-size:12px;border:none;background:none;
+ .facetclear{font:inherit;font-size:12px;border:none;background:none;
   color:var(--accent);cursor:pointer;padding:0 2px}
  .ghead{position:sticky;z-index:8;font-size:12.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;
   color:var(--faint);background:var(--bg);padding:10px 2px 4px;margin-top:14px}
@@ -259,16 +259,19 @@ CSS = """
  .opts input{accent-color:var(--accent)}
  .notes{width:100%;box-sizing:border-box;margin-top:10px;font:14.5px/1.5 inherit;border:1px solid var(--border);
   border-radius:8px;padding:7px 9px;min-height:36px;background:var(--note-bg);color:var(--fg);resize:vertical}
- .selbar{position:fixed;bottom:0;left:0;right:0;background:var(--bar);backdrop-filter:blur(10px);
-  border-top:1px solid var(--border);padding:10px 20px;font-size:14px}
- .selbar .row{display:flex;align-items:center;gap:12px;max-width:920px;margin-inline:auto;flex-wrap:wrap}
+ .selbar{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:calc(100% - 24px);max-width:920px;
+  box-sizing:border-box;background:var(--bar);backdrop-filter:blur(10px);border:1px solid var(--border);
+  border-bottom:none;border-radius:13px 13px 0 0;padding:8px 16px;font-size:14px;
+  box-shadow:0 -4px 14px rgba(0,0,0,.08)}
+ .selbar .row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
  .selbar button{font:inherit;padding:7px 16px;border-radius:8px;border:1px solid var(--border);
   background:var(--card);color:var(--fg);cursor:pointer;transition:background .5s,color .5s,border-color .5s}
  .selbar button.primary{background:#4f46e5;border-color:#4f46e5;color:#fff}
  .selbar button.confirm{background:#15803d;border-color:#15803d;color:#fff;transition:none}
  #count{color:var(--faint)}
- .blobwrap{max-width:920px;margin-inline:auto}
- .blobwrap>summary{font-size:12px;color:var(--faint);cursor:pointer;margin-top:6px}
+ .blobwrap{margin-left:auto}
+ .blobwrap[open]{flex-basis:100%;margin-left:0}
+ .blobwrap>summary{font-size:12px;color:var(--faint);cursor:pointer}
  .hint{font-size:12px;color:var(--faint);margin:6px 0 0}
  #blob{width:100%;box-sizing:border-box;margin-top:8px;font:12.5px/1.5 ui-monospace,Menlo,monospace;
   border:1px solid var(--border);border-radius:8px;padding:8px;min-height:46px;background:var(--blob-bg);color:var(--fg)}
@@ -372,7 +375,7 @@ SCRIPT = """
   }
   function copy() {
     var blob = buildBlob();
-    var done = function () { confirmFlash(document.getElementById('copybtn'), 'copied \\u2713'); };
+    var done = function () { confirmFlash(document.getElementById('copybtn'), 'Copied \\u2713'); };
     // the execCommand fallback needs a visible, selected textarea — only that path opens the blob drawer
     var fallback = function () {
       var bw = document.querySelector('.blobwrap'); if (bw && !bw.open) bw.open = true;
@@ -387,7 +390,7 @@ SCRIPT = """
     var sb = document.getElementById('submitbtn');
     var fail = function () { var o = sb.textContent; sb.textContent = 'failed: use Copy selection'; setTimeout(function () { sb.textContent = o; }, 2200); };
     fetch('/selection', { method: 'POST', body: buildBlob() })
-      .then(function (r) { if (r.ok) confirmFlash(sb, 'submitted \\u2713 (return to the session)'); else fail(); })
+      .then(function (r) { if (r.ok) confirmFlash(sb, 'Submitted \\u2713 (return to the session)'); else fail(); })
       .catch(fail);
   }
   setTheme(dark);
@@ -431,7 +434,7 @@ SCRIPT = """
     sections.forEach(function (d) { d.open = d.dataset.open0 === '1'; });
     persist();
     if (fchips.length) applyFacets();
-    confirmFlash(document.getElementById('resetbtn'), 'reset \\u2713');
+    confirmFlash(document.getElementById('resetbtn'), 'Defaults restored \\u2713');
   });
   // facet bar: chips toggle — OR within a group, AND across groups, empty group = no narrowing.
   // Hidden cards stay in the DOM, so the blob and tally cover them. Selections persist per page key.
@@ -800,11 +803,11 @@ def main():
   <button class="primary" id="submitbtn" hidden>Submit to session</button>
   <button id="copybtn">Copy selection</button>
   <button id="resetbtn">Reset</button>
+  <details class="blobwrap"><summary>selection blob</summary>
+  <textarea id="blob" readonly></textarea>
+  <p class="hint">Submit sends this blob straight to the waiting session. No server? Copy it and paste it into the chat instead — same effect.</p>
+  </details>
  </div>
- <details class="blobwrap"><summary>selection blob + how to hand it back</summary>
- <textarea id="blob" readonly></textarea>
- <p class="hint">Submit sends this blob straight to the waiting session. No server? Copy it and paste it into the chat instead — same effect.</p>
- </details>
 </div>
 <script>window.SPEC = {client_spec};</script>
 {SCRIPT}
