@@ -135,24 +135,20 @@ function tightPrompt(n) {
   const register = voiced ? 'in that voice' : 'in plain English'
   return voiceBlock
     + 'Read the code at ' + FILE + ' and the nuance ledger at ' + LEDGER + ' (the non-obvious behavior a '
-    + 'plain reading misses). Each class, function, and method: a PEP 257 docstring ' + register + ' -- a '
-    + 'single sentence summary line in the same voice carrying purpose and caller contract, then, in a '
-    + 'few spots where a fact earns it, a tiny body of a sentence or two, never on most symbols. '
+    + 'plain reading misses). Each class, function, and method: a PEP 257 docstring ' + register + ', '
+    + 'a ONE sentence summary line carrying purpose and caller contract, plus a tiny body (a sentence '
+    + 'or two) in the few spots a fact earns one. '
     + (LESS
-        ? 'Short Args and Returns (or Raises) sections where they apply, each entry a single short '
-          + 'sentence, never padded into prose; omit entries that just restate a name and type. '
+        ? 'Short Args and Returns (or Raises) sections where they apply, each entry one short sentence. '
         : 'No Args / Returns / Raises sections. ')
-    + 'A self-evident symbol gets no docstring; contract text always lives in the docstring (where '
-    + '`help()` sees it), never as a `#` block above the `def`. Modules get their own docstring: one to '
-    + 'three sentences on what the file does. A ledger fact lands once -- '
-    + 'contract facts in the docstring, line facts as `#` sentences above their lines, in the same '
-    + 'voice, never notation or `->` arrows. When a fact will not fit as a clean sentence, drop it '
-    + 'rather than compress it: keep the facts a caller acts on, let the minutiae go. Weave a warning '
-    + 'into the sentence that states it -- never behind scaffolding like "one thing to know" or '
-    + '"worth noting".\n\n'
+    + 'A symbol with no ledger fact and a name that says everything gets no docstring. Modules get one '
+    + 'to three sentences on what the file does. Every ledger fact lands once: contract facts in the '
+    + 'docstring, line facts as `#` sentences above their lines, in the voice. A fact that will not '
+    + 'fit as a clean sentence is dropped, never crammed. Weave a warning into the sentence that '
+    + 'states it, never behind scaffolding like "one thing to know".\n\n'
     + 'If a library ledger exists at ' + RUNDIR + '/LIBRARY_FACTS.md, use it for shared vocabulary.\n\n'
-    + 'No em-dashes, semicolons, `canonical`, or `shape`. Code in double backticks, lines under 100 '
-    + 'characters. Add docstrings and comments only -- never change code.\n\n'
+    + 'No em-dashes, no " -- ", no semicolons, no `canonical` or `shape`. Code in double backticks, '
+    + 'lines under 100 characters. Add docstrings and comments only.\n\n'
     + 'Write the marked-up file to ' + RUNDIR + '/runs/run-' + n + '.py. After writing, reply DONE.'
 }
 
@@ -173,9 +169,8 @@ function voicedPrompt(n) {
     + 'warning into the sentence that states it -- never behind scaffolding like "one thing to know" or '
     + '"worth noting". Simple symbols get one sentence, and the sample never adds length. '
     + 'Modules get their own docstring: one to three sentences on what the file does in the real world.\n\n'
-    + 'Keep the form a proper docstring: the first line is a complete summary sentence in the same voice, '
-    + 'and the summary may run a few sentences when that absorbs a would-be body -- prefer a fuller '
-    + 'summary over a body paragraph. Every sentence is '
+    + 'Keep the form PEP 257: a single sentence summary line in the same voice, then a body of at most '
+    + 'three or four sentences where the symbol earns one. Every sentence is '
     + 'complete (no fragments), and functions and methods get short Args and Returns (or Raises) sections '
     + 'where they apply -- omit a Returns for nothing and entries that just restate a name and type.\n\n'
     + 'If a library ledger exists at ' + RUNDIR + '/LIBRARY_FACTS.md, use it for cross-file context and '
@@ -191,9 +186,9 @@ function genPrompt(n) {
   if (VOICE_PARA.trim()) return voicedPrompt(n)
   // VOICELESS path -- the round26-34 benched wording, kept fuller than voicedPrompt on purpose: with no
   // voice to fill the space the structure still earns its keep.
-  // round33: the flowing-summary nudge cut the occasional thin / over-compressed docstring (control
-  // under-wrote _resolve_mixed / _rank_key bodies, collapsing them into Returns; flowing kept full
-  // bodies). Head-to-head vs lean control: legibility + correctness held, ban arm REJECTED.
+  // round33: the flowing-summary nudge cut the occasional thin / over-compressed docstring. Its
+  // weave-into-the-summary half was superseded 2026-06-10 (user call: PEP 257 shape, single sentence
+  // summary line, body <= 3-4 sentences); the smooth-flowing-sentences style half survives below.
   // round34: the module-altitude reword closed the diagnosed MODULE gap (plain crammed the per-method
   // drift rule into the module summary where the summarizer stayed high-level); held correctness.
   return 'Read the code at ' + FILE + ' and the nuance ledger at ' + LEDGER + ' together. The ledger holds the '
@@ -207,8 +202,8 @@ function genPrompt(n) {
     + 'layer"). Do not restate '
     + 'what the code already shows, like an enum\'s members when their names already '
     + 'say it, do not point the reader to other symbols by name, and do not invent. Write in plain, '
-    + 'smooth, flowing sentences, and when a non-obvious behavior can be woven into the '
-    + 'summary itself, do that rather than compressing the summary and spilling into a separate body paragraph.\n\n'
+    + 'smooth, flowing sentences. PEP 257 shape: a single sentence summary line, then a body of at most '
+    + 'three or four sentences where the symbol earns one.\n\n'
     + 'A line-level mechanic, such as an inclusive boundary, a value compared one way and not another, or a '
     + 'stand-in substitution, rides as a short `#` comment on its own line above that line, not in the '
     + 'docstring. State each fact once. An inline comment is a short real sentence in the same register as '
@@ -252,6 +247,8 @@ function selectPrompt() {
     job = 'YOUR JOB (' + (LESS ? 'LESS' : 'TIGHT') + ' MODE): pick the file whose single sentence '
       + 'summary lines are the sharpest and most exact, in the voice throughout -- a flat summary '
       + 'loses to an alive one saying the same thing. REJECT a file that writes '
+      + 'more than one sentence on any summary line, splices clauses with " -- ", leaves a symbol bare '
+      + 'that still carries a ledger fact, writes '
       + 'bodies on most symbols or any body past a couple of sentences (a tiny body in a few spots is '
       + 'fine), '
       + (LESS
@@ -290,7 +287,8 @@ function selectPrompt() {
       + 'to the symbol. Richness means quality of wording, NEVER quantity: a file that narrates method '
       + 'bodies line by line, pads a trivial pass-through with body paragraphs, or repeats one fact in '
       + 'several costumes is STUFFED, not rich -- it loses to a file that states the contract cleanly and '
-      + 'stops (a docstring visibly longer than its method is a strong stuffing signal). Do NOT pick a '
+      + 'stops (a docstring visibly longer than its method, or a body past four sentences, is a strong '
+      + 'stuffing signal). Do NOT pick a '
       + 'flat, thin, generic file either: among the files at the right altitude, the most vivid, '
       + 'best-turned wording wins. The other floor is legibility: every sentence must still read clearly '
       + 'as a proper docstring a caller could use. A sentence that is garbled, so dense or comma-ridden it '
