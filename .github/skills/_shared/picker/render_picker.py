@@ -82,24 +82,21 @@ Spec schema:
           "notes": true,                                  // notes box (default: true on decision cards,
                                                           // false on informational ones)
           "collapsed": true,                              // optional: start the card folded to a strip (title
-                                                          // row + radios + diff if present). Every card
-                                                          // folds/expands on a title-row click; this sets the
-                                                          // initial state. For long pages a reader skims
+                                                          // row + radios + summary + diff if present). Every
+                                                          // card folds/expands on a title-row click; this sets
+                                                          // the initial state. For long pages a reader skims
           "facets": {"severity": "high",                  // optional facet values, one per facet group the
                      "angle": "trap",                     // page defines below; the facet bar narrows the
                      "file": "heartbeat.py"}              // list to cards matching every selected group
         }
       ],
-      "facets": [                                         // optional facet-bar definition: one chip row per
-        {"key": "severity",                               // group, in this order. values: explicit chip order
-         "values": ["high", "med", "low"]},               // (others append by first appearance); label:
-        {"key": "angle",                                  // row caption (defaults to key); help: hover text
-         "help": {"trap": "correctness lens — …"}}        // per chip value
-      ],
-      "group_by": ["angle", "file"]                       // optional grouping dimensions (facet keys); adds a
-                                                          // "group" row to the facet bar — picking one reorders
-                                                          // the list under sticky per-value headers, "none"
-                                                          // restores spec order
+      "facets": [                                         // optional facet-bar definition: one group per entry,
+        {"key": "severity",                               // groups flowing inline in this order. values:
+         "values": ["high", "med", "low"]},               // explicit order (others append by first appearance);
+        {"key": "angle",                                  // label: caption (defaults to key); help: hover text
+         "help": {"trap": "correctness lens — …"}},       // per chip value. style: "select" renders the group
+        {"key": "file", "style": "select"}                // as one dropdown — the right shape past ~6 values
+      ]                                                   // (a 10-file audit is one control, not ten chips)
     }
 
 The facet bar is the page's one narrowing mechanism — no tabs (a finding list is
@@ -112,10 +109,10 @@ so within-group numbers stay stable while you multi-select; a non-active chip
 whose count drops to zero dims and stops responding, so a dead-end combination
 is visible before the click, and a selection that empties the whole list shows a
 "nothing matches" state with its own clear button; a clear-filters button
-appears in the bar while any chip is active. The `group_by` row reorders the list
-under sticky per-value headers without hiding anything — narrowing and grouping
-compose. Selections and the grouping choice persist per page key. Items render
-in spec order — ordering (e.g. by severity) is the spec author's job.
+appears in the bar while anything is active. A select-style group narrows to one
+value at a time, its option labels carrying the same live counts. Selections
+persist per page key. Items render in spec order — ordering (e.g. by severity)
+is the spec author's job.
 
 When at least one decision card exists, the bar gains a virtual `picked` row
 (suppress with "picked_facet": false) whose chips track the live radio values —
@@ -125,9 +122,9 @@ so trusted section or intro HTML can deep-link to a card (#card-heartbeat-3);
 navigating to a folded card unfolds it, and the target card flashes an accent
 ring that fades out.
 
-Every card folds to a strip — title row, radios, and the diff when one exists —
-on a title-row click; `collapsed: true` sets the initial state, and fold changes
-persist in localStorage like picks and notes do. Picking an option listed in
+Every card folds to a strip — title row, radios, the summary, and the diff when
+one exists — on a title-row click; `collapsed: true` sets the initial state, and
+fold changes persist in localStorage like picks and notes do. Picking an option listed in
 `expand_on` opens the card and focuses its notes box, for options whose
 substance lives in the note. Reset returns the page to its rendered defaults —
 picks to the default option, notes cleared, cards and page-top sections back to
@@ -182,11 +179,8 @@ CSS = """
  details.section .sbody{margin-top:8px;font-size:14.5px}
  .sbody small{color:var(--faint)}
  .sbody code{font:13px ui-monospace,Menlo,monospace}
- .facetbar{display:flex;flex-wrap:wrap;align-items:center;gap:7px 22px;margin:18px 0 16px;position:sticky;top:0;
-  z-index:9;background:color-mix(in srgb,var(--card) 90%,transparent);backdrop-filter:blur(12px) saturate(1.3);
-  -webkit-backdrop-filter:blur(12px) saturate(1.3);border:1px solid var(--border);border-radius:13px;padding:8px 12px}
- .facetbar.stuck{border-radius:0 0 13px 13px;border-top-color:transparent;background:var(--bar);
-  box-shadow:0 4px 14px rgba(0,0,0,.14)}
+ .facetbar{display:flex;flex-wrap:wrap;align-items:center;gap:7px 22px;margin:18px 0 16px;
+  background:var(--card);border:1px solid var(--border);border-radius:13px;padding:8px 12px}
  .fgroup{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
  .fglabel{font-size:11px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--fg);opacity:.75}
  .fgroup button{font:inherit;font-size:13px;padding:3px 11px;border-radius:999px;border:1px solid var(--border);
@@ -201,12 +195,12 @@ CSS = """
   cursor:pointer;padding:0 2px}
  .facetclear{font:inherit;font-size:12px;border:none;background:none;
   color:var(--accent);cursor:pointer;padding:0 2px}
- .ghead{position:sticky;z-index:8;font-size:12.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;
-  color:var(--faint);background:var(--bg);padding:10px 2px 4px;margin-top:14px}
+ .fselect{font:inherit;font-size:13px;padding:3px 8px;border-radius:8px;border:1px solid var(--border);
+  background:var(--card);color:var(--fg)}
  .card.fhidden,.card.collapsed.fhidden{display:none}
  .legend b{color:var(--fg);font-weight:620}
  .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:15px 17px;margin:12px 0;
-  scroll-margin-top:var(--anchor-clear,40px)}
+  scroll-margin-top:14px}
  .card.flash{animation:cardflash 1.8s ease-out}
  @keyframes cardflash{0%,30%{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
   100%{border-color:var(--border);box-shadow:0 0 0 0 transparent}}
@@ -214,12 +208,13 @@ CSS = """
  .chev{display:inline-block;color:var(--faint);font-size:12px;align-self:center;
   transition:transform .15s;transform:rotate(90deg)}
  .card.collapsible>.cardhead{cursor:pointer;user-select:none}
- .card.collapsed{display:flex;align-items:center;gap:12px 16px;flex-wrap:wrap;padding:9px 15px}
+ .card.collapsed{display:flex;align-items:center;gap:8px 16px;flex-wrap:wrap;padding:9px 15px}
  .card.collapsed .chev{transform:rotate(0)}
  .card.collapsed>.cardhead{flex:1 1 auto;order:1}
  .card.collapsed>.cardfold,.card.collapsed>.notes{display:none}
  .card.collapsed>.opts{margin:0;flex:0 0 auto;order:2}
- .card.collapsed>.diffblock{order:3;flex:1 1 100%;margin:0}
+ .card.collapsed>.summary{order:3;flex:1 1 100%;margin:0;font-size:14.5px;color:var(--faint)}
+ .card.collapsed>.diffblock{order:4;flex:1 1 100%;margin:0}
  .cardid{font-weight:700;color:var(--accent);font-size:17px}
  .cardtitle{font-weight:630}
  .badge{font-size:11px;font-weight:700;letter-spacing:.4px;padding:2px 8px;border-radius:999px;color:#fff;background:#64748b}
@@ -405,7 +400,7 @@ SCRIPT = """
         var n = c.querySelector('.notes'); if (n) n.focus();
       }
       persist();
-      if (fchips.length) applyFacets(); // the virtual 'picked' facet follows the live radios
+      if (fchips.length || fselects.length) applyFacets(); // the virtual 'picked' facet follows the live radios
     });
   });
   document.querySelectorAll('.notes').forEach(function (t) { t.addEventListener('input', persist); });
@@ -433,16 +428,16 @@ SCRIPT = """
     });
     sections.forEach(function (d) { d.open = d.dataset.open0 === '1'; });
     persist();
-    if (fchips.length) applyFacets();
+    if (fchips.length || fselects.length) applyFacets();
     confirmFlash(document.getElementById('resetbtn'), 'Defaults restored \\u2713');
   });
   // facet bar: chips toggle — OR within a group, AND across groups, empty group = no narrowing.
   // Hidden cards stay in the DOM, so the blob and tally cover them. Selections persist per page key.
   var fchips = document.querySelectorAll('.facetbar .fchip');
+  var fselects = document.querySelectorAll('.facetbar .fselect');
   var FACETKEY = KEY + ':facets';
   var fsel = {};
   try { fsel = JSON.parse(localStorage.getItem(FACETKEY) || '{}'); } catch (e) { fsel = {}; }
-  var cardlist = document.getElementById('cardlist');
   var allCards = Array.prototype.slice.call(document.querySelectorAll('#cardlist .card'));
   var facetsOf = new Map();
   allCards.forEach(function (c) {
@@ -452,6 +447,7 @@ SCRIPT = """
   });
   var FKEYS = [];
   fchips.forEach(function (b) { if (FKEYS.indexOf(b.dataset.key) === -1) FKEYS.push(b.dataset.key); });
+  fselects.forEach(function (s) { if (FKEYS.indexOf(s.dataset.key) === -1) FKEYS.push(s.dataset.key); });
   // 'picked' is the virtual facet: its value is the card's live radio state, not spec data
   function facetValue(c, key) {
     if (key === 'picked') {
@@ -493,6 +489,21 @@ SCRIPT = """
       var fc = b.querySelector('.fcount'); if (fc) fc.textContent = n;
       b.classList.toggle('dead', n === 0 && !b.classList.contains('active'));
     });
+    // a select group narrows to one value (or all); its option labels carry the same live counts
+    fselects.forEach(function (s) {
+      var key = s.dataset.key;
+      var sel = fsel[key] || [];
+      s.value = sel.length ? sel[0] : '';
+      if (sel.length) any = true;
+      Array.prototype.forEach.call(s.options, function (o) {
+        var n = 0;
+        allCards.forEach(function (c) {
+          if ((o.value === '' || facetValue(c, key) === o.value) && matches(c, key)) n++;
+        });
+        o.textContent = o.dataset.base + ' (' + n + ')';
+        o.disabled = n === 0 && o.value !== s.value && o.value !== '';
+      });
+    });
     var clear = document.getElementById('facetclear'); if (clear) clear.hidden = !any;
     var nomatch = document.getElementById('nomatch'); if (nomatch) nomatch.hidden = visible !== 0;
   }
@@ -501,6 +512,13 @@ SCRIPT = """
       var sel = fsel[b.dataset.key] || (fsel[b.dataset.key] = []);
       var at = sel.indexOf(b.dataset.value);
       if (at === -1) sel.push(b.dataset.value); else sel.splice(at, 1);
+      applyFacets();
+      try { localStorage.setItem(FACETKEY, JSON.stringify(fsel)); } catch (e) {}
+    });
+  });
+  fselects.forEach(function (s) {
+    s.addEventListener('change', function () {
+      fsel[s.dataset.key] = s.value ? [s.value] : [];
       applyFacets();
       try { localStorage.setItem(FACETKEY, JSON.stringify(fsel)); } catch (e) {}
     });
@@ -514,77 +532,7 @@ SCRIPT = """
     var b = document.getElementById(id);
     if (b) b.addEventListener('click', clearFacets);
   });
-  // group row: reorders the list under sticky per-value headers; "none" restores spec order.
-  // Grouping moves DOM nodes (state rides along) and composes with the facet narrowing above.
-  var gchips = document.querySelectorAll('.facetbar .gchip');
-  var GROUPKEY = KEY + ':group';
-  var specOrder = allCards.slice();
-  function applyGroup(key) {
-    gchips.forEach(function (b) { b.classList.toggle('active', b.dataset.group === key); });
-    document.querySelectorAll('.ghead').forEach(function (h) { h.remove(); });
-    if (!key) {
-      specOrder.forEach(function (c) { cardlist.appendChild(c); });
-      return;
-    }
-    var bar = document.querySelector('.facetbar');
-    var headTop = (bar ? bar.offsetHeight + 6 : 6) + 'px';
-    var values = [];
-    fchips.forEach(function (b) { if (b.dataset.key === key && values.indexOf(b.dataset.value) === -1) values.push(b.dataset.value); });
-    specOrder.forEach(function (c) {
-      var v = facetsOf.get(c)[key];
-      if (v !== undefined && values.indexOf(v) === -1) values.push(v);
-    });
-    values.forEach(function (v) {
-      var members = specOrder.filter(function (c) { return facetsOf.get(c)[key] === v; });
-      if (!members.length) return;
-      var h = document.createElement('div');
-      h.className = 'ghead';
-      h.style.top = headTop;
-      h.textContent = v + ' \\u00b7 ' + members.length;
-      cardlist.appendChild(h);
-      members.forEach(function (c) { cardlist.appendChild(c); });
-    });
-    var rest = specOrder.filter(function (c) { return facetsOf.get(c)[key] === undefined; });
-    if (rest.length) {
-      var oh = document.createElement('div');
-      oh.className = 'ghead';
-      oh.style.top = headTop;
-      oh.textContent = 'other \\u00b7 ' + rest.length;
-      cardlist.appendChild(oh);
-      rest.forEach(function (c) { cardlist.appendChild(c); });
-    }
-  }
-  gchips.forEach(function (b) {
-    b.addEventListener('click', function () {
-      applyGroup(b.dataset.group);
-      try { localStorage.setItem(GROUPKEY, b.dataset.group); } catch (e) {}
-    });
-  });
-  if (fchips.length) applyFacets();
-  if (gchips.length) {
-    var savedGroup = '';
-    try { savedGroup = localStorage.getItem(GROUPKEY) || ''; } catch (e) {}
-    var knownGroup = Array.prototype.some.call(gchips, function (b) { return b.dataset.group === savedGroup; });
-    if (savedGroup && knownGroup) applyGroup(savedGroup);
-  }
-  // anchor scrolls must clear the sticky facet bar, whose height varies with its row count
-  // and viewport width — measure it and feed scroll-margin-top through a CSS variable
-  function setAnchorClearance() {
-    var bar = document.querySelector('.facetbar');
-    root.style.setProperty('--anchor-clear', (bar ? bar.offsetHeight + 16 : 30) + 'px');
-  }
-  window.addEventListener('resize', setAnchorClearance);
-  setAnchorClearance();
-  // the bar sticks flush to the viewport top: a sentinel above it reports when it is pinned,
-  // and the stuck state squares its top corners and switches to the bottom bar's frosted look
-  var stickyBar = document.querySelector('.facetbar');
-  if (stickyBar && window.IntersectionObserver) {
-    var sentinel = document.createElement('div');
-    stickyBar.parentNode.insertBefore(sentinel, stickyBar);
-    new IntersectionObserver(function (entries) {
-      stickyBar.classList.toggle('stuck', !entries[0].isIntersecting);
-    }).observe(sentinel);
-  }
+  if (fchips.length || fselects.length) applyFacets();
   // a deep link from a context section can land on a folded card — unfold it, flash it, and let
   // the flash fade out. The hash is a transient navigation aid, not state: it clears as soon as
   // it is handled, so a reload replays nothing and a re-click of the same link is a fresh jump.
@@ -687,7 +635,8 @@ def card_html(item, page_options, page_default, option_help):
         f' data-def="{html.escape(default or "")}"{fold_attr}{facets_attr}>'
         f'<div class="cardhead">{chevron}<span class="cardid">{html.escape(item_id)}</span>{badge}{warn_flag}{source}'
         f'<span class="cardtitle">{html.escape(item.get("title", ""))}</span></div>'
-        f'<div class="cardfold">{meta}{summary}{fields}{evidence}{detail}{warning}{body}</div>'
+        f"{summary}"
+        f'<div class="cardfold">{meta}{fields}{evidence}{detail}{warning}{body}</div>'
         f"{diff_html}{opts}{notes}</div>"
     )
 
@@ -724,15 +673,24 @@ def main():
             value = (item.get("facets") or {}).get(key)
             if value in counts:
                 counts[value] += 1
-        chips = "".join(
-            f'<button class="fchip" data-key="{html.escape(key)}" data-value="{html.escape(value)}"'
-            + (f' title="{html.escape(help_map[value])}"' if value in help_map else "")
-            + f'>{html.escape(value)}<span class="fcount">{counts[value]}</span></button>'
-            for value in values
-        )
-        facet_rows.append(
-            f'<div class="fgroup"><span class="fglabel">{html.escape(group.get("label", key))}</span>{chips}</div>'
-        )
+        label = html.escape(group.get("label", key))
+        if group.get("style") == "select":
+            # one compact control regardless of value count — the right shape past ~6 values
+            options = [f'<option value="" data-base="all">all ({sum(counts.values())})</option>'] + [
+                f'<option value="{html.escape(value)}" data-base="{html.escape(value)}">'
+                f'{html.escape(value)} ({counts[value]})</option>'
+                for value in values
+            ]
+            control = f'<select class="fselect" data-key="{html.escape(key)}">{"".join(options)}</select>'
+            facet_rows.append(f'<div class="fgroup"><span class="fglabel">{label}</span>{control}</div>')
+        else:
+            chips = "".join(
+                f'<button class="fchip" data-key="{html.escape(key)}" data-value="{html.escape(value)}"'
+                + (f' title="{html.escape(help_map[value])}"' if value in help_map else "")
+                + f'>{html.escape(value)}<span class="fcount">{counts[value]}</span></button>'
+                for value in values
+            )
+            facet_rows.append(f'<div class="fgroup"><span class="fglabel">{label}</span>{chips}</div>')
     decision_items = [item for item in spec["items"] if item.get("options", page_options)]
     if decision_items and spec.get("picked_facet", True):
         picked_values = list(page_options)
@@ -753,12 +711,6 @@ def main():
             for value in picked_values
         )
         facet_rows.append(f'<div class="fgroup"><span class="fglabel">picked</span>{picked_chips}</div>')
-    if spec.get("group_by"):
-        group_chips = '<button class="gchip active" data-group="">none</button>' + "".join(
-            f'<button class="gchip" data-group="{html.escape(key)}">{html.escape(key)}</button>'
-            for key in spec["group_by"]
-        )
-        facet_rows.append(f'<div class="fgroup"><span class="fglabel">group</span>{group_chips}</div>')
     facetbar = ""
     if facet_rows:
         facetbar = ('<div class="facetbar">' + "".join(facet_rows)
