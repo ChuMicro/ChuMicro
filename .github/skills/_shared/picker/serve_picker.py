@@ -15,13 +15,22 @@ PICKER_NO_OPEN=1 and runs `open <url>` on the printed SERVING line itself: from 
 sandboxed background process the auto-open either fails silently or lands late as a
 duplicate tab, so the session must be the only opener.
 
+A refresh always shows the current spec: on each GET of the page, when <dir>/spec.json
+or render_picker.py is newer than the rendered page, the server re-renders before
+serving and prints one `RERENDERED <path>` line. The server stays selection-agnostic —
+it never parses or applies what comes back.
+
 Usage: serve_picker.py <dir> [<page>]      (default page: picker.html)
-Stdout: `SERVING <url>` once on start, then one `SELECTION RECEIVED -> <path>` line per submit.
+Stdout: `SERVING <url>` once on start, `RERENDERED <path>` per stale-refresh,
+one `SELECTION RECEIVED -> <path>` line per submit.
 """
 import http.server
 import os
+import subprocess
 import sys
 import webbrowser
+
+RENDERER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "render_picker.py")
 
 
 def main():
@@ -31,6 +40,27 @@ def main():
         print(f"refusing to serve: {directory}/{page} does not exist", flush=True)
         raise SystemExit(2)
     sink = os.path.join(directory, "selection.txt")
+    spec_path = os.path.join(directory, "spec.json")
+    page_path = os.path.join(directory, page)
+
+    def rerender_if_stale():
+        if not os.path.exists(spec_path):
+            return
+        try:
+            page_mtime = os.path.getmtime(page_path)
+            if max(os.path.getmtime(spec_path), os.path.getmtime(RENDERER)) <= page_mtime:
+                return
+            result = subprocess.run(
+                [sys.executable, RENDERER, spec_path, directory],
+                capture_output=True, text=True, timeout=30,
+            )
+            if result.returncode == 0:
+                print(f"RERENDERED {page_path}", flush=True)
+            else:
+                tail = result.stderr.strip().splitlines()[-1] if result.stderr.strip() else "unknown error"
+                print(f"RENDER FAILED (serving stale page): {tail}", flush=True)
+        except OSError:
+            pass
 
     class PickerHandler(http.server.SimpleHTTPRequestHandler):
         def __init__(self, *args, **kwargs):
@@ -38,6 +68,11 @@ def main():
 
         def log_message(self, *args):  # stdout is the session's event stream; keep request noise off it
             pass
+
+        def do_GET(self):
+            if self.path.split("?")[0].lstrip("/") in ("", page):
+                rerender_if_stale()
+            super().do_GET()
 
         def do_POST(self):
             if self.path.rstrip("/") != "/selection":
