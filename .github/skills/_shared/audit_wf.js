@@ -1,14 +1,14 @@
 export const meta = {
   name: 'audit-skill-lenses',
-  description: 'Five blind audit lenses over one SKILL.md, schema-validated findings',
+  description: 'Five blind audit lenses plus an outward research lens over one SKILL.md, schema-validated output',
   phases: [{ title: 'Audit' }],
 }
 
 // args: { skillPath, referenceFiles: [], personaFiles: [], triggerMessages: [] }
 // Accept both an object and a JSON-encoded string — stringified args reach the script
-// as one string, and reading .skillPath off a string silently yields undefined. The
-// first live run dispatched all five lenses against the literal path "undefined" for
-// exactly that reason; the guard below makes the failure loud and immediate instead.
+// as one string, and reading .skillPath off a string silently yields undefined, which
+// would dispatch every lens against the literal path "undefined". The guard below
+// makes that failure loud and immediate instead.
 const input = typeof args === 'string' ? JSON.parse(args) : (args || {})
 const skill = input.skillPath
 const refs = input.referenceFiles || []
@@ -65,6 +65,24 @@ const COLD_OUT = {
     findings: { type: 'array', items: FINDING_ITEM },
   },
 }
+const RESEARCH_OUT = {
+  type: 'object', required: ['ideas'],
+  properties: {
+    ideas: {
+      type: 'array', maxItems: 5,
+      items: {
+        type: 'object', required: ['title', 'kind', 'source', 'change', 'recommended_action'],
+        properties: {
+          title: { type: 'string' },
+          kind: { enum: ['prior-art', 'vision', 'toolset'] },
+          source: { type: 'string', description: 'the URL actually read for prior-art and toolset ideas; the word "vision" plus a one-clause rationale for vision ideas' },
+          change: { type: 'string', description: 'what changes if this lands, one sentence' },
+          recommended_action: { enum: ['apply-inline', 'apply-with-edits', 'discuss-first'] },
+        },
+      },
+    },
+  },
+}
 const IDEAS_OUT = {
   type: 'object', required: ['ideas'],
   properties: {
@@ -87,7 +105,7 @@ const IDEAS_OUT = {
 
 phase('Audit')
 
-const [loader, cold, craft, orchestration, ideas] = await parallel([
+const [loader, cold, craft, orchestration, ideas, research] = await parallel([
   () => agent(
     `${FENCE}\n\nRead ONLY the YAML frontmatter of ${skill} — stop at the closing ---. Do not open the body.\n\n` +
     `Judge whether the skill loader would route each of these user messages to this skill on the description/when_to_use text alone:\n` +
@@ -106,7 +124,7 @@ const [loader, cold, craft, orchestration, ideas] = await parallel([
 
   () => agent(
     `${FENCE}\n\nAudit the craft of ${skill} — how it collaborates with the user and whether its procedure reaches for the right tools.\n\n` +
-    `Judge: (1) every user-input fork uses AskUserQuestion with multiSelect where the user picks M of K, and previews where alternatives need visual comparison; (2) THE QUESTION RULE — any step that asks the user to decide must place the finding's evidence, consequence, and exact proposed change in front of them in the same message; a question answerable only by trusting the asker is IMPORTANT (cryptic chip-label approval prompts are the recognizer); (3) defaults carry escape hatches, silent picks where the user might override are IMPORTANT; (4) scope: does the skill deliver to its stated goal or stop at the minimum (playing small and goal-drifting expansion are both findings); (5) mashed phases that lose fresh-eyes value when one context drafts AND self-reviews; (6) repeated work that should be a bundled script — a step describing multi-line mechanical work in prose that every run would reproduce identically; (7) weak directives ("handle appropriately", "as needed") that gesture instead of instruct.\n\n` +
+    `Judge: (1) every user-input fork uses AskUserQuestion with multiSelect where the user picks M of K, and previews where alternatives need visual comparison; (2) THE QUESTION RULE — any step that asks the user to decide must place the finding's evidence, consequence, and exact proposed change in front of them in the same message; a question answerable only by trusting the asker is IMPORTANT (cryptic chip-label approval prompts are the recognizer); (3) defaults carry escape hatches, silent picks where the user might override are IMPORTANT; (4) scope: does the skill deliver to its stated goal or stop at the minimum (playing small and goal-drifting expansion are both findings); (5) mashed phases that lose fresh-eyes value when one context drafts AND self-reviews; (6) repeated work that should be a bundled script — a step describing multi-line mechanical work in prose that every run would reproduce identically; (7) weak directives ("handle appropriately", "as needed") that gesture instead of instruct; (8) harness-affordance fit — flag a step doing the weak-tool version of work the harness does better: a long-running command foregrounded instead of a background Bash task; a running task watched through repeated manual polls or sleeps instead of the Monitor tool or the harness's completion notification; a long-running step that stays silent until it finishes — printing no progress markers mid-run for a Monitor check to surface as a status report — when its work has reportable stages; a report the user must act on printed only to scrollback instead of written to a file and opened; a rich pick — many options, side-by-side candidates, free-form per-item input — crammed into AskUserQuestion's 4-option cap instead of a generated HTML page the skill writes, opens, and collects a submission from; a time-sensitive or product-behavior fact asserted from memory instead of verified (web search for the live web, the claude-code-guide agent for Claude Code behavior); file content written via shell heredocs instead of Write/Edit; a multi-item user pick forced through repeated single questions instead of one multiSelect; independent sub-agent work dispatched one message at a time. Mark findings resting on documented tool behavior harness_claim: true. This lane flags only affordances a step plainly needs; affordances that would merely upgrade the skill belong to an upgrade lens, not yours.\n\n` +
     `For every finding: evidence = file:line + quote; why = what the user experiences when it fires; proposed_fix = exact text or concrete change.`,
     { label: 'lens:craft', schema: FINDINGS }),
 
@@ -121,12 +139,23 @@ const [loader, cold, craft, orchestration, ideas] = await parallel([
     `${FENCE}\n\nRead ${skill}` +
     (personas.length ? ` and the persona files it dispatches (${personas.join(', ')})` : '') +
     ` and propose up to 5 improvements the author probably did not consider — a curated menu, not a findings list.\n\n` +
-    `Kinds: alternative framings, adjacent problems worth folding in, harness tools the skill could use but doesn't, scope adjustments, lifecycle gaps, output-shape rethinks, persona-lens reframings, cross-cutting refactors. Ground every idea in something the files actually say (anchor = file:line or section). At most ONE idea may be wild (loosened plausibility — mark it). For each, set recommended_action: apply-inline for a narrow single-file edit; apply-with-edits when wording needs the author; discuss-first for wild ideas and anything touching goal-bearing prose (description, opening paragraph, Done-when, a blindness contract).\n\n` +
+    `Kinds: alternative framings, adjacent problems worth folding in, harness tools the skill could use but doesn't, scope adjustments, lifecycle gaps, output-shape rethinks, persona-lens reframings, cross-cutting refactors. Shared assets you may propose without reading them: the voice registry at .github/skills/_shared/voices/ (registered prose voices with writing samples — a fit when the skill emits substantial prose whose register matters); the probe runner at .github/skills/_shared/run_trigger_evals.py (a fit when the skill's routing matters but no trigger-evals.json exists); an HTML page the skill writes, opens, and collects a submission from (a fit when a user decision outgrows AskUserQuestion's 4-option cap). Ground every idea in something the files actually say (anchor = file:line or section). At most ONE idea may be wild (loosened plausibility — mark it). For each, set recommended_action: apply-inline for a narrow single-file edit; apply-with-edits when wording needs the author; discuss-first for wild ideas and anything touching goal-bearing prose (description, opening paragraph, Done-when, a blindness contract).\n\n` +
     `Stay out of the checklist lanes: propose a tool or behavior only when its ABSENCE is not a defect a checklist would flag — an upgrade beyond the bar, not a missing requirement. Fewer, better ideas beat a padded menu; an empty menu is a valid result.`,
     { label: 'lens:ideas', schema: IDEAS_OUT }),
+
+  () => agent(
+    `You are the outward research lens on ${skill}. Read that file` +
+    (refs.length ? ` and its reference files (${refs.join(', ')})` : '') +
+    `, and no other skill or persona in the repository — your value is bringing in what those files cannot contain.\n\n` +
+    `Work three lanes:\n` +
+    `1. PRIOR ART — web-search for tools, workflows, and published practice that do the job this skill's goal names. What do they do that this skill doesn't? Source = the URL you actually read.\n` +
+    `2. VISION — before comparing anything, sketch what the ideal tool with this goal would do end to end. Diff the sketch against the actual file; a capability in the sketch but absent from the skill is an idea. Source = the word "vision" plus a one-clause rationale.\n` +
+    `3. TOOLSET — check the live Claude Code docs (start at https://code.claude.com/docs) for harness capabilities the skill could exploit but doesn't: tools, frontmatter fields, hooks, subagent and workflow affordances. Source = the doc URL. Upgrades beyond the current bar only — a step doing manually what a tool plainly does better is a defect another lens already flags.\n\n` +
+    `Up to 5 ideas total across the lanes, best first, each naming what changes if it lands. Skip anything derivable from the skill files alone — that is the inward ideas lens's lane. An empty menu is a valid result when the search and the sketch surface nothing the skill misses.`,
+    { label: 'lens:research', agentType: 'general-purpose', schema: RESEARCH_OUT }),
 ])
 
-const lenses = { loader, cold, craft, orchestration, ideas }
+const lenses = { loader, cold, craft, orchestration, ideas, research }
 const missing = Object.entries(lenses).filter(([, value]) => !value).map(([name]) => name)
 if (missing.length) log(`lens(es) returned nothing after retries: ${missing.join(', ')} — director must note the missing lens in the report`)
 return lenses

@@ -28,7 +28,7 @@ Every phase produces a concrete artifact the next phase consumes; if a phase exi
 - [Phase 7: Steps + per-step annotations](#phase-7-steps--per-step-annotations) — per-step success criteria
 - [Phase 8: Arguments and tools](#phase-8-arguments-and-tools) — finalize frontmatter
 - [Phase 9: Citations, incident trail, and vocabulary sourcing](#phase-9-citations-incident-trail-and-vocabulary-sourcing) — absolutes AND every label / tier / verdict the skill uses
-- [Phase 10: Validation via the blind lenses](#phase-10-validation-via-the-blind-lenses) — loader, cold-walk, craft, orchestration, ideas
+- [Phase 10: Validation via the blind lenses](#phase-10-validation-via-the-blind-lenses) — loader, cold-walk, craft, orchestration, ideas, research
 - [Phase 11: Where files land and how the run closes](#phase-11-where-files-land-and-how-the-run-closes) — pointer to SKILL.md Steps 2 and 5
 - [Appendix: Trigger-match test](#appendix-trigger-match-test)
 - [Appendix: What the validation lenses surface](#appendix-what-the-validation-lenses-surface)
@@ -905,9 +905,9 @@ For each piece of vocabulary, fire:
 
 **Goal.**  Surface the gaps mechanical sweeps miss — the content the skill *doesn't* have, plus the angles the author didn't think to ask about.
 
-**The author cannot do the cold-walk themselves.**  By Phase 10 the author has gathered the user's intake answers, drafted the description, and walked every Process step.  The author's *"this looks fine"* is unreliable.  SKILL.md Step 3 owns the dispatch: the `Workflow` call to `.github/skills/_shared/audit_wf.js` runs five blind lenses (loader, cold-walk, craft, orchestration, ideas) plus the probe lane — this phase describes what the lenses surface, not a fan-out to run by hand.  Each lens reads only what its prompt names; none sees the user's intake answers or the author's drafting context.
+**The author cannot do the cold-walk themselves.**  By Phase 10 the author has gathered the user's intake answers, drafted the description, and walked every Process step.  The author's *"this looks fine"* is unreliable.  SKILL.md Step 3 owns the dispatch: the `Workflow` call to `.github/skills/_shared/audit_wf.js` runs five blind lenses (loader, cold-walk, craft, orchestration, ideas) and an outward research lens, plus the probe lane — this phase describes what the lenses surface, not a fan-out to run by hand.  Each lens reads only what its prompt names (the research lens additionally searches the web and the live Claude Code docs); none sees the user's intake answers or the author's drafting context.
 
-The four checklist lenses return tiered, evidence-carrying findings.  The ideas lens returns a curated menu (up to 5) of improvements the author probably did not consider — alternative framings, adjacent problems to fold in, harness affordances not reached for, scope adjustments — each with a recommended action.  Ideas are **not findings**; they never gate sign-off.  Ideas do **not** get filed to `plans/next-up.md` — the authoring session is the place to solve them, not a bullet that rots.
+The four checklist lenses return tiered, evidence-carrying findings.  The ideas lens returns a curated menu (up to 5) of improvements the author probably did not consider — alternative framings, adjacent problems to fold in, harness affordances not reached for, scope adjustments — each with a recommended action.  The research lens returns a second menu (up to 5) anchored outward instead of inward: prior art for the skill's goal, capabilities present in an ideal-version sketch but absent from the draft, and harness capabilities from the live Claude Code docs — each anchored to a URL or marked vision.  Ideas from either menu are **not findings**; they never gate sign-off.  Ideas do **not** get filed to `plans/next-up.md` — the authoring session is the place to solve them, not a bullet that rots.
 
 Resolve everything per SKILL.md Step 4: one numbered report (tier, quoted evidence, consequence, exact proposed fix; ideas continue the numbering), picks in plain chat — `apply 1, 3` · `discuss 2` · `edit 4: <wording>` · `skip the rest`.
 
