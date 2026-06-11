@@ -122,7 +122,8 @@ When at least one decision card exists, the bar gains a virtual `picked` row
 narrow to your apply set for a final look before submitting. `picked` is a
 reserved facet key. Every card carries id card-<id, non-alphanumerics dashed>,
 so trusted section or intro HTML can deep-link to a card (#card-heartbeat-3);
-navigating to a folded card unfolds it, and the target card highlights.
+navigating to a folded card unfolds it, and the target card flashes an accent
+ring that fades out.
 
 Every card folds to a strip — title row, radios, and the diff when one exists —
 on a title-row click; `collapsed: true` sets the initial state, and fold changes
@@ -203,8 +204,10 @@ CSS = """
  .card.fhidden,.card.collapsed.fhidden{display:none}
  .legend b{color:var(--fg);font-weight:620}
  .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:15px 17px;margin:12px 0;
-  scroll-margin-top:140px}
- .card:target{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+  scroll-margin-top:var(--anchor-clear,40px)}
+ .card.flash{animation:cardflash 1.8s ease-out}
+ @keyframes cardflash{0%,30%{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
+  100%{border-color:var(--border);box-shadow:0 0 0 0 transparent}}
  .cardhead{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap}
  .chev{display:inline-block;color:var(--faint);font-size:12px;align-self:center;
   transition:transform .15s;transform:rotate(90deg)}
@@ -539,13 +542,31 @@ SCRIPT = """
     var knownGroup = Array.prototype.some.call(gchips, function (b) { return b.dataset.group === savedGroup; });
     if (savedGroup && knownGroup) applyGroup(savedGroup);
   }
-  // a deep link from a context section can land on a folded card — unfold it so the jump shows the card
+  // anchor scrolls must clear the sticky facet bar, whose height varies with its row count
+  // and viewport width — measure it and feed scroll-margin-top through a CSS variable
+  function setAnchorClearance() {
+    var bar = document.querySelector('.facetbar');
+    root.style.setProperty('--anchor-clear', (bar ? bar.offsetHeight + 26 : 40) + 'px');
+  }
+  window.addEventListener('resize', setAnchorClearance);
+  setAnchorClearance();
+  // a deep link from a context section can land on a folded card — unfold it, flash it, and let
+  // the flash fade out (a click listener too, so re-clicking the same link re-flashes without a hashchange)
   function revealHash() {
     if (!location.hash) return;
     var target = document.getElementById(location.hash.slice(1));
-    if (target && target.classList.contains('card')) target.classList.remove('collapsed');
+    if (!target || !target.classList.contains('card')) return;
+    target.classList.remove('collapsed');
+    target.classList.remove('flash');
+    void target.offsetWidth;
+    target.classList.add('flash');
+    target.addEventListener('animationend', function () { target.classList.remove('flash'); }, { once: true });
   }
   window.addEventListener('hashchange', revealHash);
+  document.addEventListener('click', function (e) {
+    var a = e.target.closest && e.target.closest('a[href^="#card-"]');
+    if (a) setTimeout(revealHash, 0);
+  });
   revealHash();
   refresh();
 })();
