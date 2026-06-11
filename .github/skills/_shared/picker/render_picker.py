@@ -65,13 +65,18 @@ Spec schema:
           "tab": "loader"                                 // optional: group cards into tabs
         }
       ],
-      "tabs": ["loader", "cold-walk"]                     // optional tab order; defaults to first appearance
+      "tabs": [                                           // optional tab order; defaults to first appearance
+        {"name": "loader", "help": "frontmatter routing — would the loader fire on the right messages"},
+        "cold-walk"                                       // bare names are fine; help renders atop the pane
+      ]
     }
 
 When any item carries `tab`, the page renders a sticky tab bar with per-tab item
 counts; hidden panes stay in the DOM, so the blob, tally, and Reset always cover
-every tab. Items render in spec order within a tab — ordering (e.g. by severity)
-is the spec author's job.
+every tab. A tab's `help` line names the pane's purpose for a reader who just
+clicked in — and makes a per-card `source` chip that merely repeats the tab name
+redundant (drop the chip in that case). Items render in spec order within a tab —
+ordering (e.g. by severity) is the spec author's job.
 
 body_html and intro_html are written into the page unescaped — the spec author
 is the orchestrating session, not an untrusted source.
@@ -122,6 +127,7 @@ CSS = """
  .tabbar button.active{background:var(--card);color:var(--accent);box-shadow:0 1px 5px rgba(0,0,0,.14)}
  .tabbar .tcount{font-size:10.5px;background:var(--chip);color:var(--faint);border-radius:999px;padding:0 7px;margin-left:6px;font-weight:700}
  .tabpane{display:none} .tabpane.active{display:block}
+ .tabdesc{color:var(--faint);font-size:14px;margin:2px 2px 10px}
  .legend b{color:var(--fg);font-weight:620}
  .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:15px 17px;margin:12px 0}
  .cardhead{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap}
@@ -360,7 +366,16 @@ def main():
     page_default = spec.get("default")
 
     if any(item.get("tab") for item in spec["items"]):
-        tab_order = list(spec.get("tabs", []))
+        # spec["tabs"] entries are names or {name, help}; help renders at the top of the pane
+        tab_order = []
+        tab_help = {}
+        for entry in spec.get("tabs", []):
+            if isinstance(entry, dict):
+                tab_order.append(entry["name"])
+                if entry.get("help"):
+                    tab_help[entry["name"]] = entry["help"]
+            else:
+                tab_order.append(entry)
         for item in spec["items"]:
             tab_name = item.get("tab", "general")
             if tab_name not in tab_order:
@@ -378,8 +393,9 @@ def main():
                 f'<button class="tab{active}" data-pane="{index}">{html.escape(tab_name)}'
                 f'<span class="tcount">{len(groups[tab_name])}</span></button>'
             )
+            description = f'<p class="tabdesc">{html.escape(tab_help[tab_name])}</p>' if tab_name in tab_help else ""
             pane_cards = "\n".join(card_html(item, page_options, page_default) for item in groups[tab_name])
-            panes.append(f'<div class="tabpane{active}" id="pane-{index}">{pane_cards}</div>')
+            panes.append(f'<div class="tabpane{active}" id="pane-{index}">{description}{pane_cards}</div>')
         cards = f'<div class="tabbar">{"".join(buttons)}</div>\n' + "\n".join(panes)
     else:
         cards = "\n".join(card_html(item, page_options, page_default) for item in spec["items"])
