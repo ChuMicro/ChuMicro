@@ -26,6 +26,10 @@ def _scan(text, where, out):
     bare = _strip_code_spans(text)
     if "—" in bare:
         out.append({"kind": "em-dash", "where": where, "text": text.strip()[:90]})
+    # the double-hyphen em-dash stand-in counts as an em-dash: writers mimic the prompts' own " -- "
+    # punctuation, and the character-only check let it ship all day (caught 2026-06-10)
+    if " -- " in bare or bare.rstrip().endswith(" --"):
+        out.append({"kind": "em-dash", "where": where, "text": text.strip()[:90]})
     if ";" in bare:
         out.append({"kind": "semicolon", "where": where, "text": text.strip()[:90]})
     for w in BANNED_WORDS:
