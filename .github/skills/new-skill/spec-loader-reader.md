@@ -1,6 +1,6 @@
 # Spec — Loader-reader scope
 
-Frontmatter rules the loader-reader cold-walk persona judges against.  When this file changes, [`.claude/agents/new-skill-loader-reader.md`](../../.claude/agents/new-skill-loader-reader.md) changes in lockstep.
+Frontmatter rules for skill authors.  The loader lens in `.github/skills/_shared/audit_wf.js` carries a condensed version of these rules; when this file changes materially, re-check that lens prompt.
 
 The field semantics, caps, and loader mechanics below snapshot the Claude Code documentation and lag the product as it ships.  When a judgment hinges on one of these documented behaviors (not on prose quality), the director verifies it against current docs via the `claude-code-guide` agent; a contradiction means this file gets corrected, not worked around.
 
@@ -124,7 +124,7 @@ A description that fires on the first message but stays silent on the latter two
 
 **Query realism.**  Calibration queries — positive and near-miss — should read the way users actually type: a concrete file path or symbol name, some backstory, casual phrasing, the occasional lowercase or typo.  Abstract requests (*"format this data"*, *"extract text from PDF"*) measure nothing, because no real message looks like that.  Obviously-irrelevant negatives test nothing either — every near-miss should be a query a naive keyword match would route wrong.
 
-**Persisted evals.**  The interview's Phase 1 queries (three positives + three-to-five near-misses with `expected_route`) persist as `trigger-evals.json` next to the SKILL.md, in the regen-comments schema (`skill_name`, `evals: [{query, should_trigger, expected_route?}]`).  `.github/skills/_shared/run_trigger_evals.py` probes them against the live skill registry; re-run after any `description` / `when_to_use` edit or when a sibling's scope moves closer.
+**Persisted evals.**  The intake's queries (three positives + three-to-five near-misses with `expected_route`) persist as `trigger-evals.json` next to the SKILL.md — schema: `skill_name`, `evals: [{query, should_trigger, expected_route?}]`.  `.github/skills/_shared/run_trigger_evals.py` probes them against the live skill registry; re-run after any `description` / `when_to_use` edit or when a sibling's scope moves closer.
 
 ### `when_to_use` (optional)
 

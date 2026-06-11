@@ -1,6 +1,6 @@
 # Interview — Deep Question Bank with Pushback
 
-**Reading instruction.**  Read this file top-to-bottom in one pass.  Walk phases in the order the `/new-skill` complexity table calls for; do not skip a phase the table fires.  The widget-selection table just below and the **Pushback patterns** section after the TOC are load-bearing for *every* phase — they are not framing to skim past.  Re-reference both whenever you're driving any phase's question, not only at the start.
+**Role.**  A question bank `/new-skill`'s intake conversation draws from — not a gate sequence to march through.  Consult the phase whose area is murky (trigger discovery, scope, procedure form, vocabulary sourcing, agent architecture, stretch angles) for what to ask and how to push back.  The **Pushback patterns** section after the TOC applies to every question regardless of phase.  The intake itself is plain conversation; the widget table below applies only at genuine 2–4-option forks.
 
 **If running low on context mid-interview** (compaction fired, working memory thin), extract a single phase with `awk '/^## Phase N:/,/^## Phase N+1:/' .github/skills/new-skill/interview.md` — replace `N`/`N+1` with the actual phase numbers; for Phase 11, use `/^## Appendix:/` as the end anchor.  Re-extract the framing block at the top (intro + widget table + Pushback patterns) the same way: `awk '/^# Interview/,/^## Phase 0:/' .github/skills/new-skill/interview.md` — it's the standing context for whichever phase you're working.
 
@@ -28,10 +28,10 @@ Every phase produces a concrete artifact the next phase consumes; if a phase exi
 - [Phase 7: Steps + per-step annotations](#phase-7-steps--per-step-annotations) — per-step success criteria
 - [Phase 8: Arguments and tools](#phase-8-arguments-and-tools) — finalize frontmatter
 - [Phase 9: Citations, incident trail, and vocabulary sourcing](#phase-9-citations-incident-trail-and-vocabulary-sourcing) — absolutes AND every label / tier / verdict the skill uses
-- [Phase 10: Cold-walk via four unbiased sub-agents](#phase-10-cold-walk-via-four-unbiased-sub-agents) — loader, triggerer, sibling-author, ideas
-- [Phase 11: Show, confirm, write](#phase-11-show-confirm-write) — the only place files land on disk
+- [Phase 10: Validation via the blind lenses](#phase-10-validation-via-the-blind-lenses) — loader, cold-walk, craft, orchestration, ideas
+- [Phase 11: Where files land and how the run closes](#phase-11-where-files-land-and-how-the-run-closes) — pointer to SKILL.md Steps 2 and 5
 - [Appendix: Trigger-match test](#appendix-trigger-match-test)
-- [Appendix: Four-reader cold-walk checklist](#appendix-four-reader-cold-walk-checklist)
+- [Appendix: What the validation lenses surface](#appendix-what-the-validation-lenses-surface)
 
 ---
 
@@ -214,7 +214,7 @@ Then fire a single-pick `AskUserQuestion`:
 > - "Drop one — it's actually a different skill"
 > - "Edit one — I'll say which"
 
-**Q1c — near-miss negatives.**  After the positive set is confirmed, draft three-to-five **near-miss** messages yourself and present them for the user to confirm, edit, or replace: messages that share the skill's keywords or concepts but belong to a sibling skill or to a plain edit.  Obviously-irrelevant negatives (*"write a fibonacci function"* for a deploy skill) test nothing — every negative should be one a naive keyword match would route wrong.  For each, name the `expected_route` (the sibling slug from the Step 1b survey, or `none`).  Write all queries — positive and negative — the way a user actually types: a concrete file path or symbol name, some backstory, casual phrasing, the occasional lowercase or typo.  Abstract requests (*"format this data"*) measure nothing.
+**Q1c — near-miss negatives.**  After the positive set is confirmed, draft three-to-five **near-miss** messages yourself and present them for the user to confirm, edit, or replace: messages that share the skill's keywords or concepts but belong to a sibling skill or to a plain edit.  Obviously-irrelevant negatives (*"write a fibonacci function"* for a deploy skill) test nothing — every negative should be one a naive keyword match would route wrong.  For each, name the `expected_route` (the sibling slug from the Step 1 sibling survey, or `none`).  Write all queries — positive and negative — the way a user actually types: a concrete file path or symbol name, some backstory, casual phrasing, the occasional lowercase or typo.  Abstract requests (*"format this data"*) measure nothing.
 
 > *"These near-misses should NOT fire the skill: (1) `<msg>` → `<sibling|none>` … Confirm, edit, or add your own?"*
 
@@ -619,7 +619,7 @@ If *"Explain more first"* — print this in plain text, then re-fire Q6b-5:
 
 > The director — the assistant invoking this skill — saw the inputs during the procedure (reading files, gathering data, surveying state).  That makes the director a biased reader of any downstream agent's output: it knows what *should* be in the output because it saw what *was* in the inputs.  A director's *"this looks fine"* is unreliable.
 >
-> The second-stage agent in a director pattern is independent of that bias by construction — its task prompt names only what it should see.  When reporting to the user, prefer the second-stage agent's findings over the director's observations.  If the director noticed something the agent missed, mention it as a single follow-up note — don't substitute the director's bias for the agent's blindness.
+> The second-stage agent in a director pattern is independent of that bias — its task prompt names only what it should see.  When reporting to the user, prefer the second-stage agent's findings over the director's observations.  If the director noticed something the agent missed, mention it as a single follow-up note — don't substitute the director's bias for the agent's blindness.
 
 **Q6b-6 — parallel dispatch confirm:** (Only if parallel sequencing picked) `header: Parallel dispatch`
 
@@ -681,7 +681,7 @@ If *"Walk me through the batching pattern"* — print this in plain text, then r
 
 **Exit artifact.**  `agent_roles: [...]` — one entry per role (including nested), every custom persona either confirmed to exist or fully specified for write.  Plus `ecosystem: { nested: bool, skill_of_skills: [...], hook: {...}, driver: {...}, data_files: [...] }`.
 
-**The Phase 6b output drives Process step 8 (write the files).**  Multi-level ecosystems mean multiple writes spread across multiple paths.  Step 8's success criteria includes verifying each component landed at its expected path.
+**The Phase 6b output drives Process step 2 (draft to disk).**  Multi-level ecosystems mean multiple writes spread across multiple paths.  Step 2's success criteria includes verifying each component landed at its expected path.
 
 ---
 
@@ -901,23 +901,15 @@ For each piece of vocabulary, fire:
 
 ---
 
-## Phase 10: Cold-walk via four unbiased sub-agents
+## Phase 10: Validation via the blind lenses
 
 **Goal.**  Surface the gaps mechanical sweeps miss — the content the skill *doesn't* have, plus the angles the author didn't think to ask about.
 
-**The author cannot do the cold-walk themselves.**  By Phase 10 the author has gathered the user's interview answers, drafted the description, and walked every Process step.  The author's *"this looks fine"* is unreliable.  Dispatch four sub-agents in parallel — three checklist readers (loader, triggering agent, sibling-skill author) and one generative reader (ideas).  Each gets ONLY its narrow task; none sees the user's interview answers or the author's drafting context.  The skill body in `SKILL.md` Step 5 carries the exact task-prompt templates, the four-reader dispatch table, and the consolidation procedure.
+**The author cannot do the cold-walk themselves.**  By Phase 10 the author has gathered the user's intake answers, drafted the description, and walked every Process step.  The author's *"this looks fine"* is unreliable.  SKILL.md Step 3 owns the dispatch: the `Workflow` call to `.github/skills/_shared/audit_wf.js` runs five blind lenses (loader, cold-walk, craft, orchestration, ideas) plus the probe lane — this phase describes what the lenses surface, not a fan-out to run by hand.  Each lens reads only what its prompt names; none sees the user's intake answers or the author's drafting context.
 
-The three checklist readers return findings — tiered defects that gate sign-off.  The ideas-reader returns a curated menu (up to 5) of improvements the author probably did not consider — alternative framings, adjacent problems to fold in, harness affordances not reached for, scope adjustments, persona-lens reframings, cross-persona refactors.  Ideas can anchor in the draft SKILL.md or in any persona file the draft dispatches; the ideas-reader receives both as inputs.  Ideas are **not findings**, so they never gate sign-off; the user picks per-idea whether to fold in, discuss inline first, or skip.  Ideas do **not** get filed to `plans/next-up.md` — the interview is the place to solve them, not a bullet that rots.
+The four checklist lenses return tiered, evidence-carrying findings.  The ideas lens returns a curated menu (up to 5) of improvements the author probably did not consider — alternative framings, adjacent problems to fold in, harness affordances not reached for, scope adjustments — each with a recommended action.  Ideas are **not findings**; they never gate sign-off.  Ideas do **not** get filed to `plans/next-up.md` — the authoring session is the place to solve them, not a bullet that rots.
 
-For each finding the three checklist sub-agents return, fire one `AskUserQuestion`:
-
-> "Cold-walk finding from <agent>: <finding>. How to address?" `header: Cold-walk finding N`
-> Options:
-> - "Apply the suggested fix"
-> - "Accept the gap — it's not load-bearing for the trigger messages from Phase 1"
-> - "I want to re-open Phase `<N>` to address" — re-runs that phase
-
-For the ideas-reader's menu, fire a separate `AskUserQuestion` with `multiSelect: true` listing the idea titles (plus a *"Skip all"* option).  For each picked idea, the follow-up question offers *"Apply as-drafted / Apply with edits / Discuss inline first / Skip"*. The skill body's Step 5b carries the exact prompt.
+Resolve everything per SKILL.md Step 4: one numbered report (tier, quoted evidence, consequence, exact proposed fix; ideas continue the numbering), picks in plain chat — `apply 1, 3` · `discuss 2` · `edit 4: <wording>` · `skip the rest`.
 
 **Pushback.**
 
@@ -925,55 +917,23 @@ For the ideas-reader's menu, fire a separate `AskUserQuestion` with `multiSelect
 |---|---|
 | *"Accept the gap"* on a description-level finding | "Description-level gaps mean the loader won't route the trigger messages. That's the one thing we can't ship with." |
 | *"Apply the fix"* but the fix contradicts Phase 1 trigger messages | "The fix changes the trigger. Re-run Phase 1, or change the fix." |
-| *"Apply"* an idea that contradicts the Phase 2 scope | "This idea expands scope past what Phase 2 named in-scope. Re-open Phase 2 (intentional expansion), or skip the idea (keep current scope). Pick *Discuss inline first* if unsure." |
+| *"Apply"* an idea that contradicts the Phase 2 scope | "This idea expands scope past what Phase 2 named in-scope. Re-open Phase 2 (intentional expansion), or skip the idea (keep current scope). Pick *discuss* if unsure." |
 
-**Exit artifact.**  Findings resolved.  Each idea has an outcome (applied / edited / discussed / skipped).
+**Exit artifact.**  Every numbered item resolved or explicitly accepted; each idea has an outcome (applied / edited / discussed / skipped).
 
 ---
 
-## Phase 11: Show, confirm, write
+## Phase 11: Where files land and how the run closes
 
-**Goal.**  The only place files land on disk.  This phase covers what `SKILL.md` Process steps 7, 8, and 9 do from the outer procedure — the inner interview's last phase IS the outer skill's confirm-write-tell sequence.
-
-**Step a — Print the proposed SKILL.md as normal assistant text**, in one fenced markdown block.  Print each reference file as its own block.  Print a summary header:
-
-```
-New skill: <skill-dir>/<slug>/
-
-Slug:         <slug>
-Description:  <description line>
-Trigger test: <3 messages from Phase 1, each marked ✓ or ✗ vs the description>
-Files to write:
-  SKILL.md      (<N> lines)
-  <ref.md>      (<N> lines, if any)
-```
-
-**Step b — Confirm.**
-
-> "Save these files?" `header: Save?`
-> Options:
-> - "Yes, save"
-> - "Edit `<file>` first" — user fills "Other" with the edit
-> - "Discard — start over"
+**Goal.**  A pointer, not a phase of its own.  Files land on disk at SKILL.md Process step 2 — the lenses and probes need them there, and git is the safety net — so there is no separate show-confirm-write gate; the user steers through the intake conversation before the draft and the numbered report after it.  The run closes with SKILL.md Step 5's closing block: files written with line counts, the `/<slug>` invocation form, and the user's next actions.
 
 **Pushback.**
 
 | Answer | Push |
 |---|---|
-| *"Edit SKILL.md first"* without naming the edit | "Which section? Paste the replacement or describe the change." |
-| *"Discard"* late in the interview | "You can also park the draft as scratch in chat and resume later — that way the interview's pushback work isn't lost." |
+| *"Throw it away — start over"* late in the run | "The draft is on disk and uncommitted — the next intake can overwrite it, and the pushback work survives in this chat either way. Sure you want a full restart rather than re-opening the phase that went wrong?" |
 
-**Step c — Write the files.**
-
-**Step d — Tell the user where it landed and how to invoke.**
-
-```
-Skill written: <skill-dir>/<slug>/SKILL.md
-Invoke as: /<slug> [<args>]
-Edit the SKILL.md directly to refine — re-run /new-skill to author a sibling.
-```
-
-**Exit artifact.**  Files on disk; user knows the invocation form.
+**Exit artifact.**  Files on disk per Step 2; closing block printed per Step 5.
 
 ---
 
@@ -997,7 +957,9 @@ Mark each message ✓ or ✗.  Three ✓ is the bar.  Two ✓ means iterate the 
 
 ---
 
-## Appendix: Four-reader cold-walk checklist
+## Appendix: What the validation lenses surface
+
+(The shared lens workflow — `.github/skills/_shared/audit_wf.js` — implements these checks; sibling trigger overlap is measured by the probe lane rather than judged. The lists below describe what comes back, per lens.)
 
 ### Loader agent
 

@@ -5,10 +5,18 @@ export const meta = {
 }
 
 // args: { skillPath, referenceFiles: [], personaFiles: [], triggerMessages: [] }
-const skill = args.skillPath
-const refs = args.referenceFiles || []
-const personas = args.personaFiles || []
-const triggers = args.triggerMessages || []
+// Accept both an object and a JSON-encoded string — stringified args reach the script
+// as one string, and reading .skillPath off a string silently yields undefined. The
+// first live run dispatched all five lenses against the literal path "undefined" for
+// exactly that reason; the guard below makes the failure loud and immediate instead.
+const input = typeof args === 'string' ? JSON.parse(args) : (args || {})
+const skill = input.skillPath
+const refs = input.referenceFiles || []
+const personas = input.personaFiles || []
+const triggers = input.triggerMessages || []
+if (!skill || typeof skill !== 'string' || skill === 'undefined') {
+  throw new Error(`audit target unresolved: skillPath=${JSON.stringify(skill)} — pass args {skillPath, referenceFiles, personaFiles, triggerMessages}`)
+}
 
 const FENCE = 'Read only the files this prompt names. Do not read any other skill, persona, or reference file.'
 

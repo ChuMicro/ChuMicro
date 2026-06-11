@@ -1,6 +1,6 @@
 # Spec — Triggering-reader scope
 
-Body-structure, per-step annotation, patterns-to-avoid, and stance rules the triggering-reader cold-walk persona judges against.  When this file changes, [`.claude/agents/new-skill-triggering-reader.md`](../../.claude/agents/new-skill-triggering-reader.md) changes in lockstep.
+Body-structure, per-step annotation, patterns-to-avoid, and stance rules for skill authors.  The cold-walk lens in `.github/skills/_shared/audit_wf.js` carries a condensed version of these rules; when this file changes materially, re-check that lens prompt.
 
 For frontmatter rules see [`spec-loader-reader.md`](spec-loader-reader.md).  For sibling-overlap and reference-file rules see [`spec-sibling-author.md`](spec-sibling-author.md).  For general authoring guidance see [`spec.md`](spec.md).
 

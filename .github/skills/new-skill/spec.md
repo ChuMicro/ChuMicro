@@ -4,15 +4,15 @@ This is the rule reference `/new-skill` enforces.  When this file disagrees with
 
 ## Where the rules live
 
-The mirror-aligned rules (the ones the cold-walk personas enforce) split into three sibling files by persona:
+The detailed rules split into three sibling files by topic:
 
-| File | Persona it mirrors | Covers |
-|---|---|---|
-| [`spec-loader-reader.md`](spec-loader-reader.md) | `new-skill-loader-reader` | Frontmatter contract, name + description + when_to_use rules, Concise is key |
-| [`spec-triggering-reader.md`](spec-triggering-reader.md) | `new-skill-triggering-reader` | Body structure, per-step annotation discipline, patterns to avoid, stance |
-| [`spec-sibling-author.md`](spec-sibling-author.md) | `new-skill-sibling-author` | Reading rule, reference-file layout, MCP tool naming |
+| File | Covers |
+|---|---|
+| [`spec-loader-reader.md`](spec-loader-reader.md) | Frontmatter contract, name + description + when_to_use rules, Concise is key |
+| [`spec-triggering-reader.md`](spec-triggering-reader.md) | Body structure, per-step annotation discipline, patterns to avoid, stance |
+| [`spec-sibling-author.md`](spec-sibling-author.md) | Reading rule, reference-file layout, MCP tool naming |
 
-Orchestration patterns split into a fourth file (not persona-mirrored — just topical):
+The validation lenses in `.github/skills/_shared/audit_wf.js` carry condensed versions of the loader and body rules; a material edit to those spec files means re-checking the matching lens prompt. Orchestration patterns split into a fourth file (topical):
 
 | File | Covers |
 |---|---|
@@ -28,7 +28,7 @@ The rest — degrees of freedom, authoring patterns, driver / harness, widget se
 - [Driver / harness pattern](#driver--harness-pattern) — when needed · driver shapes · driver rules · listing bundled scripts · designing scripts for agentic use · one-off commands vs bundled
 - [Widget selection — AskUserQuestion vs plain text](#widget-selection--askuserquestion-vs-plain-text)
 - Agent and orchestration patterns → see [`spec-orchestration.md`](spec-orchestration.md)
-- [Mirror relationship with persona files](#mirror-relationship-with-persona-files)
+- [Mirror relationship with the validation lenses](#mirror-relationship-with-the-validation-lenses)
 
 ---
 
@@ -72,7 +72,7 @@ Why this works: Claude A understands the skill format and agent needs; the autho
 
 **Common observation cues from Claude B:**
 
-- *Unexpected exploration paths* — Claude B reads files in an order the author didn't anticipate → structure isn't as intuitive as the author thought
+- *Unexpected exploration paths* — Claude B reads files in an order the author didn't anticipate → structure isn't as legible as the author thought
 - *Missed connections* — Claude B fails to follow a reference → the link needs to be more prominent
 - *Overreliance on one section* — Claude B reads the same file repeatedly → that content probably belongs in the main SKILL.md
 - *Ignored content* — Claude B never reads a bundled file → it's unnecessary or poorly signaled
@@ -456,18 +456,8 @@ Moved to [`spec-orchestration.md`](spec-orchestration.md) — covers file locati
 
 ---
 
-## Mirror relationship with persona files
+## Mirror relationship with the validation lenses
 
-The `/new-skill` Step 5 cold-walk dispatches three persona files in `.claude/agents/`.  Each persona carries the rules it enforces **inline in its system prompt** — it does NOT Read these spec files at dispatch time.  This is deliberate: the persona is loaded once at session start; re-reading the spec per dispatch would mean the agent skims, applies training-data intuition for anything the spec section does not spell out, and produces inconsistent behavior across runs.
-
-When you edit one of the spec files below, the matching persona must change in lockstep:
-
-| Spec file | Mirrored into |
-|---|---|
-| [`spec-loader-reader.md`](spec-loader-reader.md) (full) | [`.claude/agents/new-skill-loader-reader.md`](../../../.claude/agents/new-skill-loader-reader.md) |
-| [`spec-triggering-reader.md`](spec-triggering-reader.md) (full) | [`.claude/agents/new-skill-triggering-reader.md`](../../../.claude/agents/new-skill-triggering-reader.md) |
-| [`spec-sibling-author.md`](spec-sibling-author.md) (full) | [`.claude/agents/new-skill-sibling-author.md`](../../../.claude/agents/new-skill-sibling-author.md) |
-
-Each persona names its mirrored spec file in a **Source of truth** block at the top of its body.  When a session is restarted after a persona edit, the new rules take effect.
+The `/new-skill` validation step runs the shared lens workflow (`.github/skills/_shared/audit_wf.js`), whose agent prompts carry condensed versions of the loader and body rules **inline** — a lens does not Read these spec files at dispatch time.  This is deliberate: an agent that re-reads a long spec per dispatch skims, fills gaps with training-data intuition, and behaves inconsistently across runs.  A material edit to `spec-loader-reader.md` or `spec-triggering-reader.md` means re-checking the matching lens prompt in that script.
 
 The other sections of this `spec.md` root (Authoring principles, Authoring patterns, Three readers / three failure modes, Driver / harness pattern, Widget selection) plus the sibling [`spec-orchestration.md`](spec-orchestration.md) are authoring guidance for the skill writer — not enforced by a cold-walk persona — and live only there.
