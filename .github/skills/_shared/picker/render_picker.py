@@ -13,6 +13,9 @@ line-oriented paste-back blob:
 
 A note on an applied item is the user's wording adjustment — there is no separate
 "edit" option; the orchestrator honors apply-with-note as apply-with-this-wording.
+The Submit button carries a live summary of the picks that differ from their
+defaults ("Submit — 3 apply · 1 discuss"), so the moment of commitment shows
+what is being committed.
 
 The page is self-contained (inline CSS + JS) and works from file:// — Copy
 selection always works; a Submit button appears only when the page is served
@@ -41,10 +44,10 @@ Spec schema:
                                                           // the card and focuses its notes box — for options
                                                           // whose substance lives in the note (a discussion
                                                           // opener, a wording adjustment)
-      "option_help": {                                    // optional legend, rendered above the cards
-        "apply": "make the proposed change (a note adjusts its wording)",
-        "discuss": "no change yet — talk it through in chat first",
-        "skip": "leave as is"
+      "option_help": {                                    // optional legend, rendered above the cards AND as
+        "apply": "make the proposed change (a note adjusts its wording)",   // hover text on every card's
+        "discuss": "no change yet — talk it through in chat first",         // radio labels, so the meaning
+        "skip": "leave as is"                                               // travels with each decision
       },
       "items": [
         {
@@ -69,8 +72,8 @@ Spec schema:
           "evidence": "SKILL.md:3 \\"quote\\"",            // optional mono block
           "diff": {                                       // optional old→new block; when the fix is
             "location": "SKILL.md:3",                     // replacement text, emit this INSTEAD of
-            "old": "current text",                        // the evidence + fix pair
-            "new": "proposed text"
+            "old": "current text",                        // the evidence + fix pair. Multiline old/new
+            "new": "proposed text"                        // render one −/+ marked line per source line
           },
           "body_html": "<p>…</p>",                        // optional extra block (trusted HTML)
           "options": ["high", "medium", "low"],           // optional per-item override; [] makes the card
@@ -114,6 +117,13 @@ under sticky per-value headers without hiding anything — narrowing and groupin
 compose. Selections and the grouping choice persist per page key. Items render
 in spec order — ordering (e.g. by severity) is the spec author's job.
 
+When at least one decision card exists, the bar gains a virtual `picked` row
+(suppress with "picked_facet": false) whose chips track the live radio values —
+narrow to your apply set for a final look before submitting. `picked` is a
+reserved facet key. Every card carries id card-<id, non-alphanumerics dashed>,
+so trusted section or intro HTML can deep-link to a card (#card-heartbeat-3);
+navigating to a folded card unfolds it, and the target card highlights.
+
 Every card folds to a strip — title row, radios, and the diff when one exists —
 on a title-row click; `collapsed: true` sets the initial state, and fold changes
 persist in localStorage like picks and notes do. Picking an option listed in
@@ -132,6 +142,7 @@ Stdout: `RENDERED <path>/picker.html` on success.
 import html
 import json
 import os
+import re
 import sys
 
 BADGE_CLASSES = {
@@ -191,7 +202,9 @@ CSS = """
   color:var(--faint);background:var(--bg);padding:10px 2px 4px;margin-top:14px}
  .card.fhidden,.card.collapsed.fhidden{display:none}
  .legend b{color:var(--fg);font-weight:620}
- .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:15px 17px;margin:12px 0}
+ .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:15px 17px;margin:12px 0;
+  scroll-margin-top:140px}
+ .card:target{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
  .cardhead{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap}
  .chev{display:inline-block;color:var(--faint);font-size:12px;align-self:center;
   transition:transform .15s;transform:rotate(90deg)}
@@ -319,16 +332,22 @@ SCRIPT = """
     return lines.join('\\n');
   }
   function refresh() {
-    var unpicked = 0, changed = 0;
+    var unpicked = 0, changed = 0, byValue = {};
     cards.forEach(function (c) {
       var r = c.querySelector('input[type=radio]:checked');
       if (!r) unpicked++;
-      else if (r.value !== c.dataset.def) changed++;
+      else if (r.value !== c.dataset.def) {
+        changed++;
+        byValue[r.value] = (byValue[r.value] || 0) + 1;
+      }
     });
     var t = cards.length + ' item(s)';
     if (changed) t += ' \\u00b7 ' + changed + ' changed from default';
     if (unpicked) t += ' \\u00b7 ' + unpicked + ' unpicked';
     document.getElementById('count').textContent = t;
+    // the Submit label carries what would be sent — the moment of commitment shows the commitment
+    var summary = Object.keys(byValue).map(function (v) { return byValue[v] + ' ' + v; }).join(' \\u00b7 ');
+    document.getElementById('submitbtn').textContent = summary ? 'Submit \\u2014 ' + summary : 'Submit to session';
     var b = document.getElementById('blob'); if (b) b.value = buildBlob();
   }
   function copy() {
@@ -359,6 +378,7 @@ SCRIPT = """
         var n = c.querySelector('.notes'); if (n) n.focus();
       }
       persist();
+      if (fchips.length) applyFacets(); // the virtual 'picked' facet follows the live radios
     });
   });
   document.querySelectorAll('.notes').forEach(function (t) { t.addEventListener('input', persist); });
@@ -386,6 +406,7 @@ SCRIPT = """
     });
     sections.forEach(function (d) { d.open = d.dataset.open0 === '1'; });
     persist();
+    if (fchips.length) applyFacets();
   });
   // facet bar: chips toggle — OR within a group, AND across groups, empty group = no narrowing.
   // Hidden cards stay in the DOM, so the blob and tally cover them. Selections persist per page key.
@@ -403,11 +424,19 @@ SCRIPT = """
   });
   var FKEYS = [];
   fchips.forEach(function (b) { if (FKEYS.indexOf(b.dataset.key) === -1) FKEYS.push(b.dataset.key); });
+  // 'picked' is the virtual facet: its value is the card's live radio state, not spec data
+  function facetValue(c, key) {
+    if (key === 'picked') {
+      var r = c.querySelector('input[type=radio]:checked');
+      return r ? r.value : undefined;
+    }
+    return facetsOf.get(c)[key];
+  }
   function matches(c, skipKey) {
     for (var k = 0; k < FKEYS.length; k++) {
       if (FKEYS[k] === skipKey) continue;
       var sel = fsel[FKEYS[k]] || [];
-      if (sel.length && sel.indexOf(facetsOf.get(c)[FKEYS[k]]) === -1) return false;
+      if (sel.length && sel.indexOf(facetValue(c, FKEYS[k])) === -1) return false;
     }
     return true;
   }
@@ -431,7 +460,7 @@ SCRIPT = """
     fchips.forEach(function (b) {
       var n = 0;
       allCards.forEach(function (c) {
-        if (facetsOf.get(c)[b.dataset.key] === b.dataset.value && matches(c, b.dataset.key)) n++;
+        if (facetValue(c, b.dataset.key) === b.dataset.value && matches(c, b.dataset.key)) n++;
       });
       var fc = b.querySelector('.fcount'); if (fc) fc.textContent = n;
       b.classList.toggle('dead', n === 0 && !b.classList.contains('active'));
@@ -510,13 +539,27 @@ SCRIPT = """
     var knownGroup = Array.prototype.some.call(gchips, function (b) { return b.dataset.group === savedGroup; });
     if (savedGroup && knownGroup) applyGroup(savedGroup);
   }
+  // a deep link from a context section can land on a folded card — unfold it so the jump shows the card
+  function revealHash() {
+    if (!location.hash) return;
+    var target = document.getElementById(location.hash.slice(1));
+    if (target && target.classList.contains('card')) target.classList.remove('collapsed');
+  }
+  window.addEventListener('hashchange', revealHash);
+  revealHash();
   refresh();
 })();
 </script>
 """
 
 
-def card_html(item, page_options, page_default):
+def anchor_id(item_id):
+    """One stable element id per card (card-heartbeat-3) — '#' and friends would break a URL
+    fragment, so every non-alphanumeric becomes a dash. Section HTML deep-links against this."""
+    return "card-" + re.sub(r"[^A-Za-z0-9_-]", "-", item_id)
+
+
+def card_html(item, page_options, page_default, option_help):
     item_id = str(item["id"])
     options = item.get("options", page_options)
     default = item.get("default", page_default) if options else None
@@ -546,9 +589,13 @@ def card_html(item, page_options, page_default):
     if item.get("diff"):
         diff = item["diff"]
         location = f'<div class="diffloc">{html.escape(diff["location"])}</div>' if diff.get("location") else ""
-        old_line = f'<div class="dline dold">− {html.escape(diff["old"])}</div>' if diff.get("old") else ""
-        new_line = f'<div class="dline dnew">+ {html.escape(diff["new"])}</div>' if diff.get("new") else ""
-        diff_html = f'<div class="diffblock">{location}{old_line}{new_line}</div>'
+        old_lines = "".join(
+            f'<div class="dline dold">− {html.escape(line)}</div>' for line in diff.get("old", "").split("\n") if diff.get("old")
+        )
+        new_lines = "".join(
+            f'<div class="dline dnew">+ {html.escape(line)}</div>' for line in diff.get("new", "").split("\n") if diff.get("new")
+        )
+        diff_html = f'<div class="diffblock">{location}{old_lines}{new_lines}</div>'
     detail = ""
     if item.get("detail"):
         detail = (
@@ -560,12 +607,15 @@ def card_html(item, page_options, page_default):
     body = f'<div class="cardbody">{item["body_html"]}</div>' if item.get("body_html") else ""
     opts = ""
     if options:
-        radios = "".join(
-            f'<label><input type="radio" name="pick:{html.escape(item_id)}" value="{html.escape(option)}"'
-            f'{" checked" if option == default else ""}> {html.escape(option)}</label>'
-            for option in options
-        )
-        opts = f'<div class="opts">{radios}</div>'
+        radio_labels = []
+        for option in options:
+            help_attr = f' title="{html.escape(option_help[option])}"' if option in option_help else ""
+            checked = " checked" if option == default else ""
+            radio_labels.append(
+                f'<label{help_attr}><input type="radio" name="pick:{html.escape(item_id)}" '
+                f'value="{html.escape(option)}"{checked}> {html.escape(option)}</label>'
+            )
+        opts = f'<div class="opts">{"".join(radio_labels)}</div>'
     notes = (
         f'<textarea class="notes" placeholder="notes on {html.escape(item_id)} (on an apply, this adjusts the wording)…"></textarea>'
         if item.get("notes", bool(options))
@@ -579,7 +629,8 @@ def card_html(item, page_options, page_default):
     if item.get("facets"):
         facets_attr = f' data-facets="{html.escape(json.dumps(item["facets"]), quote=True)}"'
     return (
-        f'<div class="{card_classes}" data-id="{html.escape(item_id)}" data-def="{html.escape(default or "")}"{fold_attr}{facets_attr}>'
+        f'<div class="{card_classes}" id="{anchor_id(item_id)}" data-id="{html.escape(item_id)}"'
+        f' data-def="{html.escape(default or "")}"{fold_attr}{facets_attr}>'
         f'<div class="cardhead">{chevron}<span class="cardid">{html.escape(item_id)}</span>{badge}{warn_flag}{source}'
         f'<span class="cardtitle">{html.escape(item.get("title", ""))}</span></div>'
         f'<div class="cardfold">{meta}{summary}{fields}{evidence}{detail}{warning}{body}</div>'
@@ -628,6 +679,26 @@ def main():
         facet_rows.append(
             f'<div class="fgroup"><span class="fglabel">{html.escape(group.get("label", key))}</span>{chips}</div>'
         )
+    decision_items = [item for item in spec["items"] if item.get("options", page_options)]
+    if decision_items and spec.get("picked_facet", True):
+        picked_values = list(page_options)
+        for item in decision_items:
+            for option in item.get("options", page_options):
+                if option not in picked_values:
+                    picked_values.append(option)
+        # server-side counts reflect the spec defaults; the page recomputes from the live
+        # radios on load and on every change
+        picked_counts = {value: 0 for value in picked_values}
+        for item in decision_items:
+            default = item.get("default", page_default)
+            if default in picked_counts:
+                picked_counts[default] += 1
+        picked_chips = "".join(
+            f'<button class="fchip" data-key="picked" data-value="{html.escape(value)}">'
+            f'{html.escape(value)}<span class="fcount">{picked_counts[value]}</span></button>'
+            for value in picked_values
+        )
+        facet_rows.append(f'<div class="fgroup"><span class="fglabel">picked</span>{picked_chips}</div>')
     if spec.get("group_by"):
         group_chips = '<button class="gchip active" data-group="">none</button>' + "".join(
             f'<button class="gchip" data-group="{html.escape(key)}">{html.escape(key)}</button>'
@@ -639,7 +710,8 @@ def main():
         facetbar = ('<div class="facetbar">' + "".join(facet_rows)
                     + '<button class="facetclear" id="facetclear" hidden>clear filters ×</button></div>\n')
 
-    card_list = "\n".join(card_html(item, page_options, page_default) for item in spec["items"])
+    option_help = spec.get("option_help", {})
+    card_list = "\n".join(card_html(item, page_options, page_default, option_help) for item in spec["items"])
     nomatch = ""
     if facetbar:
         nomatch = ('<div class="nomatch" id="nomatch" hidden>Nothing matches the current filters. '
