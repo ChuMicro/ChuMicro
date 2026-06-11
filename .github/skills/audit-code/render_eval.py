@@ -6,24 +6,25 @@ phase1.json, joins the writer's prose onto the fact ledger by id, and writes spe
 shared picker schema (../_shared/picker/render_picker.py), then invokes that renderer to produce
 picker.html.
 
-The mapping: one decision card per finding — severity badge, effort/confidence meta line, the
-symbol + quoted code as the blue "where" row, the consequence as the amber "why" row, the
-suggested fix as the green "fix" row, the generated patch as an old→new diff (replace), a diff
-with only a + side (add), or evidence-block guidance (manual), the mechanism prose behind a
-collapsible detail, and a validator warning when a finding is unconfirmed. Tabs group findings by
-angle (trap / drift / coverage / clarity), severity-ordered within each, each tab opening with a
-help line naming its lens. Context lands above the decision area as collapsible page-top sections.
+The mapping: one decision card per finding — severity badge, angle chip, effort/confidence meta
+line, the symbol + quoted code as the blue "where" row, the consequence as the amber "why" row,
+the suggested fix as the green "fix" row, the generated patch as an old→new diff (replace), a
+diff with only a + side (add), or evidence-block guidance (manual), the mechanism prose behind a
+collapsible detail, and a validator warning when a finding is unconfirmed. The findings render as
+one severity-ordered list narrowed by a facet bar — severity and angle chips (angle help on
+hover), plus file chips in merge mode — with a group-by row (angle, and file in merge mode) for
+sectioned reading. Context lands above the decision area as collapsible page-top sections.
 
 Single-file mode (one room): sections are the independent module summary, the domain facts mined
 from comments, and the per-symbol summaries with finding back-references.
 
 Merge mode (--merge, library/folder scope): one page covers every room. Finding ids are
 namespaced per file (heartbeat#3) so the paste-back blob stays unambiguous; the where row leads
-with the file name; a chip row (all · heartbeat.py · …) narrows the page to one file; every card
-renders folded to a strip (title row, radios, diff) so a long tab skims like a table — the badge
-and the warning flag say what deserves a click, nothing starts open; each file's context lands as
-one collapsed section (plus a LIBRARY_FACTS section when --lib names one); and merged.json in the
-output dir maps each namespace back to its run room + target for the apply loop.
+with the file name; every card renders folded to a strip (title row, radios, diff) so a long
+list skims like a table — the badge and the warning flag say what deserves a click, nothing
+starts open; each file's context lands as one collapsed section (plus a LIBRARY_FACTS section
+when --lib names one); and merged.json in the output dir maps each namespace back to its run
+room + target for the apply loop.
 
 Defaults encode the apply policy: a validator-confirmed high-severity finding pre-selects apply,
 an unconfirmed finding pre-selects discuss (invariant 7's push-back, encoded in the page), and
@@ -48,7 +49,7 @@ import sys
 
 SEV_RANK = {"high": 0, "med": 1, "low": 2}
 EFFORT_RANK = {"small": 0, "medium": 1, "large": 2}
-TAB_HELP = {
+ANGLE_HELP = {
     "trap": "correctness lens — inversions, off-by-ones, code that says one thing and does another, judged from comment-stripped code",
     "drift": "comment/doc lens — claims a name, comment, or docstring makes that the code does not honor",
     "coverage": "test-gap lens — behaviors no test exercises, hollow tests, and tests that bless a bug",
@@ -140,19 +141,21 @@ def build_item(room, finding, namespace=None):
     verdict = room["validator_map"].get(finding_id, {})
     unconfirmed = is_unconfirmed(room, finding_id)
     where = f"{finding.get('symbol', '?')} — {finding.get('site', '?')}"
+    angle = finding.get("angle", "trap")
     item = {
         "id": f"{namespace}#{finding_id}" if namespace else str(finding_id),
         "title": finding["title"],
         "badge": severity,
+        "source": angle,
         "meta": f"effort: {finding.get('effort', '?')} · confidence: {finding.get('confidence', '?')}",
         "where": f"{room['file_name']} · {where}" if namespace else where,
         "why": finding["consequence"],
         "fix": finding["suggested_fix"],
-        "tab": finding.get("angle", "trap"),
+        "facets": {"severity": severity, "angle": angle},
         "default": "discuss" if unconfirmed else ("apply" if severity == "high" else "skip"),
     }
     if namespace:
-        item["filter"] = room["file_name"]
+        item["facets"]["file"] = room["file_name"]
         item["collapsed"] = True
     if finding.get("problem"):
         item["detail"] = {"label": "how the code does this", "text": finding["problem"]}
@@ -254,7 +257,11 @@ def main_single(rundir, target):
             "discuss": "no change yet; talk it through in the session first (unconfirmed findings start here)",
             "skip": "leave as is",
         },
-        "tabs": [{"name": name, "help": TAB_HELP[name]} for name in ("trap", "drift", "coverage", "clarity")],
+        "facets": [
+            {"key": "severity", "values": ["high", "med", "low"]},
+            {"key": "angle", "values": ["trap", "drift", "coverage", "clarity"], "help": ANGLE_HELP},
+        ],
+        "group_by": ["angle"],
         "sections": sections,
         "items": items,
     }, room["rundir"])
@@ -328,7 +335,12 @@ def main_merge(output_dir, room_args, library_facts):
             "discuss": "no change yet; talk it through in the session first (unconfirmed findings start here)",
             "skip": "leave as is",
         },
-        "tabs": [{"name": name, "help": TAB_HELP[name]} for name in ("trap", "drift", "coverage", "clarity")],
+        "facets": [
+            {"key": "severity", "values": ["high", "med", "low"]},
+            {"key": "angle", "values": ["trap", "drift", "coverage", "clarity"], "help": ANGLE_HELP},
+            {"key": "file", "values": file_names},
+        ],
+        "group_by": ["angle", "file"],
         "sections": sections,
         "items": items,
     }, output_dir)
