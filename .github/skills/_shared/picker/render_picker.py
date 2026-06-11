@@ -58,7 +58,9 @@ Spec schema:
             "label": "how the code does this",
             "text": "mechanism prose…"
           },
-          "warning": "Validator: fix needs review …",     // optional amber callout
+          "warning": "Validator: fix needs review …",     // optional amber callout; also puts an amber
+                                                          // ⚠ in the card head (hover shows the text),
+                                                          // so even a folded strip signals "go deeper"
           "evidence": "SKILL.md:3 \\"quote\\"",            // optional mono block
           "diff": {                                       // optional old→new block; when the fix is
             "location": "SKILL.md:3",                     // replacement text, emit this INSTEAD of
@@ -197,6 +199,7 @@ CSS = """
  details.detail .dtext{margin-top:6px;font-size:14.5px}
  .warning{margin:10px 0 0;background:color-mix(in srgb,#d97706 10%,transparent);
   border:1px solid color-mix(in srgb,#d97706 35%,transparent);border-radius:8px;padding:7px 10px;font-size:14px}
+ .warnflag{color:var(--why);font-size:15px;align-self:center;cursor:help}
  .field{display:flex;gap:10px;margin:11px 0 0;font-size:15px}
  .flabel{flex:0 0 auto;min-width:30px;text-align:center;font-size:11.5px;font-weight:800;letter-spacing:.6px;
   text-transform:uppercase;border-radius:6px;padding:3px 8px;align-self:flex-start;color:var(--faint);background:var(--chip)}
@@ -462,6 +465,7 @@ def card_html(item, page_options, page_default):
             f'<div class="dtext">{html.escape(item["detail"].get("text", ""))}</div></details>'
         )
     warning = f'<div class="warning">{html.escape(item["warning"])}</div>' if item.get("warning") else ""
+    warn_flag = f'<span class="warnflag" title="{html.escape(item["warning"])}">&#9888;</span>' if item.get("warning") else ""
     body = f'<div class="cardbody">{item["body_html"]}</div>' if item.get("body_html") else ""
     opts = ""
     if options:
@@ -483,7 +487,7 @@ def card_html(item, page_options, page_default):
     filter_attr = f' data-filter="{html.escape(item["filter"])}"' if item.get("filter") else ""
     return (
         f'<div class="{card_classes}" data-id="{html.escape(item_id)}" data-def="{html.escape(default or "")}"{fold_attr}{filter_attr}>'
-        f'<div class="cardhead">{chevron}<span class="cardid">{html.escape(item_id)}</span>{badge}{source}'
+        f'<div class="cardhead">{chevron}<span class="cardid">{html.escape(item_id)}</span>{badge}{warn_flag}{source}'
         f'<span class="cardtitle">{html.escape(item.get("title", ""))}</span></div>'
         f'<div class="cardfold">{meta}{summary}{fields}{evidence}{diff_html}{detail}{warning}{body}</div>'
         f"{opts}{notes}</div>"
