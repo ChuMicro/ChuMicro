@@ -551,10 +551,12 @@ SCRIPT = """
   window.addEventListener('resize', setAnchorClearance);
   setAnchorClearance();
   // a deep link from a context section can land on a folded card — unfold it, flash it, and let
-  // the flash fade out (a click listener too, so re-clicking the same link re-flashes without a hashchange)
+  // the flash fade out. The hash is a transient navigation aid, not state: it clears as soon as
+  // it is handled, so a reload replays nothing and a re-click of the same link is a fresh jump.
   function revealHash() {
     if (!location.hash) return;
     var target = document.getElementById(location.hash.slice(1));
+    try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
     if (!target || !target.classList.contains('card')) return;
     target.classList.remove('collapsed');
     target.classList.remove('flash');
@@ -563,10 +565,6 @@ SCRIPT = """
     target.addEventListener('animationend', function () { target.classList.remove('flash'); }, { once: true });
   }
   window.addEventListener('hashchange', revealHash);
-  document.addEventListener('click', function (e) {
-    var a = e.target.closest && e.target.closest('a[href^="#card-"]');
-    if (a) setTimeout(revealHash, 0);
-  });
   revealHash();
   refresh();
 })();
