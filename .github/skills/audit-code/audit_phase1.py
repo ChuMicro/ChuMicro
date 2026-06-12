@@ -132,6 +132,25 @@ def _stage(wf_src, rundir, **subs):
     open(os.path.join(rundir, wf_src), "w").write(src)
 
 
+def write_repros(rundir, patches):
+    """Write each patch's executable repro to <rundir>/repros/repro_<id>.py; return the count.
+
+    A repro is the patcher's runnable demonstration: a self-contained pytest file that fails on
+    the current code and passes once the fix is applied. The clean room has no Bash, so the
+    in-session apply loop is where they run — red before the edit demonstrates the defect,
+    green after proves the fix."""
+    written = 0
+    for patch in patches.get("patches", []):
+        repro = (patch.get("repro") or "").strip()
+        if not repro:
+            continue
+        os.makedirs(os.path.join(rundir, "repros"), exist_ok=True)
+        with open(os.path.join(rundir, "repros", f"repro_{patch.get('id')}.py"), "w") as out:
+            out.write(repro + "\n")
+        written += 1
+    return written
+
+
 def main():
     require_claude()
     args = sys.argv[1:]
@@ -165,8 +184,9 @@ def main():
     # composes FULLY in that voice. Voice is written at compose time, never as a post-hoc rewrite.
     open(os.path.join(rundir, "voice_persona.txt"), "w").write(voice_persona(voice))
 
-    # the evaluation workflow, one clean-room claude -p
-    _stage("audit_wf.js", rundir, __RUNDIR__=rundir)
+    # the evaluation workflow, one clean-room claude -p. __TARGET__ hands the patcher the real
+    # path as a STRING (for deriving repro import names); the room never gains read access to it.
+    _stage("audit_wf.js", rundir, __RUNDIR__=rundir, __TARGET__=os.path.abspath(target))
     claude_p_workflow(rundir, "audit_wf.js")
 
     # collect
@@ -191,6 +211,7 @@ def main():
         return out
 
     npatch = len(patches.get("patches", []))
+    n_repros = write_repros(rundir, patches)
     phase1 = {
         "target": os.path.abspath(target),
         "rundir": rundir,
@@ -199,6 +220,7 @@ def main():
         "n_findings": len(findings),
         "n_written": len(written.get("findings", [])),
         "n_patches": npatch,
+        "n_repros": n_repros,
         "by_angle": _count("angle"),
         "by_severity": _count("severity"),
         "tests_found": tests_found,
@@ -219,7 +241,8 @@ def main():
         print(f"      - {p}")
     print(f"  symbols summarized: {phase1['n_symbols']}")
     print(f"  findings: {len(findings)}   by angle: {phase1['by_angle']}   by severity: {phase1['by_severity']}")
-    print(f"  prose written: {phase1['n_written']}   patches generated: {npatch}")
+    print(f"  prose written: {phase1['n_written']}   patches generated: {npatch}   "
+          f"executable repros: {n_repros}")
     print(f"  validator: {'converged clean' if converged else 'left some findings unconfirmed (report flags them)'}")
     print("  Next (in-session): render_eval.py to build + open the HTML, then the selection/apply loop.")
 
