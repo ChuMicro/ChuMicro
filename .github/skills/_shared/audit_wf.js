@@ -1,6 +1,6 @@
 export const meta = {
   name: 'audit-skill-lenses',
-  description: 'Five blind audit lenses plus an outward research lens over one SKILL.md, schema-validated output',
+  description: 'Six blind audit lenses plus an outward research lens over one SKILL.md, schema-validated output',
   phases: [{ title: 'Audit' }],
 }
 
@@ -110,7 +110,7 @@ const IDEAS_OUT = {
 
 phase('Audit')
 
-const [loader, cold, craft, orchestration, ideas, research] = await parallel([
+const [loader, cold, craft, orchestration, surprise, ideas, research] = await parallel([
   () => agent(
     `${FENCE}\n\nRead ONLY the YAML frontmatter of ${skill} — stop at the closing ---. Do not open the body.\n\n` +
     `Judge whether the skill loader would route each of these user messages to this skill on the description/when_to_use text alone:\n` +
@@ -123,7 +123,8 @@ const [loader, cold, craft, orchestration, ideas, research] = await parallel([
     `4. The key use case leads: the skill listing truncates the combined description + when_to_use text at 1,536 characters, so a trigger placed past the cap never routes (harness_claim: true).\n` +
     `5. Caps: description <= 1024 chars hard, description + when_to_use <= 1536 combined; neither field contains XML tags (mark cap and XML findings harness_claim: true — they rest on documented loader behavior).\n` +
     `6. name (or the directory name when name is omitted): <= 64 chars, lowercase/digits/hyphens, never "anthropic" or "claude"; gerund form (verb + -ing) is the documented preference, and a vague or generic name (helper, utils, tools, documents, data, files) is a MINOR finding.\n` +
-    `7. allowed-tools carries prefix-scoped Bash forms, never bare Bash, and includes AskUserQuestion when the body asks the user anything.\n\n` +
+    `7. allowed-tools carries prefix-scoped Bash forms, never bare Bash, and includes AskUserQuestion when the body asks the user anything.\n` +
+    `8. Execution-control fields stay consistent: context: fork fits only a skill that runs to completion without user input — fork alongside AskUserQuestion in allowed-tools contradicts itself, and fork on guideline-only content returns nothing; a description naming side effects (deploys, commits, sends) wants disable-model-invocation: true (harness_claim: true).\n\n` +
     `For every finding: evidence = the frontmatter line quoted; why = what misroutes or fails to load in production; proposed_fix = the exact replacement text. Strict marking: a borderline routing call is a miss with the reason stated.`,
     { label: 'lens:loader', schema: LOADER_OUT }),
 
@@ -137,7 +138,7 @@ const [loader, cold, craft, orchestration, ideas, research] = await parallel([
     `3. Walkability — no step depends on a later step; every linked reference file exists.\n` +
     `4. Per-step Success criteria — present on every step past two, observable, and DISCRIMINATING: a clearly-wrong run must fail it ("report generated" passes on an empty report — flag like a missing criterion).\n` +
     `5. A Done-when block distinct from the last step — the last step is what you do; Done-when is what you observe after. Local convention, not a documented Anthropic rule: flag its absence, never cite documentation for it.\n` +
-    `6. Size against both documented budgets: <= 500 lines AND under ~5,000 tokens (roughly 3,800 words) for the body — the body enters context whole on trigger and stays there, so every line is a recurring token cost. A body inside the line target only because its lines run hundreds of characters has gamed the budget: flag it with the token figure as evidence and propose what moves to a reference file. Mark size findings harness_claim: true.\n` +
+    `6. Size against both documented budgets: <= 500 lines AND under ~5,000 tokens (~20,000 characters; tokens = chars / 4 — word counts under-count dense markdown) for the body — the body enters context whole on trigger and stays there, so every line is a recurring token cost. A body inside the line target only because its lines run hundreds of characters has gamed the budget: flag it with the token figure as evidence and propose what moves to a reference file. Mark size findings harness_claim: true.\n` +
     `7. Compaction-prefix placement — auto-compaction re-attaches only the first ~5,000 tokens of an invoked skill, so a load-bearing rule in the back half of a long body vanishes mid-session; flag any rule whose loss would corrupt the run sitting past the early body (harness_claim: true).\n` +
     `8. Standing instructions — the body is read once and never re-read; guidance meant to hold for the whole task but phrased as a one-time step is a finding.\n` +
     `9. Rule salience — a constraint whose violation breaks the run, appearing once mid-paragraph, fused into a long sentence with other imperatives, or far from the step it governs, is a rule the executing agent will skip; propose moving it onto its own line at the point of use with its reason stated. The inverse fails too: walls of all-caps MUST/NEVER and over-rigid structure are a documented yellow flag — placement and a stated why beat volume.\n` +
@@ -147,7 +148,8 @@ const [loader, cold, craft, orchestration, ideas, research] = await parallel([
     `13. Degrees of freedom — prescription tightness matches fragility: a fragile or destructive sequence needs exact commands or a script (low freedom); an open judgment task needs direction, not lockstep (high freedom). Flag over- and under-constraint both.\n` +
     `14. Token justification — assume a capable, knowledgeable reader: a paragraph explaining what the model already knows fails the "does this paragraph justify its token cost" test.\n` +
     `15. Cold-read patterns — anti-self-assertions, dated phrasing, first-person plural, defensive hedging, moralizing imperatives, voodoo constants, unrun commands, AI-tic vocabulary (canonical, comprehensive, seamless, robust, leverage, intuitive, elegant, battle-tested, worth noting, under the hood, empowers, magic, powerful, and kin).\n` +
-    `16. Stance — written to a capable practitioner: no apologetic scope notes, no narration of self-evident actions, no over-cautious checkpointing.\n\n` +
+    `16. Stance — written to a capable practitioner: no apologetic scope notes, no narration of self-evident actions, no over-cautious checkpointing.\n` +
+    `17. Output template — a skill that emits a structured artifact (report, commit message, generated page) carries a template or one worked input/output example, strictness matched to need; absence is a finding when output quality depends on format.\n\n` +
     `For every finding: evidence = file:line + a short verbatim quote; why = how a cold execution goes wrong; proposed_fix = exact replacement text, or empty when only the author can draft it. A pattern that appears once and may be load-bearing is AMBIGUOUS, not MINOR. Default to flagging: a false flag costs one confirmation round; a missed one ships unexecutable.`,
     { label: 'lens:cold-walk', schema: COLD_OUT }),
 
@@ -164,10 +166,11 @@ const [loader, cold, craft, orchestration, ideas, research] = await parallel([
     `7. Every bundled-script mention states its intent — execute it ("run analyze.py to extract fields") or read it as reference ("see analyze.py for the algorithm"); a script referenced without that intent leaves the executor guessing.\n` +
     `8. Scripts solve, don't punt — a bundled script that defers its error cases to the model, or a validator that fails without naming what failed and what was available, is a finding.\n` +
     `9. Dependencies declared — a step saying "use the X library" without an install line or availability check, or required packages unlisted, is a finding.\n` +
-    `10. MCP tools named fully qualified (ServerName:tool_name) — a bare tool name fails with tool-not-found (harness_claim: true).\n` +
-    `11. Fragile-sequence protection — a fragile non-scriptable sequence carries a copyable checklist; a quality-critical step carries a validate-fix-repeat loop; a batch or destructive operation produces a machine-checkable plan validated before execution.\n` +
-    `12. Weak directives ("handle appropriately", "as needed") that gesture instead of instruct.\n` +
-    `13. Harness-affordance fit — flag a step doing the weak-tool version of work the harness does better: a long-running command foregrounded instead of a background Bash task; a running task watched through repeated manual polls or sleeps instead of the Monitor tool or the harness's completion notification; a long-running step that stays silent until it finishes — printing no progress markers mid-run for a Monitor check to surface as a status report — when its work has reportable stages; a report the user must act on printed only to scrollback instead of written to a file and opened; a rich pick (many options, side-by-side candidates, free-form per-item input) crammed into AskUserQuestion's 4-option cap instead of a generated HTML page the skill writes, opens, and collects a submission from; a time-sensitive or product-behavior fact asserted from memory instead of verified (web search for the live web, the claude-code-guide agent for Claude Code behavior); file content written via shell heredocs instead of Write/Edit; a multi-item user pick forced through repeated single questions instead of one multiSelect; independent sub-agent work dispatched one message at a time. Mark findings resting on documented tool behavior harness_claim: true.\n` +
+    `10. Bundled scripts run non-interactively (a TTY prompt hangs an agent shell), pin their runners' versions (uvx / npx / pipx run with explicit pins), and bound their output; a body path to a bundled script uses \${CLAUDE_SKILL_DIR} so it resolves at any install level (harness_claim: true on the path rule).\n` +
+    `11. MCP tools named fully qualified (ServerName:tool_name) — a bare tool name fails with tool-not-found (harness_claim: true).\n` +
+    `12. Fragile-sequence protection — a fragile non-scriptable sequence carries a copyable checklist; a quality-critical step carries a validate-fix-repeat loop; a batch or destructive operation produces a machine-checkable plan validated before execution.\n` +
+    `13. Weak directives ("handle appropriately", "as needed") that gesture instead of instruct.\n` +
+    `14. Harness-affordance fit — flag a step doing the weak-tool version of work the harness does better: a long-running command foregrounded instead of a background Bash task; a running task watched through repeated manual polls or sleeps instead of the Monitor tool or the harness's completion notification; a long-running step that stays silent until it finishes — printing no progress markers mid-run for a Monitor check to surface as a status report — when its work has reportable stages; a report the user must act on printed only to scrollback instead of written to a file and opened; a rich pick (many options, side-by-side candidates, free-form per-item input) crammed into AskUserQuestion's 4-option cap instead of a generated HTML page the skill writes, opens, and collects a submission from; a time-sensitive or product-behavior fact asserted from memory instead of verified (web search for the live web, the claude-code-guide agent for Claude Code behavior); file content written via shell heredocs instead of Write/Edit; a multi-item user pick forced through repeated single questions instead of one multiSelect; independent sub-agent work dispatched one message at a time. Mark findings resting on documented tool behavior harness_claim: true.\n` +
     `This lane flags only affordances a step plainly needs; affordances that would merely upgrade the skill belong to the ideas lens, not yours.\n\n` +
     `For every finding: evidence = file:line + quote (name which file); why = what the user experiences when it fires; proposed_fix = exact text or concrete change.`,
     { label: 'lens:craft', schema: FINDINGS }),
@@ -185,6 +188,19 @@ const [loader, cold, craft, orchestration, ideas, research] = await parallel([
     `7. Model selection stated or correctly inherited for judgment work.\n\n` +
     `For every finding: evidence = file:line + quote (name which file); why = the orchestration failure a real run hits; proposed_fix = exact change.`,
     { label: 'lens:orchestration', schema: FINDINGS }),
+
+  () => agent(
+    `${FENCE}\n\nYou are the surprise lens on ${skill}` +
+    (refs.length || scripts.length ? `, plus the files it ships: ${[...refs, ...scripts].join(', ')}` : '') +
+    `. Judge whether anything the skill does would surprise a user who read only its description.\n\n` +
+    `Work through every numbered check below in order; skip none.\n` +
+    `1. Undisclosed behavior — anything the body or a bundled script does that the description does not admit: writes outside the skill's own work area, network calls, data leaving the machine, state changes beyond the stated job.\n` +
+    `2. External fetches — a script or step pulling content from an external URL is the documented high-risk case; flag each with what it fetches and where the result lands.\n` +
+    `3. Destructive operations — deletes, overwrites, force flags, resets — without an explicit user confirm in the procedure.\n` +
+    `4. Credentials — tokens, passwords, or key material read, echoed, or written anywhere a transcript or commit could capture them.\n` +
+    `5. Dynamic-context triggers — a literal bang-backtick command pattern in any shipped file fires the loader's preprocessor the moment the skill loads; flag any occurrence the skill does not clearly intend as injection (harness_claim: true).\n\n` +
+    `For every finding: evidence = file:line + quote (name which file); why = what the user did not sign up for; proposed_fix = exact change. An empty findings list is a valid result.`,
+    { label: 'lens:surprise', schema: FINDINGS }),
 
   () => agent(
     `${FENCE}\n\nRead ${skill}` +
@@ -206,7 +222,7 @@ const [loader, cold, craft, orchestration, ideas, research] = await parallel([
     { label: 'lens:research', agentType: 'general-purpose', schema: RESEARCH_OUT }),
 ])
 
-const lenses = { loader, cold, craft, orchestration, ideas, research }
+const lenses = { loader, cold, craft, orchestration, surprise, ideas, research }
 const missing = Object.entries(lenses).filter(([, value]) => !value).map(([name]) => name)
 if (missing.length) log(`lens(es) returned nothing after retries: ${missing.join(', ')} — director must note the missing lens in the report`)
 return lenses
