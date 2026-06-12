@@ -6,11 +6,14 @@ Builds a picker spec from a finished run room and renders it with the shared ren
   1. page-top context sections: an INDEPENDENT plain-English summary (summary.json — written from the
      code, never from the comments), the selection rationale (pick.json — which whole writer pass won
      and why, plus auto-routed symbols), the legibility / tic / ban flags, and the validated ledger;
-  2. one card per symbol: the suggested take's before/after docstrings, every *differing* cached writer
-     pass (runs/run-N.py) as an option with comparison chips and a full-symbol expander, that symbol's
-     ledger facts behind a detail fold, and a ⚠ warning carrying its flags;
-  3. choices per card: `suggested` (pre-checked) · `run-N` · `edit` — an `edit` pick takes the exact
-     replacement docstring in the card's note box (`multiline_notes`: newlines survive the blob).
+  2. one card per symbol, open on load: the original docstring on top, then the candidates side by side
+     (the picker's "columns" pick_ui) — the suggested take leftmost and pre-checked, every *differing*
+     cached writer pass (runs/run-N.py) after it with comparison chips and a full-symbol expander, four
+     or more scrolling horizontally — plus the symbol's ledger facts behind a detail fold and a ⚠
+     warning carrying its flags;
+  3. below the columns, an `edit` choice with its own full-width text box seeded with the suggested
+     docstring — adjust it in place; its exact text rides back on an `edit <id>:` blob line (newlines
+     escaped), and the note box stays a plain note.
 
 The page key carries a content fingerprint of the FINAL file, so a mid-review reload restores picks
 but an applied selection (FINAL changes) starts the page clean. The Copy/Submit bar serializes choices
@@ -220,17 +223,22 @@ def build_file_entry(rundir, voice, original, namespaced=False):
         sugg = final_blocks.get(qual, {"doc": fin.get("doc"), "block": ""})
         is_class = qual != "<module>" and not (sugg.get("block") or "").strip() and qual in final_blocks
 
-        parts = [
-            "<div style='display:flex;gap:12px;flex-wrap:wrap'>",
-            f"<div style='flex:1;min-width:260px'><small><b>BEFORE</b></small>{_doc_pre(before.get(qual, {}).get('doc'))}</div>",
-            f"<div style='flex:1;min-width:260px'><small><b>AFTER (suggested)</b></small>{_doc_pre(fin.get('doc'))}</div>",
-            "</div>",
-        ]
-        if (sugg.get("block") or "").strip() and qual != "<module>":
-            parts.append(f"<details><summary>suggested full symbol (inline comments)</summary>"
-                         f"<pre>{_esc(sugg['block'])}</pre></details>")
+        # the original docstring sits above the candidate columns, full width, so every candidate
+        # below is read against the same starting point
+        parts = [f"<small><b>ORIGINAL</b></small>{_doc_pre(before.get(qual, {}).get('doc'))}"]
+        if is_class:
+            parts.append("<p><small>A class pick applies the class docstring only; methods have "
+                         "their own cards.</small></p>")
 
-        options = ["suggested"]
+        if qual in autoroute:
+            sugg_label = f"suggested — auto-routed to writer pass {autoroute[qual]}"
+        elif winner is not None:
+            sugg_label = f"suggested — writer pass {winner}, polished"
+        else:
+            sugg_label = "suggested"
+        candidates = [{"value": "suggested", "label": sugg_label, "text": sugg.get("doc") or ""}]
+        if (sugg.get("block") or "").strip() and qual != "<module>":
+            candidates[0]["more"] = {"label": "full symbol (inline comments)", "text": sugg["block"]}
         for n in sorted(run_blocks):
             cand = run_blocks[n].get(qual)
             if not cand:
@@ -239,18 +247,11 @@ def build_file_entry(rundir, voice, original, namespaced=False):
             same_block = (cand.get("block") or "") == (sugg.get("block") or "")
             if same_doc and same_block:
                 continue
-            options.append(f"run-{n}")
-            chips = " · ".join(_doc_hint(sugg, cand))
-            parts.append(f"<p style='margin:10px 0 2px'><b>run-{n}</b> <small>{_esc(chips)}</small></p>"
-                         + _doc_pre(cand.get("doc")))
+            entry = {"value": f"run-{n}", "label": f"writer pass {n}",
+                     "chips": _doc_hint(sugg, cand), "text": cand.get("doc") or ""}
             if not same_block and (cand.get("block") or "").strip() and qual != "<module>":
-                parts.append(f"<details><summary>run-{n} full symbol (inline comments)</summary>"
-                             f"<pre>{_esc(cand['block'])}</pre></details>")
-        options.append("edit")
-        parts.append("<p><small>To rewrite it yourself: pick <b>edit</b> and put the exact replacement "
-                     "docstring in the note box — newlines are preserved."
-                     + (" A class pick applies the class docstring only; methods have their own cards."
-                        if is_class else "") + "</small></p>")
+                entry["more"] = {"label": "full symbol (inline comments)", "text": cand["block"]}
+            candidates.append(entry)
 
         sym_flags = ([f"legibility: {f.get('sentence')}" for f in flags if f.get("symbol") == qual]
                      + [f"{f.get('kind')}: {f.get('text')}" for f in tflags if f.get("symbol") == qual])
@@ -260,10 +261,11 @@ def build_file_entry(rundir, voice, original, namespaced=False):
             "title": qual,
             "summary": purpose.get(qual, purpose.get(_short(qual), "")),
             "body_html": "".join(parts),
-            "options": options,
+            "pick_ui": {"style": "columns", "candidates": candidates,
+                        "edit": {"value": "edit",
+                                 "label": "edit it myself — replaces the docstring with this exact text",
+                                 "seed": sugg.get("doc") or ""}},
             "default": "suggested",
-            "multiline_notes": True,
-            "collapsed": qual not in flagged_syms,
             "facets": ({"flag": "flagged" if qual in flagged_syms else "clean"}
                        | ({"file": fname} if namespaced else {})),
         }
@@ -336,7 +338,7 @@ def build_file_entry(rundir, voice, original, namespaced=False):
 
 OPTION_HELP = {
     "suggested": "keep the selector's winning take for this symbol",
-    "edit": "replace the docstring with the note box's exact text (newlines preserved)",
+    "edit": "replace the docstring with the edit box's exact text (it starts seeded with the suggested take)",
 }
 
 
@@ -372,12 +374,14 @@ def main():
         "blob_header": f"regen-comments apply ({meta['file']})",
         "subtitle": f"voice: {voice} · {meta['symbols']} symbols · {meta['n_passes']} cached passes · "
                     f"{meta['badge']}",
-        "intro_html": "<p>Pick per symbol below (the suggested take is pre-checked), put an exact "
-                      "replacement docstring in a note after picking <b>edit</b>, then Submit to session "
-                      "(shown when the page is served) or Copy the blob and paste it back into the Claude "
-                      "session — or just describe what you want in chat.</p>",
+        "intro_html": "<p>Pick per symbol below — click a candidate box to choose it (the suggested "
+                      "take is pre-checked), or adjust the seeded <b>edit</b> box to rewrite a docstring "
+                      "yourself. Then Submit to session (shown when the page is served) or Copy the blob "
+                      "and paste it back into the Claude session — or just describe what you want in "
+                      "chat.</p>",
         "options": ["suggested", "edit"],
         "default": "suggested",
+        "page_width": 1280,
         "expand_on": ["edit"],
         "option_help": OPTION_HELP,
         "sections": sections,
