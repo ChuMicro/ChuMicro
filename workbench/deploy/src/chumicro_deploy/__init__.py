@@ -77,7 +77,13 @@ from .runtime_marker import (
     is_test_support_module,
     read_runtime_marker,
 )
-from .sources import DirectorySource, FileMapSource, FileSource, ImportGraphSource
+from .sources import (
+    DirectorySource,
+    FileMapSource,
+    FileSource,
+    ImportGraphSource,
+    UnresolvedImportError,
+)
 from .testing import FakeTransport
 
 __all__ = [
@@ -112,6 +118,7 @@ __all__ = [
     "Runtime",
     "TransportProtocol",
     "UnresolvedFirmwareError",
+    "UnresolvedImportError",
     "UnsupportedExtraFilesError",
     "WindowsNotSupportedError",
     "build_circuitpython_bootstrap_scripts",

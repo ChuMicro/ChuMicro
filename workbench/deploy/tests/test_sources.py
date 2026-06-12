@@ -10,7 +10,10 @@ from chumicro_deploy import (
     FileMapSource,
     FileSource,
     ImportGraphSource,
+    UnresolvedImportError,
 )
+from chumicro_deploy.recovery import classify_deploy_failure
+from chumicro_deploy.recovery_kind import DeployFailureKind
 
 
 class TestFileSourceProtocol:
@@ -191,12 +194,12 @@ class TestImportGraphSource:
         # helpers.greeting is), so ImportGraphSource should leave it out.
         assert "/lib/helpers/__init__.py" not in files
 
-    def test_unresolved_modules_are_skipped(self, tmp_path: Path):
+    def test_builtin_modules_are_skipped_not_shipped(self, tmp_path: Path):
         entrypoint, libs = self._scaffold(tmp_path)
         source = ImportGraphSource(entrypoint, search_paths=[libs])
-        # sys is a stdlib module, not resolvable against the search
-        # path.  ImportGraphSource silently skips it rather than
-        # raising.
+        # sys is a device-runtime built-in on the allowlist: it resolves
+        # to no search-path file, but the walk treats it as external and
+        # ships nothing for it rather than refusing the deploy.
         assert "sys" not in " ".join(source.files())
 
     def test_extra_modules_forced_in(self, tmp_path: Path):
@@ -347,9 +350,10 @@ class TestImportGraphSource:
         """``from foo import not_a_module`` doesn't error or over-include.
 
         ``not_a_module`` is a function/class defined inside
-        ``foo/__init__.py``.  The walker probes ``foo.not_a_module``,
-        gets a None from ``_resolve_module``, and silently skips,
-        the same path stdlib imports take.
+        ``foo/__init__.py``.  The walker probes ``foo.not_a_module`` as a
+        speculative submodule, which resolves to no file.  Because the probe
+        is never *required* (only the real ``foo`` import is), the miss is
+        dropped silently and does not refuse the deploy.
         """
         libs = tmp_path / "libs"
         libs.mkdir()
@@ -574,3 +578,253 @@ class TestDirectorySourceExcludesTestSupport:
         assert "/chumicro_demo/__init__.py" in files
         # The fake never ships to a product/app deploy.
         assert "/chumicro_demo/testing.py" not in files
+
+
+class TestImportGraphSourceRefusesUnresolvedImports:
+    """An import that ships nowhere and isn't a device built-in refuses the
+    deploy at construction instead of shipping an ImportError-at-boot.
+    """
+
+    def test_unregistered_chumicro_import_refused_with_named_file_and_module(
+        self, tmp_path: Path,
+    ) -> None:
+        """An unregistered library import names the importing file and module."""
+        libs = tmp_path / "libs"
+        libs.mkdir()
+        entrypoint = tmp_path / "app.py"
+        entrypoint.write_text("import chumicro_missing\n")
+        with pytest.raises(UnresolvedImportError) as caught:
+            ImportGraphSource(entrypoint, search_paths=[libs])
+        message = str(caught.value)
+        assert "chumicro_missing" in message
+        assert "app.py" in message
+        # Collect-all-then-fail exposes the offending pair on the exception.
+        assert caught.value.unresolved == [(entrypoint, "chumicro_missing")]
+
+    def test_genuine_stdlib_builtin_passes(self, tmp_path: Path) -> None:
+        """A pure-stdlib entrypoint (struct, sys) deploys without refusal."""
+        libs = tmp_path / "libs"
+        libs.mkdir()
+        entrypoint = tmp_path / "app.py"
+        entrypoint.write_text("import struct\nimport sys\nimport json\n")
+        source = ImportGraphSource(entrypoint, search_paths=[libs])
+        # None of the built-ins ship as files; the entrypoint alone lands.
+        assert source.files() == {"/code.py": entrypoint.read_bytes()}
+
+    def test_platform_only_builtins_pass(self, tmp_path: Path) -> None:
+        """Platform built-ins (wifi, microcontroller, board, machine) pass.
+
+        These resolve against the runtime on-device, never against the host
+        search path, so the allowlist must accept them across runtimes.
+        """
+        libs = tmp_path / "libs"
+        libs.mkdir()
+        entrypoint = tmp_path / "app.py"
+        entrypoint.write_text(
+            "import wifi\n"
+            "import microcontroller\n"
+            "import board\n"
+            "import machine\n"
+        )
+        source = ImportGraphSource(entrypoint, search_paths=[libs])
+        assert source.files() == {"/code.py": entrypoint.read_bytes()}
+
+    def test_import_error_guarded_import_is_not_refused(
+        self, tmp_path: Path,
+    ) -> None:
+        """A try/except ImportError fallback ships without refusal.
+
+        The guarded module resolves to no file and is not a built-in, but the
+        guard marks it a deliberate optional fallback, so the walk neither
+        refuses the deploy nor ships a file for it.
+        """
+        libs = tmp_path / "libs"
+        libs.mkdir()
+        entrypoint = tmp_path / "app.py"
+        entrypoint.write_text(
+            "try:\n"
+            "    import optional_accelerator\n"
+            "except ImportError:\n"
+            "    optional_accelerator = None\n"
+        )
+        source = ImportGraphSource(entrypoint, search_paths=[libs])
+        assert "optional_accelerator" not in " ".join(source.files())
+
+    def test_guarded_from_import_tuple_handler_is_not_refused(
+        self, tmp_path: Path,
+    ) -> None:
+        """``except (ImportError, OSError)`` still exempts the guarded import."""
+        libs = tmp_path / "libs"
+        libs.mkdir()
+        entrypoint = tmp_path / "app.py"
+        entrypoint.write_text(
+            "try:\n"
+            "    from optional_pkg import thing\n"
+            "except (ImportError, OSError):\n"
+            "    thing = None\n"
+        )
+        source = ImportGraphSource(entrypoint, search_paths=[libs])
+        assert "optional_pkg" not in " ".join(source.files())
+
+    def test_bare_except_guard_exempts_import(self, tmp_path: Path) -> None:
+        """A bare ``except:`` catches everything, so its import is optional."""
+        libs = tmp_path / "libs"
+        libs.mkdir()
+        entrypoint = tmp_path / "app.py"
+        entrypoint.write_text(
+            "try:\n"
+            "    import optional_thing\n"
+            "except:  # noqa: E722 — deliberate catch-all under test\n"
+            "    optional_thing = None\n"
+        )
+        source = ImportGraphSource(entrypoint, search_paths=[libs])
+        assert "optional_thing" not in " ".join(source.files())
+
+    def test_non_importerror_guard_still_refuses(self, tmp_path: Path) -> None:
+        """A ``try/except ValueError`` does NOT exempt a missing import.
+
+        Only ImportError-family guards mark an import optional.  An
+        unresolved import inside an unrelated guard still ships nowhere and
+        must be refused.
+        """
+        libs = tmp_path / "libs"
+        libs.mkdir()
+        entrypoint = tmp_path / "app.py"
+        entrypoint.write_text(
+            "try:\n"
+            "    import chumicro_missing\n"
+            "except ValueError:\n"
+            "    chumicro_missing = None\n"
+        )
+        with pytest.raises(UnresolvedImportError) as caught:
+            ImportGraphSource(entrypoint, search_paths=[libs])
+        assert caught.value.unresolved == [(entrypoint, "chumicro_missing")]
+
+    def test_dotted_exception_guard_still_refuses(self, tmp_path: Path) -> None:
+        """An ``except module.SomeError`` handler does NOT exempt the import.
+
+        A dotted (attribute) exception type can't be confirmed as
+        ImportError, so the walker treats the guard as unrelated and refuses
+        the unresolved import.
+        """
+        libs = tmp_path / "libs"
+        libs.mkdir()
+        entrypoint = tmp_path / "app.py"
+        entrypoint.write_text(
+            "import errno\n"
+            "try:\n"
+            "    import chumicro_missing\n"
+            "except errno.Whatever:\n"
+            "    chumicro_missing = None\n"
+        )
+        with pytest.raises(UnresolvedImportError) as caught:
+            ImportGraphSource(entrypoint, search_paths=[libs])
+        assert caught.value.unresolved == [(entrypoint, "chumicro_missing")]
+
+    def test_transitive_unregistered_import_refused_names_importing_file(
+        self, tmp_path: Path,
+    ) -> None:
+        """A registered lib reaching an unregistered transitive is refused,
+        and the error names the transitive's importing file, not the entrypoint.
+        """
+        libs = tmp_path / "libs"
+        libs.mkdir()
+        client = libs / "chumicro_thing"
+        client.mkdir()
+        (client / "__init__.py").write_text("import chumicro_unregistered\n")
+        entrypoint = tmp_path / "app.py"
+        entrypoint.write_text("import chumicro_thing\n")
+        with pytest.raises(UnresolvedImportError) as caught:
+            ImportGraphSource(entrypoint, search_paths=[libs])
+        importing_file, module_name = caught.value.unresolved[0]
+        assert module_name == "chumicro_unregistered"
+        # The file that wrote the broken import is the library __init__,
+        # not the entrypoint.
+        assert importing_file == client / "__init__.py"
+
+    def test_collect_all_then_fail_reports_every_missing_module(
+        self, tmp_path: Path,
+    ) -> None:
+        """Two distinct unresolved imports both surface in one refusal."""
+        libs = tmp_path / "libs"
+        libs.mkdir()
+        entrypoint = tmp_path / "app.py"
+        entrypoint.write_text(
+            "import chumicro_first_missing\n"
+            "import chumicro_second_missing\n"
+        )
+        with pytest.raises(UnresolvedImportError) as caught:
+            ImportGraphSource(entrypoint, search_paths=[libs])
+        missing = {module for _file, module in caught.value.unresolved}
+        assert missing == {"chumicro_first_missing", "chumicro_second_missing"}
+
+    def test_from_import_of_unregistered_module_refused(
+        self, tmp_path: Path,
+    ) -> None:
+        """``from chumicro_missing import x`` refuses on the module, not the alias.
+
+        The real ``chumicro_missing`` module is required and unresolved; the
+        speculative ``chumicro_missing.x`` probe is not separately reported.
+        """
+        libs = tmp_path / "libs"
+        libs.mkdir()
+        entrypoint = tmp_path / "app.py"
+        entrypoint.write_text("from chumicro_missing import helper\n")
+        with pytest.raises(UnresolvedImportError) as caught:
+            ImportGraphSource(entrypoint, search_paths=[libs])
+        missing = [module for _file, module in caught.value.unresolved]
+        assert missing == ["chumicro_missing"]
+
+    def test_required_import_not_masked_by_prior_alias_probe(
+        self, tmp_path: Path,
+    ) -> None:
+        """A broken ``import foo.bar`` is refused even after a probe of the
+        same dotted name.
+
+        ``from foo import bar`` queues a non-required ``foo.bar`` probe that
+        resolves to nothing.  A later real ``import foo.bar`` of the same
+        unresolved name must still be refused — the required check runs ahead
+        of the visited-set dedup so the probe can't swallow it.
+        """
+        libs = tmp_path / "libs"
+        libs.mkdir()
+        foo = libs / "chumicro_foo"
+        foo.mkdir()
+        (foo / "__init__.py").write_text("")
+        entrypoint = tmp_path / "app.py"
+        entrypoint.write_text(
+            "from chumicro_foo import bar\n"
+            "import chumicro_foo.bar\n"
+        )
+        with pytest.raises(UnresolvedImportError) as caught:
+            ImportGraphSource(entrypoint, search_paths=[libs])
+        assert [
+            module for _file, module in caught.value.unresolved
+        ] == ["chumicro_foo.bar"]
+
+    def test_refusal_classifies_to_unresolved_import_kind(
+        self, tmp_path: Path,
+    ) -> None:
+        """The refusal routes through the recovery taxonomy, not UNKNOWN."""
+        libs = tmp_path / "libs"
+        libs.mkdir()
+        entrypoint = tmp_path / "app.py"
+        entrypoint.write_text("import chumicro_missing\n")
+        with pytest.raises(UnresolvedImportError) as caught:
+            ImportGraphSource(entrypoint, search_paths=[libs])
+        assert (
+            classify_deploy_failure(caught.value)
+            is DeployFailureKind.UNRESOLVED_IMPORT
+        )
+
+    def test_unresolved_imports_accessor_empty_on_success(
+        self, tmp_path: Path,
+    ) -> None:
+        """A successfully-built source reports no unresolved imports."""
+        libs = tmp_path / "libs"
+        libs.mkdir()
+        (libs / "helper.py").write_text("X = 1\n")
+        entrypoint = tmp_path / "app.py"
+        entrypoint.write_text("import helper\nimport sys\n")
+        source = ImportGraphSource(entrypoint, search_paths=[libs])
+        assert source.unresolved_imports() == []

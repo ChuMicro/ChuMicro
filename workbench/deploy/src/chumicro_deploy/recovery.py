@@ -32,7 +32,7 @@ from .recovery_kind import DeployFailureKind, RecoveryPlan
 from .recovery_plans import PLANS
 from .result import DeployResult
 
-if TYPE_CHECKING:  # pragma: no cover — type-only
+if TYPE_CHECKING:  # pragma: no cover -type-only
     from .deployer import Deployer
     from .sources import FileSource
 
@@ -136,6 +136,14 @@ _CONFIGURATION_PATTERNS = (
     "does not support deploy_mode",
 )
 
+#: The import walker refused a deploy because an import resolved to no
+#: deployed file and isn't a known device built-in.  The lead phrase is
+#: emitted verbatim by :class:`chumicro_deploy.sources.UnresolvedImportError`
+#: so the classifier routes it without coupling to the exception subclass.
+_UNRESOLVED_IMPORT_PATTERNS = (
+    "deploy refused: unresolved import",
+)
+
 #: Signature of a Python traceback embedded in an error message.
 #: On CircuitPython RAM mode the raw REPL raises
 #: ``CircuitpythonTransportError`` with the board's stderr inline —
@@ -173,6 +181,7 @@ _CLASSIFICATION_TABLE: tuple[
     tuple[tuple[str, ...], DeployFailureKind], ...
 ] = (
     (_CONFIGURATION_PATTERNS, DeployFailureKind.CONFIGURATION_ERROR),
+    (_UNRESOLVED_IMPORT_PATTERNS, DeployFailureKind.UNRESOLVED_IMPORT),
     ((_TRACEBACK_IN_MESSAGE_PATTERN,), DeployFailureKind.TRACEBACK_RETURNED),
     (_FLASH_DRIVE_STATE_PATTERNS, DeployFailureKind.FLASH_COPY_FAILED),
     (_CIRCUITPY_DRIVE_PATTERNS, DeployFailureKind.CIRCUITPY_DRIVE_MISSING),
@@ -249,7 +258,7 @@ _LIKELY_CHUMICRO_KEYWORDS = (
     "chumicro-deploy",
     "chumicro_workspace",
     "mpremote",
-    "run.py deploy",  # noqa: CHU006 — workspace shim command name is data here, not prose
+    "run.py deploy",  # noqa: CHU006 - workspace shim command name is data here, not prose
 )
 
 
@@ -276,7 +285,7 @@ def _full_command_for_pid(
     and ps), unsupported platforms, and missing ``ps`` binary.
     """
     try:
-        result = runner(  # noqa: S603 — args fully controlled
+        result = runner(  # noqa: S603 - args fully controlled
             ["ps", "-p", str(pid), "-o", "command="],
             capture_output=True, text=True, check=False, timeout=2,
         )
@@ -315,7 +324,7 @@ def diagnose_port_holders(
     if sys.platform.startswith("win"):
         return []
     try:
-        result = runner(  # noqa: S603 — args fully controlled
+        result = runner(  # noqa: S603 - args fully controlled
             ["lsof", "-F", "pcn", port_path],
             capture_output=True, text=True, check=False, timeout=2,
         )
@@ -554,7 +563,7 @@ class RecoveringDeployer:
             return
         try:
             holders = diagnose_port_holders(port_path)
-        except Exception:  # noqa: BLE001 — diagnosis is best-effort
+        except Exception:  # noqa: BLE001 - diagnosis is best-effort
             return
         if not holders:
             return
