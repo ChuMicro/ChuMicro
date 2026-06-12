@@ -28,6 +28,16 @@ Start from these per finding shape; adjust per the skill's tier semantics and fi
 
 `(Recommended)` is the auditor's lean.  Skip the tag when LOW findings have no clear default — keep is still first but doesn't get the marker.
 
+## Wording the ask
+
+These rules cover every `AskUserQuestion` in this repo, walks included.  A `PreToolUse` hook (`ask_gate.py` in this directory, wired in `.claude/settings.json`) enforces the mechanical floor: it bounces a thin ask back with a per-defect failure list and the floor's exact thresholds, and the asking agent rewrites the same ask and re-fires.  The gate is mechanical; the rewrite stays the model's.
+
+- The question text stands alone.  Open with one or two plain sentences naming the concrete thing being decided (the file, the finding, the fact) and what hangs on the choice, then ask.  The user decides from this text plus what is already on their screen, never from session memory — an ask written in lens shorthand or ledger-stub register reads as gibberish at the gate.
+- Labels stay short; the widget truncates long ones.  The substance lives in each option's description: a full sentence on what picking it does and when it is the right pick, never the label restated.
+- Spell facts as sentences.  Fragment joiners (em-dash, ` -- `, `→`, `·`) are blocked in questions, labels, and descriptions, except inside quoted spans — quoting prose that itself carries an em-dash is fine.
+- Candidate text under comparison (a rewrite, a command, a description line) goes in per-option `preview` fields on a single-select question, not compressed into descriptions.
+- A gate that outgrows the widget — more than a few facts per option, side-by-side text comparison, or anything the user would want to sit with — renders the shared decision page (`picker/` in this directory) instead, even for two items.
+
 ## When not to walk
 
 - **HIGH findings** batch — DELETEs, mechanical TRIMs, mechanical REWRITEs are word-choice-free.  No per-finding pause; one cohesive commit.
