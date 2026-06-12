@@ -6,11 +6,10 @@ at module load time — so we can drive it from any runtime as long as
 we stub those two modules in ``sys.modules`` before the call.
 
 Mirrors the shape of ``test_mp_adapter_pytest.py`` (per-test stubbed
-modules, protocol-shape verification) but uses the
-``_SwapAttribute`` / ``_SwapItem`` / ``_FakeModule`` cross-runtime
-pattern landed earlier in this session for the test_udp /
-test_factories salvages — so it runs on CPython, MicroPython
-unix-port, and CircuitPython unix-port.
+modules, protocol-shape verification) but uses the ``SwapAttribute``
+/ ``SwapItem`` / ``FakeModule`` cross-runtime helpers from
+``chumicro_test_harness.patching`` — so it runs on CPython,
+MicroPython unix-port, and CircuitPython unix-port.
 
 This is the host-side complement to:
 
@@ -32,108 +31,20 @@ __chumicro_host_only__ = True
 
 import sys
 
+from _swap_helpers import SocketpoolStub
 
-class _SocketpoolStub:
-    """Stand-in for the ``socketpool`` firmware module on host runtimes.
-
-    Production CP boards expose ``socketpool`` from firmware; host
-    runtimes (CPython, MP / CP unix-port) do not.  The cp adapter
-    imports ``socketpool`` at module top (production-correct shape),
-    so this stub has to be in ``sys.modules`` before any test reaches
-    that import.  Per-test fakes overwrite ``cp_adapter.socketpool``
-    directly via :class:`_SwapAttribute`; this stub only needs to
-    satisfy the module-load import.
-
-    ``types.ModuleType`` would be the obvious tool but the MP / CP
-    unix-ports do not ship a ``types`` module, so the stub is a plain
-    class with the surface ``import socketpool`` consumers reach for.
-    """
-
-    AF_INET = 2
-    SOCK_STREAM = 1
-    SOCK_DGRAM = 2
-    SOL_SOCKET = 0
-    SO_REUSEADDR = 4
-    SO_BROADCAST = 6
-
-    class SocketPool:
-        def __init__(self, _radio):
-            raise RuntimeError(
-                "_SocketpoolStub.SocketPool reached — a test invoked "
-                "the cp adapter without overriding "
-                "``cp_adapter.socketpool`` with a per-test fake first.",
-            )
-
-
-sys.modules.setdefault("socketpool", _SocketpoolStub())
+sys.modules.setdefault("socketpool", SocketpoolStub())
 
 
 from chumicro_sockets import (  # noqa: E402 — load-order dependency on the stub above
     UnsupportedSSLConfigError,
 )
 from chumicro_test_harness.assertions import raises  # noqa: E402
-
-# ---------------------------------------------------------------------------
-# Cross-runtime stand-ins for unittest.mock.patch{,.dict}
-# ---------------------------------------------------------------------------
-
-
-class _SwapAttribute:
-    """Context manager — swap ``module.name``, restore on exit."""
-
-    def __init__(self, module, name, replacement):
-        self.module = module
-        self.name = name
-        self.replacement = replacement
-        self._original = None
-        self._had_attr = False
-
-    def __enter__(self):
-        self._had_attr = hasattr(self.module, self.name)
-        if self._had_attr:
-            self._original = getattr(self.module, self.name)
-        setattr(self.module, self.name, self.replacement)
-        return self
-
-    def __exit__(self, exc_type, exc_value, exc_traceback):
-        if self._had_attr:
-            setattr(self.module, self.name, self._original)
-        else:
-            delattr(self.module, self.name)
-        return False
-
-
-class _SwapItem:
-    """Context manager — swap ``mapping[key]``, restore on exit.
-
-    Used to stub ``sys.modules['socketpool']`` and ``sys.modules['ssl']``.
-    """
-
-    def __init__(self, mapping, key, replacement):
-        self.mapping = mapping
-        self.key = key
-        self.replacement = replacement
-        self._original = None
-        self._had_key = False
-
-    def __enter__(self):
-        self._had_key = self.key in self.mapping
-        if self._had_key:
-            self._original = self.mapping[self.key]
-        self.mapping[self.key] = self.replacement
-        return self
-
-    def __exit__(self, exc_type, exc_value, exc_traceback):
-        if self._had_key:
-            self.mapping[self.key] = self._original
-        else:
-            del self.mapping[self.key]
-        return False
-
-
-class _FakeModule:
-    """Bare class standing in for ``types.ModuleType`` (absent on MP/CP)."""
-
+from chumicro_test_harness.patching import (  # noqa: E402
+    FakeModule,
+    SwapAttribute,
+    SwapItem,
+)
 
 # ---------------------------------------------------------------------------
 # Stubs — minimum surface the CP adapter touches
@@ -237,15 +148,15 @@ def _install_socketpool_stub():
 
     Returns the (context-manager, fake-module) pair so the test can
     later look up the most-recently-created pool via the fake module's
-    recorded list.  The conftest stubs ``sys.modules['socketpool']``
-    once at session start so ``import socketpool`` at cp.py module
-    top succeeds; per-test swaps target the adapter's binding
-    directly so tests do not race against the cached
+    recorded list.  This file's module-level ``sys.modules.setdefault``
+    seeds ``socketpool`` at import time so ``import socketpool`` at
+    cp.py module top succeeds; per-test swaps target the adapter's
+    binding directly so tests do not race against the cached
     ``cp.socketpool`` reference.
     """
     from chumicro_sockets._adapters import cp as cp_adapter
 
-    fake = _FakeModule()
+    fake = FakeModule()
     fake.SocketPool = _StubPool
     fake.created_pools = []  # filled by the patched constructor below
 
@@ -261,7 +172,7 @@ def _install_socketpool_stub():
         (_StubPool,),
         {"__init__": recording_init},
     )
-    return _SwapAttribute(cp_adapter, "socketpool", fake), fake
+    return SwapAttribute(cp_adapter, "socketpool", fake), fake
 
 
 def _install_ssl_stub(create_default_context_factory=None):
@@ -272,7 +183,7 @@ def _install_ssl_stub(create_default_context_factory=None):
     a placeholder ``_StubContext`` so callers that don't care about
     context shape still get a working stub.
     """
-    fake = _FakeModule()
+    fake = FakeModule()
     contexts_built = []
 
     def factory():
@@ -285,7 +196,7 @@ def _install_ssl_stub(create_default_context_factory=None):
 
     fake.create_default_context = factory
     fake.contexts_built = contexts_built
-    return _SwapItem(sys.modules, "ssl", fake), fake
+    return SwapItem(sys.modules, "ssl", fake), fake
 
 
 class _StubContext:
@@ -487,7 +398,7 @@ class TestUdpSocket:
             sock.raise_setsockopt = OSError(99, "SO_BROADCAST not supported")
             return sock
 
-        with pool_swap, _SwapAttribute(
+        with pool_swap, SwapAttribute(
             fake_pool_module.SocketPool, "socket", socket_with_failing_setsockopt,
         ):
             wrapper = cp_adapter.udp_socket(radio=object(), broadcast=True)
@@ -507,7 +418,7 @@ class TestUdpSocket:
             sock.no_setsockopt = True
             return sock
 
-        with pool_swap, _SwapAttribute(
+        with pool_swap, SwapAttribute(
             fake_pool_module.SocketPool, "socket", socket_without_setsockopt,
         ):
             wrapper = cp_adapter.udp_socket(radio=object(), broadcast=True)
@@ -614,7 +525,7 @@ class TestListenTcp:
             sock.no_setsockopt = True
             return sock
 
-        with pool_swap, _SwapAttribute(
+        with pool_swap, SwapAttribute(
             fake_pool_module.SocketPool, "socket", socket_without_setsockopt,
         ):
             listener = cp_adapter.listen_tcp("0.0.0.0", 8080, radio=object())

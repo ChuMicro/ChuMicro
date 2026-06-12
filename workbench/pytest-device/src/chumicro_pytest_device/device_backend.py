@@ -25,7 +25,11 @@ from chumicro_workspace.device_orchestration import (
 )
 
 from .backends import BackendExecuteError, BackendPrepareError
-from .collection import _bulk_stage_for_device, _session_effective_deploy_mode
+from .collection import (
+    _bulk_stage_for_device,
+    _session_effective_deploy_mode,
+    _sibling_extra_modules,
+)
 from .session import (
     _encode_runtime_config_extra_files,
     _harness_source_dir,
@@ -136,8 +140,12 @@ def _stage_one_item(
     ``--per-file`` flash path: resolve the library's source closure
     (intra-workspace dependency walk), call ``transport.stage()``
     with the single test file, harness, runtime-config extras, and
-    the device-unit support flag.  Bulk per-library staging uses
-    :func:`_bulk_stage_for_device` instead.
+    the device-unit support flag.  Underscore-prefixed sibling modules
+    in the test file's ``tests/`` directory
+    (:func:`_sibling_extra_modules`) ride along as ``extra_modules`` so
+    a ``from _socket_stubs import ...`` line resolves on the device.
+    Bulk per-library staging uses :func:`_bulk_stage_for_device`
+    instead.
     """
     source_dirs = resolve_library_source_dirs(
         item.library_dir,
@@ -148,6 +156,7 @@ def _stage_one_item(
         source_dirs,
         [item.test_file],
         _harness_source_dir(session),
+        extra_modules=_sibling_extra_modules([item.test_file]),
         extra_files=_encode_runtime_config_extra_files(session.config),
         include_test_support=_target_is_device_unit(session.config),
     )

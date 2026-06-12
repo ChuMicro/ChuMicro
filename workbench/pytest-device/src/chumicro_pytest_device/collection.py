@@ -15,6 +15,7 @@ that own the once-per-file-batch connect / stage / execute cost.
 from __future__ import annotations
 
 import ast
+import warnings
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any, cast
@@ -170,6 +171,26 @@ def _sum_reported_test_durations(test_results: list[TestResult]) -> float:
     return total_duration
 
 
+def _device_items(
+    session: pytest.Session, device_entry: DeviceEntry,
+) -> Iterator[DeviceTestItem]:
+    """Yield every collected ``DeviceTestItem`` that targets *device_entry*.
+
+    The ``getattr`` guard handles test stubs (``FakeSession``) that
+    don't populate ``items``: an absent attribute yields nothing rather
+    than raising, so callers degrade to an empty result.  Skips items
+    with no resolved target and items pointing at a different device by
+    ``identifier``.
+    """
+    for item in getattr(session, "items", ()):
+        if not isinstance(item, DeviceTestItem):
+            continue
+        target = item.target_device
+        if target is None or target.identifier != device_entry.identifier:
+            continue
+        yield item
+
+
 def _device_closure_source_dirs(
     session: pytest.Session, device_entry: DeviceEntry,
 ) -> list[Path]:
@@ -184,15 +205,7 @@ def _device_closure_source_dirs(
     flash *before* a RAM-mode transport gets cached.
     """
     closure: list[Path] = []
-    # ``getattr`` guard mirrors the feature pass: test stubs (FakeSession)
-    # don't populate ``items``, so an empty closure falls through and the
-    # resolver returns the configured mode unchanged.
-    for item in getattr(session, "items", ()):
-        if not isinstance(item, DeviceTestItem):
-            continue
-        target = item.target_device
-        if target is None or target.identifier != device_entry.identifier:
-            continue
+    for item in _device_items(session, device_entry):
         for source_dir in resolve_library_source_dirs(
             item.library_dir,
             libraries_root=_libraries_root(session),
@@ -219,13 +232,7 @@ def _device_is_unit_sweep(
     only when *all* of the device's items are unit tests. Any
     functional item makes it closure-scoped (the safe direction).
     """
-    items = [
-        item
-        for item in getattr(session, "items", ())
-        if isinstance(item, DeviceTestItem)
-        and item.target_device is not None
-        and item.target_device.identifier == device_entry.identifier
-    ]
+    items = list(_device_items(session, device_entry))
     return bool(items) and all(
         _is_library_unit_test(item.test_file) for item in items
     )
@@ -241,12 +248,7 @@ def _device_own_source_dirs(
     (``ntp``) does not, so the data file does not flip it to flash.
     """
     own: list[Path] = []
-    for item in getattr(session, "items", ()):
-        if not isinstance(item, DeviceTestItem):
-            continue
-        target = item.target_device
-        if target is None or target.identifier != device_entry.identifier:
-            continue
+    for item in _device_items(session, device_entry):
         source_dir = item.library_dir / "src"
         if source_dir.is_dir() and source_dir not in own:
             own.append(source_dir)
@@ -321,8 +323,6 @@ def _session_effective_deploy_mode(
         force=None,
     )
     if message is not None:
-        import warnings  # noqa: PLC0415, only used on the override path
-
         warnings.warn(f"Device {device_id!r}: {message}", stacklevel=2)
     cache.set_resolved_deploy_mode(device_id, mode)
     return mode
@@ -534,6 +534,27 @@ class DeviceRuntimeItem(pytest.Item):
 
         return batch
 
+    def _require_batch_result(
+        self,
+        device_entry: DeviceEntry,
+    ) -> tuple[RunResult, str]:
+        """Run the file batch and return a result guaranteed to hold tests.
+
+        Wraps :meth:`_ensure_batch_result` with the two failure guards
+        every ``runtest`` shares: a ``None`` result (the batch failed to
+        prepare or execute) fails the item with the raw device output; a
+        result that parsed zero tests fails with the raw output too,
+        since a file that ran but reported nothing is a harness error,
+        not a pass.  Returns the parsed result and the raw output the
+        caller still needs for per-test lookup.
+        """
+        result, raw_output = self._ensure_batch_result(device_entry)
+        if result is None:
+            pytest.fail(raw_output)
+        if not result.tests:
+            pytest.fail(f"No test results in device output:\n{raw_output}")
+        return result, raw_output
+
     def repr_failure(
         self,
         excinfo: pytest.ExceptionInfo[BaseException],
@@ -562,12 +583,7 @@ class DeviceRunFileItem(DeviceRuntimeItem):
     def runtest(self) -> None:
         """Run the file batch once and validate the harness-level result."""
         device_entry = self._resolve_device_entry()
-        result, raw_output = self._ensure_batch_result(device_entry)
-
-        if result is None:
-            pytest.fail(raw_output)
-        if not result.tests:
-            pytest.fail(f"No test results in device output:\n{raw_output}")
+        result, _raw_output = self._require_batch_result(device_entry)
         self.reported_test_total_duration = _sum_reported_test_durations(result.tests)
 
 
@@ -592,16 +608,7 @@ class DeviceTestItem(DeviceRuntimeItem):
     def runtest(self) -> None:
         """Look up this test's result from the batched device run."""
         device_entry = self._resolve_device_entry()
-        result, raw_output = self._ensure_batch_result(device_entry)
-
-        # If the batch failed, all items from it fail.
-        if result is None:
-            pytest.fail(raw_output)
-
-        if not result.tests:
-            pytest.fail(
-                f"No test results in device output:\n{raw_output}"
-            )
+        result, raw_output = self._require_batch_result(device_entry)
 
         # Find this specific test in the results.
         for test_result in result.tests:
@@ -978,8 +985,6 @@ def _deselect_items_missing_required_features(
                 )
                 output = transport.run_script(FEATURE_PROBE_SCRIPT)
             except Exception as error:  # noqa: BLE001, graceful per-device fallback
-                import warnings  # noqa: PLC0415, only used on the failure path
-
                 warnings.warn(
                     f"Feature probe failed for device {device_id!r}: "
                     f"{error}.  Tests declaring "
@@ -996,6 +1001,35 @@ def _deselect_items_missing_required_features(
         for item, device, required in feature_targets
         if not required.issubset(cache[device.identifier])
     ]
+
+def _sibling_extra_modules(test_files: list[Path]) -> list[Path]:
+    """Return underscore-prefixed sibling ``.py`` modules of *test_files*.
+
+    Convention: a test file may import a shared helper module that sits
+    next to it in the same ``tests/`` directory, named with a leading
+    underscore (``_swap_helpers.py``).  ``test_*.py`` files and
+    ``conftest.py`` don't start with an underscore, so the ``_*.py``
+    glob excludes them by construction — it picks up only the shared
+    helpers, which neither the normal source closure nor the test-file
+    list otherwise stages.  The caller passes the result to
+    ``transport.stage(extra_modules=...)``, which lands each helper on
+    the device next to the test files, where the test source's
+    ``from _swap_helpers import ...`` resolves.
+
+    The result is deduplicated by filename and sorted for deterministic
+    staging across the directories holding *test_files*.
+    """
+    found: dict[str, Path] = {}
+    seen_dirs: set[Path] = set()
+    for test_file in test_files:
+        parent = test_file.parent
+        if parent in seen_dirs:
+            continue
+        seen_dirs.add(parent)
+        for candidate in sorted(parent.glob("_*.py")):
+            found[candidate.name] = candidate
+    return [found[name] for name in sorted(found)]
+
 
 def _bulk_stage_for_device(
     session: pytest.Session,
@@ -1062,6 +1096,7 @@ def _bulk_stage_for_device(
         seen_source_dirs,
         seen_test_files,
         _harness_source_dir(session),
+        extra_modules=_sibling_extra_modules(seen_test_files),
         extra_files=_encode_runtime_config_extra_files(session.config),
         include_test_support=_target_is_device_unit(session.config),
     )
