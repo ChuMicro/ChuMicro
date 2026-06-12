@@ -33,7 +33,7 @@ libraries/my-sensor/
 │   ├── core.py                      # starter class with patterns
 │   └── testing.py                   # test fakes (keep or delete)
 ├── tests/
-│   ├── conftest.py                  # pytest config
+│   ├── conftest.py                  # collection anchor (see note below)
 │   └── test_my_sensor.py             # starter tests (100% coverage)
 ├── docs/
 │   ├── index.md                     # docs landing page
@@ -49,6 +49,8 @@ libraries/my-sensor/
 In addition to creating the library directory, the scaffolder runs an editable install (`pip install -e libraries/my-sensor`) and re-runs `sync-ide`, which updates the local `.idea/chumicro.iml` plus the tracked `.idea/runConfigurations/`, `pyrightconfig.json`, `.vscode/tasks.json`, and `.vscode/settings.json` so your IDE picks up the new package immediately. The `.iml` stays local and gitignored because PyCharm may rewrite it while the project is open; the tracked config files are the ones you may see in `git status` after running `new-library`.
 
 The scaffold is immediately runnable — tests pass at 100% coverage, lint is clean, and the example executes. Start by replacing the starter `MySensor` class in `core.py` with your real implementation.
+
+The `tests/conftest.py` looks empty but is load-bearing: the workspace runs one pytest rootdir over every library with `--import-mode=importlib`, and the file anchors each `tests/` directory as its own collection root so same-named test modules in sibling libraries don't collide. Don't delete it.
 
 ## 2. Implement
 

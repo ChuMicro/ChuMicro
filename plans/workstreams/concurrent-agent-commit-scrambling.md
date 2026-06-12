@@ -1,6 +1,6 @@
 # Workstream: Concurrent-agent commit scrambling
 
-Status: **proposed.**  Incident logged 2026-05-19 during the pytest-device audit.  Process / skill note, not a code-recovery task.
+Status: **shipped.**  Incident logged 2026-05-19 during the pytest-device audit.  Process / skill note, not a code-recovery task.  Both infra opportunities landed: explicit-pathspec staging is mandated by `git-commit` SKILL.md step 1 and `task-checkpoint` step 5 (unconditional, stronger than the proposed detect-other-Claude-processes gate), and the post-commit message-vs-content reconciliation landed in `git-commit` step 2 (2026-06-12) — `git show --stat HEAD` compared against the message's claimed file set, with rider-recovery instructions that avoid `--amend`.
 
 ## Incident
 

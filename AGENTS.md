@@ -270,5 +270,5 @@ For deeper implementation detail:
 - [docs/contributing/style-guide.md](docs/contributing/style-guide.md): naming, annotations, imports, layout, doc tone.
 - [docs/contributing/device-testing.md](docs/contributing/device-testing.md): functional tests, deploy modes, devices.yml.
 - [docs/contributing/releases.md](docs/contributing/releases.md) covers VERSION, SemVer, and experimental-to-stable promotion.
-- [Decision 0060](plans/decisions/0060-chu-rules-home.md): the CHU lint index — every `CHU0NN` code referenced in this file is enumerated and described here.
+- CHU lint rules: the live index is [`workbench/checks/src/chumicro_checks/rules/`](workbench/checks/src/chumicro_checks/rules/) — one module per `CHU0NN` code, each docstring describing what it flags.  [Decision 0060](plans/decisions/0060-chu-rules-home.md) records why the rules live there.
 - [docs/troubleshooting/](docs/troubleshooting/): hardware-issue recovery (FSKit wedge, read-only FAT, RingIO quirks).

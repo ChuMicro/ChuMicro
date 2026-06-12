@@ -12,6 +12,25 @@ Questions that lead to structural tradeoffs should become decisions in
 
 ---
 
+### Candidate skill: session-end retrospective for dropped threads + un-validated claims
+
+**Moved from next-up 2026-06-12** — still observation, not specification; it
+parks here until someone designs it.  Distinct from `task-checkpoint` (fast
+end-of-unit-of-work gate) and `session-handoff` (state transfer): this one
+scans shipped artifacts for claims never validated (a SKILL.md mode documented
+but never exercised), questions raised but not resolved, and deferrals that
+lost context, triaging by confidence with ungrounded claims defaulting to
+"uncertain".  Surfaced 2026-05-26 during the `/regen-comments` session — it
+would have caught the `--tree all` mode that shipped documented-but-untested,
+the persona-tool restrictions deferred without follow-up, and the
+emoji-indicator format used without sign-off.  Could extend `task-checkpoint`
+(lighter, per-checkpoint), extend `session-handoff` (natural frame, but
+invoked too late to catch pre-commit slips), or stand alone as a slash
+command.  Open sub-question: can the grounding discipline be encoded in skill
+text, or does it need a verifier agent reading the transcript blind to the
+agent's own draft?  Source observations:
+[`plans/2026-05-26-agent-collaboration-reflections.md`](2026-05-26-agent-collaboration-reflections.md).
+
 ### `chumicro-presence` design from Decision 0042 §167-168 — re-audit before anything rides on its shape
 
 **Surfaced 2026-05-12** during the `/audit-integration` pass on `chumicro-events ↔ wifi + mqtt`.  Decision 0042 names a future `chumicro-presence` library as the centralized binder for wifi/mqtt state into the events bus: *"`chumicro-presence` ships a one-line `presence.bind(wifi=..., mqtt=...)` that does the callback wiring centrally"* (§167-168).  Library doesn't exist yet (`ls libraries/` confirms — no presence directory).  The `presence.bind(wifi=..., mqtt=...)` shape was sketched long ago and is possibly stale or wrong; the binding method it promises should be considered suspect until re-audited.

@@ -1,6 +1,6 @@
 # Workstream: `_load_fallback_device` — stash sessionstart error to save the runtime re-load
 
-Status: **proposed.**  Investigated 2026-05-19 during the pytest-device audit; ruled out as a `/audit-integration` candidate, parked as a sole-purpose cleanup.
+Status: **parked.**  Investigated 2026-05-19 during the pytest-device audit; ruled out as a `/audit-integration` candidate.  Closed as won't-do 2026-06-12: the stash saves one `load_device_registry` re-load on the error/no-targets path only — a cosmetic micro-optimization the read pass below already demoted from the original duplication claim.  Reopen only if the re-load shows up in a real profile.
 
 ## Problem
 
