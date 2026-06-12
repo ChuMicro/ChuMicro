@@ -38,10 +38,10 @@ from chumicro_websockets._wire import (
 
 gc.collect()
 
-from chumicro_websockets.client import WebSocketClient, WhenOversized  # noqa: E402, I001 — preceded by gc.collect().
+from chumicro_websockets.client import WebSocketClient, WhenOversized  # noqa: E402, I001 - preceded by gc.collect().
 gc.collect()
 
-from chumicro_websockets.server import Connection, WebSocketServer  # noqa: E402, I001 — preceded by gc.collect().
+from chumicro_websockets.server import Connection, WebSocketServer  # noqa: E402, I001 - preceded by gc.collect().
 
 __all__ = [
     "CLOSE_BAD_DATA",

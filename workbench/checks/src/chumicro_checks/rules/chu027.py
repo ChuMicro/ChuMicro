@@ -31,8 +31,10 @@ intentionally out of scope. Test files commonly share fixture
 boilerplate that is correct duplication.
 
 Suppression: ``# noqa: CHU027`` on the line carrying the first token
-of the duplicate block (the line CHU027 reports), paired with the
-one-line *why* AGENTS.md requires.
+of a duplicate comment block, or on the ``def`` / ``class`` header line
+for a function or class docstring, paired with the one-line *why*
+AGENTS.md requires.  Module docstrings have no header line to carry the
+marker and are deliberately not suppressible.
 """
 
 from __future__ import annotations

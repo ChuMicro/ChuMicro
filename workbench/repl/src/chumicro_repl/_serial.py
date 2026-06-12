@@ -86,7 +86,7 @@ def default_port_factory(
     Returns:
         An open :class:`SerialPort`.
     """
-    import serial  # noqa: PLC0415 — deferred optional dependency
+    import serial  # noqa: PLC0415 - deferred optional dependency
 
     return serial.Serial(address, baudrate=baudrate, timeout=timeout)
 
@@ -144,7 +144,7 @@ def close_quietly(port: SerialPort) -> None:
     """
     try:
         port.close()
-    except OSError:  # pragma: no cover — port already dying
+    except OSError:  # pragma: no cover -port already dying
         pass
 
 
@@ -157,7 +157,7 @@ def flush_quietly(stream: TextIO) -> None:
     """
     try:
         stream.flush()
-    except (OSError, ValueError):  # pragma: no cover — closed stream
+    except (OSError, ValueError):  # pragma: no cover -closed stream
         pass
 
 

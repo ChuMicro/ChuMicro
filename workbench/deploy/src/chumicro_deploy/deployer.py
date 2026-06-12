@@ -35,7 +35,7 @@ from .preflight import (
 from .protocol import DeployMode, Runtime
 from .result import DeployResult
 
-if TYPE_CHECKING:  # pragma: no cover — type-only
+if TYPE_CHECKING:  # pragma: no cover - type-only
     from .device import Device
     from .protocol import TransportProtocol
     from .sources import FileSource

@@ -51,7 +51,7 @@ from .framing import Utf8StreamDecoder
 from .highlight import DEFAULT_THEME, Theme, colorize_stream_chunk
 from .patterns import StreamingPatternDetector
 
-if TYPE_CHECKING:  # pragma: no cover — type-only
+if TYPE_CHECKING:  # pragma: no cover -type-only
     from prompt_toolkit import PromptSession
     from prompt_toolkit.key_binding import KeyBindings, KeyPressEvent
 
@@ -125,7 +125,7 @@ def history_path_for(
     target.parent.mkdir(parents=True, exist_ok=True)
     try:
         target.parent.chmod(0o700)
-    except OSError:  # pragma: no cover — best-effort on filesystems without chmod
+    except OSError:  # pragma: no cover -best-effort on filesystems without chmod
         pass
     return target
 
@@ -298,7 +298,7 @@ def _open_editor(*, editor: str, file_path: Path) -> int:
     Indirection point — tests stub this so they don't shell out.
     """
     argv = shlex.split(editor) + [str(file_path)]
-    completed = subprocess.run(argv, check=False)  # noqa: S603 — shlex-parsed user editor
+    completed = subprocess.run(argv, check=False)  # noqa: S603 - shlex-parsed user editor
     return completed.returncode
 
 
@@ -344,7 +344,7 @@ def _cmd_edit(context: LineModeContext, _rest: str) -> bool:
     finally:
         try:
             tmp_path.unlink()
-        except OSError:  # pragma: no cover — tmpfile unlinks best-effort
+        except OSError:  # pragma: no cover -tmpfile unlinks best-effort
             pass
     return True
 
@@ -399,7 +399,7 @@ def _split_command(line: str) -> tuple[str, str]:
 # ---------------------------------------------------------------------------
 
 
-class _ExitLineMode(Exception):  # noqa: N818 — internal control-flow sentinel, not a user-facing error
+class _ExitLineMode(Exception):  # noqa: N818 - internal control-flow sentinel, not a user-facing error
     """Ctrl-X raises this from a key binding so the main loop exits
     without rebooting the device."""
 
@@ -497,7 +497,7 @@ def _drain_serial(
             return
         try:
             available = port.in_waiting
-        except OSError:  # pragma: no cover — port dropped mid-drain
+        except OSError:  # pragma: no cover -port dropped mid-drain
             return
         if not available:
             if time.monotonic() - last_read_at >= settle_seconds:
@@ -506,7 +506,7 @@ def _drain_serial(
             continue
         try:
             chunk = port.read(available)
-        except OSError:  # pragma: no cover — port dropped mid-drain
+        except OSError:  # pragma: no cover -port dropped mid-drain
             return
         last_read_at = time.monotonic()
         decoded = decoder.decode(chunk)
@@ -663,7 +663,7 @@ def run_line_mode(
         elif line:
             try:
                 context.send_line(line)
-            except OSError as error:  # pragma: no cover — port dropped mid-line
+            except OSError as error:  # pragma: no cover -port dropped mid-line
                 output.write(f"line-mode: write failed: {error!r}\n")
                 output.flush()
                 return 1

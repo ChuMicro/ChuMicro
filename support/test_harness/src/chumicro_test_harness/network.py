@@ -124,7 +124,7 @@ def wifi_up(default_ssid, default_password, *, timeout_s=15):
 
     name = sys.implementation.name
     if name == "circuitpython":  # pragma: no cover - CP wifi connect, exercised on hardware
-        import wifi  # noqa: PLC0415 — CP-only
+        import wifi  # noqa: PLC0415 - CP-only
         wifi.radio.connect(ssid, password)
         deadline = time.time() + timeout_s
         while not wifi.radio.connected:
@@ -134,7 +134,7 @@ def wifi_up(default_ssid, default_password, *, timeout_s=15):
         return wifi.radio, str(wifi.radio.ipv4_address)
 
     if name == "micropython":  # pragma: no cover - MP wifi connect, exercised on hardware
-        import network  # noqa: PLC0415 — MP-only
+        import network  # noqa: PLC0415 - MP-only
         wlan = network.WLAN(network.STA_IF)
         wlan.active(True)
         # CYW43 boards (Pi Pico W today, list in _CYW43_MACHINES above)

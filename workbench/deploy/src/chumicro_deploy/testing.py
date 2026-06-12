@@ -519,8 +519,8 @@ class FakeTransport:
         ``False`` keeps the :func:`is_in_deploy_scope` filter so the
         additive path leaves out-of-scope files alone.
         """
-        from .flash_drive import DEVICE_KEEP_SET  # noqa: PLC0415 — avoid cycle
-        from .protocol import is_in_deploy_scope  # noqa: PLC0415 — avoid cycle
+        from .flash_drive import DEVICE_KEEP_SET  # noqa: PLC0415 - avoid cycle
+        from .protocol import is_in_deploy_scope  # noqa: PLC0415 - avoid cycle
 
         self.calls.append(("list_files_in_scope", (clean_slate,)))
         if clean_slate:

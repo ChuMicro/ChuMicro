@@ -132,7 +132,7 @@ def _read_boot_out_text(drive_path: Path) -> str | None:
         return None
     try:
         return boot_out.read_text(encoding="utf-8", errors="replace")
-    except OSError:  # pragma: no cover — hard to mock read_text
+    except OSError:  # pragma: no cover - hard to mock read_text
         return None
 
 
