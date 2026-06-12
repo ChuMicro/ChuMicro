@@ -103,7 +103,9 @@ Spec schema:
             ],
             "edit": {"value": "edit",                     // optional editable choice: a full-width textarea
                      "label": "edit it myself",           // seeded with `seed`; its exact text rides back as
-                     "seed": "current text"}              // an `edit <id>:` blob line (newline-escaped)
+                     "seed": "current text"},             // an `edit <id>:` blob line (newline-escaped)
+            "context": {"label": "original",              // optional non-selectable lead box above the
+                        "text": "the current text…"}      // candidates — the baseline they are read against
           },                                              // with pick_ui, the choice set is candidates[].value
                                                           // + edit.value and the options field is ignored
           "notes": true,                                  // notes box (default: true on decision cards,
@@ -152,7 +154,14 @@ is the spec author's job.
 When at least one decision card exists, the bar gains a virtual `picked` row
 (suppress with "picked_facet": false) whose chips track the live radio values —
 narrow to your apply set for a final look before submitting. `picked` is a
-reserved facet key. Every card carries id card-<id, non-alphanumerics dashed>,
+reserved facet key. "decided_facet": true adds a `decided` row (pending / done):
+a card turns done when the human actively decides it — picks a candidate box,
+re-affirms the already-checked one, or re-affirms the edit box after typing in
+it (picking the edit choice or typing only opens the work; clicking the box
+again settles it, the same gesture as a candidate) — so `pending` narrows to
+the cards not yet visited; a done card's id carries a ✓. A candidate
+pick also re-seeds a pristine edit box with that candidate's text; once the
+human types there, their text is never replaced. `decided` is reserved too. Every card carries id card-<id, non-alphanumerics dashed>,
 so trusted section or intro HTML can deep-link to a card (#card-heartbeat-3);
 navigating to a folded card unfolds it, and the target card flashes an accent
 ring that fades out.
@@ -320,7 +329,16 @@ CSS = """
  .ccol details{margin-top:6px}
  .ccol details>summary{cursor:pointer;font-size:12px;color:var(--accent)}
  .ccol details pre{flex:none}
- .cedit{margin-top:10px;border:1px solid var(--border);border-radius:10px;padding:9px 11px;background:var(--blob-bg)}
+ .cedit{margin-top:10px;border:1px solid var(--border);border-radius:10px;padding:9px 11px;background:var(--blob-bg);
+  cursor:pointer;transition:border-color .15s,box-shadow .15s}
+ .cedit:hover{border-color:var(--accent)}
+ .ccontext{border:1px dashed var(--border);border-radius:10px;padding:9px 11px;background:var(--blob-bg);
+  margin-bottom:10px}
+ .cclabel{font-size:11px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--faint)}
+ .ccontext pre{margin:7px 0 0;background:var(--card);border:1px solid var(--border);border-radius:8px;
+  padding:8px 10px;font:12.5px/1.55 ui-monospace,Menlo,monospace;white-space:pre-wrap;overflow-wrap:break-word}
+ .ccontext pre.cnone{color:var(--faint);font-style:italic}
+ .card.done .cardid::after{content:" ✓";color:var(--fix)}
  .editbox{width:100%;box-sizing:border-box;margin-top:7px;min-height:90px;resize:vertical;
   font:12.5px/1.55 ui-monospace,Menlo,monospace;border:1px solid var(--border);border-radius:8px;
   padding:8px 10px;background:var(--card);color:var(--fg)}
@@ -368,11 +386,18 @@ SCRIPT = """
     return c.querySelector('input[type=radio]');
   });
   var state = load();
+  // done = the human actively decided this card (picked a box, typed an edit, or re-affirmed the
+  // checked one); the virtual 'decided' facet narrows on it. A dirty edit box (the human typed)
+  // keeps its text when a later candidate pick would otherwise re-seed it.
+  var doneSet = new Set();
+  var dirtyEdits = new Set();
   cards.forEach(function (c) {
     var id = c.dataset.id;
     if (state['p:' + id]) { var r = c.querySelector('input[value="' + state['p:' + id] + '"]'); if (r) r.checked = true; }
     if (state['n:' + id]) { var n = c.querySelector('.notes'); if (n) n.value = state['n:' + id]; }
     if (state['d:' + id] !== undefined) { var e = c.querySelector('.editbox'); if (e) e.value = state['d:' + id]; }
+    if (state['k:' + id]) { doneSet.add(id); c.classList.add('done'); }
+    if (state['dd:' + id]) dirtyEdits.add(id);
   });
   // every card folds on a title-row click; spec sets the initial state (data-fold). A saved
   // 'e:' key (1 = opened, 0 = folded) is a deviation from that default restored on reload.
@@ -395,6 +420,8 @@ SCRIPT = """
       if (n && n.value.trim()) s['n:' + id] = n.value;
       var e = c.querySelector('.editbox');
       if (e && e.value !== e.defaultValue) s['d:' + id] = e.value;
+      if (doneSet.has(id)) s['k:' + id] = 1;
+      if (dirtyEdits.has(id)) s['dd:' + id] = 1;
     });
     document.querySelectorAll('.card.collapsible').forEach(function (c) {
       var folded = c.classList.contains('collapsed');
@@ -486,6 +513,21 @@ SCRIPT = """
         var target = (e && e.dataset.val === r.value) ? e : c.querySelector('.notes');
         if (target) target.focus();
       }
+      var card = r.closest('.card');
+      var box = card.querySelector('.editbox');
+      // picking the edit choice opens the work rather than finishing it: the card turns done when
+      // the human leaves the box having typed (focusout below), not on the pick itself
+      if (!(box && r.value === box.dataset.val)) {
+        doneSet.add(card.dataset.id);
+        card.classList.add('done');
+      }
+      // a candidate pick re-seeds a pristine edit box with that candidate's text; once the human
+      // has typed in the box their text is never replaced
+      if (box && r.value !== box.dataset.val && !dirtyEdits.has(card.dataset.id)) {
+        var col = r.closest('.ccol');
+        var pre = col && col.querySelector(':scope > pre');
+        if (pre && !pre.classList.contains('cnone')) box.value = pre.textContent;
+      }
       persist();
       if (fchips.length || fselects.length) applyFacets(); // the virtual 'picked' facet follows the live radios
     });
@@ -497,11 +539,42 @@ SCRIPT = """
       if (event.target.closest('details') || event.target.tagName === 'INPUT') return;
       var r = col.querySelector('input[type=radio]');
       if (r && !r.checked) { r.checked = true; r.dispatchEvent(new Event('change', { bubbles: true })); }
+      else if (r) {
+        // re-affirming the already-checked box is the agree act: it marks the card decided
+        var card = col.closest('.card');
+        doneSet.add(card.dataset.id);
+        card.classList.add('done');
+        persist();
+        if (fchips.length || fselects.length) applyFacets();
+      }
+    });
+  });
+  // the edit container behaves like a candidate box: a click anywhere in it selects the edit
+  // choice and puts the cursor in the textarea. Re-affirming it (a second click once edit is
+  // picked and text has been typed) finishes the edit decision, same gesture as a candidate —
+  // blur cannot finish it, because clicking back to a suggestion mid-think would fire blur and
+  // yank the card out of an active pending filter.
+  document.querySelectorAll('.cedit').forEach(function (box) {
+    box.addEventListener('click', function (event) {
+      if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') return;
+      var r = box.querySelector('input[type=radio]');
+      if (r && !r.checked) { r.checked = true; r.dispatchEvent(new Event('change', { bubbles: true })); }
+      else if (r) {
+        var card = box.closest('.card');
+        if (dirtyEdits.has(card.dataset.id)) {
+          doneSet.add(card.dataset.id);
+          card.classList.add('done');
+          persist();
+          if (fchips.length || fselects.length) applyFacets();
+        }
+      }
+      var t = box.querySelector('.editbox'); if (t) t.focus();
     });
   });
   // typing in the edit box is choosing it: check its radio so the text can ride in the blob
   document.querySelectorAll('.editbox').forEach(function (e) {
     e.addEventListener('input', function () {
+      dirtyEdits.add(e.closest('.card').dataset.id);
       var r = e.closest('.card').querySelector('input[value="' + e.dataset.val + '"]');
       if (r && !r.checked) { r.checked = true; r.dispatchEvent(new Event('change', { bubbles: true })); }
       persist();
@@ -525,7 +598,10 @@ SCRIPT = """
       c.querySelectorAll('input[type=radio]').forEach(function (r) { r.checked = (r.value === c.dataset.def); });
       var n = c.querySelector('.notes'); if (n) n.value = '';
       var e = c.querySelector('.editbox'); if (e) e.value = e.defaultValue;
+      c.classList.remove('done');
     });
+    doneSet.clear();
+    dirtyEdits.clear();
     // fold state returns to spec defaults too, cards and sections both — Reset means "as first rendered"
     document.querySelectorAll('.card.collapsible').forEach(function (c) {
       c.classList.toggle('collapsed', c.dataset.fold === '1');
@@ -557,6 +633,10 @@ SCRIPT = """
     if (key === 'picked') {
       var r = c.querySelector('input[type=radio]:checked');
       return r ? r.value : undefined;
+    }
+    if (key === 'decided') {
+      if (!c.querySelector('input[type=radio]')) return undefined;
+      return doneSet.has(c.dataset.id) ? 'done' : 'pending';
     }
     return facetsOf.get(c)[key];
   }
@@ -683,6 +763,8 @@ def pick_area_html(item, options, default, option_help):
     Default strategy: one radio-label row. "columns" (item.pick_ui): one bordered box per candidate
     laid out side by side — radio + label heading, comparison chips, the candidate text in its own
     mono block, an optional expander — plus a full-width edit box seeded with pick_ui.edit.seed.
+    An optional pick_ui.context renders first as a full-width non-selectable box (label + mono
+    text): the baseline the candidates are read against.
     Every strategy emits radios named pick:<id>; the page JS is strategy-agnostic. A new strategy
     is a new branch here plus its CSS.
     """
@@ -720,7 +802,14 @@ def pick_area_html(item, options, default, option_help):
                 f'<textarea class="editbox" data-val="{html.escape(value)}" spellcheck="false">'
                 f'{html.escape(edit.get("seed", ""))}</textarea></div>'
             )
-        return f'<div class="candwrap"><div class="candrow">{"".join(columns)}</div>{edit_html}</div>'
+        context_html = ""
+        context = pick_ui.get("context")
+        if context:
+            text = context.get("text") or ""
+            body = f"<pre>{html.escape(text)}</pre>" if text.strip() else '<pre class="cnone">(none)</pre>'
+            context_html = (f'<div class="ccontext"><span class="cclabel">'
+                            f'{html.escape(context.get("label", "context"))}</span>{body}</div>')
+        return f'<div class="candwrap">{context_html}<div class="candrow">{"".join(columns)}</div>{edit_html}</div>'
     if not options:
         return ""
     radio_labels = []
@@ -878,6 +967,13 @@ def main():
             for value in picked_values
         )
         facet_rows.append(f'<div class="fgroup"><span class="fglabel">picked</span>{picked_chips}</div>')
+    if decision_items and spec.get("decided_facet"):
+        # everything starts pending server-side; the page recomputes from the live done flags
+        decided_chips = "".join(
+            f'<button class="fchip" data-key="decided" data-value="{value}">'
+            f'{value}<span class="fcount">{count}</span></button>'
+            for value, count in (("pending", len(decision_items)), ("done", 0)))
+        facet_rows.append(f'<div class="fgroup"><span class="fglabel">decided</span>{decided_chips}</div>')
     # select rows land after every chip row, so the chips read as one area
     facet_rows += select_rows
     facetbar = ""
