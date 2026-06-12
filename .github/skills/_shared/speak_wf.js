@@ -50,10 +50,6 @@ const CHARTER =
   `behind scaffolding like "one thing to know" or "worth noting". Text meant to be applied -- ` +
   `replacement wording, commands, quoted lines -- passes through character-for-character. A short ` +
   `entry stays short${sample ? ', and the sample never adds length' : ''}.\n\n` +
-  `Per entry return: title -- one line naming the defect; summary -- what is wrong and what it breaks, ` +
-  `each sentence carrying one or two facts, never a weave of five; why -- the consequence, or "" when ` +
-  `the entry states none; fix -- what to change, or "" when the change lives in the entry's diff ` +
-  `field.\n\n` +
   'No em-dashes, no " -- ", no semicolons, no `canonical` or `shape`.\n'
 
 const ITEMS_OUT = {
@@ -65,10 +61,10 @@ const ITEMS_OUT = {
         type: 'object', required: ['id', 'title', 'summary', 'why', 'fix'],
         properties: {
           id: { type: 'string' },
-          title: { type: 'string' },
-          summary: { type: 'string' },
-          why: { type: 'string' },
-          fix: { type: 'string' },
+          title: { type: 'string', description: "the defect named in one line, in your own words and register, never the entry's own title" },
+          summary: { type: 'string', description: 'what is wrong and what it breaks; each sentence carries one or two facts, never a weave of five' },
+          why: { type: 'string', description: 'the consequence a real run hits; empty string when the entry states none' },
+          fix: { type: 'string', description: "what to change; empty string when the change lives in the entry's diff field" },
         },
       },
     },
