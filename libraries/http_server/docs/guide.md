@@ -120,6 +120,8 @@ The constructor exposes per-connection budgets so you can tune for your workload
 | `recv_budget_per_tick` | `1024` | Bytes drained per connection per `handle()`.  Bounds tick latency under big uploads. |
 | `send_budget_per_tick` | `4096` | Bytes flushed per connection per `handle()`.  Higher than recv so small responses drain in one tick. |
 | `max_request_body_bytes` | `16 KB` | Cap on a single buffered request body.  Requests declaring a larger `Content-Length` get a `413 Payload Too Large` response — no body bytes are allocated.  Within the cap, the body buffer is sized-to-fit at headers-complete time (one `bytearray(content_length)` allocation per request), freed when the response drains. |
+| `max_request_line_bytes` | `1 KB` | Cap on the request-line length (method + target + version).  A request line that reaches the cap without a CRLF gets a `414 URI Too Long` response, so a no-CRLF dribble can't grow the parse buffer past the cap before the request times out. |
+| `max_headers_bytes` | `4 KB` | Cap on the total header-section bytes (every header line plus its CRLF).  Headers exceeding the cap get a `431 Request Header Fields Too Large` response. |
 
 Defaults are conservative; the per-tick budgets keep an LED blink visible even with a chatty client and a big POST body.
 

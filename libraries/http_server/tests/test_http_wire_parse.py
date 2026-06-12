@@ -4,8 +4,10 @@ request parser. Sibling slices: other test_http_*.py."""
 from chumicro_http_server import (
     RequestParser,
     RequestParseState,
+    ServerHeadersTooLargeError,
     ServerOversizedError,
     ServerProtocolError,
+    ServerRequestLineTooLargeError,
     parse_query,
     split_target,
 )
@@ -181,3 +183,127 @@ class TestRequestParser:
         )
         parser.feed_eof()
         assert parser.state == RequestParseState.ERROR
+
+
+class TestRequestLineCap:
+    """Request line capped at max_request_line_bytes: a no-CRLF dribble
+    is refused at the cap instead of growing, an exact-cap line passes,
+    and an over-cap line raises 414-mapped ServerRequestLineTooLargeError.
+    """
+
+    def test_no_crlf_dribble_refused_at_cap(self):
+        # A byte-at-a-time dribble with no CRLF stops growing the buffer
+        # once it passes the cap, raising 414 rather than buffering until
+        # the request-timeout deadline.
+        parser = RequestParser(max_request_line_bytes=16)
+        for _ in range(64):
+            parser.feed(b"A")
+            if parser.state == RequestParseState.ERROR:
+                break
+        assert parser.state == RequestParseState.ERROR
+        assert isinstance(parser.error, ServerRequestLineTooLargeError)
+        # Buffer never grew far past the cap — at most one byte over.
+        assert parser._live_len() <= 17
+
+    def test_one_big_chunk_no_crlf_refused(self):
+        # A single oversized chunk with no CRLF is caught by the same
+        # length check, independent of chunk size.
+        parser = RequestParser(max_request_line_bytes=16)
+        parser.feed(b"B" * 4096)
+        assert parser.state == RequestParseState.ERROR
+        assert isinstance(parser.error, ServerRequestLineTooLargeError)
+
+    def test_exact_cap_line_passes(self):
+        # "GET /123456 HTTP/1.1" is exactly 20 bytes; with the cap set to
+        # 20 the line plus its CRLF parses cleanly.
+        line = b"GET /123456 HTTP/1.1"
+        assert len(line) == 20
+        parser = RequestParser(max_request_line_bytes=20)
+        parser.feed(line + b"\r\n\r\n")
+        assert parser.state == RequestParseState.DONE
+        assert parser.target == "/123456"
+
+    def test_exact_cap_line_split_before_crlf_waits(self):
+        # The exact-cap line with no CRLF yet stays in REQUEST_LINE (a
+        # length of exactly the cap is allowed); the CRLF in a later
+        # feed completes it.
+        line = b"GET /123456 HTTP/1.1"
+        parser = RequestParser(max_request_line_bytes=20)
+        parser.feed(line)
+        assert parser.state == RequestParseState.REQUEST_LINE
+        parser.feed(b"\r\n\r\n")
+        assert parser.state == RequestParseState.DONE
+
+    def test_one_over_cap_line_raises_414(self):
+        # A line one byte longer than the cap (still no CRLF) trips 414.
+        parser = RequestParser(max_request_line_bytes=20)
+        parser.feed(b"GET /1234567 HTTP/1.1")  # 21 bytes, no CRLF
+        assert parser.state == RequestParseState.ERROR
+        assert isinstance(parser.error, ServerRequestLineTooLargeError)
+        assert parser.error.status_code == 414
+
+    def test_default_request_line_well_within_cap(self):
+        # A normal request line is far below the 1 KB default and parses
+        # without tripping the cap.
+        parser = RequestParser()
+        parser.feed(b"GET /api/widgets?page=2 HTTP/1.1\r\n\r\n")
+        assert parser.state == RequestParseState.DONE
+
+
+class TestHeadersCap:
+    """Header section capped at max_headers_bytes: an oversized header
+    section raises 431-mapped ServerHeadersTooLargeError, whether one big
+    header line or many small ones, and a section at the cap passes.
+    """
+
+    def test_oversized_single_header_raises_431(self):
+        parser = RequestParser(max_headers_bytes=32)
+        parser.feed(b"GET / HTTP/1.1\r\n")
+        parser.feed(b"X-Big: " + b"v" * 200 + b"\r\n\r\n")
+        assert parser.state == RequestParseState.ERROR
+        assert isinstance(parser.error, ServerHeadersTooLargeError)
+        assert parser.error.status_code == 431
+
+    def test_many_small_headers_sum_past_cap(self):
+        # Each header line is small and consumed individually, but their
+        # running total crosses the cap — the section-total counter,
+        # not just the unconsumed buffer, catches it.
+        parser = RequestParser(max_headers_bytes=64)
+        parser.feed(b"GET / HTTP/1.1\r\n")
+        for index in range(40):
+            parser.feed(f"H{index}: v\r\n".encode("ascii"))
+            if parser.state == RequestParseState.ERROR:
+                break
+        assert parser.state == RequestParseState.ERROR
+        assert isinstance(parser.error, ServerHeadersTooLargeError)
+
+    def test_no_crlf_header_dribble_refused_at_cap(self):
+        # A header line that dribbles in with no CRLF stops growing the
+        # buffer once the section total passes the cap.
+        parser = RequestParser(max_headers_bytes=32)
+        parser.feed(b"GET / HTTP/1.1\r\n")
+        for _ in range(128):
+            parser.feed(b"Z")
+            if parser.state == RequestParseState.ERROR:
+                break
+        assert parser.state == RequestParseState.ERROR
+        assert isinstance(parser.error, ServerHeadersTooLargeError)
+        assert parser._live_len() <= 33
+
+    def test_header_section_at_cap_passes(self):
+        # A header section whose total bytes (line + CRLF + the empty
+        # terminating CRLF) land exactly on the cap parses cleanly.
+        # "Host: x\r\n" is 9 bytes, "\r\n" terminator is 2 → 11 total.
+        parser = RequestParser(max_headers_bytes=11)
+        parser.feed(b"GET / HTTP/1.1\r\nHost: x\r\n\r\n")
+        assert parser.state == RequestParseState.DONE
+        assert parser.headers["Host"] == "x"
+
+    def test_default_headers_well_within_cap(self):
+        parser = RequestParser()
+        parser.feed(
+            b"GET / HTTP/1.1\r\n"
+            b"Host: device.local\r\n"
+            b"Accept: */*\r\n\r\n",
+        )
+        assert parser.state == RequestParseState.DONE

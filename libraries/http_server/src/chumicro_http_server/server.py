@@ -29,7 +29,9 @@ import json
 from chumicro_http_server._wire import (
     CRLF,
     DEFAULT_MAX_CONNECTIONS,
+    DEFAULT_MAX_HEADERS_BYTES,
     DEFAULT_MAX_REQUEST_BODY_BYTES,
+    DEFAULT_MAX_REQUEST_LINE_BYTES,
     DEFAULT_RECV_BUDGET_PER_TICK,
     DEFAULT_REQUEST_TIMEOUT_MS,
     DEFAULT_SEND_BUDGET_PER_TICK,
@@ -37,7 +39,7 @@ from chumicro_http_server._wire import (
     RequestParser,
     RequestParseState,
     ServerError,
-    ServerOversizedError,
+    ServerLimitError,
     parse_charset,
     parse_query,
     split_target,
@@ -54,6 +56,8 @@ _REASONS = {
     404: "Not Found",
     405: "Method Not Allowed",
     413: "Payload Too Large",
+    414: "URI Too Long",
+    431: "Request Header Fields Too Large",
     500: "Internal Server Error",
     503: "Service Unavailable",
 }
@@ -71,7 +75,7 @@ def _force_non_blocking(socket):
         return
     try:
         setblocking(False)
-    except (OSError, AttributeError):  # pragma: no cover — defensive
+    except (OSError, AttributeError):  # pragma: no cover - defensive
         pass
 
 
@@ -221,6 +225,8 @@ class _Connection:
         recv_budget,
         send_budget,
         max_request_body_bytes,
+        max_request_line_bytes,
+        max_headers_bytes,
     ):
         self._socket = socket
         self._peer = peer
@@ -232,7 +238,11 @@ class _Connection:
         # emits ``Connection: close``, so each _Connection serves one
         # request before destruction.  A use-once buffer would fragment
         # worse than RequestParser's sized-rebind alloc per request.
-        self._parser = RequestParser(max_body_bytes=max_request_body_bytes)
+        self._parser = RequestParser(
+            max_body_bytes=max_request_body_bytes,
+            max_request_line_bytes=max_request_line_bytes,
+            max_headers_bytes=max_headers_bytes,
+        )
         # Pre-allocated recv scratch reused by every :meth:`_drive_recv`
         # call.  A 4-conn server with the default 1024-byte budget pins
         # ~2 KB of steady-state heap (4 × min(1024, 512)) instead of
@@ -272,11 +282,15 @@ class _Connection:
                 _ConnState.WANT_SEND_BODY,
             ):
                 self._drive_send()
-        except ServerOversizedError as oversized_error:
-            # 413 before any body bytes were allocated — surface the
-            # response cleanly instead of letting the connection die
-            # silently with a TCP close.
-            self._stage_response(_build_error_response(413, str(oversized_error)))
+        except ServerLimitError as limit_error:
+            # A sender-controlled allocation hit a documented cap before
+            # the offending bytes were buffered or a body was allocated
+            # (413 oversized body / 414 request line / 431 headers).
+            # Surface the status the error carries instead of letting the
+            # connection die silently with a TCP close.
+            self._stage_response(
+                _build_error_response(limit_error.status_code, str(limit_error)),
+            )
         except (OSError, ServerError):
             # Either side of the wire died — drop the connection.  The
             # writer's response state is already past the point where a
@@ -289,7 +303,7 @@ class _Connection:
         if self._socket is not None:
             try:
                 self._socket.close()
-            except OSError:  # pragma: no cover — defensive
+            except OSError:  # pragma: no cover - defensive
                 pass
             self._socket = None
 
@@ -350,7 +364,7 @@ class _Connection:
         )
         try:
             response = self._handler(request)
-        except Exception as handler_error:  # noqa: BLE001 — anything in the handler is a 500
+        except Exception as handler_error:  # noqa: BLE001 - anything in the handler is a 500
             response = _build_error_response(500, str(handler_error))
         if not isinstance(response, Response):
             response = _build_error_response(
@@ -506,8 +520,9 @@ class HttpServer:
 
         Reads optional ``http_server.*`` keys (``bind_host`` /
         ``bind_port`` / ``max_connections`` / ``request_timeout_ms`` /
-        ``max_request_body_bytes`` / ``tls.cert_path`` /
-        ``tls.key_path``) from *config*.  All defaults apply when
+        ``max_request_body_bytes`` / ``max_request_line_bytes`` /
+        ``max_headers_bytes`` / ``tls.cert_path`` / ``tls.key_path``)
+        from *config*.  All defaults apply when
         absent; a custom *listener_factory* bypasses the auto-build
         entirely, *ssl_context* opts into TLS without config paths,
         and exactly one half of the TLS pair raises
@@ -546,6 +561,14 @@ class HttpServer:
                 "http_server.max_request_body_bytes",
                 DEFAULT_MAX_REQUEST_BODY_BYTES,
             ),
+            max_request_line_bytes=config.get(
+                "http_server.max_request_line_bytes",
+                DEFAULT_MAX_REQUEST_LINE_BYTES,
+            ),
+            max_headers_bytes=config.get(
+                "http_server.max_headers_bytes",
+                DEFAULT_MAX_HEADERS_BYTES,
+            ),
         )
 
     def __init__(
@@ -558,6 +581,8 @@ class HttpServer:
         recv_budget_per_tick: int = DEFAULT_RECV_BUDGET_PER_TICK,
         send_budget_per_tick: int = DEFAULT_SEND_BUDGET_PER_TICK,
         max_request_body_bytes: int = DEFAULT_MAX_REQUEST_BODY_BYTES,
+        max_request_line_bytes: int = DEFAULT_MAX_REQUEST_LINE_BYTES,
+        max_headers_bytes: int = DEFAULT_MAX_HEADERS_BYTES,
         ticks: object | None = None,
     ) -> None:
         """Wire up the server.
@@ -589,6 +614,15 @@ class HttpServer:
                 body.  Default 16 KB.  Bigger bodies are rejected
                 with 413 Payload Too Large at headers-complete time,
                 before any body bytes are allocated.
+            max_request_line_bytes: Cap on the request-line length
+                (method + target + version).  Default 1 KB.  A request
+                line that reaches the cap without a CRLF is rejected
+                with 414 URI Too Long — bounds the buffer a no-CRLF
+                dribble can grow before the request-timeout deadline.
+            max_headers_bytes: Cap on the total header-section bytes.
+                Default 4 KB.  Headers exceeding the cap are rejected
+                with 431 Request Header Fields Too Large — bounds the
+                buffer a slow header dribble can grow.
             ticks: Optional tick source — any object exposing
                 ``ticks_ms``, ``ticks_diff``, ``ticks_add`` (matches
                 the ``chumicro_timing.ticks`` submodule shape).
@@ -602,6 +636,8 @@ class HttpServer:
         self._recv_budget_per_tick = recv_budget_per_tick
         self._send_budget_per_tick = send_budget_per_tick
         self._max_request_body_bytes = max_request_body_bytes
+        self._max_request_line_bytes = max_request_line_bytes
+        self._max_headers_bytes = max_headers_bytes
 
         if ticks is None:
             from chumicro_timing import ticks  # noqa: PLC0415 - DI fallback
@@ -777,7 +813,7 @@ class HttpServer:
         if self._listener is not None:
             try:
                 self._listener.close()
-            except OSError:  # pragma: no cover — defensive
+            except OSError:  # pragma: no cover - defensive
                 pass
             self._listener = None
 
@@ -785,7 +821,7 @@ class HttpServer:
     # Runner contract
     # ------------------------------------------------------------------
 
-    def check(self, now_ms):  # noqa: ARG002 — runner contract
+    def check(self, now_ms):  # noqa: ARG002 - runner contract
         """Always ``True``: the accept loop must run on every tick.
 
         Cheap to advance even with no in-flight connections, and the
@@ -820,7 +856,7 @@ class HttpServer:
         arrive at any time."""
         return self._listener is not None
 
-    def next_deadline(self, now_ms):  # noqa: ARG002 — runner contract
+    def next_deadline(self, now_ms):  # noqa: ARG002 - runner contract
         """Earliest per-connection deadline across in-flight connections.
 
         Returns ``None`` when no connection is in flight.  Lets
@@ -872,6 +908,8 @@ class HttpServer:
             recv_budget=self._recv_budget_per_tick,
             send_budget=self._send_budget_per_tick,
             max_request_body_bytes=self._max_request_body_bytes,
+            max_request_line_bytes=self._max_request_line_bytes,
+            max_headers_bytes=self._max_headers_bytes,
         )
         self._connections.append(connection)
 
@@ -885,7 +923,7 @@ def build_response(
     status: int = 200,
     *,
     body: bytes | str | None = None,
-    json=None,  # noqa: A002 — json is the conventional kwarg name
+    json=None,  # noqa: A002 - json is the conventional kwarg name
     text: str | None = None,
     html: str | None = None,
     headers: object | None = None,
