@@ -2,8 +2,11 @@
 """Render a full-feature fixture through render_picker.py and gate the output (no LLM).
 
 A PostToolUse hook (picker_edit_gate.py here, wired in .claude/settings.json) runs this
-automatically on every agent edit to render_picker.py or this file; run it by hand after
-editing outside an agent session. Gates, in order:
+automatically on every agent edit to render_picker.py or this file.  Agent directive for
+every other path to a picker change (scripted edits, edits outside an agent session, a
+repo this directory migrates into): run this file plus validate_picker_smoke.py yourself
+before committing — the gates only need to run when the picker changed, so no repo-wide
+preflight wiring is assumed.  Gates, in order:
 
   1. render    — a fixture spec exercising every schema feature (columns pick_ui with an empty
                  candidate and a 4-box scroll row, seeded edit box, all four badge severities,
