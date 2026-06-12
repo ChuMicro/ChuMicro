@@ -334,6 +334,19 @@ Pass `run_count` to auto-remove a task after a set number of handler fires:
 runner.add_periodic(calibrate, period_ms=1000, run_count=3)
 ```
 
+### Phase anchoring
+
+By default a fired periodic reschedules from the tick that fired it, so fires are always at least `period_ms` apart — but each fire inherits the tick's lateness, and the drift compounds.  A 1 Hz publish whose handler takes 80 ms settles near 1.08 s per cycle.
+
+Pass `preserve_phase=True` for sampling, metering, or telemetry tasks that must hold their long-run cadence.  The next deadline then advances from the previous deadline in whole periods: fires stay aligned to the original schedule, and a stall longer than one period skips the missed fires instead of bursting to catch up.
+
+```python
+# Holds 10 Hz cadence even when handlers run long.
+runner.add_periodic(sample_adc, period_ms=100, preserve_phase=True)
+```
+
+One caveat: a phase-preserving fire that runs late catches back up to its schedule, so two fires can land closer together than `period_ms`.  Code that needs a guaranteed minimum gap (throttles, debounce) should keep the default.
+
 ## Multiple services
 
 The pattern scales to many services with no extra boilerplate:

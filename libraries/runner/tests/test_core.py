@@ -349,6 +349,83 @@ def test_periodic_set_period_changes_rate() -> None:
     assert len(received) == 2
 
 
+def test_periodic_default_reanchors_from_the_late_tick() -> None:
+    """A late tick pushes the default periodic's next fire late too: fired
+    at 130 on a 100 ms period, it stays quiet at 200 and fires at 230."""
+    fake = FakeTicks()
+    received = []
+
+    runner = Runner(ticks=fake)
+    runner.add_periodic(lambda now: received.append(now), period_ms=100)
+
+    fake.advance(130)
+    runner.tick()
+    assert received == [130]
+
+    fake.advance(70)
+    runner.tick()
+    assert received == [130]
+
+    fake.advance(30)
+    runner.tick()
+    assert received == [130, 230]
+
+
+def test_periodic_preserve_phase_holds_schedule_through_late_ticks() -> None:
+    """With preserve_phase, a fire at 130 on a 100 ms period keeps the next
+    deadline at 200, so the schedule does not inherit the tick's lateness."""
+    fake = FakeTicks()
+    received = []
+
+    runner = Runner(ticks=fake)
+    runner.add_periodic(
+        lambda now: received.append(now), period_ms=100, preserve_phase=True,
+    )
+
+    fake.advance(130)
+    runner.tick()
+    assert received == [130]
+
+    fake.advance(70)
+    runner.tick()
+    assert received == [130, 200]
+
+
+def test_periodic_preserve_phase_skips_missed_fires_without_burst() -> None:
+    """A stall past several deadlines yields one fire, and the next deadline
+    is the next future phase point (400), not a catch-up burst."""
+    fake = FakeTicks()
+    received = []
+
+    runner = Runner(ticks=fake)
+    runner.add_periodic(
+        lambda now: received.append(now), period_ms=100, preserve_phase=True,
+    )
+
+    fake.advance(370)
+    runner.tick()
+    assert received == [370]
+
+    runner.tick()
+    assert received == [370]
+
+    fake.advance(20)
+    runner.tick()
+    assert received == [370]
+
+    fake.advance(10)
+    runner.tick()
+    assert received == [370, 400]
+
+
+def test_preserve_phase_requires_period() -> None:
+    """add() rejects preserve_phase on a registration with no period."""
+    runner = Runner(ticks=FakeTicks())
+
+    with raises(ValueError):
+        runner.add(handler=lambda now: None, preserve_phase=True)
+
+
 def test_periodic_remove() -> None:
     """Removed periodic handler should no longer fire."""
     fake = FakeTicks()
