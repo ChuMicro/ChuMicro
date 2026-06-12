@@ -1,0 +1,52 @@
+{
+  "skill_name": "audit-branch",
+  "purpose": "Routing evals for the description + when_to_use frontmatter. Half should route here; half are near-misses that belong to a sibling skill or a built-in. Re-run after any description/when_to_use edit or when a sibling skill's scope moves closer to change-set review.",
+  "evals": [
+    {
+      "query": "audit my branch before i merge — i changed chumicro_sockets/src/chumicro_sockets/connector.py and i'm worried i broke the callers",
+      "should_trigger": true
+    },
+    {
+      "query": "deep review of everything committed since origin/main, the keepalive fix might be masking the real bug instead of fixing it",
+      "should_trigger": true
+    },
+    {
+      "query": "pressure-test my staged changes — trace the usages of the stuff i touched and check the integration before i commit",
+      "should_trigger": true
+    },
+    {
+      "query": "is the diff set on feature/mqtt-reconnect compatible with the code it integrates with? check every call site",
+      "should_trigger": true
+    },
+    {
+      "query": "deeply evaluate libraries/chumicro-timing/src/chumicro_timing/heartbeat.py, find the traps and run it in your head",
+      "should_trigger": false,
+      "expected_route": "audit-code"
+    },
+    {
+      "query": "quick look over my current diff for bugs before i push",
+      "should_trigger": false,
+      "expected_route": "code-review"
+    },
+    {
+      "query": "audit chumicro_mqtt for duplication and dead code, it's accumulated debt",
+      "should_trigger": false,
+      "expected_route": "audit-library"
+    },
+    {
+      "query": "commit what i have on the connector with a proper message",
+      "should_trigger": false,
+      "expected_route": "git-commit"
+    },
+    {
+      "query": "rewrite the docstrings in the files i just changed, they're stale",
+      "should_trigger": false,
+      "expected_route": "regen-comments"
+    },
+    {
+      "query": "security review of everything committed since origin/main before I push",
+      "should_trigger": false,
+      "expected_route": "security-review"
+    }
+  ]
+}
