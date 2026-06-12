@@ -37,9 +37,10 @@ Follow the project's commit-message conventions: imperative subject line, body e
 
 ```bash
 git --no-pager log -1 --format='%H%n%s%n---body---%n%b'
+git --no-pager show --stat --format= HEAD
 ```
 
-Confirms the subject + body landed intact.  Worth doing the first few times you use the heredoc pattern; routine after that.
+The first command confirms the subject + body landed intact.  The second lists the files the commit actually contains — compare it against the files the message claims to change.  A parallel agent session or linter hook can stage files in the window between your `diff --cached --stat` check and the commit, and those riders land silently.  If a file you didn't intend appears: do **not** `--amend`.  Revert the rider with a follow-up commit (`git restore --source=HEAD~1 -- <path>` then commit the restoration, naming the scramble), and tell the user which session's work was swept.
 
 ## Notes
 
