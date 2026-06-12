@@ -8,7 +8,6 @@ FAT-cluster slack on a USB-mounted CIRCUITPY drive low, since each
 file costs a 4 KB cluster minimum on FAT16/32.
 """
 
-import gc
 import struct
 
 try:
@@ -446,10 +445,6 @@ class _OversizedMessage:
 _DRAIN_NONE = const(0)
 _DRAIN_INTACT = const(1)
 _DRAIN_OVERSIZED = const(2)
-
-
-# Defragment compile-time scratch before the PacketDecoder class body.
-gc.collect()
 
 
 class PacketDecoder:
