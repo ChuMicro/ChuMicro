@@ -27,6 +27,18 @@
   "enabledPlugins": {
     "pyright-lsp@claude-plugins-official": false
   },
-  "hooks": {},
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.github/skills/_shared/picker/picker_edit_gate.py\""
+          }
+        ]
+      }
+    ]
+  },
   "includeGitInstructions": false
 }
