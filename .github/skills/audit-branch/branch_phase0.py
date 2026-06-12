@@ -18,6 +18,7 @@ Usage:
 
 `--stage-only` stops after laying out ./world/ (no `claude -p`) — for the TESTPLAN's fixture rows.
 """
+import json
 import os
 import subprocess
 import sys
@@ -26,6 +27,7 @@ SKILL = os.path.dirname(os.path.abspath(__file__))
 PIPELINE = os.path.join(os.path.dirname(SKILL), "audit-code")
 sys.path.insert(0, PIPELINE)
 sys.path.insert(0, SKILL)
+from audit_phase1 import CLEAN_ROOM_SETTINGS  # noqa: E402
 from branch_phase1 import _git, changed_files  # noqa: E402
 from preflight import require_claude  # noqa: E402
 from strip import strip_code  # noqa: E402
@@ -120,9 +122,16 @@ def main():
 
     prompt = PROMPT_HEAD.format(changed="\n".join(f"- {p}" for p in changed))
     # --safe-mode: user-global memory, hooks, skills, plugins, and MCP stay out of the clean room
-    subprocess.run(["claude", "--safe-mode", "-p", prompt, "--allowedTools", "Read", "Write",
-                    "--permission-mode", "acceptEdits", "--model", "opus"],
-                   cwd=rundir, capture_output=True, text=True)
+    completed = subprocess.run(["claude", "--safe-mode", "-p", prompt, "--allowedTools", "Read", "Write",
+                                "--permission-mode", "acceptEdits", "--model", "opus",
+                                "--output-format", "json", "--settings", CLEAN_ROOM_SETTINGS],
+                               cwd=rundir, capture_output=True, text=True)
+    try:
+        envelope = json.loads(completed.stdout or "")
+    except ValueError:
+        envelope = {"unparseable_stdout_tail": (completed.stdout or "")[-2000:]}
+    envelope["stderr_tail"] = (completed.stderr or "")[-2000:]
+    json.dump(envelope, open(os.path.join(rundir, "claude_envelope.json"), "w"), indent=1)
     out = os.path.join(rundir, "FEATURE_FACTS.md")
     if os.path.exists(out):
         print(f"wrote {out}  ({len(manifest)} files from {len(roots)} package root(s))")

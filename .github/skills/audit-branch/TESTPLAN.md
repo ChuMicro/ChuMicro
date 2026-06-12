@@ -9,7 +9,7 @@ commit 2 edits `greet` to `def greet(name, loud=False)` and changes its return. 
 plain `git init` / `git add` / `git commit` (any session can fabricate this in five commands).
 `$SKILL` = `.github/skills/audit-branch`, `$PIPE` = `.github/skills/audit-code`.
 
-| # | What it exercises | Invocation | Expected observable | Mark |
+| # | What it exercises | Invocation | Expected observable | Mode |
 |---|---|---|---|---|
 | A1 | Range staging end-to-end (mechanical only) | `python3 $SKILL/branch_phase1.py HEAD~1 HEAD $(mktemp -d)/room --repo <fixture> --stage-only` | room holds `diff.patch` (non-empty), `head/pkg/mod.py`, `head_stripped/pkg/mod.py`, `base_stripped/pkg/mod.py`; `changed_symbols.json` lists `greet` for `pkg/mod.py` | self-executing |
 | A2 | Usage tracing | same run as A1 | `usage_map.json` maps `greet` to `caller.py`; `usages/caller.py` exists and is stripped | self-executing |
