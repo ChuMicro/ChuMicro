@@ -49,7 +49,7 @@ def _polish_once(rundir, fname, offenders):
         "VIOLATIONS:\n" + lines + "\n\nEdit the file in place and reply DONE."
     )
     subprocess.run(
-        ["claude", "-p", prompt, "--allowedTools", "Read", "Edit", "Write",
+        ["claude", "-p", prompt, "--safe-mode", "--allowedTools", "Read", "Edit", "Write",
          "--permission-mode", "acceptEdits", "--model", "opus"],
         cwd=rundir, capture_output=True, text=True,
     )
