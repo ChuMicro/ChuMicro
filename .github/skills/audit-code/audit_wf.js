@@ -9,6 +9,8 @@
 //                     patcher's before-snippets must match the REAL file exactly so a patch applies).
 //   tests.py          the file's located tests, concatenated (or a NO-TESTS marker) -- the coverage lens.
 //   voice_persona.txt the chosen voice persona (only when VOICED == 'yes'); the voicer reads it.
+//   voice_sample.txt  the voice's real-prose register excerpt (empty for plain / no sample on file);
+//                     the writer absorbs it so the voice lands as the author's register, not an impression.
 //   LIBRARY_FACTS.md  optional cross-file context (domain + contracts + glossary) in library mode.
 //
 // Shape: a summarizer + FIVE lenses run in parallel on the code; a merger consolidates every finding into a
@@ -392,7 +394,11 @@ const writerPrompt =
   + 'CODE (for accuracy + the quoted line): ' + STRIPPED + '\n\n'
   + 'REGISTER: read ' + RUNDIR + '/voice_persona.txt. If it is EMPTY, write in a clear, plain, direct '
   + 'register. If it holds a persona ("A [role] who ..."), write FULLY in that voice -- the voice REPLACES '
-  + 'the plain register (do not write a plain draft and then flavor it), and it runs free. The ONE floor: '
+  + 'the plain register (do not write a plain draft and then flavor it), and it runs free. With a persona, '
+  + 'also read ' + RUNDIR + '/voice_sample.txt -- a sample of that voice in its own genre rather than '
+  + 'audit findings (empty = persona only). Absorb the rhythm, attitude, and word choice from it, then '
+  + 'write in your own words about these findings -- never reuse its phrases or subject matter, and never '
+  + 'its paragraph length or format. The ONE floor: '
   + 'the `consequence` must stay understandable in a single read.\n\n'
   + 'For EACH finding id, write four fields:\n'
   + '- title: one short line naming the issue concretely (under ~12 words).\n'

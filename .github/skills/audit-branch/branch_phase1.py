@@ -41,7 +41,7 @@ SKILL = os.path.dirname(os.path.abspath(__file__))
 # two front doors); this skill stages differently but runs the same room machinery
 PIPELINE = os.path.join(os.path.dirname(SKILL), "audit-code")
 sys.path.insert(0, PIPELINE)
-from audit_phase1 import claude_p_workflow, find_tests, voice_persona, write_repros  # noqa: E402
+from audit_phase1 import claude_p_workflow, find_tests, voice_persona, voice_register_sample, write_repros  # noqa: E402
 from preflight import require_claude  # noqa: E402
 from strip import strip_code  # noqa: E402
 
@@ -331,6 +331,7 @@ def main():
     if facts:
         shutil.copy(facts, os.path.join(rundir, "FEATURE_FACTS.md"))
     open(os.path.join(rundir, "voice_persona.txt"), "w").write(voice_persona(voice))
+    open(os.path.join(rundir, "voice_sample.txt"), "w").write(voice_register_sample(voice))
 
     label = f"{base}...{head}" if mode == "range" else f"{mode} vs HEAD"
     manifest = {"mode": mode, "base": base, "head": head, "merge_base": merge_base,

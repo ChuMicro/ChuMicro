@@ -44,6 +44,15 @@ def voice_persona(key):
         return ""
 
 
+def voice_register_sample(key):
+    """The voice's real-prose register excerpt (empty for plain / unknown / no sample on file)."""
+    if not key or key == "plain":
+        return ""
+    sys.path.insert(0, os.path.join(SKILL, "..", "_shared", "voices"))
+    from voice_sample import load_voice_sample
+    return load_voice_sample(key)
+
+
 def _find_lib_root(target):
     """Nearest ancestor of the target that looks like a library root (has a tests/ dir or a pyproject)."""
     d = os.path.dirname(os.path.abspath(target))
@@ -201,10 +210,13 @@ def main():
     tests_found = build_tests_file(target, os.path.join(rundir, "tests.py"), tests_override)
     if lib:
         shutil.copy(lib, os.path.join(rundir, "LIBRARY_FACTS.md"))
-    # voice: write the persona to a file (so its quotes/newlines never break the workflow JS). The writer
-    # reads it -- empty persona (plain / none) -> the writer composes in a plain register; otherwise it
-    # composes FULLY in that voice. Voice is written at compose time, never as a post-hoc rewrite.
+    # voice: write the persona and its real-prose register excerpt to files (so their quotes/newlines
+    # never break the workflow JS). The writer reads both -- empty persona (plain / none) -> a plain
+    # register; otherwise it composes FULLY in that voice, grounded by the excerpt when one exists
+    # (persona-only steering produces an impression of the author, not the register). Voice is written
+    # at compose time, never as a post-hoc rewrite.
     open(os.path.join(rundir, "voice_persona.txt"), "w").write(voice_persona(voice))
+    open(os.path.join(rundir, "voice_sample.txt"), "w").write(voice_register_sample(voice))
 
     # the evaluation workflow, one clean-room claude -p. __TARGET__ hands the patcher the real
     # path as a STRING (for deriving repro import names); the room never gains read access to it.
