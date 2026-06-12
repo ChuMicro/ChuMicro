@@ -1,0 +1,43 @@
+{
+  "skill_name": "audit-code",
+  "purpose": "Routing evals for the description + when_to_use frontmatter. audit-code sits in the repo's most contested routing neighborhood (audit-branch, code-review, audit-library, regen-comments, audit-comments, audit-embedded all share keywords); these rows turn the boundary prose from asserted to tested. Re-run after any description/when_to_use edit or when a sibling's scope moves closer.",
+  "evals": [
+    {
+      "query": "deeply evaluate libraries/chumicro-timing/src/chumicro_timing/heartbeat.py, find the traps and run it in your head",
+      "should_trigger": true
+    },
+    {
+      "query": "does libraries/chumicro-mqtt actually do what its docstrings say? pressure-test the whole library",
+      "should_trigger": true
+    },
+    {
+      "query": "are the tests really covering the connector class? i want a report of gaps with fixes i can apply by number",
+      "should_trigger": true
+    },
+    {
+      "query": "pressure-test what I changed since origin/main — find the traps and give me numbered fixes I can apply",
+      "should_trigger": false,
+      "expected_route": "audit-branch"
+    },
+    {
+      "query": "quick review of my current diff before i push",
+      "should_trigger": false,
+      "expected_route": "code-review"
+    },
+    {
+      "query": "audit chumicro_kvstore for duplication, dead code, and speculative API",
+      "should_trigger": false,
+      "expected_route": "audit-library"
+    },
+    {
+      "query": "rewrite heartbeat.py's docstrings from the code, the current ones are stale",
+      "should_trigger": false,
+      "expected_route": "regen-comments"
+    },
+    {
+      "query": "how much RAM does chumicro_msgpack pull at import on the pico, audit the footprint",
+      "should_trigger": false,
+      "expected_route": "audit-embedded"
+    }
+  ]
+}

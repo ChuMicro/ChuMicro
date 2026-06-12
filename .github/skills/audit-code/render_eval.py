@@ -54,6 +54,7 @@ SEV_RANK = {"high": 0, "med": 1, "low": 2}
 EFFORT_RANK = {"small": 0, "medium": 1, "large": 2}
 ANGLE_HELP = {
     "trap": "correctness lens — inversions, off-by-ones, code that says one thing and does another, judged from comment-stripped code",
+    "hazard": "adversarial-robustness lens — unbounded peer-controlled allocations, untrusted data reaching a sensitive sink, reentrancy windows, resources leaked on error paths",
     "drift": "comment/doc lens — claims a name, comment, or docstring makes that the code does not honor",
     "coverage": "test-gap lens — behaviors no test exercises, hollow tests, and tests that bless a bug",
     "clarity": "craft lens — confusing naming, hard-to-follow control flow, could-be-tighter",
@@ -264,7 +265,7 @@ def main_single(rundir, target):
         },
         "facets": [
             {"key": "severity", "values": ["high", "med", "low"]},
-            {"key": "angle", "values": ["trap", "drift", "coverage", "clarity"], "help": ANGLE_HELP},
+            {"key": "angle", "values": ["trap", "hazard", "drift", "coverage", "clarity"], "help": ANGLE_HELP},
         ],
         "sections": sections,
         "items": items,
@@ -354,7 +355,7 @@ def main_merge(output_dir, room_args, library_facts):
         },
         "facets": [
             {"key": "severity", "values": ["high", "med", "low"]},
-            {"key": "angle", "values": ["trap", "drift", "coverage", "clarity"], "help": ANGLE_HELP},
+            {"key": "angle", "values": ["trap", "hazard", "drift", "coverage", "clarity"], "help": ANGLE_HELP},
             {"key": "file", "values": file_names, "style": "select"},
         ],
         "sections": sections,

@@ -110,9 +110,13 @@ def build_tests_file(target, out_path, override=None):
 
 
 def claude_p_workflow(rundir, wf_name):
-    """Run one clean-room `claude -p` from rundir that executes the named workflow to completion."""
+    """Run one clean-room `claude -p` from rundir that executes the named workflow to completion.
+
+    --safe-mode keeps user-global ~/.claude/CLAUDE.md, hooks, skills, plugins, and MCP servers out
+    of every judging layer (OAuth login and the Workflow/Task tools still work under it), so the
+    clean room guarantees what its name claims instead of warning about the leak."""
     return subprocess.run(
-        ["claude", "-p",
+        ["claude", "--safe-mode", "-p",
          f"Use the Workflow tool to run the workflow at ./{wf_name} (call Workflow with scriptPath "
          f"./{wf_name}). Wait for full completion, then reply DONE.",
          "--allowedTools", "Workflow", "Task", "Read", "Write",

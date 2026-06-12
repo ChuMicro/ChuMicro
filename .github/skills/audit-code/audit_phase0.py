@@ -55,7 +55,8 @@ def main():
             manifest.append("lib/" + rel)
     open(os.path.join(rundir, "lib_manifest.txt"), "w").write("\n".join(manifest) + "\n")
 
-    subprocess.run(["claude", "-p", PROMPT, "--allowedTools", "Read", "Write",
+    # --safe-mode: user-global memory, hooks, skills, plugins, and MCP stay out of the clean room
+    subprocess.run(["claude", "--safe-mode", "-p", PROMPT, "--allowedTools", "Read", "Write",
                     "--permission-mode", "acceptEdits", "--model", "opus"],
                    cwd=rundir, capture_output=True, text=True)
     out = os.path.join(rundir, "LIBRARY_FACTS.md")
