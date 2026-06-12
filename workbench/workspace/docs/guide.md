@@ -202,6 +202,26 @@ chumicro-workspace deploy back-porch --import-graph
 
 Routes through [`project_import_graph_source`](api.md): AST-parses the entrypoint, walks `import` / `from ... import` targets, resolves against the workspace's `shared/` + `packages/` + any `library_sources:` overrides in `workspace.yml`, and ships only the reachable modules.  Useful for projects that import shared libs.
 
+### Installing libraries without the workspace tooling
+
+The default path pulls chumicro libraries into the workspace with `chumicro-workspace library add <name>`, then `deploy --import-graph` ships the ones a project imports to the board's `/lib/`.  Both steps fetch from the host's network.
+
+When the host can't reach the snapshot channel — air-gapped, behind a custom registry, no internet — install onto the board directly with the runtime's own package manager.  Both pull from `ChuMicro-Bundle`, list the libraries your project imports, and resolve transitive chumicro deps automatically:
+
+```bash
+# CircuitPython — register the bundle once per machine, then install by name
+circup bundle-add ChuMicro/ChuMicro-Bundle
+circup install chumicro-wifi chumicro-mqtt chumicro-runner
+
+# MicroPython — one mip install per library; the board needs wifi to fetch
+mpremote connect /dev/cu.usbmodem1101 mip install \
+    github:ChuMicro/ChuMicro-Bundle/chumicro_wifi
+mpremote connect /dev/cu.usbmodem1101 mip install \
+    github:ChuMicro/ChuMicro-Bundle/chumicro_mqtt
+```
+
+`circup` uses hyphens (`chumicro-wifi`); `mip` uses the underscore import name (`chumicro_wifi`).  Swap `ChuMicro-Bundle` for `ChuMicro-Bundle-Experimental` to track the pre-release channel.  Files land at `/lib/chumicro_<name>/` either way, the same place `deploy --import-graph` writes them, so a project deployed afterward finds its imports.  Full install matrix, pre-compiled `.mpy` bytecode, and pip-on-CPython: [INSTALL.md](https://github.com/ChuMicro/ChuMicro/blob/main/INSTALL.md).
+
 ### Single project, boot-shim layout
 
 ```bash
@@ -255,7 +275,7 @@ Categories: `shim` (workspace-runtime infrastructure), `namespace` (empty `__ini
 
 ### One project per `deploy` call
 
-Multi-project-on-one-device deploys (`deploy <a> <b> <c> --boot-shim`) and the matching `switch <name>` re-pointer were retired — multi-project-staging blew the flash budget on the minimum supported board class (256 KB MCU RAM / 4 MB flash).  Pass one positional per `deploy` invocation; re-deploy when you want to change which project is active.  Scoped diff-deploy is the replacement (`deploy_diff` on the transport layer, `deploy --wipe` for a clean slate).
+Multi-project-on-one-device deploys (`deploy <a> <b> <c> --boot-shim`) and the matching `switch <name>` re-pointer were retired — multi-project-staging blew the flash budget on the minimum supported board class (256 KB MCU RAM / 2 MB physical / ~800 KB usable flash).  Pass one positional per `deploy` invocation; re-deploy when you want to change which project is active.  Scoped diff-deploy is the replacement (`deploy_diff` on the transport layer, `deploy --wipe` for a clean slate).
 
 ### Multi-board deploys — `--all-devices`
 
