@@ -3,7 +3,7 @@
 Status: `accepted`
 Date: `2026-05-14`
 Summary: `chumicro-sockets` ships a curated DER CA bundle for MicroPython; `tls_client_socket(host, port)` is secure-by-default on every runtime; `ssl_context_no_verify()` is the explicit opt-out.
-Related: [Decision 0031](0031-chumicro-sockets.md) (chumicro-sockets charter — the substrate this decision modifies), [Decision 0042](0042-library-dependency-policy.md) (every consumer of TLS routes through chumicro_sockets), [Decision 0015](0015-board-architecture-support.md) (256 KB RAM / 4 MB flash minimum — informs the bundle's flash-cost ceiling).
+Related: [Decision 0031](0031-chumicro-sockets.md) (chumicro-sockets charter — the substrate this decision modifies), [Decision 0042](0042-library-dependency-policy.md) (every consumer of TLS routes through chumicro_sockets), [Decision 0015](0015-board-architecture-support.md) (256 KB RAM / 2 MB physical / ~800 KB usable flash minimum — informs the bundle's flash-cost ceiling).
 
 ## Context
 
@@ -50,7 +50,7 @@ DER, not a `PEM_BYTES` / `DER_BYTES` module constant, and a *file*, not a consta
 
 Because a non-`.py` data file cannot ride RAM-mode CircuitPython (raw-REPL `exec()`, no device filesystem — the file would be silently dropped), `Deployer._effective_device_for_source` switches the *whole* deploy to flash mode when any non-`.py` file is in the staged set (all-or-nothing; the explicit `force_deploy_mode='ram'` escape hatch still wins).  This makes the sibling-`__file__` path resolution reliable.
 
-The MP adapter's `context=None` path builds the `SSLContext` from `read_der()` on first call and caches it module-level for the process; plain-TCP-only consumers never trigger the read+parse.  The ~16 KB DER flash cost is paid by every MP install of `chumicro_sockets` regardless of TLS use (no `__chumicro_runtimes__` marker mechanism for data files — it also ships, unused, to CP, ~16 KB; negligible against a 4 MB floor).
+The MP adapter's `context=None` path builds the `SSLContext` from `read_der()` on first call and caches it module-level for the process; plain-TCP-only consumers never trigger the read+parse.  The ~16 KB DER flash cost is paid by every MP install of `chumicro_sockets` regardless of TLS use (no `__chumicro_runtimes__` marker mechanism for data files — it also ships, unused, to CP, ~16 KB; negligible against ~800 KB usable flash).
 
 Generation today is manual: extract the chosen roots from a current trust store, concatenate DER, write `_ca_bundle.der`, and verify the set is a strict subset of ESP-IDF's `cacrt_all.pem` (the source of CP's firmware bundle).  Re-cut during a release pass.  No automated `regen` script exists yet; if root rotation makes this churn, a small script is the obvious follow-up.
 
@@ -81,7 +81,7 @@ Every TLS consumer in the workspace already routes through `tls_client_socket(ho
 
 ### Negative / tradeoffs
 
-- **MP flash + RAM cost** — measured, not estimated (`functional_tests/test_ca_bundle_ram_cost.py`, Pi Pico W MP): ~16 KB DER flash; ~500 B parsed-chain resident heap per root (17 roots ≈ ~8-9 KB) against a ~187 KB free-heap baseline; the chain frees cleanly on context release (retained < 2 KB — no pinned buffer, no leak).  RAM is therefore *not* the binding constraint on subset size — flash (~900 B/root) and bundle maintenance are.  The flash cost is paid by every MP install regardless of TLS use, and the file also ships unused to CP (~16 KB; negligible against the 4 MB floor).
+- **MP flash + RAM cost** — measured, not estimated (`functional_tests/test_ca_bundle_ram_cost.py`, Pi Pico W MP): ~16 KB DER flash; ~500 B parsed-chain resident heap per root (17 roots ≈ ~8-9 KB) against a ~187 KB free-heap baseline; the chain frees cleanly on context release (retained < 2 KB — no pinned buffer, no leak).  RAM is therefore *not* the binding constraint on subset size — flash (~900 B/root) and bundle maintenance are.  The flash cost is paid by every MP install regardless of TLS use, and the file also ships unused to CP (~16 KB; negligible against ~800 KB usable flash).
 - **Bundle staleness** — Certificate Authorities rotate roots on multi-year cycles; a stale bundle means a TLS handshake against a server whose chain depends on a not-yet-bundled root fails with `MBEDTLS_ERR_X509_*` until the user upgrades `chumicro_sockets` or calls `set_default_ca_bundle`.  Acceptable vs. the alternative (silently accepting any cert).  Cadence: re-cut the bundle during each release pass.
 - **Maintenance burden** — the bundle is curated and regenerated manually (extract the chosen roots from a trust store, concatenate DER, verify strict-subset of ESP-IDF `cacrt_all.pem`).  No automated script yet; the manual step is small but un-checked — a root that rotates out silently keeps working until removed, a needed new root is invisible until a user hits a failure.  A `regen` + subset-diff script is the obvious follow-up if this churns.
 

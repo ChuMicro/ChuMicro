@@ -45,7 +45,7 @@ Everything is non-blocking: **no `async` / `await`, no threads**.  Concurrent wo
 
 - **Bring your own socket, your own clock.**  Each library accepts its I/O dependencies as constructor arguments.  `MQTTClient` takes a socket. `Heartbeat` takes a clock.  You decide what to pass.  ChuMicro provides defaults (`chumicro-sockets`, `chumicro-timing`) so minimal wiring works.  Nothing locks you in: pass a stdlib `socket.socket` for a desktop script, a wrapper around an existing networking library, or anything else that exposes the small set of methods the library needs.  When the default is fully replaced, [Slimming Your Deploy](docs/contributing/slimming-your-deploy.md) shows how to drop `chumicro-sockets` from the on-device files too.
 
-- **Runs on common Python-capable dev boards.**  Tested on real CircuitPython and MicroPython boards before each release.  Any board that runs CircuitPython or MicroPython with at least 256 KB of RAM and 4 MB of flash should work.
+- **Runs on common Python-capable dev boards.**  Tested on real CircuitPython and MicroPython boards before each release.  Any board that runs CircuitPython or MicroPython with at least 256 KB of RAM and 2 MB physical / ~800 KB usable flash should work.
 
 ## From blink to a full IoT loop
 

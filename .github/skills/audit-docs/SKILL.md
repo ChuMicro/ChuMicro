@@ -114,7 +114,7 @@ Claims a reader might rely on need verification before they ship.  Stratify by s
 **Source-read verify** (grep or Read tool, no hardware) when the claim is API-surface or pure-Python.
 
 * **API-shape claims.**  *"`Heartbeat.period_ms` is read-only"*, *"`X.from_config` accepts empty dict"*.  Verify by reading the class source.
-* **Compatibility claims.**  *"works on every board with ≥ 256 KB / 4 MB"*.  At minimum, list the families actually tested.
+* **Compatibility claims.**  *"works on every board with ≥ 256 KB RAM / 2 MB flash (~800 KB usable)"*.  At minimum, list the families actually tested.
 * **Detection-table claims.**  *"`supervisor.ticks_ms` on CircuitPython 7+; `time.ticks_ms` on MicroPython"*.  Verify by reading the detection logic.
 
 If a claim cannot be verified, soften to a capability mention (*"supports TLS"* instead of *"validates TLS by default"*) or remove.  If the gap is structural and worth fixing in code, file it as a research item under `plans/next-up.md` → `## Investigations` and roll back the claim in the doc.

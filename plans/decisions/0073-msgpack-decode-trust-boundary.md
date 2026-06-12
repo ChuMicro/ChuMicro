@@ -21,7 +21,7 @@ overwrites the original on the next commit.
 The open question this resolves: is `unpackb` contractually a
 *validating* decoder or a *trusting* one, and must every kvstore
 persistence backend carry CRC framing? The embedded-cost gate applies —
-`libraries/msgpack/src/` runs on 256 KB-RAM / 4 MB-flash boards, and
+`libraries/msgpack/src/` runs on 256 KB-RAM / 2 MB-flash (~800 KB usable) boards, and
 the realistic threat is power-loss flash corruption on a *raw-flash*
 backend, not a network attacker (most chumicro devices are LAN/leaf
 nodes; the genuinely exposed surface is `http_server` / `websockets`).

@@ -29,7 +29,7 @@ cleanup tail.
 
 ## The embedded-cost gate (load-bearing constraint — Phases 1–2 only)
 
-Phases 1–2 touch `libraries/*/src/`, which runs on 256 KB-RAM / 4 MB-flash
+Phases 1–2 touch `libraries/*/src/`, which runs on 256 KB-RAM / 2 MB-flash (~800 KB usable)
 boards under MicroPython and CircuitPython.  **A complete fix that costs
 100 lines of complex parsing can be the wrong fix** — flash, import-time
 RAM, hot-path CPU, and heap fragmentation on a non-compacting GC are

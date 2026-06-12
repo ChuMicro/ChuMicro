@@ -30,7 +30,7 @@ Small, focused libraries for microcontrollers and laptops.  Use what you need �
 | **[mqtt](mqtt/)** | Non-blocking MQTT 3.1.1 client (QoS 0 + 1) — runner-shaped, no threads or async.  Concurrent QoS 1 publishes, configurable oversized-message policy, last-will + retain. |
 | **[websockets](websockets/)** | Non-blocking WebSocket client + server — RFC 6455 framing + masking, runner-shaped, plays alongside [`http_server`](http_server/) for combined HTTP/WS deployments. |
 
-Validated on ESP32 (S2, S3, C3, C6) and RP2040 / RP2350 (Raspberry Pi Pico, Pico W).  Should work on any board that runs CircuitPython or MicroPython with at least 256 KB of RAM and 4 MB of flash — STM32 and nRF52840 builds included, untested.
+Validated on ESP32 (S2, S3, C3, C6) and RP2040 / RP2350 (Raspberry Pi Pico, Pico W).  Should work on any board that runs CircuitPython or MicroPython with at least 256 KB of RAM and 2 MB physical / ~800 KB usable flash — STM32 and nRF52840 builds included, untested.
 
 ## Install
 
