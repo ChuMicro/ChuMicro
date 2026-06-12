@@ -21,6 +21,7 @@ For frontmatter rules see [`spec-loader-reader.md`](spec-loader-reader.md).  For
 - The parallel budget is tokens: keep the body under ~5,000 tokens (≈20,000 characters; estimate tokens as characters ÷ 4 — word counts under-count dense markdown).  Line count alone is gameable — a body under 500 lines built from multi-hundred-character lines has blown the real budget, and the body's whole token cost recurs every turn once the skill loads.
 - Put load-bearing rules in the first ~5,000 tokens.  Compaction re-attaches only that prefix (see Compaction behavior below), so a rule in the back half of a long body vanishes mid-session.
 - When the body wants to grow past either budget, factor reference files (one hop deep).  Reference files load on demand from body links; each link names what the file contains and when to read it, and a reference file over ~100 lines opens with a table of contents so a partial read still shows its full scope.
+- When a skill serves several domains or variants, split reference material per domain (`reference/circuitpython.md`, `reference/micropython.md`) so a run loads only the slice it needs.  One fat reference mixing variants forces every run to pay for all of them.
 
 ### Section ordering
 
