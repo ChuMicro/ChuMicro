@@ -40,6 +40,18 @@ DEFAULT_SEND_BUDGET_PER_TICK = const(4096)
 #: at headers-complete time with a 413 response — no body allocation.
 DEFAULT_MAX_REQUEST_BODY_BYTES = const(16384)
 
+#: Default cap on the request-line length (method + target + version,
+#: not counting the trailing CRLF).  A request line that grows past
+#: this without a CRLF is rejected with a 414 response — bounds the
+#: buffer a no-CRLF dribble can grow before the request times out.
+DEFAULT_MAX_REQUEST_LINE_BYTES = const(1024)
+
+#: Default cap on the total header-section bytes (every header line
+#: plus its CRLF, summed across the section).  Headers exceeding this
+#: are rejected with a 431 response — bounds the buffer a slow header
+#: dribble can grow before the request times out.
+DEFAULT_MAX_HEADERS_BYTES = const(4096)
+
 #: Default per-connection deadline.
 DEFAULT_REQUEST_TIMEOUT_MS = const(10000)
 
@@ -72,21 +84,58 @@ class ServerProtocolError(ServerError):
     """
 
 
-class ServerOversizedError(ServerError):
+class ServerLimitError(ServerError):
+    """A sender-controlled allocation hit a documented cap.
+
+    Surfaced by the parser before the offending bytes are buffered or
+    a body is allocated.  Carries :attr:`status_code` — the HTTP status
+    the connection layer responds with before closing — so the catch
+    site maps the failure to a response without hard-coding the code.
+    Distinct from :class:`ServerProtocolError` so the connection can
+    choose a precise 413 / 414 / 431 over a generic 400.
+    """
+
+    #: HTTP status the connection layer emits.  Subclasses override.
+    status_code = 400
+
+
+class ServerOversizedError(ServerLimitError):
     """Request ``Content-Length`` exceeds ``max_body_bytes``.
 
     Surfaced by the parser at headers-complete time, before any body
     bytes are allocated.  The connection layer responds with 413
-    Payload Too Large and closes — the body is never read.  Sibling
-    of :class:`ServerProtocolError` so ``except ServerError`` catches
-    both, but distinct so the connection can choose 413 over 400.
+    Payload Too Large and closes — the body is never read.
 
     :attr:`reported_length` is the value the client declared.
     """
 
+    status_code = 413
+
     def __init__(self, message, *, reported_length):
         super().__init__(message)
         self.reported_length = reported_length
+
+
+class ServerRequestLineTooLargeError(ServerLimitError):
+    """Request line grew past ``max_request_line_bytes`` without a CRLF.
+
+    Surfaced by the parser while still reading the request line, before
+    the over-cap bytes drive any further parsing.  The connection layer
+    responds with 414 URI Too Long and closes.
+    """
+
+    status_code = 414
+
+
+class ServerHeadersTooLargeError(ServerLimitError):
+    """Header section grew past ``max_headers_bytes``.
+
+    Surfaced by the parser while reading headers, counting every header
+    line plus its CRLF against the cap.  The connection layer responds
+    with 431 Request Header Fields Too Large and closes.
+    """
+
+    status_code = 431
 
 
 # ---------------------------------------------------------------------------
@@ -112,7 +161,7 @@ class CaseInsensitiveDict:
     """
 
     def __init__(self):
-        # noqa: CHU027 — sibling impl in chumicro-requests _wire.py; candidate for shared http-wire library hoist
+        # noqa: CHU027 - same dict body as chumicro-requests _wire.py; per-consumer duplication kept intentionally
         # Lowercase key -> (original_name, value).  Paired with
         # ``_order`` (list of lowercase keys) so iteration preserves
         # insertion order on every runtime — MicroPython and
@@ -171,7 +220,7 @@ class CaseInsensitiveDict:
         for lower in self._order:
             yield self._entries[lower]
 
-    def add(self, name, value):  # noqa: CHU027  docstring shared with chumicro-requests _wire.add — candidate for shared http-wire library
+    def add(self, name, value):  # noqa: CHU027 - same docstring as chumicro-requests _wire.add; per-consumer duplication kept intentionally
         """Append *value* to the existing header, joining with ``, ``.
 
         New keys behave like :meth:`__setitem__`.  Used by the parser
@@ -193,7 +242,7 @@ class CaseInsensitiveDict:
 # ---------------------------------------------------------------------------
 
 
-def parse_charset(content_type: str | None) -> str:  # noqa: CHU027  docstring shared with chumicro-requests _wire.parse_charset — candidate for shared http-wire library
+def parse_charset(content_type: str | None) -> str:  # noqa: CHU027 - same docstring as chumicro-requests _wire.parse_charset; per-consumer duplication kept intentionally
     """Extract the ``charset=...`` parameter from a Content-Type header.
 
     Per RFC 7231 §3.1.1.5 the Content-Type value may carry a
@@ -286,6 +335,8 @@ class RequestParser:
         self,
         *,
         max_body_bytes: int = DEFAULT_MAX_REQUEST_BODY_BYTES,
+        max_request_line_bytes: int = DEFAULT_MAX_REQUEST_LINE_BYTES,
+        max_headers_bytes: int = DEFAULT_MAX_HEADERS_BYTES,
         body_buffer: bytearray | None = None,
         body_buffer_view: memoryview | None = None,
     ) -> None:
@@ -295,6 +346,17 @@ class RequestParser:
             max_body_bytes: Hard cap on body size.  Bodies bigger than
                 this raise :class:`ServerOversizedError` (413 at the
                 connection layer).
+            max_request_line_bytes: Hard cap on the request-line length
+                (method + target + version, excluding the trailing
+                CRLF).  A request line that reaches this length without
+                a CRLF raises :class:`ServerRequestLineTooLargeError`
+                (414 at the connection layer), so a no-CRLF dribble
+                can't grow the buffer past the cap.  Default 1024.
+            max_headers_bytes: Hard cap on the total header-section
+                bytes (every header line plus its CRLF, summed across
+                the section).  Crossing it raises
+                :class:`ServerHeadersTooLargeError` (431 at the
+                connection layer).  Default 4096.
             body_buffer: Optional caller-owned ``bytearray`` reused as
                 a steady-state body buffer across requests.  Requests
                 whose Content-Length fits land in it with zero
@@ -312,6 +374,13 @@ class RequestParser:
                 (a view will be made if missing).
         """
         self._max_body_bytes = max_body_bytes
+        self._max_request_line_bytes = max_request_line_bytes
+        self._max_headers_bytes = max_headers_bytes
+        # Running total of header bytes consumed in HEADERS state (each
+        # parsed line plus its CRLF).  Checked against
+        # ``_max_headers_bytes`` together with the unconsumed buffer so
+        # many small headers can't slip the cap one line at a time.
+        self._headers_bytes = 0
         self._buffer = bytearray()
         # Read cursor into ``_buffer``.  Each ``_consume(n)`` advances
         # the cursor and only realloates the bytearray when at least
@@ -457,6 +526,16 @@ class RequestParser:
         """
         crlf_index = self._live_find(CRLF)
         if crlf_index == -1:
+            # No complete line yet.  Length comparison only — the cap
+            # bounds the buffer a no-CRLF dribble can grow.  A line of
+            # exactly ``max_request_line_bytes`` passes here (its CRLF
+            # arrives in a later feed and is found above); only a
+            # longer no-CRLF run trips 414.
+            if self._live_len() > self._max_request_line_bytes:
+                self._fail(ServerRequestLineTooLargeError(
+                    f"request line exceeds cap {self._max_request_line_bytes}",
+                ))
+                return True
             return False
         line = self._live_slice(0, crlf_index)
         self._consume(crlf_index + 2)
@@ -496,18 +575,29 @@ class RequestParser:
         self.state = RequestParseState.HEADERS
         return True
 
-    def _try_parse_headers(self):  # noqa: CHU027  docstring shared with chumicro-requests _wire._try_parse_headers — candidate for shared http-wire library
+    def _try_parse_headers(self):  # noqa: CHU027 - same parse loop as chumicro-requests _wire._try_parse_headers; per-consumer duplication kept intentionally
         """Consume one header line; return True if state advanced or
         another header was parsed."""
+        # Section-total cap: bytes already consumed in HEADERS plus the
+        # unconsumed buffer.  Length comparison only — bounds both a
+        # no-CRLF dribble (``_live_len`` grows) and many small headers
+        # summing past the cap (``_headers_bytes`` grows).
+        if self._headers_bytes + self._live_len() > self._max_headers_bytes:
+            self._fail(ServerHeadersTooLargeError(
+                f"header section exceeds cap {self._max_headers_bytes}",
+            ))
+            return True
         crlf_index = self._live_find(CRLF)
         if crlf_index == -1:
             return False
         if crlf_index == 0:
             # Empty line — end of headers.
+            self._headers_bytes += 2
             self._consume(2)
             self._enter_body_state()
             return True
         line = self._live_slice(0, crlf_index)
+        self._headers_bytes += crlf_index + 2
         self._consume(crlf_index + 2)
         try:
             text = str(line, "ascii")
@@ -658,7 +748,9 @@ def parse_query(raw_query: str) -> "CaseInsensitiveDict":
 __all__ = [
     "CRLF",
     "DEFAULT_MAX_CONNECTIONS",
+    "DEFAULT_MAX_HEADERS_BYTES",
     "DEFAULT_MAX_REQUEST_BODY_BYTES",
+    "DEFAULT_MAX_REQUEST_LINE_BYTES",
     "DEFAULT_RECV_BUDGET_PER_TICK",
     "DEFAULT_REQUEST_TIMEOUT_MS",
     "DEFAULT_SEND_BUDGET_PER_TICK",
@@ -666,8 +758,11 @@ __all__ = [
     "RequestParseState",
     "RequestParser",
     "ServerError",
+    "ServerHeadersTooLargeError",
+    "ServerLimitError",
     "ServerOversizedError",
     "ServerProtocolError",
+    "ServerRequestLineTooLargeError",
     "parse_charset",
     "parse_query",
     "split_target",

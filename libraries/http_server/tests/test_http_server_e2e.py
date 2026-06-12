@@ -264,6 +264,93 @@ class TestHttpServerOversizedBody:
         assert captured["body"] == body
 
 
+class TestHttpServerRequestLineCap:
+    """Request line over max_request_line_bytes returns 414 cleanly (no
+    handler invocation) and closes the connection.
+    """
+
+    def test_oversize_request_line_returns_414(self):
+        handler_calls = []
+
+        def handler(request):
+            handler_calls.append(request)
+            return build_response(200, text="should not reach handler")
+
+        # ~2 KB request-target with no CRLF passes the default 1 KB cap.
+        sock, peer = _connection(b"GET /" + b"a" * 2048 + b" HTTP/1.1")
+        server, ticks, _ = _make_server(sockets=[(sock, peer)], handler=handler)
+        _drive_until_idle(server, ticks)
+        assert sock.sent.startswith(b"HTTP/1.1 414 URI Too Long\r\n")
+        assert b"Connection: close\r\n" in sock.sent
+        assert handler_calls == []
+        assert sock.closed is True
+
+    def test_request_line_within_cap_runs_handler(self):
+        # Negative control: a long-but-allowed request line still
+        # dispatches normally.
+        captured = {}
+
+        def handler(request):
+            captured["path"] = request.path
+            return build_response(200, text="ok")
+
+        sock, peer = _connection(request_bytes(path="/api/" + "x" * 200))
+        server, ticks, _ = _make_server(
+            sockets=[(sock, peer)],
+            handler=handler,
+            max_request_line_bytes=512,
+        )
+        _drive_until_idle(server, ticks)
+        assert sock.sent.startswith(b"HTTP/1.1 200 OK\r\n")
+        assert captured["path"] == "/api/" + "x" * 200
+
+
+class TestHttpServerHeadersCap:
+    """Header section over max_headers_bytes returns 431 cleanly (no
+    handler invocation) and closes the connection.
+    """
+
+    def test_oversize_headers_returns_431(self):
+        handler_calls = []
+
+        def handler(request):
+            handler_calls.append(request)
+            return build_response(200, text="should not reach handler")
+
+        request = (
+            b"GET / HTTP/1.1\r\n"
+            b"X-Big: " + b"v" * 8000 + b"\r\n\r\n"
+        )
+        sock, peer = _connection(request)
+        server, ticks, _ = _make_server(sockets=[(sock, peer)], handler=handler)
+        _drive_until_idle(server, ticks)
+        assert sock.sent.startswith(
+            b"HTTP/1.1 431 Request Header Fields Too Large\r\n",
+        )
+        assert b"Connection: close\r\n" in sock.sent
+        assert handler_calls == []
+        assert sock.closed is True
+
+    def test_headers_within_cap_run_handler(self):
+        captured = {}
+
+        def handler(request):
+            captured["host"] = request.headers.get("Host")
+            return build_response(200, text="ok")
+
+        sock, peer = _connection(request_bytes(
+            headers=[("Host", "device.local"), ("Accept", "*/*")],
+        ))
+        server, ticks, _ = _make_server(
+            sockets=[(sock, peer)],
+            handler=handler,
+            max_headers_bytes=512,
+        )
+        _drive_until_idle(server, ticks)
+        assert sock.sent.startswith(b"HTTP/1.1 200 OK\r\n")
+        assert captured["host"] == "device.local"
+
+
 class TestHttpServerTimeout:
     def test_connection_dropped_when_deadline_exceeded(self):
         class StalledSocket(FakeSocket):
