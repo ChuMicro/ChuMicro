@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Repo-specific apply gate for the audit skills — THE PORTING SEAM.
+"""REPO-SPECIFIC (ChuMicro) apply gate for the audit skills — THE PORTING SEAM.
 
 `apply_fix.py runtests` (shared by audit-code and audit-branch) runs the universal pytest gate,
 then consults this file for an extra repo-specific gate. The contract is one function:

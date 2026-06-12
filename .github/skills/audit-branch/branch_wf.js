@@ -74,6 +74,8 @@ const SCALES =
 // What deterministic gates already cover. This repo runs a preflight (ruff lint, the pytest suite,
 // coverage thresholds) on every commit, so re-flagging its lanes only adds noise -- the lenses hunt
 // what automated checks CANNOT detect.
+// REPO-SPECIFIC (ChuMicro): the gate NAMES below (ruff / pytest / preflight) are this repo's;
+// convert them to the target repo's gates when porting. The concept itself ports as-is.
 const CHECKS_AWARE =
   '\nDO NOT flag what this repo\'s deterministic gates already catch: lint/style/formatting/naming/'
   + 'import-order, a test that currently fails, or coverage percentages -- a preflight runs ruff and the '
@@ -152,6 +154,8 @@ const integrationPrompt =
   + '- CONTRACT EVOLUTION: a return type narrowed or widened against what callers can rely on; an '
   + 'invariant the base code maintained (sorted output, non-None field, closed handle) the head code '
   + 'drops.\n\n'
+  // REPO-SPECIFIC (ChuMicro): the VERSION-bump rule below is this repo's release policy — delete
+  // or convert this paragraph when porting (e.g. a Kotlin repo's version-catalog / API-dump check).
   + 'Also check the VERSION contract: this repo requires a VERSION bump in the same change-set for any '
   + 'public-API or behavior change to a library. ' + MANIFEST + ' lists every changed file -- if a '
   + 'library\'s public surface changed and no VERSION file under that library changed with it, flag it '

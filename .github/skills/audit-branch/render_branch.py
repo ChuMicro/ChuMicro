@@ -31,7 +31,9 @@ import sys
 SKILL = os.path.dirname(os.path.abspath(__file__))
 PIPELINE = os.path.join(os.path.dirname(SKILL), "audit-code")
 sys.path.insert(0, PIPELINE)
-from render_eval import card_anchor, facts_html, load_room, patch_fields, render  # noqa: E402
+from render_eval import (  # noqa: E402
+    card_anchor, facts_html, load_room, patch_fields, path_features_section, render,
+)
 
 ANGLE_HELP = {
     "trap": "correctness lens — inversions, off-by-ones, hostile-input and timing hazards the change introduces, judged from comment-stripped code",
@@ -40,6 +42,7 @@ ANGLE_HELP = {
     "intent": "alignment lens — where the diff diverges from the stated intent unacknowledged, symptom-masking on claimed bugfixes, unrelated riders",
     "coverage": "test-gap lens — new or altered behavior no test exercises or pins, tests blessing the old behavior",
     "craft": "craft lens — prose the change broke, new code that reads wrong, inconsistency with its surroundings",
+    "path": "usage-path lens — transitive callers (callers of callers, optionally in consumer repos) judged in-session on full commented code, in feature terms; no clean room on purpose",
 }
 ANGLES = list(ANGLE_HELP)
 
@@ -72,6 +75,12 @@ def build_branch_item(room, finding):
     if unconfirmed:
         tag = "problem unconfirmed" if not verdict.get("real", True) else "fix needs review"
         item["warning"] = f"Validator: {tag}. {verdict.get('note', '')}".strip()
+    if finding.get("in_session"):
+        item["warning"] = ("In-session usage-path lens — judged on full commented code with "
+                           "project context, outside the clean room, on purpose. "
+                           + item.get("warning", "")).strip()
+    if finding.get("feature"):
+        item["meta"] += f" · feature: {finding['feature']}"
     patch = room["patch_map"].get(finding_id)
     if patch and (patch.get("repro") or "").strip():
         item["meta"] += " · executable repro (apply runs it red→green)"
@@ -130,6 +139,9 @@ def main():
     per_file = per_file_section_html(room)
     if per_file:
         sections.append({"title": "Per-file changes", "html": per_file})
+    features = path_features_section(rundir)
+    if features:
+        sections.append(features)
 
     status = "validated clean" if room["converged"] else "some findings left unconfirmed — they default to discuss"
     voice = room["phase1"].get("voice", "plain")
