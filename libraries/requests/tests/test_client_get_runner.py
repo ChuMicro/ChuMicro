@@ -245,8 +245,13 @@ class TestRunnerReactorContract:
 
     def test_io_socket_returns_socket_in_flight(self):
         socket = FakeSocket()
-        client, _ticks, _ = make_client(socket_or_factory=socket)
+        client, ticks, _ = make_client(socket_or_factory=socket)
         client.get("http://example.test/")
+        # At ``awaiting_dns`` the connector has not built its socket, so
+        # the pollable is ``None``; one ``handle`` drives ``dns_ok`` and
+        # the connector's socket goes live.
+        assert client.io_socket is None
+        client.handle(ticks.ticks_ms())
         # FakeSocket has no ``_sock`` wrapping, so the property returns
         # the socket itself.  Production adapters expose ``_sock`` and
         # the property unwraps it for the poller.

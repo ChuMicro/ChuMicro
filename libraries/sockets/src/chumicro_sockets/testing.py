@@ -323,9 +323,11 @@ class FakeSocketConnector:
     * ``"fail:<message>"`` — transition to ``failed`` with the given
       message as ``last_error``.
 
-    The fake's ``socket`` attribute is set to the :class:`FakeSocket`
-    passed in at construction (or a fresh one if none given) when the
-    connector reaches ``ready``.
+    The fake's ``socket`` attribute holds the :class:`FakeSocket`
+    passed in at construction (or a fresh one if none given) from
+    ``awaiting_tcp`` onward — mirroring the real connector, which
+    builds its socket at TCP-connect entry and keeps it live through
+    ``ready``.  ``failed`` and ``cancel`` clear it back to ``None``.
 
     Use this in consumer-side unit tests (``MQTTClient`` against the
     multi-tick connect path).  Real-network tests live in the adapter
@@ -353,9 +355,17 @@ class FakeSocketConnector:
 
     @property
     def io_socket(self) -> object | None:
-        if self.state in ("ready", "failed"):
+        """Registrable pollable for ``Runner.wait``, or ``None``.
+
+        Returns the registrable underlying of :attr:`socket` once it is
+        built (chumicro wrapper classes store the raw socket on
+        ``.sock``; bare sockets pass through), matching the real
+        connector.  ``None`` at ``awaiting_dns`` before the socket
+        exists and after ``failed`` / ``cancel`` clear it.
+        """
+        if self.socket is None:
             return None
-        return self._target_socket
+        return getattr(self.socket, "sock", self.socket)
 
     @property
     def io_wants_read(self) -> bool:
@@ -384,8 +394,12 @@ class FakeSocketConnector:
         if action.startswith("fail:"):
             self.last_error = OSError(action[5:])
             self.state = "failed"
+            self.socket = None
             return
         if action == "dns_ok" and self.state == "awaiting_dns":
+            # The real connector builds its raw socket at TCP-connect
+            # entry and keeps it on ``socket`` through ``ready``.
+            self.socket = self._target_socket
             self.state = "awaiting_tcp"
             return
         if action == "tcp_pending" and self.state == "awaiting_tcp":
@@ -394,13 +408,11 @@ class FakeSocketConnector:
             if self._tls:
                 self.state = "awaiting_tls"
             else:
-                self.socket = self._target_socket
                 self.state = "ready"
             return
         if action == "tls_pending" and self.state == "awaiting_tls":
             return
         if action == "tls_ok" and self.state == "awaiting_tls":
-            self.socket = self._target_socket
             self.state = "ready"
             return
         raise AssertionError(
@@ -413,4 +425,5 @@ class FakeSocketConnector:
             return
         if self.last_error is None:
             self.last_error = OSError("connector cancelled")
+        self.socket = None
         self.state = "failed"
