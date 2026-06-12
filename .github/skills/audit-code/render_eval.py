@@ -58,6 +58,7 @@ ANGLE_HELP = {
     "drift": "comment/doc lens — claims a name, comment, or docstring makes that the code does not honor",
     "coverage": "test-gap lens — behaviors no test exercises, hollow tests, and tests that bless a bug",
     "clarity": "craft lens — confusing naming, hard-to-follow control flow, could-be-tighter",
+    "path": "usage-path lens — transitive callers (callers of callers, optionally in consumer repos) judged in-session on full commented code, in feature terms; no clean room on purpose",
 }
 RENDERER = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, "_shared", "picker", "render_picker.py")
 USAGE = (
@@ -146,6 +147,10 @@ def build_item(room, finding, namespace=None):
     unconfirmed = is_unconfirmed(room, finding_id)
     angle = finding.get("angle", "trap")
     place = f"{room['file_name']} · {finding.get('symbol', '?')}" if namespace else finding.get("symbol", "?")
+    # a merged path finding names the file the fix would edit (often a caller, not the target);
+    # lead the where row with it so the reader doesn't assume the target file
+    if not namespace and finding.get("file"):
+        place = f"{finding['file']} · {finding.get('symbol', '?')}"
     item = {
         "id": f"{namespace}#{finding_id}" if namespace else str(finding_id),
         "title": finding["title"],
@@ -168,6 +173,12 @@ def build_item(room, finding, namespace=None):
     if unconfirmed:
         tag = "problem unconfirmed" if not verdict.get("real", True) else "fix needs review"
         item["warning"] = f"Validator: {tag}. {verdict.get('note', '')}".strip()
+    if finding.get("in_session"):
+        item["warning"] = ("In-session usage-path lens — judged on full commented code with "
+                           "project context, outside the clean room, on purpose. "
+                           + item.get("warning", "")).strip()
+    if finding.get("feature"):
+        item["meta"] += f" · feature: {finding['feature']}"
     patch = room["patch_map"].get(finding_id)
     if patch and (patch.get("repro") or "").strip():
         item["meta"] += " · executable repro (apply runs it red→green)"
@@ -213,6 +224,26 @@ def facts_html(room):
     )
 
 
+def path_features_section(rundir):
+    """The usage-path lens's feature map as a page-top section, when the trace produced one."""
+    path = os.path.join(rundir, "path_features.json")
+    if not os.path.exists(path):
+        return None
+    features = json.load(open(path)).get("features", [])
+    if not features:
+        return None
+    blocks = []
+    for feature in features:
+        entries = ", ".join(feature.get("entry_points", []))
+        touched = ", ".join(feature.get("touched_by", []))
+        blocks.append(
+            f"<p><b>{html.escape(feature.get('name', ''))}</b> — {html.escape(feature.get('summary', ''))}<br>"
+            f"<small>entry points: {html.escape(entries) or '—'} · touched by: {html.escape(touched) or '—'}</small></p>"
+        )
+    return {"title": f"Features on the usage path — {len(features)} mapped, and what touches them",
+            "html": "".join(blocks)}
+
+
 def render(spec, output_dir):
     spec_path = os.path.join(output_dir, "spec.json")
     with open(spec_path, "w") as handle:
@@ -242,6 +273,9 @@ def main_single(rundir, target):
     symbols_html = summary_section_html(room)
     if symbols_html:
         sections.append({"title": "Per-symbol understanding", "html": symbols_html})
+    features = path_features_section(room["rundir"])
+    if features:
+        sections.append(features)
 
     # severity and angle counts live on the facet chips below the title; the subtitle keeps
     # only what the bar cannot say
@@ -268,7 +302,7 @@ def main_single(rundir, target):
         },
         "facets": [
             {"key": "severity", "values": ["high", "med", "low"]},
-            {"key": "angle", "values": ["trap", "hazard", "drift", "coverage", "clarity"], "help": ANGLE_HELP},
+            {"key": "angle", "values": ["trap", "hazard", "drift", "coverage", "clarity", "path"], "help": ANGLE_HELP},
         ],
         "sections": sections,
         "items": items,
@@ -358,7 +392,7 @@ def main_merge(output_dir, room_args, library_facts):
         },
         "facets": [
             {"key": "severity", "values": ["high", "med", "low"]},
-            {"key": "angle", "values": ["trap", "hazard", "drift", "coverage", "clarity"], "help": ANGLE_HELP},
+            {"key": "angle", "values": ["trap", "hazard", "drift", "coverage", "clarity", "path"], "help": ANGLE_HELP},
             {"key": "file", "values": file_names, "style": "select"},
         ],
         "sections": sections,
