@@ -43,14 +43,16 @@ const CHARTER =
   `You speak the entries; you do not judge them.\n\n` +
   `Rewrite each entry named below for the person deciding what to do about it -- they have not opened ` +
   `the audited files, and they read each card alone. Every fact comes from the entry itself; add ` +
-  `nothing, soften nothing, and keep every file:line, number, and name. Introduce a thing the first ` +
+  `nothing, soften nothing. Each fact lands once across the card: the entry's where, evidence, and ` +
+  `diff fields render on the card verbatim, so your prose never re-lists what they already show; a ` +
+  `location or number stated only in the entry's own prose stays. Introduce a thing the first ` +
   `time you name it, never as already-known. Weave a warning into the sentence that states it, never ` +
   `behind scaffolding like "one thing to know" or "worth noting". Text meant to be applied -- ` +
   `replacement wording, commands, quoted lines -- passes through character-for-character. A short ` +
   `entry stays short${sample ? ', and the sample never adds length' : ''}.\n\n` +
-  `Per entry return: title -- one line naming the defect; summary -- what is wrong and where; why -- ` +
-  `the consequence, or "" when the entry states none; fix -- what to change, or "" when the change ` +
-  `lives in the entry's diff field.\n\n` +
+  `Per entry return: title -- one line naming the defect; summary -- what is wrong and what it breaks; ` +
+  `why -- the consequence, or "" when the entry states none; fix -- what to change, or "" when the ` +
+  `change lives in the entry's diff field.\n\n` +
   'No em-dashes, no " -- ", no semicolons, no `canonical` or `shape`.\n'
 
 const ITEMS_OUT = {
@@ -91,26 +93,61 @@ const PAGE_OUT = {
   },
 }
 
+const PICK_OUT = {
+  type: 'object', required: ['pick', 'reason'],
+  properties: {
+    pick: { type: 'integer', minimum: 1, maximum: 2 },
+    reason: { type: 'string', description: 'one sentence on why this pass won' },
+  },
+}
+
 phase('Speak')
 
 const CHUNK = 12
+// 2 passes, not regen-comments' 4: a report is 5-6 chunks where regen writes one
+// file, so 4 passes per chunk made a big matrix. Best-of-2 keeps the selector's
+// escape from a tic-heavy roll at half the cost.
+const PASSES = 2
 const chunks = []
 for (let i = 0; i < ids.length; i += CHUNK) chunks.push(ids.slice(i, i + CHUNK))
 
 // opus on every speaking agent: the voice work this prompt descends from was
 // converged on opus end to end, and register fidelity is the whole job here.
-const renderChunk = (chunkIds, retry) => agent(
+const renderChunk = (chunkIds, tag) => agent(
   REGISTER + CHARTER + `\nEntries to render, by id: ${chunkIds.join(', ')}. Return one items[] element per id, ids as strings.`,
-  { label: `speak:${chunkIds[0]}-${chunkIds[chunkIds.length - 1]}${retry ? ':retry' : ''}`, phase: 'Speak', schema: ITEMS_OUT, model: 'opus' })
+  { label: `speak:${chunkIds[0]}-${chunkIds[chunkIds.length - 1]}:${tag}`, phase: 'Speak', schema: ITEMS_OUT, model: 'opus' })
+
+// Best-of-N per chunk, the converged answer to grounding-induced tics: dense facts
+// summon the load-bearing/antithesis register in any single pass, and no prompt rule
+// selects it out. The selector picks one whole pass by number and never rewrites or
+// merges across passes (a rewrite is unvalidated new text).
+const speakChunk = async (chunkIds) => {
+  const passLabels = Array.from({ length: PASSES }, (unused, index) => index + 1)
+  const passes = (await parallel(passLabels.map(n => () => renderChunk(chunkIds, `p${n}`)))).filter(Boolean)
+  if (!passes.length) return null
+  if (passes.length === 1) return passes[0]
+  const candidates = passes.map((pass, index) => `PASS ${index + 1}:\n${JSON.stringify(pass.items, null, 1)}`).join('\n\n')
+  const verdict = await agent(
+    `${passes.length} renderings of the same audit-report cards follow. The ledger they were rendered from is at ${ledgerPath}` +
+    (persona ? `, and the target voice is: "${persona}"` : '') + `.\n\n` +
+    `Pick the one whole pass whose cards read the richest and best-worded${persona ? ', most alive in that voice' : ''}, never the flattest (flat is wrong). Legibility is the only floor and correctness the second: a garbled sentence or a fact the ledger contradicts loses the pass outright. Pick by number; never merge or reword.\n\n` +
+    candidates,
+    { label: `select:${chunkIds[0]}-${chunkIds[chunkIds.length - 1]}`, phase: 'Speak', schema: PICK_OUT, model: 'opus' })
+  const picked = verdict && passes[verdict.pick - 1] ? passes[verdict.pick - 1] : passes[0]
+  if (verdict) log(`cards ${chunkIds[0]}-${chunkIds[chunkIds.length - 1]}: pass ${verdict.pick} — ${verdict.reason}`)
+  return picked
+}
 
 // Barrier on purpose: coverage of every id is checked across ALL chunk results
 // before the retry round, and the page prose is part of the same return value.
+// The page runs a single pass: its intro and gate text carry few ledger facts,
+// which is exactly the regime where one pass already lands the register.
 const [page, ...chunkResults] = await parallel([
   () => agent(
     REGISTER + CHARTER +
     `\nDo not render entries. Return the page-level prose instead: intro_html for the decision page; option_help one-liners for apply / discuss / skip (apply = make the proposed change, a note adjusts its wording; discuss = no change yet, talk it through in chat first; skip = leave as is -- keep those meanings, in your words); and the gate wording for the mode question fired after the report opens (three fixed choices: apply findings by number, hand the skill to a from-scratch re-author, stop at the report).`,
     { label: 'speak:page', phase: 'Speak', schema: PAGE_OUT, model: 'opus' }),
-  ...chunks.map(chunkIds => () => renderChunk(chunkIds, false)),
+  ...chunks.map(chunkIds => () => speakChunk(chunkIds)),
 ])
 
 const rendered = {}
@@ -120,7 +157,7 @@ for (const result of chunkResults.filter(Boolean)) {
 let missing = ids.filter(id => !rendered[id])
 if (missing.length) {
   log(`retrying ${missing.length} unrendered id(s): ${missing.join(', ')}`)
-  const retried = await renderChunk(missing, true)
+  const retried = await renderChunk(missing, 'retry')
   for (const item of (retried && retried.items) || []) rendered[String(item.id)] = item
   missing = ids.filter(id => !rendered[id])
 }
