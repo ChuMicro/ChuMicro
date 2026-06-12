@@ -1,6 +1,6 @@
 // audit-code EVALUATION workflow. Run inside ONE `claude -p` from the run room (clean: no project
 // CLAUDE.md by cwd-ancestry, file access bounded to the room). It deeply evaluates ONE source file from
-// four angles, produces a patch for every finding, and (optionally) voices the prose.
+// five angles, produces a patch for every finding, and (optionally) voices the prose.
 //
 // Inputs in the room (the launcher places them):
 //   stripped.py       executable code, comments + docstrings removed -- the code lenses judge from THIS, so
@@ -11,7 +11,7 @@
 //   voice_persona.txt the chosen voice persona (only when VOICED == 'yes'); the voicer reads it.
 //   LIBRARY_FACTS.md  optional cross-file context (domain + contracts + glossary) in library mode.
 //
-// Shape: a summarizer + FOUR lenses run in parallel on the code; a merger consolidates every finding into a
+// Shape: a summarizer + FIVE lenses run in parallel on the code; a merger consolidates every finding into a
 // telegraphic FACT LEDGER (defect / bite / fix as un-pasteable FRAGMENTS, never finished sentences) and
 // assigns a STABLE integer id (the apply-by-number); a fixture-agnostic validator re-checks every finding +
 // fix against the code and drives a merger re-run loop until clean or the cap. Then, in parallel: a WRITER
@@ -24,9 +24,9 @@
 
 export const meta = {
   name: 'audit-code-eval',
-  description: 'Evaluate one source file from four angles, validate the facts, then write the prose in voice and patch every finding.',
+  description: 'Evaluate one source file from five angles, validate the facts, then write the prose in voice and patch every finding.',
   phases: [
-    { title: 'Read', detail: 'summarizer + 4 lenses (correctness / drift / coverage / clarity)' },
+    { title: 'Read', detail: 'summarizer + 5 lenses (correctness / hazard / drift / coverage / clarity)' },
     { title: 'Merge', detail: 'consolidate into a fact ledger, assign stable fix numbers' },
     { title: 'Validate', detail: 'fixture-agnostic re-check of every finding + fix; merger re-run loop' },
     { title: 'Compose', detail: 'writer composes the prose in voice + patcher patches every finding' },
@@ -66,7 +66,7 @@ const CROSSFILE =
 const FINDING = {
   type: 'object', additionalProperties: false,
   properties: {
-    angle: { type: 'string', enum: ['trap', 'drift', 'coverage', 'clarity'] },
+    angle: { type: 'string', enum: ['trap', 'hazard', 'drift', 'coverage', 'clarity'] },
     symbol: { type: 'string' },
     site: { type: 'string' },
     severity: { type: 'string', enum: ['high', 'med', 'low'] },
@@ -106,7 +106,36 @@ const trapPrompt =
   + '\nReport ONLY genuine behavior problems or real latent risks. Set angle="trap". Write JSON '
   + '{lens:"trap", findings, path} to ' + FINDINGS + '/trap.json and return it.'
 
-// ---------- LENS 2: code-vs-claim drift (reads the COMMENTED file + code) ----------
+// ---------- LENS 2: hazard / adversarial robustness (stripped code) ----------
+// The correctness lens asks "is the logic wrong"; this lens asks "can hostile input, unlucky timing, or
+// resource exhaustion MAKE it go wrong". The split mirrors what automated checks miss most: no linter or
+// green suite flags a missing allocation cap or an error path that leaks a socket.
+const hazardPrompt =
+  'You are the HAZARD lens. Read the code and find where it can be MADE to go wrong -- not where the logic '
+  + 'is wrong on its own (a different lens owns that), but where hostile or malformed input, unlucky timing, '
+  + 'or resource exhaustion turns correct-looking code into a failure. The file has NO comments and NO '
+  + 'docstrings: the code is the only source of truth.\n\nCODE: ' + STRIPPED + '\n\n'
+  + 'Hunt specifically for:\n'
+  + '- UNBOUNDED PEER-CONTROLLED ALLOCATION: a bytearray(N) / bytes(N) / list-or-buffer growth where N or '
+  + 'the loop count comes from a peer-controlled field (a length header, a count, a Content-Length) with no '
+  + 'enforced cap -- heap-DoS surface, worst on a small device.\n'
+  + '- UNTRUSTED DATA REACHING A SENSITIVE SINK: eval / exec / subprocess / os.system, a file path built '
+  + 'from external input (traversal), external text interpolated into a query or command, a secret or '
+  + 'credential hardcoded in the source.\n'
+  + '- INTERLEAVING / REENTRANCY: state mutated across multiple tick() / handle() / callback invocations '
+  + 'that a re-entered call or an error-path retry can observe half-updated; a check-then-act gap where the '
+  + 'world can change between the check and the act.\n'
+  + '- RESOURCE LIFECYCLE ON ERROR PATHS: a socket / file / handle opened and released only on the happy '
+  + 'path (trace the exception path), a retry loop that re-opens without closing, a queue / dict / buffer '
+  + 'that only ever grows.\n'
+  + '- TRUST-BOUNDARY ASSUMPTIONS: input validated in one method but consumable through another that skips '
+  + 'the validator; a parser that indexes before it bounds-checks.\n\n'
+  + 'Report only hazards with a REACHABLE trigger: the `bite` fragment must name WHO controls the input or '
+  + 'WHEN the timing window opens. A hazard nobody can reach is not a finding. Set angle="hazard".\n\n'
+  + SCALES + CROSSFILE
+  + '\nWrite JSON {lens:"hazard", findings, path} to ' + FINDINGS + '/hazard.json and return it.'
+
+// ---------- LENS 3: code-vs-claim drift (reads the COMMENTED file + code) ----------
 const DRIFT_OUT = {
   type: 'object', additionalProperties: false,
   properties: {
@@ -137,7 +166,7 @@ const driftPrompt =
   + SCALES + CROSSFILE
   + '\nWrite JSON {lens:"drift", findings, domain_facts, path} to ' + FINDINGS + '/drift.json and return it.'
 
-// ---------- LENS 3: test coverage (stripped code + tests) ----------
+// ---------- LENS 4: test coverage (stripped code + tests) ----------
 const coveragePrompt =
   'You are the COVERAGE lens. You read the code (' + STRIPPED + ') and its tests (' + TESTS + ', which may '
   + 'be a NO-TESTS marker). The code is the source of truth. Judge what the tests DO and DO NOT verify.\n\n'
@@ -157,7 +186,7 @@ const coveragePrompt =
   + SCALES + CROSSFILE
   + '\nWrite JSON {lens:"coverage", findings, path} to ' + FINDINGS + '/coverage.json and return it.'
 
-// ---------- LENS 4: clarity / craft (stripped code) ----------
+// ---------- LENS 5: clarity / craft (stripped code) ----------
 const clarityPrompt =
   'You are the CLARITY lens. Read the code (' + STRIPPED + ') and find what makes it harder to read, '
   + 'maintain, or less standard than it should be. This lens is about CRAFT, not correctness.\n\n'
@@ -206,7 +235,7 @@ const EVAL_OUT = {
     findings: { type: 'array', items: { type: 'object', additionalProperties: false,
       properties: {
         id: { type: 'integer' },
-        angle: { type: 'string', enum: ['trap', 'drift', 'coverage', 'clarity'] },
+        angle: { type: 'string', enum: ['trap', 'hazard', 'drift', 'coverage', 'clarity'] },
         symbol: { type: 'string' }, site: { type: 'string' },
         severity: { type: 'string', enum: ['high', 'med', 'low'] },
         effort: { type: 'string', enum: ['small', 'medium', 'large'] },
@@ -221,10 +250,14 @@ const EVAL_OUT = {
   required: ['findings', 'domain_facts'],
 }
 function mergePrompt(lensDump, domainFacts, feedback, prior) {
-  return 'You are the MERGER. Consolidate findings from four code-evaluation lenses (correctness, drift, '
-    + 'coverage, clarity) over ONE file into a single FACT LEDGER. You output telegraphic FRAGMENTS, not '
-    + 'reader prose -- a later writer composes the prose from your fragments, so keep them un-pasteable.\n\n'
+  return 'You are the MERGER. Consolidate findings from five code-evaluation lenses (correctness, hazard, '
+    + 'drift, coverage, clarity) over ONE file into a single FACT LEDGER. You output telegraphic FRAGMENTS, '
+    + 'not reader prose -- a later writer composes the prose from your fragments, so keep them un-pasteable.\n\n'
     + 'RULES:\n'
+    + '- ACTIONABILITY GATE: every finding must name something to CHANGE. Drop any lens finding that merely '
+    + 'validates, praises, or affirms the code, that asks the author to "check" / "verify" / "confirm" '
+    + 'something, or that has no symbol + quoted site to anchor it -- a finding that cannot be located is a '
+    + 'guess, not a finding.\n'
     + '- DEDUP: when two lenses report the SAME underlying problem, merge into one (keep the sharpest defect, '
     + 'the clearest bite, the most actionable fix, and the higher severity). Do not drop a distinct problem '
     + 'just because it touches the same symbol.\n'
@@ -363,6 +396,7 @@ phase('Read')
 const reads = await parallel([
   () => agent(summaryPrompt, { label: 'summarizer', phase: 'Read', model: 'opus', agentType: 'general-purpose', schema: SUMMARY_OUT }).then((r) => ({ kind: 'summary', r })),
   () => agent(trapPrompt, { label: 'lens:trap', phase: 'Read', model: 'opus', agentType: 'general-purpose', schema: LENS_OUT }).then((r) => ({ kind: 'lens', r })),
+  () => agent(hazardPrompt, { label: 'lens:hazard', phase: 'Read', model: 'opus', agentType: 'general-purpose', schema: LENS_OUT }).then((r) => ({ kind: 'lens', r })),
   () => agent(driftPrompt, { label: 'lens:drift', phase: 'Read', model: 'opus', agentType: 'general-purpose', schema: DRIFT_OUT }).then((r) => ({ kind: 'drift', r })),
   () => agent(coveragePrompt, { label: 'lens:coverage', phase: 'Read', model: 'opus', agentType: 'general-purpose', schema: LENS_OUT }).then((r) => ({ kind: 'lens', r })),
   () => agent(clarityPrompt, { label: 'lens:clarity', phase: 'Read', model: 'opus', agentType: 'general-purpose', schema: LENS_OUT }).then((r) => ({ kind: 'lens', r })),
