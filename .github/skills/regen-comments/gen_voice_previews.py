@@ -47,7 +47,7 @@ def main():
         ["claude", "-p",
          "Use the Workflow tool to run ./voice_preview_wf.js (call Workflow with scriptPath "
          "./voice_preview_wf.js). Wait for full completion, then reply DONE.",
-         "--allowedTools", "Workflow", "Task", "Read", "Write",
+         "--safe-mode", "--allowedTools", "Workflow", "Task", "Read", "Write",
          "--permission-mode", "acceptEdits", "--model", "opus"],
         cwd=room, capture_output=True, text=True,
     )

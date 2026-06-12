@@ -64,7 +64,7 @@ def gen(name):
         "text) to ./persona.txt and reply DONE."
     )
     subprocess.run(
-        ["claude", "-p", prompt, "--allowedTools", "Read", "Write",
+        ["claude", "-p", prompt, "--safe-mode", "--allowedTools", "Read", "Write",
          "--permission-mode", "acceptEdits", "--model", "opus"],
         cwd=room, capture_output=True, text=True,
     )
