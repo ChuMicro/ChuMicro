@@ -25,7 +25,9 @@ Two blob grammars are accepted. The shared picker page (render_report.py / rende
   PICKS — regen-comments apply (<file.py> | library)
   KVStore.get = run-2                       (library page: kvstore.py#KVStore.get = run-2)
   <module> = edit
-    note <module>: exact docstring text\nwith newlines escaped   (a note on an `edit` pick IS the text)
+    edit <module>: exact docstring text\nwith newlines escaped   (the page's edit box, verbatim)
+    note <module>: a plain note (newlines collapsed; on an edit pick with no edit line, the note
+                   is decoded as the replacement text — pre-edit-channel pages put it there)
 
   regen-comments apply (<file.py>): all suggested
   regen-comments apply (<file.py>): KVStore.get=run-2, <module>=edit
@@ -49,10 +51,11 @@ _NOTE_AT = re.compile(r"^#note\s+(\S+)\s*:\s*(.*)$")
 _PICK = re.compile(r"^(.+?)\s*=\s*(run-\d+|edit|suggested)$")
 _SHARED_HEADER = re.compile(r"^\s*PICKS\s*[—-]+\s*regen-comments\s+apply\s*\(([^)]*)\)\s*$")
 _SHARED_NOTE = re.compile(r"^\s*note\s+(\S+)\s*:\s*(.*)$")
+_SHARED_EDIT = re.compile(r"^\s*edit\s+(\S+)\s*:\s*(.*)$")
 
 
 def _decode_note(text):
-    """Reverse the shared picker's multiline-note escaping (backslash doubled, newline as literal \\n)."""
+    """Reverse the shared picker's edit-channel escaping (backslash doubled, newline as literal \\n)."""
     return text.replace("\\\\", "\x00").replace("\\n", "\n").replace("\x00", "\\")
 
 
@@ -60,12 +63,12 @@ def parse_shared_blob(text):
     """A shared-picker PICKS blob -> [selection, ...], grouped per file.
 
     Card ids are bare qualnames on a single-file page (the header names the file) and
-    `<file.py>#<qualname>` on the library page. A note on an `edit` pick carries the replacement
-    docstring (newlines escaped by the page, decoded here); other notes ride through for the
+    `<file.py>#<qualname>` on the library page. An `edit <id>:` line carries the replacement
+    docstring (newlines escaped by the page, decoded here); notes ride through for the
     orchestrator to read. `suggested` and `(none)` lines are the no-op default.
     """
     scope = None
-    raw_picks, raw_notes = {}, []
+    raw_picks, raw_notes, raw_edits = {}, [], {}
     for line in text.splitlines():
         m = _SHARED_HEADER.match(line)
         if m:
@@ -73,9 +76,13 @@ def parse_shared_blob(text):
             continue
         if scope is None:
             continue
+        m = _SHARED_EDIT.match(line)
+        if m:
+            raw_edits[m.group(1)] = _decode_note(m.group(2))
+            continue
         m = _SHARED_NOTE.match(line)
         if m:
-            raw_notes.append((m.group(1), _decode_note(m.group(2))))
+            raw_notes.append((m.group(1), m.group(2)))
             continue
         m = _PICK.match(line.strip())
         if m:
@@ -95,11 +102,15 @@ def parse_shared_blob(text):
         sel = section_for(fname)
         if choice != "suggested":
             sel["picks"][sym] = choice
+    for card_id, edit_text in raw_edits.items():
+        fname, sym = split_id(card_id)
+        section_for(fname)["edits"][sym] = edit_text
     for card_id, note_text in raw_notes:
         fname, sym = split_id(card_id)
         sel = section_for(fname)
-        if sel["picks"].get(sym) == "edit":
-            sel["edits"][sym] = note_text
+        if sel["picks"].get(sym) == "edit" and sym not in sel["edits"]:
+            # pre-edit-channel pages carried the replacement text in the note; decode and honor it
+            sel["edits"][sym] = _decode_note(note_text)
         else:
             sel["notes"].append({"symbol": sym, "note": note_text.replace("\n", " / ")})
     return list(selections.values()) or [section_for(scope)]
@@ -191,6 +202,10 @@ def set_docstring(src, qual, text):
         indent = " " * first.col_offset
         insert_at = first.lineno - 1
 
+    # the text lands inside a non-raw string literal: double backslashes first so a \t or \n the
+    # human typed re-parses as those two characters, not an escape (quote escapes come after and
+    # must stay single)
+    text = text.replace("\\", "\\\\")
     quote = '"""'
     if '"""' in text:
         quote = "'''" if "'''" not in text else '"""'

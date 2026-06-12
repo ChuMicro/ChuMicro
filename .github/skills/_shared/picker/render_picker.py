@@ -3,16 +3,23 @@
 
 One card per item — id, severity badge, a source chip naming what raised the item,
 a plain-words summary, labeled why / fix rows, the evidence in a small mono block —
-plus a radio group and a notes box. A sticky bar serializes every choice into a
-line-oriented paste-back blob:
+plus a pick area and a notes box. The pick area defaults to a radio row; an item's
+`pick_ui` swaps in a different strategy (today: "columns", side-by-side candidate
+boxes with an optional seeded edit textarea). A sticky bar serializes every choice
+into a line-oriented paste-back blob:
 
     PICKS — <blob_header>
     1 = apply
       note 1: <free text, newlines collapsed>
-    2 = skip
+    2 = edit
+      edit 2: <the edit box's exact text, newlines as literal \\n, backslashes doubled>
+    3 = skip
 
-A note on an applied item is the user's wording adjustment — there is no separate
-"edit" option; the orchestrator honors apply-with-note as apply-with-this-wording.
+A note on an applied item is the user's wording adjustment — on a default-strategy
+page there is no separate "edit" option; the orchestrator honors apply-with-note as
+apply-with-this-wording. A card whose `pick_ui` defines an edit choice carries a
+dedicated edit box instead: its exact text rides back on its own `edit <id>:` line
+(the consuming parser decodes the escapes), and the note box stays a note.
 The Submit button carries a live summary of the picks that differ from their
 defaults ("Submit — 3 apply · 1 discuss"), so the moment of commitment shows
 what is being committed.
@@ -42,6 +49,9 @@ Spec schema:
       ],                                                  // top-level row, expanding to one row per file
       "options": ["apply", "discuss", "skip"],            // page-wide option set
       "default": "skip",                                  // page-wide pre-checked option (omit for none)
+      "page_width": 1280,                                 // content-column width in px (default 920) — a
+                                                          // page of side-by-side candidates earns more
+                                                          // width than a finding list
       "expand_on": ["discuss"],                           // optional: picking one of these options expands
                                                           // the card and focuses its notes box — for options
                                                           // whose substance lives in the note (a discussion
@@ -81,13 +91,23 @@ Spec schema:
           "options": ["high", "medium", "low"],           // optional per-item override; [] makes the card
                                                           // informational: no radios, no blob/tally entry
           "default": "medium",                            // optional per-item override
+          "pick_ui": {                                    // optional pick-area strategy; absent = the default
+            "style": "columns",                           // radio row. "columns": one box per candidate, side
+            "candidates": [                               // by side (4+ scroll horizontally), the whole box
+              {"value": "suggested",                      // clickable; value rides in the blob like any option
+               "label": "suggested — writer pass 3",      // box heading next to its radio
+               "chips": ["2 lines shorter"],              // optional faint comparison chips
+               "text": "the candidate text…",             // the box body, a mono block
+               "more": {"label": "full symbol",           // optional per-candidate expander
+                        "text": "…"}}
+            ],
+            "edit": {"value": "edit",                     // optional editable choice: a full-width textarea
+                     "label": "edit it myself",           // seeded with `seed`; its exact text rides back as
+                     "seed": "current text"}              // an `edit <id>:` blob line (newline-escaped)
+          },                                              // with pick_ui, the choice set is candidates[].value
+                                                          // + edit.value and the options field is ignored
           "notes": true,                                  // notes box (default: true on decision cards,
                                                           // false on informational ones)
-          "multiline_notes": true,                        // optional: this card's note serializes newlines
-                                                          // into the blob as literal \n escapes (backslash
-                                                          // doubled) instead of collapsing them — for choices
-                                                          // whose substance is exact multi-line text; the
-                                                          // consuming parser decodes
           "collapsed": true,                              // optional: start the card folded to a strip (title
                                                           // row + radios + summary + diff if present). Every
                                                           // card folds/expands on a title-row click; this sets
@@ -106,6 +126,13 @@ Spec schema:
       ]                                                   // spec order, then picked); select rows render last,
                                                           // keeping the chips in one area
     }
+
+A pick-area strategy changes only how choices render: every strategy emits radios
+named pick:<id>, so the blob, tally, picked facet, expand_on, and Reset stay
+strategy-agnostic. A new strategy is a new branch in pick_area_html() plus its CSS —
+the page JS needs nothing. In the columns strategy the whole candidate box is
+clickable, the checked box carries an accent ring, and typing in the edit textarea
+selects its radio; Reset returns the textarea to its seed.
 
 The facet bar is the page's one narrowing mechanism — no tabs (a finding list is
 one dataset; tabs hide most of it and tax cross-tab comparison). Chips toggle:
@@ -172,7 +199,7 @@ CSS = """
   --accent:#8d97ff; --blob-bg:#11141b; --bar:#1a1f29eb; --note-bg:#161b24; --chip:#232a38;
   --why:#fbbf24; --fix:#4ade80; --where:#93b4ff}
  body{font:16px/1.55 -apple-system,'Segoe UI',sans-serif;background:var(--bg);color:var(--fg);
-  margin:0;padding:26px 20px 110px;max-width:920px;margin-inline:auto}
+  margin:0;padding:26px 20px 110px;max-width:var(--pagew,920px);margin-inline:auto}
  h1{font-size:24px;font-weight:600;margin:0 44px 6px 0}
  .themebtn{position:fixed;top:14px;right:16px;font:inherit;font-size:13px;padding:6px 12px;border-radius:999px;
   border:1px solid var(--border);background:var(--card);color:var(--fg);cursor:pointer;z-index:10}
@@ -263,9 +290,38 @@ CSS = """
  .opts{display:flex;gap:16px;flex-wrap:wrap;margin-top:12px}
  .opts label{cursor:pointer;display:flex;align-items:center;gap:6px;font-size:15px}
  .opts input{accent-color:var(--accent)}
+ .candwrap{margin-top:12px}
+ .candrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px;align-items:stretch;
+  scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+ .candrow:has(.ccol:nth-child(4)){grid-template-columns:none;grid-auto-flow:column;
+  grid-auto-columns:minmax(300px,340px);overflow-x:auto;scroll-snap-type:x proximity;padding-bottom:8px}
+ .candrow:has(.ccol:nth-child(4))>.ccol{scroll-snap-align:start}
+ .candrow::-webkit-scrollbar{height:8px}
+ .candrow::-webkit-scrollbar-thumb{background:var(--border);border-radius:999px}
+ .candrow::-webkit-scrollbar-track{background:transparent}
+ .ccol{border:1px solid var(--border);border-radius:10px;padding:9px 11px;background:var(--blob-bg);
+  min-width:0;display:flex;flex-direction:column;cursor:pointer;transition:border-color .15s,box-shadow .15s}
+ .ccol:hover{border-color:var(--accent)}
+ .ccol:has(input:checked),.cedit:has(input:checked){border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+ .ccol>label,.cedit>label{cursor:pointer;font-size:14px;font-weight:620;display:flex;gap:7px;align-items:baseline}
+ .ccol input,.cedit input{accent-color:var(--accent);flex:0 0 auto}
+ .cchips{display:flex;gap:5px;flex-wrap:wrap;margin-top:5px}
+ .cchip{font-size:11px;color:var(--faint);background:var(--chip);border-radius:999px;padding:1px 8px}
+ .ccol pre{flex:1 1 auto;margin:7px 0 0;background:var(--card);border:1px solid var(--border);border-radius:8px;
+  padding:8px 10px;font:12.5px/1.55 ui-monospace,Menlo,monospace;white-space:pre-wrap;overflow-wrap:break-word;
+  min-height:40px}
+ .ccol pre.cnone{color:var(--faint);font-style:italic}
+ .ccol details{margin-top:6px}
+ .ccol details>summary{cursor:pointer;font-size:12px;color:var(--accent)}
+ .ccol details pre{flex:none}
+ .cedit{margin-top:10px;border:1px solid var(--border);border-radius:10px;padding:9px 11px;background:var(--blob-bg)}
+ .editbox{width:100%;box-sizing:border-box;margin-top:7px;min-height:90px;resize:vertical;
+  font:12.5px/1.55 ui-monospace,Menlo,monospace;border:1px solid var(--border);border-radius:8px;
+  padding:8px 10px;background:var(--card);color:var(--fg)}
+ .card.collapsed>.candwrap{display:none}
  .notes{width:100%;box-sizing:border-box;margin-top:10px;font:14.5px/1.5 inherit;border:1px solid var(--border);
   border-radius:8px;padding:7px 9px;min-height:36px;background:var(--note-bg);color:var(--fg);resize:vertical}
- .selbar{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:calc(100% - 24px);max-width:920px;
+ .selbar{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:calc(100% - 24px);max-width:var(--pagew,920px);
   box-sizing:border-box;background:var(--bar);backdrop-filter:blur(10px);border:1px solid var(--border);
   border-bottom:none;border-radius:13px 13px 0 0;padding:8px 16px;font-size:14px;
   box-shadow:0 -8px 28px rgba(0,0,0,.20)}
@@ -309,6 +365,7 @@ SCRIPT = """
     var id = c.dataset.id;
     if (state['p:' + id]) { var r = c.querySelector('input[value="' + state['p:' + id] + '"]'); if (r) r.checked = true; }
     if (state['n:' + id]) { var n = c.querySelector('.notes'); if (n) n.value = state['n:' + id]; }
+    if (state['d:' + id] !== undefined) { var e = c.querySelector('.editbox'); if (e) e.value = state['d:' + id]; }
   });
   // every card folds on a title-row click; spec sets the initial state (data-fold). A saved
   // 'e:' key (1 = opened, 0 = folded) is a deviation from that default restored on reload.
@@ -329,6 +386,8 @@ SCRIPT = """
       if (r && r.value !== c.dataset.def) s['p:' + id] = r.value;
       var n = c.querySelector('.notes');
       if (n && n.value.trim()) s['n:' + id] = n.value;
+      var e = c.querySelector('.editbox');
+      if (e && e.value !== e.defaultValue) s['d:' + id] = e.value;
     });
     document.querySelectorAll('.card.collapsible').forEach(function (c) {
       var folded = c.classList.contains('collapsed');
@@ -343,11 +402,12 @@ SCRIPT = """
       var r = c.querySelector('input[type=radio]:checked');
       lines.push(id + ' = ' + (r ? r.value : '(none)'));
       var n = c.querySelector('.notes');
-      if (n && n.value.trim()) {
-        var t = n.value.trim();
-        var enc = c.dataset.mln ? t.replace(/\\\\/g, '\\\\\\\\').replace(/\\n/g, '\\\\n')
-                                : t.replace(/\\n/g, ' ');
-        lines.push('  note ' + id + ': ' + enc);
+      if (n && n.value.trim()) lines.push('  note ' + id + ': ' + n.value.trim().replace(/\\n/g, ' '));
+      // the edit box's exact text rides only when its choice is the pick; newline-escaped so the
+      // line-oriented blob survives a multiline replacement (the consuming parser decodes)
+      var e = c.querySelector('.editbox');
+      if (e && r && r.value === e.dataset.val && e.value.trim()) {
+        lines.push('  edit ' + id + ': ' + e.value.replace(/\\\\/g, '\\\\\\\\').replace(/\\n/g, '\\\\n'));
       }
     });
     return lines.join('\\n');
@@ -410,17 +470,36 @@ SCRIPT = """
   var EXPAND_ON = window.SPEC.expand_on || [];
   document.querySelectorAll('.card input[type=radio]').forEach(function (r) {
     r.addEventListener('change', function () {
-      // a pick whose substance lives in the note (e.g. discuss) opens the card and puts the cursor there
+      // a pick whose substance lives in a text box (edit, discuss) opens the card and puts the cursor
+      // there — the edit box when this pick owns one, the notes box otherwise
       if (EXPAND_ON.indexOf(r.value) !== -1) {
         var c = r.closest('.card');
         c.classList.remove('collapsed');
-        var n = c.querySelector('.notes'); if (n) n.focus();
+        var e = c.querySelector('.editbox');
+        var target = (e && e.dataset.val === r.value) ? e : c.querySelector('.notes');
+        if (target) target.focus();
       }
       persist();
       if (fchips.length || fselects.length) applyFacets(); // the virtual 'picked' facet follows the live radios
     });
   });
   document.querySelectorAll('.notes').forEach(function (t) { t.addEventListener('input', persist); });
+  // columns strategy: the whole candidate box picks its radio (expanders and the radio itself excepted)
+  document.querySelectorAll('.ccol').forEach(function (col) {
+    col.addEventListener('click', function (event) {
+      if (event.target.closest('details') || event.target.tagName === 'INPUT') return;
+      var r = col.querySelector('input[type=radio]');
+      if (r && !r.checked) { r.checked = true; r.dispatchEvent(new Event('change', { bubbles: true })); }
+    });
+  });
+  // typing in the edit box is choosing it: check its radio so the text can ride in the blob
+  document.querySelectorAll('.editbox').forEach(function (e) {
+    e.addEventListener('input', function () {
+      var r = e.closest('.card').querySelector('input[value="' + e.dataset.val + '"]');
+      if (r && !r.checked) { r.checked = true; r.dispatchEvent(new Event('change', { bubbles: true })); }
+      persist();
+    });
+  });
   document.getElementById('copybtn').addEventListener('click', copy);
   // Submit is the primary action when the page is served; on a file:// page it stays
   // hidden and Copy inherits the primary styling as the only hand-back path.
@@ -438,6 +517,7 @@ SCRIPT = """
     cards.forEach(function (c) {
       c.querySelectorAll('input[type=radio]').forEach(function (r) { r.checked = (r.value === c.dataset.def); });
       var n = c.querySelector('.notes'); if (n) n.value = '';
+      var e = c.querySelector('.editbox'); if (e) e.value = e.defaultValue;
     });
     // fold state returns to spec defaults too, cards and sections both — Reset means "as first rendered"
     document.querySelectorAll('.card.collapsible').forEach(function (c) {
@@ -578,9 +658,78 @@ def anchor_id(item_id):
     return "card-" + re.sub(r"[^A-Za-z0-9_-]", "-", item_id)
 
 
+def item_options(item, page_options):
+    """The card's choice set — candidates[].value + edit.value under a pick_ui strategy, the
+    options field (page-wide set as fallback) otherwise. [] means an informational card."""
+    pick_ui = item.get("pick_ui") or {}
+    if pick_ui.get("style") == "columns":
+        values = [candidate["value"] for candidate in pick_ui.get("candidates", [])]
+        if pick_ui.get("edit"):
+            values.append(pick_ui["edit"].get("value", "edit"))
+        return values
+    return item.get("options", page_options)
+
+
+def pick_area_html(item, options, default, option_help):
+    """The card's interactive choice block — the strategy seam.
+
+    Default strategy: one radio-label row. "columns" (item.pick_ui): one bordered box per candidate
+    laid out side by side — radio + label heading, comparison chips, the candidate text in its own
+    mono block, an optional expander — plus a full-width edit box seeded with pick_ui.edit.seed.
+    Every strategy emits radios named pick:<id>; the page JS is strategy-agnostic. A new strategy
+    is a new branch here plus its CSS.
+    """
+    item_id = str(item["id"])
+    pick_ui = item.get("pick_ui") or {}
+    if pick_ui.get("style") == "columns":
+        name = f'name="pick:{html.escape(item_id)}"'
+        columns = []
+        for candidate in pick_ui.get("candidates", []):
+            checked = " checked" if candidate["value"] == default else ""
+            chips = ""
+            if candidate.get("chips"):
+                chips = ('<div class="cchips">'
+                         + "".join(f'<span class="cchip">{html.escape(chip)}</span>' for chip in candidate["chips"])
+                         + "</div>")
+            text = candidate.get("text") or ""
+            body = f"<pre>{html.escape(text)}</pre>" if text.strip() else '<pre class="cnone">(empty)</pre>'
+            more = ""
+            if candidate.get("more"):
+                more = (f'<details><summary>{html.escape(candidate["more"].get("label", "more"))}</summary>'
+                        f'<pre>{html.escape(candidate["more"].get("text", ""))}</pre></details>')
+            columns.append(
+                f'<div class="ccol"><label><input type="radio" {name} value="{html.escape(candidate["value"])}"'
+                f'{checked}> {html.escape(candidate.get("label", candidate["value"]))}</label>'
+                f"{chips}{body}{more}</div>"
+            )
+        edit_html = ""
+        edit = pick_ui.get("edit")
+        if edit:
+            value = edit.get("value", "edit")
+            checked = " checked" if value == default else ""
+            edit_html = (
+                f'<div class="cedit"><label><input type="radio" {name} value="{html.escape(value)}"{checked}> '
+                f'{html.escape(edit.get("label", value))}</label>'
+                f'<textarea class="editbox" data-val="{html.escape(value)}" spellcheck="false">'
+                f'{html.escape(edit.get("seed", ""))}</textarea></div>'
+            )
+        return f'<div class="candwrap"><div class="candrow">{"".join(columns)}</div>{edit_html}</div>'
+    if not options:
+        return ""
+    radio_labels = []
+    for option in options:
+        help_attr = f' title="{html.escape(option_help[option])}"' if option in option_help else ""
+        checked = " checked" if option == default else ""
+        radio_labels.append(
+            f'<label{help_attr}><input type="radio" name="pick:{html.escape(item_id)}" '
+            f'value="{html.escape(option)}"{checked}> {html.escape(option)}</label>'
+        )
+    return f'<div class="opts">{"".join(radio_labels)}</div>'
+
+
 def card_html(item, page_options, page_default, option_help):
     item_id = str(item["id"])
-    options = item.get("options", page_options)
+    options = item_options(item, page_options)
     default = item.get("default", page_default) if options else None
     badge = ""
     if item.get("badge"):
@@ -624,19 +773,10 @@ def card_html(item, page_options, page_default, option_help):
     warning = f'<div class="warning">{html.escape(item["warning"])}</div>' if item.get("warning") else ""
     warn_flag = f'<span class="warnflag" title="{html.escape(item["warning"])}">&#9888;</span>' if item.get("warning") else ""
     body = f'<div class="cardbody">{item["body_html"]}</div>' if item.get("body_html") else ""
-    opts = ""
-    if options:
-        radio_labels = []
-        for option in options:
-            help_attr = f' title="{html.escape(option_help[option])}"' if option in option_help else ""
-            checked = " checked" if option == default else ""
-            radio_labels.append(
-                f'<label{help_attr}><input type="radio" name="pick:{html.escape(item_id)}" '
-                f'value="{html.escape(option)}"{checked}> {html.escape(option)}</label>'
-            )
-        opts = f'<div class="opts">{"".join(radio_labels)}</div>'
+    opts = pick_area_html(item, options, default, option_help)
+    note_hint = " (on an apply, this adjusts the wording)" if "apply" in options else ""
     notes = (
-        f'<textarea class="notes" placeholder="notes on {html.escape(item_id)} (on an apply, this adjusts the wording)…"></textarea>'
+        f'<textarea class="notes" placeholder="notes on {html.escape(item_id)}{note_hint}…"></textarea>'
         if item.get("notes", bool(options))
         else ""
     )
@@ -644,13 +784,12 @@ def card_html(item, page_options, page_default, option_help):
     card_classes = "card collapsible collapsed" if collapsed else "card collapsible"
     chevron = '<span class="chev">▸</span>'
     fold_attr = ' data-fold="1"' if collapsed else ""
-    multiline_attr = ' data-mln="1"' if item.get("multiline_notes") else ""
     facets_attr = ""
     if item.get("facets"):
         facets_attr = f' data-facets="{html.escape(json.dumps(item["facets"]), quote=True)}"'
     return (
         f'<div class="{card_classes}" id="{anchor_id(item_id)}" data-id="{html.escape(item_id)}"'
-        f' data-def="{html.escape(default or "")}"{fold_attr}{multiline_attr}{facets_attr}>'
+        f' data-def="{html.escape(default or "")}"{fold_attr}{facets_attr}>'
         f'<div class="cardhead">{chevron}<span class="cardid">{html.escape(item_id)}</span>{badge}{warn_flag}{source}'
         f'<span class="cardtitle">{html.escape(item.get("title", ""))}</span></div>'
         f"{summary}"
@@ -710,11 +849,11 @@ def main():
                 for value in values
             )
             facet_rows.append(f'<div class="fgroup"><span class="fglabel">{label}</span>{chips}</div>')
-    decision_items = [item for item in spec["items"] if item.get("options", page_options)]
+    decision_items = [item for item in spec["items"] if item_options(item, page_options)]
     if decision_items and spec.get("picked_facet", True):
         picked_values = list(page_options)
         for item in decision_items:
-            for option in item.get("options", page_options):
+            for option in item_options(item, page_options):
                 if option not in picked_values:
                     picked_values.append(option)
         # server-side counts reflect the spec defaults; the page recomputes from the live
@@ -761,11 +900,13 @@ def main():
     client_spec = json.dumps({"key": spec.get("key", ""), "blob_header": spec.get("blob_header", ""),
                               "expand_on": spec.get("expand_on", [])})
 
+    page_width = int(spec.get("page_width", 920))
     page = f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{html.escape(spec.get("title", "decision page"))}</title>
-<style>{CSS}</style></head>
+<style>{CSS}
+:root{{--pagew:{page_width}px}}</style></head>
 <body>
 <button class="themebtn" id="themebtn">dark mode</button>
 <h1>{html.escape(spec.get("title", "decision page"))}</h1>
