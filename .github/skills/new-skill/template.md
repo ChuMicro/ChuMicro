@@ -274,7 +274,7 @@ A condensed checklist when filling the scaffold above.  Full rules live in `spec
 
 **Body:**
 
-- ≤ 500 lines.  Past that, factor reference files (one hop deep only).
+- ≤ 500 lines and under ~5,000 tokens (≈3,800 words) — both budgets, since long lines game the line count.  Past either, factor reference files (one hop deep only); each link names what the file contains and when to read it.
 - Procedure-first.  Bury narrative.
 - Every Process step needs Success criteria.  The other annotations (Execution, Artifacts, Human checkpoint, Rules) are conditional.
 - Done-when is distinct from the last Process step.  The last step is what you do; Done-when is the state you observe.
