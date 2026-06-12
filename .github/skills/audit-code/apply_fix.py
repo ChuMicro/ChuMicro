@@ -11,10 +11,15 @@ the host test runner (re-locating each time, so a newly added test file is picke
 Usage:
   apply_fix.py plan <rundir> <id[,id...]>       # print the selected findings as an edit spec (text + JSON)
   apply_fix.py runtests <target.py> [--tests <p[,p...]>]   # run pytest on the file's tests; exit = pytest's
+  apply_fix.py parse-selection <blob-file> [--merged <merged.json>]   # normalize a picker blob or typed
+        # selection into a JSON choice vector: choices, per-id notes, bare-number lists as apply-these,
+        # and (with --merged, i.e. library scope) bare numeric ids flagged ambiguous for the orchestrator
+        # to resolve. Defaults-unchanged detection stays with the orchestrator, which holds spec.json.
 """
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 
@@ -128,13 +133,67 @@ def cmd_runtests(target, override=None):
     return repo_gate(target)
 
 
+_CHOICE_LINE = re.compile(r"^\s*([A-Za-z0-9_.-]+#\d+|\d+)\s*=\s*(apply|discuss|skip)\s*$")
+_NOTE_LINE = re.compile(r"^\s*note\s+([A-Za-z0-9_.-]+#\d+|\d+)\s*:\s*(.*\S)\s*$")
+_ID_TOKEN = re.compile(r"^(?:[A-Za-z0-9_.-]+#\d+|\d+)$")
+
+
+def cmd_parse_selection(blob_path, merged_path=None):
+    """Normalize a picker blob or typed selection into one JSON choice vector on stdout.
+
+    Accepts three input forms, mixed freely: `<id> = <choice>` lines, `note <id>: <text>` riders
+    (appended when an id carries several), and lines of bare id tokens (`3, 7, 12`) read as
+    apply-these. With --merged (library scope, where ids are namespaced like `heartbeat#3`), a
+    bare numeric id is flagged in `ambiguous` instead of guessed at. Unrecognized non-empty lines
+    land in `unparsed` so nothing is silently dropped."""
+    text = sys.stdin.read() if blob_path == "-" else open(blob_path).read()
+    library_scope = bool(merged_path) and os.path.exists(merged_path)
+    choices, notes, ambiguous, unparsed = {}, {}, [], []
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("PICKS"):
+            continue
+        m = _CHOICE_LINE.match(line)
+        if m:
+            choices[m.group(1)] = m.group(2)
+            continue
+        m = _NOTE_LINE.match(line)
+        if m:
+            key = m.group(1)
+            notes[key] = (notes[key] + " " + m.group(2)) if key in notes else m.group(2)
+            continue
+        tokens = [t for t in re.split(r"[,\s]+", line) if t]
+        if tokens and all(_ID_TOKEN.match(t) for t in tokens):
+            for t in tokens:
+                choices.setdefault(t, "apply")
+            continue
+        unparsed.append(line)
+    if library_scope:
+        ambiguous = sorted([i for i in choices if i.isdigit()], key=int)
+    result = {
+        "choices": choices,
+        "notes": notes,
+        "apply": [i for i, c in choices.items() if c == "apply"],
+        "discuss": [i for i, c in choices.items() if c == "discuss"],
+        "skip": [i for i, c in choices.items() if c == "skip"],
+        "ambiguous": ambiguous,
+        "unparsed": unparsed,
+    }
+    print(json.dumps(result, indent=2))
+    return 0
+
+
 def main():
+    if len(sys.argv) >= 3 and sys.argv[1] == "parse-selection":
+        merged = sys.argv[sys.argv.index("--merged") + 1] if "--merged" in sys.argv else None
+        sys.exit(cmd_parse_selection(sys.argv[2], merged))
     if len(sys.argv) >= 4 and sys.argv[1] == "plan":
         sys.exit(cmd_plan(os.path.abspath(sys.argv[2]), sys.argv[3]))
     if len(sys.argv) >= 3 and sys.argv[1] == "runtests":
         override = sys.argv[sys.argv.index("--tests") + 1] if "--tests" in sys.argv else None
         sys.exit(cmd_runtests(sys.argv[2], override))
-    sys.exit("usage: apply_fix.py plan <rundir> <ids> | runtests <target.py> [--tests <paths>]")
+    sys.exit("usage: apply_fix.py plan <rundir> <ids> | runtests <target.py> [--tests <paths>] | "
+             "parse-selection <blob-file> [--merged <merged.json>]")
 
 
 if __name__ == "__main__":

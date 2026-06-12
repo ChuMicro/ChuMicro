@@ -135,8 +135,7 @@ const trapPrompt =
   + '\nWrite JSON {lens:"trap", findings, path} to ' + FINDINGS + '/trap.json and return it.'
 
 // ---------- LENS 2: integration / contract compatibility (stripped base vs head) ----------
-// Adapted from a Kotlin binary/behavioral/source-compatibility review skill: the three classes of
-// break carry over to Python as call, behavior, and contract-evolution compatibility.
+// Three classes of break, judged as call, behavior, and contract-evolution compatibility.
 const integrationPrompt =
   'You are the INTEGRATION lens on a change-set. Compare each changed file\'s PUBLIC surface (no '
   + 'leading underscore) before and after: base side under ' + BASE_STRIPPED + ', head side under '
@@ -187,8 +186,8 @@ const usagePrompt =
 
 // ---------- LENS 4: intent / alignment with the stated purpose (commented head + diff + intent) ----------
 // The intent record is a CLAIM, exactly as comments are to a drift lens: true only if the diff
-// confirms it. The two-gate policy below is adapted from a production PR-review bot: it suppresses
-// the noisy "doesn't match the ticket" class while keeping real drift loud.
+// confirms it. The two-gate policy below suppresses the noisy "doesn't match the ticket" class
+// while keeping real drift loud.
 const INTENT_OUT = {
   type: 'object', additionalProperties: false,
   properties: {

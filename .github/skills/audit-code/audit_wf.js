@@ -296,7 +296,11 @@ const VALIDATE_OUT = {
 const validatePrompt =
   'You validate a FACT LEDGER against the CODE and TESTS. You have NO list of expected problems and no prior '
   + 'knowledge of this file -- reason only from the code (' + STRIPPED + ') and the tests (' + TESTS + '). Do '
-  + 'NOT trust that a passing test means the behavior is correct; re-derive from the code.\n\n'
+  + 'NOT trust that a passing test means the behavior is correct; re-derive from the code.\n'
+  + 'EXCEPTION, drift findings only: a drift finding claims a comment/docstring says something the code does '
+  + 'not do -- its comment side is verifiable only in ' + COMMENTED + ', so read that file to check what the '
+  + 'comment actually claims. Never use ' + COMMENTED + ' as evidence about CODE BEHAVIOR for any finding kind; '
+  + 'behavior is judged from ' + STRIPPED + ' alone.\n\n'
   + 'LEDGER TO CHECK: ' + RUNDIR + '/eval.json -- each finding has a `defect` (what is wrong), a `bite` (the '
   + 'consequence), and a `fix`, all as fragments.\n\n'
   + 'For EACH finding, answer two things:\n'

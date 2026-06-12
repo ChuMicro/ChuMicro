@@ -194,10 +194,18 @@ def cmd_validate(rundir, findings_path):
         for i, f in enumerate(payload["findings"])]}
     json.dump(check, open(os.path.join(rundir, "path_findings_check.json"), "w"), indent=1)
 
-    subprocess.run(["claude", "--safe-mode", "-p", VALIDATE_PROMPT,
-                    "--allowedTools", "Read", "Write",
-                    "--permission-mode", "acceptEdits", "--model", "opus"],
-                   cwd=rundir, capture_output=True, text=True)
+    from audit_phase1 import CLEAN_ROOM_SETTINGS
+    completed = subprocess.run(["claude", "--safe-mode", "-p", VALIDATE_PROMPT,
+                                "--allowedTools", "Read", "Write",
+                                "--permission-mode", "acceptEdits", "--model", "opus",
+                                "--output-format", "json", "--settings", CLEAN_ROOM_SETTINGS],
+                               cwd=rundir, capture_output=True, text=True)
+    try:
+        envelope = json.loads(completed.stdout or "")
+    except ValueError:
+        envelope = {"unparseable_stdout_tail": (completed.stdout or "")[-2000:]}
+    envelope["stderr_tail"] = (completed.stderr or "")[-2000:]
+    json.dump(envelope, open(os.path.join(rundir, "validate_claude_envelope.json"), "w"), indent=1)
     out = os.path.join(rundir, "path_validation.json")
     if os.path.exists(out):
         verdicts = json.load(open(out)).get("findings", [])

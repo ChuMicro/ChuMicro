@@ -14,8 +14,11 @@ it, as information for the reader -- the pass/fail contract is only about the sk
 under test.
 
 Usage: run_trigger_evals.py <trigger-evals.json> [--runs 3] [--workers 4]
-                            [--limit N] [--out <results.json>]
+                            [--limit N] [--out <results.json>] [--model <name>]
 --limit N probes only the first N queries (a cheap smoke before a full sweep).
+--model overrides the probe model. Pass/fail baselines hold only on the CLI's
+default model: cheaper tiers route a minority of boundary queries differently,
+so a haiku/sonnet table is not comparable to a default-model one.
 Exit 0 = every query passed; exit 1 = at least one failed or was unparseable.
 """
 import argparse
@@ -75,12 +78,15 @@ def extract_slug(text, slugs):
     return f"unparsed:{lowered[:60]}"
 
 
-def probe(query, slugs, repo_root):
+def probe(query, slugs, repo_root, model):
     """One routing probe: a fresh claude -p answering which skill it would invoke."""
+    command = ["claude", "-p", "--max-turns", "1"]
+    if model:
+        command += ["--model", model]
+    command.append(ROUTING_PROMPT.format(query=query))
     try:
         completed = subprocess.run(
-            ["claude", "-p", "--max-turns", "1", ROUTING_PROMPT.format(query=query)],
-            cwd=repo_root, capture_output=True, text=True, timeout=240,
+            command, cwd=repo_root, capture_output=True, text=True, timeout=240,
         )
     except subprocess.TimeoutExpired:
         return "error:timeout"
@@ -94,6 +100,10 @@ def main():
     parser.add_argument("--workers", type=int, default=4, help="parallel claude -p processes")
     parser.add_argument("--limit", type=int, default=0, help="probe only the first N queries")
     parser.add_argument("--out", default="", help="results JSON path (default .scratch/trigger-evals/)")
+    parser.add_argument("--model", default="",
+                        help="probe-model override (default: the CLI's default model, "
+                             "which the pass/fail baselines are calibrated on; cheaper "
+                             "tiers route boundary queries differently)")
     arguments = parser.parse_args()
 
     evals_path = os.path.abspath(arguments.evals_path)
@@ -105,14 +115,16 @@ def main():
 
     total_probes = len(rows) * arguments.runs
     print(f"probing {len(rows)} queries x {arguments.runs} run(s) = {total_probes} "
-          f"claude -p calls ({arguments.workers} parallel, ~15-60s each)...", flush=True)
+          f"claude -p calls ({arguments.workers} parallel, "
+          f"model={arguments.model or 'cli-default'}, ~15-60s each)...", flush=True)
 
     started = time.time()
     with ThreadPoolExecutor(max_workers=arguments.workers) as pool:
         jobs = {}
         for index, row in enumerate(rows):
             for run_number in range(arguments.runs):
-                jobs[(index, run_number)] = pool.submit(probe, row["query"], slugs, repo_root)
+                jobs[(index, run_number)] = pool.submit(
+                    probe, row["query"], slugs, repo_root, arguments.model)
         answers = {}
         for (index, run_number), job in jobs.items():
             slug = job.result()
@@ -144,7 +156,8 @@ def main():
         repo_root, ".scratch", "trigger-evals",
         f"{skill_name}-{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}.json")
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
-    json.dump({"skill_name": skill_name, "runs": arguments.runs, "results": results},
+    json.dump({"skill_name": skill_name, "runs": arguments.runs,
+               "model": arguments.model or "cli-default", "results": results},
               open(out_path, "w"), indent=1)
     print(f"=== TRIGGER EVALS: {len(rows) - failed}/{len(rows)} passed "
           f"in {time.time() - started:.0f}s -> {out_path} ===")

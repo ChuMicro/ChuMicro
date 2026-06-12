@@ -9,6 +9,7 @@ LIBRARY_FACTS.md (domain + cross-file contracts + glossary). The orchestrator th
 
 Usage: audit_phase0.py <lib_dir> <rundir>   # writes <rundir>/LIBRARY_FACTS.md
 """
+import json
 import os
 import subprocess
 import sys
@@ -17,6 +18,7 @@ SKILL = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, SKILL)
 from strip import strip_code  # noqa: E402
 from preflight import require_claude  # noqa: E402
+from audit_phase1 import CLEAN_ROOM_SETTINGS  # noqa: E402
 
 PROMPT = (
     "Read the comment-stripped library source under ./lib/ (the files are listed in ./lib_manifest.txt; read "
@@ -56,14 +58,25 @@ def main():
     open(os.path.join(rundir, "lib_manifest.txt"), "w").write("\n".join(manifest) + "\n")
 
     # --safe-mode: user-global memory, hooks, skills, plugins, and MCP stay out of the clean room
-    subprocess.run(["claude", "--safe-mode", "-p", PROMPT, "--allowedTools", "Read", "Write",
-                    "--permission-mode", "acceptEdits", "--model", "opus"],
-                   cwd=rundir, capture_output=True, text=True)
+    completed = subprocess.run(["claude", "--safe-mode", "-p", PROMPT, "--allowedTools", "Read", "Write",
+                                "--permission-mode", "acceptEdits", "--model", "opus",
+                                "--output-format", "json", "--settings", CLEAN_ROOM_SETTINGS],
+                               cwd=rundir, capture_output=True, text=True)
+    try:
+        envelope = json.loads(completed.stdout or "")
+    except ValueError:
+        envelope = {"unparseable_stdout_tail": (completed.stdout or "")[-2000:]}
+    envelope["stderr_tail"] = (completed.stderr or "")[-2000:]
+    json.dump(envelope, open(os.path.join(rundir, "claude_envelope.json"), "w"), indent=1)
     out = os.path.join(rundir, "LIBRARY_FACTS.md")
     if os.path.exists(out):
         print(f"wrote {out}  ({len(manifest)} files)")
     else:
-        print(f"WARNING: LIBRARY_FACTS.md not produced (continuing without cross-file context); {len(manifest)} files staged")
+        print(f"WARNING: LIBRARY_FACTS.md not produced; {len(manifest)} files staged. claude -p output tail:")
+        tail = ((completed.stdout or "") + (completed.stderr or "")).strip().splitlines()[-15:]
+        for line in tail:
+            print(f"  | {line}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

@@ -4,10 +4,12 @@
 Strips the target so the code lenses read behavior with no comment to anchor them, copies the ORIGINAL
 (commented) file for the drift lens, locates and concatenates the file's tests for the coverage lens, then
 runs the evaluation workflow as ONE `claude -p` from a /tmp room (clean: no project CLAUDE.md by
-cwd-ancestry, file access bounded to the room). The workflow runs a summarizer + four lenses, a merger that
+cwd-ancestry, file access bounded to the room). The workflow runs a summarizer + five lenses, a merger that
 assigns stable fix numbers, and a fixture-agnostic validator re-check loop. It then collects what the
 in-session orchestrator renders:
   - eval.json        (numbered findings + domain facts, validator-converged)
+  - written.json     (the writer's reader prose, in voice)
+  - patches.json     (apply-ready before/after per finding)
   - summary.json     (independent module + per-symbol summaries)
   - validation.json  (per-finding real / fix_sound verdicts; convergence)
   - phase1.json      (counts + convergence + the located test files, for the orchestrator)
@@ -109,20 +111,40 @@ def build_tests_file(target, out_path, override=None):
     return paths
 
 
+# CLEAN_ROOM_SETTINGS hard-bounds every clean-room claude -p with permission deny rules: a lens
+# that follows an absolute project path (a diff header, a manifest entry) gets a denial instead of
+# silently reading the tree it must stay blind to. The /tmp rooms stay readable -- their absolute
+# paths sit outside every denied anchor -- and deny rules outrank --allowedTools at every scope.
+CLEAN_ROOM_SETTINGS = json.dumps({"permissions": {"deny": [
+    "Read(~/**)", "Read(//Users/**)", "Read(//home/**)",
+    "Write(~/**)", "Write(//Users/**)", "Write(//home/**)",
+]}})
+
+
 def claude_p_workflow(rundir, wf_name):
     """Run one clean-room `claude -p` from rundir that executes the named workflow to completion.
 
     --safe-mode keeps user-global ~/.claude/CLAUDE.md, hooks, skills, plugins, and MCP servers out
     of every judging layer (OAuth login and the Workflow/Task tools still work under it), so the
-    clean room guarantees what its name claims instead of warning about the leak."""
-    return subprocess.run(
+    clean room guarantees what its name claims instead of warning about the leak. The headless
+    result envelope (is_error / result / total_cost_usd / session_id) lands in
+    <rundir>/claude_envelope.json so a degraded run names its cause and cost."""
+    completed = subprocess.run(
         ["claude", "--safe-mode", "-p",
          f"Use the Workflow tool to run the workflow at ./{wf_name} (call Workflow with scriptPath "
          f"./{wf_name}). Wait for full completion, then reply DONE.",
          "--allowedTools", "Workflow", "Task", "Read", "Write",
-         "--permission-mode", "acceptEdits", "--model", "opus"],
+         "--permission-mode", "acceptEdits", "--model", "opus", "--output-format", "json",
+         "--settings", CLEAN_ROOM_SETTINGS],
         cwd=rundir, capture_output=True, text=True,
     )
+    try:
+        envelope = json.loads(completed.stdout or "")
+    except ValueError:
+        envelope = {"unparseable_stdout_tail": (completed.stdout or "")[-2000:]}
+    envelope["stderr_tail"] = (completed.stderr or "")[-2000:]
+    json.dump(envelope, open(os.path.join(rundir, "claude_envelope.json"), "w"), indent=1)
+    return completed
 
 
 def _stage(wf_src, rundir, **subs):
