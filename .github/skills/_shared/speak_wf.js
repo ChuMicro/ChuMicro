@@ -50,9 +50,10 @@ const CHARTER =
   `behind scaffolding like "one thing to know" or "worth noting". Text meant to be applied -- ` +
   `replacement wording, commands, quoted lines -- passes through character-for-character. A short ` +
   `entry stays short${sample ? ', and the sample never adds length' : ''}.\n\n` +
-  `Per entry return: title -- one line naming the defect; summary -- what is wrong and what it breaks; ` +
-  `why -- the consequence, or "" when the entry states none; fix -- what to change, or "" when the ` +
-  `change lives in the entry's diff field.\n\n` +
+  `Per entry return: title -- one line naming the defect; summary -- what is wrong and what it breaks, ` +
+  `each sentence carrying one or two facts, never a weave of five; why -- the consequence, or "" when ` +
+  `the entry states none; fix -- what to change, or "" when the change lives in the entry's diff ` +
+  `field.\n\n` +
   'No em-dashes, no " -- ", no semicolons, no `canonical` or `shape`.\n'
 
 const ITEMS_OUT = {
