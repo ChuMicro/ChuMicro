@@ -17,7 +17,7 @@ when_to_use: |
 
 # Audit Skill
 
-Audits a SKILL.md, its reference files, and anything it dispatches (persona files, workflow scripts). One Workflow run fans out six lenses — five blind ones (loader routing, cold-walk, craft, orchestration, a generative ideas lens) plus an outward research lens that web-searches prior art and live Claude Code docs — each returning schema-validated output that carries its own evidence. The director merges them with measured routing probes, prints one numbered evidence-first report, and applies only the fixes the user picks by number.
+Audits a SKILL.md, its reference files, and anything it dispatches (persona files, workflow scripts). One Workflow run fans out six lenses — five blind ones (loader routing, cold-walk, craft, orchestration, a generative ideas lens) plus an outward research lens that web-searches prior art and live Claude Code docs — each returning schema-validated output that carries its own evidence. The director merges them with measured routing probes into a ledger; a second Workflow — the speaker — rewrites every user-facing line from that ledger for a cold reader, plain by default or in a registry voice picked up front; the director applies only the fixes the user picks by number.
 
 ## When to use this skill
 
@@ -39,12 +39,12 @@ Audits a SKILL.md, its reference files, and anything it dispatches (persona file
 
 Every question this skill asks must be decidable from the question itself plus the report the user just read. A finding's number, its quoted evidence, its consequence, and the exact proposed change appear **before** the user is asked anything about it. Asking for approval through a bare label — where the user must trust the asker instead of seeing the defect — is itself the failure mode this skill audits for, and it is how a prior version of this skill failed in production.
 
-That rule sets the selection mechanics: findings are approved **by number in plain chat** (`apply 1, 3, 5`, `discuss 2`, `edit 4: <wording>`), not through one approval widget per finding. `AskUserQuestion` is reserved for the genuine forks with few options: the Step 1 redirect and the Step 6 mode pick.
+That rule sets the selection mechanics: findings are approved **by number in plain chat** (`apply 1, 3, 5`, `discuss 2`, `edit 4: <wording>`), not through one approval widget per finding. `AskUserQuestion` is reserved for the genuine forks with few options: the Step 1 redirect, the Step 1b voice pick, and the Step 6 mode pick. A picked voice phrases the report and the gates; it never changes what an option does and never states a fact outside the ledger.
 
 ## Definition of done
 
-1. A real SKILL.md resolved (or the request redirected cleanly to the right tool).
-2. The lens workflow ran; the probe table ran when a `trigger-evals.json` exists; findings merged into one numbered evidence-first report, written to a file and opened, with harness-claims verified against live docs.
+1. A real SKILL.md resolved (or the request redirected cleanly to the right tool), and a voice picked at the gate (plain default).
+2. The lens workflow ran; the probe table ran when a `trigger-evals.json` exists; findings merged into `ledger.json` and spoken into one numbered evidence-first report, written to a file and opened, with harness-claims verified against live docs.
 3. The user picked a mode (apply-by-number / re-author / report-only) and the picked numbers ran to completion — every applied edit visible, substantive rewrites re-verified.
 4. In re-author mode, a backup landed at `.scratch/skills-backup/skills/<slug>-<UTC>/` before the seed paragraph printed.
 
@@ -55,6 +55,17 @@ That rule sets the selection mechanics: findings are approved **by number in pla
 `ls` the explicit path, or check both `.claude/skills/<slug>/SKILL.md` and `.github/skills/<slug>/SKILL.md` (some projects symlink one to the other). When neither resolves, the request is probably about a different artifact — fire a redirect `AskUserQuestion` whose options carry `preview` fields showing the destination invocation (`/audit-docs <target>`, `/audit-comments <target>`, `/new-skill <slug>`, or "It's a SKILL.md — I'll give a different path"). On a non-skill pick, print the previewed invocation and exit.
 
 **Success criteria:** an absolute SKILL.md path printed, or the redirect invocation printed and the skill exited.
+
+### 1b. Voice gate
+
+The report and every gate after it speak in a voice; the scans never do.
+
+- Read the shared registry (`.github/skills/_shared/voices/voices.json`) and print a compact numbered menu in chat: one voice per line in registry order, number + key + its one-line persona, `1. plain` first marked **(default, voiceless — reads cleanest)**. Offer any voice's cached preview from the registry's `previews` on request.
+- Fire one `AskUserQuestion`. In the no-arg form the which-skill question rides first and the voice question second; with a resolved target the voice question is the call's only question.
+- The voice question: header `Voice`, two options — *"Plain (default, recommended)"* and *"Numbered voice — type the menu number under Other"*. A bare number typed under Other maps to the menu.
+- For a named voice, hold its persona line and check whether `voice_samples/<key>.md` exists (the register sample the speaker injects; absent is fine — the voice runs persona-only).
+
+**Success criteria:** the menu printed, the user's pick echoed, one voice key (+ persona and sample path when named) held for Step 5b.
 
 ### 2. Inventory
 
@@ -92,14 +103,30 @@ The Workflow runs in the background and notifies on completion; tell the user bo
 - **Harness claims:** any finding with `harness_claim: true` (or any you notice resting on documented Claude Code behavior) gets verified before it lands — dispatch `claude-code-guide` with the specific claim; require a doc URL. Confirmed → the finding stands with the URL. Contradicted → the audited skill is fine and the stale rule (in `_shared/audit_wf.js`'s lens prompts) becomes the finding. A claim already verified this session with a URL needs no re-dispatch.
 - **Director comparison:** predictions no lens touched become director follow-ups, labeled as yours and outranked accordingly.
 - Ideas are not findings: the ideas lens's file-anchored entries and the research lens's URL-or-vision-anchored entries join the report as one separately-numbered menu, each with its lens's `recommended_action`.
+- **Write the ledger:** `mkdir -p` the report dir (`<report-dir> = .scratch/skill-audits/<slug>-<UTC>/`) and write the merged result to `<report-dir>/ledger.json` — a full picker spec in raw lens wording. The ledger is the ground truth the speaker may not exceed; its lens wording is writer-facing notation and never reaches the user.
+  - One card per finding/idea: id = report number, title, tier badge, `source` naming the lens that raised it, the lens's summary / why / fix wording untouched, `evidence` verbatim.
+  - When the proposed fix is replacement text, emit a `diff` ({location, old, new} — old from the evidence quote) instead of the evidence + fix pair; instruction-style fixes keep the fix row, where a fabricated diff would mislead.
+  - Order items by tier across all lenses; give each `facets: {"tier": <tier>, "lens": <lens>}` and define the page `facets` as a tier group plus a lens group whose per-value `help` lines name each lens's lane — one narrowable list, no tabs hiding most of it.
+  - Options are `apply / discuss / skip` (no edit option — a note on an applied item *is* the wording adjustment); defaults: CRITICAL and IMPORTANT pre-select `apply`, MINOR, AMBIGUOUS, and ideas pre-select `skip`.
 
-**Success criteria:** one merged, numbered findings list + numbered ideas menu, every entry carrying evidence, consequence, and proposed fix.
+**Success criteria:** one merged, numbered findings list + numbered ideas menu in `<report-dir>/ledger.json`, every entry carrying evidence, consequence, and proposed fix.
+
+### 5b. Speak the ledger
+
+Lens wording is shorthand by a reader steeped in the audited file ("invariant 2 contradicts its charter") — decidable to its author, gibberish to the user. Nothing user-facing ships in that register, the plain voice included.
+
+- Call `Workflow` with `scriptPath: .github/skills/_shared/speak_wf.js` and `args: {ledgerPath, ids, voice, persona, samplePath}` — every item id from the ledger; persona = the registry line (empty for plain); samplePath only when the sample file exists.
+- The speaker reframes and never re-grounds: per item it returns a rewritten title, summary, why, and fix built only from that entry's facts, each card readable alone by someone who has never opened the audited skill, exact replacement text and commands passed through character-for-character. It also returns the page `intro_html`, the `option_help` legend, and the Step 6 mode-gate wording.
+- Save the workflow's return to `<report-dir>/spoken.json`; `python3 .github/skills/_shared/splice_spoken.py <report-dir>` then writes `spec.json` — speaker strings over each card's title / summary / why / fix, the speaker's `intro_html` and `option_help` onto the page, everything else verbatim from the ledger.
+- An empty speaker string never overwrites (a misbehaving speaker cannot erase a fact), and an id the script reports `unrendered` keeps ledger wording with a `warning` naming that.
+
+**Success criteria:** speaker strings spliced over every item id (or warnings on the stragglers); no raw lens wording left in any title, summary, why, or fix the user will read.
 
 ### 6. Report, then one fork
 
-Render the report in the [Output format](#output-format) below — full evidence inline, nothing the user must take on trust. Write it to `.scratch/skill-audits/<slug>-<UTC>.md` (`date -u +%Y%m%dT%H%M%SZ`), `open` it, and print it in chat.
+Render the report in the [Output format](#output-format) below — the speaker's prose with full evidence inline, nothing the user must take on trust. Write it to `.scratch/skill-audits/<slug>-<UTC>.md` (`date -u +%Y%m%dT%H%M%SZ`), `open` it, and print it in chat.
 
-**Decision page — always, when at least one finding or idea is open.** The evidence-rich layout (facet bar, why/fix rows, diffs, per-item notes) earns its keep even for a single item; only a fully clean pass skips it. Build a picker spec next to the report — one card per finding/idea with id = report number, title, tier badge, `source` naming the lens that raised it, and the structured `summary` / `why` / `fix` / `evidence` fields (never one mashed body block). When the proposed fix is replacement text, emit a `diff` ({location, old, new} — old from the evidence quote) instead of the evidence + fix pair; instruction-style fixes keep the fix row, where a fabricated diff would mislead. Order items by tier across all lenses and give each one `facets: {"tier": <tier>, "lens": <lens>}`; define the page `facets` as a tier group plus a lens group whose per-value `help` lines name each lens's lane — one narrowable list, no tabs hiding most of it. Options are `apply / discuss / skip` with an `option_help` legend; there is no edit option because a note on an applied item *is* the wording adjustment. Defaults: CRITICAL and IMPORTANT findings pre-select `apply`; MINOR, AMBIGUOUS, and ideas pre-select `skip`. Then:
+**Decision page — always, when at least one finding or idea is open.** The evidence-rich layout (facet bar, why/fix rows, diffs, per-item notes) earns its keep even for a single item; only a fully clean pass skips it. The page spec is already on disk — `<report-dir>/spec.json`, the Step 5 ledger structure carrying the Step 5b speaker prose. Then:
 
 ```bash
 python3 .github/skills/_shared/picker/render_picker.py <report-dir>/spec.json
@@ -118,11 +145,17 @@ Then fire **one** `AskUserQuestion`:
 > - "Route to re-author" — only shown when ≥ 2 CRITICAL findings or any CRITICAL goal-derivability finding landed
 > - "Report only — no action"
 
+The question text and option descriptions carry the speaker's gate wording; the three options' semantics are fixed.
+
 **Success criteria:** report file written and opened, report in scrollback, decision page served whenever at least one item is open, mode picked. No filesystem change on the audited skill yet.
 
 ### 7. Apply by number
 
-Selections arrive as typed chat (`apply 1, 3, 5` · `discuss 2` · `edit 4: <their wording>` · `skip the rest`) or as the picker blob — same semantics; a note on an applied blob number is the user's wording adjustment, the typed `edit 4: <wording>` equivalent. For each applied number: re-read the touched region (earlier fixes shift line numbers), apply via `Edit` so the change is visible, and honor any per-number note. Ideas apply the same way by their numbers; an idea anchored in goal-bearing prose (description, opening paragraph, Done-when, a blindness contract) gets one explicit confirm first. A substantive rewrite (not a word swap) gets one re-verification: dispatch a fresh `Agent` (general-purpose) with the finding text + the post-edit file, asking *confirmed resolved / not resolved / new finding*; cap one re-dispatch per finding, unresolved ones land in the report tail. Git is the recovery path — nothing is committed by this skill.
+Selections arrive as typed chat (`apply 1, 3, 5` · `discuss 2` · `edit 4: <their wording>` · `skip the rest`) or as the picker blob — same semantics; a note on an applied blob number is the user's wording adjustment, the typed `edit 4: <wording>` equivalent.
+
+For each applied number: re-read the touched region (earlier fixes shift line numbers), apply via `Edit` so the change is visible, and honor any per-number note. Ideas apply the same way by their numbers; an idea anchored in goal-bearing prose (description, opening paragraph, Done-when, a blindness contract) gets one explicit confirm first. A substantive rewrite (not a word swap) gets one re-verification: dispatch a fresh `Agent` (general-purpose) with the finding text + the post-edit file, asking *confirmed resolved / not resolved / new finding*; cap one re-dispatch per finding, unresolved ones land in the report tail. Git is the recovery path — nothing is committed by this skill.
+
+Follow-up gates reuse the speaker's pre-rendered wording where one exists; the orchestrator never imitates the voice itself — it passes spoken strings through, and its own chat stays plain. When a follow-up genuinely needs voiced prose (a report tail worth shipping in register), write the new facts as a mini-ledger and re-run `speak_wf.js` over it.
 
 **Success criteria:** every picked number applied or explicitly bounced with a reason; re-verification verdicts collected for substantive rewrites; unpicked numbers untouched.
 
@@ -177,7 +210,7 @@ Lens findings outrank director observations; the probe table outranks both on ro
 Audit run: <UTC> · recommendation: <apply-by-number | re-author | report-only>
 ```
 
-The same content goes to `.scratch/skill-audits/<slug>-<UTC>.md` so the report survives outside scrollback.
+The same content goes to `.scratch/skill-audits/<slug>-<UTC>.md` so the report survives outside scrollback. The finding / why / fix lines are the speaker's strings from Step 5b; evidence lines stay verbatim from the ledger.
 
 ## Red flags — stop and reconsider
 
@@ -185,6 +218,7 @@ The same content goes to `.scratch/skill-audits/<slug>-<UTC>.md` so the report s
 - Your Step 3 draft disagrees materially with the lenses → don't paper over it; the lenses win or the dispatch was under-fed.
 - Three or more CRITICAL findings → recommend re-author, not patchwork.
 - A lens returned nothing after the workflow's retry → name the missing lens in the report rather than quietly auditing with four.
+- The speaker workflow died entirely → ship the report in ledger wording, say so up top, and offer a one-shot re-speak before the mode gate; never block the report on prose.
 
 ## Don'ts
 
@@ -193,10 +227,13 @@ The same content goes to `.scratch/skill-audits/<slug>-<UTC>.md` so the report s
 - Don't auto-invoke `/new-skill`; the user fires the seed.
 - Don't read other audit-* skills for reference mid-audit; the lens prompts in `audit_wf.js` carry the rules.
 - Don't let your read outrank a lens, or a lens outrank the probe table on routing.
+- Don't ship raw lens wording anywhere the user reads — report, page, or gates; every user-facing line passes through the Step 5b speaker, plain voice included.
+- Don't let the speaker add, drop, or soften a fact: ledger facts only, replacement text verbatim, voices speak — they never judge.
 
 ## Done when
 
 - The numbered evidence-first report exists at `.scratch/skill-audits/<slug>-<UTC>.md`, was opened, and sits in scrollback.
+- The report, the page, and the mode gate carry the speaker's prose in the picked voice (plain default); lens shorthand survives only inside `ledger.json`, and the orchestrator never voiced a line itself.
 - `git diff` on the audited skill shows exactly the user's picked numbers — nothing more.
 - In re-author mode, the backup + seed are in place and the `/new-skill` invocation is one paste away.
 - A reader scrolling this session can answer in a minute: what was found, what the evidence was, what the user picked, what moved.
