@@ -1133,7 +1133,7 @@ class CircuitpythonTransport:
             pass
         try:
             self._port.close()
-        except Exception:  # pragma: no cover — port is already dying
+        except Exception:  # pragma: no cover -port is already dying
             pass
         self._port = None
         return True
@@ -1425,7 +1425,7 @@ class CircuitpythonTransport:
             target = drive / relative
             try:
                 target.unlink()
-            except (OSError, FileNotFoundError):  # pragma: no cover — best-effort
+            except (OSError, FileNotFoundError):  # pragma: no cover -best-effort
                 pass
         # Reap empty directories across the whole drive scope.  unlink
         # removes files but not dirs, so a package whose every file
@@ -1457,7 +1457,7 @@ class CircuitpythonTransport:
         for directory in directories:
             try:
                 directory.rmdir()
-            except OSError:  # pragma: no cover — non-empty or transient
+            except OSError:  # pragma: no cover -non-empty or transient
                 pass
 
     def clear_entrypoints(self) -> None:
@@ -1527,11 +1527,11 @@ class CircuitpythonTransport:
             self._send_repl_command(
                 "import storage\nstorage.erase_filesystem()\n",
             )
-        except Exception:  # noqa: BLE001 — reboot kills the REPL mid-call
+        except Exception:  # noqa: BLE001 - reboot kills the REPL mid-call
             pass
         try:
             self._port.close()
-        except Exception:  # pragma: no cover — port may already be torn down
+        except Exception:  # pragma: no cover -port may already be torn down
             pass
         self._port = None
         # Settle, then poll-reconnect.  USB-CDC takes a beat to come

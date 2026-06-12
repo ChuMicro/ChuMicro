@@ -184,7 +184,7 @@ def dump_devices(data: CommentedMap, path: Path) -> None:
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     yaml = _yaml()
-    handle = tempfile.NamedTemporaryFile(  # noqa: SIM115 — closed manually below
+    handle = tempfile.NamedTemporaryFile(  # noqa: SIM115 - closed manually below
         mode="w",
         encoding="utf-8",
         dir=path.parent,

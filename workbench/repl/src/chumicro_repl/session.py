@@ -204,7 +204,7 @@ class ReplSession:
         if self._in_raw_repl:
             try:
                 port.write(CTRL_B)
-            except OSError:  # pragma: no cover — closed port during exit
+            except OSError:  # pragma: no cover -closed port during exit
                 pass
         self._in_raw_repl = False
         self._close_port()
@@ -213,7 +213,7 @@ class ReplSession:
     # Public raw-REPL primitives
     # ------------------------------------------------------------------
 
-    def exec(  # noqa: A003, CHU001 — matches the upstream mpremote / upyr / pyboard API
+    def exec(  # noqa: A003, CHU001 - matches the upstream mpremote / upyr / pyboard API
         self,
         code: str,
         *,
@@ -475,5 +475,5 @@ class ReplSession:
             return
         try:
             port.close()
-        except OSError:  # pragma: no cover — port already closed
+        except OSError:  # pragma: no cover -port already closed
             pass

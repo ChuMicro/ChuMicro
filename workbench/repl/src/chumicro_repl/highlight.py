@@ -70,7 +70,7 @@ class Theme:
         # added without wiring a style.  Fall back to no styling
         # rather than crash — highlighter should never be the cause
         # of a REPL session ending.
-        return ""  # pragma: no cover — defensive, enum is closed today
+        return ""  # pragma: no cover - defensive, enum is closed today
 
 
 #: Default theme used by :func:`colorize` and the TUI when no theme

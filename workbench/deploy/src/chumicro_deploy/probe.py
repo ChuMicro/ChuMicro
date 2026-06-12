@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING
 from .host_platform import check_supported_platform
 from .protocol import DeviceImplementation
 
-if TYPE_CHECKING:  # pragma: no cover — type-only
+if TYPE_CHECKING:  # pragma: no cover - type-only
     from .device import Device
 
 

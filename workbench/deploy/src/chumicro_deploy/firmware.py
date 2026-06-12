@@ -365,16 +365,16 @@ def _dispatch_bootloader_reset(device: Device) -> bool:
         transport = device.create_transport()
         try:
             transport.connect()
-        except Exception:  # pragma: no cover — hardware-only connect failures
+        except Exception:  # pragma: no cover -hardware-only connect failures
             return False
         try:
             return transport.reset_into_bootloader()
         finally:
             try:
                 transport.disconnect()
-            except Exception:  # pragma: no cover — serial may already be gone
+            except Exception:  # pragma: no cover -serial may already be gone
                 pass
-    except Exception:  # pragma: no cover — best-effort hardware path
+    except Exception:  # pragma: no cover -best-effort hardware path
         return False
 
 
@@ -440,7 +440,7 @@ def _copy_uf2_to_drive(
     try:
         with destination.open("rb") as handle:
             os.fsync(handle.fileno())
-    except OSError:  # pragma: no cover — best-effort flush
+    except OSError:  # pragma: no cover -best-effort flush
         pass
     _report(on_progress, 1.0, "copy complete — waiting for board reboot")
 

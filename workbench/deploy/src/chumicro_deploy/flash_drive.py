@@ -471,7 +471,7 @@ def strip_extended_attributes(path: Path) -> None:
         path: Root directory to strip recursively.
     """
     if _sys_module.platform != "darwin":
-        return  # pragma: no cover — tests run on macOS
+        return  # pragma: no cover -tests run on macOS
     try:
         subprocess.run(
             ["xattr", "-cr", str(path)],
@@ -481,7 +481,7 @@ def strip_extended_attributes(path: Path) -> None:
         )
     except FileNotFoundError:
         print("WARNING: xattr not found — skipping extended attribute removal")
-    except subprocess.TimeoutExpired:  # pragma: no cover — defensive
+    except subprocess.TimeoutExpired:  # pragma: no cover -defensive
         print(
             "WARNING: xattr -cr hung past "
             f"{METADATA_HELPER_TIMEOUT_SECONDS:.0f}s — continuing without it"
@@ -502,7 +502,7 @@ def clean_dot_files(drive_path: Path) -> None:
         drive_path: Mount point of the FAT32 volume.
     """
     if _sys_module.platform != "darwin":
-        return  # pragma: no cover — tests run on macOS
+        return  # pragma: no cover -tests run on macOS
     try:
         subprocess.run(
             ["dot_clean", str(drive_path)],
@@ -512,7 +512,7 @@ def clean_dot_files(drive_path: Path) -> None:
         )
     except FileNotFoundError:
         print("WARNING: dot_clean not found — skipping ._ file cleanup")
-    except subprocess.TimeoutExpired:  # pragma: no cover — defensive
+    except subprocess.TimeoutExpired:  # pragma: no cover -defensive
         print(
             "WARNING: dot_clean hung past "
             f"{METADATA_HELPER_TIMEOUT_SECONDS:.0f}s — continuing without it"
@@ -569,7 +569,7 @@ def plant_macos_sentinels_in_staging(staging_path: Path) -> None:
             everything under this into the CIRCUITPY drive root.
     """
     if _sys_module.platform != "darwin":
-        return  # pragma: no cover — tests run on macOS
+        return  # pragma: no cover -tests run on macOS
     for relative in _MACOS_SKIP_SENTINELS:
         target = staging_path / relative
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -593,7 +593,7 @@ def cleanup_macos_noise_dirs_post_rsync(drive_path: Path) -> None:
         drive_path: Mount point of the CIRCUITPY drive.
     """
     if _sys_module.platform != "darwin":
-        return  # pragma: no cover — tests run on macOS
+        return  # pragma: no cover -tests run on macOS
     for noise_relative in _MACOS_NOISE_DIRS:
         shutil.rmtree(drive_path / noise_relative, ignore_errors=True)
 
@@ -627,7 +627,7 @@ def flush_volume(
                 capture_output=True,
                 timeout=SYNC_TIMEOUT_SECONDS,
             )
-        except subprocess.TimeoutExpired:  # pragma: no cover — defensive
+        except subprocess.TimeoutExpired:  # pragma: no cover -defensive
             print(
                 f"WARNING: sync hung past {SYNC_TIMEOUT_SECONDS:.0f}s — "
                 "USB stack may be wedged.  Falling back to os.sync()"
@@ -637,6 +637,6 @@ def flush_volume(
             print("WARNING: sync command failed — falling back to os.sync()")
             os.sync()
     else:
-        os.sync()  # pragma: no cover — tests run on macOS
+        os.sync()  # pragma: no cover -tests run on macOS
 
     sleep(settle_delay)

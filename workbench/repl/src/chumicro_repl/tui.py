@@ -182,7 +182,7 @@ def run_loop(
         if send_initial_after and initial_send:
             try:
                 new_port.write(initial_send)
-            except OSError:  # pragma: no cover — replug-then-replug
+            except OSError:  # pragma: no cover -replug-then-replug
                 pass
         return new_port, Utf8StreamDecoder(), StreamingPatternDetector()
     if initial_send:
@@ -195,7 +195,7 @@ def run_loop(
             port, decoder, detector = outcome
             try:
                 port.write(initial_send)
-            except OSError:  # pragma: no cover — replug-then-replug
+            except OSError:  # pragma: no cover -replug-then-replug
                 pass
     while True:
         exit_requested = False
@@ -206,7 +206,7 @@ def run_loop(
                 if prefix:
                     try:
                         port.write(prefix)
-                    except OSError:  # pragma: no cover — exiting anyway
+                    except OSError:  # pragma: no cover -exiting anyway
                         pass
                 exit_requested = True
             else:
@@ -493,7 +493,7 @@ class _StdinKeyboard:
             if callable(read1):
                 return cast(bytes, read1(256))
             return b""
-        import select  # noqa: PLC0415 — stdlib-only, defer to keep imports lean
+        import select  # noqa: PLC0415 - stdlib-only, defer to keep imports lean
 
         ready, _, _ = select.select([self._fd], [], [], 0)
         if not ready:
@@ -514,9 +514,9 @@ def _posix_raw_mode(fd: int) -> Iterator[None]:
     emulator's own behavior.
     """
     try:
-        import termios  # noqa: PLC0415 — POSIX-only, deferred
-        import tty  # noqa: PLC0415 — POSIX-only, deferred
-    except ImportError:  # pragma: no cover — Windows path
+        import termios  # noqa: PLC0415 - POSIX-only, deferred
+        import tty  # noqa: PLC0415 - POSIX-only, deferred
+    except ImportError:  # pragma: no cover -Windows path
         yield
         return
     original = termios.tcgetattr(fd)

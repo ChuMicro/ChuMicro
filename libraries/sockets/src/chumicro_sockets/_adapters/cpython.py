@@ -197,8 +197,8 @@ def ssl_context_with_cert_and_key(cert_pem, key_pem):
     `load_cert_chain` accepts file paths only (not in-memory bytes),
     so we write them to a temporary file and load from there.
     """
-    import ssl  # noqa: PLC0415 — runtime-gated
-    import tempfile  # noqa: PLC0415 — runtime-gated
+    import ssl  # noqa: PLC0415 - runtime-gated
+    import tempfile  # noqa: PLC0415 - runtime-gated
 
     if isinstance(cert_pem, (bytes, bytearray)):
         cert_pem_text = bytes(cert_pem).decode("ascii")
@@ -285,7 +285,7 @@ def udp_socket(*, bind_host="0.0.0.0", bind_port=0, broadcast=False, **_kwargs):
     host, port)`` separated-arg shape is honored (stdlib expects a
     ``(host, port)`` tuple).
     """
-    import socket  # noqa: PLC0415 — runtime-gated
+    import socket  # noqa: PLC0415 - runtime-gated
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     if broadcast:
@@ -329,7 +329,7 @@ def ssl_context_with_ca(ca_pem):
     ``check_hostname=True`` defaults; only the trust anchor is
     replaced.  Override on the returned context if needed.
     """
-    import ssl  # noqa: PLC0415 — runtime-gated
+    import ssl  # noqa: PLC0415 - runtime-gated
 
     context = ssl.create_default_context()
     if isinstance(ca_pem, str):
@@ -365,7 +365,7 @@ def ssl_context_no_verify():
     set ``verify_mode = CERT_NONE`` while ``check_hostname`` is true)
     and ``verify_mode = CERT_NONE``.
     """
-    import ssl  # noqa: PLC0415 — runtime-gated
+    import ssl  # noqa: PLC0415 - runtime-gated
 
     context = ssl.create_default_context()
     context.check_hostname = False

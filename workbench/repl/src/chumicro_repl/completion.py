@@ -35,7 +35,7 @@ from ._serial import (
     read_chunk,
 )
 
-if TYPE_CHECKING:  # pragma: no cover — type-only
+if TYPE_CHECKING:  # pragma: no cover -type-only
     from prompt_toolkit.completion import CompleteEvent, Completion
     from prompt_toolkit.document import Document
 
@@ -357,7 +357,7 @@ def fetch_device_names(
             _read_until_marker(
                 port, _FRIENDLY_PROMPT, deadline=deadline, time=active_time,
             )
-        except (OSError, TimeoutError):  # pragma: no cover — replug-then-replug
+        except (OSError, TimeoutError):  # pragma: no cover -replug-then-replug
             pass
         return None
     # raw → friendly (consume the banner reprint cleanly)

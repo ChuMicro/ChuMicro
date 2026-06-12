@@ -161,7 +161,7 @@ def tail(
                 return ExitCode.OK
             try:
                 chunk = read_chunk(port)
-            except KeyboardInterrupt:  # pragma: no cover — platform-dependent
+            except KeyboardInterrupt:  # pragma: no cover - platform-dependent
                 return ExitCode.INTERRUPTED
             except OSError as disconnect_error:
                 # pyserial raises ``SerialException`` (subclass of

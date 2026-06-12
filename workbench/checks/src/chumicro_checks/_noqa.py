@@ -39,6 +39,17 @@ def line_suppresses(line: str, code: str) -> bool:
     return False
 
 
+def has_noqa(line: str) -> bool:
+    """Return True when *line* carries any noqa directive, code-listed or bare.
+
+    A rule whose carve-out exempts every suppression line (a
+    suppression explanation legitimately names its duplicate's home)
+    skips the line outright instead of asking whether its own code is
+    listed.
+    """
+    return any(pattern.search(line) is not None for pattern in _NOQA_PATTERNS)
+
+
 def strip_noqa(line: str) -> str:
     """Return *line* with every noqa directive removed.
 

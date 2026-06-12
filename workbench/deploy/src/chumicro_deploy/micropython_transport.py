@@ -841,7 +841,7 @@ class MicropythonTransport:
         if self._mounted and self._serial is not None:
             try:
                 self._serial.umount_local()
-            except Exception:  # pragma: no cover — best-effort cleanup
+            except Exception:  # pragma: no cover -best-effort cleanup
                 pass
             self._mounted = False
 
@@ -943,7 +943,7 @@ class MicropythonTransport:
         if self._mounted and self._serial is not None:
             try:
                 self._serial.umount_local()
-            except Exception:  # pragma: no cover — best-effort cleanup
+            except Exception:  # pragma: no cover -best-effort cleanup
                 pass
             self._mounted = False
         self._ensure_serial()
@@ -993,7 +993,7 @@ class MicropythonTransport:
         if self._mounted and self._serial is not None:
             try:
                 self._serial.umount_local()
-            except Exception:  # pragma: no cover — best-effort cleanup
+            except Exception:  # pragma: no cover -best-effort cleanup
                 pass
             self._mounted = False
         self._ensure_serial()
@@ -1054,7 +1054,7 @@ class MicropythonTransport:
         if self._mounted and self._serial is not None:
             try:
                 self._serial.umount_local()
-            except Exception:  # pragma: no cover — best-effort cleanup
+            except Exception:  # pragma: no cover -best-effort cleanup
                 pass
             self._mounted = False
         self._ensure_serial()
@@ -1285,7 +1285,7 @@ class MicropythonTransport:
             # also a subprocess.  Opening the serial here would hold the
             # port and fail that push.
             self._run_mpremote(["exec", script])
-        except MicropythonTransportError:  # pragma: no cover — best-effort
+        except MicropythonTransportError:  # pragma: no cover -best-effort
             # A clean device (nothing to remove) or a transient
             # hiccup: the post-`fs cp` free-space check is the real
             # guard, so don't let this mask the staging it precedes.

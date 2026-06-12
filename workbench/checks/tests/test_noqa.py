@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from chumicro_checks._noqa import line_suppresses, strip_noqa
+from chumicro_checks._noqa import has_noqa, line_suppresses, strip_noqa
 
 
 class TestLineSuppresses:
@@ -34,6 +34,20 @@ class TestLineSuppresses:
     def test_comma_separated_codes(self) -> None:
         assert line_suppresses("x  # noqa: CHU001, CHU006", "CHU006") is True
         assert line_suppresses("x  # noqa: CHU001, CHU006", "CHU012") is False
+
+
+class TestHasNoqa:
+    def test_code_listed_directive_detected(self) -> None:
+        assert has_noqa("x  # noqa: CHU006 - reason") is True
+
+    def test_bare_directive_detected(self) -> None:
+        assert has_noqa("x  # noqa") is True
+
+    def test_html_directive_detected(self) -> None:
+        assert has_noqa("prose <!-- noqa: CHU012 -->") is True
+
+    def test_no_marker_returns_false(self) -> None:
+        assert has_noqa("plain prose with no directive") is False
 
 
 class TestStripNoqa:
