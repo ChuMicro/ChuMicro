@@ -248,11 +248,11 @@ class FakeHttpClient:
             timeout_ms=timeout_ms, max_redirects=max_redirects, on_done=on_done,
         )
 
-    def check(self, now_ms: int) -> bool:  # noqa: ARG002 — runner contract
+    def check(self, now_ms: int) -> bool:  # noqa: ARG002 - runner contract
         """Return ``True`` while a request is in flight."""
         return self._handle is not None
 
-    def handle(self, now_ms: int) -> None:  # noqa: ARG002 — runner contract
+    def handle(self, now_ms: int) -> None:  # noqa: ARG002 - runner contract
         """Complete the in-flight request from the scripted outcome.
 
         Fires the handle's ``on_done`` callback (if registered) after
@@ -264,13 +264,13 @@ class FakeHttpClient:
         outcome = self._pending_outcome
         finished_handle = self._handle
         if isinstance(outcome, Response):
-            finished_handle._set_response(outcome)  # noqa: SLF001 — internal handoff
+            finished_handle._set_response(outcome)  # noqa: SLF001 - internal handoff
         else:
-            finished_handle._set_error(outcome)  # noqa: SLF001 — internal handoff
+            finished_handle._set_error(outcome)  # noqa: SLF001 - internal handoff
         self._handle = None
         self._url = None
         self._pending_outcome = None
-        finished_handle._invoke_done()  # noqa: SLF001 — internal handoff
+        finished_handle._invoke_done()  # noqa: SLF001 - internal handoff
 
     # ------------------------------------------------------------------
     # Internal
@@ -333,7 +333,7 @@ def make_factory(socket_or_factory):
     ``dns_ok`` then ``tcp_ok``.  Tests that need pending/failure
     phases should build the connector directly.
     """
-    def factory(host, port, use_tls):  # noqa: ARG001 — fake ignores args
+    def factory(host, port, use_tls):  # noqa: ARG001 - fake ignores args
         socket = socket_or_factory() if callable(socket_or_factory) else socket_or_factory
         return FakeSocketConnector(actions=["dns_ok", "tcp_ok"], socket=socket)
 

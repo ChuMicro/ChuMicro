@@ -131,7 +131,7 @@ NO_BODY_STATUS_CODES = frozenset({204, 304})
 # ---------------------------------------------------------------------------
 
 
-def parse_charset(content_type: str | None) -> str:  # noqa: CHU027 — duplication intentional, no shared dependency yet
+def parse_charset(content_type: str | None) -> str:  # noqa: CHU027 - same primitive in chumicro-http-server _wire.py; per-consumer duplication kept intentionally
     """Extract the ``charset=...`` parameter from a Content-Type header.
 
     Per RFC 7231 §3.1.1.5 the Content-Type value may carry a
@@ -321,7 +321,7 @@ class CaseInsensitiveDict:
     the embedded footprint small.
     """
 
-    def __init__(self):  # noqa: CHU027 — duplication intentional, no shared dependency yet
+    def __init__(self):  # noqa: CHU027 - same primitive in chumicro-http-server _wire.py; per-consumer duplication kept intentionally
         # Lowercase key -> (original_name, value).  Paired with
         # ``_order`` (list of lowercase keys) so iteration preserves
         # insertion order on every runtime — MicroPython and
@@ -380,7 +380,7 @@ class CaseInsensitiveDict:
         for lower in self._order:
             yield self._entries[lower]
 
-    def add(self, name, value):  # noqa: CHU027 — duplication intentional, no shared dependency yet
+    def add(self, name, value):  # noqa: CHU027 - same primitive in chumicro-http-server _wire.py; per-consumer duplication kept intentionally
         """Append *value* to the existing header, joining with ``, ``.
 
         New keys behave like :meth:`__setitem__`.  Used by the parser
@@ -768,7 +768,7 @@ class ResponseParser:
         self.state = ParseState.HEADERS
         return True
 
-    def _try_parse_headers(self):  # noqa: CHU027 — duplication intentional, no shared dependency yet
+    def _try_parse_headers(self):  # noqa: CHU027 - same primitive in chumicro-http-server _wire.py; per-consumer duplication kept intentionally
         """Consume one header line; return True if state advanced or
         another header was parsed."""
         crlf_index = self._live_find(CRLF)
