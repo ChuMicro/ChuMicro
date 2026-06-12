@@ -1,5 +1,5 @@
 ---
-description: Audits an existing skill on disk against the skill-writing rules in AGENTS.md and the skill's own stated goal. Use when a skill's flow feels off, contradicts itself, or routes wrong — or before relying on it for important work. Examples: "audit the audit-docs skill", "/audit-skill audit-library", "is the audit-library skill achieving its goal?".
+description: Audits an existing skill on disk against Anthropic's documented skill-authoring rules — size and token budgets, progressive disclosure, rule salience, frontmatter routing — and the skill's own stated goal. Use when a skill's flow feels off, contradicts itself, or routes wrong — or before relying on it for important work. Examples: "audit the audit-docs skill", "/audit-skill audit-library", "is the audit-library skill achieving its goal?".
 allowed-tools: Read, Write, Edit, Grep, Bash(ls *), Bash(cp *), Bash(mkdir *), Bash(date *), Bash(python3 *), Bash(open *), AskUserQuestion, Agent, Workflow, Monitor
 argument-hint: "<slug-or-path>"
 arguments:
@@ -73,11 +73,15 @@ The report and every gate after it speak in a voice; the scans never do.
 ls <skill-dir>/*.md <skill-dir>/*.js <skill-dir>/trigger-evals.json <skill-dir>/scripts/ 2>/dev/null
 grep -nE 'subagent_type:|\.claude/agents/' <skill-dir>/SKILL.md
 grep -E '^description:.*Examples:' <skill-dir>/SKILL.md
+for f in <skill-dir>/SKILL.md <each reference file>; do awk -v f="$f" '{ if (length($0) > longest) longest = length($0); words += NF } END { printf "%s  lines=%d  words=%d  est_tokens=%d  longest_line=%d\n", f, NR, words, int(words * 1.33), longest }' "$f"; done
+ls .github/skills/_shared/
 ```
 
-Capture: the SKILL.md path; reference files; bundled scripts and workflow files; persona files the skill dispatches — from the greps **plus a read of any dispatch or companion table in the body**, since a persona cited by bare slug matches no fixed pattern; whether `trigger-evals.json` exists (feeds the probe lane in Step 4). Extract the three trigger messages from the description's `Examples:` block, salvaging from `when_to_use` when absent. When both are empty, that is a CRITICAL finding on its own — report it and continue; the loader lens still judges the description text.
+Capture: the SKILL.md path; reference files; bundled scripts and workflow files; persona files the skill dispatches — from the greps **plus a read of any dispatch or companion table in the body**, since a persona cited by bare slug matches no fixed pattern; whether `trigger-evals.json` exists (feeds the probe lane in Step 4 — its absence is itself an IMPORTANT finding at the merge: routing unmeasured, and the documented authoring path builds evaluation queries before prose). Extract the three trigger messages from the description's `Examples:` block, salvaging from `when_to_use` when absent. When both are empty, that is a CRITICAL finding on its own — report it and continue; the loader lens still judges the description text.
 
-**Success criteria:** an inventory block in chat naming every file the audit covers, plus the trigger messages or the CRITICAL no-triggers note.
+The awk loop is the sizing table — lines, words, estimated tokens (words × 1.33), longest line, per file. It rides into the Step 4 Workflow args as `sizing`; a measured number outranks any lens estimate, and the longest-line column is what catches a body that meets the 500-line target by packing rules into multi-hundred-character lines. The `_shared/` listing feeds one director check at the merge: a bundled script that re-implements a shared asset (the picker, the probe runner, the voice registry) is a finding the fenced lenses cannot see.
+
+**Success criteria:** an inventory block in chat naming every file the audit covers, the measured sizing table, plus the trigger messages or the CRITICAL no-triggers note.
 
 ### 3. Director pre-draft
 
@@ -89,7 +93,7 @@ From your own fresh top-to-bottom read, hold two things in chat: (a) a 2–3 sen
 
 In one turn:
 
-- **Lens workflow:** call `Workflow` with `scriptPath: .github/skills/_shared/audit_wf.js` (shared — `/new-skill` runs the same lenses over its drafts) and `args: {skillPath, referenceFiles, personaFiles, triggerMessages}` (absolute paths; empty arrays where the inventory found none). The script fans out six agents. Five are blind lenses — loader, cold-walk, craft, orchestration, ideas — each restricted to the files its prompt names, each returning schema-validated findings that must carry tier, evidence (file:line + quote), consequence, and a proposed fix. The sixth is a research lens that reads only the audited files but searches outward: prior art for the skill's goal (including Anthropic's public skills repo), an ideal-version sketch diffed against the actual, and live Claude Code docs plus Anthropic's public GitHub for unexploited harness capabilities — every idea anchored to a URL or marked vision. The schema does the format enforcement; there is no re-dispatch-for-missing-tiers loop.
+- **Lens workflow:** call `Workflow` with `scriptPath: .github/skills/_shared/audit_wf.js` (shared — `/new-skill` runs the same lenses over its drafts) and `args: {skillPath, referenceFiles, personaFiles, scriptFiles, triggerMessages, sizing}` (absolute paths; empty arrays where the inventory found none; `sizing` is the Step 2 measured table as one string). The script fans out six agents. Five are blind lenses — loader, cold-walk, craft, orchestration, ideas — each restricted to the files its prompt names, each returning schema-validated findings that must carry tier, evidence (file:line + quote), consequence, and a proposed fix. The sixth is a research lens that reads only the audited files but searches outward: prior art for the skill's goal (including Anthropic's public skills repo), an ideal-version sketch diffed against the actual, and live Claude Code docs plus Anthropic's public GitHub for unexploited harness capabilities — every idea anchored to a URL or marked vision. The schema does the format enforcement; there is no re-dispatch-for-missing-tiers loop.
 - **Probe lane (when Step 2 found `trigger-evals.json`):** `Bash(run_in_background: true)`: `python3 .github/skills/_shared/run_trigger_evals.py <skill-dir>/trigger-evals.json --workers 4`. Each probe is a fresh `claude -p` whose loader sees the real sibling registry — a routing measurement to set against the loader lens's judgment.
 
 The Workflow runs in the background and notifies on completion; tell the user both are running and the rough duration (lenses a few minutes; probes similar).
@@ -98,7 +102,11 @@ The Workflow runs in the background and notifies on completion; tell the user bo
 
 ### 5. Merge
 
-- **Tiers:** CRITICAL = goal not derivable, frontmatter routes nothing (judged, or measured: every positive probe fails), Done-when missing, tool-event procedure misfiled as a skill. IMPORTANT = non-discriminating or missing Success criteria, a measured routing failure on any row, a missing AskUserQuestion at a real fork, a question-rule violation, lens-table↔persona drift, hedging/moralizing in directives. MINOR = single tic words, voodoo constants, cosmetic drift. AMBIGUOUS = the lens itself stated two readings.
+- **Tiers:**
+  - CRITICAL — goal not derivable; frontmatter routes nothing (judged, or measured: every positive probe fails); Done-when missing; a tool-event procedure misfiled as a skill.
+  - IMPORTANT — non-discriminating or missing Success criteria; a measured routing failure on any row; the body over either documented budget (500 lines / ~5,000 tokens) or inside the line target only through long lines; a load-bearing rule past the ~5,000-token compaction prefix; a missing `trigger-evals.json`; a bundled script re-implementing a `_shared/` asset (director finding — the fenced lenses cannot see it); a missing AskUserQuestion at a real fork; a question-rule violation; lens-table↔persona drift; hedging/moralizing in directives.
+  - MINOR — single tic words, voodoo constants, cosmetic drift, name-style (gerund-form) misses.
+  - AMBIGUOUS — the lens itself stated two readings.
 - **Precedence:** lens findings outrank director observations; the measured probe table outranks both on routing.
 - **Harness claims:** any finding with `harness_claim: true` (or any you notice resting on documented Claude Code behavior) gets verified before it lands — dispatch `claude-code-guide` with the specific claim; require a doc URL. Confirmed → the finding stands with the URL. Contradicted → the audited skill is fine and the stale rule (in `_shared/audit_wf.js`'s lens prompts) becomes the finding. A claim already verified this session with a URL needs no re-dispatch.
 - **Director comparison:** predictions no lens touched become director follow-ups, labeled as yours and outranked accordingly.
@@ -173,9 +181,10 @@ Print a seed for `/new-skill <slug>`: the preserved goal, triggers, exclusions, 
 ### 9. Post-edit sweep (only when edits landed)
 
 - `description` ≤ 1024 chars; combined with `when_to_use` ≤ 1536 — when frontmatter was touched
+- Body budgets re-measured with the Step 2 awk loop — ≤ 500 lines, under ~5,000 estimated tokens, longest line not ballooned by the edits — when body content was touched
 - AI-tic regex (AGENTS.md § Writing tone) and the abstract-subject probe (`docs/contributing/agent-style-guide.md` § Concrete subject, real verb) against the post-edit body — hits are candidates for a read-aloud, not verdicts
 - Every step still carries a discriminating Success criteria field; Done-when still distinct from the last step
-- Every reference-file link and dispatched-file path still resolves
+- Every reference-file link and dispatched-file path still resolves, and references stay one hop from SKILL.md
 
 Print PASS/FAIL per check; a FAIL gets fixed or recorded as a known concern in the report tail.
 

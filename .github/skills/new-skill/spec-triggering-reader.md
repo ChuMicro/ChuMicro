@@ -18,7 +18,9 @@ For frontmatter rules see [`spec-loader-reader.md`](spec-loader-reader.md).  For
 ### Length
 
 - Target ≤500 lines for the SKILL.md body.  Past that the reading agent skims, and a partial-read with `head` / `offset` misses the back half.
-- When the body wants to grow past 500, factor reference files (one hop deep).  Reference files load on demand from body links.
+- The parallel budget is tokens: keep the body under ~5,000 tokens (≈3,800 words; estimate with `wc -w` × 1.33).  Line count alone is gameable — a body under 500 lines built from multi-hundred-character lines has blown the real budget, and the body's whole token cost recurs every turn once the skill loads.
+- Put load-bearing rules in the first ~5,000 tokens.  Compaction re-attaches only that prefix (see Compaction behavior below), so a rule in the back half of a long body vanishes mid-session.
+- When the body wants to grow past either budget, factor reference files (one hop deep).  Reference files load on demand from body links; each link names what the file contains and when to read it, and a reference file over ~100 lines opens with a table of contents so a partial read still shows its full scope.
 
 ### Section ordering
 
