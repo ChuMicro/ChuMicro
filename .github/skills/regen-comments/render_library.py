@@ -56,6 +56,8 @@ def main():
                       "file you touched. Untouched files ride as suggested.</p>",
         "options": ["suggested", "edit"],
         "default": "suggested",
+        "picked_facet": False,
+        "decided_facet": True,
         "page_width": 1280,
         "expand_on": ["edit"],
         "option_help": OPTION_HELP,

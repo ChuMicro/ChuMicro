@@ -6,7 +6,8 @@ Builds a picker spec from a finished run room and renders it with the shared ren
   1. page-top context sections: an INDEPENDENT plain-English summary (summary.json — written from the
      code, never from the comments), the selection rationale (pick.json — which whole writer pass won
      and why, plus auto-routed symbols), the legibility / tic / ban flags, and the validated ledger;
-  2. one card per symbol, open on load: the original docstring on top, then the candidates side by side
+  2. one card per symbol, open on load: the original docstring in a context box on top, then the
+     candidates side by side
      (the picker's "columns" pick_ui) — the suggested take leftmost and pre-checked, every *differing*
      cached writer pass (runs/run-N.py) after it with comparison chips and a full-symbol expander, four
      or more scrolling horizontally — plus the symbol's ledger facts behind a detail fold and a ⚠
@@ -155,10 +156,6 @@ def _facts_for(qual, ledger):
     return [f for f in ledger if name in f.get("sites", "")]
 
 
-def _doc_pre(doc):
-    return f"<pre>{_esc(doc)}</pre>" if (doc or "").strip() else "<pre><i>(no docstring)</i></pre>"
-
-
 def build_file_entry(rundir, voice, original, namespaced=False):
     """Spec items + page-top context sections + meta for one finished run room.
 
@@ -223,9 +220,7 @@ def build_file_entry(rundir, voice, original, namespaced=False):
         sugg = final_blocks.get(qual, {"doc": fin.get("doc"), "block": ""})
         is_class = qual != "<module>" and not (sugg.get("block") or "").strip() and qual in final_blocks
 
-        # the original docstring sits above the candidate columns, full width, so every candidate
-        # below is read against the same starting point
-        parts = [f"<small><b>ORIGINAL</b></small>{_doc_pre(before.get(qual, {}).get('doc'))}"]
+        parts = []
         if is_class:
             parts.append("<p><small>A class pick applies the class docstring only; methods have "
                          "their own cards.</small></p>")
@@ -261,7 +256,10 @@ def build_file_entry(rundir, voice, original, namespaced=False):
             "title": qual,
             "summary": purpose.get(qual, purpose.get(_short(qual), "")),
             "body_html": "".join(parts),
-            "pick_ui": {"style": "columns", "candidates": candidates,
+            "pick_ui": {"style": "columns",
+                        "context": {"label": "original",
+                                    "text": before.get(qual, {}).get("doc") or ""},
+                        "candidates": candidates,
                         "edit": {"value": "edit",
                                  "label": "edit it myself — replaces the docstring with this exact text",
                                  "seed": sugg.get("doc") or ""}},
@@ -381,6 +379,8 @@ def main():
                       "chat.</p>",
         "options": ["suggested", "edit"],
         "default": "suggested",
+        "picked_facet": False,
+        "decided_facet": True,
         "page_width": 1280,
         "expand_on": ["edit"],
         "option_help": OPTION_HELP,
