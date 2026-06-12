@@ -709,7 +709,7 @@ class HttpClient:
     # Runner contract
     # ------------------------------------------------------------------
 
-    def check(self, now_ms):  # noqa: ARG002 — runner contract uses now_ms
+    def check(self, now_ms):  # noqa: ARG002 - runner contract uses now_ms
         """Return ``True`` if there's outbound bytes to send or readable bytes."""
         return self._state != _RequestState.IDLE
 
@@ -928,7 +928,7 @@ class HttpClient:
             url=self.url,
             oversized_dropped=False,
         )
-        self._handle._set_response(response)  # noqa: SLF001 — internal handoff
+        self._handle._set_response(response)  # noqa: SLF001 - internal handoff
         self._reset_socket()
 
     def _follow_redirect(self, status_code, location):
@@ -986,7 +986,7 @@ class HttpClient:
                 return
             # DISCONNECT — fall through to fail path.
         if self._handle is not None:
-            self._handle._set_error(error)  # noqa: SLF001 — internal handoff
+            self._handle._set_error(error)  # noqa: SLF001 - internal handoff
         self._reset_socket()
 
     def _complete_oversized_drop(self):
@@ -1000,7 +1000,7 @@ class HttpClient:
             url=self.url,
             oversized_dropped=True,
         )
-        self._handle._set_response(response)  # noqa: SLF001 — internal handoff
+        self._handle._set_response(response)  # noqa: SLF001 - internal handoff
         self._reset_socket()
 
     def _close_socket_only(self):
@@ -1013,7 +1013,7 @@ class HttpClient:
         if self._socket is not None:
             try:
                 self._socket.close()
-            except OSError:  # pragma: no cover — defensive
+            except OSError:  # pragma: no cover - defensive
                 pass
         self._socket = None
         self._tx_buffer = b""
@@ -1043,4 +1043,4 @@ class HttpClient:
         self._deadline_ticks = None
         self._redirects_remaining = 0
         if finished_handle is not None:
-            finished_handle._invoke_done()  # noqa: SLF001 — internal handoff
+            finished_handle._invoke_done()  # noqa: SLF001 - internal handoff
