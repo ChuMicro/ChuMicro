@@ -72,7 +72,10 @@ def build_branch_item(room, finding):
     if unconfirmed:
         tag = "problem unconfirmed" if not verdict.get("real", True) else "fix needs review"
         item["warning"] = f"Validator: {tag}. {verdict.get('note', '')}".strip()
-    item.update(patch_fields(room["patch_map"].get(finding_id)))
+    patch = room["patch_map"].get(finding_id)
+    if patch and (patch.get("repro") or "").strip():
+        item["meta"] += " · executable repro (apply runs it red→green)"
+    item.update(patch_fields(patch))
     return item
 
 

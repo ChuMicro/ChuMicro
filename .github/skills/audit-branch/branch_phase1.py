@@ -41,7 +41,7 @@ SKILL = os.path.dirname(os.path.abspath(__file__))
 # two front doors); this skill stages differently but runs the same room machinery
 PIPELINE = os.path.join(os.path.dirname(SKILL), "audit-code")
 sys.path.insert(0, PIPELINE)
-from audit_phase1 import claude_p_workflow, find_tests, voice_persona  # noqa: E402
+from audit_phase1 import claude_p_workflow, find_tests, voice_persona, write_repros  # noqa: E402
 from preflight import require_claude  # noqa: E402
 from strip import strip_code  # noqa: E402
 
@@ -373,10 +373,12 @@ def main():
             out[finding.get(key)] = out.get(finding.get(key), 0) + 1
         return out
 
+    n_repros = write_repros(rundir, patches)
     phase1 = {"target": label, "mode": mode, "rundir": rundir, "voice": voice or "plain",
               "converged": converged, "n_findings": len(findings),
               "n_written": len(written.get("findings", [])),
               "n_patches": len(patches.get("patches", [])),
+              "n_repros": n_repros,
               "by_angle": _count("angle"), "by_severity": _count("severity"),
               "files": [e["path"] for e in manifest_files], "tests_found": test_paths,
               "n_symbols": len(summary.get("symbols", [])),
@@ -396,7 +398,8 @@ def main():
           + ("" if test_paths else "  (none -> coverage lens treats the changes as unverified)"))
     print(f"  findings: {len(findings)}   by angle: {phase1['by_angle']}   "
           f"by severity: {phase1['by_severity']}")
-    print(f"  prose written: {phase1['n_written']}   patches generated: {phase1['n_patches']}")
+    print(f"  prose written: {phase1['n_written']}   patches generated: {phase1['n_patches']}   "
+          f"executable repros: {n_repros}")
     print(f"  validator: {'converged clean' if converged else 'left some findings unconfirmed (report flags them)'}")
     print("  Next (in-session): render_branch.py to build + open the HTML, then the selection/apply loop.")
 

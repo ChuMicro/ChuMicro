@@ -12,6 +12,7 @@ Usage:
   apply_fix.py plan <rundir> <id[,id...]>       # print the selected findings as an edit spec (text + JSON)
   apply_fix.py runtests <target.py> [--tests <p[,p...]>]   # run pytest on the file's tests; exit = pytest's
 """
+import importlib.util
 import json
 import os
 import subprocess
@@ -20,6 +21,8 @@ import sys
 SKILL = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, SKILL)
 from audit_phase1 import find_tests, _find_lib_root  # noqa: E402
+
+GATE_FILE = os.path.join(SKILL, os.pardir, "_shared", "apply_gate.py")
 
 
 def _parse_ids(arg):
@@ -73,13 +76,43 @@ def cmd_plan(rundir, ids_arg):
     return 0
 
 
+def repo_gate(target):
+    """Run the repo-specific apply gate when one is defined; return its exit code (0 = pass).
+
+    ../_shared/apply_gate.py is the porting seam: its gate_command(path) maps the edited file to
+    an extra gate command plus a reason (this repo: the package's cross-runtime suite for
+    libraries/ and support/ files), or None when the universal pytest gate suffices. No seam
+    file at all — a repo these skills were ported to without one — means no extra gate."""
+    if not os.path.exists(GATE_FILE):
+        return 0
+    spec = importlib.util.spec_from_file_location("apply_gate", GATE_FILE)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    probe = subprocess.run(["git", "rev-parse", "--show-toplevel"],
+                           cwd=os.path.dirname(os.path.abspath(target)) or ".",
+                           capture_output=True, text=True)
+    repo_root = probe.stdout.strip()
+    rel = os.path.relpath(os.path.abspath(target), repo_root) if repo_root else target
+    gate = module.gate_command(rel)
+    if not gate:
+        return 0
+    argv, reason = gate
+    print(f"=== REPO GATE: {' '.join(argv)} ===")
+    print(f"  ({reason})")
+    r = subprocess.run(argv, cwd=repo_root or None, capture_output=True, text=True)
+    tail = "\n".join(((r.stdout or "") + (r.stderr or "")).splitlines()[-15:])
+    print(tail)
+    print(f"=== repo gate exit {r.returncode} ({'PASS' if r.returncode == 0 else 'FAIL'}) ===")
+    return r.returncode
+
+
 def cmd_runtests(target, override=None):
     paths = [p.strip() for p in override.split(",")] if override else find_tests(target)
     paths = [p for p in paths if p and os.path.exists(p)]
     if not paths:
         print(f"=== RUNTESTS: no test files found for {os.path.basename(target)} ===")
         print("  (a coverage fix may need you to ADD a test first; re-run after writing it.)")
-        return 0
+        return repo_gate(target)
     root = _find_lib_root(target)
     print(f"=== RUNTESTS: {len(paths)} file(s), cwd={root} ===")
     for p in paths:
@@ -90,7 +123,9 @@ def cmd_runtests(target, override=None):
     tail = "\n".join(out.splitlines()[-25:])
     print(tail)
     print(f"=== pytest exit {r.returncode} ({'PASS' if r.returncode == 0 else 'FAIL'}) ===")
-    return r.returncode
+    if r.returncode != 0:
+        return r.returncode
+    return repo_gate(target)
 
 
 def main():

@@ -34,6 +34,7 @@ export const meta = {
 }
 
 const RUNDIR = '__RUNDIR__'
+const TARGET = '__TARGET__'   // the target's REAL path in the project -- a string for deriving import paths, not a readable file
 const STRIPPED = RUNDIR + '/stripped.py'
 const COMMENTED = RUNDIR + '/commented.py'
 const TESTS = RUNDIR + '/tests.py'
@@ -330,8 +331,9 @@ const PATCH_OUT = {
       kind: { type: 'string', enum: ['replace', 'add', 'manual'] },
       before: { type: 'string' }, after: { type: 'string' },
       location_hint: { type: 'string' }, note: { type: 'string' },
+      repro: { type: 'string' },
     },
-    required: ['id', 'kind', 'before', 'after', 'location_hint', 'note'] } } },
+    required: ['id', 'kind', 'before', 'after', 'location_hint', 'note', 'repro'] } } },
   required: ['patches'],
 }
 const patchPrompt =
@@ -353,6 +355,14 @@ const patchPrompt =
   + 'beyond one symbol, edits in several methods at once) or genuinely needs a human judgment call -- never '
   + 'merely because the edit is large. `before` = "", `after` = "", and `note` = clear guidance on what to '
   + 'do by hand, naming each region it touches.\n'
+  + '- repro: for a trap or hazard finding whose defect a RUNNABLE test can demonstrate, also fill `repro` '
+  + 'with a MINIMAL self-contained pytest file body -- imports included, importing the module under test by '
+  + 'its REAL import path (the real file lives at ' + TARGET + '; derive the dotted import from its '
+  + 'src-layout path -- the path is a string to derive from, not a file you can read) -- that FAILS on the '
+  + 'current code and PASSES once the fix is applied. The orchestrator runs it in-session before the edit '
+  + '(red demonstrates the defect) and after (green proves the fix). No fixtures beyond stdlib + the package '
+  + 'under test. Set repro to "" for every other finding (a coverage finding is already a test; drift and '
+  + 'clarity have nothing to execute).\n'
   + 'Rules: emit EXACTLY ONE patch per finding id, no duplicates, no extra ids. Each patch addresses ONLY '
   + 'its finding. If two findings would touch overlapping lines, still emit '
   + 'each independently against the ORIGINAL text and say so in `note` ("overlaps #N"). For a coverage patch, '

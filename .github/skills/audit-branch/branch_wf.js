@@ -397,8 +397,9 @@ const PATCH_OUT = {
       kind: { type: 'string', enum: ['replace', 'add', 'manual'] },
       before: { type: 'string' }, after: { type: 'string' },
       location_hint: { type: 'string' }, note: { type: 'string' },
+      repro: { type: 'string' },
     },
-    required: ['id', 'file', 'kind', 'before', 'after', 'location_hint', 'note'] } } },
+    required: ['id', 'file', 'kind', 'before', 'after', 'location_hint', 'note', 'repro'] } } },
   required: ['patches'],
 }
 const patchPrompt =
@@ -419,6 +420,13 @@ const patchPrompt =
   + '- kind "manual": ONLY when the change spans multiple disjoint regions, lives in a file staged only '
   + 'as a stripped copy, or genuinely needs a human judgment call -- never merely because the edit is '
   + 'large. `before` = "", `after` = "", and `note` = clear guidance naming each region it touches.\n'
+  + '- repro: for a trap, usage, or integration finding whose defect a RUNNABLE test can demonstrate, also '
+  + 'fill `repro` with a MINIMAL self-contained pytest file body -- imports included, importing the module '
+  + 'under test by its real import path derived from the finding\'s repo-relative `file` (src-layout: the '
+  + 'dotted path after `src/`) -- that FAILS at head and PASSES once the fix is applied. The orchestrator '
+  + 'runs it in-session before the edit (red demonstrates the defect) and after (green proves the fix). No '
+  + 'fixtures beyond stdlib + the package under test. Set repro to "" for every other finding (a coverage '
+  + 'finding is already a test; intent and craft have nothing to execute).\n'
   + 'Rules: emit EXACTLY ONE patch per finding id, no duplicates, no extra ids. Each patch addresses ONLY '
   + 'its finding. If two findings would touch overlapping lines, emit each independently against the '
   + 'ORIGINAL text and say so in `note` ("overlaps #N"). For a coverage patch, `after` is the actual test '
