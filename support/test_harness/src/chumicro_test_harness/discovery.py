@@ -172,8 +172,28 @@ def _exec_as_namespace(file_path, name="__main__", package="", chunk_boundaries=
     return result
 
 
+def _parent_dir(file_path):
+    """Return the directory part of *file_path*, or ``"."`` if it has none.
+
+    Splits on the last ``/`` instead of using ``os.path.dirname`` because
+    some CircuitPython builds omit ``os.path`` (see module docstring).
+    A path with no slash (a bare filename) yields ``"."``.
+
+    Args:
+        file_path: Path to a file.
+    """
+    head, _, _ = file_path.rpartition("/")
+    return head if head else "."
+
+
 def run_one_file(test_file, root_dir="."):
     """Set up sys.path, exec the file, run its tests, return 0/1 exit code.
+
+    Inserts the test file's own directory on ``sys.path`` before exec so
+    a ``from _socket_stubs import ...`` line — pulling in an
+    underscore-prefixed sibling helper module that lives next to the
+    test file — resolves on the host and unix-port runs (on a device the
+    sibling is staged into the import root instead).
 
     Returns 1 for ImportError during load (with a FAIL line whose
     message names the runtime markers the file needs to declare), for
@@ -181,6 +201,9 @@ def run_one_file(test_file, root_dir="."):
     inside the file. Returns 0 only when every test passes.
     """
     setup_source_paths(root_dir)
+    test_dir = _parent_dir(test_file)
+    if test_dir not in sys.path:
+        sys.path.insert(0, test_dir)
     print(f"== {test_file} ==")
     try:
         test_module = _exec_as_namespace(test_file)

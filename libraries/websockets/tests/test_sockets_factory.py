@@ -5,39 +5,15 @@ Verifies the helper wiring: the factory lives in its own submodule,
 TLS / non-TLS to the right :mod:`chumicro_sockets` connector with
 the right arguments.
 
-Cross-runtime: pure-Python.  Module-level symbols are swapped manually
-via ``setattr`` / ``try`` / ``finally`` (instead of
+Cross-runtime: pure-Python.  Module-level symbols are swapped via
+``SwapAttribute`` from ``chumicro_test_harness.patching`` (instead of
 ``unittest.mock.patch``, which is CPython-only) so the tests run on
 the MP / CP unix-ports too.
 """
 
 import chumicro_sockets
+from chumicro_test_harness.patching import SwapAttribute
 from chumicro_websockets.sockets_factory import chumicro_sockets_connector_factory
-
-
-class _SwapAttribute:
-    """Context manager — swap ``module.name`` with a stand-in, restore on exit."""
-
-    def __init__(self, module: object, name: str, replacement: object) -> None:
-        self.module = module
-        self.name = name
-        self.replacement = replacement
-        self._original: object = None
-        self._had_attr: bool = False
-
-    def __enter__(self) -> "_SwapAttribute":
-        self._had_attr = hasattr(self.module, self.name)
-        if self._had_attr:
-            self._original = getattr(self.module, self.name)
-        setattr(self.module, self.name, self.replacement)
-        return self
-
-    def __exit__(self, exc_type, exc_value, exc_traceback) -> bool:
-        if self._had_attr:
-            setattr(self.module, self.name, self._original)
-        else:
-            delattr(self.module, self.name)
-        return False
 
 
 class TestSocketsFactory:
@@ -58,8 +34,8 @@ class TestSocketsFactory:
             return "tls-connector"
 
         factory = chumicro_sockets_connector_factory(radio="radio-handle")
-        with _SwapAttribute(chumicro_sockets, "tcp_client_connector", fake_tcp), \
-                _SwapAttribute(chumicro_sockets, "tls_client_connector", fake_tls):
+        with SwapAttribute(chumicro_sockets, "tcp_client_connector", fake_tcp), \
+                SwapAttribute(chumicro_sockets, "tls_client_connector", fake_tls):
             result = factory("example.com", 80, False)
 
         assert result == "tcp-connector"
@@ -80,8 +56,8 @@ class TestSocketsFactory:
 
         context = object()
         factory = chumicro_sockets_connector_factory(radio="radio", ssl_context=context)
-        with _SwapAttribute(chumicro_sockets, "tcp_client_connector", fake_tcp), \
-                _SwapAttribute(chumicro_sockets, "tls_client_connector", fake_tls):
+        with SwapAttribute(chumicro_sockets, "tcp_client_connector", fake_tcp), \
+                SwapAttribute(chumicro_sockets, "tls_client_connector", fake_tls):
             result = factory("example.com", 443, True)
 
         assert result == "tls-connector"
@@ -99,8 +75,8 @@ class TestSocketsFactory:
             return "tcp-connector"
 
         factory = chumicro_sockets_connector_factory()
-        with _SwapAttribute(chumicro_sockets, "tls_client_connector", fake_tls), \
-                _SwapAttribute(chumicro_sockets, "tcp_client_connector", fake_tcp):
+        with SwapAttribute(chumicro_sockets, "tls_client_connector", fake_tls), \
+                SwapAttribute(chumicro_sockets, "tcp_client_connector", fake_tcp):
             factory("h", 443, True)
 
         assert tls_calls == [("h", 443, None, None)]

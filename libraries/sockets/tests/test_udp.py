@@ -1,22 +1,19 @@
 """Cross-runtime tests for chumicro_sockets UDP support.
 
-Two layers exercised here:
+:class:`FakeUDPSocket` — the in-memory protocol-conformance fake.
+Every assertion here runs on CPython, MicroPython unix-port,
+CircuitPython unix-port, and real boards.
 
-* :class:`FakeUDPSocket` — the in-memory protocol-conformance fake.
-  Every assertion runs on CPython, MicroPython unix-port, and
-  CircuitPython unix-port.
-* Factory routing — confirm ``udp_socket`` dispatches to the right
-  adapter when ``_runtime_name`` is swapped.  Uses a tiny manual
-  ``_SwapAttribute`` context manager (mirrors the same pattern in
-  ``libraries/websockets/tests/test_sockets_factory.py``) instead of
-  ``unittest.mock.patch``, which doesn't exist on MP / CP.
-
-The CPython-loopback tests (real ``socket.socket()``, ``getsockopt``,
-``SO_BROADCAST``) live in ``test_udp_pytest.py`` because they depend
-on stdlib ``socket`` directly — CP unix-port doesn't ship it (real
-CP boards use ``socketpool`` instead) and MP unix-port has it but
-the cross-runtime contract is already covered by ``FakeUDPSocket``
-plus the on-device functional tests.
+Factory-routing tests — which swap ``chumicro_sockets._adapter`` and
+assert ``udp_socket``'s dispatch target — moved to the host-only
+``test_udp_routing.py``: a named adapter only stages on the matching
+runtime, so those can't run on real silicon.  The CPython-loopback
+tests (real ``socket.socket()``, ``getsockopt``, ``SO_BROADCAST``)
+live in ``test_udp_pytest.py`` because they depend on stdlib ``socket``
+directly — CP unix-port doesn't ship it (real CP boards use
+``socketpool`` instead) and MP unix-port has it but the cross-runtime
+contract is already covered by ``FakeUDPSocket`` plus the on-device
+functional tests.
 
 Cross-runtime files (no ``_pytest`` suffix) must not import pytest /
 unittest / etc., and run unmodified under CPython + MicroPython +
@@ -24,107 +21,10 @@ CircuitPython unix-ports via the ``chumicro_test_harness`` runner.
 """
 
 import errno
-import sys
 
-
-class _SocketpoolStub:
-    """Stand-in for the ``socketpool`` firmware module on host runtimes.
-
-    UDP routing tests below patch the runtime to ``"circuitpython"``,
-    triggering a lazy ``from chumicro_sockets._adapters import cp`` —
-    that adapter imports ``socketpool`` at module top, which fails
-    on hosts without it.  The cpython adapter does the same for
-    ``socket`` / ``ssl`` / ``select``.  These stubs only need to
-    satisfy the module-load imports; routing tests swap the adapter
-    module's attribute (``udp_socket``) directly.  Plain classes
-    instead of ``types.ModuleType`` because MP / CP unix-ports omit
-    ``types``.
-    """
-
-    AF_INET = 2
-    SOCK_STREAM = 1
-    SOCK_DGRAM = 2
-    SOL_SOCKET = 0
-    SO_REUSEADDR = 4
-    SO_BROADCAST = 6
-
-
-class _BareStub:
-    """Empty placeholder for ``sys.modules[<name>]`` entries the
-    cpython adapter needs at module-load time on host runtimes."""
-
-
-sys.modules.setdefault("socketpool", _SocketpoolStub())
-sys.modules.setdefault("socket", _BareStub())
-sys.modules.setdefault("ssl", _BareStub())
-sys.modules.setdefault("select", _BareStub())
-
-
-import chumicro_sockets  # noqa: E402 — load-order dependency on the stubs above
-from chumicro_sockets import udp_socket  # noqa: E402
-from chumicro_sockets.testing import FakeUDPSocket  # noqa: E402
-from chumicro_test_harness.assertions import raises  # noqa: E402
-
-
-class _SwapAttribute:
-    """Context manager — swap ``module.name`` with a stand-in, restore on exit.
-
-    Cross-runtime stand-in for ``unittest.mock.patch.object``: ``unittest``
-    isn't available on MicroPython / CircuitPython unix-ports.
-    """
-
-    def __init__(self, module: object, name: str, replacement: object) -> None:
-        self.module = module
-        self.name = name
-        self.replacement = replacement
-        self._original: object = None
-        self._had_attr: bool = False
-
-    def __enter__(self) -> "_SwapAttribute":
-        self._had_attr = hasattr(self.module, self.name)
-        if self._had_attr:
-            self._original = getattr(self.module, self.name)
-        setattr(self.module, self.name, self.replacement)
-        return self
-
-    def __exit__(self, exc_type, exc_value, exc_traceback) -> bool:
-        if self._had_attr:
-            setattr(self.module, self.name, self._original)
-        else:
-            delattr(self.module, self.name)
-        return False
-
-
-class _SwapItem:
-    """Context manager — swap ``mapping[key]`` with a stand-in, restore on exit.
-
-    Cross-runtime stand-in for ``unittest.mock.patch.dict``.  Used here
-    to stub ``sys.modules['<dotted-path>']`` so an ``import`` that
-    would otherwise fail on a runtime missing the underlying module
-    instead picks up our fake.
-    """
-
-    def __init__(self, mapping: dict, key: str, replacement: object) -> None:
-        self.mapping = mapping
-        self.key = key
-        self.replacement = replacement
-        self._original: object = None
-        self._had_key: bool = False
-
-    def __enter__(self) -> "_SwapItem":
-        self._had_key = self.key in self.mapping
-        if self._had_key:
-            self._original = self.mapping[self.key]
-        self.mapping[self.key] = self.replacement
-        return self
-
-    def __exit__(self, exc_type, exc_value, exc_traceback) -> bool:
-        if self._had_key:
-            self.mapping[self.key] = self._original
-        else:
-            del self.mapping[self.key]
-        return False
-
+import chumicro_sockets
+from chumicro_sockets.testing import FakeUDPSocket
+from chumicro_test_harness.assertions import raises
 
 # ---------------------------------------------------------------------------
 # Public-surface checks
@@ -253,97 +153,3 @@ class TestFakeUDPSocket:
     def test_getsockname_reports_bind_address(self) -> None:
         sock = FakeUDPSocket(bind_host="192.168.1.10", bind_port=1234)
         assert sock.getsockname() == ("192.168.1.10", 1234)
-
-
-# ---------------------------------------------------------------------------
-# Factory routing — confirm udp_socket dispatches by runtime
-# ---------------------------------------------------------------------------
-
-
-class TestUDPFactoryRouting:
-    """Verify ``udp_socket`` picks the right adapter via ``_runtime_name``.
-
-    Manual ``_SwapAttribute`` context manager replaces
-    ``unittest.mock.patch`` so the tests run on MP / CP unix-ports too.
-    The CP / MP adapter modules might not be importable on the host
-    (the CP adapter does ``import socketpool`` at call time; the MP
-    adapter does ``import socket``), so we install a synthetic
-    ``udp_socket`` attribute on the module before the call.
-    """
-
-    def test_routes_to_circuitpython(self) -> None:
-        sentinel = object()
-        calls: list = []
-
-        def fake_cp_udp_socket(**kwargs):
-            calls.append(kwargs)
-            return sentinel
-
-        # Ensure the cp adapter module is importable before we patch on it.
-        from chumicro_sockets._adapters import cp as cp_adapter
-
-        with _SwapAttribute(chumicro_sockets, "_adapter", cp_adapter), \
-                _SwapAttribute(cp_adapter, "udp_socket", fake_cp_udp_socket):
-            result = udp_socket(
-                "0.0.0.0",
-                1234,
-                radio="radio-stub",
-                broadcast=True,
-            )
-
-        assert result is sentinel
-        assert calls == [{
-            "bind_host": "0.0.0.0",
-            "bind_port": 1234,
-            "radio": "radio-stub",
-            "broadcast": True,
-        }]
-
-    def test_routes_to_micropython(self) -> None:
-        sentinel = object()
-        calls: list = []
-
-        def fake_mp_udp_socket(**kwargs):
-            calls.append(kwargs)
-            return sentinel
-
-        # Build a bare module-shaped object exposing the one attribute
-        # the package factory reaches for.  ``types.ModuleType`` doesn't
-        # exist on MP / CP unix-ports — use a plain class instead.
-        class _FakeModule:
-            udp_socket = staticmethod(fake_mp_udp_socket)
-
-        fake_mp_module = _FakeModule()
-
-        with _SwapAttribute(chumicro_sockets, "_adapter", fake_mp_module):
-            result = udp_socket("1.2.3.4", 9, broadcast=True)
-
-        assert result is sentinel
-        assert calls == [{
-            "bind_host": "1.2.3.4",
-            "bind_port": 9,
-            "radio": None,
-            "broadcast": True,
-        }]
-
-    def test_routes_to_cpython_for_unknown_runtime(self) -> None:
-        sentinel = object()
-        calls: list = []
-
-        def fake_cpython_udp_socket(**kwargs):
-            calls.append(kwargs)
-            return sentinel
-
-        from chumicro_sockets._adapters import cpython as cpython_adapter
-
-        with _SwapAttribute(chumicro_sockets, "_adapter", cpython_adapter), \
-                _SwapAttribute(cpython_adapter, "udp_socket", fake_cpython_udp_socket):
-            result = udp_socket()
-
-        assert result is sentinel
-        assert calls == [{
-            "bind_host": "0.0.0.0",
-            "bind_port": 0,
-            "radio": None,
-            "broadcast": False,
-        }]
