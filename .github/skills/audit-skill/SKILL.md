@@ -63,7 +63,7 @@ The report and every gate after it speak in a voice; the scans never do.
 - Read the shared registry (`.github/skills/_shared/voices/voices.json`) and print a compact numbered menu in chat: one voice per line in registry order, number + key + its one-line persona, `1. plain` first marked **(default, voiceless — reads cleanest)**. Offer any voice's cached preview from the registry's `previews` on request.
 - Fire one `AskUserQuestion`. In the no-arg form the which-skill question rides first and the voice question second; with a resolved target the voice question is the call's only question.
 - The voice question: header `Voice`, two options — *"Plain (default, recommended)"* and *"Numbered voice — type the menu number under Other"*. A bare number typed under Other maps to the menu.
-- For a named voice, hold its persona line and check whether `voice_samples/<key>.md` exists (the register sample the speaker injects; absent is fine — the voice runs persona-only).
+- For a named voice, hold its persona line and load its register excerpt: `python3 .github/skills/_shared/voices/voice_sample.py <key>` prints the real-prose sample (excerpt only, never attribution); empty output is fine — the voice runs persona-only.
 
 **Success criteria:** the menu printed, the user's pick echoed, one voice key (+ persona and sample path when named) held for Step 5b.
 
@@ -115,7 +115,7 @@ The Workflow runs in the background and notifies on completion; tell the user bo
 
 Lens wording is shorthand by a reader steeped in the audited file ("invariant 2 contradicts its charter") — decidable to its author, gibberish to the user. Nothing user-facing ships in that register, the plain voice included.
 
-- Call `Workflow` with `scriptPath: .github/skills/_shared/speak_wf.js` and `args: {ledgerPath, ids, voice, persona, samplePath}` — every item id from the ledger; persona = the registry line (empty for plain); samplePath only when the sample file exists.
+- Call `Workflow` with `scriptPath: .github/skills/_shared/speak_wf.js` and `args: {ledgerPath, ids, voice, persona, sample}` — every item id from the ledger; persona = the registry line (empty for plain); sample = the Step 1b excerpt text, injected inline (never a path).
 - The speaker reframes and never re-grounds: per item it returns a rewritten title, summary, why, and fix built only from that entry's facts, each card readable alone by someone who has never opened the audited skill, exact replacement text and commands passed through character-for-character. It also returns the page `intro_html`, the `option_help` legend, and the Step 6 mode-gate wording.
 - Save the workflow's return to `<report-dir>/spoken.json`; `python3 .github/skills/_shared/splice_spoken.py <report-dir>` then writes `spec.json` — speaker strings over each card's title / summary / why / fix, the speaker's `intro_html` and `option_help` onto the page, everything else verbatim from the ledger.
 - An empty speaker string never overwrites (a misbehaving speaker cannot erase a fact), and an id the script reports `unrendered` keeps ledger wording with a `warning` naming that.
