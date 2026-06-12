@@ -120,12 +120,37 @@ class TestFakeRunnerSurface:
         assert connector.io_wants_read is True
         assert connector.io_wants_write is True
 
-    def test_io_socket_none_in_terminal_states(self) -> None:
-        connector = FakeSocketConnector(actions=["dns_ok", "tcp_ok"])
+    def test_io_socket_is_live_socket_in_ready(self) -> None:
+        # At ``ready`` the connector keeps its socket live, so the
+        # registrable pollable is that socket — matching the real
+        # connector, whose consumers read ``connector.socket`` at
+        # promotion.
+        target = FakeSocket()
+        connector = FakeSocketConnector(
+            actions=["dns_ok", "tcp_ok"], socket=target,
+        )
         connector.tick(0)
         connector.tick(0)
         assert connector.state == STATE_READY
+        assert connector.io_socket is target
+
+    def test_io_socket_none_in_failed(self) -> None:
+        # ``fail:`` clears the socket, so the pollable goes ``None`` —
+        # the runner does not wake on a dead handle.
+        connector = FakeSocketConnector(actions=["fail:dns lookup failed"])
+        connector.tick(0)
+        assert connector.state == STATE_FAILED
         assert connector.io_socket is None
+
+    def test_io_socket_live_during_connect_phases(self) -> None:
+        # The socket is built at ``awaiting_tcp`` entry and the pollable
+        # tracks it through the connect, so the runner can park on the
+        # in-flight handle.
+        connector = FakeSocketConnector(actions=["dns_ok"])
+        assert connector.io_socket is None  # awaiting_dns, no socket yet
+        connector.tick(0)
+        assert connector.state == STATE_AWAITING_TCP
+        assert connector.io_socket is not None
 
     def test_handle_aliases_tick(self) -> None:
         # ``runner.add(connector)`` calls .handle(); make sure that
@@ -144,6 +169,8 @@ class TestFakeRunnerSurface:
         connector.cancel()
         assert connector.state == STATE_FAILED
         assert connector.last_error is not None
+        assert connector.socket is None
+        assert connector.io_socket is None
 
     def test_cancel_is_idempotent_in_terminal(self) -> None:
         connector = FakeSocketConnector(actions=["dns_ok", "tcp_ok"])

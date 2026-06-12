@@ -320,8 +320,13 @@ class TestRunnerReactorContract:
         assert client.io_socket is None
 
     def test_io_socket_returns_socket_while_connecting(self):
-        client, socket, _clock, _ = _make_client()
+        client, socket, clock, _ = _make_client()
         client.connect("ws://example.com/")
+        # At ``awaiting_dns`` the connector has not built its socket, so
+        # the pollable is ``None``; one ``handle`` drives ``dns_ok`` and
+        # the connector's socket goes live.
+        assert client.io_socket is None
+        client.handle(clock.ticks_ms())
         # FakeConnection has no ``_sock`` wrapper, so the property
         # returns it directly.
         assert client.io_socket is socket
