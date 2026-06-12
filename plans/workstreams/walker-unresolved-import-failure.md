@@ -1,6 +1,8 @@
 # Workstream: Deploy walker fails on unresolved imports
 
-Status: **proposed.** Surfaced 2026-05-12 while cleaning up downstream eager imports of `chumicro_sockets` / `chumicro_timing` / `chumicro_config`. Decision 0062's bench-validation table reported "12 files, zero `chumicro_sockets/*`" for the post-skip deploy, but that result came partly from the walker silently dropping unresolvable imports — not from the per-library code actually being free of those imports. With the cleanup landing in a sibling session, the silent-skip behavior becomes the only remaining failure mode that ships an `ImportError` at boot.
+Status: **shipped** (walker change). Surfaced 2026-05-12 while cleaning up downstream eager imports of `chumicro_sockets` / `chumicro_timing` / `chumicro_config`. Decision 0062's bench-validation table reported "12 files, zero `chumicro_sockets/*`" for the post-skip deploy, but that result came partly from the walker silently dropping unresolvable imports — not from the per-library code actually being free of those imports. With the cleanup landing in a sibling session, the silent-skip behavior becomes the only remaining failure mode that ships an `ImportError` at boot.
+
+Status note: the walker now refuses unresolved imports at deploy time (see Validation history). The `## Corrective ADR work` follow-ups below stay open — they depend on the sibling import-cleanup session landing and on editing `plans/decisions/0062`, both outside this change.
 
 Trigger: User-confirmed concern that "this should be a reported failure before it turns into a runtime crash."
 
@@ -46,3 +48,7 @@ Decision 0062's `## Bench validation` section currently reports the post-skip 12
 ## Sizing
 
 ~50-80 LOC walker change + the allowlist constant + 4 new fixtures + ~6 new tests. Half a session of focused work; doable in one sitting once the design questions above are picked.
+
+## Validation history
+
+- 2026-06-12: Walker refusal shipped. New `chumicro_deploy/import_allowlist.py` holds `DEVICE_BUILTIN_MODULES` (union of MicroPython v1.26.0 + CircuitPython 10.2.0 built-ins, derived from the `.tools/` clones). `ImportGraphSource` now collects every required unresolved import not on the allowlist and raises `UnresolvedImportError` from `__init__` (collect-all-then-fail), naming each importing file + module; `unresolved_imports()` accessor added. New `DeployFailureKind.UNRESOLVED_IMPORT` + recovery plan + classifier pattern wire the refusal into the recovery taxonomy. `try/except ImportError`-guarded imports and speculative `from x import name` alias probes are exempt (guarded imports detected structurally, since `ast.walk` flattens the `Try` node). Silent-skip docstring rewritten to the new contract. Tests: `test_import_allowlist.py` (5) + 13 new `test_sources.py` cases + 2 `test_recovery.py` cases. Deploy suite 1005 green via `run.py test --libraries deploy --coverage-threshold 94` (TOTAL 95%); workspace suite 901 green (consumers unaffected); examples green. VERSION 0.31.2 -> 0.32.0 (new public API: exception, method, enum member, module). Open: the `## Corrective ADR work` 0062 bench rerun (contingent on the sibling import-cleanup session).

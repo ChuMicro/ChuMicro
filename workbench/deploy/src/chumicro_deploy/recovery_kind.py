@@ -31,6 +31,7 @@ class DeployFailureKind(Enum):
     INSUFFICIENT_MEMORY = "insufficient_memory"
     TRACEBACK_RETURNED = "traceback_returned"
     CONFIGURATION_ERROR = "configuration_error"
+    UNRESOLVED_IMPORT = "unresolved_import"
     UNKNOWN = "unknown"
 
 

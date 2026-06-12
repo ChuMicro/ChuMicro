@@ -20,6 +20,7 @@ import ast
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
+from .import_allowlist import is_device_builtin
 from .protocol import validate_entrypoint_in_files
 from .runtime_marker import file_targets_runtime, is_test_support_module
 from .skip_factories import (
@@ -27,6 +28,48 @@ from .skip_factories import (
     read_skip_factories_marker,
     resolve_skip_targets,
 )
+
+
+class UnresolvedImportError(Exception):
+    """Raised when an import walk reaches a module that ships nowhere.
+
+    :class:`ImportGraphSource` refuses the deploy at construction time when an
+    ``import`` in the bundle resolves to no file under any search path and the
+    module name is not a known device-runtime built-in (see
+    :data:`chumicro_deploy.import_allowlist.DEVICE_BUILTIN_MODULES`).  Such an
+    import would ship silently and raise :exc:`ImportError` from the device
+    runtime at first boot; refusing here turns a boot-time crash into a
+    deploy-time error that names the importing file and the missing module.
+
+    The message leads with ``"Deploy refused: unresolved import"`` so
+    :func:`chumicro_deploy.recovery.classify_deploy_failure` routes it to
+    :attr:`~chumicro_deploy.recovery_kind.DeployFailureKind.UNRESOLVED_IMPORT`
+    without coupling the classifier to this subclass.
+
+    Attributes:
+        unresolved: Every ``(importing_file, module_name)`` pair the walk
+            collected before refusing.  Collect-all-then-fail, so a single
+            deploy attempt surfaces every missing module at once.
+    """
+
+    def __init__(self, unresolved: list[tuple[Path, str]]) -> None:
+        self.unresolved = list(unresolved)
+        lines = [
+            f"  {importing_file} imports {module_name!r} — resolves to no "
+            "deployed file and is not a known device built-in"
+            for importing_file, module_name in self.unresolved
+        ]
+        body = "\n".join(lines)
+        super().__init__(
+            "Deploy refused: unresolved import"
+            f"{'s' if len(self.unresolved) != 1 else ''}.\n"
+            f"{body}\n"
+            "Register the module under a deploy search path, fix the typo, "
+            "or — if it is a genuine runtime built-in — add it to "
+            "DEVICE_BUILTIN_MODULES in chumicro_deploy/import_allowlist.py.  "
+            "An ImportError-guarded import (try/except ImportError) is "
+            "treated as optional and never refused."
+        )
 
 
 @runtime_checkable
@@ -221,10 +264,25 @@ class ImportGraphSource:
     ``__import__``) are not detected; pass those names explicitly via
     *extra_modules*.
 
-    Modules that don't resolve against any search path are skipped
-    silently.  They are assumed to be device-runtime built-ins
-    (``gc``, ``time``, ``board``, etc.) the host can't provide
-    regardless.
+    A module name that doesn't resolve against any search path is
+    either a device-runtime built-in (``gc``, ``time``, ``board``)
+    the host can't provide, or a library the walk should have found
+    but didn't (missing from the search paths, or a typo).  The two
+    look identical at the AST level — both are bare module names.
+    :class:`ImportGraphSource` distinguishes them by an explicit
+    allowlist: a name on
+    :data:`chumicro_deploy.import_allowlist.DEVICE_BUILTIN_MODULES`
+    is skipped as a built-in; any other unresolved *required* import
+    is collected, and the constructor raises
+    :class:`UnresolvedImportError` naming every importing file and
+    missing module rather than shipping an import that would
+    :exc:`ImportError` at first boot.  Two cases are exempt: an
+    import guarded by ``try: ... except ImportError`` (a deliberate
+    optional fallback), and the speculative ``module.name`` probe the
+    walk uses to resolve ``from module import name`` against a real
+    submodule — when ``name`` is a function or class in
+    ``module/__init__.py`` instead, the probe doesn't resolve and is
+    silently dropped.
 
     Args:
         entrypoint: Host path to the entrypoint file.  Deployed as
@@ -261,6 +319,9 @@ class ImportGraphSource:
             directory.
         ValueError: If ``__chumicro_skip_factories__`` lists entries
             that match zero discovered factory modules.
+        UnresolvedImportError: If a required import resolves to no
+            file under any search path and is not a known device
+            built-in.  Carries every offending ``(file, module)`` pair.
     """
 
     def __init__(
@@ -289,8 +350,11 @@ class ImportGraphSource:
         self._host_paths: list[Path] = []
         self._skip_warnings: list[str] = []
         self._skip_per_entry: dict[str, frozenset[str]] = {}
+        self._unresolved: list[tuple[Path, str]] = []
         self._skip_modules = self._compute_skip_modules()
         self._files = self._collect()
+        if self._unresolved:
+            raise UnresolvedImportError(self._unresolved)
 
     def _compute_skip_modules(self) -> frozenset[str]:
         """Resolve ``__chumicro_skip_factories__`` to fully-qualified module names.
@@ -318,7 +382,12 @@ class ImportGraphSource:
         matched: set[str] = set()
         for matches in per_entry.values():
             matched.update(matches)
-        entrypoint_imports = set(self._imports_from_file(self._entrypoint_path))
+        entrypoint_imports = {
+            module_name
+            for module_name, _is_required, _path in self._imports_from_file(
+                self._entrypoint_path,
+            )
+        }
         overrides = matched & entrypoint_imports
         for override in sorted(overrides):
             self._skip_warnings.append(
@@ -343,11 +412,44 @@ class ImportGraphSource:
         }
         self._host_paths.append(self._entrypoint_path)
         visited: set[str] = set()
-        queue: list[str] = self._imports_from_file(self._entrypoint_path)
-        queue.extend(self._extra_modules)
+        # Each queue entry is (module_name, is_required, importing_file).
+        # is_required marks a real ``import``/``from`` module that must
+        # resolve to a file or a known built-in; speculative
+        # ``module.name`` alias probes ride along as not-required so they
+        # never trip the unresolved-import refusal.
+        queue: list[tuple[str, bool, Path]] = self._imports_from_file(
+            self._entrypoint_path,
+        )
+        queue.extend(
+            (name, True, self._entrypoint_path) for name in self._extra_modules
+        )
+
+        # Names already recorded as required-and-unresolved, so two imports
+        # of the same broken module don't double-report it.
+        reported_unresolved: set[str] = set()
 
         while queue:
-            module_name = queue.pop(0)
+            module_name, is_required, importing_file = queue.pop(0)
+            resolved_path = (
+                None
+                if module_name in self._skip_modules
+                else self._resolve_module(module_name)
+            )
+            if (
+                resolved_path is None
+                and is_required
+                and module_name not in self._skip_modules
+                and module_name not in reported_unresolved
+                and not is_device_builtin(module_name)
+            ):
+                # A real import that ships nowhere and isn't a runtime
+                # built-in.  Record it; the constructor refuses the deploy
+                # after the whole walk so one attempt surfaces every missing
+                # module, not just the first.  Checked before the visited
+                # guard so a required import is never masked by a prior
+                # not-required ``from x import name`` probe of the same name.
+                reported_unresolved.add(module_name)
+                self._unresolved.append((importing_file, module_name))
             if module_name in visited:
                 continue
             visited.add(module_name)
@@ -357,7 +459,6 @@ class ImportGraphSource:
                 # so its closure (typically chumicro_sockets) is not
                 # pulled in.
                 continue
-            resolved_path = self._resolve_module(module_name)
             if resolved_path is None:
                 continue
             if not file_targets_runtime(
@@ -405,31 +506,108 @@ class ImportGraphSource:
                     "imported; skip entry has no effect.",
                 )
 
-    def _imports_from_file(self, path: Path) -> list[str]:
+    def _imports_from_file(self, path: Path) -> list[tuple[str, bool, Path]]:
+        """Return ``(module_name, is_required, path)`` for *path*'s imports.
+
+        *is_required* is ``True`` for a real ``import x`` / ``from x import``
+        module the device must be able to import, and ``False`` for the
+        speculative ``x.name`` probe that resolves ``from x import name``
+        against a possible submodule.  An import nested in a
+        ``try: ... except ImportError`` (or bare ``except``) block is omitted
+        entirely — it is a deliberate optional fallback, so a device that
+        can't import it isn't broken.  Returns an empty list on a syntax
+        error (the file still ships as bytes; its imports just contribute no
+        walk targets).
+        """
         try:
             tree = ast.parse(path.read_bytes())
         except SyntaxError:
             return []
-        discovered: list[str] = []
+        guarded = self._import_error_guarded_names(tree)
+        discovered: list[tuple[str, bool, Path]] = []
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
-                discovered.extend(alias.name for alias in node.names)
+                discovered.extend(
+                    (alias.name, alias.name not in guarded, path)
+                    for alias in node.names
+                )
             elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
-                discovered.append(node.module)
+                module_guarded = node.module in guarded
+                discovered.append((node.module, not module_guarded, path))
                 # ``from foo.bar import baz`` could be importing a
                 # ``foo/bar/baz.py`` submodule or a name defined in
                 # ``foo/bar/__init__.py``.  AST can't tell which form
-                # an import resolves to, so probe both.
-                # ``_resolve_module`` skips names that don't resolve to
-                # a real file, so probing harmless function/class names
-                # is a no-op.  Without this, a runtime-gated
+                # an import resolves to, so probe ``foo.bar.baz`` as a
+                # candidate submodule.  The probe is never *required*:
+                # when ``baz`` is a function or class in
+                # ``foo/bar/__init__.py`` it resolves to no file, and
+                # dropping it silently is correct (the package itself
+                # already shipped).  Without this probe, a runtime-gated
                 # ``from chumicro_sockets._adapters import mp`` inside a
                 # function body ships only ``_adapters/__init__.py``,
                 # not the named adapter file.
                 for alias in node.names:
                     if alias.name != "*":
-                        discovered.append(f"{node.module}.{alias.name}")
+                        discovered.append(
+                            (f"{node.module}.{alias.name}", False, path),
+                        )
         return discovered
+
+    @staticmethod
+    def _import_error_guarded_names(tree: ast.Module) -> set[str]:
+        """Return module names imported inside an ``ImportError``-guarded block.
+
+        ``ast.walk`` flattens the tree, so a ``try: import foo`` /
+        ``except ImportError:`` guard is invisible to the flat import scan —
+        the guarded ``import foo`` looks identical to a top-level one.  This
+        re-reads the structure: every ``ast.Try`` whose handlers catch
+        ``ImportError`` (or are bare, or catch ``Exception``) contributes the
+        top-level module name of each import in its ``try`` body.  A guarded
+        import is a deliberate optional fallback, so the walker must not
+        refuse a deploy over a device that can't import it.
+        """
+        guarded: set[str] = set()
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Try):
+                continue
+            if not any(
+                ImportGraphSource._handler_catches_import_error(handler)
+                for handler in node.handlers
+            ):
+                continue
+            for statement in node.body:
+                for inner in ast.walk(statement):
+                    if isinstance(inner, ast.Import):
+                        guarded.update(alias.name for alias in inner.names)
+                    elif (
+                        isinstance(inner, ast.ImportFrom)
+                        and inner.module
+                        and inner.level == 0
+                    ):
+                        guarded.add(inner.module)
+        return guarded
+
+    @staticmethod
+    def _handler_catches_import_error(handler: ast.ExceptHandler) -> bool:
+        """Return whether *handler* catches ``ImportError``.
+
+        A bare ``except:`` (``handler.type is None``) catches everything, so
+        it counts.  Otherwise the caught type must name ``ImportError`` or its
+        broader parents ``Exception`` / ``BaseException`` — directly or inside
+        an ``except (ImportError, OSError):`` tuple.
+        """
+        caught = handler.type
+        if caught is None:
+            return True
+        catching_names = {"ImportError", "ModuleNotFoundError", "Exception", "BaseException"}
+        if isinstance(caught, ast.Name):
+            return caught.id in catching_names
+        if isinstance(caught, ast.Tuple):
+            return any(
+                isinstance(element, ast.Name) and element.id in catching_names
+                for element in caught.elts
+            )
+        return False
 
     def _resolve_module(self, module_name: str) -> Path | None:
         dotted_parts = module_name.split(".")
@@ -476,3 +654,17 @@ class ImportGraphSource:
         source's internal record.
         """
         return list(self._host_paths)
+
+    def unresolved_imports(self) -> list[tuple[Path, str]]:
+        """Return every ``(importing_file, module_name)`` the walk couldn't ship.
+
+        A pair is collected for each required import that resolves to no file
+        under any search path and isn't a known device built-in.  A
+        successfully-constructed :class:`ImportGraphSource` always returns an
+        empty list: a non-empty set aborts construction with
+        :class:`UnresolvedImportError` (whose ``unresolved`` attribute carries
+        the same pairs).  The accessor exists so a caller that builds the
+        source under its own ``try`` can read the collected pairs off either
+        side.
+        """
+        return list(self._unresolved)

@@ -146,6 +146,13 @@ from chumicro_deploy.result import DeployResult
             "deploy_mode='ram'",
             DeployFailureKind.CONFIGURATION_ERROR,
         ),
+        # Unresolved import: the walker refused before touching the board.
+        (
+            "Deploy refused: unresolved import.\n"
+            "  /proj/app.py imports 'chumicro_missing' — resolves to no "
+            "deployed file and is not a known device built-in",
+            DeployFailureKind.UNRESOLVED_IMPORT,
+        ),
         # No Python runtime: board responds but isn't running CP/MP.
         # Distinct from RAW_REPL_UNRESPONSIVE (Python interpreter
         # present but hung) and PORT_UNAVAILABLE (port not reachable).
@@ -351,6 +358,13 @@ def test_configuration_error_is_not_retryable() -> None:
 
 def test_traceback_is_not_retryable() -> None:
     plan = recovery_plan_for(DeployFailureKind.TRACEBACK_RETURNED)
+    assert plan.retryable is False
+
+
+def test_unresolved_import_is_not_retryable() -> None:
+    # The fix is editing the deploy config or source; the board was never
+    # touched, so a retry of the same bytes changes nothing.
+    plan = recovery_plan_for(DeployFailureKind.UNRESOLVED_IMPORT)
     assert plan.retryable is False
 
 

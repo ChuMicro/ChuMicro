@@ -160,6 +160,28 @@ PLANS: dict[DeployFailureKind, RecoveryPlan] = {
         ),
         retryable=False,
     ),
+    DeployFailureKind.UNRESOLVED_IMPORT: RecoveryPlan(
+        headline=(
+            "The deploy was refused: an import in the bundle resolves to "
+            "no deployed file and is not a known device built-in."
+        ),
+        fix_steps=(
+            "Read the error above — it names each importing file and the "
+            "module it imports that the walker could not find.",
+            "If the module is one of your libraries, register it so the "
+            "walker can find it: add its directory to the deploy's search "
+            "paths (its package needs to live under one of them).",
+            "If it's a typo, fix the import statement.",
+            "If the module is a genuine MicroPython / CircuitPython runtime "
+            "built-in the walker doesn't yet know about, add its name to "
+            "DEVICE_BUILTIN_MODULES in chumicro_deploy/import_allowlist.py.",
+            "If the import is a deliberate optional fallback, wrap it in "
+            "`try: import foo` / `except ImportError:` — the walker treats "
+            "ImportError-guarded imports as optional and does not refuse "
+            "the deploy over them.",
+        ),
+        retryable=False,
+    ),
     DeployFailureKind.TRACEBACK_RETURNED: RecoveryPlan(
         headline="The entrypoint ran but raised a traceback.",
         fix_steps=(
