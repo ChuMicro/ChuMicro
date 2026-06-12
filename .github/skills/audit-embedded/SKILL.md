@@ -1,11 +1,11 @@
 ---
 name: audit-embedded
-description: Embedded-systems audit of a single device library — flash footprint, import-time RAM, hot-path allocations, heap fragmentation, runtime quirks on MicroPython and CircuitPython, and docs-vs-code drift.  Complements (does not replace) `/audit-library`.  Use when a library is bound for boards with 256 KB RAM / 4 MB flash and you want a focused pass on whether it pulls its weight there.
+description: Embedded-systems audit of a single device library — flash footprint, import-time RAM, hot-path allocations, heap fragmentation, runtime quirks on MicroPython and CircuitPython, and docs-vs-code drift.  Complements (does not replace) `/audit-library`.  Use when a library is bound for boards with 256 KB RAM / 2 MB physical / ~800 KB usable flash and you want a focused pass on whether it pulls its weight there.
 ---
 
 # Embedded-library audit
 
-Audit one device library (`libraries/<name>/`) through the **on-device lens**: does the code respect the realities of MicroPython and CircuitPython on a 256 KB-RAM / 4 MB-flash microcontroller? Output a prioritized punch-list, then execute the high-confidence items with the user's go-ahead.
+Audit one device library (`libraries/<name>/`) through the **on-device lens**: does the code respect the realities of MicroPython and CircuitPython on a 256 KB-RAM / 2 MB-flash (~800 KB usable) microcontroller? Output a prioritized punch-list, then execute the high-confidence items with the user's go-ahead.
 
 Argument: the library name (matches the folder under `libraries/`). Example: `/audit-embedded mqtt`, `/audit-embedded wifi`, `/audit-embedded sockets`.
 
@@ -32,7 +32,7 @@ Tag a finding `cross-skill` and escalate when it really belongs in the other aud
 
 ## Audit philosophy
 
-Minimum board class is 256 KB MCU RAM + 4 MB flash ([Decision 0015](../../../plans/decisions/0015-board-architecture-support.md)). Everything below follows from that:
+Minimum board class is 256 KB MCU RAM + 2 MB physical / ~800 KB usable flash ([Decision 0015](../../../plans/decisions/0015-board-architecture-support.md)). Everything below follows from that:
 
 * **Less code is better than more code.** Flash is a hard cap and `.py` source is what ships in practice (most users install via `mip` / `circup` against the `.py` side of the bundle; `.mpy` adoption is limited by bytecode-version bugs and runtime mismatches). Class explosion and helper-bucket modules cost flash bytes, FAT cluster waste, and parse-time RAM. Form is good; size is the constraint. Don't add abstractions without a caller demanding them.
 * **The heap fragments under the kind of work libraries do.** Long-lived state interleaved with short-lived buffers leaves the small-block tier full of holes. A 100-byte allocation can fail with 20 KB free if every free slot is 40 bytes. Reserve buffers up front; reuse them; pass `memoryview` slices instead of copies. See [`plans/patterns.md` "Static recv buffer + memoryview window"](../../../plans/patterns.md).

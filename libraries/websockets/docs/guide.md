@@ -130,7 +130,7 @@ Family form (`"sockets_factory"`, matches every `chumicro_*.sockets_factory`) or
 ## Memory notes
 
 The library is sized for the minimum supported board class (256 KB
-MCU RAM, 4 MB flash):
+MCU RAM, 2 MB physical / ~800 KB usable flash):
 
 - `max_message_bytes` defaults to `16384` (16 KB).  Inbound messages
   larger than this trigger `WhenOversized` policy.  The parser runs

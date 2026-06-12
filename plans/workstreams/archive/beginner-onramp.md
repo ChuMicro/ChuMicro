@@ -109,7 +109,7 @@ Hard requirements:
 - **Non-blocking by default.**  An LED blinking on the runner must not stall when a request is in flight, when DNS is slow, when TLS handshake is dragging, or when the server is unreachable.  Mirror `chumicro-mqtt`'s `check(now_ms)` / `handle(now_ms)` runner integration.  Some operations *can't* be non-blocking (e.g., a single `recv()` on a TLS socket that's mid-handshake) — accept that, document it, keep those windows tight.
 - **Built on `chumicro-sockets`.**  TLS is solved.  Don't reimplement.
 - **Per-request budgets.**  Timeout in ms, max body size in bytes, max redirects.  Same `WhenOversized` policy enum shape as mqtt.
-- **Pre-allocated buffers in hot paths.**  Library code on a 256 KB / 4 MB board.
+- **Pre-allocated buffers in hot paths.**  Library code on a 256 KB / 2 MB-flash (~800 KB usable) board.
 
 API sketch (subject to revision when implementation starts):
 

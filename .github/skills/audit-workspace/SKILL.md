@@ -97,7 +97,7 @@ Per `plans/decisions/README.md`, structural decisions get an ADR.  Audit for:
 
 * **Build times.**  `python scripts/run.py preflight` should run in a sensible budget (~30 s or less for the full sweep on this hardware).  Anything materially slower deserves investigation.
 * **Test parallelism.**  Per AGENTS.md, tests should run via `python scripts/run.py test`.  Are slow tests using `--package-workers` correctly?
-* **Bundle size.**  For libraries that ship to PyPI / circup / mip, audit the `.mpy` size where applicable.  Per Decision [0015](../../../plans/decisions/0015-board-architecture-support.md) the minimum supported tier is 256 KB MCU RAM + 4 MB flash.  Boards at the floor care about every kilobyte.
+* **Bundle size.**  For libraries that ship to PyPI / circup / mip, audit the `.mpy` size where applicable.  Per Decision [0015](../../../plans/decisions/0015-board-architecture-support.md) the minimum supported tier is 256 KB MCU RAM + 2 MB physical / ~800 KB usable flash.  Boards at the floor care about every kilobyte.
 
 ### 7. chumicro workspace-policy compliance
 

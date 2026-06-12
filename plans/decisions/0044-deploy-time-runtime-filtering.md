@@ -11,7 +11,7 @@ Decision 0037 introduced the `__chumicro_runtimes__` marker so the bundle pipeli
 
 That left a gap: every other on-device deploy path also shipped unfiltered.  When `chumicro_workspace deploy` pushes a project to a CircuitPython board, when `chumicro_deploy` flashes a bundle of files, when `pytest-device` stages a library for a functional test, when an example gets copied to a board — wrong-runtime adapter source still landed on the device.  Default-safe in the sense that the runtime selector imports only the matching adapter, but wasted flash and surprising for users who reasonably assumed `__chumicro_runtimes__` controlled what reached the device.
 
-The cost is meaningful on tier-floor hardware (256 KB RAM, 4 MB flash per Decision 0015): the unused `cp.py` / `mp.py` / `cpython.py` adapters across `sockets`, `wifi`, and `kvstore` total a few KB per library — small individually, larger when a workspace ships many libraries.  More importantly, the marker semantics didn't match user intuition: "I marked this CP-only, why is it on my MP board?"
+The cost is meaningful on tier-floor hardware (256 KB RAM, 2 MB physical / ~800 KB usable flash per Decision 0015): the unused `cp.py` / `mp.py` / `cpython.py` adapters across `sockets`, `wifi`, and `kvstore` total a few KB per library — small individually, larger when a workspace ships many libraries.  More importantly, the marker semantics didn't match user intuition: "I marked this CP-only, why is it on my MP board?"
 
 ## Decision
 

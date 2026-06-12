@@ -94,7 +94,7 @@ Recommended even for a single-project board.
 
 ChuMicro libraries run on:
 
-- **CircuitPython** — ESP32 (S2, S3, C3, C6), RP2040/RP2350 (Raspberry Pi Pico, Pico W), and most boards with at least 256 KB RAM and 4 MB flash.
+- **CircuitPython** — ESP32 (S2, S3, C3, C6), RP2040/RP2350 (Raspberry Pi Pico, Pico W), and most boards with at least 256 KB RAM and 2 MB physical / ~800 KB usable flash.
 - **MicroPython** — same hardware classes, plus broader STM32 / ESP-IDF coverage.
 - **CPython** — your laptop, for testing.
 
