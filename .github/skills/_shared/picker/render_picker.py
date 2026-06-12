@@ -174,7 +174,9 @@ Stdout: `RENDERED <path>/picker.html` on success.
 
 validate_picker.py (same directory) is this renderer's gate: it renders a full-feature fixture
 and checks structure, JS syntax, CSS/JS/HTML namespace drift, and (when vnu is available) markup
-+ CSS validity. Run it after any edit to CSS, SCRIPT, or the card builders here.
++ CSS validity. A PostToolUse hook (picker_edit_gate.py here, wired in .claude/settings.json)
+runs it automatically on every agent edit to this file; run it by hand after editing outside
+an agent session.
 """
 import html
 import json
