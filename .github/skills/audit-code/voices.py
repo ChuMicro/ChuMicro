@@ -6,7 +6,8 @@ default is `plain` (voiceless) — clearest, no persona. The orchestrator prints
 up the chosen persona to pass into the evaluation.
 
 Usage:
-  voices.py menu              # print the numbered voice menu (plain first, marked default)
+  voices.py menu              # print the numbered voice menu (plain first, marked default,
+                              # one preview-sentence taste per voice so the pick isn't blind)
   voices.py persona <key>     # print the persona string for <key> (empty for plain / unknown)
 """
 import json
@@ -21,8 +22,22 @@ def _voices():
     return json.load(open(REG)).get("voices", {})
 
 
+def _first_sentence(text):
+    """The first sentence of a cached preview, flattened to one line (empty when no preview exists)."""
+    text = " ".join(text.split())
+    if not text:
+        return ""
+    end = text.find(". ")
+    sentence = text if end == -1 else text[: end + 1]
+    if len(sentence) > 160:
+        sentence = sentence[:160].rsplit(" ", 1)[0] + " …"
+    return sentence
+
+
 def menu():
-    voices = _voices()
+    registry = json.load(open(REG))
+    voices = registry.get("voices", {})
+    previews = registry.get("previews", {})
     keys = ["plain"] + [k for k in voices if k != "plain"]
     print("Pick a voice for the findings (the register the traps are written in):\n")
     for i, k in enumerate(keys, 1):
@@ -31,6 +46,9 @@ def menu():
         else:
             persona = voices.get(k, "")
             print(f"  {i}. {k}   — {persona[:96]}")
+        taste = _first_sentence(previews.get(k, ""))
+        if taste:
+            print(f"       e.g. {taste}")
         print()
     print("type a number or key (Enter = 1, plain). The findings stay clear either way; a voice only adds bite.")
 
