@@ -113,8 +113,8 @@ class _SelectPollAdapter:
 class TaskHandle:
     """Handle returned by ``Runner.add()`` or ``add_periodic()``.
 
-    Inspect state via the ``period_ms``, ``run_count``, and ``active``
-    attributes.  Mutate via ``set_period()`` or ``remove()``.
+    Inspect state via the ``period_ms``, ``run_count``, ``preserve_phase``,
+    and ``active`` attributes.  Mutate via ``set_period()`` or ``remove()``.
     """
 
     def __init__(self, check_function: object | None,
@@ -123,12 +123,14 @@ class TaskHandle:
                  next_due_ms: int | None,
                  run_count: int | None,
                  runner: "Runner",
-                 service: object | None = None) -> None:
+                 service: object | None = None,
+                 preserve_phase: bool = False) -> None:
         self.check_function = check_function
         self.handler_function = handler_function
         self.period_ms = period_ms
         self.next_due_ms = next_due_ms
         self.run_count = run_count
+        self.preserve_phase = preserve_phase
         self.active = True
         self._runner = runner
         # Retained so ``Runner.wait`` can read the service's optional
@@ -210,7 +212,8 @@ class Runner:
             handler: object | None = None,
             period_ms: int | None = None,
             start_after_ms: int | None = None,
-            run_count: int | None = None) -> TaskHandle:
+            run_count: int | None = None,
+            preserve_phase: bool = False) -> TaskHandle:
         """Register a task with the runner.
 
         **Object-based** (task only): *task* must have
@@ -234,6 +237,15 @@ class Runner:
                 Subsequent fires use *period_ms* if set.
             run_count: Optional number of times the handler may fire
                 before auto-removing.  ``None`` means unlimited.
+            preserve_phase: When ``True``, a fired periodic reschedules
+                from its previous deadline in whole periods, so fires
+                stay aligned to the original schedule even when ticks
+                run late; a stall longer than one period skips the
+                missed fires rather than bursting.  When ``False``
+                (default), the next fire is *period_ms* after the tick
+                that fired it, guaranteeing at least *period_ms*
+                between fires but drifting by the tick's lateness.
+                Requires *period_ms*.
         """
         # ``service`` is the originating task object when registration was
         # object-based or "task-with-check + handler" — those are the
@@ -264,12 +276,14 @@ class Runner:
             raise ValueError("period_ms must be greater than zero")
         if run_count is not None and run_count <= 0:
             raise ValueError("run_count must be greater than zero")
+        if preserve_phase and period_ms is None:
+            raise ValueError("preserve_phase requires period_ms")
 
         next_due_ms = self._initial_next_due_ms(start_after_ms, period_ms)
 
         handle = TaskHandle(
             check_function, handler_function, period_ms, next_due_ms,
-            run_count, self, service=service,
+            run_count, self, service=service, preserve_phase=preserve_phase,
         )
         self._entries.append(handle)
         return handle
@@ -310,7 +324,8 @@ class Runner:
 
     def add_periodic(self, handler: object, period_ms: int,
                      start_after_ms: int | None = None,
-                     run_count: int | None = None) -> TaskHandle:
+                     run_count: int | None = None,
+                     preserve_phase: bool = False) -> TaskHandle:
         """Register a periodic handler with no check.
 
         Convenience wrapper around ``add(handler=..., period_ms=...)``
@@ -324,12 +339,19 @@ class Runner:
                 Overrides the first period.
             run_count: Optional number of times the handler may fire
                 before auto-removing.  ``None`` means unlimited.
+            preserve_phase: When ``True``, fires stay aligned to the
+                original schedule even when ticks run late (missed
+                fires are skipped, never bursted).  When ``False``
+                (default), each fire reschedules *period_ms* from the
+                tick that fired it — at least *period_ms* between
+                fires, drifting by the tick's lateness.
         """
         if period_ms is None:
             raise ValueError("period_ms is required for add_periodic")
         return self.add(
             handler=handler, period_ms=period_ms,
             start_after_ms=start_after_ms, run_count=run_count,
+            preserve_phase=preserve_phase,
         )
 
     def tick(self) -> int:
@@ -364,10 +386,22 @@ class Runner:
                     if ticks_diff(now_ms, entry.next_due_ms) < 0:
                         continue
                     # Advance: periodic tasks reschedule, one-shot tasks clear.
-                    if entry.period_ms is not None:
-                        entry.next_due_ms = ticks_add(now_ms, entry.period_ms)
-                    else:
+                    if entry.period_ms is None:
                         entry.next_due_ms = None
+                    elif entry.preserve_phase:
+                        # Advance from the previous deadline in whole
+                        # periods so fires stay aligned to the original
+                        # schedule; a stall longer than one period skips
+                        # the missed fires instead of bursting to catch
+                        # up.  Constant-time and allocation-free.
+                        behind = ticks_diff(now_ms, entry.next_due_ms)
+                        periods_missed = behind // entry.period_ms + 1
+                        entry.next_due_ms = ticks_add(
+                            entry.next_due_ms,
+                            periods_missed * entry.period_ms,
+                        )
+                    else:
+                        entry.next_due_ms = ticks_add(now_ms, entry.period_ms)
 
                 # Check gate.
                 if entry.check_function is not None:
