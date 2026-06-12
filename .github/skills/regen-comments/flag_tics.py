@@ -2,7 +2,7 @@
 """Deterministic flag-only watcher: AI discourse-marker TICS + voice-descriptor LEAKS (no LLM).
 
 Two cheap string checks over the finished file's docstrings/comments, flag-only -- never rewrites. The flags
-surface in report.html next to the legibility flags; the human cuts them in the refine loop (re-roll /
+surface on the decision page next to the legibility flags; the human cuts them in the refine loop (re-roll /
 tighten / write-it-myself). Both phenomena are EXACT-STRING detectable, so this needs no clean-room call.
 
 - TICS: formulaic emphasis scaffolding LLMs over-produce ("That's the whole X", "Here's the thing", "the one

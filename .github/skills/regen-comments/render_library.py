@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
-"""Tabbed library-wide report: one page, a tab per file, ONE combined Copy-selection blob (no LLM).
+"""Library-wide decision page: every room's cards on ONE shared-picker page, one combined blob (no LLM).
 
-Library mode used to present each file's report sequentially; this composes every finished room's report
-section (render_report.build_file_section) into a single page so the human reviews files in any order.
-Each tab is a full per-file report (summary, rationale, flags, ledger, per-symbol pickers); radio groups
-and saved state are namespaced per tab, so picks never interfere. The sticky Copy-selection bar serializes
-ALL files' picks into one blob — one `regen-comments apply (<file>): …` section per touched file — which
-apply_selection.py parses per section and the orchestrator applies room by room (the per-room guards and
-re-checks are unchanged). Saved picks key on the combined content hash of every FINAL file: a mid-review
-reload restores them; any applied change starts the page clean.
+Composes each finished room's spec entries (render_report.build_file_entry) into a single faceted page:
+card ids are namespaced `<file.py>#<qualname>`, a select-style file facet narrows to one file at a time
+(plus the flagged/clean chips), and each file's context (summary, rationale, flags, ledger) nests under
+one page-top section per file. The Copy/Submit bar serializes ALL files' picks into one shared
+`PICKS — regen-comments apply (library)` blob; apply_selection.py groups it per file and the
+orchestrator applies room by room (the per-room guards and re-checks are unchanged). The page key
+carries the combined content hash of every FINAL file: a mid-review reload restores picks, and any
+applied change starts the page clean.
 
 Usage: render_library.py <outdir> <voice> <rundir>=<original.py> [<rundir>=<original.py> ...]
-Writes <outdir>/library_report.html and opens it. The orchestrator builds the pairs from
-batch_manifest.json (file -> room).
+Writes <outdir>/spec.json + <outdir>/picker.html and opens it (REGEN_NO_OPEN suppresses the open).
+The orchestrator builds the pairs from batch_manifest.json (file -> room).
 """
 import hashlib
 import os
@@ -20,7 +20,7 @@ import sys
 
 SKILL = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, SKILL)
-from render_report import build_file_section, selbar_html, write_page, _esc  # noqa: E402
+from render_report import OPTION_HELP, build_file_entry, open_page, render_spec  # noqa: E402
 
 
 def main():
@@ -33,34 +33,38 @@ def main():
     if not pairs:
         sys.exit("no <rundir>=<original.py> pairs given")
 
-    tabs, panes, metas = [], [], []
-    for k, (rundir, original) in enumerate(pairs):
-        section, meta = build_file_section(rundir, voice, original, ns=f"f{k}")
+    items, sections, metas = [], [], []
+    for rundir, original in pairs:
+        file_items, file_sections, meta = build_file_entry(rundir, voice, original, namespaced=True)
+        items.extend(file_items)
+        flag_note = f" · ⚠ {meta['n_flags']}" if meta["n_flags"] else ""
+        sections.append({"title": f"{meta['file']} — {meta['symbols']} symbols · "
+                                  f"{meta['ledger']} facts{flag_note}",
+                         "sections": file_sections})
         metas.append(meta)
-        flag_chip = f"<span class='tflag'>⚠ {meta['n_flags']}</span>" if meta["n_flags"] else ""
-        tabs.append(f"<button data-pane='{k}'{' class=active' if k == 0 else ''}>"
-                    f"{_esc(meta['file'])}{flag_chip}</button>")
-        # every pane leads with its own filename: with the sticky tab bar this makes the active file
-        # unmistakable at any scroll depth (panes can otherwise open on similar-looking summary cards)
-        panes.append(f"<div class='filepane{' active' if k == 0 else ''}' id='pane-{k}'>"
-                     f"<div class='panehead'><code>{_esc(meta['file'])}</code>"
-                     f"<span class='panemeta'>{meta['symbols']} symbols · {meta['ledger']} ledger facts</span></div>"
-                     f"{section}</div>")
 
-    gen = hashlib.sha1("".join(m["hash"] for m in metas).encode()).hexdigest()[:10]
+    combined = hashlib.sha1("".join(m["hash"] for m in metas).encode()).hexdigest()[:10]
     n_flagged = sum(1 for m in metas if m["n_flags"])
-    hint = ("Review each tab (flag chips mark files with tic/legibility hits), pick or edit per symbol, "
-            "then copy ONE blob covering every file you touched and paste it back into the Claude session. "
-            "Untouched files ride as suggested.")
-    body = (f" <h1>regen-comments — library review <span style='font-weight:400;font-size:13px;color:#667'>"
-            f"({len(pairs)} files, voice: {_esc(voice)}{f', {n_flagged} with flags' if n_flagged else ''})</span></h1>"
-            f"<div class='tabbar'>{''.join(tabs)}</div>"
-            + "".join(panes) + selbar_html(hint))
-
+    spec = {
+        "title": f"regen-comments — library review ({len(pairs)} files, {voice})",
+        "key": f"regen:library:{combined}",
+        "blob_header": "regen-comments apply (library)",
+        "subtitle": f"voice: {voice} · {len(pairs)} files · {len(items)} symbols"
+                    + (f" · {n_flagged} file(s) with flags" if n_flagged else ""),
+        "intro_html": "<p>Review per file (the file dropdown narrows the cards; ⚠ marks flagged "
+                      "symbols), pick or edit per symbol, then Submit or Copy ONE blob covering every "
+                      "file you touched. Untouched files ride as suggested.</p>",
+        "options": ["suggested", "edit"],
+        "default": "suggested",
+        "expand_on": ["edit"],
+        "option_help": OPTION_HELP,
+        "sections": sections,
+        "items": items,
+        "facets": [{"key": "flag"}, {"key": "file", "style": "select"}],
+    }
     os.makedirs(outdir, exist_ok=True)
-    out = os.path.join(outdir, "library_report.html")
-    url, opened = write_page(out, f"regen-comments — library review ({len(pairs)} files)",
-                             body, os.path.basename(outdir), gen)
+    out = render_spec(spec, outdir)
+    url, opened = open_page(out)
     print("=== LIBRARY REPORT WRITTEN ===")
     print(f"  {out}")
     print(f"  {url}")

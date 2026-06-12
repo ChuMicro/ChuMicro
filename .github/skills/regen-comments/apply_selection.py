@@ -19,7 +19,14 @@ Usage:
   apply_selection.py parse <blobfile>                 -> print the parsed selection as JSON
   apply_selection.py apply <rundir> <voice> <blobfile> -> apply picks + edits to <rundir>/FINAL_<voice>.py
 
-Blob grammar (built by the report JS; also accepted hand-typed):
+Two blob grammars are accepted. The shared picker page (render_report.py / render_library.py via
+`_shared/picker/`) emits the PICKS form; the legacy form stays for compare.html and hand-typed blobs:
+
+  PICKS — regen-comments apply (<file.py> | library)
+  KVStore.get = run-2                       (library page: kvstore.py#KVStore.get = run-2)
+  <module> = edit
+    note <module>: exact docstring text\nwith newlines escaped   (a note on an `edit` pick IS the text)
+
   regen-comments apply (<file.py>): all suggested
   regen-comments apply (<file.py>): KVStore.get=run-2, <module>=edit
   regen-comments voice (<file.py>): cantrill
@@ -40,15 +47,74 @@ _HEADER = re.compile(r"^\s*regen-comments\s+(apply|voice)\s*(?:\(([^)]*)\))?\s*:
 _EDIT_AT = re.compile(r"^#edit\s+(\S+)\s*$")
 _NOTE_AT = re.compile(r"^#note\s+(\S+)\s*:\s*(.*)$")
 _PICK = re.compile(r"^(.+?)\s*=\s*(run-\d+|edit|suggested)$")
+_SHARED_HEADER = re.compile(r"^\s*PICKS\s*[—-]+\s*regen-comments\s+apply\s*\(([^)]*)\)\s*$")
+_SHARED_NOTE = re.compile(r"^\s*note\s+(\S+)\s*:\s*(.*)$")
+
+
+def _decode_note(text):
+    """Reverse the shared picker's multiline-note escaping (backslash doubled, newline as literal \\n)."""
+    return text.replace("\\\\", "\x00").replace("\\n", "\n").replace("\x00", "\\")
+
+
+def parse_shared_blob(text):
+    """A shared-picker PICKS blob -> [selection, ...], grouped per file.
+
+    Card ids are bare qualnames on a single-file page (the header names the file) and
+    `<file.py>#<qualname>` on the library page. A note on an `edit` pick carries the replacement
+    docstring (newlines escaped by the page, decoded here); other notes ride through for the
+    orchestrator to read. `suggested` and `(none)` lines are the no-op default.
+    """
+    scope = None
+    raw_picks, raw_notes = {}, []
+    for line in text.splitlines():
+        m = _SHARED_HEADER.match(line)
+        if m:
+            scope = m.group(1).strip() or None
+            continue
+        if scope is None:
+            continue
+        m = _SHARED_NOTE.match(line)
+        if m:
+            raw_notes.append((m.group(1), _decode_note(m.group(2))))
+            continue
+        m = _PICK.match(line.strip())
+        if m:
+            raw_picks[m.group(1).strip()] = m.group(2)
+
+    def split_id(card_id):
+        return card_id.split("#", 1) if "#" in card_id else (scope, card_id)
+
+    selections = {}
+
+    def section_for(fname):
+        return selections.setdefault(
+            fname, {"kind": "apply", "file": fname, "picks": {}, "edits": {}, "notes": [], "voice": None})
+
+    for card_id, choice in raw_picks.items():
+        fname, sym = split_id(card_id)
+        sel = section_for(fname)
+        if choice != "suggested":
+            sel["picks"][sym] = choice
+    for card_id, note_text in raw_notes:
+        fname, sym = split_id(card_id)
+        sel = section_for(fname)
+        if sel["picks"].get(sym) == "edit":
+            sel["edits"][sym] = note_text
+        else:
+            sel["notes"].append({"symbol": sym, "note": note_text.replace("\n", " / ")})
+    return list(selections.values()) or [section_for(scope)]
 
 
 def parse_blob_multi(text):
-    """Blob text -> [selection, ...], one per `regen-comments …` header (the library page emits several).
+    """Blob text -> [selection, ...]: the shared PICKS blob grouped per file, or one element per legacy
+    `regen-comments …` header (compare.html and hand-typed blobs).
 
-    Lines before the first header are ignored; each section's #edit / #note lines bind to the header above
-    them. A single-file blob parses to a one-element list.
+    Legacy: lines before the first header are ignored; each section's #edit / #note lines bind to the
+    header above them. A single-file blob parses to a one-element list.
     """
     lines = text.splitlines()
+    if any(_SHARED_HEADER.match(ln) for ln in lines):
+        return parse_shared_blob(text)
     starts = [i for i, ln in enumerate(lines) if _HEADER.match(ln)]
     if not starts:
         return [parse_blob(text)]  # headerless: let the single parser report what it can
