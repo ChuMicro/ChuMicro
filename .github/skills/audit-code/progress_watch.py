@@ -21,11 +21,18 @@ import os
 import sys
 import time
 
-# (glob relative to rundir, human label), in pipeline order
+# (glob relative to rundir, human label), in pipeline order. The early globs are per-skill —
+# audit-code rooms stage stripped.py/commented.py, audit-branch rooms stage diff.patch and the
+# head/base/usages trees — and a glob that never matches simply stays silent for that room.
 STEPS = [
     ("lib", "library source stripped + laid out (phase 0, mechanical)"),
     ("LIBRARY_FACTS.md", "library triage complete (phase 0)"),
+    ("world", "package world staged base-side (phase 0, mechanical)"),
+    ("FEATURE_FACTS.md", "feature context complete (phase 0)"),
     ("stripped.py", "stripped the target (mechanical)"),
+    ("diff.patch", "change-set diff staged (mechanical)"),
+    ("usage_map.json", "usages of changed symbols traced + staged"),
+    ("intent.txt", "intent record staged (commit messages)"),
     ("tests.py", "tests located + concatenated"),
     ("commented.py", "commented copy staged for the drift lens"),
     ("findings/*.json", "lens findings landing"),
