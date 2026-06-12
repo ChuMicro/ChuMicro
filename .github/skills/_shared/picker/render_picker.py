@@ -171,6 +171,10 @@ is the orchestrating session, not an untrusted source.
 
 Usage: render_picker.py <spec.json> [<output-dir>]    (default output dir: the spec's directory)
 Stdout: `RENDERED <path>/picker.html` on success.
+
+validate_picker.py (same directory) is this renderer's gate: it renders a full-feature fixture
+and checks structure, JS syntax, CSS/JS/HTML namespace drift, and (when vnu is available) markup
++ CSS validity. Run it after any edit to CSS, SCRIPT, or the card builders here.
 """
 import html
 import json
@@ -319,8 +323,9 @@ CSS = """
   font:12.5px/1.55 ui-monospace,Menlo,monospace;border:1px solid var(--border);border-radius:8px;
   padding:8px 10px;background:var(--card);color:var(--fg)}
  .card.collapsed>.candwrap{display:none}
- .notes{width:100%;box-sizing:border-box;margin-top:10px;font:14.5px/1.5 inherit;border:1px solid var(--border);
-  border-radius:8px;padding:7px 9px;min-height:36px;background:var(--note-bg);color:var(--fg);resize:vertical}
+ .notes{width:100%;box-sizing:border-box;margin-top:10px;font:inherit;font-size:14.5px;line-height:1.5;
+  border:1px solid var(--border);border-radius:8px;padding:7px 9px;min-height:36px;background:var(--note-bg);
+  color:var(--fg);resize:vertical}
  .selbar{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:calc(100% - 24px);max-width:var(--pagew,920px);
   box-sizing:border-box;background:var(--bar);backdrop-filter:blur(10px);border:1px solid var(--border);
   border-bottom:none;border-radius:13px 13px 0 0;padding:8px 16px;font-size:14px;
@@ -742,8 +747,10 @@ def card_html(item, page_options, page_default, option_help):
     where_value = item.get("where")
     if isinstance(where_value, dict):
         code = f'<div class="fcode">{html.escape(where_value["code"])}</div>' if where_value.get("code") else ""
+        # the code line is a <div>, so its wrapper must be flow content — a <span> here violates
+        # the HTML content model and makes validators suppress errors in the whole subtree
         where_html = (f'<div class="field f-where"><span class="flabel">where</span>'
-                      f'<span class="ftext">{html.escape(where_value.get("place", ""))}{code}</span></div>')
+                      f'<div class="ftext">{html.escape(where_value.get("place", ""))}{code}</div></div>')
     elif where_value:
         where_html = (f'<div class="field f-where"><span class="flabel">where</span>'
                       f'<span class="ftext mono">{html.escape(where_value)}</span></div>')
