@@ -6,9 +6,9 @@ then each voice's docstring side by side, so the human can compare voices and pi
 also surfaces the selection rationale (pick.json) and any legibility flags. Each voice card carries a pick
 radio + a notes box; a Copy-selection button serializes the winner into a paste-back blob
 (`regen-comments voice (<file>): <key>`) the orchestrator reads, then renders THAT voice's interactive
-report.html (per-symbol picker) from its room.
+decision page (picker.html, per-symbol options) from its room.
 
-Built on render_report's shared page machinery: same light/dark theme (OS default, toggle remembered) and the
+This file owns the bespoke page machinery (write_page + theme + base CSS): same light/dark theme (OS default, toggle remembered) and the
 same staleness rule — the saved pick keys on a combined content hash of every voice's FINAL, so a reload
 mid-review restores it but a regenerated voice starts the page clean.
 
@@ -24,8 +24,180 @@ import sys
 
 SKILL = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, SKILL)
-from render_report import write_page  # noqa: E402
 
+
+# Page machinery moved here from the pre-shared-picker render_report.py: compare.html is its
+# only remaining consumer (the decision page renders via ../_shared/picker/render_picker.py).
+CSS = """
+ :root{
+  --bg:#f3f5f8; --fg:#171c26; --muted:#5a6472; --faint:#8a93a0; --soft:#33405a;
+  --card:#ffffff; --border:#e4e8ed; --border2:#d6dbe2; --line:#edf0f4; --divider:#e4e8ed;
+  --pre-bg:#f8fafc; --accent:#4f46e5; --accent2:#7c3aed; --green:#15803d; --amber:#9a4a10;
+  --sig-bg:#eef1fb; --sig-border:#dde2f6; --sig-fg:#3730a3;
+  --pill-bg:#eef0f4; --pill-fg:#3a4554; --pill-hover:#e4e8ee; --pill-border:#d6dbe2;
+  --ok-bg:#dcf5e4; --warn-bg:#fdeadb;
+  --legib-bg:#fffaf0; --legib-fg:#7a3a00; --legib-ok-bg:#f3fbf5;
+  --tic-bg:#ebe5ff; --tic-fg:#5b3a9a; --leak-bg:#ffe4e6; --leak-fg:#a8323f;
+  --tab-bg:#e8ebf0; --blob-bg:#f8fafc; --shadow:rgba(23,28,38,.08); --glow:rgba(79,70,229,.16);
+ }
+ [data-theme=dark]{
+  --bg:#0e1117; --fg:#dfe3ea; --muted:#98a1b0; --faint:#69727f; --soft:#b6c0d0;
+  --card:#151922; --border:#252b36; --border2:#323947; --line:#212733; --divider:#2a313d;
+  --pre-bg:#11141b; --accent:#8d97ff; --accent2:#b78cf7; --green:#4ade80; --amber:#e8a06a;
+  --sig-bg:#1b2030; --sig-border:#2c3450; --sig-fg:#aeb7f5;
+  --pill-bg:#222834; --pill-fg:#c3cad4; --pill-hover:#2a3140; --pill-border:#363e4d;
+  --ok-bg:#143124; --warn-bg:#3c2616;
+  --legib-bg:#2a2218; --legib-fg:#e0b48a; --legib-ok-bg:#182a1e;
+  --tic-bg:#2d2547; --tic-fg:#b9a3ee; --leak-bg:#3a2226; --leak-fg:#e89aa4;
+  --tab-bg:#1a1f29; --blob-bg:#11141b; --shadow:rgba(0,0,0,.4); --glow:rgba(141,151,255,.18);
+ }
+ body{font:14px/1.55 -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;margin:0;background:var(--bg);color:var(--fg);-webkit-font-smoothing:antialiased}
+ ::selection{background:color-mix(in srgb,var(--accent) 22%,transparent)}
+ .wrap{max-width:1180px;margin:0 auto;padding:28px 24px 40px}
+ h1{font-size:21px;margin:0 0 4px;font-weight:650;letter-spacing:-.01em}
+ h2{font-size:16px;margin:30px 0 10px;border-bottom:1px solid var(--border2);padding-bottom:6px;font-weight:650;letter-spacing:-.005em}
+ h3{font-size:14px;margin:0 0 6px;font-family:ui-monospace,Menlo,monospace;color:var(--accent)}
+ .sub{color:var(--muted);margin-bottom:16px}
+ .badge{display:inline-flex;align-items:center;gap:6px;padding:3px 11px;border-radius:999px;font-weight:600;font-size:12px}
+ .badge::before{content:'';width:7px;height:7px;border-radius:50%;background:currentColor}
+ .badge.ok{background:var(--ok-bg);color:var(--green)} .badge.warn{background:var(--warn-bg);color:var(--amber)}
+ .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:14px;box-shadow:0 1px 2px var(--shadow)}
+ .summary p{margin:0 0 10px} .summary ul{margin:0;padding-left:18px} .summary li{margin:2px 0}
+ .summary code{color:var(--accent)}
+ table{width:100%;border-collapse:collapse} td,th{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+ th{font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-weight:650}
+ code{font-family:ui-monospace,Menlo,monospace;font-size:12.5px}
+ .c-high{color:var(--green);font-weight:600} .c-med{color:#9a6a10} .c-low{color:#c05a6a}
+ [data-theme=dark] .c-med{color:#d8b36a}
+ .sym{border-top:1px solid var(--divider);padding:26px 0 20px}
+ .sym>details:last-child{margin-top:12px}
+ .purpose{color:var(--soft);margin-bottom:8px}
+ .ba{display:flex;gap:12px} .col{flex:1;min-width:0} .lbl{font-size:10.5px;color:var(--faint);text-transform:uppercase;letter-spacing:.06em;font-weight:650;margin-bottom:3px}
+ pre{white-space:pre-wrap;word-break:break-word;background:var(--pre-bg);border:1px solid var(--line);border-radius:8px;padding:9px 10px;margin:4px 0;font-size:12.5px;color:var(--fg)}
+ .ba .col:last-child pre{border-left:3px solid color-mix(in srgb,var(--accent) 50%,transparent)}
+ pre.sig{background:var(--sig-bg);border-color:var(--sig-border);color:var(--sig-fg);font-weight:600;margin-bottom:8px}
+ input[type=radio]{accent-color:var(--accent)}
+ @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+ details.card>summary{font-size:16px;cursor:pointer}
+ .none{color:var(--faint);font-style:italic}
+ details{margin-top:6px} summary{cursor:pointer;color:var(--muted);font-size:12px}
+ .facts{margin:8px 0;padding-left:18px} .facts .meta{color:var(--faint)}
+ .why{margin-top:6px;color:var(--soft)}
+ .sel{color:var(--soft)} .concern{margin-top:8px;color:var(--amber);font-weight:600}
+ .legib{border-left:4px solid #e0a020;background:var(--legib-bg);color:var(--legib-fg)}
+ .legib.ok{border-left-color:var(--green);background:var(--legib-ok-bg);color:var(--green)}
+ .legib .flags{margin:8px 0 0;padding-left:18px} .legib .flagsent{font-style:italic;margin:2px 0 8px}
+ .legib .meta{color:var(--faint);font-style:normal}
+ .tk{font-size:10.5px;padding:1px 6px;border-radius:3px;font-weight:700;text-transform:uppercase}
+ .tk-tic{background:var(--tic-bg);color:var(--tic-fg)} .tk-leak{background:var(--leak-bg);color:var(--leak-fg)}
+ .alts{margin:16px 0 4px}
+ .alts>summary{font-weight:600;font-size:13px;color:var(--pill-fg);background:var(--pill-bg);border:1px solid var(--pill-border);border-radius:999px;padding:7px 14px;display:inline-block;transition:background .15s,border-color .15s}
+ .alts>summary:hover{background:var(--pill-hover);border-color:var(--border2)}
+ .pickwrap{border:1px solid var(--border);border-radius:12px;padding:12px;margin-top:8px;background:var(--card);box-shadow:0 1px 2px var(--shadow)}
+ .candgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:10px;align-items:stretch;scrollbar-width:thin;scrollbar-color:var(--border2) transparent}
+ /* 4+ takes: a cramming grid goes unreadable, so flip to a horizontal snap rail of fixed-width cards */
+ .candgrid:has(.cand:nth-child(4)){grid-template-columns:none;grid-auto-flow:column;grid-auto-columns:minmax(300px,340px);overflow-x:auto;scroll-snap-type:x proximity;padding-bottom:8px}
+ .candgrid:has(.cand:nth-child(4))>.cand{scroll-snap-align:start}
+ .candgrid::-webkit-scrollbar{height:8px}
+ .candgrid::-webkit-scrollbar-thumb{background:var(--border2);border-radius:999px}
+ .candgrid::-webkit-scrollbar-track{background:transparent}
+ .cand{border:1px solid var(--border);border-radius:10px;padding:10px;background:var(--pre-bg);min-width:0;display:flex;flex-direction:column;transition:border-color .15s,box-shadow .15s}
+ .candgrid .cand pre{flex:1 1 auto;background:var(--card)}
+ .cand:hover{border-color:var(--border2)}
+ .cand:has(input:checked){border-color:var(--accent);box-shadow:0 0 0 1px var(--accent),0 4px 16px var(--glow)}
+ .cand.edit{margin-top:10px}
+ .cand label{cursor:pointer;font-weight:600} .cand.sugg label b{color:var(--green)}
+ .dhint{display:flex;gap:5px;flex-wrap:wrap;margin:6px 0 2px}
+ .dhint .chip{font-size:10.5px;font-weight:600;color:var(--pill-fg);background:var(--pill-bg);border:1px solid var(--pill-border);border-radius:999px;padding:1px 8px}
+ .dedup{font-size:11.5px;color:var(--faint);margin-top:10px;font-style:italic}
+ .fbadge{font-size:11px;background:var(--warn-bg);color:var(--amber);padding:1px 8px;border-radius:999px;font-weight:700}
+ .editbox{width:100%;min-height:90px;font:12.5px/1.5 ui-monospace,Menlo,monospace;border:1px solid var(--border2);border-radius:8px;padding:9px;margin-top:6px;box-sizing:border-box;background:var(--card);color:var(--fg)}
+ .symnotes{width:100%;font:inherit;font-size:12.5px;border:1px dashed var(--border2);border-radius:8px;padding:7px 9px;margin-top:10px;box-sizing:border-box;min-height:34px;background:var(--pre-bg);color:var(--fg)}
+ .editbox:focus,.symnotes:focus{outline:2px solid color-mix(in srgb,var(--accent) 55%,transparent);outline-offset:1px;border-color:var(--accent)}
+ .selbar{position:sticky;bottom:10px;border-radius:14px;background:color-mix(in srgb,var(--card) 80%,transparent);backdrop-filter:blur(14px) saturate(1.4);-webkit-backdrop-filter:blur(14px) saturate(1.4);border:1px solid var(--border2);box-shadow:0 10px 32px var(--shadow);padding:8px 12px}
+ .blobwrap{margin-top:6px} .blobwrap>summary{font-size:11.5px;color:var(--faint)}
+ .selbar .row{display:flex;gap:10px;align-items:center}
+ .selbar button{font:inherit;font-size:13px;padding:7px 15px;border-radius:999px;border:none;cursor:pointer;transition:filter .15s,background .15s,transform .06s}
+ .selbar button:active{transform:translateY(1px)}
+ .selbar .primary{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-weight:600;box-shadow:0 2px 12px var(--glow)}
+ .selbar .primary:hover{filter:brightness(1.08)}
+ .selbar .ghost{background:var(--pill-bg);color:var(--fg);border:1px solid var(--pill-border)}
+ .selbar .ghost:hover{background:var(--pill-hover)}
+ .selbar .grow{flex:1;color:var(--soft);font-weight:600}
+ .selbar button:focus-visible,.themebtn:focus-visible{outline:2px solid color-mix(in srgb,var(--accent) 60%,transparent);outline-offset:2px}
+ #blob{width:100%;margin-top:10px;font:12px/1.5 ui-monospace,Menlo,monospace;border:1px solid var(--border2);border-radius:8px;padding:8px;min-height:46px;background:var(--blob-bg);color:var(--fg);box-sizing:border-box}
+ .tabbar{display:flex;gap:4px;flex-wrap:wrap;margin:16px 0 20px;background:color-mix(in srgb,var(--tab-bg) 80%,transparent);backdrop-filter:blur(12px) saturate(1.3);-webkit-backdrop-filter:blur(12px) saturate(1.3);border:1px solid var(--border);border-radius:12px;padding:4px;width:fit-content;max-width:100%;position:sticky;top:10px;z-index:9}
+ .tabbar button{font:inherit;font-size:13px;font-weight:600;padding:7px 14px;border:none;border-radius:9px;background:transparent;color:var(--muted);cursor:pointer;transition:color .15s,background .15s}
+ .tabbar button:hover{color:var(--fg)}
+ .tabbar button.active{background:var(--card);color:var(--accent);box-shadow:0 1px 5px var(--shadow)}
+ .tabbar .tflag{font-size:10.5px;background:var(--warn-bg);color:var(--amber);border-radius:999px;padding:0 7px;margin-left:6px;font-weight:700}
+ .filepane{display:none} .filepane.active{display:block}
+ .panehead{display:flex;align-items:baseline;gap:10px;margin:2px 0 14px;font-size:16px;font-weight:650;color:var(--accent)}
+ .panehead .panemeta{font-size:12px;font-weight:500;color:var(--faint)}
+ .themebtn{position:fixed;top:14px;right:16px;font:inherit;font-size:13px;padding:6px 12px;border-radius:999px;border:1px solid var(--pill-border);background:color-mix(in srgb,var(--pill-bg) 75%,transparent);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);color:var(--pill-fg);cursor:pointer;z-index:10;transition:background .15s}
+ .themebtn:hover{background:var(--pill-hover)}
+"""
+
+THEME_JS = """
+<script>
+(function () {
+  var tb = document.getElementById('themebtn');
+  if (!tb) return;
+  function glyph() { tb.textContent = document.documentElement.dataset.theme === 'dark' ? '\\u263e dark' : '\\u2600 light'; }
+  glyph();
+  tb.addEventListener('click', function () {
+    var next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = next;
+    try { localStorage.setItem('regen-comments-theme', next); } catch (e) {}
+    glyph();
+  });
+})();
+</script>"""
+
+THEME_BOOT = """
+<script>
+(function () {
+  var t = null;
+  try { t = localStorage.getItem('regen-comments-theme'); } catch (e) {}
+  var mq = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)');
+  document.documentElement.dataset.theme = t || (mq && mq.matches ? 'dark' : 'light');
+  if (!t && mq && mq.addEventListener) {
+    mq.addEventListener('change', function (e) {
+      var saved = null;
+      try { saved = localStorage.getItem('regen-comments-theme'); } catch (x) {}
+      if (!saved) {
+        document.documentElement.dataset.theme = e.matches ? 'dark' : 'light';
+        var b = document.getElementById('themebtn');
+        if (b) b.textContent = e.matches ? '\\u263e dark' : '\\u2600 light';
+      }
+    });
+  }
+})();
+</script>"""
+
+
+def write_page(out_path, title_html, body_html, run_key, gen, script, extra_css=""):
+    doc = f"""<!doctype html><html><head><meta charset="utf-8">
+<title>{title_html}</title>
+{THEME_BOOT}
+<style>{CSS}{extra_css}</style></head><body>
+<button class="themebtn" id="themebtn" title="toggle light/dark (remembered)"></button>
+<div class="wrap">
+{body_html}
+</div>
+<script>window.DATA = {{run: {json.dumps(run_key)}, gen: {json.dumps(gen)}}};</script>
+{THEME_JS}
+{script}
+</body></html>"""
+    open(out_path, "w").write(doc)
+    url = f"file://{out_path}"
+    if os.environ.get("REGEN_NO_OPEN"):  # a serve_report.py session owns the open; re-renders just rewrite the file
+        return url, False
+    try:
+        opened = webbrowser.open(url)  # best-effort; no-op on headless/SSH
+    except Exception:  # noqa: BLE001
+        opened = False
+    return url, opened
 
 def _load(path, default):
     try:

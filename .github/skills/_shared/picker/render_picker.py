@@ -83,6 +83,11 @@ Spec schema:
           "default": "medium",                            // optional per-item override
           "notes": true,                                  // notes box (default: true on decision cards,
                                                           // false on informational ones)
+          "multiline_notes": true,                        // optional: this card's note serializes newlines
+                                                          // into the blob as literal \n escapes (backslash
+                                                          // doubled) instead of collapsing them — for choices
+                                                          // whose substance is exact multi-line text; the
+                                                          // consuming parser decodes
           "collapsed": true,                              // optional: start the card folded to a strip (title
                                                           // row + radios + summary + diff if present). Every
                                                           // card folds/expands on a title-row click; this sets
@@ -338,7 +343,12 @@ SCRIPT = """
       var r = c.querySelector('input[type=radio]:checked');
       lines.push(id + ' = ' + (r ? r.value : '(none)'));
       var n = c.querySelector('.notes');
-      if (n && n.value.trim()) lines.push('  note ' + id + ': ' + n.value.trim().replace(/\\n/g, ' '));
+      if (n && n.value.trim()) {
+        var t = n.value.trim();
+        var enc = c.dataset.mln ? t.replace(/\\\\/g, '\\\\\\\\').replace(/\\n/g, '\\\\n')
+                                : t.replace(/\\n/g, ' ');
+        lines.push('  note ' + id + ': ' + enc);
+      }
     });
     return lines.join('\\n');
   }
@@ -634,12 +644,13 @@ def card_html(item, page_options, page_default, option_help):
     card_classes = "card collapsible collapsed" if collapsed else "card collapsible"
     chevron = '<span class="chev">▸</span>'
     fold_attr = ' data-fold="1"' if collapsed else ""
+    multiline_attr = ' data-mln="1"' if item.get("multiline_notes") else ""
     facets_attr = ""
     if item.get("facets"):
         facets_attr = f' data-facets="{html.escape(json.dumps(item["facets"]), quote=True)}"'
     return (
         f'<div class="{card_classes}" id="{anchor_id(item_id)}" data-id="{html.escape(item_id)}"'
-        f' data-def="{html.escape(default or "")}"{fold_attr}{facets_attr}>'
+        f' data-def="{html.escape(default or "")}"{fold_attr}{multiline_attr}{facets_attr}>'
         f'<div class="cardhead">{chevron}<span class="cardid">{html.escape(item_id)}</span>{badge}{warn_flag}{source}'
         f'<span class="cardtitle">{html.escape(item.get("title", ""))}</span></div>'
         f"{summary}"
