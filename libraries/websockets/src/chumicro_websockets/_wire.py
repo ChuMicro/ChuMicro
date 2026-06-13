@@ -1241,7 +1241,7 @@ def parse_close_payload(payload: bytes) -> tuple[int | None, str]:
         raise WebSocketProtocolError(
             "close payload of exactly 1 byte is forbidden by RFC 6455 §5.5.1",
         )
-    code = struct.unpack("!H", payload[:2])[0]
+    code = struct.unpack_from("!H", payload)[0]
     if code in RESERVED_CLOSE_CODES:
         raise WebSocketProtocolError(
             f"peer sent reserved close code {code}",

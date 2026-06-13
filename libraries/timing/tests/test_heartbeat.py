@@ -7,6 +7,7 @@ Cross-runtime: runs on CPython (via pytest), MicroPython and CircuitPython
 from chumicro_test_harness import raises
 from chumicro_timing import Heartbeat, ticks_diff, ticks_ms
 from chumicro_timing.testing import FakeTicks, sleep_ms
+from chumicro_timing.ticks import TICKS_HALFPERIOD
 
 
 def test_heartbeat_rejects_non_positive_periods() -> None:
@@ -16,6 +17,21 @@ def test_heartbeat_rejects_non_positive_periods() -> None:
 
     with raises(ValueError):
         Heartbeat(-1)
+
+
+def test_heartbeat_rejects_periods_at_or_above_half_the_ring() -> None:
+    """A period >= TICKS_HALFPERIOD can never fire, so it raises instead of silently never firing."""
+    with raises(ValueError):
+        Heartbeat(TICKS_HALFPERIOD)
+
+    with raises(ValueError):
+        Heartbeat(TICKS_HALFPERIOD + 1)
+
+
+def test_heartbeat_accepts_period_just_below_half_the_ring() -> None:
+    """The largest representable period (TICKS_HALFPERIOD - 1) is accepted."""
+    heartbeat = Heartbeat(TICKS_HALFPERIOD - 1, ticks=FakeTicks())
+    assert heartbeat.period_ms == TICKS_HALFPERIOD - 1
 
 
 def test_sleep_ms_advances_the_clock() -> None:

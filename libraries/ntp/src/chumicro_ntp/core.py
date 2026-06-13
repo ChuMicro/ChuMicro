@@ -166,10 +166,10 @@ class NTPClient:
     Args:
         socket: A non-blocking UDP-shaped object.  Must expose:
 
-            * ``sendto(payload: bytes, address) -> int`` — sends the
-              packet to *address* (a ``(host, port)`` tuple).
-              Raises ``OSError(EAGAIN | EWOULDBLOCK)`` when the send
-              buffer is full.
+            * ``sendto(payload: bytes, host: str, port: int) -> int`` —
+              sends the packet to ``(host, port)``.  Raises
+              ``OSError(EAGAIN | EWOULDBLOCK)`` when the send buffer is
+              full.
             * ``recvfrom_into(buffer) -> (nbytes, address)`` — reads
               into *buffer*, returning the byte count and sender.
               Raises ``OSError(EAGAIN | EWOULDBLOCK)`` on no data.

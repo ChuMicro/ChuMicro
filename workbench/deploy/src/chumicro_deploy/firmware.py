@@ -215,7 +215,13 @@ def _download_firmware(
             response.getheader("Content-Length")  # type: ignore[attr-defined]
             if hasattr(response, "getheader") else None
         )
-        total_bytes = int(total_bytes_header) if total_bytes_header else None
+        try:
+            total_bytes = int(total_bytes_header) if total_bytes_header else None
+        except ValueError:
+            # A malformed Content-Length only costs the progress percent,
+            # not the download (streamed in chunks), so fall back to
+            # unknown size.
+            total_bytes = None
         bytes_downloaded = 0
         with destination.open("wb") as output_file:
             while True:
@@ -886,7 +892,7 @@ def flash_firmware(
 
     with tempfile.TemporaryDirectory(prefix="chumicro_flash_") as staging:
         staging_path = Path(staging)
-        filename = url.rsplit("/", 1)[-1] or "firmware.bin"
+        filename = Path(url.rsplit("/", 1)[-1]).name or "firmware.bin"
         local_firmware = staging_path / filename
         _download_firmware(url, local_firmware, on_progress=on_progress)
 

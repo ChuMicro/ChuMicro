@@ -37,12 +37,15 @@ import sys
 class UnsupportedSSLConfigError(RuntimeError):
     """Raised when the requested TLS configuration isn't supported on this runtime.
 
-    Today's only firing site is :func:`tls_listening_socket` on CP-rp2
+    Two firing sites today: :func:`tls_listening_socket` on CP-rp2
     (Pi Pico W / Pi Pico 2 W), where ``wrap_socket(server_side=True) +
-    accept()`` raises ``OSError(32)`` mid-handshake and wedges the
-    CYW43 station-mode state until USB power-cycle.  Downstream libs
-    ``except`` it so future adapter additions for older hardware
-    surface as a structured failure instead of an ``AttributeError``.
+    accept()`` raises ``OSError(32)`` mid-handshake and wedges the CYW43
+    station-mode state until USB power-cycle; and
+    ``ssl_context_with_cert_and_key`` on CircuitPython, whose
+    ``load_cert_chain`` needs filesystem paths rather than in-memory PEM
+    bytes (use ``ssl_context_with_cert_and_key_paths`` there).  Downstream
+    libs ``except`` it so an unsupported TLS shape surfaces as a
+    structured failure instead of an ``AttributeError``.
     """
 
 
