@@ -126,12 +126,13 @@ client = MQTTClient(sock, client_id="my-thing")
 A few platform realities:
 
 * On MP rp2 (Pi Pico W), `chumicro-sockets` automatically converts PEM to DER for `load_verify_locations` — the rp2 firmware ships without `MBEDTLS_PEM_PARSE_C`.
-* The TLS handshake is synchronous inside `wrap_socket(...)` — bench-tested against `test.mosquitto.org:8883`, the listener stalls 2–3 ms on Lolin S2 CP and 10–11 ms on Pi Pico W CP for the full handshake.  Short on a good link; longer (tens of ms) on a high-latency uplink as TLS rounds-trip with the broker.
+* **The TLS handshake blocks the whole reactor, not just this client.** It runs synchronously inside `wrap_socket(...)`, so for its full duration every other runner-registered service — a sensor sample, a watchdog feed, an LED heartbeat — gets no tick. Bench-tested against `test.mosquitto.org:8883`: 2–3 ms on Lolin S2 CP and 10–11 ms on Pi Pico W CP on a good link, but tens of ms — or seconds against a slow or unreachable broker — on a high-latency uplink. Connect before you start time-critical services, or budget for the stall.
+* **DNS resolution also blocks the reactor.** The connector's `awaiting_dns` phase calls a synchronous `getaddrinfo`, which hangs for the resolver's own timeout when DNS is slow or down. Pre-resolve and pass an IP if a stall there is unacceptable.
 * For server-side TLS handshake heap sizes per board, see the `chumicro-http-server` guide's TLS-server table.
 
 ## Wifi-drop self-heal
 
-Pass a `connector_factory` callable instead of a bare socket and the client will rebuild its socket automatically after a wifi-drop / socket-death — without blocking the runner during DNS / TCP / TLS:
+Pass a `connector_factory` callable instead of a bare socket and the client will rebuild its socket automatically after a wifi-drop / socket-death. The TCP-connect phase advances one tick at a time, but DNS and the TLS handshake still block the reactor for their duration (see the TLS-connections platform realities above):
 
 ```python
 from chumicro_sockets import tcp_client_connector

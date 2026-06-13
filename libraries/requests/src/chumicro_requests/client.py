@@ -352,8 +352,9 @@ class HttpClient:
             connector_factory=chumicro_sockets_connector_factory(),
         )
 
-    The connector advances DNS / TCP / TLS across multiple ticks rather
-    than blocking the runner during the round-trip.
+    The connector advances the TCP connect across ticks; the DNS lookup
+    and, on MicroPython / CircuitPython, the TLS handshake block the
+    runner for their duration.
 
     For config-driven construction, see :meth:`from_config` —
     one-line factory that reads the per-call defaults

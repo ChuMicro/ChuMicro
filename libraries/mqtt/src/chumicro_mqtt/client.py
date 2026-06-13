@@ -475,10 +475,12 @@ class MQTTClient:
         With a ``connector_factory=``: the factory is invoked to build
         a :class:`~chumicro_sockets.SocketConnector`, the state
         transitions to ``AWAITING_TRANSPORT``, and subsequent
-        :meth:`handle` ticks drive DNS / TCP / TLS without blocking the
-        runner.  When the connector reaches ``ready``, the socket is
-        promoted, the CONNECT packet is queued, and the state moves to
-        ``CONNECTING`` (all inside :meth:`handle`).  When the connector
+        :meth:`handle` ticks drive the connect forward: the TCP phase
+        advances one tick at a time, while DNS resolution and, on
+        MicroPython / CircuitPython, the TLS handshake block the runner
+        for their duration.  When the connector reaches ``ready``, the
+        socket is promoted, the CONNECT packet is queued, and the state
+        moves to ``CONNECTING`` (all inside :meth:`handle`).  When the connector
         fails, the state transitions to ``FAILED`` with ``last_error``
         carrying the connector's error.
 

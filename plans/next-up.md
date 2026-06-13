@@ -6,7 +6,7 @@
 
 - [ ] **Deep code review remediation (2026-06): 1 CRITICAL (runner fault isolation) + 11 HIGH + 18 MEDIUM across runner / test-infra / http+ws security / tick-budget / alloc / cross-runtime / workbench.** [`workstreams/deep-code-review-remediation.md`](workstreams/deep-code-review-remediation.md) (report: [`reviews/2026-06-13-deep-code-review.md`](reviews/2026-06-13-deep-code-review.md)). Status: code complete; Phases 1-9 shipped (DEP-4 deferred — see the dedup bullet below). Pending only: real-board bakes for RUN-1 / SOCK-2 / WS-1 / WS-2 / MQTT-3.
 - [ ] **Comment-generation round 18 (guided vs bare no-guidance control; honest naming; 4 guided voices + 2 bare) — built, awaiting dispatch + analysis** — see [`handoffs/2026-05-30-comment-generation-round18-guided-vs-bare.md`](handoffs/2026-05-30-comment-generation-round18-guided-vs-bare.md).  Status: deferred 2026-06-12 (user call — clean-room spend stays for a user-present session).
-- [ ] **Post-fix hardware+UX remediation (2026-06): 1 HIGH (logging crash regression) + 2 MEDIUM library, connect-blocks-reactor docs, 9 workbench UX (6 HIGH) — from the second review pass.** [workstreams/post-fix-hardware-ux-remediation.md](workstreams/post-fix-hardware-ux-remediation.md) — in progress; Phase 0 (coverage gap) → Phase A (L1/L2) → workbench batch → docs.
+- [ ] **Post-fix hardware+UX remediation (2026-06): shipped Phases 0 + A–D (library correctness, workbench failure-handling + coaching, hardware-reality docs).** [workstreams/post-fix-hardware-ux-remediation.md](workstreams/post-fix-hardware-ux-remediation.md). Residual: the runner-tick (L2) real-board bake folds into the RUN-1 bake above; a top-level-only import-graph hard-reset scan (W8) is a deferred follow-up.
 
 ## Next
 
