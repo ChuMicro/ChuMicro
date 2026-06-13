@@ -11,9 +11,11 @@ The board wires `chumicro_wifi.WifiService` + `chumicro_mqtt.MQTTClient`
 into one `chumicro_runner.Runner` and drives them with
 `while True: now = runner.tick(); runner.wait(now)` — the same shape
 the root README's "Now scale it up: add MQTT and chumicro_runner"
-walkthrough uses.  Orchestration is event-driven through library
-callbacks (`mqtt.on_connect`, `on_publish`, `on_subscribe`,
-`on_message`).
+walkthrough uses.  It reads like a mainstream MQTT quickstart: set a
+Last Will, set the callbacks once, connect, let the loop run.  All the
+connect-time setup lives in one `on_connect` — the publish and the
+subscribe fire independently, neither waiting on the other's ack — so
+there is no callback cascade.
 
 ## What it shows
 
@@ -24,6 +26,9 @@ callbacks (`mqtt.on_connect`, `on_publish`, `on_subscribe`,
 - **Local broker.** The driver spawns Mosquitto on the host's LAN IP
   via `chumicro_pytest_device.fixtures.mosquitto.start_mosquitto_broker`
   so the board (joining the same wifi) can reach it.
+- **Presence via Last Will.** Board sets a retained `"offline"` Last
+  Will, then publishes a retained `"online"` on connect.  The broker
+  publishes the `"offline"` automatically if the board drops uncleanly.
 - **Retained messages.** Board publishes `demo/<client_id>/state` →
   `"online"` with `retain=True`.  Host subscribes to `demo/+/state`
   and gets the retained payload back on SUBACK without the board

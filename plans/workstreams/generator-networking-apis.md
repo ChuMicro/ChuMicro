@@ -77,3 +77,11 @@ while it stays up). Demos run to `DEMO_COMPLETE`; tail one minute under load.
   the final code uses the plain 2-arg deque, validated green on the MP and CP emulators.
   `preflight --coverage-threshold 94` green (websockets 96.27% total; cross-runtime + check-* PASS).
   websockets 0.19.7 -> 0.20.0. Real-board bake (incl. the dual-registration path): pending Phase 5.
+- 2026-06-13 Phase 4: `demos/mqtt_pub_sub` rewritten to a mainstream-quickstart cadence — Last Will set
+  at construction, callbacks set once, all connect-time setup in one `on_connect` (publish + subscribe
+  fire independently, neither waiting on the other's ack), no callback cascade. Per-call on_publish /
+  on_subscribe callbacks only print markers, so the host driver's ack-timed markers are unchanged and
+  `driver.py` needs no edit. No `chumicro_mqtt` code change (no VERSION bump); `on_connect_failed` not
+  needed (the demo doesn't branch on connect failure). README updated (presence-via-will bullet +
+  cadence description). `preflight --coverage-threshold 94` green (verify-demos parses clean). Real
+  broker + board bake: Final phase.
