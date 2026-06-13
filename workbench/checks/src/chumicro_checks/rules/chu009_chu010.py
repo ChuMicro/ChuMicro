@@ -124,14 +124,27 @@ def _callable_tail_name(node: ast.expr) -> str | None:
 
 
 def _function_has_assertion(func: ast.FunctionDef) -> bool:
-    """Return whether *func*'s body contains anything that can fail it."""
-    for node in ast.walk(func):
+    """Return whether *func*'s own control flow contains anything that can fail it.
+
+    Walks the test body's compound statements (if / for / while / with /
+    try) but stops at nested ``def`` / ``lambda`` / ``class``: an
+    ``assert`` inside a callback the test registers but never drives
+    cannot fail the test, so it must not satisfy CHU010.
+    """
+    stack = list(func.body)
+    while stack:
+        node = stack.pop()
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef,
+                             ast.Lambda, ast.ClassDef)):
+            continue
         if isinstance(node, ast.Assert | ast.Raise):
             return True
         if isinstance(node, ast.Call):
             name = _callable_tail_name(node.func)
             if name in _ASSERTION_CALL_NAMES:
                 return True
+        for child in ast.iter_child_nodes(node):
+            stack.append(child)
     return False
 
 
@@ -171,6 +184,11 @@ def _silent_return_findings(
     * a bare ``return`` / ``pass`` that is a direct statement of the
       test body and not its final statement — an early exit that
       orphans the assertions after it.
+
+    A bare ``return`` / ``pass`` as the test body's **final** statement is
+    deliberately not flagged: a trailing exit after the assertions ran is
+    harmless, and a test that only ``pass``es with no assertion is caught
+    by CHU010 instead.
     """
     findings: list[Finding] = []
     seen_lines: set[int] = set()
@@ -199,22 +217,36 @@ def _silent_return_findings(
         )
 
     for node in _ifs_in_scope(func):
-        if not node.body:
-            continue
-        last = node.body[-1]
-        if isinstance(last, ast.Return | ast.Pass):
-            _emit(
-                node.lineno,
-                (
-                    _source_line(source_lines, node.lineno),
-                    _source_line(source_lines, last.lineno),
-                ),
-                last,
-            )
+        if node.body:
+            last = node.body[-1]
+            if isinstance(last, ast.Return | ast.Pass):
+                _emit(
+                    node.lineno,
+                    (
+                        _source_line(source_lines, node.lineno),
+                        _source_line(source_lines, last.lineno),
+                    ),
+                    last,
+                )
+        # A real ``else:`` body — the canonical "skip when the hardware
+        # is missing" shape.  An ``elif`` is a lone nested ``ast.If`` in
+        # orelse that _ifs_in_scope yields on its own, so skip it here.
+        orelse = node.orelse
+        if orelse and not (len(orelse) == 1 and isinstance(orelse[0], ast.If)):
+            last_else = orelse[-1]
+            if isinstance(last_else, ast.Return | ast.Pass):
+                _emit(
+                    last_else.lineno,
+                    (_source_line(source_lines, last_else.lineno),),
+                    last_else,
+                )
 
     body = func.body
     for index, stmt in enumerate(body):
         if index == len(body) - 1:
+            # Final statement deliberately not flagged: a trailing
+            # return/pass after the asserts ran is harmless, and an
+            # assertionless test ending in pass is caught by CHU010.
             continue
         if isinstance(stmt, ast.Return | ast.Pass):
             _emit(stmt.lineno, (_source_line(source_lines, stmt.lineno),), stmt)

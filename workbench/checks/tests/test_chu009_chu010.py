@@ -194,6 +194,19 @@ class TestCHU010:
         """)
         assert CHU010.check(tmp_path) == []
 
+    def test_assert_only_in_nested_callback_does_not_satisfy(self, tmp_path: Path) -> None:
+        # The only assert lives in a callback the test registers but
+        # never drives, so it can't fail the test -> CHU010 still flags.
+        _stage_test(tmp_path, "foo", "tests", """
+            def test_thing() -> None:
+                def on_event(payload):
+                    assert payload is not None
+                register(on_event)
+        """)
+        findings = CHU010.check(tmp_path)
+        assert len(findings) == 1
+        assert "no assertion" in findings[0].message
+
 
 class TestEdgeCases:
     def test_syntax_error_skipped(self, tmp_path: Path) -> None:
@@ -303,6 +316,26 @@ class TestFunctionHasAssertionEarlyExits:
         func = ast.parse("def f():\n    x = 1\n    y = x + 1\n").body[0]
         assert _function_has_assertion(func) is False
 
+    def test_assertion_inside_nested_def_not_counted(self) -> None:
+        # An assert inside a nested def is that callable's logic.
+        func = ast.parse(
+            "def f():\n    def cb():\n        assert True\n    register(cb)\n"
+        ).body[0]
+        assert _function_has_assertion(func) is False
+
+    def test_assertion_call_inside_lambda_not_counted(self) -> None:
+        # A lambda body can't fail the enclosing test.
+        func = ast.parse("def f():\n    handler = lambda: fail('x')\n").body[0]
+        assert _function_has_assertion(func) is False
+
+    def test_assertion_inside_compound_statement_counts(self) -> None:
+        # An assert nested in for/with (not a closure) still counts.
+        func = ast.parse(
+            "def f():\n    for item in items:\n        with ctx():\n"
+            "            assert item\n"
+        ).body[0]
+        assert _function_has_assertion(func) is True
+
 
 class TestSilentReturnEdgeCases:
     """Widened CHU009: any ``if``-body-final return/pass + bare early exit."""
@@ -354,5 +387,53 @@ class TestSilentReturnEdgeCases:
             def test_thing() -> None:
                 assert compute() == 1
                 return
+        """)
+        assert CHU009.check(tmp_path) == []
+
+    def test_legit_final_pass_after_assert_not_flagged(self, tmp_path: Path) -> None:
+        # A trailing ``pass`` after an assertion is harmless.
+        _stage_test(tmp_path, "foo", "tests", """
+            def test_thing() -> None:
+                assert compute() == 1
+                pass
+        """)
+        assert CHU009.check(tmp_path) == []
+
+    def test_else_branch_bare_return_flagged(self, tmp_path: Path) -> None:
+        # The canonical skip-on-missing-hardware shape: assert in the
+        # if-branch, bare return in the else -> a silent skip.
+        _stage_test(tmp_path, "foo", "tests", """
+            def test_thing() -> None:
+                if has_hardware():
+                    assert probe() == 1
+                else:
+                    return
+        """)
+        findings = CHU009.check(tmp_path)
+        assert len(findings) == 1
+        assert findings[0].code == "CHU009"
+
+    def test_elif_chain_terminal_else_flagged_once(self, tmp_path: Path) -> None:
+        # if/elif/else whose final else returns: flagged once, not once
+        # per elif level.
+        _stage_test(tmp_path, "foo", "tests", """
+            def test_thing() -> None:
+                if mode == 1:
+                    assert a()
+                elif mode == 2:
+                    assert b()
+                else:
+                    return
+        """)
+        assert len(CHU009.check(tmp_path)) == 1
+
+    def test_else_branch_with_assertion_not_flagged(self, tmp_path: Path) -> None:
+        # Both branches assert, so neither is a silent skip.
+        _stage_test(tmp_path, "foo", "tests", """
+            def test_thing() -> None:
+                if cond():
+                    assert a()
+                else:
+                    assert b()
         """)
         assert CHU009.check(tmp_path) == []
