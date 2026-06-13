@@ -128,19 +128,22 @@ class InboundMessage:
 
 
 class _InboundWait:
-    """Read-wait yielded by ``next_message`` while the inbound queue is empty.
+    """Resume-every-tick wait yielded by ``next_message`` while the queue is empty.
 
-    ``io_wants_read`` is always True; ``io_socket`` is refreshed by the
-    generator before each yield (so it tracks the session's live
-    pollable and goes ``None`` at CLOSED) without a per-yield allocation.
-    No ``next_deadline`` — the session is registered with the runner in
-    its own right, so its deadlines already gate ``Runner.wait``.
+    Carries no ``io_socket`` and no ``next_deadline``, so the runner
+    resumes the generator each tick to re-check the queue but registers
+    nothing for it.  The session that fills the queue is itself
+    registered with the runner and owns the socket poll (read while OPEN,
+    write while connecting); registering the same socket here too would
+    collide with the session's connect-phase write interest, since the
+    poll-set keeps one interest per socket.  A single shared instance is
+    enough — the wait is stateless.
     """
 
-    io_wants_read = True
+    io_socket = None
 
-    def __init__(self):
-        self.io_socket = None
+
+_INBOUND_WAIT = _InboundWait()
 
 
 # ---------------------------------------------------------------------------
@@ -422,17 +425,12 @@ class _BaseSession:
             # TX queue uses flags=1 to raise instead, for backpressure.)
             self._inbound_queue = deque((), self._max_inbound_queue_size)
             self._inbound_to_queue = True
-        read_wait = _InboundWait()
         while True:
             if self._inbound_queue:
                 return self._inbound_queue.popleft()
             if self.state == WebSocketState.CLOSED:
                 return None
-            # Refresh the pollable before suspending so the runner
-            # registers the current socket (None once CLOSED); zero-alloc
-            # because read_wait is reused across yields.
-            read_wait.io_socket = self.io_socket
-            yield read_wait
+            yield _INBOUND_WAIT
 
     # -- subclass-customizable mask ---------------------------------------
 

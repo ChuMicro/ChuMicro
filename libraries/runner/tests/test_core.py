@@ -1195,6 +1195,28 @@ def test_wait_unregisters_when_service_releases_socket() -> None:
     assert sock in poller.unregister_calls
 
 
+def test_wait_swallows_valueerror_unregistering_closed_socket() -> None:
+    """CPython select.poll raises ValueError unregistering a closed socket
+    (its fileno() is -1).  A service that closed its socket is exactly this
+    path, so wait() treats it as benign poll-set divergence, not an error."""
+    class _ClosedSocketPoller(FakePoller):
+        def unregister(self, obj: object) -> None:
+            super().unregister(obj)
+            raise ValueError("file descriptor cannot be a negative integer (-1)")
+
+    poller = _ClosedSocketPoller()
+    runner = Runner(ticks=FakeTicks(), poller=poller)
+    sock = object()
+    service = _IOService(sock=sock, wants_read=True)
+    runner.add(service, period_ms=100)
+    runner.wait(0)  # registers the socket
+
+    service.io_socket = None  # the service closed and released its socket
+    runner.wait(0)  # must not propagate the unregister ValueError
+
+    assert sock in poller.unregister_calls
+
+
 def test_wait_unregisters_when_service_drops_to_no_interest() -> None:
     """io_wants_read=False and io_wants_write=False unregisters even when io_socket is still set."""
     poller = FakePoller()

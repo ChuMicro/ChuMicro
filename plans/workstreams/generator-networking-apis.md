@@ -67,6 +67,21 @@ while it stays up). Demos run to `DEMO_COMPLETE`; tail one minute under load.
   conflicting with `--device <mp-board>`; now `default=None` like the mqtt driver. After the fix,
   `requests_fetch` ran green on the Pico W MP (264 KB): `WIFI_OK` -> `FETCHED status=200` -> clean exit.
   VERSION patches: sockets 0.11.1, requests 0.14.1, mqtt 0.16.6, websockets 0.20.1. preflight green.
+- 2026-06-13 Final-phase bake, two more bugs caught + fixed, then all three demos green. (2) The
+  websockets_stream demo stalled at connect: the session (registered) wants POLLOUT while connecting,
+  the next_message generator's read-wait wanted POLLIN on the *same* socket, and `_sync_poll_set` keeps
+  one interest per socket (last write wins) — so POLLIN overwrote POLLOUT and the connect never woke.
+  Fixed by making the next_message wait register nothing (`io_socket=None`): the session owns the
+  socket poll, the generator just re-checks the queue each tick. (3) After that, close crashed in
+  `Runner.wait` -> `poll.unregister` with ValueError (CPython unregistering a closed socket, fileno -1);
+  the `except (KeyError, OSError)` didn't catch it — broadened to include ValueError. Also made the
+  websockets_stream driver wait on the terminal STREAM_CLOSED marker instead of the intermediate
+  WS_OPEN (one bake corrupted the WS_OPEN serial line; the run was otherwise clean). Results on the
+  Things Cat network: requests_fetch green on Pico W MP (264 KB) AND s2mini-cp (CP); websockets_stream
+  green on s2mini-cp (count=3, clean close); mqtt_pub_sub green on s2mini-cp (connected, retained
+  online, cmd round-trip, 3 telemetry, clean) — the rewritten cadence working end-to-end with no
+  cascade. The Pico W CP could not be staged (flash bloat, separate workstream). runner 0.7.3,
+  websockets 0.20.2. preflight green.
 
 
 - 2026-06-13 Phase 1: relocation landed. `preflight --coverage-threshold 94` green (lint, test 96%
