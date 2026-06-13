@@ -27,6 +27,7 @@ from chumicro_websockets._session import (
 from chumicro_websockets._wire import (
     DEFAULT_CLOSE_TIMEOUT_MS,
     DEFAULT_HANDSHAKE_TIMEOUT_MS,
+    DEFAULT_MAX_INBOUND_QUEUE_SIZE,
     DEFAULT_MAX_MESSAGE_BYTES,
     DEFAULT_MAX_TX_QUEUE_SIZE,
     DEFAULT_PONG_TIMEOUT_MS,
@@ -169,6 +170,7 @@ class WebSocketClient(_BaseSession):
         pong_timeout_ms: int = DEFAULT_PONG_TIMEOUT_MS,
         handshake_timeout_ms: int = DEFAULT_HANDSHAKE_TIMEOUT_MS,
         close_timeout_ms: int = DEFAULT_CLOSE_TIMEOUT_MS,
+        max_inbound_queue_size: int = DEFAULT_MAX_INBOUND_QUEUE_SIZE,
         ticks: object | None = None,
     ) -> None:
         if ticks is None:
@@ -184,6 +186,7 @@ class WebSocketClient(_BaseSession):
             pong_timeout_ms=pong_timeout_ms,
             handshake_timeout_ms=handshake_timeout_ms,
             close_timeout_ms=close_timeout_ms,
+            max_inbound_queue_size=max_inbound_queue_size,
             ticks=ticks,
         )
 

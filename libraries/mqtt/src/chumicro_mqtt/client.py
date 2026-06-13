@@ -892,7 +892,7 @@ class MQTTClient:
         in-flight pollable so ``Runner.wait`` parks correctly between
         connect phases.  While in ``CONNECTING`` / ``CONNECTED`` it
         unwraps the MQTT socket (adapter wrappers from
-        ``chumicro_sockets`` store the pollable on ``_sock``).
+        ``chumicro_sockets`` store the pollable on ``.sock``).
         ``DISCONNECTED`` and ``FAILED`` return ``None`` so the runner
         does not wake on a dead handle.
         """
@@ -902,7 +902,7 @@ class MQTTClient:
             return None
         if self.state in (ProtocolState.DISCONNECTED, ProtocolState.FAILED):
             return None
-        return getattr(self._socket, "_sock", self._socket)
+        return getattr(self._socket, "sock", self._socket)
 
     @property
     def io_wants_read(self):

@@ -39,6 +39,7 @@ from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from chumicro_deploy import DeviceEntry
+
     from chumicro_pytest_device.plugin import DeviceRuntimeItem
 
 
