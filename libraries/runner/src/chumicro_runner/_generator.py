@@ -18,9 +18,10 @@ None / False:
 
 The ``SocketConnector`` from ``chumicro_sockets`` already exposes
 these attributes natively, so a generator that wraps it can simply
-``yield connector`` — no extra wrapping needed.  The helpers in
-``chumicro_runner.generators`` build small private wait objects for
-the cases where a bare socket or a sleep needs the same surface.
+``yield connector`` — no extra wrapping needed.  Helper functions
+build small private wait objects for the other cases: the socket
+helpers in ``chumicro_sockets.generators`` for a bare socket,
+``sleep_until`` in ``chumicro_runner.generators`` for a deadline.
 
 Sequential I/O state machines that would otherwise need an explicit
 per-state ``check`` / ``handle`` object collapse to a top-to-bottom
@@ -102,10 +103,15 @@ class _GeneratorWrapper:
         wait = self._wait
         if wait is None:
             return False
-        # next_deadline gates time-based waits.  Socket-based waits
-        # leave next_deadline at None and rely on ipoll wake-ups in
-        # Runner.wait to gate the loop — an EAGAIN-loop helper that
-        # re-yields the same wait re-tries on the next tick.
+        # A socket-driven wait resumes every tick so its EAGAIN loop
+        # re-tries on each wake; ipoll in Runner.wait gates the sleep.
+        # When such a wait also carries next_deadline (a socket read
+        # with a timeout), that deadline only shortens Runner.wait's
+        # sleep — it must not delay the resume, or ready bytes would
+        # sit unread until the deadline.  A sleep-only wait (no socket)
+        # gates the resume on its deadline.
+        if getattr(wait, "io_socket", None) is not None:
+            return True
         deadline = self.next_deadline(now_ms)
         if deadline is not None:
             return ticks_diff(now_ms, deadline) >= 0

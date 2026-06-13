@@ -17,7 +17,7 @@ Marker lines (``WIFI_OK``, ``CONNECTING``, ``CONNECTED``, ``SENT``,
 
 from chumicro_config import load_runtime_config
 from chumicro_runner import Runner
-from chumicro_runner.generators import connect, recv_until, send_all
+from chumicro_sockets.generators import connect, recv_until, send_all
 from chumicro_sockets import tcp_client_connector
 from chumicro_wifi import WifiConfig, WifiService, WifiState
 

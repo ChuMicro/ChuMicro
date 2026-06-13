@@ -19,6 +19,7 @@ from chumicro_websockets._wire import (
     CLOSE_NORMAL,
     CLOSE_PROTOCOL_ERROR,
     CLOSE_TOO_BIG,
+    DEFAULT_MAX_INBOUND_QUEUE_SIZE,
     OPCODE_BINARY,
     OPCODE_CLOSE,
     OPCODE_CONTINUATION,
@@ -107,6 +108,44 @@ def _force_non_blocking(socket):
         pass
 
 
+class InboundMessage:
+    """A complete inbound WebSocket data message returned by ``next_message``.
+
+    ``is_text`` selects which field carries the payload: a text message
+    holds the decoded ``str`` in ``text`` (``data`` is ``None``); a
+    binary message holds ``bytes`` in ``data`` (``text`` is ``None``).
+    """
+
+    def __init__(self, *, is_text: bool, text: str | None = None, data: bytes | None = None):
+        self.is_text = is_text
+        self.text = text
+        self.data = data
+
+    def __repr__(self):
+        if self.is_text:
+            return f"InboundMessage(text={self.text!r})"
+        return f"InboundMessage(data={len(self.data)} bytes)"
+
+
+class _InboundWait:
+    """Resume-every-tick wait yielded by ``next_message`` while the queue is empty.
+
+    Carries no ``io_socket`` and no ``next_deadline``, so the runner
+    resumes the generator each tick to re-check the queue but registers
+    nothing for it.  The session that fills the queue is itself
+    registered with the runner and owns the socket poll (read while OPEN,
+    write while connecting); registering the same socket here too would
+    collide with the session's connect-phase write interest, since the
+    poll-set keeps one interest per socket.  A single shared instance is
+    enough — the wait is stateless.
+    """
+
+    io_socket = None
+
+
+_INBOUND_WAIT = _InboundWait()
+
+
 # ---------------------------------------------------------------------------
 # _BaseSession
 # ---------------------------------------------------------------------------
@@ -148,6 +187,7 @@ class _BaseSession:
         handshake_timeout_ms: int,
         close_timeout_ms: int,
         ticks,
+        max_inbound_queue_size: int = DEFAULT_MAX_INBOUND_QUEUE_SIZE,
     ) -> None:
         self._socket = socket
         self._max_message_bytes = max_message_bytes
@@ -158,6 +198,7 @@ class _BaseSession:
         self._pong_timeout_ms = pong_timeout_ms
         self._handshake_timeout_ms = handshake_timeout_ms
         self._close_timeout_ms = close_timeout_ms
+        self._max_inbound_queue_size = max_inbound_queue_size
 
         self._ticks = ticks
 
@@ -184,6 +225,10 @@ class _BaseSession:
         self._inbound_message_buffer = bytearray()
         self._inbound_message_opcode = None  # TEXT or BINARY when fragmented
         self._inbound_oversized = False
+        # next_message() lazily builds the inbound queue and flips data
+        # delivery from the on_text / on_binary callbacks to the queue.
+        self._inbound_queue = None
+        self._inbound_to_queue = False
         # Running peer-reported size of the in-progress message.  Tracks
         # the sum of frame ``reported_length`` values across the message.
         # Load-bearing when oversize trips at the frame layer (tier 3)
@@ -221,14 +266,14 @@ class _BaseSession:
         Returns ``None`` once the session reaches ``CLOSED`` (handle()
         will no-op from then on, so the runner does not need to wake on
         the socket).  Adapter wrappers from ``chumicro_sockets`` store
-        the pollable on ``_sock``; the property unwraps so ``select.poll``
+        the pollable on ``.sock``; the property unwraps so ``select.poll``
         registers the object the runtime's stream-poll ioctl knows.
         """
         if self._socket is None:
             return None
         if self.state == WebSocketState.CLOSED:
             return None
-        return getattr(self._socket, "_sock", self._socket)
+        return getattr(self._socket, "sock", self._socket)
 
     @property
     def io_wants_read(self):
@@ -343,6 +388,50 @@ class _BaseSession:
                 f"close() not allowed in state {self.state}",
             )
         self._send_close(code, reason, None)
+
+    def next_message(self):
+        """Suspend until the next inbound data message; return it, or ``None`` on close.
+
+        Generator for runner-driven receive loops registered via
+        ``Runner.add_generator`` alongside the session itself::
+
+            runner.add(ws)                       # drives I/O each tick
+            runner.add_generator(consume(ws))
+
+            def consume(ws):
+                while True:
+                    message = yield from ws.next_message()
+                    if message is None:
+                        break
+                    handle(message)
+
+        The first call switches inbound data delivery from the
+        ``on_text`` / ``on_binary`` callbacks to a bounded queue this
+        drains; control frames (ping / pong / close) keep firing their
+        callbacks either way.  Returns an :class:`InboundMessage` while
+        the queue holds one, draining queued messages even after the
+        peer closes, then ``None`` once the session is CLOSED and the
+        queue is empty.  On a ``None`` return, read ``last_close_code`` /
+        ``last_close_reason`` / ``last_error`` to learn why the stream
+        ended.
+
+        The queue is bounded by ``max_inbound_queue_size`` (drop-oldest
+        when full): a consumer that falls behind silently loses the
+        oldest queued messages rather than growing the heap.
+        """
+        if self._inbound_queue is None:
+            # 2-arg deque (no overflow-check flag) drops the oldest item
+            # on append-when-full on every runtime — CPython via maxlen,
+            # MicroPython / CircuitPython via the default flags=0.  (The
+            # TX queue uses flags=1 to raise instead, for backpressure.)
+            self._inbound_queue = deque((), self._max_inbound_queue_size)
+            self._inbound_to_queue = True
+        while True:
+            if self._inbound_queue:
+                return self._inbound_queue.popleft()
+            if self.state == WebSocketState.CLOSED:
+                return None
+            yield _INBOUND_WAIT
 
     # -- subclass-customizable mask ---------------------------------------
 
@@ -530,7 +619,12 @@ class _BaseSession:
                 self._send_close(CLOSE_BAD_DATA, str(utf8_error), now_ms)
                 self.last_error = utf8_error
                 return
-            self.on_text(text)
+            if self._inbound_to_queue:
+                self._inbound_queue.append(InboundMessage(is_text=True, text=text))
+            else:
+                self.on_text(text)
+        elif self._inbound_to_queue:
+            self._inbound_queue.append(InboundMessage(is_text=False, data=message_payload))
         else:
             self.on_binary(message_payload)
 

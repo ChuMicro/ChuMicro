@@ -335,14 +335,14 @@ class Runner:
         generator function once at the call site so its arguments are
         captured (``runner.add_generator(echo_run(host, port, radio))``).
 
-        The generator yields wait-tokens (``ReadReady`` / ``WriteReady``
-        / ``Sleep``) to suspend; the runner resumes it via ``.send()``
-        of the token's ``result(now_ms)`` once the token reports
-        ``ready()`` and any underlying ipoll wake-up has fired.
-        Sequential I/O state machines that would otherwise need an
-        explicit per-state ``handle`` shape collapse to a top-to-bottom
-        generator body.  See the runner README for the canonical
-        worked example.
+        The generator suspends by ``yield``-ing a duck-typed wait
+        object — anything exposing ``io_socket`` / ``io_wants_read`` /
+        ``io_wants_write`` / ``next_deadline``.  The runner reads those
+        each ``wait()`` to register the socket with ipoll, and resumes
+        the generator via ``.send(now_ms)`` once the socket is ready or
+        the deadline elapses.  Sequential I/O state machines that would
+        otherwise need an explicit per-state ``handle`` shape collapse
+        to a top-to-bottom generator body.
 
         The returned ``GeneratorHandle`` carries ``.done`` (False until
         the generator finishes) and ``.cancel()`` (stop early, firing
@@ -651,11 +651,14 @@ class Runner:
                 if poller is not None:
                     try:
                         poller.unregister(sock)
-                    except (KeyError, OSError):
+                    except (KeyError, OSError, ValueError):
                         # Poll-set divergence (socket already closed at
-                        # the OS level, or unregistered out-of-band):
-                        # the registered_interest dict is the source of
-                        # truth, keep it consistent and move on.
+                        # the OS level, or unregistered out-of-band): the
+                        # registered_interest dict is the source of truth,
+                        # keep it consistent and move on.  CPython's
+                        # select.poll raises ValueError when the socket is
+                        # closed (fileno() is -1) — a closed service socket
+                        # is exactly this path, not an error.
                         pass
 
     def _compute_timeout(self, now_ms: int) -> int | None:

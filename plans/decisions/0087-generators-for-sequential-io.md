@@ -22,18 +22,23 @@ Two further pieces of runtime evidence sharpen the choice of *syntax* once the s
 
 ### 1. Sequential I/O uses generator functions
 
-Library code expresses sequential I/O state machines as **generator functions** registered with the runner via `runner.add_generator(gen) -> GeneratorHandle`. The runner drives the generator via `.send()` against wait-tokens (`ReadReady`, `WriteReady`, `Sleep`) it yields. The runner's external dispatch surface is unchanged — internally the wrapper satisfies the same check/handle/io_* contract everything else does.
+Library code expresses sequential I/O state machines as **generator functions** registered with the runner via `runner.add_generator(gen) -> GeneratorHandle`. The generator suspends by `yield`-ing a duck-typed wait object — anything exposing `io_socket` / `io_wants_read` / `io_wants_write` / `next_deadline`. The runner reads those each `wait()` to register the socket with ipoll, and resumes the generator via `.send(now_ms)` once the socket is ready or the deadline elapses. The runner's external dispatch surface is unchanged — internally the wrapper satisfies the same check/handle/io_* contract everything else does.
 
 ```python
-def echo_run(host, port, radio):
-    sock = yield from connect(host, port, radio)
+from chumicro_sockets import tcp_client_connector
+from chumicro_sockets.generators import connect, recv_until, send_all
+
+def echo_run(connector):
+    sock = yield from connect(connector)
     try:
         yield from send_all(sock, b"hello chumicro\n")
-        reply = yield from recv_until(sock, b"\n")
+        reply = yield from recv_until(sock, b"\n", max_bytes=4096)
     finally:
         sock.close()
 
-handle = runner.add_generator(echo_run(host, port, wifi.adapter.radio))
+handle = runner.add_generator(
+    echo_run(tcp_client_connector(host, port, radio=wifi.adapter.radio)),
+)
 
 while not handle.done:
     now_ms = runner.tick()
@@ -42,7 +47,7 @@ while not handle.done:
 
 ### 2. `async`/`await` syntax and the asyncio module are both banned
 
-A CHU lint rule fails on `async def`, `await`, `async with`, `async for`, `import asyncio`, `from asyncio import …`, `import uasyncio`, and any file or directory named `asyncio*` in `libraries/` / `support/` / `workbench/`. Deploy-bundle staging refuses to copy `asyncio*` to a device as defense in depth.
+CHU033 fails on `async def`, `await`, `async with`, `async for`, `import asyncio`, `from asyncio import …`, and `import uasyncio` in `libraries/`, `support/`, and `workbench/`, excluding `functional_tests/` — those are host-only, hardware-driving test servers that may reach asyncio through a host package (the websocket echo server does). The check is AST-based, so the same keywords inside a string literal — a boot shim that *rejects* `async def run` — are not flagged.
 
 ### Why generators, not async/await
 
@@ -74,13 +79,13 @@ The cost is that post-PEP-492 Python authors expect `async`/`await` as the moder
 
 ## Consequences
 
-- New `chumicro_runner` public API: `runner.add_generator(gen) -> GeneratorHandle`, `GeneratorHandle.done`, wait-token classes (`ReadReady`, `WriteReady`, `Sleep`, `Done` sentinel). Internal `_GeneratorWrapper` stays private. Existing check/handle services and their registration paths are unchanged.
+- New `chumicro_runner` public API: `runner.add_generator(gen) -> GeneratorHandle`, `GeneratorHandle.done`, `GeneratorHandle.cancel()`. The wait objects a generator yields are **duck-typed, not named classes** — any object exposing `io_socket` / `io_wants_read` / `io_wants_write` / `next_deadline` works (an earlier `ReadReady` / `WriteReady` / `Sleep` token design with `ready()` / `result()` methods was dropped as needless ceremony). Internal `_GeneratorWrapper` stays private. Existing check/handle services and their registration paths are unchanged.
 
-- Wait-tokens expose `ready(now_ms) -> bool` and `result(now_ms)`. They are **not** awaitables — they do not implement `__await__`. Generator helpers `yield` them directly. Tokens are cacheable: a helper that loops on `yield ready` constructs one token outside the loop and reuses it.
+- A yielded wait exposes `io_socket` + `io_wants_read` / `io_wants_write` (poll interest) and an optional `next_deadline` (a timeout). They are **not** awaitables — no `__await__`. They are cacheable: an EAGAIN-loop helper constructs one wait outside the loop and re-yields it, so steady-state iterations allocate nothing.
 
-- New socket generator helpers in `chumicro_sockets`: `connect(host, port, radio)`, `send_all(sock, data)`, `recv_until(sock, sep, max_bytes=...)`, `recv_exact(sock, n)`. `connect` returns the connected socket via PEP 380 `return value`; callers use a plain `with sock:` (or `try/finally`) around the synchronous socket object. Existing synchronous and tick-driven-connector factories stay — these are an additional surface, not a replacement.
+- Socket generator helpers live in `chumicro_sockets.generators`: `connect(connector)`, `send_all(sock, data)`, `recv_until(sock, sep, max_bytes=...)`, `recv_exact(sock, n)`. `connect` takes an already-built `SocketConnector` (from `tcp_client_connector` / `tls_client_connector`), drives it across ticks, and returns the connected socket via PEP 380 `return value`; callers wrap it in `try/finally` (or `with`). The scheduler-side `sleep_until` (a deadline wait) stays in `chumicro_runner.generators`. Existing synchronous and tick-driven-connector factories stay — these are an additional surface, not a replacement.
 
-- New CHU lint rule bans `async def` / `await` / `async with` / `async for` and `import asyncio` / `from asyncio import …` / `import uasyncio` in `libraries/`, `support/`, and `workbench/`. Deploy bundle staging refuses to copy any module named `asyncio*` to a device.
+- CHU033 bans `async def` / `await` / `async with` / `async for` and `import asyncio` / `from asyncio import …` / `import uasyncio` in `libraries/`, `support/`, and `workbench/`, AST-based and excluding `functional_tests/`.
 
 - `chumicro_runner` `VERSION` minor bump (new public surface). `chumicro_sockets` `VERSION` minor bump (new helpers). `workbench/checks` `VERSION` minor bump (new lint rule).
 
@@ -88,6 +93,6 @@ The cost is that post-PEP-492 Python authors expect `async`/`await` as the moder
 
 - Decisions 0051 and 0080 are edited in place to distinguish "the asyncio module / event loop" (rejected) from "the runner-driven generator substrate" (the path this ADR takes). The `async`/`await` keywords stay rejected alongside the module.
 
-- Reactive libraries (MQTT, WiFi, HTTP server, websockets) keep their `check`/`handle` shape unchanged. They may optionally adopt `add_generator`-style internals for genuinely sequential subpaths in future, but no migration is mandated. Two service shapes coexist; library authors default to `check`/`handle` and reach for `add_generator` only when the work is naturally one-shot sequential I/O.
+- Reactive libraries keep their `check`/`handle` cores. [Decision 0089](0089-generator-surfaces-on-networking-libraries.md) later adds generator *surfaces* to two of them — a one-shot `fetch` in `chumicro_requests` and a receive-stream `next_message` in `chumicro_websockets` — while MQTT, the HTTP server, and WiFi stay purely reactive; see it for the rule on which work earns a generator surface. Two service shapes coexist; library authors default to `check`/`handle` and reach for `add_generator` only when the work is naturally sequential await.
 
 - Asyncio users who want to drive chumicro services from their own loop use the existing duck-typed `check`/`handle` contract via a polling adapter (~5 lines of glue per service). They lose the `Runner.wait()` `ipoll`-based I/O sleep optimization; this is documented, not fixed.

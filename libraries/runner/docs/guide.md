@@ -239,11 +239,11 @@ runner.add_periodic(
 
 ### Generator-driven
 
-Write the I/O as a generator function and register it with `runner.add_generator(gen)`.  Each `yield from connect(...)` / `send_all(...)` / `recv_until(...)` hands control back to the runner between steps, so the body reads top-to-bottom while other services keep ticking.  Import the helpers explicitly from `chumicro_runner.generators` — plain-runner consumers pay nothing.
+Write the I/O as a generator function and register it with `runner.add_generator(gen)`.  Each `yield from connect(...)` / `send_all(...)` / `recv_until(...)` hands control back to the runner between steps, so the body reads top-to-bottom while other services keep ticking.  Import the helpers explicitly from `chumicro_sockets.generators` — plain-runner consumers pay nothing.
 
 ```python
 from chumicro_runner import Runner
-from chumicro_runner.generators import connect, recv_until, send_all
+from chumicro_sockets.generators import connect, recv_until, send_all
 from chumicro_sockets import tcp_client_connector
 
 

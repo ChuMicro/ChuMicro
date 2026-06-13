@@ -210,7 +210,7 @@ Write the work as a generator function and register it with `runner.add_generato
 
 ```python
 from chumicro_runner import Runner
-from chumicro_runner.generators import connect, recv_until, send_all
+from chumicro_sockets.generators import connect, recv_until, send_all
 from chumicro_sockets import tcp_client_connector
 
 

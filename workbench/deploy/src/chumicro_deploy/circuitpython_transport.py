@@ -26,7 +26,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Protocol, cast
 
-from . import circuitpy_drive, flash_drive
+from . import circuitpy_drive, flash_drive, source_minify
 from ._line_dispatcher import StreamingLineDispatcher
 from .circuitpython_bootstrap import build_circuitpython_deploy_scripts
 from .protocol import (
@@ -773,6 +773,9 @@ class CircuitpythonTransport:
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_bytes(content)
 
+        # Strip docstrings and comments from staged .py before the rsync so
+        # libraries, tests, and the harness land as code only.
+        source_minify.minify_python_tree(staging_path)
         flash_drive.strip_extended_attributes(staging_path)
 
     @staticmethod
@@ -1340,6 +1343,14 @@ class CircuitpythonTransport:
                     staging_destination.write_bytes(files[device_path])
                     if on_file_staged is not None:
                         on_file_staged(device_path)
+                # Strip docstrings and comments from every staged .py before
+                # the push so the board carries code, not prose.  Capture the
+                # entrypoint's post-strip byte size now, while the staging tree
+                # still exists, because _wait_for_board_to_see_entrypoint polls
+                # the drive for exactly that size after this temp dir is gone.
+                source_minify.minify_python_tree(staging_path)
+                entrypoint_staged = staging_path / entrypoint.lstrip("/")
+                expected_entrypoint_size = entrypoint_staged.stat().st_size
                 # clean=True: rsync --delete, only DEVICE_KEEP_SET survives.
                 # clean=False: additive — drive files outside this payload persist.
                 self._push_staging_to_drive(
@@ -1364,7 +1375,7 @@ class CircuitpythonTransport:
                 circuitpy_drive._format_probe_error("", error),
             ) from error
 
-        self._wait_for_board_to_see_entrypoint(entrypoint, len(files[entrypoint]))
+        self._wait_for_board_to_see_entrypoint(entrypoint, expected_entrypoint_size)
 
         # CP caches the FAT32 filesystem view in-memory; with autoreload
         # disabled, exec(open()) would read stale content.  Soft-reboot
