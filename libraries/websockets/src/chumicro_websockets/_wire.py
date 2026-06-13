@@ -134,6 +134,11 @@ DEFAULT_MAX_MESSAGE_BYTES = const(16384)
 #: Default bound on the outbound TX queue.
 DEFAULT_MAX_TX_QUEUE_SIZE = const(8)
 
+#: Default bound on the inbound message queue that ``next_message``
+#: drains.  Full means the oldest queued message is dropped (a slow
+#: consumer loses stale messages rather than the device OOMing).
+DEFAULT_MAX_INBOUND_QUEUE_SIZE = const(16)
+
 #: Default steady-state payload buffer size for :class:`FrameParser`.
 #: Sized to cover the common short text/binary frame without per-frame
 #: allocation; frames bigger than this fall back to a one-shot
