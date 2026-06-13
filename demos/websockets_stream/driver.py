@@ -130,9 +130,11 @@ def main(argv: list[str] | None = None) -> int:
         wifi_marker = session.wait_for("WIFI_OK", timeout_s=args.wifi_timeout_s)
         print(f"driver: board WIFI_OK ip={wifi_marker.values.get('ip')}")
 
-        session.wait_for("WS_OPEN", timeout_s=15.0)
-        print("driver: board WS_OPEN")
-
+        # Wait on the terminal STREAM_CLOSED marker (it carries the count,
+        # which proves the messages arrived) rather than the intermediate
+        # WS_OPEN / MESSAGE markers — the marker queue drops non-matching
+        # lines while waiting, and a single corrupted serial line on a
+        # non-terminal marker shouldn't fail an otherwise-clean run.
         closed_marker = session.wait_for(
             "STREAM_CLOSED", timeout_s=args.completion_timeout_s,
         )

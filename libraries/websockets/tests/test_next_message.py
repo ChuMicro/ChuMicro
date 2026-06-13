@@ -175,17 +175,18 @@ def test_next_message_queue_drops_oldest_on_overflow():
 # -- wait shape ------------------------------------------------------
 
 
-def test_inbound_wait_shape():
+def test_inbound_wait_registers_no_socket():
+    # The wait carries no io_socket: the session owns the socket poll
+    # (registering it here too would collide with the session's
+    # connect-phase write interest); the generator just re-checks the
+    # queue each tick.
     wait = _InboundWait()
-    assert wait.io_wants_read is True
     assert wait.io_socket is None
 
 
-def test_next_message_wait_carries_live_socket():
+def test_next_message_yields_the_no_register_wait():
     clock = FakeTicks()
     client, socket = _make_open_client(clock)
     gen = client.next_message()
-    wait = gen.send(None)  # queue empty -> yields the read-wait
-    assert wait.io_wants_read is True
-    assert wait.io_socket is not None
-    assert wait.io_socket is client.io_socket
+    wait = gen.send(None)  # queue empty -> yields the resume-every-tick wait
+    assert getattr(wait, "io_socket", None) is None
