@@ -18,7 +18,11 @@ class WifiConfig:
         hostname: Hostname advertised on the AP.  Optional.
         connect_timeout_ms: Maximum wait for a single
             ``connect()`` attempt to complete.  Optional,
-            defaults to 15 s.
+            defaults to 15 s.  CircuitPython-only: the CP adapter
+            passes it to ``radio.connect(timeout=...)``; the
+            MicroPython adapter ignores it (MP leans on its firmware
+            timeout plus the reconnect backoff below), so setting it
+            changes nothing on MP.
         reconnect_backoff_start_ms: Initial delay between
             reconnect attempts after a link drop.  Optional,
             defaults to 1 s.

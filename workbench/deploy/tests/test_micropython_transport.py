@@ -12,6 +12,7 @@ from chumicro_deploy.micropython_transport import (
     _RESET_RETRY_SETTLE_SECONDS,
     MicropythonTransport,
     MicropythonTransportError,
+    _decode_exec_result,
 )
 from chumicro_deploy.testing import FakeTransport
 
@@ -2198,3 +2199,20 @@ class TestRuntimeFiltering:
         assert not (adapters / "cp.py").exists()
 
         transport.disconnect()
+
+
+class TestDecodeExecResult:
+    """``_decode_exec_result`` tolerates mpremote's drifting return shapes."""
+
+    def test_two_tuple_stdout_and_stderr(self) -> None:
+        assert _decode_exec_result((b"out", b"err")) == "outerr"
+
+    def test_one_tuple_stdout_only(self) -> None:
+        # A 1-tuple (stdout only) must not raise on the unpack.
+        assert _decode_exec_result((b"out",)) == "out"
+
+    def test_three_tuple_takes_stdout_stderr_ignores_extra(self) -> None:
+        assert _decode_exec_result((b"out", b"err", b"extra")) == "outerr"
+
+    def test_bytes_result_decoded(self) -> None:
+        assert _decode_exec_result(b"plain") == "plain"

@@ -6,6 +6,8 @@ Public API::
         UnsupportedSSLConfigError, # raised when the requested TLS shape isn't supported
         tcp_client_socket,         # plain-TCP factory
         tls_client_socket,         # TLS factory
+        tcp_client_connector,      # non-blocking tick-driven TCP connect
+        tls_client_connector,      # non-blocking tick-driven TLS connect
         udp_socket,                # UDP datagram factory (unicast + broadcast)
         ssl_context_with_ca,       # custom-CA helper
     )
@@ -51,8 +53,10 @@ __all__ = [
     "ssl_context_with_ca",
     "ssl_context_with_cert_and_key",
     "ssl_context_with_cert_and_key_paths",
+    "tcp_client_connector",
     "tcp_client_socket",
     "tcp_listening_socket",
+    "tls_client_connector",
     "tls_client_socket",
     "tls_listening_socket",
     "udp_socket",

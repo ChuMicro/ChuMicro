@@ -261,7 +261,11 @@ def _decode_exec_result(result: Any) -> str:
         UTF-8 decoded text with stderr appended to stdout.
     """
     if isinstance(result, tuple):
-        stdout_bytes, stderr_bytes = result
+        # mpremote's exec_raw return shape has drifted across versions, so
+        # accept a 1-tuple (stdout only) and ignore extras in a 3-tuple
+        # instead of raising on a fixed two-value unpack.
+        stdout_bytes = result[0] if len(result) >= 1 else b""
+        stderr_bytes = result[1] if len(result) >= 2 else b""
         stdout = stdout_bytes.decode("utf-8", errors="replace") if stdout_bytes else ""
         stderr = stderr_bytes.decode("utf-8", errors="replace") if stderr_bytes else ""
         return stdout + stderr
@@ -570,7 +574,9 @@ class MicropythonTransport:
             stdout_text = bytes(captured_stdout_bytes).rstrip(b"\x04").decode(
                 "utf-8", errors="replace",
             )
-            stderr_bytes = result[1] if isinstance(result, tuple) else b""
+            stderr_bytes = (
+                result[1] if isinstance(result, tuple) and len(result) >= 2 else b""
+            )
             stderr_text = (
                 stderr_bytes.decode("utf-8", errors="replace")
                 if stderr_bytes

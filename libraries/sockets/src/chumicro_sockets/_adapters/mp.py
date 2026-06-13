@@ -601,9 +601,18 @@ class _MpConnector(SocketConnector):  # pragma: no cover - device only
                     # the next tick the ``awaiting_tls`` branch promotes
                     # to ``ready``.
                     self._context = _resolve_default_context(self._context)
+                    # wrap_socket drives the handshake to completion
+                    # inline, which needs a blocking socket — a
+                    # non-blocking one can return mid-handshake.  Flip the
+                    # underlying blocking for the handshake, then back so
+                    # the consumer's tick-driven recv / send see EAGAIN on
+                    # the data path.
+                    raw_socket = self.socket
+                    raw_socket.setblocking(True)
                     self.socket = self._context.wrap_socket(
-                        self.socket, server_hostname=self._host,
+                        raw_socket, server_hostname=self._host,
                     )
+                    raw_socket.setblocking(False)
                     self.state = STATE_AWAITING_TLS
                 else:
                     self.socket = _MpSocketWrapper(self.socket)
