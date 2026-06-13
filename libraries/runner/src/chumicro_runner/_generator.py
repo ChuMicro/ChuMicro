@@ -103,10 +103,15 @@ class _GeneratorWrapper:
         wait = self._wait
         if wait is None:
             return False
-        # next_deadline gates time-based waits.  Socket-based waits
-        # leave next_deadline at None and rely on ipoll wake-ups in
-        # Runner.wait to gate the loop — an EAGAIN-loop helper that
-        # re-yields the same wait re-tries on the next tick.
+        # A socket-driven wait resumes every tick so its EAGAIN loop
+        # re-tries on each wake; ipoll in Runner.wait gates the sleep.
+        # When such a wait also carries next_deadline (a socket read
+        # with a timeout), that deadline only shortens Runner.wait's
+        # sleep — it must not delay the resume, or ready bytes would
+        # sit unread until the deadline.  A sleep-only wait (no socket)
+        # gates the resume on its deadline.
+        if getattr(wait, "io_socket", None) is not None:
+            return True
         deadline = self.next_deadline(now_ms)
         if deadline is not None:
             return ticks_diff(now_ms, deadline) >= 0
