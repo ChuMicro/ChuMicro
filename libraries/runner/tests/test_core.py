@@ -6,7 +6,7 @@ Cross-runtime: runs on CPython (via pytest), MicroPython and CircuitPython
 
 import select
 
-from chumicro_runner import Runner, TaskHandle
+from chumicro_runner import ReentrantTickError, Runner, TaskHandle
 from chumicro_runner.testing import CallRecorder, FakePoller
 from chumicro_test_harness import raises
 from chumicro_timing.testing import FakeTicks
@@ -1164,17 +1164,24 @@ def test_periodic_zero_raises() -> None:
         runner.add_periodic(lambda now: None, period_ms=0)
 
 
-def test_reentrant_tick_from_handler_is_isolated() -> None:
-    """A re-entrant tick() call from a handler is isolated and counted, not propagated."""
+def test_reentrant_tick_from_handler_propagates() -> None:
+    """A re-entrant tick() raises ReentrantTickError and is not counted as a handler fault."""
     runner = Runner(ticks=FakeTicks())
 
     def reenter(now_ms: int) -> None:
         runner.tick()
 
-    runner.add(handler=reenter)
-    runner.tick()  # must not raise
+    handle = runner.add(handler=reenter)
 
-    assert runner.handler_errors == 1
+    with raises(ReentrantTickError):
+        runner.tick()
+
+    # Framework misuse propagates rather than bumping the handler-fault count.
+    assert runner.handler_errors == 0
+    # The outer tick's finally cleared the guard, so the runner is not wedged
+    # once the offending handler is removed.
+    handle.remove()
+    runner.tick()
 
 
 def test_ticking_flag_resets_after_handler_fault() -> None:

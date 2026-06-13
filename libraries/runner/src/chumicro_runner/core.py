@@ -58,6 +58,19 @@ except ImportError:  # pragma: no cover
 _POLL_ERROR_MASK = _POLLERR | _POLLHUP
 
 
+class ReentrantTickError(RuntimeError):
+    """Raised when ``tick()`` runs while a ``tick()`` is already in progress.
+
+    A handler that calls ``runner.tick()`` re-enters the reactor mid-dispatch
+    and would corrupt the shared pending-handler walk.  Re-entering the
+    reactor is framework misuse (a structural programming error), not a
+    service fault, so it propagates past ``tick()``'s handler-fault
+    isolation rather than being counted in ``handler_errors``.  Subclasses
+    ``RuntimeError`` so callers already catching ``RuntimeError`` keep
+    working.
+    """
+
+
 # Pick a millisecond sleep once at import.  ``time.sleep_ms`` exists on
 # MicroPython and CircuitPython; CPython falls back to seconds.
 _native_sleep_ms = getattr(time, "sleep_ms", None)
@@ -184,7 +197,10 @@ class Runner:
     raises ``Exception`` is isolated: ``tick()`` counts it in
     ``handler_errors``, reports it to the optional ``on_handler_error``
     callback, and keeps firing the other due handlers, so one faulting
-    service can't stop the reactor.
+    service can't stop the reactor.  A handler that re-enters ``tick()``
+    is the exception: it raises ``ReentrantTickError`` and propagates,
+    since re-entering the reactor is framework misuse, not a service
+    fault.
 
     Args:
         ticks: Optional tick source (must have ``ticks_ms``,
@@ -391,16 +407,25 @@ class Runner:
         ``on_handler_error`` callback, and the remaining due handlers
         still fire this tick.  ``KeyboardInterrupt`` / ``SystemExit`` /
         ``GeneratorExit`` are not ``Exception`` subclasses, so they
-        still propagate and stop the loop.
+        still propagate and stop the loop.  A handler that re-enters
+        ``tick()`` raises ``ReentrantTickError``, which propagates past
+        the isolation because re-entering the reactor is framework
+        misuse, not a service fault.
 
         Returns:
             The tick timestamp used this cycle.
+
+        Raises:
+            ReentrantTickError: A handler called ``tick()`` while this
+                ``tick()`` was already running.
         """
         # Re-entrancy guard: a handler calling tick() on this runner
-        # would corrupt the shared _pending list mid-iteration. Reject
-        # it rather than queue deferred ops (no per-tick allocation).
+        # would corrupt the shared _pending list mid-iteration. Raise
+        # ReentrantTickError, which the dispatch loop below re-raises
+        # past the handler-fault isolation so the misuse surfaces loudly
+        # instead of being silently counted (no per-tick allocation).
         if self._ticking:
-            raise RuntimeError(
+            raise ReentrantTickError(
                 "Runner.tick() is not re-entrant; a handler must not call tick()",
             )
         self._ticking = True
@@ -445,6 +470,12 @@ class Runner:
             for entry in pending:
                 try:
                     entry.handler_function(now_ms)
+                except ReentrantTickError:
+                    # A handler re-entered tick(). That is framework
+                    # misuse, not a service fault, so let it propagate
+                    # loudly instead of counting it. The outer finally
+                    # still clears _pending and _ticking on the way out.
+                    raise
                 except Exception as error:  # noqa: BLE001
                     # Isolate a faulting handler so one service's
                     # exception can't kill the reactor or skip the other
