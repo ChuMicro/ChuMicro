@@ -240,6 +240,15 @@ class TestRequestLineCap:
         parser.feed(b"GET /1234567 HTTP/1.1")  # 21 bytes, no CRLF
         assert parser.state == RequestParseState.ERROR
         assert isinstance(parser.error, ServerRequestLineTooLargeError)
+
+    def test_over_cap_line_with_crlf_in_same_feed_raises_414(self):
+        # The full line plus its CRLF arrive in one feed and exceed the
+        # cap.  Before the pre-slice check this parsed (the cap was soft
+        # by up to one recv chunk); now crlf_index > cap trips 414.
+        parser = RequestParser(max_request_line_bytes=20)
+        parser.feed(b"GET /1234567 HTTP/1.1\r\n\r\n")  # 21-byte line + CRLF
+        assert parser.state == RequestParseState.ERROR
+        assert isinstance(parser.error, ServerRequestLineTooLargeError)
         assert parser.error.status_code == 414
 
     def test_default_request_line_well_within_cap(self):

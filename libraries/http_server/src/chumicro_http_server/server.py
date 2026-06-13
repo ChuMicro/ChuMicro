@@ -40,6 +40,7 @@ from chumicro_http_server._wire import (
     RequestParseState,
     ServerError,
     ServerLimitError,
+    ServerProtocolError,
     parse_charset,
     parse_query,
     split_target,
@@ -415,6 +416,18 @@ class _Connection:
 # ---------------------------------------------------------------------------
 
 
+def _reject_control_chars(label: str, value: str) -> None:
+    """Raise ``ServerProtocolError`` if *value* holds CR, LF, or NUL.
+
+    Guards the response encoder against handler-reflected response
+    splitting: a handler that echoes request-derived data into a header
+    or the reason phrase could otherwise inject CR/LF to splice extra
+    headers or a body into the response.
+    """
+    if "\r" in value or "\n" in value or "\x00" in value:
+        raise ServerProtocolError(f"{label} contains a control character")
+
+
 def encode_response(response: Response) -> bytes:
     """Serialize a :class:`Response` into wire bytes.
 
@@ -422,7 +435,13 @@ def encode_response(response: Response) -> bytes:
     close`` — keep-alive is not supported, so every response closes
     its connection — then emits the status line + headers + body in
     one bytes blob.
+
+    Raises :class:`ServerProtocolError` when the reason phrase or any
+    header name or value carries a CR, LF, or NUL — the control
+    characters a handler reflecting request data could use to splice
+    the response.
     """
+    _reject_control_chars("reason", str(response.reason))
     headers = CaseInsensitiveDict()
     headers["Content-Length"] = str(len(response.body))
     headers["Connection"] = "close"
@@ -431,6 +450,8 @@ def encode_response(response: Response) -> bytes:
         f"HTTP/1.1 {response.status_code} {response.reason}\r\n".encode("ascii"),
     ]
     for name, value in headers.items():
+        _reject_control_chars("header name", str(name))
+        _reject_control_chars("header value", str(value))
         parts.append(f"{name}: {value}\r\n".encode("ascii"))
     parts.append(CRLF)
     parts.append(response.body)

@@ -169,6 +169,17 @@ _OUT_OF_SUBSET = {
 _MAX_DEPTH = 8
 _MALFORMED = "malformed msgpack: truncated or over-length framing"
 
+# A truncated multi-byte header reads past the buffer.  ``data[offset+1]``
+# raises IndexError on every runtime; ``struct.unpack_from`` on a short
+# buffer raises struct.error on CPython but ValueError on MicroPython /
+# CircuitPython, which expose no ``struct.error`` attribute.  The tuple is
+# built to match only the types that exist so unpackb can translate the
+# CPython case to the ValueError the contract promises; the MP / CP
+# ValueError already satisfies it.
+_FRAMING_ERRORS = (IndexError,)
+if hasattr(struct, "error"):
+    _FRAMING_ERRORS = (IndexError, struct.error)
+
 
 gc.collect()
 
@@ -377,7 +388,11 @@ def unpackb(data: bytes | bytearray | memoryview) -> object:
     """
     if not isinstance(data, memoryview):
         data = memoryview(data)
-    result, end = _decode(data, 0, 0)
+    try:
+        result, end = _decode(data, 0, 0)
+    except _FRAMING_ERRORS as framing_error:
+        # A truncated multi-byte length header read past the buffer end.
+        raise ValueError(_MALFORMED) from framing_error
     # Trailing bytes are rejected at the top level only. The recursive
     # core legitimately stops mid-buffer inside a container.
     if end != len(data):

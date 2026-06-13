@@ -548,6 +548,38 @@ def test_truncated_bin16_raises() -> None:
         _pure_unpackb(b"\xc5\x00\x10ab")  # claims 16 bytes, supplies 2
 
 
+def test_truncated_uint16_header_raises() -> None:
+    """A uint16 tag with one of its two value bytes missing raises ValueError.
+
+    The multi-byte header itself is truncated (not a payload): on CPython
+    struct.unpack_from raises struct.error, which the contract translates
+    to ValueError so a caller's ``except ValueError`` catches it.
+    """
+    with raises(ValueError):
+        _pure_unpackb(b"\xcd\x00")  # uint16 tag, 1 of 2 bytes
+
+
+def test_truncated_bin8_length_header_raises() -> None:
+    """A bin8 tag with its length byte missing raises ValueError.
+
+    data[offset + 1] reads past the buffer (IndexError on every runtime).
+    """
+    with raises(ValueError):
+        _pure_unpackb(b"\xc4")  # bin8 tag, no length byte
+
+
+def test_truncated_str16_header_raises() -> None:
+    """A str16 tag with a short length header raises ValueError."""
+    with raises(ValueError):
+        _pure_unpackb(b"\xda\x00")  # str16 tag, 1 of 2 length bytes
+
+
+def test_truncated_uint32_header_raises() -> None:
+    """A uint32 tag with a short value header raises ValueError."""
+    with raises(ValueError):
+        _pure_unpackb(b"\xce\x00\x00")  # uint32 tag, 2 of 4 bytes
+
+
 def test_trailing_bytes_raises() -> None:
     """Bytes left after one complete object raise at the top level.
 
