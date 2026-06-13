@@ -57,9 +57,10 @@ class Logger:
     Records below the configured level are dropped before any handler
     is consulted.  Each handler decides independently whether to emit.
 
-    Handler exceptions never escape the logger — they increment
-    ``handler_errors`` and are otherwise swallowed.  Logging must
-    not crash the application that uses it.
+    Handler exceptions and ``message % args`` format mismatches never
+    escape the logger — they increment ``handler_errors`` and are
+    otherwise swallowed.  Logging must not crash the application that
+    uses it.
 
     Args:
         name: Logger name; appears in formatted records.
@@ -116,12 +117,25 @@ class Logger:
         and only after the level gate — so a dropped record never pays
         the interpolation.  Prefer ``log.info("x=%d", n)`` over a
         pre-built f-string (``log.info(f"x={n}")``) so the formatting
-        stays off the hot path when the level is disabled.
+        stays off the hot path when the level is disabled.  A format/arg
+        mismatch is caught, rendered as a visible fallback, and counted
+        in ``handler_errors`` — never raised into the caller.
         """
         if level < self.level:
             return
         if args:
-            message = message % args
+            try:
+                message = message % args
+            except Exception as format_error:  # noqa: BLE001
+                # A ``%`` format/arg mismatch must not crash the caller:
+                # ``log`` is reached from error paths where a raised
+                # exception would mask the original failure.  Render a
+                # visible fallback and count it like a handler fault.
+                message = (
+                    f"{message!r} % {args!r} "
+                    f"(log-format error: {format_error})"
+                )
+                self.handler_errors += 1
         for handler in self._handlers:
             try:
                 handler.emit(level, self.name, message)

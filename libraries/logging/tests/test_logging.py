@@ -181,6 +181,21 @@ def test_logger_no_args_message_is_not_interpolated() -> None:
     assert handler.records == [(INFO, "root", "100% done")]
 
 
+def test_logger_format_mismatch_does_not_crash_the_caller() -> None:
+    # An above-level ``%`` format/arg mismatch must not raise — logging is
+    # reached from error paths where a crash would mask the original
+    # failure.  The record still emits a visible fallback naming the bad
+    # message and args, and the fault counts in handler_errors.
+    handler = RecordingHandler()
+    logger = Logger("root", level=INFO, handlers=[handler])
+    logger.info("%d items", "not a number")  # TypeError if interpolated raw
+    assert logger.handler_errors == 1
+    assert len(handler.records) == 1
+    level, name, message = handler.records[0]
+    assert level == INFO and name == "root"
+    assert "log-format error" in message and "not a number" in message
+
+
 def test_logger_level_setter_changes_threshold() -> None:
     handler = RecordingHandler()
     logger = Logger("root", level=ERROR, handlers=[handler])
