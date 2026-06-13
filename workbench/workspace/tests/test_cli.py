@@ -10,7 +10,11 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from chumicro_deploy import Device
+from chumicro_deploy import (
+    Device,
+    FlashFirmwareError,
+    MicropythonTransportError,
+)
 from chumicro_deploy.protocol import TransportProtocol
 from chumicro_deploy.testing import FakeTransport
 from chumicro_workspace import cli
@@ -2864,6 +2868,65 @@ class TestDeployTail:
         assert tail_called[0] is False
         assert "deploy-failed" in capsys.readouterr().err
 
+    def test_transport_error_surfaces_message_not_traceback(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """A transport error during deploy exits 1 with its message on stderr, not a traceback."""
+        root = seed_workspace(tmp_path)
+        project_dir = seed_project(root, name="back-porch")
+        (project_dir / "app.py").write_text("def run(): pass\n")
+        transport = FakeTransport(
+            connect_raises=MicropythonTransportError(
+                "serial port /dev/cu.fake is busy",
+            ),
+        )
+        _install_fake_transport(monkeypatch, transport)
+
+        exit_code = cli.main([
+            "deploy", "--workspace-dir", str(root), "back-porch",
+        ])
+        assert exit_code == 1
+        assert "serial port /dev/cu.fake is busy" in capsys.readouterr().err
+
+    def test_all_devices_continues_past_a_failing_device(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """deploy --all-devices reports both devices' transport errors, not just the first."""
+        root = seed_workspace(tmp_path)
+        (root / "devices.yml").write_text(
+            "defaults:\n"
+            "  micropython: board-a\n"
+            "devices:\n"
+            "  - id: board-a\n"
+            "    runtime: micropython\n"
+            "    address: /dev/cu.fake-a\n"
+            "  - id: board-b\n"
+            "    runtime: micropython\n"
+            "    address: /dev/cu.fake-b\n",
+        )
+        project_dir = seed_project(root, name="back-porch")
+        (project_dir / "app.py").write_text("def run(): pass\n")
+        transport = FakeTransport(
+            connect_raises=MicropythonTransportError("port busy"),
+        )
+        _install_fake_transport(monkeypatch, transport)
+
+        exit_code = cli.main([
+            "deploy", "--workspace-dir", str(root), "back-porch", "--all-devices",
+        ])
+        assert exit_code == 1
+        # Both addresses appear, so the loop continued past board-a's failure
+        # instead of aborting the whole run on the first device.
+        stderr_text = capsys.readouterr().err
+        assert "/dev/cu.fake-a" in stderr_text
+        assert "/dev/cu.fake-b" in stderr_text
+
     def test_tail_requires_single_target(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
     ) -> None:
@@ -3128,6 +3191,29 @@ class TestInstallFirmware:
         assert exit_code == 0
         assert captured["url"] == "https://example.com/fw.uf2"
         assert captured["method"] == "uf2"
+
+    def test_flash_failure_surfaces_message_not_traceback(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """A FlashFirmwareError exits 1 with its guidance on stderr, not a traceback."""
+        root = seed_workspace(tmp_path)
+
+        def fake_flash(_url: str, _device: Device, **_kwargs: Any) -> None:
+            raise FlashFirmwareError(
+                "UF2 bootloader drive did not appear; hold BOOTSEL and replug",
+            )
+
+        exit_code = cli.main(
+            [
+                "install-firmware", "--workspace-dir", str(root),
+                "--url", "https://example.com/fw.uf2", "--method", "uf2",
+            ],
+            env=cli.CliEnv(flash_firmware_fn=fake_flash),
+        )
+        assert exit_code == 1
+        assert "hold BOOTSEL and replug" in capsys.readouterr().err
 
     def test_upgrade_firmware_uses_same_handler(
         self,
