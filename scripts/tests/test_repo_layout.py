@@ -537,6 +537,46 @@ class TestDetectChangedPackages:
         names = [package_dir.name for package_dir in result]
         assert "lib_a" in names
 
+    def test_untracked_only_package_detected(
+        self, synthetic_workspace, monkeypatch,
+    ):
+        """A package whose only changes are untracked new files is detected.
+
+        The three ``git diff`` forms never list untracked files; only the
+        added ``ls-files --others`` query sees a brand-new un-added module,
+        so without it such a package would escape change detection.
+        """
+        def fake_run(args, **_kwargs):
+            # args is ("git", <subcommand>, ...); the untracked query is
+            # the only one returning the new file's path.
+            is_ls_others = args[1] == "ls-files" and "--others" in args
+            stdout = (
+                "libraries/lib_a/src/chumicro_lib_a/new_module.py\n"
+                if is_ls_others else ""
+            )
+            return type("R", (), {"returncode": 0, "stdout": stdout})()
+
+        monkeypatch.setattr("repo_layout.subprocess.run", fake_run)
+        result = detect_changed_packages()
+        assert result is not None
+        assert "lib_a" in [package_dir.name for package_dir in result]
+
+    def test_ls_files_others_included_in_union(self, monkeypatch):
+        """detect_changed_packages issues the untracked-files query."""
+        seen_subcommands: list[str] = []
+
+        def fake_run(args, **_kwargs):
+            # Record the git form: ("git", "diff"/"ls-files", ...).
+            seen_subcommands.append(" ".join(args[1:]))
+            return type("R", (), {"returncode": 0, "stdout": ""})()
+
+        monkeypatch.setattr("repo_layout.subprocess.run", fake_run)
+        detect_changed_packages()
+        assert any(
+            "ls-files --others --exclude-standard" in subcommand
+            for subcommand in seen_subcommands
+        )
+
     def test_git_unavailable_returns_none(self, monkeypatch):
         """When git is not available, returns None."""
         def raise_not_found(*_args, **_kwargs):

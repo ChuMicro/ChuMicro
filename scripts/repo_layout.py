@@ -415,15 +415,22 @@ def detect_changed_packages() -> list[Path] | None:
     """
     try:
         changed: set[str] = set()
-        # Union three diffs to catch all local work:
+        # Union four git queries to catch all local work regardless of
+        # commit state:
         #   1. Committed changes on this branch vs origin/main
-        #   2. Unstaged working-tree changes
+        #   2. Unstaged working-tree changes to tracked files
         #   3. Staged but uncommitted changes
-        # This ensures we never miss files regardless of commit state.
+        #   4. Untracked, non-ignored files (new modules / tests an
+        #      agent created but hasn't `git add`ed yet)
+        # The three diff forms never list untracked files, so without
+        # query 4 a package whose only changes are brand-new files
+        # would escape change detection and fall to the lower default
+        # coverage gate.
         for diff_args in (
             ("diff", "--name-only", "origin/main...HEAD"),
             ("diff", "--name-only"),
             ("diff", "--name-only", "--cached"),
+            ("ls-files", "--others", "--exclude-standard"),
         ):
             result = run_git(*diff_args)
             if result.returncode == 0 and result.stdout.strip():
