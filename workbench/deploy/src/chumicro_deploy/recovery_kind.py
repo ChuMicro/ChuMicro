@@ -23,6 +23,7 @@ class DeployFailureKind(Enum):
 
     PORT_UNAVAILABLE = "port_unavailable"
     RAW_REPL_UNRESPONSIVE = "raw_repl_unresponsive"
+    COMMAND_TIMED_OUT = "command_timed_out"
     NO_PYTHON_RUNTIME = "no_python_runtime"
     CIRCUITPY_DRIVE_MISSING = "circuitpy_drive_missing"
     MACOS_FSKIT_WEDGED = "macos_fskit_wedged"

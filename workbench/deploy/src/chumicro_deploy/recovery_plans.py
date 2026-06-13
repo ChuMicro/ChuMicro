@@ -36,6 +36,21 @@ PLANS: dict[DeployFailureKind, RecoveryPlan] = {
         ),
         retryable=True,
     ),
+    DeployFailureKind.COMMAND_TIMED_OUT: RecoveryPlan(
+        headline=(
+            "The board stopped responding mid-command — its USB-CDC "
+            "serial link likely wedged."
+        ),
+        fix_steps=(
+            "Physically replug the board: unplug the USB cable and plug "
+            "it back in.  A wedged USB-CDC does not clear on its own, so "
+            "retrying without this just hangs for the same timeout.",
+            "If it stays unresponsive after replugging, run "
+            "`chumicro-workspace reset-board --yes --device <id>` to wipe "
+            "and re-prep it, or reflash with `install-firmware`.",
+        ),
+        retryable=False,
+    ),
     DeployFailureKind.NO_PYTHON_RUNTIME: RecoveryPlan(
         headline=(
             "The board responds, but it's not running CircuitPython "
@@ -48,13 +63,16 @@ PLANS: dict[DeployFailureKind, RecoveryPlan] = {
             "that suits your project: CircuitPython for the broadest "
             "Adafruit-board support, MicroPython for stronger "
             "hardware-acceleration on ESP32 / Pi Pico W.",
-            "Run:  chumicro-workspace install-firmware --board "
-            "<model> --runtime <circuitpython|micropython> --address "
-            "<port>",
-            "List supported boards with `--list-boards`.  Heads-up: "
-            "this is destructive — flashing overwrites whatever the "
-            "board is currently running (your Arduino sketch, custom "
-            "firmware, etc.).  Back up first if it matters.",
+            "Register the board first if you haven't "
+            "(`chumicro-workspace add-device`), then run:  "
+            "chumicro-workspace install-firmware --device <id> "
+            "--method <uf2|esptool>  (uf2 for RP2040 / RP2350, esptool "
+            "for the ESP32 family).",
+            "The firmware URL is derived from the device entry; pass "
+            "--url <firmware-url> to flash a specific build instead.  "
+            "Heads-up: flashing is destructive — it overwrites whatever "
+            "the board is currently running (your Arduino sketch, "
+            "custom firmware, etc.).  Back up first if it matters.",
             "After flashing, the board re-enumerates with the new "
             "runtime; re-run the original command.",
         ),
