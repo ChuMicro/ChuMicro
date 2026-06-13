@@ -107,3 +107,12 @@ while it stays up). Demos run to `DEMO_COMPLETE`; tail one minute under load.
   0087's async-ban *lint-rule* + deploy-refusal claims are stale (no CHU rule; asyncio is allowlisted)
   — left out of scope as a different subsystem. `preflight --coverage-threshold 94` green (CHU029/CHU019
   pass on both ADRs).
+- 2026-06-13 Async-ban enforcement (user ask "please enforce the ban"): new CHU033 flags `async def` /
+  `await` / `async with` / `async for` / `import asyncio` / `from asyncio` / `import uasyncio`, AST-based
+  (string literals like the boot-shim's `async def run` rejection are not hit), scoped to `libraries/` /
+  `support/` / `workbench/` and excluding `functional_tests/` (the websockets host echo server there is
+  asyncio-based via the `websockets` PyPI package). 0087 §2 + §Consequences corrected: the lint rule now
+  exists (CHU033), and the never-true deploy-bundle `asyncio*` refusal claim is dropped (the deploy
+  `import_allowlist` allowlists asyncio). AGENTS.md cites CHU033. `workbench/checks` 0.12.0 -> 0.13.0.
+  17 rule tests; `preflight --coverage-threshold 94` green (checks 94.17%; CHU033 fires on nothing in
+  the repo, confirming the functional_tests exclusion).

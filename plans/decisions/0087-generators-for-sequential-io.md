@@ -47,7 +47,7 @@ while not handle.done:
 
 ### 2. `async`/`await` syntax and the asyncio module are both banned
 
-A CHU lint rule fails on `async def`, `await`, `async with`, `async for`, `import asyncio`, `from asyncio import …`, `import uasyncio`, and any file or directory named `asyncio*` in `libraries/` / `support/` / `workbench/`. Deploy-bundle staging refuses to copy `asyncio*` to a device as defense in depth.
+CHU033 fails on `async def`, `await`, `async with`, `async for`, `import asyncio`, `from asyncio import …`, and `import uasyncio` in `libraries/`, `support/`, and `workbench/`, excluding `functional_tests/` — those are host-only, hardware-driving test servers that may reach asyncio through a host package (the websocket echo server does). The check is AST-based, so the same keywords inside a string literal — a boot shim that *rejects* `async def run` — are not flagged.
 
 ### Why generators, not async/await
 
@@ -85,7 +85,7 @@ The cost is that post-PEP-492 Python authors expect `async`/`await` as the moder
 
 - Socket generator helpers live in `chumicro_sockets.generators`: `connect(connector)`, `send_all(sock, data)`, `recv_until(sock, sep, max_bytes=...)`, `recv_exact(sock, n)`. `connect` takes an already-built `SocketConnector` (from `tcp_client_connector` / `tls_client_connector`), drives it across ticks, and returns the connected socket via PEP 380 `return value`; callers wrap it in `try/finally` (or `with`). The scheduler-side `sleep_until` (a deadline wait) stays in `chumicro_runner.generators`. Existing synchronous and tick-driven-connector factories stay — these are an additional surface, not a replacement.
 
-- New CHU lint rule bans `async def` / `await` / `async with` / `async for` and `import asyncio` / `from asyncio import …` / `import uasyncio` in `libraries/`, `support/`, and `workbench/`. Deploy bundle staging refuses to copy any module named `asyncio*` to a device.
+- CHU033 bans `async def` / `await` / `async with` / `async for` and `import asyncio` / `from asyncio import …` / `import uasyncio` in `libraries/`, `support/`, and `workbench/`, AST-based and excluding `functional_tests/`.
 
 - `chumicro_runner` `VERSION` minor bump (new public surface). `chumicro_sockets` `VERSION` minor bump (new helpers). `workbench/checks` `VERSION` minor bump (new lint rule).
 
