@@ -87,3 +87,11 @@ while it stays up). Demos run to `DEMO_COMPLETE`; tail one minute under load.
   publish whether as retained-on-subscribe or as a live publish. No `chumicro_mqtt` code change (no
   VERSION bump). README updated (presence-via-will bullet + cadence). `preflight --coverage-threshold 94`
   green (verify-demos parses clean). Real broker + board bake: Final phase.
+- 2026-06-13 Phase 5: new demos `demos/requests_fetch` (board does `response = yield from get(...)`
+  against a stdlib host HTTP server) and `demos/websockets_stream` (board drains a stream via
+  `yield from ws.next_message()`; the host server dogfoods `chumicro_websockets.WebSocketServer` on
+  CPython, streaming a few messages then closing — so one demo exercises both ends). New library
+  examples: `requests/examples/generator_fetch.py` and `websockets/examples/receive_stream.py`
+  (both register the session/generator with a Runner). `preflight --coverage-threshold 94` green
+  (16 demo files parse, verify-examples green for both new examples, lint + CHU clean). No library
+  src change (no VERSION bump). Real-board bake of all three demos: Final phase.
