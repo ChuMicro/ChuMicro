@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -2216,3 +2217,21 @@ class TestDecodeExecResult:
 
     def test_bytes_result_decoded(self) -> None:
         assert _decode_exec_result(b"plain") == "plain"
+
+
+class TestRunMpremoteTimeout:
+    """A wedged mpremote subprocess becomes a classified error, not a hang."""
+
+    def test_timeout_raises_transport_error_with_recovery(self) -> None:
+        def timing_out_runner(command, **kwargs):
+            raise subprocess.TimeoutExpired(command, kwargs.get("timeout", 0))
+
+        transport = MicropythonTransport("/dev/ttyUSB0", runner=timing_out_runner)
+        with pytest.raises(MicropythonTransportError, match="timed out"):
+            transport._run_mpremote(["fs", "cp", "x", ":x"])  # noqa: SLF001
+
+    def test_run_mpremote_passes_a_subprocess_timeout(self) -> None:
+        runner = FakeRunner()
+        transport = MicropythonTransport("/dev/ttyUSB0", runner=runner)
+        transport._run_mpremote(["connect"])  # noqa: SLF001
+        assert runner.calls[0][1].get("timeout") is not None

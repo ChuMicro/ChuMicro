@@ -52,6 +52,13 @@ if TYPE_CHECKING:  # pragma: no cover - type-only
 #: keep their own short timeouts.
 _EXECUTE_IDLE_TIMEOUT: float = 300.0
 
+#: Wall-clock cap on a single ``mpremote`` subprocess call (connect, fs
+#: cp, exec, wipe).  Generous so a large file copy over serial isn't
+#: false-timed-out, but finite so a board whose USB-CDC wedges mid-command
+#: can't hang the deploy forever — the timeout becomes a classified
+#: MicropythonTransportError instead.
+_MPREMOTE_SUBPROCESS_TIMEOUT: float = 120.0
+
 
 class MicropythonTransportError(Exception):
     """Raised when an mpremote command fails."""
@@ -1339,15 +1346,29 @@ class MicropythonTransport:
             arguments: Arguments to pass after ``mpremote connect <address>``.
 
         Raises:
-            MicropythonTransportError: If the command exits with a non-zero code.
+            MicropythonTransportError: If the command exits non-zero, or
+                runs past ``_MPREMOTE_SUBPROCESS_TIMEOUT`` — a board whose
+                USB-CDC wedged mid-command would otherwise hang the deploy
+                forever.
         """
         command = [_resolve_mpremote_binary(), "connect", self.address] + arguments
-        result = self._runner(
-            command,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
+        try:
+            result = self._runner(
+                command,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=_MPREMOTE_SUBPROCESS_TIMEOUT,
+            )
+        except subprocess.TimeoutExpired as timeout_error:
+            raise MicropythonTransportError(
+                f"mpremote command timed out after "
+                f"{_MPREMOTE_SUBPROCESS_TIMEOUT:.0f} s; the board's USB-CDC "
+                f"likely wedged mid-command.\n"
+                f"  command: {' '.join(command)}\n"
+                f"  Fix: replug the board, or run "
+                f"`chumicro-workspace reset-board --yes` to wipe and re-prep it."
+            ) from timeout_error
         if result.returncode != 0:
             raise MicropythonTransportError(
                 f"mpremote command failed (exit {result.returncode}):\n"

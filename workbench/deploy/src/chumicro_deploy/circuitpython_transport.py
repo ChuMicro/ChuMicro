@@ -545,7 +545,7 @@ class CircuitpythonTransport:
             return self._identify_drive_via_probe(drive_path)
         probe = self.probe_implementation()
         if probe is None:
-            return drive_path
+            return self._drive_path_or_refuse_unverifiable(drive_path)
         if probe.uid and boot_uid is not None:
             return self._resolve_identity_match(
                 drive_path,
@@ -561,6 +561,27 @@ class CircuitpythonTransport:
                 drive_identity=boot_machine,
                 probe_identity=probe.machine,
                 mount_finder=circuitpy_drive.find_circuitpy_drive_for_machine,
+            )
+        return self._drive_path_or_refuse_unverifiable(drive_path)
+
+    def _drive_path_or_refuse_unverifiable(self, drive_path: Path) -> Path:
+        """Return *drive_path*, or refuse a wrong-board wipe when it can't be verified.
+
+        Reached when the serial probe gave no identity to match the
+        drive's ``boot_out.txt`` against.  One mounted CIRCUITPY* volume
+        is unambiguous.  With several, returning the drive that merely
+        came up first could land the rsync --delete on the wrong board,
+        so refuse instead.
+        """
+        mounts = circuitpy_drive._circuitpy_volume_candidates()
+        if len(mounts) > 1:
+            raise CircuitpythonTransportError(
+                f"cannot confirm {drive_path} is the connected board: the "
+                f"serial probe returned no identity and {len(mounts)} "
+                f"CIRCUITPY* volumes are mounted.  Refusing rather than risk "
+                f"a wrong-board wipe — unplug the other board(s), or replug / "
+                f"run `chumicro-workspace reset-board --yes` to restore the "
+                f"probe."
             )
         return drive_path
 
