@@ -261,18 +261,20 @@ class FakeUDPSocket:
     def recvfrom_into(self, buffer: bytearray, nbytes: int = 0) -> tuple:
         """Pop a queued datagram into *buffer*, return ``(n, (host, port))``.
 
-        Returns ``(0, ("0.0.0.0", 0))`` when the queue is empty — UDP
-        has no peer-close, so an empty queue and a non-blocking socket
-        is just "no datagram this tick".  Datagrams larger than
-        ``nbytes`` (or ``len(buffer)`` when ``nbytes=0``) are
-        truncated; the unread tail is discarded — matches real UDP.
+        Raises ``OSError(EAGAIN)`` when the queue is empty, matching a
+        real non-blocking UDP socket on CircuitPython / MicroPython: no
+        datagram ready is a would-block, not a zero-length read.  A
+        genuine zero-length datagram (enqueued via ``enqueue_recv(b"")``)
+        still returns ``0``.  Datagrams larger than ``nbytes`` (or
+        ``len(buffer)`` when ``nbytes=0``) are truncated; the unread tail
+        is discarded, matching real UDP.
         """
         self._raise_if_closed()
         if self._recv_eagains > 0:
             self._recv_eagains -= 1
             raise OSError(errno.EAGAIN, "would block")
         if not self._recv_queue:
-            return 0, ("0.0.0.0", 0)
+            raise OSError(errno.EAGAIN, "would block")
         capacity = nbytes if nbytes > 0 else len(buffer)
         data, address = self._recv_queue.popleft()
         consumed = min(capacity, len(data))

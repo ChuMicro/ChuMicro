@@ -86,12 +86,24 @@ class TestFakeUDPSocket:
         assert n_received == 3
         assert bytes(buffer[:3]) == b"abc"
 
-    def test_recvfrom_into_empty_queue_returns_zero(self) -> None:
+    def test_recvfrom_into_empty_queue_raises_eagain(self) -> None:
+        # An empty queue is "no datagram ready", which a real non-blocking
+        # UDP socket reports as OSError(EAGAIN), not a zero-length read.
         sock = FakeUDPSocket()
+        buffer = bytearray(16)
+        with raises(OSError):
+            sock.recvfrom_into(buffer)
+
+    def test_recvfrom_into_zero_length_datagram_returns_zero(self) -> None:
+        # A genuine zero-length datagram still returns 0 (distinct from an
+        # empty queue), so a consumer can tell "0-byte packet" from "no
+        # packet".
+        sock = FakeUDPSocket()
+        sock.enqueue_recv(b"", host="10.0.0.5", port=123)
         buffer = bytearray(16)
         n_received, address = sock.recvfrom_into(buffer)
         assert n_received == 0
-        assert address == ("0.0.0.0", 0)
+        assert address == ("10.0.0.5", 123)
 
     def test_recvfrom_into_zero_capacity_returns_zero(self) -> None:
         sock = FakeUDPSocket()
