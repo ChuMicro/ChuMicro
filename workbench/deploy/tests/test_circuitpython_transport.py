@@ -2559,6 +2559,60 @@ class TestDriveVerification:
         ):
             transport._verify_drive_for_board(drive)
 
+    def test_refuses_when_probe_unidentifiable_and_multiple_mounts(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """boot_out.txt present but the probe gives no identity, with more
+        than one CIRCUITPY* mounted -> refuse rather than risk a
+        wrong-board wipe on whichever drive came up first."""
+        drive = tmp_path / "CIRCUITPY"
+        drive.mkdir()
+        (drive / "boot_out.txt").write_text(
+            f"Adafruit CircuitPython 10.2.0 on 2026-01-01; {_TEST_BOOT_MACHINE}\n"
+            f"Board ID:test_board\nUID:{_TEST_BOOT_UID}\n",
+            encoding="utf-8",
+        )
+        sibling = tmp_path / "CIRCUITPY 1"
+        sibling.mkdir()
+        monkeypatch.setattr(
+            "chumicro_deploy.circuitpy_drive._circuitpy_volume_candidates",
+            lambda: [drive, sibling],
+        )
+        monkeypatch.setattr(
+            CircuitpythonTransport, "probe_implementation", lambda self: None,
+        )
+        transport, _ = self._make_transport(
+            drive_path=str(drive),
+            reads=[_RAW_REPL_PROMPT],
+        )
+        with pytest.raises(CircuitpythonTransportError, match="cannot confirm"):
+            transport._verify_drive_for_board(drive)
+
+    def test_returns_drive_when_probe_unidentifiable_but_single_mount(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A single mounted CIRCUITPY* volume is unambiguous, so an
+        unverifiable probe still returns the drive (single-board host)."""
+        drive = tmp_path / "CIRCUITPY"
+        drive.mkdir()
+        (drive / "boot_out.txt").write_text(
+            f"Adafruit CircuitPython 10.2.0 on 2026-01-01; {_TEST_BOOT_MACHINE}\n"
+            f"Board ID:test_board\nUID:{_TEST_BOOT_UID}\n",
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(
+            "chumicro_deploy.circuitpy_drive._circuitpy_volume_candidates",
+            lambda: [drive],
+        )
+        monkeypatch.setattr(
+            CircuitpythonTransport, "probe_implementation", lambda self: None,
+        )
+        transport, _ = self._make_transport(
+            drive_path=str(drive),
+            reads=[_RAW_REPL_PROMPT],
+        )
+        assert transport._verify_drive_for_board(drive) == drive
+
     def test_auto_corrects_when_boot_out_missing_but_sibling_matches(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
