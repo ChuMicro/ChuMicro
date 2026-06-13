@@ -15,6 +15,7 @@ import chumicro_ntp
 from chumicro_ntp import NTPClient, NTPError, NTPResult
 from chumicro_ntp.core import _CLIENT_REQUEST, NTP_TO_UNIX, _parse_response
 from chumicro_sockets.testing import FakeUDPSocket
+from chumicro_test_harness import skip
 from chumicro_test_harness.assertions import raises
 from chumicro_timing.testing import FakeTicks
 
@@ -233,6 +234,34 @@ def test_handle_swallows_eagain_until_timeout() -> None:
     sock.enqueue_eagain_for_recv()
     client.handle(now_ms=ticks.ticks_ms())
     assert request.done is False  # still waiting — under timeout
+
+
+def test_handle_treats_ewouldblock_as_would_block_until_timeout() -> None:
+    # macOS-CPython raises EWOULDBLOCK (35), distinct from EAGAIN (11),
+    # on a non-blocking recv with no datagram.  Under the timeout the
+    # exchange must stay pending, not permanently fail.  MP/CP alias it
+    # to EAGAIN and expose no constant, so skip there.
+    ewouldblock = getattr(errno, "EWOULDBLOCK", None)
+    if ewouldblock is None:
+        skip("errno.EWOULDBLOCK is distinct from EAGAIN only on CPython")
+
+    class _WouldBlockSocket:
+        def sendto(self, *args: object) -> int:
+            return len(args[0])
+
+        def recvfrom_into(self, buffer: object) -> tuple:
+            raise OSError(ewouldblock, "would block")
+
+        def close(self) -> None:
+            pass
+
+    sock = _WouldBlockSocket()
+    ticks = FakeTicks()
+    client = NTPClient(socket=sock, timeout_ms=200, ticks=ticks)
+    request = client.query()
+    ticks.advance(50)
+    client.handle(now_ms=ticks.ticks_ms())
+    assert request.done is False  # would-block under timeout → still waiting
 
 
 def test_handle_times_out_when_no_data_arrives() -> None:
