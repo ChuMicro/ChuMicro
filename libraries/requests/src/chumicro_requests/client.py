@@ -589,13 +589,24 @@ class HttpClient:
         Lets ``Runner.wait`` shorten its central poll so the loop wakes
         for timeout enforcement even on a quiescent socket.  *now_ms*
         is the runner's tick and is accepted for the contract; the
-        deadline is an absolute tick captured at request start.  The
-        request-level deadline supersedes the connector's ``None``
-        deadline during ``AWAITING_TRANSPORT`` so a stuck handshake
-        gets timed out by the same per-request budget.
+        deadline is an absolute tick captured at request start.
+
+        While ``AWAITING_TRANSPORT`` with no pollable yet (the connector
+        is still resolving DNS, so ``io_socket`` is ``None`` and
+        ``Runner.wait`` has nothing to park on), this returns *now_ms* —
+        an immediate deadline that keeps the loop ticking the
+        tick-driven connector forward instead of sleeping toward the far
+        request deadline.  Once a pollable exists (TCP-connect onward) or
+        the connect phase ends, the per-request budget governs again and
+        still times out a stuck handshake.
         """
         if self._state == _RequestState.IDLE:
             return None
+        if (
+            self._state == _RequestState.AWAITING_TRANSPORT
+            and self.io_socket is None
+        ):
+            return now_ms
         return self._deadline_ticks
 
     # ------------------------------------------------------------------

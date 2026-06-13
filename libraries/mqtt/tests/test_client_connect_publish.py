@@ -303,6 +303,35 @@ class TestMultiTickConnect:
         assert client.io_wants_read is False
         assert client.next_deadline(0) is None
 
+    def test_next_deadline_clamps_to_now_while_awaiting_dns(self) -> None:
+        """Before the connector builds a socket (awaiting_dns, io_socket
+        None), next_deadline returns now_ms so Runner.wait ticks the
+        connector forward instead of sleeping; once dns_ok produces a
+        pollable, the connector's deadline (None here) flows through."""
+        sock = FakeSocket()
+        ticks = FakeTicks()
+
+        def factory():
+            return FakeSocketConnector(
+                actions=["dns_ok", "tcp_ok"], socket=sock,
+            )
+
+        client = MQTTClient(
+            connector_factory=factory,
+            client_id="clamp-test",
+            ticks=ticks,
+        )
+        client.connect()
+        # Fresh connector is in awaiting_dns: no socket yet, nothing for
+        # Runner.wait to park on, so the deadline collapses to now_ms.
+        assert client.io_socket is None
+        assert client.next_deadline(777) == 777
+        # One tick drives dns_ok; the connector now exposes its socket
+        # and the clamp lifts (the connector reports no deadline of its own).
+        client.handle(ticks.ticks_ms())
+        assert client.io_socket is sock
+        assert client.next_deadline(777) is None
+
 
 class TestDisconnect:
     def test_sends_disconnect_packet_and_closes(self) -> None:

@@ -290,14 +290,34 @@ class TestRunnerReactorContract:
         client, ticks, _ = make_client()
         assert client.next_deadline(ticks.ticks_ms()) is None
 
-    def test_next_deadline_returns_request_deadline_when_busy(self):
+    def test_next_deadline_clamps_to_now_while_awaiting_dns(self):
+        """At request start the connector is in awaiting_dns with no
+        socket, so io_socket is None and next_deadline collapses to
+        now_ms — Runner.wait then ticks the connector forward instead
+        of sleeping toward the far request deadline."""
+        socket = FakeSocket()
+        client, ticks, _ = make_client(
+            socket_or_factory=socket, default_timeout_ms=500,
+        )
+        client.get("http://example.test/")
+
+        assert client.io_socket is None
+        assert client.next_deadline(777) == 777
+
+    def test_next_deadline_returns_request_deadline_once_pollable(self):
+        """Once one handle tick drives dns_ok and the connector exposes
+        its socket, the clamp lifts and the per-request budget (500 ms
+        from start) governs the wake again."""
         socket = FakeSocket()
         client, ticks, _ = make_client(
             socket_or_factory=socket, default_timeout_ms=500,
         )
         start = ticks.ticks_ms()
         client.get("http://example.test/")
+        # Drive the connector one step: dns_ok makes io_socket live.
+        client.handle(ticks.ticks_ms())
 
+        assert client.io_socket is socket
         deadline = client.next_deadline(ticks.ticks_ms())
         assert deadline is not None
         assert ticks.ticks_diff(deadline, start) == 500

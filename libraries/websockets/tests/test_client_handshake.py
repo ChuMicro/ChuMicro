@@ -382,12 +382,30 @@ class TestRunnerReactorContract:
         client.handle(clock.ticks_ms())
         assert client.io_wants_write is False
 
-    def test_next_deadline_returns_handshake_deadline_when_connecting(self):
+    def test_next_deadline_clamps_to_now_while_awaiting_dns(self):
+        """At connect the connector is in awaiting_dns with no socket,
+        so io_socket is None and next_deadline collapses to now_ms —
+        Runner.wait ticks the connector forward instead of sleeping
+        toward the far handshake-timeout deadline."""
+        client, _socket, _clock, _ = _make_client(
+            handshake_timeout_ms=3000,
+        )
+        client.connect("ws://example.com/")
+        assert client.io_socket is None
+        assert client.next_deadline(777) == 777
+
+    def test_next_deadline_returns_handshake_deadline_once_pollable(self):
+        """Once one handle tick drives dns_ok and the connector exposes
+        its socket, the clamp lifts and the handshake-timeout deadline
+        (3000 ms from start) governs the wake again."""
         client, _socket, clock, _ = _make_client(
             handshake_timeout_ms=3000,
         )
         start = clock.ticks_ms()
         client.connect("ws://example.com/")
+        # Drive the connector one step: dns_ok makes io_socket live.
+        client.handle(clock.ticks_ms())
+        assert client.io_socket is not None
         deadline = client.next_deadline(clock.ticks_ms())
         assert deadline is not None
         assert clock.ticks_diff(deadline, start) == 3000

@@ -947,12 +947,22 @@ class MQTTClient:
         response's ack deadline, each in-flight QoS 1 publish's retry
         deadline, and the send timeout (when armed).  ``None`` when no
         deadline applies (the runner falls back to the next periodic-
-        task ``next_due_ms``).  ``AWAITING_TRANSPORT`` forwards to the
-        connector — which currently returns ``None`` (consumers wrap
-        with an outer deadline).
+        task ``next_due_ms``).
+
+        While ``AWAITING_TRANSPORT`` with no pollable yet (the connector
+        is still resolving DNS, so ``io_socket`` is ``None`` and
+        ``Runner.wait`` has nothing to park on), this returns *now_ms* —
+        an immediate deadline that keeps the loop ticking the
+        tick-driven connector forward.  Once a pollable exists
+        (TCP-connect onward) the connector's own deadline flows through
+        (currently ``None``; consumers wrap with an outer deadline).
         """
         if self.state == ProtocolState.AWAITING_TRANSPORT:
-            return self._connector.next_deadline(now_ms) if self._connector is not None else None
+            if self._connector is None:
+                return None
+            if self.io_socket is None:
+                return now_ms
+            return self._connector.next_deadline(now_ms)
         if self.state in (ProtocolState.DISCONNECTED, ProtocolState.FAILED):
             return None
         ticks_diff = self._ticks.ticks_diff
