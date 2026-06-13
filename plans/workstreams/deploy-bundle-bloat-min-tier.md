@@ -20,72 +20,63 @@ names 256 KB RAM / 2 MB physical / ~800 KB usable flash as the minimum board.
 If a one-request demo cannot be staged there, the ecosystem has outgrown its own
 stated floor.
 
-## Measured 2026-06-13 (chumicro_sockets — a "thin" cross-runtime socket layer)
+## Measured 2026-06-13 — on the board, not the source tree
 
-`chumicro_sockets/src` is **~135 KB of source, ~118 KB staged** to a board (excl
-`testing.py`). For a layer whose job is to bind MicroPython + CircuitPython sockets
-behind one API plus small ease-of-use helpers, that is far too big. Per-file:
+Corrected after reading the actual CIRCUITPY drive (the source-sum was misleading).
+The deploy is already selective: a CircuitPython board carries **only** the CP adapter —
+no `mp.py`, no host `cpython.py`, no `testing.py`. So `chumicro_sockets` on the board is
+**~74 KB**, not the ~118 KB the source-sum suggested. What actually landed:
 
-| File | Bytes | Note |
-|---|---:|---|
-| `_adapters/mp.py` | 26.8 KB | MicroPython adapter |
-| `__init__.py` | 22.2 KB | factories + heavy docstrings |
-| `_adapters/cp.py` | 18.0 KB | CircuitPython adapter |
-| `testing.py` | 17.0 KB | test-support, **not** device-bundled |
-| `_ca_bundle.der` | 16.4 KB | TLS CA certs |
-| `_adapters/cpython.py` | 13.9 KB | **host** adapter — a board never uses it |
-| `generators.py` | 9.7 KB | **72% docstrings**; ~2.7 KB is code |
-| `_connector.py` | 7.2 KB | |
-| `_ca_bundle.py` | 3.4 KB | |
+| File on board | Bytes | docstring+comment |
+|---|---:|---:|
+| `__init__.py` | 22.1 KB | **85%** |
+| `_adapters/cp.py` | 18.0 KB | 68% |
+| `_ca_bundle.der` | 16.4 KB | — (binary, not strippable) |
+| `generators.py` | 9.7 KB | 72% |
+| `_connector.py` | 7.2 KB | 74% |
+| `_adapters/__init__.py` | 0.4 KB | 99% |
 
-## Concrete levers (highest-impact first)
+The deployed `.py` is **57 KB, of which 76% (44 KB) is docstrings + comments**.
 
-1. **Flash-mode does not strip docstrings.** RAM-mode inlines source through
-   `circuitpython_bootstrap._strip_docstring_from_body`; flash-mode `rsync`/`shutil.copy2`
-   ships raw `.py`. Across these files docstrings are 50–72% of bytes. Applying the
-   existing `strip-comments` machinery to the flash-stage path would roughly halve the
-   deployed size of every library. Biggest single win, contained to the deploy pipeline.
-2. **All three runtime adapters are staged.** A board needs only its own adapter, yet
-   `mp.py` + `cp.py` + `cpython.py` all ship — `cpython.py` (13.9 KB, host-only) is pure
-   dead weight on a device, and the non-target MP/CP adapter (~20 KB) is too. Stage only
-   the target runtime's adapter.
-3. **`generators.py` is docstring-bloated** (the generator *code* is ~2.7 KB). Tracks the
-   same docstring-on-flash issue as lever 1; the user's earlier instruction was minimal
-   comments + a generator skill later, which this run did not honor in the moved file.
-4. **The 16 KB CA bundle** is unconditional; a BYO-context / non-TLS user still pays it.
+## The fix is essentially one lever
+
+**Flash-mode deploys ship docstrings verbatim.** RAM-mode inlines source through
+`circuitpython_bootstrap._strip_docstring_from_body`; flash-mode `rsync`/`shutil.copy2`
+copies raw `.py`. Apply the existing strip to the flash-stage path and `chumicro_sockets`
+drops from ~74 KB to **~30 KB** (saving ~44 KB), and every other library shrinks by its
+own docstring share. This also reconciles the verbose-docstring AGENTS rules with the
+embedded flash budget: rich docstrings for maintainers, stripped on the device path.
+
+Secondary: the 16 KB CA bundle is unconditional (a non-TLS user still pays it); and the
+test-harness staging on the *demo* deploy path is what actually overflowed the Pico W CP.
+
+Not a lever (verified on the board): per-runtime adapter selection already works — the
+non-target adapter and the host adapter do not ship. An earlier note claimed otherwise from
+a source-sum; the board disproved it.
 
 (The 0087 "generators are leaner than coroutines" claim is about *runtime* — CircuitPython
 allocates a fresh generator per `await`, asyncio carries a module + Task heap — not source
-bytes. The generator file size is a docstring/deploy issue, lever 1+3, not the mechanism.)
+bytes. The generators.py file is 72% docstrings; the code is ~2.7 KB. Same docstring-on-flash
+issue, not the mechanism.)
 
-## Suspected contributors (to measure, not assume)
+## Next steps
 
-- **Test-harness staging on the demo path.** The user identified the
-  `chumicro_test_harness` rsync as what tipped it over. A demo runs `app.py` and
-  prints stdout markers the host driver reads over serial — it is not clear the
-  full on-device test harness needs to land on the FAT drive for a *demo* deploy
-  (vs the on-device *unit-test* sweep, which does). If demo/app deploys can skip
-  the harness, that is likely the biggest single win. Measure the harness's
-  staged byte cost first.
-- **Dependency-chain footprint.** requests_fetch pulls chumicro_requests +
-  chumicro_runner + chumicro_sockets + chumicro_wifi + chumicro_config +
-  chumicro_timing. Each is modest alone; the sum plus the harness overflows
-  500 KB. Measure per-module staged bytes (`.mpy`/`.py`) and find the heavy ones.
-- **Per-library size.** Existing next-up bullets already flag this: chumicro_mqtt
-  is ~2x the reference impl; `/audit-embedded chumicro_runner.core` +
-  chumicro_websockets are queued. Fold those measurements in here.
-- **Boilerplate.** Copied `examples/helpers.py` per library, the inline
-  runtime_config msgpack decoder, repeated wifi-up scaffolding. Quantify how much
-  is duplicated vs load-bearing.
+1. **Strip docstrings/comments on the flash-stage path.** The machinery already
+   exists for RAM-mode (`circuitpython_bootstrap._strip_docstring_from_body`,
+   plus the `strip-comments` command). Apply it in `circuitpython_transport`'s
+   flash staging (and the MicroPython transport). Validate: deployed bytes drop
+   ~76% on `.py`, and the stripped libraries still import + run on-device.
+2. **Decide whether demo/app deploys stage the test harness.** A demo runs
+   `app.py` and prints stdout markers the host reads over serial; the on-device
+   test harness is for the *unit-test* sweep, not a demo. Excluding it from the
+   demo/app deploy mode is what would let the Pico W CP fit. Measure its staged
+   byte cost, then gate it by deploy mode.
+3. **Make the 16 KB CA bundle opt-in** for non-TLS / BYO-context users (later).
 
-## First steps
-
-1. Measure: `chumicro-workspace`/`chumicro-deploy` staged byte breakdown for the
-   requests_fetch deploy on rp2040 CP (per file). Confirm the harness share.
-2. Decide whether demo/app (non-unit-test) deploys should stage the test harness
-   at all; if not, exclude it from that deploy mode.
-3. Re-attempt the requests_fetch deploy on the Pico W CP; it should fit if the
-   harness is the main offender.
+Boilerplate (copied `examples/helpers.py`, the inline runtime_config msgpack
+decoder, repeated wifi-up scaffolding) and per-library size (chumicro_mqtt ~2x
+the reference; the queued `/audit-embedded` passes) are real but secondary to the
+docstring-strip win above — re-measure each after step 1 lands.
 
 ## Why it matters
 
