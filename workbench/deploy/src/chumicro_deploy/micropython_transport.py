@@ -35,6 +35,7 @@ from .protocol import (
     validate_entrypoint_in_files,
 )
 from .runtime_marker import file_targets_runtime, is_test_support_module
+from .source_minify import minify_python_tree
 
 if TYPE_CHECKING:  # pragma: no cover - type-only
     from mpremote.transport_serial import SerialTransport
@@ -462,6 +463,9 @@ class MicropythonTransport:
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 destination.write_bytes(content)
 
+        # Strip docstrings and comments from every staged .py before the
+        # transfer so libraries, tests, and the harness land as code only.
+        minify_python_tree(staging_path)
         if self.mode == "copy":
             # Subprocess `fs cp -r` — release the serial port if held.
             self._close_serial()
@@ -857,6 +861,9 @@ class MicropythonTransport:
             if on_file_staged is not None:
                 on_file_staged(device_path)
 
+        # Strip docstrings and comments from every staged .py before the
+        # transfer so the board carries code, not prose.
+        minify_python_tree(staging_path)
         relative_entrypoint = entrypoint.lstrip("/")
         if self.mode == "copy":
             # Copy mode pushes files to the device's real filesystem,

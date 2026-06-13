@@ -1478,7 +1478,7 @@ class TestFlashMode:
         source_dir = tmp_path / "src"
         package_dir = source_dir / "chumicro_timing"
         package_dir.mkdir(parents=True)
-        (package_dir / "__init__.py").write_text("# init")
+        (package_dir / "__init__.py").write_text('marker = "init"')
 
         harness_dir = tmp_path / "harness"
         harness_dir.mkdir()
@@ -1516,7 +1516,7 @@ class TestFlashMode:
         assert not (drive_path / "test_one.py").exists()
         # Library content is unchanged.
         lib_init = drive_path / "lib" / "chumicro_timing" / "__init__.py"
-        assert lib_init.read_text() == "# init"
+        assert lib_init.read_text() == 'marker = "init"'
 
         transport.disconnect()
 
@@ -1577,7 +1577,7 @@ class TestFlashMode:
         source_dir = tmp_path / "src"
         package_dir = source_dir / "chumicro_timing"
         package_dir.mkdir(parents=True)
-        (package_dir / "__init__.py").write_text("# new")
+        (package_dir / "__init__.py").write_text('marker = "new"')
 
         harness_dir = tmp_path / "harness"
         harness_dir.mkdir()
@@ -1598,7 +1598,7 @@ class TestFlashMode:
         transport.stage([source_dir], [], harness_dir)
 
         # Existing files are overwritten with new content.
-        assert (lib_dir / "__init__.py").read_text() == "# new"
+        assert (lib_dir / "__init__.py").read_text() == 'marker = "new"'
         # Stale files are removed by rsync --delete.
         assert not (lib_dir / "stale_file.py").exists()
 

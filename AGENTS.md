@@ -132,6 +132,7 @@ A feature that exists only in code is incomplete. Docs, ADRs, planning files, sc
 - Don't manipulate CIRCUITPY mount state from the host (`diskutil unmount` / `eject` / `mount`, `rm /Volumes/CIRCUITPY*`) — deploy/transport owns it, and interference defeats its EACCES classifier. Destructive remediation: `chumicro-workspace reset-board --yes`.
 - Two CP boards plugged in mount as `/Volumes/CIRCUITPY` + `/Volumes/CIRCUITPY 1` — that's normal disambiguation, not a wedge. Check `chumicro-workspace devices` first. Parallel deploys to two CP boards race for the mount; run them sequentially.
 - A `git rm` or `git add` stages immediately and rides into the next commit, even a later narrowly-scoped one. Before a scoped commit, run `git --no-pager diff --cached --stat` and `git restore --staged <unrelated>`, or stage with explicit pathspecs.
+- Device deploys strip docstrings and comments from every staged `.py` ([Decision 0090](plans/decisions/0090-deploy-strips-docstrings-and-comments.md)). An on-device file is shorter than its repo source and its runtime `__doc__` is empty, so compare against the repo source rather than the board copy, and never rely on `__doc__` in library code.
 
 ## Working style
 
