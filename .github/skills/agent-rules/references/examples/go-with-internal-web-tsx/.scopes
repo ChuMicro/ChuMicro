@@ -1,3 +1,0 @@
-# Scopes for testing Go+frontend hybrid projects
-# Format: path:type
-internal/web:frontend-typescript
