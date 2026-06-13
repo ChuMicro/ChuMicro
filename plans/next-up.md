@@ -4,6 +4,7 @@
 
 ## Now
 
+- [ ] **Deploy-bundle bloat overflows the minimum-tier flash — a basic demo can't be staged on a Pico W CP (500 KB cap, 2 KB free).**  [workstreams/deploy-bundle-bloat-min-tier.md](workstreams/deploy-bundle-bloat-min-tier.md) — surfaced 2026-06-13 baking `requests_fetch`; test-harness staging + the dependency chain (requests+runner+sockets+wifi+config+timing) tip it over.  Measure per-file staged bytes, decide whether demo/app deploys should stage the harness at all.
 - [ ] **Generator (`yield from`) I/O surfaces for the networking libraries + MQTT demo cleanup.**  [workstreams/generator-networking-apis.md](workstreams/generator-networking-apis.md) — branch `generator-networking-apis`; Phase 1 (socket helpers relocated to `chumicro_sockets.generators`) landed 2026-06-13.
 - [ ] **Comment-generation round 18 (guided vs bare no-guidance control; honest naming; 4 guided voices + 2 bare) — built, awaiting dispatch + analysis** — see [`handoffs/2026-05-30-comment-generation-round18-guided-vs-bare.md`](handoffs/2026-05-30-comment-generation-round18-guided-vs-bare.md).  Status: deferred 2026-06-12 (user call — clean-room spend stays for a user-present session).
 
