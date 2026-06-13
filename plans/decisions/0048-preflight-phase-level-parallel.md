@@ -2,7 +2,7 @@
 
 Status: `accepted`
 Date: `2026-05-03`
-Summary: `preflight`'s 11 phases fan out as parallel subprocesses; host-aware workers (`--phase-workers` / `--package-workers` override); `--with-functional` stays serial for hardware contention.
+Summary: `preflight`'s 12 phases fan out as parallel subprocesses; all at once by default (`--phase-workers` / `--package-workers` override); `--with-functional` stays serial for hardware contention.
 Related: Decision 0025 (coverage threshold), [Decision 0054](0054-streaming-output-and-status-modes.md)
 (supersedes §3 — output capture switched from `subprocess.run(capture_output=True)` to `Popen` + line-streaming dispatcher; subprocess re-invocation persists for resource isolation, not output capture), commit `ffe50bc`
 (Bucket 3 — per-package fan-out for `build` and `docs`),
@@ -12,12 +12,12 @@ commit `cb4efa9` (older 2-thread MP/CP fan-out inside `test_all_runtimes`)
 
 `scripts/run.py preflight` is the local mirror of the CI matrix —
 agents and humans run it before every commit.  It currently runs
-**11 phases serially** in this fixed order:
+**12 phases serially** in this fixed order:
 
 ```
 lint → build → docs → test (cpython) → test-scripts →
-verify-examples → check-dep-graph → check-version → check-api →
-test-micropython → test-circuitpython
+verify-examples → verify-demos → check-dep-graph → check-version →
+check-api → test-micropython → test-circuitpython
 ```
 
 After Bucket 3 (commit `ffe50bc`) parallelized per-package fan-out
@@ -42,7 +42,7 @@ the on-screen log shape (lint output appears first, etc.).
 
 ### 1. Phase DAG: every phase runs in parallel
 
-All 11 phases are independent and can fan out concurrently.
+All 12 phases are independent and can fan out concurrently.
 There is no DAG between them — each is a self-contained subprocess
 re-invocation of `python scripts/run.py <subcommand>`.
 
@@ -161,7 +161,7 @@ The two pre-existing helpers (`_run_phases_in_parallel` for `test_all_runtimes`,
 ### Negative / tradeoffs
 
 - Subprocess re-invocation adds Python-startup overhead (~0.1-0.2 s)
-  per phase.  At 11 phases that's ~1-2 s of overhead.  Net win
+  per phase.  At 12 phases that's ~1-2 s of overhead.  Net win
   is still large because the concurrency saves far more than
   startup costs.
 - A failing phase no longer aborts the run early — the user waits

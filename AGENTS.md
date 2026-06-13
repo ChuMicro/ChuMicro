@@ -223,7 +223,7 @@ Core commands for active development and troubleshooting:
 | `lint` | Ruff across the workspace |
 | `test-all-runtimes` | CPython + MicroPython + CircuitPython unit tests (parallelized) |
 | `check-api` / `check-version` | Diff public API surface, confirm VERSION bump level matches |
-| `verify-examples` | Run each library's `examples/` against CPython (`--libraries <name>` or all) |
+| `verify-examples` | Statically check each library's `examples/` for valid syntax and resolvable imports under CPython — no execution (`--libraries <name>` or all) |
 | `new-library` | Scaffold a new device library (`--workbench` for a host-only tool) + regenerate IDE configs |
 | `sync-ide` | Regenerate IDE configs |
 

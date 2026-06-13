@@ -400,7 +400,7 @@ class TestMainDispatch:
                     "coverage_threshold": 94,
                     "with_functional": False,
                     "with_device_unit": False,
-                    "phase_workers": run._DEFAULT_PREFLIGHT_PHASE_PARALLEL_WORKERS,
+                    "phase_workers": None,
                     "package_workers": run._DEFAULT_PACKAGE_PARALLEL_WORKERS,
                     "quiet": False,
                     "slow_test_threshold_cpython": run._DEFAULT_SLOW_TEST_THRESHOLD_CPYTHON,
@@ -517,7 +517,7 @@ class TestMainDispatch:
                     "coverage_threshold": None,
                     "with_functional": True,
                     "with_device_unit": False,
-                    "phase_workers": run._DEFAULT_PREFLIGHT_PHASE_PARALLEL_WORKERS,
+                    "phase_workers": None,
                     "package_workers": run._DEFAULT_PACKAGE_PARALLEL_WORKERS,
                     "quiet": False,
                     "slow_test_threshold_cpython": run._DEFAULT_SLOW_TEST_THRESHOLD_CPYTHON,
@@ -993,7 +993,7 @@ class TestCompositeTestCommands:
         """
         monkeypatch.setattr(
             run, "_preflight_run_parallel_phases",
-            lambda phases, **_kwargs: (0, None),
+            lambda phases, **_kwargs: (0, None, []),
         )
         monkeypatch.setattr(run, "is_ref_reachable", lambda *_args, **_kwargs: True)
 
@@ -1019,17 +1019,33 @@ class TestCompositeTestCommands:
 
 
 def _make_test_package(tmp_path: Path, name: str) -> Path:
-    """Create a fake library directory with a tests/ subdir."""
+    """Create a fake library directory with a tests/ subdir.
+
+    The ``src/chumicro_<name>/__init__.py`` makes the package an
+    importable, coverage-resolvable directory — without it
+    ``coverage_args_for`` returns no ``--cov`` source and test_cpython
+    now refuses the run rather than ship an inert gate.
+    """
     package_dir = tmp_path / name
     (package_dir / "tests").mkdir(parents=True)
-    (package_dir / "src" / f"chumicro_{name}").mkdir(parents=True)
+    source_dir = package_dir / "src" / f"chumicro_{name}"
+    source_dir.mkdir(parents=True)
+    (source_dir / "__init__.py").write_text("")
     return package_dir
 
 
 @pytest.fixture
 def fake_root(monkeypatch, tmp_path):
-    """Repoint run.ROOT at a tmp_path so relative_to() works for fake packages."""
+    """Repoint ROOT at a tmp_path so relative_to() works for fake packages.
+
+    Patches both ``run.ROOT`` and ``repo_layout.ROOT`` — ``test_cpython``
+    builds labels off the former while ``coverage_args_for`` resolves
+    ``--cov`` paths against the latter.
+    """
+    import repo_layout
+
     monkeypatch.setattr(run, "ROOT", tmp_path)
+    monkeypatch.setattr(repo_layout, "ROOT", tmp_path)
     return tmp_path
 
 
@@ -1416,7 +1432,7 @@ class TestRunParallelPhases:
             log.append("two")
             return 0
 
-        exit_code, failing_label = run._run_parallel_phases(
+        exit_code, failing_label, _phase_results = run._run_parallel_phases(
             (("first", phase_one), ("second", phase_two)),
             dispatcher=run._QuietDispatcher(),
         )
@@ -1449,7 +1465,7 @@ class TestRunParallelPhases:
 
     def test_first_failure_short_circuits_return_value(self):
         """A failing phase's exit code becomes the run's return value."""
-        exit_code, failing_label = run._run_parallel_phases(
+        exit_code, failing_label, _phase_results = run._run_parallel_phases(
             (
                 ("succeeded", lambda sink: 0),
                 ("failed", lambda sink: 7),
@@ -1461,7 +1477,7 @@ class TestRunParallelPhases:
 
     def test_first_failure_in_submission_order(self):
         """When two phases fail, the first one in submission order wins."""
-        exit_code, failing_label = run._run_parallel_phases(
+        exit_code, failing_label, _phase_results = run._run_parallel_phases(
             (
                 ("a", lambda sink: 11),
                 ("b", lambda sink: 13),
@@ -1476,7 +1492,7 @@ class TestRunParallelPhases:
         def phase_crashes(sink) -> int:
             raise RuntimeError("oh no")
 
-        exit_code, failing_label = run._run_parallel_phases(
+        exit_code, failing_label, _phase_results = run._run_parallel_phases(
             (("crashy", phase_crashes),),
             dispatcher=run._QuietDispatcher(),
         )
@@ -1695,7 +1711,7 @@ class TestPreflightParallelDispatch:
 
         def fake_run(phases, **_kwargs):
             captured_phases.extend([label for label, _ in phases])
-            return 0, None
+            return 0, None, []
 
         monkeypatch.setattr(run, "_preflight_run_parallel_phases", fake_run)
 
@@ -1725,7 +1741,7 @@ class TestPreflightParallelDispatch:
 
         def fake_run(phases, **_kwargs):
             captured_labels.extend([label for label, _ in phases])
-            return 0, None
+            return 0, None, []
 
         monkeypatch.setattr(run, "_preflight_run_parallel_phases", fake_run)
 
@@ -1757,7 +1773,7 @@ class TestPreflightParallelDispatch:
         )
         monkeypatch.setattr(
             run, "_preflight_run_parallel_phases",
-            lambda phases, **_kwargs: (0, None),
+            lambda phases, **_kwargs: (0, None, []),
         )
 
         run.preflight(coverage_threshold=94)
@@ -1784,7 +1800,7 @@ class TestPreflightParallelDispatch:
         )
         monkeypatch.setattr(
             run, "_preflight_run_parallel_phases",
-            lambda phases, **_kwargs: (0, None),
+            lambda phases, **_kwargs: (0, None, []),
         )
 
         run.preflight(
@@ -1810,7 +1826,7 @@ class TestPreflightParallelDispatch:
         monkeypatch.setattr(run, "is_ref_reachable", lambda *_a, **_kw: True)
         monkeypatch.setattr(
             run, "_preflight_run_parallel_phases",
-            lambda phases, **_kwargs: (13, "test-micropython"),
+            lambda phases, **_kwargs: (13, "test-micropython", []),
         )
 
         functional_calls: list[str] = []
@@ -1827,6 +1843,320 @@ class TestPreflightParallelDispatch:
         assert functional_calls == []
         out = capsys.readouterr().out
         assert "Preflight failed at: test-micropython" in out
+
+
+class TestPreflightPhaseTable:
+    """The per-phase status table rendered after the parallel block."""
+
+    def test_table_rows_carry_status_and_wall_time_in_submission_order(self):
+        """Each non-skipped spec gets a PASS/FAIL row with its wall seconds."""
+        specs = [
+            ("lint", ["lint"]),
+            ("build", ["build"]),
+            ("test-micropython", ["test-micropython"]),
+        ]
+        results = [
+            run._PhaseResult("lint", 0, 1.2, "ok\n"),
+            run._PhaseResult("build", 0, 3.4, "ok\n"),
+            run._PhaseResult("test-micropython", 1, 5.6, "boom\n"),
+        ]
+        lines = run._format_preflight_phase_table(specs, results)
+        text = "\n".join(lines)
+        assert "lint" in text and "PASS" in text and "1.2s" in text
+        assert "FAIL" in text and "5.6s" in text
+        # Submission order: lint before build before test-micropython.
+        assert text.index("lint") < text.index("build")
+        assert text.index("build") < text.index("test-micropython")
+
+    def test_skipped_spec_renders_skip_row(self):
+        """A spec with None args (origin/main unreachable) shows SKIP."""
+        specs = [("check-version", None), ("lint", ["lint"])]
+        results = [run._PhaseResult("lint", 0, 0.1, "")]
+        lines = run._format_preflight_phase_table(specs, results)
+        text = "\n".join(lines)
+        assert "check-version" in text
+        assert "SKIP" in text
+
+
+class TestPreflightFailureRecap:
+    """The end-of-run recap that re-prints the failing phase's tail."""
+
+    def test_recap_reprints_last_lines_of_failing_phase(self):
+        """The recap pulls the failing phase's trailing lines to EOF."""
+        captured = "\n".join(f"line {index}" for index in range(100)) + "\n"
+        results = [
+            run._PhaseResult("test", 1, 2.0, captured),
+            run._PhaseResult("lint", 0, 0.5, "lint ok\n"),
+        ]
+        lines = run._format_preflight_failure_recap("test", results)
+        text = "\n".join(lines)
+        assert "test (failed)" in text
+        # Last line present, an early line beyond the recap window absent.
+        assert "line 99" in text
+        assert "line 10" not in text
+        # Only the failing phase's transcript, not the passing one.
+        assert "lint ok" not in text
+
+    def test_recap_empty_when_no_failing_label(self):
+        """No failing label means no recap lines."""
+        assert run._format_preflight_failure_recap(None, []) == []
+
+    def test_preflight_prints_table_and_recap_on_failure(self, monkeypatch, capsys):
+        """A failing preflight prints the phase table then the failing recap."""
+        monkeypatch.setattr(run, "is_ref_reachable", lambda *_a, **_kw: True)
+        failing = run._PhaseResult(
+            "test (python 3.14)", 1, 2.0,
+            "ERROR: support/test_harness coverage 87% < fail-under=94%\n",
+        )
+
+        def fake_run(phases, **_kwargs):
+            return 1, "test (python 3.14)", [failing]
+
+        monkeypatch.setattr(run, "_preflight_run_parallel_phases", fake_run)
+
+        result = run.preflight(coverage_threshold=94)
+        assert result == 1
+        out = capsys.readouterr().out
+        assert "Phase summary:" in out
+        assert "(failed)" in out
+        # The attributed coverage line surfaces in the recap tail.
+        assert "support/test_harness coverage 87%" in out
+        assert "Preflight failed at: test (python 3.14)" in out
+
+
+class TestCoverageFailureAttribution:
+    """A coverage-gate failure carries the package label out of the fan-out."""
+
+    def test_filter_captures_coverage_failure_percentages(self):
+        """pytest-cov's unlabeled gate line is parsed and suppressed."""
+        filter_state = run._PytestOutputFilter()
+        absorbed = filter_state.consume(
+            "ERROR: Coverage failure: total of 87 is less than fail-under=94",
+        )
+        assert absorbed is True
+        assert filter_state.coverage_failure == (87, 94)
+
+    def test_phase_summary_names_failing_run(self):
+        """A non-zero run gets its own FAILED attribution line."""
+        results = [
+            run._PytestRunResult("libraries/timing/tests", 0, passed=10),
+            run._PytestRunResult("support/test_harness/tests", 1, passed=5),
+        ]
+        lines = run._format_pytest_phase_summary(
+            "test", results, slow_threshold_s=1.0,
+        )
+        text = "\n".join(lines)
+        assert "FAILED support/test_harness/tests (exit=1)" in text
+
+    def test_phase_summary_reports_deselected_count(self):
+        """A deselected count surfaces in the rolled-up summary."""
+        results = [run._PytestRunResult("lib/tests", 0, passed=3, deselected=7)]
+        lines = run._format_pytest_phase_summary(
+            "test", results, slow_threshold_s=1.0,
+        )
+        assert "7 deselected" in lines[0]
+
+
+class TestCoverageGateArgs:
+    """The per-package --cov-fail-under gate selection."""
+
+    def test_package_uses_threshold(self):
+        """A package gets the elevated threshold as an explicit flag."""
+        args = run._coverage_gate_args(
+            "timing",
+            skip_coverage_gate=False,
+            coverage_threshold=94,
+            elevated_packages=None,
+        )
+        assert args == ["--cov-fail-under=94"]
+
+    def test_skip_gate_forces_zero(self):
+        """skip_coverage_gate overrides every threshold with --cov-fail-under=0."""
+        args = run._coverage_gate_args(
+            "timing",
+            skip_coverage_gate=True,
+            coverage_threshold=94,
+            elevated_packages=None,
+        )
+        assert args == ["--cov-fail-under=0"]
+
+    def test_none_threshold_adds_no_flag(self):
+        """With no threshold the package falls back to the pyproject default (no flag)."""
+        args = run._coverage_gate_args(
+            "timing",
+            skip_coverage_gate=False,
+            coverage_threshold=None,
+            elevated_packages=None,
+        )
+        assert args == []
+
+    def test_unelevated_package_falls_back_to_default(self):
+        """A package outside elevated_packages gets no explicit flag."""
+        args = run._coverage_gate_args(
+            "timing",
+            skip_coverage_gate=False,
+            coverage_threshold=94,
+            elevated_packages={"sockets"},
+        )
+        assert args == []
+
+    def test_elevated_package_gets_threshold(self):
+        """A package inside elevated_packages gets the threshold flag."""
+        args = run._coverage_gate_args(
+            "sockets",
+            skip_coverage_gate=False,
+            coverage_threshold=94,
+            elevated_packages={"sockets"},
+        )
+        assert args == ["--cov-fail-under=94"]
+
+
+class TestInertCoverageGuard:
+    """A testable package whose coverage source resolves empty fails loudly."""
+
+    def test_no_coverage_source_fails_the_phase(
+        self, monkeypatch, fake_root, capsys,
+    ):
+        """A package with tests but no resolvable __init__.py is a loud error."""
+        package_dir = fake_root / "ghost"
+        (package_dir / "tests").mkdir(parents=True)
+        # src/ tree without an __init__.py: find_package_dir returns None.
+        (package_dir / "src" / "chumicro_ghost").mkdir(parents=True)
+
+        monkeypatch.setattr(
+            run, "_run_pytest_capturing",
+            lambda *_a, **_kw: pytest.fail("pytest must not run"),
+        )
+
+        result = run.test_cpython([package_dir], coverage_threshold=94)
+        assert result == 1
+        out = capsys.readouterr().out
+        assert "no resolvable coverage source" in out
+
+    def test_no_cov_bypasses_the_guard(self, monkeypatch, fake_root):
+        """With no_cov the empty-source package still runs (gate intentionally off)."""
+        package_dir = fake_root / "ghost"
+        (package_dir / "tests").mkdir(parents=True)
+        (package_dir / "src" / "chumicro_ghost").mkdir(parents=True)
+
+        recorded: list[list[str]] = []
+        monkeypatch.setattr(
+            run, "_run_pytest_capturing",
+            lambda command, environment, sink: (recorded.append(command), 0)[1],
+        )
+        monkeypatch.setattr(run, "run_command", lambda *_a, **_kw: 0)
+
+        result = run.test_cpython([package_dir], no_cov=True)
+        assert result == 0
+        assert recorded  # pytest ran
+
+
+class TestDuplicatePhaseLabels:
+    """Phase labels must stay unique across the fan-out."""
+
+    def test_run_parallel_rejects_duplicate_labels(self):
+        """Identical labels raise rather than silently clobber dispatcher state."""
+        with pytest.raises(ValueError, match="Duplicate phase label"):
+            run._run_parallel_phases(
+                (("dup", lambda sink: 0), ("dup", lambda sink: 0)),
+                dispatcher=run._QuietDispatcher(),
+            )
+
+    def test_same_file_scoped_filters_get_distinct_labels(
+        self, monkeypatch, fake_root,
+    ):
+        """Two -k entries on the same test file produce distinct phase labels."""
+        package_dir = _make_test_package(fake_root, "timing")
+        (package_dir / "tests" / "test_ticks.py").write_text(
+            "def test_a():\n    assert True\n"
+            "def test_b():\n    assert True\n",
+        )
+        monkeypatch.setattr(run, "discover_package_dirs", lambda: [package_dir])
+        monkeypatch.setattr(
+            run, "_run_pytest_capturing",
+            lambda command, environment, sink: 0,
+        )
+
+        captured_labels: list[str] = []
+
+        def capture_phases(phases, **_kwargs):
+            captured_labels.extend(label for label, _ in phases)
+            return 0, None, []
+
+        monkeypatch.setattr(run, "_run_parallel_phases", capture_phases)
+        # Two file-scoped entries naming the same file.
+        run.test_cpython(
+            [package_dir],
+            filter_expression="timing/test_ticks/test_a,timing/test_ticks/test_b",
+        )
+        assert len(captured_labels) == 2
+        assert len(set(captured_labels)) == 2  # distinct, no collision
+
+
+class TestInterruptCleanup:
+    """KeyboardInterrupt mid-block cancels queued phases and reaps children."""
+
+    def test_keyboard_interrupt_terminates_registered_processes(
+        self, monkeypatch,
+    ):
+        """A KeyboardInterrupt propagates after terminate_all reaps the group."""
+        terminated: list[str] = []
+
+        class _FakeRegistry:
+            def add(self, _process):
+                pass
+
+            def terminate_all(self):
+                terminated.append("terminated")
+
+        monkeypatch.setattr(run, "_ProcessRegistry", _FakeRegistry)
+
+        def interrupting_phase(sink):
+            raise KeyboardInterrupt
+
+        with pytest.raises(KeyboardInterrupt):
+            run._run_parallel_phases(
+                (("phase", interrupting_phase),),
+                dispatcher=run._QuietDispatcher(),
+            )
+        assert terminated == ["terminated"]
+
+    def test_registry_signals_group_then_kills_on_timeout(self, monkeypatch):
+        """terminate_all sends SIGTERM, then SIGKILL to a group that won't die."""
+        import subprocess as subprocess_module
+
+        signals: list[int] = []
+
+        class _StubProcess:
+            pid = 4242
+
+            def poll(self):
+                return None
+
+            def wait(self, timeout=None):
+                raise subprocess_module.TimeoutExpired(cmd="x", timeout=timeout)
+
+        monkeypatch.setattr(run.os, "getpgid", lambda _pid: 4242)
+        monkeypatch.setattr(
+            run.os, "killpg", lambda _pgid, sig: signals.append(sig),
+        )
+
+        registry = run._ProcessRegistry()
+        registry.add(_StubProcess())
+        registry.terminate_all()
+        assert run.signal.SIGTERM in signals
+        assert run.signal.SIGKILL in signals
+
+
+class TestRawDispatcherLocking:
+    """The raw child dispatcher serializes its line emission."""
+
+    def test_raw_dispatcher_holds_a_lock(self):
+        """_RawDispatcher carries a lock so concurrent phase_line can't tear."""
+        dispatcher = run._RawDispatcher()
+        # The lock attribute exists and is a usable context manager.
+        with dispatcher._lock:
+            pass
 
 
 class TestUnitOnDeviceSweep:

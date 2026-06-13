@@ -1,0 +1,180 @@
+"""Tests for UnixPortBackend's binary resolution and subprocess execution.
+
+Drives execute() against real subprocesses by pointing the runtime
+binary at the host Python and the harness script at small stand-in
+scripts, so the spawn / capture / empty-output / OSError paths run for
+real without a MicroPython build.
+"""
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
+from chumicro_deploy import DeviceEntry
+from chumicro_pytest_device.backends import (
+    BackendExecuteError,
+    BackendPrepareError,
+    UnixPortBackend,
+)
+
+_HARNESS_RELATIVE = Path("support/test_harness/run_cross_runtime.py")
+
+
+def _unix_port_target(runtime: str = "micropython") -> DeviceEntry:
+    return DeviceEntry(
+        identifier=f"{runtime}-unix-port", runtime=runtime, address="unix-port",
+    )
+
+
+def _workspace_with_harness(tmp_path: Path, harness_source: str) -> Path:
+    """Create a workspace whose harness script is *harness_source*."""
+    harness = tmp_path / _HARNESS_RELATIVE
+    harness.parent.mkdir(parents=True)
+    harness.write_text(harness_source)
+    return tmp_path
+
+
+def _item_for(test_file: Path) -> SimpleNamespace:
+    return SimpleNamespace(test_file=test_file)
+
+
+class TestResolve:
+    """Binary resolution order and failure modes."""
+
+    def test_missing_binary_everywhere_raises_prepare_error(
+        self, tmp_path: Path, monkeypatch,
+    ) -> None:
+        """No override, no marker, no PATH hit: a coached prepare error."""
+        monkeypatch.setattr(
+            "chumicro_pytest_device.backends.shutil.which", lambda _name: None,
+        )
+        backend = UnixPortBackend(tmp_path)
+        with pytest.raises(BackendPrepareError, match="binary not found"):
+            backend._resolve("micropython")
+
+    def test_second_resolve_returns_the_cached_path(
+        self, tmp_path: Path,
+    ) -> None:
+        """The per-runtime resolution memoizes after the first call."""
+        binary = tmp_path / "fake-runtime"
+        binary.write_text("#!/bin/sh\n")
+        backend = UnixPortBackend(
+            tmp_path, binaries={"micropython": str(binary)},
+        )
+
+        first = backend._resolve("micropython")
+        # Remove the file: a second call must not re-check existence.
+        binary.unlink()
+        second = backend._resolve("micropython")
+
+        assert first == second == str(tmp_path / "fake-runtime")
+
+
+class TestPrepare:
+    """Front-loaded failure checks before any subprocess spawns."""
+
+    def test_missing_harness_script_raises_prepare_error(
+        self, tmp_path: Path,
+    ) -> None:
+        """A workspace without the worker script fails with the install hint."""
+        backend = UnixPortBackend(
+            tmp_path, binaries={"micropython": sys.executable},
+        )
+        with pytest.raises(BackendPrepareError, match="harness not found"):
+            backend.prepare(
+                _item_for(tmp_path / "test_x.py"), _unix_port_target(),
+            )
+
+    def test_prepare_with_binary_and_harness_succeeds(
+        self, tmp_path: Path,
+    ) -> None:
+        """Binary resolved + harness present: prepare returns quietly."""
+        workspace = _workspace_with_harness(tmp_path, "print('PASS')\n")
+        backend = UnixPortBackend(
+            workspace, binaries={"micropython": sys.executable},
+        )
+        backend.prepare(
+            _item_for(workspace / "test_x.py"), _unix_port_target(),
+        )
+
+
+class TestExecute:
+    """Real subprocess spawn, output capture, and error surfaces."""
+
+    def test_returns_harness_output_for_the_test_file(
+        self, tmp_path: Path,
+    ) -> None:
+        """The worker invocation's stdout comes back for parsing."""
+        workspace = _workspace_with_harness(
+            tmp_path,
+            "import sys\n"
+            "print('PASS test_alpha (0.01s)')\n"
+            "print('SUMMARY total=1 failed=0 time=0.01s')\n"
+            "print('worker file:', sys.argv[-1])\n",
+        )
+        test_file = workspace / "test_demo.py"
+        test_file.write_text("def test_alpha():\n    pass\n")
+        backend = UnixPortBackend(
+            workspace, binaries={"micropython": sys.executable},
+        )
+
+        output = backend.execute(_item_for(test_file), _unix_port_target())
+
+        assert "PASS test_alpha (0.01s)" in output
+        # The worker received the test file path as its argument.
+        assert str(test_file) in output
+
+    def test_stderr_is_captured_alongside_stdout(
+        self, tmp_path: Path,
+    ) -> None:
+        """Harness noise on stderr still reaches the parser input."""
+        workspace = _workspace_with_harness(
+            tmp_path,
+            "import sys\n"
+            "print('PASS test_a (0.01s)')\n"
+            "print('boot noise', file=sys.stderr)\n",
+        )
+        backend = UnixPortBackend(
+            workspace, binaries={"micropython": sys.executable},
+        )
+
+        output = backend.execute(
+            _item_for(workspace / "test_a.py"), _unix_port_target(),
+        )
+
+        assert "boot noise" in output
+
+    def test_silent_nonzero_exit_raises_execute_error(
+        self, tmp_path: Path,
+    ) -> None:
+        """A worker that dies without output surfaces the exit code."""
+        workspace = _workspace_with_harness(
+            tmp_path, "import sys\nsys.exit(3)\n",
+        )
+        backend = UnixPortBackend(
+            workspace, binaries={"micropython": sys.executable},
+        )
+
+        with pytest.raises(BackendExecuteError, match="no output"):
+            backend.execute(
+                _item_for(workspace / "test_a.py"), _unix_port_target(),
+            )
+
+    def test_unspawnable_binary_raises_execute_error(
+        self, tmp_path: Path,
+    ) -> None:
+        """A binary the OS refuses to exec surfaces as a spawn failure."""
+        workspace = _workspace_with_harness(tmp_path, "print('PASS')\n")
+        not_executable = workspace / "not-a-binary.txt"
+        not_executable.write_text("plain text, not executable\n")
+        backend = UnixPortBackend(
+            workspace, binaries={"micropython": str(not_executable)},
+        )
+
+        with pytest.raises(BackendExecuteError, match="failed to spawn"):
+            backend.execute(
+                _item_for(workspace / "test_a.py"), _unix_port_target(),
+            )

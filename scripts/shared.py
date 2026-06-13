@@ -69,6 +69,7 @@ def stream_subprocess(
     cwd: Path | None = None,
     environment: dict[str, str] | None = None,
     on_line: Callable[[str], None] | None = None,
+    on_start: Callable[[subprocess.Popen], None] | None = None,
 ) -> tuple[int, str]:
     """Run *command* and stream its merged stdout/stderr line-by-line.
 
@@ -81,6 +82,11 @@ def stream_subprocess(
     This matters when a tool interleaves "running test_foo" on stdout with
     "WARNING: …" on stderr.
 
+    The child starts in its own session (``start_new_session=True``) so a
+    caller that registers it via *on_start* can terminate the whole
+    process group on interrupt — killing the child alone would orphan its
+    grandchildren (e.g. a pytest worker holding a serial port).
+
     Args:
         command: Command + arguments to run.
         cwd: Working directory.  Defaults to the repository root.
@@ -89,6 +95,9 @@ def stream_subprocess(
         on_line: Per-line callback fired the moment each line is read.
             Receives the line *without* its trailing newline.  Pass
             ``None`` to suppress streaming and only collect the buffer.
+        on_start: Called once with the live :class:`subprocess.Popen`
+            right after spawn, before any output is read, so the caller
+            can track the handle for group termination on interrupt.
 
     Returns:
         ``(exit_code, captured_text)``.  The captured text is the
@@ -104,7 +113,10 @@ def stream_subprocess(
         stderr=subprocess.STDOUT,
         bufsize=1,
         text=True,
+        start_new_session=True,
     ) as process:
+        if on_start is not None:
+            on_start(process)
         assert process.stdout is not None
         for raw_line in process.stdout:
             line = raw_line.rstrip("\n")

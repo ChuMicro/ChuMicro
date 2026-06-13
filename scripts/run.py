@@ -13,6 +13,7 @@ import argparse
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import threading
@@ -49,61 +50,28 @@ from shared import run_command, stream_subprocess
 PYTHON = sys.executable
 
 
-def _default_workers() -> tuple[int, int]:
-    """Return ``(phase_workers, package_workers)`` defaults sized for this host.
+def _default_package_workers() -> int:
+    """Return the per-package fan-out worker default sized for this host.
 
-    Preflight is mostly I/O-bound (pytest startup, subprocess spawning,
-    file reads), not CPU-bound, so mild oversubscription is a win.
-    The unit-test phases are seconds-scale today.  After the per-library
-    fan-out reached test-micropython / test-circuitpython (each ~2.5 s
-    standalone, ~6 s under preflight contention with concurrent
-    test-cpython + build + docs), the wall-time floor is dominated by
-    whichever single phase loses most to cross-phase resource
-    contention, typically ``test (python <ver>)``.
+    Build / docs / test fan out one subprocess per package (``python -m
+    build``, ``python -m zensical build``, or pytest), mostly I/O-bound
+    (process spawn, file reads), so the fan-out hits its
+    diminishing-returns ceiling around 8 packages wide.  Override via
+    ``--package-workers``.
 
-    Sizing rule: run every preflight phase concurrently when cores
-    allow (cap at 11, the total phase count), and let the
-    per-package test fan-out hit its diminishing-returns ceiling
-    around 8 packages wide.
-
-    Worked examples (benchmarked on a 12-core M-series host, 21
-    per-package test runs, preflight wall time):
-
-    ====  =====  =======  ========
-    cpu   phase  package  total
-    ====  =====  =======  ========
-      4    4      4         16
-      8    8      6         48
-     12   11      8         88
-     16   11      8         88
-     24   11      8         88
-    ====  =====  =======  ========
-
-    Override via ``--phase-workers`` and ``--package-workers``.
+    The preflight *phase* count is not capped here: each phase is a
+    thread streaming a subprocess, so a phase cap bounds no real
+    resource — preflight runs every phase at once by default
+    (Decision 0048).  Override the phase count via ``--phase-workers``.
     """
     cores = max(2, os.cpu_count() or 4)
-    phase = max(2, min(11, cores))
-    package = max(2, min(8, cores // 2 + 2))
-    return phase, package
-
-
-_DEFAULT_PHASE_WORKERS, _DEFAULT_PACKAGE_WORKERS = _default_workers()
-
-
-#: Default cap on concurrent ``preflight`` *phases*.  Each phase is
-#: its own ``python scripts/run.py <subcommand>`` subprocess that may
-#: itself fan out internally (build / docs, test_cpython via pytest,
-#: etc.), so a higher phase-level cap multiplies subprocess count.
-#: See :func:`_default_workers` for the host-aware sizing rule and
-#: Decision 0048.  Override via ``--phase-workers``.
-_DEFAULT_PREFLIGHT_PHASE_PARALLEL_WORKERS = _DEFAULT_PHASE_WORKERS
+    return max(2, min(8, cores // 2 + 2))
 
 
 #: Default cap on concurrent per-package subprocesses for build /
-#: docs / test fan-out.  Each task spawns one external process
-#: (``python -m build``, ``python -m zensical build``, or pytest).
-#: See :func:`_default_workers`; override via ``--package-workers``.
-_DEFAULT_PACKAGE_PARALLEL_WORKERS = _DEFAULT_PACKAGE_WORKERS
+#: docs / test fan-out.  See :func:`_default_package_workers`;
+#: override via ``--package-workers``.
+_DEFAULT_PACKAGE_PARALLEL_WORKERS = _default_package_workers()
 
 
 #: Default slow-test threshold for host CPython tests (seconds).
@@ -142,28 +110,88 @@ _OUTPUT_MODE_ENV_VAR = "CHUMICRO_OUTPUT_MODE"
 # ---------------------------------------------------------------------------
 # Output dispatcher: routes parallel-phase output to the user.
 #
-# Three modes:
+# Four modes:
 #
 # - ``quiet``: every line is buffered; on finish() the dispatcher
 #   replays each phase's full transcript under a ``== <label> ==``
 #   header in submission order.  This is the original (pre-2026-05)
-#   behavior and the default for ``--quiet`` / agent / log-capture
-#   contexts.
+#   behavior, selected only by ``--quiet`` or
+#   ``CHUMICRO_OUTPUT_MODE=quiet`` — not the default for any context.
 # - ``interleave``: phase events (started / done) and every line of
 #   output print live, prefixed with ``[label]``.  Default for
-#   non-TTY contexts (CI logs, ``run.py preflight > out.log``).
+#   non-TTY contexts (CI logs, ``run.py preflight > out.log``), which
+#   is the agent / log-capture path.
 # - ``status``: phase events print live (``→ lint``, ``✓ lint
 #   (1.2s)``); per-line output is suppressed during the run; on
 #   finish(), failed phases get a full transcript dump under a
 #   ``== <label> (failed) ==`` header.  Default for TTY contexts.
-# - ``raw``: a fourth mode used only by the child of a subprocess
-#   re-invocation (when ``CHUMICRO_RAW_OUTPUT`` is set in the env).
-#   Lines print raw to stdout so the parent's pipe reader can frame
-#   them.  No phase events, no headers.
+# - ``raw``: used only by the child of a subprocess re-invocation
+#   (when ``CHUMICRO_RAW_OUTPUT`` is set in the env).  Lines print raw
+#   to stdout so the parent's pipe reader can frame them.  No phase
+#   events, no headers.
 #
 # The dispatcher is constructed by :func:`_pick_dispatcher` based on
 # CLI flag + TTY + env-var detection.
 # ---------------------------------------------------------------------------
+
+
+@dataclass
+class _PhaseResult:
+    """Outcome of one parallel phase: status, wall time, and transcript.
+
+    Carries what the end-of-run summary table and the failure recap
+    need that the live dispatcher discards — the interleave dispatcher
+    prints every line and buffers nothing, so the recap pulls the
+    failing phase's last lines from :attr:`captured` here instead.
+    """
+
+    label: str
+    exit_code: int
+    elapsed_s: float
+    captured: str
+
+
+class _ProcessRegistry:
+    """Tracks live phase subprocesses so they can be killed on interrupt.
+
+    :func:`_run_parallel_phases` owns one registry and passes it into
+    every phase's :class:`_Sink`.  Phase callables that spawn a child
+    register it; on a :class:`KeyboardInterrupt` (or any termination)
+    the runner terminates each registered process *group* — the child
+    started in its own session, so killing the group reaps grandchildren
+    (a pytest worker, a unix-port binary) that would otherwise orphan
+    and keep holding a serial port.
+    """
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._processes: list[subprocess.Popen] = []
+
+    def add(self, process: subprocess.Popen) -> None:
+        with self._lock:
+            self._processes.append(process)
+
+    def terminate_all(self) -> None:
+        """Terminate every tracked process group: SIGTERM, brief wait, SIGKILL."""
+        with self._lock:
+            processes = list(self._processes)
+        for process in processes:
+            self._signal_group(process, signal.SIGTERM)
+        for process in processes:
+            try:
+                process.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                self._signal_group(process, signal.SIGKILL)
+
+    @staticmethod
+    def _signal_group(process: subprocess.Popen, sig: int) -> None:
+        """Signal the child's whole process group, ignoring an already-dead child."""
+        if process.poll() is not None:
+            return
+        try:
+            os.killpg(os.getpgid(process.pid), sig)
+        except (ProcessLookupError, PermissionError):
+            pass
 
 
 class _Sink:
@@ -179,17 +207,33 @@ class _Sink:
     output through the sink with one line of glue.
     """
 
-    __slots__ = ("_dispatcher", "_label", "_buffer")
+    __slots__ = ("_dispatcher", "_label", "_buffer", "_registry")
 
-    def __init__(self, dispatcher: _Dispatcher, label: str) -> None:
+    def __init__(
+        self,
+        dispatcher: _Dispatcher,
+        label: str,
+        registry: _ProcessRegistry | None = None,
+    ) -> None:
         self._dispatcher = dispatcher
         self._label = label
         self._buffer: list[str] = []
+        self._registry = registry
 
     def line(self, text: str) -> None:
         """Record one line and forward it to the dispatcher."""
         self._buffer.append(text)
         self._dispatcher.phase_line(self._label, text)
+
+    def register_process(self, process: subprocess.Popen) -> None:
+        """Track a live child so the runner can terminate it on interrupt.
+
+        Phase callables that spawn a subprocess pass this as
+        ``stream_subprocess(..., on_start=sink.register_process)``.  A
+        no-op when the sink has no registry (standalone runs).
+        """
+        if self._registry is not None:
+            self._registry.add(process)
 
     @property
     def captured(self) -> str:
@@ -238,9 +282,9 @@ class _Dispatcher:
 class _QuietDispatcher(_Dispatcher):
     """Buffer everything, replay at finish() in submission order.
 
-    The original (pre-2026-05) behavior preserved as a fallback for
-    ``--quiet``, agent / log-capture contexts, and any consumer that
-    wants the deterministic per-phase header layout.
+    The original (pre-2026-05) behavior, selected by ``--quiet`` or
+    ``CHUMICRO_OUTPUT_MODE=quiet`` for any consumer that wants the
+    deterministic per-phase header layout.
     """
 
     def __init__(self) -> None:
@@ -373,8 +417,18 @@ class _RawDispatcher(_Dispatcher):
     phase header.  Emit raw lines, no phase events.
     """
 
+    def __init__(self) -> None:
+        # The child's own test_cpython fan-out drives phase_line from up
+        # to package_workers worker threads.  print() issues write(text)
+        # then write(end) non-atomically, so two threads can fuse their
+        # halves into a torn line in the parent's captured transcript
+        # (corrupting both the log and the pytest-summary parse).  Hold
+        # the lock across the whole print so each line lands intact.
+        self._lock = threading.Lock()
+
     def phase_line(self, label: str, text: str) -> None:
-        print(text, flush=True)
+        with self._lock:
+            print(text, flush=True)
 
 
 _DISPATCHERS_BY_NAME: dict[str, type[_Dispatcher]] = {
@@ -794,6 +848,7 @@ def test_cpython(
         "--durations=0", f"--durations-min={slow_test_threshold_s}",
     ]
     run_counter = 0
+    seen_labels: set[str] = set()
     for package_dir in testable:
         runs = _plan_test_runs_for_library(package_dir, per_library)
         if runs is None:
@@ -805,6 +860,20 @@ def test_cpython(
             coverage_threshold=coverage_threshold,
             elevated_packages=elevated_packages,
         )
+
+        # A testable package whose coverage source resolves to nothing
+        # would run pytest with a gate flag but no ``--cov``, so
+        # pytest-cov never activates and the gate is inert (the failure
+        # mode that hid pytest-device's true coverage; preflight-audit
+        # 2026-06-12).  When coverage is being enforced, refuse loudly
+        # rather than ship a silently-ungated package.
+        if not no_cov and not coverage_args_for([package_dir]):
+            print(
+                f"ERROR: {package_dir.relative_to(ROOT)} has tests but no "
+                f"resolvable coverage source (missing src/<pkg>/__init__.py?)."
+                f"  Coverage gate would be inert; failing the test phase.",
+            )
+            return 1
 
         for test_target, expression in runs:
             extra_args: list[str] = []
@@ -836,7 +905,6 @@ def test_cpython(
             # to its own ``.coverage.<package>.<run>`` file before
             # ``coverage combine`` merges them.
             coverage_name = f".coverage.{package_dir.name}.{run_counter}"
-            run_counter += 1
             command = [
                 PYTHON, "-m", "pytest",
                 "-W", "error",
@@ -852,6 +920,13 @@ def test_cpython(
                 **environment, "COVERAGE_FILE": str(ROOT / coverage_name),
             }
             label = f"{package_dir.relative_to(ROOT)}/{Path(test_target).name}"
+            # Two file-scoped ``-k`` entries naming the same test file
+            # produce identical labels; suffix the run index so each
+            # phase keeps its own dispatcher slot and test tally.
+            if label in seen_labels:
+                label = f"{label}#{run_counter}"
+            seen_labels.add(label)
+            run_counter += 1
             phases.append(
                 (
                     label,
@@ -863,7 +938,7 @@ def test_cpython(
                 ),
             )
 
-    overall_exit_code, _failing_label = _run_parallel_phases(
+    overall_exit_code, _failing_label, _phase_results = _run_parallel_phases(
         phases,
         dispatcher=_pick_dispatcher(quiet=quiet),
         max_workers=package_workers,
@@ -939,6 +1014,12 @@ def _make_pytest_phase(
         filter_state = _PytestOutputFilter()
         wrapped = _FilteringSink(sink, filter_state)
         exit_code = _run_pytest_capturing(command, environment, wrapped)
+        if filter_state.coverage_failure is not None:
+            total, fail_under = filter_state.coverage_failure
+            sink.line(
+                f"ERROR: {phase_label} coverage {total}% < "
+                f"fail-under={fail_under}%",
+            )
         result_collector.record(
             _PytestRunResult.build(phase_label, exit_code, filter_state),
         )
@@ -954,6 +1035,17 @@ def _make_pytest_phase(
 # Also collects "slowest durations" entries so the parent phase can
 # surface a warn-only "SLOW (>Xs)" notice.
 # ---------------------------------------------------------------------------
+
+
+#: pytest-cov's own per-run gate-failure line, emitted unlabeled to
+#: stdout.  Captured so the phase can re-emit it prefixed with the
+#: package label (the fan-out collapses every run's stdout into one
+#: stream, so an unlabeled "total of 87 < fail-under=94" can't be
+#: attributed to a package otherwise).
+_PYTEST_COVERAGE_FAILURE = re.compile(
+    r"Coverage failure: total of (?P<total>\d+) is less than "
+    r"fail-under=(?P<fail_under>\d+)",
+)
 
 
 _PYTEST_SLOW_HEADER = re.compile(r"^=+\s*slowest durations\s*=+\s*$")
@@ -980,6 +1072,7 @@ class _PytestRunResult:
     exit_code: int
     passed: int = 0
     skipped: int = 0
+    deselected: int = 0
     duration_s: float = 0.0
     slow_tests: list[tuple[float, str]] = field(default_factory=list)
 
@@ -995,6 +1088,7 @@ class _PytestRunResult:
             exit_code=exit_code,
             passed=filter_state.passed,
             skipped=filter_state.skipped,
+            deselected=filter_state.deselected,
             duration_s=filter_state.duration_s,
             slow_tests=list(filter_state.slow_tests),
         )
@@ -1041,12 +1135,25 @@ class _PytestOutputFilter:
     def __init__(self) -> None:
         self.passed = 0
         self.skipped = 0
+        self.deselected = 0
         self.duration_s = 0.0
         self.slow_tests: list[tuple[float, str]] = []
+        #: ``(total_percent, fail_under_percent)`` from pytest-cov's gate
+        #: failure line, or ``None`` when the run met its coverage gate.
+        self.coverage_failure: tuple[int, int] | None = None
         self._in_slow_block = False
 
     def consume(self, text: str) -> bool:
         stripped = text.rstrip()
+        coverage_failure = _PYTEST_COVERAGE_FAILURE.search(stripped)
+        if coverage_failure is not None:
+            # Record the percentages and drop the unlabeled line; the
+            # phase closure re-emits it prefixed with the package label.
+            self.coverage_failure = (
+                int(coverage_failure.group("total")),
+                int(coverage_failure.group("fail_under")),
+            )
+            return True
         if _PYTEST_SLOW_HEADER.match(stripped):
             self._in_slow_block = True
             return True
@@ -1074,6 +1181,8 @@ class _PytestOutputFilter:
                 self.passed += int(match.group("passed"))
             if match.group("skipped"):
                 self.skipped += int(match.group("skipped"))
+            if match.group("deselected"):
+                self.deselected += int(match.group("deselected"))
             self.duration_s += float(match.group("duration"))
             return True
         if _PYTEST_NO_TESTS_RAN.match(stripped):
@@ -1113,13 +1222,23 @@ def _format_pytest_phase_summary(
 ) -> list[str]:
     """Build the rolled-up summary lines for a pytest phase.
 
-    Returns one summary line plus optional SLOW notices.  The summary
-    follows pytest's own ``X passed [, Y skipped] in Zs`` shape so log
-    scanners that already grep for "passed in" keep working, prefixed
-    with the phase label.  When *results* spans multiple pytest
-    invocations (per-package fan-out under :func:`test_cpython`) the
-    line gains an ``across N libraries`` clause; a single invocation
-    omits it.
+    Returns one summary line, one FAILED line per failing run, then
+    optional SLOW notices.  The summary follows pytest's own ``X passed
+    [, Y skipped] [, Z deselected] in Ws`` shape so log scanners that
+    already grep for "passed in" keep working, prefixed with the phase
+    label.  When *results* spans multiple pytest invocations (per-package
+    fan-out under :func:`test_cpython`) the line gains an ``across N
+    libraries`` clause; a single invocation omits it.
+
+    Each run whose ``exit_code`` is non-zero gets its own
+    ``<label>: FAILED <run-label> (exit=N)`` line so a coverage-gate or
+    test failure inside the fan-out is attributable to the package that
+    produced it — the rolled-up "N passed" line alone reads as a clean
+    pass even on a phase that exited 1.
+
+    Deselected counts surface a ``-k`` filter or marker exclusion that
+    silently removed test files from the run; without this the count is
+    parsed and dropped.
 
     Slow notices list every test whose ``call`` duration crossed
     *slow_threshold_s*.  Warn-only: the caller's exit code is
@@ -1127,16 +1246,24 @@ def _format_pytest_phase_summary(
     """
     passed = sum(result.passed for result in results)
     skipped = sum(result.skipped for result in results)
+    deselected = sum(result.deselected for result in results)
     duration_s = sum(result.duration_s for result in results)
 
     pieces = [f"{passed} passed"]
     if skipped:
         pieces.append(f"{skipped} skipped")
+    if deselected:
+        pieces.append(f"{deselected} deselected")
     summary = f"{label}: {', '.join(pieces)}"
     if len(results) > 1:
         summary += f" across {len(results)} libraries"
     summary += f" in {duration_s:.2f}s"
     lines = [summary]
+    for result in results:
+        if result.exit_code != 0:
+            lines.append(
+                f"{label}: FAILED {result.label} (exit={result.exit_code})",
+            )
     slow_entries: list[tuple[float, str]] = []
     for result in results:
         for duration, test_id in result.slow_tests:
@@ -1237,7 +1364,7 @@ def build(
         return run
 
     phases = [(f"build {package}", build_one(package)) for package in packages]
-    result, _failing_label = _run_parallel_phases(
+    result, _failing_label, _phase_results = _run_parallel_phases(
         phases,
         dispatcher=_pick_dispatcher(quiet=quiet),
         max_workers=package_workers,
@@ -1310,7 +1437,7 @@ def docs(
         )
         for library_dir in doc_dirs
     ]
-    exit_code, _failing_label = _run_parallel_phases(
+    exit_code, _failing_label, _phase_results = _run_parallel_phases(
         phases,
         dispatcher=_pick_dispatcher(quiet=quiet),
         max_workers=package_workers,
@@ -1478,13 +1605,76 @@ def docs_preview(package_dirs: list[Path]) -> int:
     ])
 
 
+#: Number of trailing transcript lines the failure recap re-prints.
+_FAILURE_RECAP_LINES = 40
+
+
+def _format_preflight_phase_table(
+    parallel_specs: Sequence[tuple[str, list[str] | None]],
+    phase_results: Sequence[_PhaseResult],
+) -> list[str]:
+    """Build the per-phase status table in submission order.
+
+    One row per spec: label, ``PASS`` / ``FAIL`` / ``SKIP``, and wall
+    seconds.  A spec whose args are ``None`` was skipped (origin/main
+    unreachable) and has no :class:`_PhaseResult`; everything else maps
+    by label to its result.  Submission order matches the spec list so
+    the table reads "lint first, test-circuitpython last" regardless of
+    finish order.
+    """
+    by_label = {result.label: result for result in phase_results}
+    label_width = max((len(label) for label, _ in parallel_specs), default=0)
+    lines = ["", "Phase summary:"]
+    for label, args in parallel_specs:
+        if args is None:
+            lines.append(f"  {label:<{label_width}}  SKIP")
+            continue
+        result = by_label.get(label)
+        if result is None:
+            # Phase never recorded a result (cancelled mid-interrupt).
+            lines.append(f"  {label:<{label_width}}  ----")
+            continue
+        status = "PASS" if result.exit_code == 0 else "FAIL"
+        lines.append(
+            f"  {label:<{label_width}}  {status}  {result.elapsed_s:6.1f}s",
+        )
+    return lines
+
+
+def _format_preflight_failure_recap(
+    failing_label: str | None,
+    phase_results: Sequence[_PhaseResult],
+) -> list[str]:
+    """Re-print the failing phase's last lines under a clear header.
+
+    The live interleave stream leaves the root cause hundreds of lines
+    above EOF (every later-finishing phase's output piles on top).  This
+    pulls the failing phase's last :data:`_FAILURE_RECAP_LINES` captured
+    lines back to the tail so a log reader lands on the error.
+    """
+    if failing_label is None:
+        return []
+    result = next(
+        (phase for phase in phase_results if phase.label == failing_label),
+        None,
+    )
+    if result is None or not result.captured:
+        return []
+    tail = result.captured.splitlines()[-_FAILURE_RECAP_LINES:]
+    return [
+        "",
+        f"== {failing_label} (failed) — last {len(tail)} lines ==",
+        *tail,
+    ]
+
+
 def preflight(
     micropython_binary: str | None = None,
     circuitpython_binary: str | None = None,
     coverage_threshold: int | None = None,
     with_functional: bool = False,
     with_device_unit: bool = False,
-    phase_workers: int = _DEFAULT_PREFLIGHT_PHASE_PARALLEL_WORKERS,
+    phase_workers: int | None = None,
     package_workers: int = _DEFAULT_PACKAGE_PARALLEL_WORKERS,
     quiet: bool = False,
     slow_test_threshold_cpython: float = _DEFAULT_SLOW_TEST_THRESHOLD_CPYTHON,
@@ -1497,12 +1687,20 @@ def preflight(
     scripts infrastructure tests, example verification, version-check,
     api-check, MicroPython and CircuitPython cross-runtime unit tests.
 
-    The 11 unit-test phases run **in parallel** as independent
-    subprocess re-invocations of ``python scripts/run.py <subcommand>``.
-    Output is captured per phase and replayed in submission order so
-    the on-screen log reads as if the loop ran serially.  See
-    Decision 0048 for the design.  The ``--with-functional`` tail
-    stays serial because both phases drive the same physical hardware.
+    The 12 phases run **in parallel** as independent subprocess
+    re-invocations of ``python scripts/run.py <subcommand>`` (two of the
+    12 — check-version and check-api — skip when ``origin/main`` is
+    unreachable).  See Decision 0048 for the design.  Output routing
+    depends on the context (Decision 0054): a TTY gets the status
+    dispatcher (per-phase events live, failing-phase transcript dumped
+    at the end); ``--quiet`` / ``CHUMICRO_OUTPUT_MODE=quiet`` buffers
+    and replays each phase under a ``== <label> ==`` header in
+    submission order; a redirected / non-TTY stdout (CI, ``preflight >
+    out.log``) gets live ``[label]``-prefixed interleave.  After the
+    parallel block, every mode prints a per-phase status table and, on
+    failure, a recap of the failing phase's last lines so the root
+    cause sits at the tail.  The ``--with-functional`` tail stays serial
+    because both phases drive the same physical hardware.
 
     Pass *coverage_threshold* to override the ``pyproject.toml`` default
     (85 %).  Agents should pass ``--coverage-threshold 94`` (Decision 0025).
@@ -1545,11 +1743,11 @@ def preflight(
     base_reference = "origin/main"
     can_diff = is_ref_reachable(base_reference)
 
-    # Build the parallel-phase list.  Order matters for log replay:
-    # `_run_capture_phases_in_parallel` prints headers + captured
-    # output in submission order, so the log keeps the documented
-    # "lint first, test-circuitpython last" shape regardless of
-    # which phase actually finishes first.
+    # Build the parallel-phase list.  Order matters for the per-phase
+    # status table and the quiet-mode replay, both of which render in
+    # submission order, so the log keeps the documented "lint first,
+    # test-circuitpython last" shape regardless of which phase finishes
+    # first.
     # Forward --package-workers to subcommands whose internal fan-out
     # honors the cap (test, build, docs, check-api).  Phases that don't
     # fan out per-package (lint, test-scripts, verify-examples,
@@ -1618,17 +1816,28 @@ def preflight(
         print(f"  SKIP: {base_reference} not reachable (fetch or set --base).")
 
     dispatcher = _pick_dispatcher(quiet=quiet)
-    parallel_result, failing_label = _preflight_run_parallel_phases(
+    parallel_result, failing_label, phase_results = _preflight_run_parallel_phases(
         parallel_phases,
         max_workers=phase_workers,
         dispatcher=dispatcher,
     )
+
+    # Print a per-phase status table in submission order so the run's
+    # shape is legible at a glance regardless of which dispatcher routed
+    # the live stream.  On failure, follow it with a recap of the
+    # failing phase's last lines so the root cause sits at EOF instead
+    # of buried hundreds of interleaved lines above.
+    for line in _format_preflight_phase_table(
+        parallel_specs, phase_results,
+    ):
+        print(line)
+
     if parallel_result != 0:
-        # The dispatcher already printed phase events and (in status /
-        # quiet mode) the failing phase's transcript; finish with a
-        # labeled banner so the failing phase survives interleaved-
-        # output schedulers where its [FAIL] line scrolls past the
-        # visible tail.
+        for line in _format_preflight_failure_recap(failing_label, phase_results):
+            print(line)
+        # Final labeled banner so the failing phase survives
+        # interleaved-output schedulers where its [FAIL] line scrolls
+        # past the visible tail.
         if failing_label is not None:
             print(f"Preflight failed at: {failing_label}")
         else:
@@ -1905,7 +2114,7 @@ def test_all_runtimes(
             ),
         ),
     )
-    exit_code, _failing_label = _run_parallel_phases(
+    exit_code, _failing_label, _phase_results = _run_parallel_phases(
         parallel_phases,
         dispatcher=_pick_dispatcher(quiet=False),
     )
@@ -1917,7 +2126,7 @@ def _run_parallel_phases(
     *,
     dispatcher: _Dispatcher,
     max_workers: int | None = None,
-) -> tuple[int, str | None]:
+) -> tuple[int, str | None, list[_PhaseResult]]:
     """Run *phases* concurrently, routing output through *dispatcher*.
 
     Each phase callable receives a per-phase :class:`_Sink`.  The sink
@@ -1940,30 +2149,58 @@ def _run_parallel_phases(
             integer to throttle for CPU / subprocess oversubscription.
 
     Returns:
-        ``(exit_code, failing_label)``: first non-zero exit code in
-        submission order paired with its phase label, or ``(0, None)``
-        when every phase succeeded.  The label lets callers print
-        ``Preflight failed at: <label>``-style summaries that survive
-        interleaved-output schedulers where the failing phase's
-        ``[FAIL]`` line scrolls past the visible tail.
+        ``(exit_code, failing_label, phase_results)``: first non-zero
+        exit code in submission order paired with its phase label (or
+        ``(0, None, …)`` when every phase succeeded), plus a
+        :class:`_PhaseResult` per phase in submission order.  The label
+        lets callers print ``Preflight failed at: <label>`` summaries
+        that survive interleaved-output schedulers where the failing
+        phase's ``[FAIL]`` line scrolls past the visible tail; the
+        results carry per-phase wall time and transcript for the
+        end-of-run table and failure recap.
     """
+    import time
     from concurrent.futures import ThreadPoolExecutor
 
     if not phases:
-        return 0, None
+        return 0, None, []
 
     labels = [label for label, _ in phases]
+    # Every dispatcher keys its per-phase state by label (the quiet and
+    # status dispatchers store results in a dict).  A duplicate label
+    # silently overwrites one phase's transcript with another's and
+    # drops it from the test tally, so reject collisions up front.  A
+    # user-reachable form is two file-scoped ``-k`` entries naming the
+    # same test file.
+    duplicate_labels = sorted({
+        label for label in labels if labels.count(label) > 1
+    })
+    if duplicate_labels:
+        raise ValueError(
+            f"Duplicate phase label(s): {', '.join(duplicate_labels)}.  "
+            f"Phase labels must be unique.",
+        )
     dispatcher.start(labels)
 
+    registry = _ProcessRegistry()
+    results_by_label: dict[str, _PhaseResult] = {}
+    results_lock = threading.Lock()
+
     def run_one(label: str, work: Callable[[_Sink], int]) -> tuple[str, int]:
-        sink = _Sink(dispatcher, label)
+        sink = _Sink(dispatcher, label, registry)
         dispatcher.phase_started(label)
+        start = time.monotonic()
         try:
             exit_code = work(sink)
         except Exception as error:  # pragma: no cover - defensive
             sink.line(f"Phase {label!r} crashed: {error}")
             exit_code = 1
+        elapsed = time.monotonic() - start
         dispatcher.phase_done(label, exit_code, sink.captured)
+        with results_lock:
+            results_by_label[label] = _PhaseResult(
+                label, exit_code, elapsed, sink.captured,
+            )
         return label, exit_code
 
     workers = max_workers if max_workers is not None else len(phases)
@@ -1972,14 +2209,26 @@ def _run_parallel_phases(
         futures = [
             executor.submit(run_one, label, work) for label, work in phases
         ]
-        results = [future.result() for future in futures]
+        try:
+            results = [future.result() for future in futures]
+        except KeyboardInterrupt:
+            # Stop launching queued phases and reap every live child's
+            # process group so a pytest worker can't orphan and keep a
+            # serial port locked.  cancel_futures drops not-yet-started
+            # work; terminate_all signals the running groups.
+            executor.shutdown(wait=False, cancel_futures=True)
+            registry.terminate_all()
+            raise
 
     dispatcher.finish()
 
+    phase_results = [
+        results_by_label[label] for label in labels if label in results_by_label
+    ]
     for label, exit_code in results:
         if exit_code != 0:
-            return exit_code, label
-    return 0, None
+            return exit_code, label, phase_results
+    return 0, None, phase_results
 
 
 def _subcommand_phase_factory(
@@ -2059,17 +2308,17 @@ def _tally_pytest_counts(captured_outputs: dict[str, str]) -> int:
 def _preflight_run_parallel_phases(
     phases: Sequence[tuple[str, Callable[[_Sink], int]]],
     *,
-    max_workers: int = _DEFAULT_PREFLIGHT_PHASE_PARALLEL_WORKERS,
+    max_workers: int | None = None,
     dispatcher: _Dispatcher | None = None,
-) -> tuple[int, str | None]:
+) -> tuple[int, str | None, list[_PhaseResult]]:
     """Dispatch the parallel preflight phase block.
 
     Thin wrapper over :func:`_run_parallel_phases` that exists as a
     named seam so tests can monkeypatch the parallel block without
     forking the subprocess invocations on every preflight test.
 
-    Returns ``(exit_code, failing_label)`` straight through from the
-    underlying runner.
+    Returns ``(exit_code, failing_label, phase_results)`` straight
+    through from the underlying runner.
     """
     return _run_parallel_phases(
         phases,
@@ -2750,10 +2999,11 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     preflight_parser.add_argument(
         "--phase-workers", type=int, metavar="N",
-        default=_DEFAULT_PREFLIGHT_PHASE_PARALLEL_WORKERS,
+        default=None,
         help=(
-            f"cap on concurrent preflight phases "
-            f"(default: {_DEFAULT_PREFLIGHT_PHASE_PARALLEL_WORKERS} for this host)"
+            "cap on concurrent preflight phases "
+            "(default: run every phase at once — the cap controls no real "
+            "resource since each phase is a thread streaming a subprocess)"
         ),
     )
     preflight_parser.add_argument(
@@ -3212,6 +3462,17 @@ def _resolve_optional_scope(args) -> list[Path] | None:
 
 def main(argv: list[str]) -> int:
     """Dispatch a named repository-level task."""
+    # In a CHUMICRO_RAW_OUTPUT child the parent reads our stdout through
+    # a pipe, which Python block-buffers.  Plain print() in run_command
+    # echoes, the rolled-up summary, and the coverage Hint would then
+    # sit in the userspace buffer while grandchild subprocesses (coverage
+    # combine/report) write straight to the inherited fd, so the parent's
+    # captured transcript shows their output before the command that
+    # produced it.  Switch to line buffering so every print flushes at
+    # the newline, keeping the transcript in emission order.
+    if os.environ.get(_RAW_OUTPUT_ENV_VAR):
+        sys.stdout.reconfigure(line_buffering=True)
+
     # ``add-device`` and ``deploy-example`` are pass-through shims
     # around their workspace counterparts.  Peeled off before argparse
     # so the workspace package's flag sets (which evolve independently
