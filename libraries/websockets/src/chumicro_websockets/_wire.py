@@ -938,11 +938,16 @@ class FrameParser:
                 take = need if need <= remaining else remaining
                 if self.had_mask:
                     mask_key = self._mask_key
-                    for index in range(take):
+                    # Hand-indexed: range(take) would allocate an iterator
+                    # per feed on this masked-inbound hot path (every byte
+                    # a client sends is masked).
+                    index = 0
+                    while index < take:
                         payload[write_offset + index] = (
                             chunk_view[cursor + index]
                             ^ mask_key[(write_offset + index) & 3]
                         )
+                        index += 1
                 else:
                     payload[write_offset:write_offset + take] = (
                         chunk_view[cursor : cursor + take]
