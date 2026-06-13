@@ -62,6 +62,36 @@ from .session import (
 )
 
 
+def _assert_summary_reconciles(result: RunResult, raw_output: str) -> None:
+    """Fail the batch on a missing SUMMARY line or a dropped FAIL result.
+
+    The device prints an authoritative ``SUMMARY total=N failed=M`` as the
+    last line of a complete run.  Its absence means the run was truncated
+    before finishing (a board that crashed mid-run, a serial drop) — a
+    partial transcript that reads green when the surviving lines all
+    passed.  A ``failed`` count higher than the parsed FAIL lines means a
+    failure result was dropped from the output, which is the dangerous
+    case: a real failure silently vanishing into a pass.  The total count
+    is deliberately not reconciled here — a test that appears in fewer
+    output lines than expected is caught per-test as "not found in device
+    output", which pinpoints the missing test instead of failing the
+    whole batch.
+    """
+    summary = result.summary
+    if summary is None:
+        pytest.fail(
+            f"Device output has no SUMMARY line; the run was truncated "
+            f"before finishing (board crash or serial drop):\n{raw_output}"
+        )
+    parsed_failed = sum(1 for test in result.tests if test.status == "FAIL")
+    if summary.failed != parsed_failed:
+        pytest.fail(
+            f"Device SUMMARY reports failed={summary.failed} but {parsed_failed} "
+            f"FAIL line(s) were parsed; a failure result was dropped from the "
+            f"output (board crash or serial glitch):\n{raw_output}"
+        )
+
+
 def _parse_test_functions(filepath: Path) -> list[str]:
     """Use AST to discover test names without importing.
 
@@ -553,6 +583,7 @@ class DeviceRuntimeItem(pytest.Item):
             pytest.fail(raw_output)
         if not result.tests:
             pytest.fail(f"No test results in device output:\n{raw_output}")
+        _assert_summary_reconciles(result, raw_output)
         return result, raw_output
 
     def repr_failure(
