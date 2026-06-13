@@ -145,11 +145,30 @@ def test_wait_default_adapter_dispatches_io_error_via_fileno(pipe_fds) -> None:
     assert service.io_error_calls == [(0, select.POLLERR)]
 
 
+class _NoSleepTicks:
+    """A tick source with no ``sleep_ms`` attribute at all, so ``wait``
+    falls through to the module ``_sleep_ms``.  FakeTicks now carries
+    ``sleep_ms``, which the Runner would otherwise delegate to."""
+
+    def __init__(self) -> None:
+        self._now = 0
+
+    def ticks_ms(self) -> int:
+        return self._now
+
+    def ticks_diff(self, end: int, start: int) -> int:
+        return end - start
+
+    def ticks_add(self, ticks_val: int, delta: int) -> int:
+        return ticks_val + delta
+
+
 def test_wait_sleeps_via_native_sleep_ms_when_present(monkeypatch) -> None:
     """``_sleep_ms`` prefers ``time.sleep_ms`` on runtimes that expose it
     (MicroPython, CircuitPython).  CPython has no ``sleep_ms``, so we
     monkeypatch the module-cached ``_native_sleep_ms`` to verify the
-    preferred branch fires."""
+    preferred branch fires.  The tick source here has no ``sleep_ms``,
+    so the Runner uses the module helper rather than delegating."""
     captured: list[int] = []
 
     def _fake_sleep_ms(timeout_ms: int) -> None:
@@ -158,9 +177,30 @@ def test_wait_sleeps_via_native_sleep_ms_when_present(monkeypatch) -> None:
     from chumicro_runner import core as runner_core
     monkeypatch.setattr(runner_core, "_native_sleep_ms", _fake_sleep_ms)
 
-    runner = Runner(ticks=FakeTicks())
+    runner = Runner(ticks=_NoSleepTicks())
     runner.add_periodic(lambda now_ms: None, period_ms=25)
 
     runner.wait(0)
 
     assert captured == [25]
+
+
+def test_wait_socketless_with_fake_ticks_spends_no_real_wall_clock() -> None:
+    """A socket-less wait over a FakeTicks returns near-instantly even
+    when the computed idle timeout is large: the sleep delegates to
+    FakeTicks.sleep_ms (which advances the fake clock) instead of the
+    runtime sleep.  Bound the real elapsed well under the would-be
+    wall-clock delay."""
+    import time
+
+    fake = FakeTicks(start_ms=0)
+    runner = Runner(ticks=fake)
+    # A 5-second idle timeout: a real sleep would block the test 5 s.
+    runner.add_periodic(lambda now_ms: None, period_ms=5000)
+
+    start = time.monotonic()
+    runner.wait(fake.ticks_ms())
+    elapsed = time.monotonic() - start
+
+    assert elapsed < 0.2  # no real sleep happened
+    assert fake.ticks_ms() == 5000  # fake clock advanced instead

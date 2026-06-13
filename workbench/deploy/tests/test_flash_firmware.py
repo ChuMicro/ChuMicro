@@ -502,6 +502,7 @@ class TestEsptoolPath:
         _flash_firmware_esptool(
             firmware, device, on_progress=None,
             erase_flash=True, runner=fake_runner,
+            sleep=lambda _seconds: None,
         )
 
         assert len(invocations) == 2

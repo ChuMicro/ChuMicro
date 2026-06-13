@@ -202,6 +202,13 @@ class Runner:
         self._pending = []
         self._ticking = False
         self._ticks = ticks if ticks is not None else _DEFAULT_TICKS
+        # ``wait`` sleeps the idle timeout through the tick source when it
+        # exposes ``sleep_ms``, falling back to the module ``_sleep_ms``.
+        # Sleeping is the same time dependency as reading the clock: a
+        # ``FakeTicks`` advances its own clock instead of burning wall
+        # time.  Cached here so the socket-less ``wait`` path stays
+        # allocation-free (no per-call ``getattr``).
+        self._sleep_ms = getattr(self._ticks, "sleep_ms", _sleep_ms)
         self._poller = poller
         # id(sock) -> (sock, eventmask) for sockets currently in the
         # poll set.  ``_sync_poll_set`` diffs against this on every
@@ -442,9 +449,13 @@ class Runner:
            ``next_due_ms`` and every service's
            ``next_deadline(now_ms)``, minus *now_ms*.
         3. Blocks in ``ipoll(timeout_ms)`` over the registered poll set
-           if any socket is registered, otherwise sleeps the timeout
-           via ``time.sleep_ms``.  Returns immediately if no timeout
-           source applies or the next deadline is already in the past.
+           if any socket is registered, otherwise sleeps the timeout.
+           The socket-less sleep delegates to the injected tick source's
+           ``sleep_ms`` when it has one (so a ``FakeTicks`` advances its
+           own clock instead of burning wall time), otherwise the
+           runtime ``time.sleep_ms`` / ``time.sleep``.  Returns
+           immediately if no timeout source applies or the next deadline
+           is already in the past.
 
         For each ipoll event whose mask carries POLLERR or POLLHUP
         (socket error / hangup), looks up the registered service whose
@@ -485,7 +496,7 @@ class Runner:
                 if eventmask & _POLL_ERROR_MASK:
                     self._dispatch_io_error(obj, eventmask, now_ms)
         else:
-            _sleep_ms(timeout_ms)
+            self._sleep_ms(timeout_ms)
 
     def _dispatch_io_error(self, obj: object, eventmask: int, now_ms: int) -> None:
         """Find the registered service whose ``io_socket`` is *obj* and
