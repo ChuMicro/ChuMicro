@@ -95,3 +95,15 @@ while it stays up). Demos run to `DEMO_COMPLETE`; tail one minute under load.
   (both register the session/generator with a Runner). `preflight --coverage-threshold 94` green
   (16 demo files parse, verify-examples green for both new examples, lint + CHU clean). No library
   src change (no VERSION bump). Real-board bake of all three demos: Final phase.
+- 2026-06-13 Phase 6: new Decision 0089 (generator surfaces on the networking libraries) records the
+  invariant — `yield from` for sequential awaits, reactive fan-out stays callbacks — and the two
+  flavors (requests fetch, websockets next_message) + why MQTT/http_server stay reactive. Decision 0087
+  amended in place: the `ReadReady`/`WriteReady`/`Sleep` token classes with `ready()`/`result()` never
+  shipped (the substrate is the duck-typed `io_*` wait protocol — user flagged the tokens as a weird
+  early idea), `connect(host,port,radio)` corrected to `connect(connector)`, helper placement
+  (`chumicro_sockets.generators` + runner's `sleep_until`) made accurate, and the "no migration
+  mandated" consequence cross-links 0089. Same fix to the `add_generator` docstring in
+  `chumicro_runner.core` (runner 0.7.1 -> 0.7.2, docstring-only patch). Separately surfaced (next-up):
+  0087's async-ban *lint-rule* + deploy-refusal claims are stale (no CHU rule; asyncio is allowlisted)
+  — left out of scope as a different subsystem. `preflight --coverage-threshold 94` green (CHU029/CHU019
+  pass on both ADRs).
