@@ -43,6 +43,15 @@ SERVER_MODE = const(4)
 #: rebuilding a fresh packet each call.
 _CLIENT_REQUEST = bytes([CLIENT_FIRST_BYTE]) + b"\x00" * (PACKET_SIZE - 1)
 
+#: Errnos that mean "no datagram ready yet", not a failed exchange.  A
+#: non-blocking socket reports EAGAIN on every runtime; CPython on macOS
+#: reports the distinct EWOULDBLOCK (errno 35).  MicroPython /
+#: CircuitPython expose no EWOULDBLOCK and alias it to EAGAIN on device,
+#: so the tuple holds only what each runtime defines.
+_WOULD_BLOCK_ERRNOS = (errno.EAGAIN,)
+if hasattr(errno, "EWOULDBLOCK"):
+    _WOULD_BLOCK_ERRNOS = (errno.EAGAIN, errno.EWOULDBLOCK)
+
 
 class NTPError(OSError):
     """SNTP exchange failed.
@@ -318,7 +327,7 @@ class NTPClient:
                 self._recv_buffer,
             )
         except OSError as recv_error:
-            if recv_error.errno == errno.EAGAIN:
+            if recv_error.errno in _WOULD_BLOCK_ERRNOS:
                 # No data this tick.  Check the timeout instead.
                 self._check_timeout(result, now_ms)
                 return
