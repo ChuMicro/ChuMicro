@@ -190,6 +190,11 @@ def tcp_client_connector(host: str, port: int, *, radio: object | None = None) -
       expose a non-blocking connect, so the TCP phase blocks for the
       kernel's handshake duration.  Honest documented compromise.
 
+    The ``awaiting_dns`` phase resolves *host* with a synchronous
+    ``getaddrinfo`` on every runtime, so a cache miss against a slow
+    resolver blocks the runner for the lookup.  Pass an IP literal to
+    skip it when the address is already known.
+
     Args:
         host: DNS name or IP literal.
         port: Remote port.
@@ -229,6 +234,11 @@ def tls_client_connector(
     * **CircuitPython** — CP collapses TCP + TLS into one
       ``wrapped_socket.connect()`` call; the connector skips
       ``awaiting_tls`` and lands ready after the (blocking) TCP phase.
+
+    The ``awaiting_dns`` phase resolves *host* with a synchronous
+    ``getaddrinfo`` on every runtime, so a cache miss against a slow
+    resolver blocks the runner for the lookup.  Pass an IP literal to
+    skip it when the address is already known.
 
     Args:
         host: DNS name or IP literal; used as ``server_hostname`` for
