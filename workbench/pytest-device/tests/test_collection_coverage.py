@@ -25,7 +25,7 @@ from chumicro_deploy import DeviceEntry
 from chumicro_deploy.testing import FakeTransport
 from chumicro_pytest_device import collection
 from chumicro_pytest_device import plugin as pytest_device
-from chumicro_pytest_device.result_parser import RunResult
+from chumicro_pytest_device.result_parser import RunResult, SummaryResult
 from chumicro_pytest_device.result_parser import TestResult as ParsedTestResult
 from chumicro_pytest_device.testing import (
     FakeSession,
@@ -195,6 +195,7 @@ class TestDeviceTestItemRuntestSkip:
                     message="no wifi on this board",
                 ),
             ],
+            summary=SummaryResult(total=1, failed=0, duration=0.0),
         )
         cache.cache_batch_result(
             (device.identifier, "alpha", test_file.name), skip_result, "raw",
@@ -203,6 +204,46 @@ class TestDeviceTestItemRuntestSkip:
 
         with pytest.raises(pytest.skip.Exception, match="no wifi on this board"):
             item.runtest()
+
+
+class TestAssertSummaryReconciles:
+    """The device SUMMARY must be present and its failed-count must match."""
+
+    def test_missing_summary_fails(self) -> None:
+        result = RunResult(
+            tests=[ParsedTestResult(name="t", status="PASS", duration=0.0)],
+        )
+        with pytest.raises(pytest.fail.Exception, match="no SUMMARY"):
+            collection._assert_summary_reconciles(result, "raw")
+
+    def test_dropped_fail_line_fails(self) -> None:
+        # SUMMARY claims a failure but no FAIL line parsed: a failure
+        # silently vanished from the transcript.
+        result = RunResult(
+            tests=[ParsedTestResult(name="t", status="PASS", duration=0.0)],
+            summary=SummaryResult(total=1, failed=1, duration=0.0),
+        )
+        with pytest.raises(pytest.fail.Exception, match="failure result was dropped"):
+            collection._assert_summary_reconciles(result, "raw")
+
+    def test_consistent_summary_passes(self) -> None:
+        result = RunResult(
+            tests=[
+                ParsedTestResult(name="a", status="PASS", duration=0.0),
+                ParsedTestResult(name="b", status="FAIL", duration=0.0),
+            ],
+            summary=SummaryResult(total=2, failed=1, duration=0.0),
+        )
+        collection._assert_summary_reconciles(result, "raw")
+
+    def test_total_higher_than_parsed_does_not_fail(self) -> None:
+        # A vanished PASS/SKIP (SUMMARY total exceeds parsed lines) is
+        # handled per-test as "not found", so reconciliation must not fail.
+        result = RunResult(
+            tests=[ParsedTestResult(name="a", status="PASS", duration=0.0)],
+            summary=SummaryResult(total=3, failed=0, duration=0.0),
+        )
+        collection._assert_summary_reconciles(result, "raw")
 
 
 class TestLoadFallbackDeviceMalformed:
