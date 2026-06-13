@@ -29,6 +29,8 @@ Fold these into existing `next-up.md` items rather than duplicating:
 
 ### Phase 1 — Runner fault isolation + tick correctness
 
+**Shipped 2026-06-13 (runner 0.7.0). Real-board bake still pending (orchestration class).** RUN-1 flipped the runner's fault contract from propagate to isolate-and-count: the propagation behavior was deliberately tested (three tests + a "future iteration may swallow" comment), so this was a contract change confirmed by the user's 2026-06-13 fault-model decision (isolate + optional `on_handler_error` hook), not just a bug fix.
+
 Highest priority. Bench on a real board after the fix (orchestration bug class). Confirm against Decision 0080 that tick fault-propagation isn't an intended contract; the `EventBus` / `Logger` precedent says it isn't.
 
 - **RUN-1** (CRITICAL, `runner/core.py:420-426`) — wrap the handler fire in `try/except Exception` (let `KeyboardInterrupt`/`SystemExit`/`GeneratorExit` propagate), route failures to a counter or injected error hook, move `pending.clear()` into `finally` so a raised handler can't leave stale pending entries that re-fire. *verified.*
@@ -105,3 +107,4 @@ ECO-1 reported the AGENTS.md-referenced project skills missing from `.github/ski
 ## Validation history
 
 - 2026-06-13 — Workstream opened from the deep review report. ECO-1 confirmed resolved (skills present + tracked, working tree clean). No code phases shipped yet.
+- 2026-06-13 — Phase 1 shipped (runner 0.7.0). RUN-1: `tick()` isolates a faulting handler (catch `Exception`, count in `handler_errors`, report to an optional `on_handler_error(handle, exception)` hook) and clears `_pending` in `finally`; `KeyboardInterrupt`/`SystemExit`/`GeneratorExit` still propagate. RUN-2: documented the single-dispatch-then-return safety at `_dispatch_io_error` and trimmed the rule-violating `_mark_done` docstring. RUN-3: `connect()` threads `now_ms` into `connector.tick()` instead of literal `0`. 160 runner unit tests green, full preflight green. Real-board bake (Pico W, orchestration class) still pending.

@@ -264,11 +264,11 @@ def test_io_error_throws_into_generator_at_current_yield():
     assert handle.done is True
 
 
-def test_unhandled_exception_during_advance_marks_done_and_propagates():
-    # A generator that raises during a normal resume must not leave a
-    # dead entry in the runner; the wrapper drops itself before
-    # re-raising so a caller catching the error upstream still sees
-    # consistent runner state.
+def test_unhandled_exception_during_advance_marks_done_and_is_isolated():
+    # A generator that raises during a normal resume is dropped from the
+    # runner (the wrapper marks done and removes its entry), and tick()
+    # isolates and counts the fault rather than propagating it, so the
+    # reactor loop survives.
     runner = Runner(ticks=FakeTicks())
 
     def gen():
@@ -278,10 +278,11 @@ def test_unhandled_exception_during_advance_marks_done_and_propagates():
     handle = runner.add_generator(gen())
     assert len(runner._entries) == 1
 
-    with raises(ValueError):
-        runner.tick()  # sleep ready at 0; resume hits the raise.
+    runner.tick()  # sleep ready at 0; resume hits the raise, isolated.
+
     assert handle.done is True
     assert len(runner._entries) == 0
+    assert runner.handler_errors == 1
 
 
 def test_io_error_unhandled_propagates_done():

@@ -180,7 +180,11 @@ class Runner:
 
     Captures ``ticks_ms()`` once per ``tick()`` call and passes the
     shared timestamp to every due component.  Registration paths are
-    documented on ``add()`` and ``add_periodic()``.
+    documented on ``add()`` and ``add_periodic()``.  A handler that
+    raises ``Exception`` is isolated: ``tick()`` counts it in
+    ``handler_errors``, reports it to the optional ``on_handler_error``
+    callback, and keeps firing the other due handlers, so one faulting
+    service can't stop the reactor.
 
     Args:
         ticks: Optional tick source (must have ``ticks_ms``,
@@ -194,13 +198,26 @@ class Runner:
             lazily on the first ``wait`` call that has a socket to
             register.  Tests pass ``FakePoller`` from
             ``chumicro_runner.testing``.
+        on_handler_error: Optional callback
+            ``on_handler_error(handle, exception)`` invoked when a
+            handler raises ``Exception`` during ``tick()``.  Lets the
+            app log the fault, remove the faulting task via
+            ``handle.remove()``, or re-raise to fail fast.  A callback
+            that itself raises is swallowed and counted, never
+            propagated.
     """
 
     def __init__(self, ticks: object | None = None,
-                 poller: object | None = None) -> None:
+                 poller: object | None = None,
+                 on_handler_error: object | None = None) -> None:
         self._entries = []
         self._pending = []
         self._ticking = False
+        # Count of handler exceptions tick() has isolated, plus any
+        # raised by the on_handler_error callback itself.  A climbing
+        # count is the app's signal that a service is failing.
+        self.handler_errors = 0
+        self._on_handler_error = on_handler_error
         self._ticks = ticks if ticks is not None else _DEFAULT_TICKS
         # ``wait`` sleeps the idle timeout through the tick source when it
         # exposes ``sleep_ms``, falling back to the module ``_sleep_ms``.
@@ -369,6 +386,13 @@ class Runner:
         2. Batch-fire all collected handlers.
         3. Decrement run counts and auto-remove exhausted entries.
 
+        A handler raising ``Exception`` is isolated: the error is
+        counted in ``handler_errors``, reported to the optional
+        ``on_handler_error`` callback, and the remaining due handlers
+        still fire this tick.  ``KeyboardInterrupt`` / ``SystemExit`` /
+        ``GeneratorExit`` are not ``Exception`` subclasses, so they
+        still propagate and stop the loop.
+
         Returns:
             The tick timestamp used this cycle.
         """
@@ -417,16 +441,36 @@ class Runner:
                 else:
                     pending.append(entry)
 
+            on_handler_error = self._on_handler_error
             for entry in pending:
-                entry.handler_function(now_ms)
+                try:
+                    entry.handler_function(now_ms)
+                except Exception as error:  # noqa: BLE001
+                    # Isolate a faulting handler so one service's
+                    # exception can't kill the reactor or skip the other
+                    # handlers gated this tick.  KeyboardInterrupt /
+                    # SystemExit / GeneratorExit are not Exception
+                    # subclasses and still propagate.
+                    self.handler_errors += 1
+                    if on_handler_error is not None:
+                        try:
+                            on_handler_error(entry, error)
+                        except Exception:  # noqa: BLE001
+                            # A callback that raises would re-introduce
+                            # the crash isolation just prevented; swallow
+                            # and count it too.
+                            self.handler_errors += 1
                 if entry.run_count is not None:
                     entry.run_count -= 1
                     if entry.run_count <= 0:
                         self._remove(entry)
-            pending.clear()
 
             return now_ms
         finally:
+            # Clear unconditionally: a handler that raised must not leave
+            # already-fired entries in _pending to re-fire on the next
+            # tick.
+            self._pending.clear()
             self._ticking = False
 
     def wait(self, now_ms: int) -> None:
@@ -522,6 +566,10 @@ class Runner:
                 handler = getattr(service, "io_error", None)
                 if handler is not None:
                     handler(now_ms, eventmask)
+                # io_error may remove this entry (a generator wrapper
+                # drops itself on an uncaught error), mutating _entries
+                # mid-scan.  Returning after this single dispatch means
+                # the loop never continues over the mutated list.
                 return
 
     def _sync_poll_set(self) -> None:

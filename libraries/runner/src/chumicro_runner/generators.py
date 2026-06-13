@@ -110,6 +110,11 @@ def connect(connector: object) -> object:
     their duration — no different from driving the connector under a
     check / handle service.
 
+    Each resume threads the runner's ``now_ms`` into
+    ``connector.tick(now_ms)`` so a connector that tracks its own
+    deadline sees the real clock; the priming tick before the first
+    resume passes ``0``.
+
     On cancellation (``GeneratorExit``) or failure, the connector's
     ``cancel`` runs in a ``finally`` block so any in-flight socket
     closes cleanly.
@@ -137,16 +142,17 @@ def connect(connector: object) -> object:
             ``last_error`` is what's raised.
     """
     sock = None
+    now_ms = 0
     try:
         while True:
-            connector.tick(0)
+            connector.tick(now_ms)
             state = connector.state
             if state == "ready":
                 sock = connector.socket
                 return sock
             if state == "failed":
                 raise connector.last_error
-            yield connector
+            now_ms = yield connector
     finally:
         if sock is None:
             connector.cancel()
