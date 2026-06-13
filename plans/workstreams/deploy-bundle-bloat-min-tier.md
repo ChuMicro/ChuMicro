@@ -20,6 +20,44 @@ names 256 KB RAM / 2 MB physical / ~800 KB usable flash as the minimum board.
 If a one-request demo cannot be staged there, the ecosystem has outgrown its own
 stated floor.
 
+## Measured 2026-06-13 (chumicro_sockets — a "thin" cross-runtime socket layer)
+
+`chumicro_sockets/src` is **~135 KB of source, ~118 KB staged** to a board (excl
+`testing.py`). For a layer whose job is to bind MicroPython + CircuitPython sockets
+behind one API plus small ease-of-use helpers, that is far too big. Per-file:
+
+| File | Bytes | Note |
+|---|---:|---|
+| `_adapters/mp.py` | 26.8 KB | MicroPython adapter |
+| `__init__.py` | 22.2 KB | factories + heavy docstrings |
+| `_adapters/cp.py` | 18.0 KB | CircuitPython adapter |
+| `testing.py` | 17.0 KB | test-support, **not** device-bundled |
+| `_ca_bundle.der` | 16.4 KB | TLS CA certs |
+| `_adapters/cpython.py` | 13.9 KB | **host** adapter — a board never uses it |
+| `generators.py` | 9.7 KB | **72% docstrings**; ~2.7 KB is code |
+| `_connector.py` | 7.2 KB | |
+| `_ca_bundle.py` | 3.4 KB | |
+
+## Concrete levers (highest-impact first)
+
+1. **Flash-mode does not strip docstrings.** RAM-mode inlines source through
+   `circuitpython_bootstrap._strip_docstring_from_body`; flash-mode `rsync`/`shutil.copy2`
+   ships raw `.py`. Across these files docstrings are 50–72% of bytes. Applying the
+   existing `strip-comments` machinery to the flash-stage path would roughly halve the
+   deployed size of every library. Biggest single win, contained to the deploy pipeline.
+2. **All three runtime adapters are staged.** A board needs only its own adapter, yet
+   `mp.py` + `cp.py` + `cpython.py` all ship — `cpython.py` (13.9 KB, host-only) is pure
+   dead weight on a device, and the non-target MP/CP adapter (~20 KB) is too. Stage only
+   the target runtime's adapter.
+3. **`generators.py` is docstring-bloated** (the generator *code* is ~2.7 KB). Tracks the
+   same docstring-on-flash issue as lever 1; the user's earlier instruction was minimal
+   comments + a generator skill later, which this run did not honor in the moved file.
+4. **The 16 KB CA bundle** is unconditional; a BYO-context / non-TLS user still pays it.
+
+(The 0087 "generators are leaner than coroutines" claim is about *runtime* — CircuitPython
+allocates a fresh generator per `await`, asyncio carries a module + Task heap — not source
+bytes. The generator file size is a docstring/deploy issue, lever 1+3, not the mechanism.)
+
 ## Suspected contributors (to measure, not assume)
 
 - **Test-harness staging on the demo path.** The user identified the

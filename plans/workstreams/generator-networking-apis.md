@@ -1,6 +1,9 @@
 # Workstream: generator (`yield from`) I/O surfaces for the networking libraries
 
-Status: **in progress** (started 2026-06-13, branch `generator-networking-apis`).
+Status: **implementation complete + hardware-validated** on branch `generator-networking-apis`
+(2026-06-13). Pending: merge to main (another owner held main that day) and PyPI project creation for
+the new packages (`check-version` flags chumicro-sockets / -requests / -websockets as new). Follow-on
+concerns tracked separately: deploy-bundle bloat on min-tier flash, 0087 async-ban prose.
 
 Builds on Decision 0087 (generator substrate) by giving the networking libraries the two
 `yield from` surfaces that earn their place, and by fixing the demos that advertise a bad
