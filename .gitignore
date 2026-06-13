@@ -51,6 +51,13 @@ _library-backups/
 !.claude/skills
 !.claude/settings.json
 
+# .agents/ — install tree the add-skill tool writes when pulling downloaded
+# marketplace skills from `skills-lock.json`.  The canonical, tracked copy of
+# every downloaded skill lives under `.github/skills/`; this is a redundant
+# per-checkout install tree, so track the manifest plus `.github/skills/` and
+# ignore this duplicate.
+.agents/
+
 devices.yml
 
 # Legacy: chumicro-dev-config.toml.  Retired in Phase 4 of the unification
