@@ -1,0 +1,335 @@
+{
+  "version": 1,
+  "skills": {
+    "add-skill": {
+      "source": "youdotcom-oss/agent-skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/add-skill/SKILL.md",
+      "computedHash": "7e8f07bdcc9005c58487c644dd5207fd3d6155f4d2eb80dac9a40c759666bdfc"
+    },
+    "aegis-nextjs-frontend": {
+      "source": "jmazzahacks/byteforge-claude-skills",
+      "sourceType": "github",
+      "skillPath": "skills/aegis-nextjs-frontend/SKILL.md",
+      "computedHash": "a688351ab288cbdf0c8de58551e94d40407548ed92e59dad627c7ea91db345e6"
+    },
+    "agent-eval-harness": {
+      "source": "youdotcom-oss/agent-skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/agent-eval-harness/SKILL.md",
+      "computedHash": "a4b49337dfe4d1468301270a14a78782b36d65c455f4b20fb0e8bf67ff69e93e"
+    },
+    "agent-rules": {
+      "source": "netresearch/agent-rules-skill",
+      "sourceType": "github",
+      "skillPath": "skills/agent-rules/SKILL.md",
+      "computedHash": "e8e75fdbf6dd2a27f3830cf0210be3bd4efb7ada2d2f3f039927241f794234a2"
+    },
+    "book-study": {
+      "source": "sanyuan0704/sanyuan-skills",
+      "sourceType": "github",
+      "skillPath": "skills/book-study/SKILL.md",
+      "computedHash": "f02c38de9b640428987156ffd7d219e12beacf222bb633a06de48698ff466be9"
+    },
+    "byteforge-loki-logging": {
+      "source": "jmazzahacks/byteforge-claude-skills",
+      "sourceType": "github",
+      "skillPath": "skills/byteforge-loki-logging/SKILL.md",
+      "computedHash": "ff8026e1873907ace0041ef82205b2efd32656257a30cd5d0c38fed1caf7eb91"
+    },
+    "byteforge-prometheus-metrics": {
+      "source": "jmazzahacks/byteforge-claude-skills",
+      "sourceType": "github",
+      "skillPath": "skills/byteforge-prometheus-metrics/SKILL.md",
+      "computedHash": "c2b8b5cadbf6dbe5fbbc22ff7f4c86cc0c08e6a012e5637542f8f532c255a32d"
+    },
+    "code-documentation": {
+      "source": "youdotcom-oss/agent-skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/code-documentation/SKILL.md",
+      "computedHash": "1730f0a6ce2b4541f6fabed3c7415c1b66899a4f68b2c05039e89732b643fc22"
+    },
+    "code-review-and-quality": {
+      "source": "addyosmani/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/code-review-and-quality/SKILL.md",
+      "computedHash": "83931d7416bcff73c24d976c1e45f09f80259541d33e9fdfe3ee521d39b27428"
+    },
+    "code-review-expert": {
+      "source": "sanyuan0704/sanyuan-skills",
+      "sourceType": "github",
+      "skillPath": "skills/code-review-expert/SKILL.md",
+      "computedHash": "6c2fe31851a34e63e033257527eab04eea835ca1cf4c4276d1392a323e36e377"
+    },
+    "code-review-router": {
+      "source": "win4r/agent-skills-code-review-router",
+      "sourceType": "github",
+      "skillPath": "SKILL.md",
+      "computedHash": "00cb8f476fa253b44c5a0cb98cb524afaab2682a4742213c01cdca5ee2f129f9"
+    },
+    "code-review-skill": {
+      "source": "awesome-skills/code-review-skill",
+      "sourceType": "github",
+      "skillPath": "SKILL.md",
+      "computedHash": "58980ae8bec85f778b5e4755f298d01377c6fab2d6317bcc8fb64acae77e0a44"
+    },
+    "create-seed-skill": {
+      "source": "youdotcom-oss/agent-skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/create-seed-skill/SKILL.md",
+      "computedHash": "c06b782ce2d68ed70b03e549717aa911334bc193d5ae72b93e5af76d56ed7cbe"
+    },
+    "deephaven-core-query-writing": {
+      "source": "deephaven/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/deephaven-core-query-writing/SKILL.md",
+      "computedHash": "54d8ae216948408a89986c13e8187f3ac90af59effba4ce7de4503f6856344b8"
+    },
+    "doc-coauthoring": {
+      "source": "anthropics/skills",
+      "sourceType": "github",
+      "skillPath": "skills/doc-coauthoring/SKILL.md",
+      "computedHash": "b964e4c3ffe13f66f76dd7919073e60c7aec622cd8a8363bb36323188100cf8e"
+    },
+    "documentation-writer": {
+      "source": "pedronauck/skills",
+      "sourceType": "github",
+      "skillPath": "skills/curated/documentation-writer/SKILL.md",
+      "computedHash": "ee53d65b163cd7eb953a930c95841cfe398cc2c0bd24c06508bbaa07c432be35"
+    },
+    "flask-docker-deployment": {
+      "source": "jmazzahacks/byteforge-claude-skills",
+      "sourceType": "github",
+      "skillPath": "skills/flask-docker-deployment/SKILL.md",
+      "computedHash": "fbf5a09cc46ca3c0f26769c6f7c5703552906ec07ff4c12b9fef985053d853ac"
+    },
+    "flask-smorest-api": {
+      "source": "jmazzahacks/byteforge-claude-skills",
+      "sourceType": "github",
+      "skillPath": "skills/flask-smorest-api/SKILL.md",
+      "computedHash": "f8c2a770251c4d2e7d41294f26da736dca8c7529e731f1eeb7a51dc224243b31"
+    },
+    "flask-telegram-bot": {
+      "source": "jmazzahacks/byteforge-claude-skills",
+      "sourceType": "github",
+      "skillPath": "skills/flask-telegram-bot/SKILL.md",
+      "computedHash": "bb79c9e58fdfbe6b370505fcd819740cc31525011878b72e82e6b3301bedf31a"
+    },
+    "gatekeeper-nginx-setup": {
+      "source": "jmazzahacks/byteforge-claude-skills",
+      "sourceType": "github",
+      "skillPath": "skills/gatekeeper-nginx-setup/SKILL.md",
+      "computedHash": "da7cf5252e316ea52b8ccaa2b981b504ef04b0609d4c3b20441d5578b9828ff6"
+    },
+    "github-code-review": {
+      "source": "NousResearch/hermes-agent",
+      "sourceType": "github",
+      "skillPath": "skills/github/github-code-review/SKILL.md",
+      "computedHash": "86e80680818bcfa7c2c73407de9d9fbc5fdd88f0ef359595496552994b433a36"
+    },
+    "headless-adapters": {
+      "source": "youdotcom-oss/agent-skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/headless-adapters/SKILL.md",
+      "computedHash": "7a11f808966a21dd3f4245cb2b4eb44c7593c99a96f06a876fedf190d8576726"
+    },
+    "mcp-docker-deployment": {
+      "source": "jmazzahacks/byteforge-claude-skills",
+      "sourceType": "github",
+      "skillPath": "skills/mcp-docker-deployment/SKILL.md",
+      "computedHash": "efc11f83653d17f8adcbf91524dab585d46465df48956a7829bfb0c36d1b81b0"
+    },
+    "mcp-server-nginx-gatekeeper": {
+      "source": "jmazzahacks/byteforge-claude-skills",
+      "sourceType": "github",
+      "skillPath": "skills/mcp-server-nginx-gatekeeper/SKILL.md",
+      "computedHash": "0bfdaeb6525fbb8348201dcfbb6e6c714d0231d82e1fef5233be13acdcc41902"
+    },
+    "mini-dock": {
+      "source": "myvobot/mini-dock-app-skill",
+      "sourceType": "github",
+      "skillPath": "SKILL.md",
+      "computedHash": "f35a6c5b9410e9db7cbee6a2210448e33a4d2f8b4365a1d9ffacab5bdcc29095"
+    },
+    "node": {
+      "source": "mcollina/skills",
+      "sourceType": "github",
+      "skillPath": "skills/node/SKILL.md",
+      "computedHash": "aba2163ddb3fcf3e6a9d101ac370fabc94055b3e628b125dd084969f1a945993"
+    },
+    "optimize-agents-md": {
+      "source": "youdotcom-oss/agent-skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/optimize-agents-md/SKILL.md",
+      "computedHash": "9066c867611bd2d10760d1e4b635a429cefbfeb9cc5061b0c538f98d74844032"
+    },
+    "postgres-setup": {
+      "source": "jmazzahacks/byteforge-claude-skills",
+      "sourceType": "github",
+      "skillPath": "skills/postgres-setup/SKILL.md",
+      "computedHash": "f1f34a582ccf057028ad27f2562418e1aa1d051572c60880c770c4fd5e987526"
+    },
+    "pytest-skill": {
+      "source": "LambdaTest/agent-skills",
+      "sourceType": "github",
+      "skillPath": "pytest-skill/SKILL.md",
+      "computedHash": "3fed1c57035b8d7759db6b5e200f9817049da97609789e6edcbd2607233574a9"
+    },
+    "python-lib-setup": {
+      "source": "jmazzahacks/byteforge-claude-skills",
+      "sourceType": "github",
+      "skillPath": "skills/python-lib-setup/SKILL.md",
+      "computedHash": "4ebae509e78446b73ee3a91d473eb32131277a254fa8ab32c13ed3363b22e989"
+    },
+    "python-profiling": {
+      "source": "fgmacedo/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/python-profiling/SKILL.md",
+      "computedHash": "b6bab2bca03cf9195911d6ceb7910c759553d690e5ee98a44d5bfa64bc47e6de"
+    },
+    "python-project-scaffold": {
+      "source": "jmazzahacks/byteforge-claude-skills",
+      "sourceType": "github",
+      "skillPath": "skills/python-project-scaffold/SKILL.md",
+      "computedHash": "25de5e16146552ce5ac5757eb1081c4fc1255f175a1bf6e923ca4aeb7115feae"
+    },
+    "quality-playbook": {
+      "source": "github/awesome-copilot",
+      "sourceType": "github",
+      "skillPath": "skills/quality-playbook/SKILL.md",
+      "computedHash": "995cfa79a5e410a2675a828da08fc2377f5ee7182d210787ae4bece43bad3857"
+    },
+    "requesting-code-review": {
+      "source": "NousResearch/hermes-agent",
+      "sourceType": "github",
+      "skillPath": "skills/software-development/requesting-code-review/SKILL.md",
+      "computedHash": "2faedcb12c35f541ec626b060ec73c547da049ac641841bb71e08574e2cfa9a4"
+    },
+    "review-and-refactor": {
+      "source": "github/awesome-copilot",
+      "sourceType": "github",
+      "skillPath": "skills/review-and-refactor/SKILL.md",
+      "computedHash": "9236d06a1500089ddb46975b866e9a63478e502afe7095b1980c618678a7c7fe"
+    },
+    "scaffold-rules": {
+      "source": "youdotcom-oss/agent-skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/scaffold-rules/SKILL.md",
+      "computedHash": "423448960a6a6a3a01a47f5f90834796552d4649fe6df037c2ba17e12cde0c22"
+    },
+    "security-review": {
+      "source": "getsentry/skills",
+      "sourceType": "github",
+      "skillPath": "skills/security-review/SKILL.md",
+      "computedHash": "ec9792f5fd065e020c48ab5a57707c83435c286c449ba98dfa726d7b1842c868"
+    },
+    "sigma": {
+      "source": "sanyuan0704/sanyuan-skills",
+      "sourceType": "github",
+      "skillPath": "skills/sigma/SKILL.md",
+      "computedHash": "88bcbdec596ed7e19a50ca80282c3b12cfdcf48ae28e3ba275da3193f8a8f057"
+    },
+    "skill-forge": {
+      "source": "sanyuan0704/sanyuan-skills",
+      "sourceType": "github",
+      "skillPath": "skills/skill-forge/SKILL.md",
+      "computedHash": "63785e2efb35dcee3588e9cd8428aab25b2a8f1e5eb67b380bdbdbeb420e5ecf"
+    },
+    "skill-review": {
+      "source": "sanyuan0704/sanyuan-skills",
+      "sourceType": "github",
+      "skillPath": "skills/skill-review/SKILL.md",
+      "computedHash": "8d786d13179c6bd1e0b9ff05c3db72768349ab36c43ad431638fd9eef0f21137"
+    },
+    "tdd": {
+      "source": "glebis/claude-skills",
+      "sourceType": "github",
+      "skillPath": "tdd/SKILL.md",
+      "computedHash": "6f1eb67d0cb2a776ede3bad3bca89806e6d2aa76b87b7f4d4886878050bd7112"
+    },
+    "teams-anthropic-integration": {
+      "source": "youdotcom-oss/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/teams-anthropic-integration/SKILL.md",
+      "computedHash": "38d55011621886f8261eda473537697cdea39308f13df9529c18301bd1417e55"
+    },
+    "technical-writing": {
+      "source": "richtabor/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/technical-writing/SKILL.md",
+      "computedHash": "ad1109f3366907aa2c4a4435d1df3d4d2bd6581e0d50ac7a71e71acd93f0323f"
+    },
+    "typescript-lsp": {
+      "source": "youdotcom-oss/agent-skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/typescript-lsp/SKILL.md",
+      "computedHash": "fc701e63c4905021a54a44c6aac73f2125a954edb3727b0c9611cde0500d2e77"
+    },
+    "unslop": {
+      "source": "theclaymethod/unslop",
+      "sourceType": "github",
+      "skillPath": "SKILL.md",
+      "computedHash": "97461aa671e994c7b45e963e2d44b517dc293628a491e92a9d44de937f9f9d0e"
+    },
+    "uv-supply-chain-hardening": {
+      "source": "jmazzahacks/byteforge-claude-skills",
+      "sourceType": "github",
+      "skillPath": "skills/uv-supply-chain-hardening/SKILL.md",
+      "computedHash": "8051367a8277afc3cc5907d10af049585c8244bed131954a0aef6e27dadfbe5a"
+    },
+    "validate-skill": {
+      "source": "youdotcom-oss/agent-skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/validate-skill/SKILL.md",
+      "computedHash": "c8368389c09e70a2047cc1d5251bfa7532fb44146f7caa17bae976b2cbada750"
+    },
+    "wiki-ingest": {
+      "source": "sanyuan0704/sanyuan-skills",
+      "sourceType": "github",
+      "skillPath": "skills/wiki-ingest/SKILL.md",
+      "computedHash": "a9f2611dfbf61bb029d799ffa7d61dd6b96e693e5b086d9b19afb7d7e713faf3"
+    },
+    "ydc-ai-sdk-integration": {
+      "source": "youdotcom-oss/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/ydc-ai-sdk-integration/SKILL.md",
+      "computedHash": "04fbfcbef2711eb93a5a7e051147f65010c6befac4f4b4ebdfb68af2694dce18"
+    },
+    "ydc-claude-agent-sdk-integration": {
+      "source": "youdotcom-oss/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/ydc-claude-agent-sdk-integration/SKILL.md",
+      "computedHash": "d93ad8642bf61e7af9bf65c68a73d552cd159d310f06b9f60f7ac43f9f302426"
+    },
+    "ydc-crewai-mcp-integration": {
+      "source": "youdotcom-oss/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/ydc-crewai-mcp-integration/SKILL.md",
+      "computedHash": "767a01b8b0555bb6d9497ad7f6d09a0d451de7728314a13723c0f537c83744a4"
+    },
+    "ydc-langchain-integration": {
+      "source": "youdotcom-oss/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/ydc-langchain-integration/SKILL.md",
+      "computedHash": "ed669b3fadb9f5a3fc2114b3900900f293826a8748527429a37bfbbfaef8827f"
+    },
+    "ydc-openai-agent-sdk-integration": {
+      "source": "youdotcom-oss/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/ydc-openai-agent-sdk-integration/SKILL.md",
+      "computedHash": "8b5ce7f453a531269e0d9f9a4aebe1d4901b9eec97b76cf4c423181dab064049"
+    },
+    "youdotcom-api": {
+      "source": "youdotcom-oss/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/youdotcom-api/SKILL.md",
+      "computedHash": "e220375809a2e616e290d19b9e84618582f85e1cb99b596cff51839c2e5c5a9a"
+    },
+    "youdotcom-cli": {
+      "source": "youdotcom-oss/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/youdotcom-cli/SKILL.md",
+      "computedHash": "7da724aed14880924d84b6b34e8b5f990cc38cad1ad63912defadff2cfc04e99"
+    }
+  }
+}
