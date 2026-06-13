@@ -2,7 +2,7 @@
 
 ## Overview
 
-`chumicro-requests` is a non-blocking HTTP/1.1 client built on `chumicro-sockets`.  `HttpClient` is the single entry point for every verb — its `check(now_ms)` / `handle(now_ms)` methods drive the request forward one tick at a time.  An LED keeps blinking on the same board while a request is in flight, in a TLS handshake, or mid-timeout against a stalled peer.  The library is single-in-flight today — a second `client.get(...)` while another request is running raises `HttpBusyError`.
+`chumicro-requests` is a non-blocking HTTP/1.1 client built on `chumicro-sockets`.  `HttpClient` is the single entry point for every verb — its `check(now_ms)` / `handle(now_ms)` methods drive the request forward one tick at a time.  An LED keeps blinking on the same board while a request is in flight or mid-timeout against a stalled peer.  Two connect phases are the exception: the DNS lookup, and on MicroPython / CircuitPython the TLS handshake, each block the reactor for their duration (see *Bring your own transport*).  The library is single-in-flight today — a second `client.get(...)` while another request is running raises `HttpBusyError`.
 
 ## Getting started
 
@@ -125,7 +125,7 @@ that returns a `chumicro_sockets.testing.FakeSocket`.
 
 ## Bring your own transport
 
-`HttpClient` does not care which library produces its sockets.  The `connector_factory` you pass is a callable of shape `(host: str, port: int, use_tls: bool) -> SocketConnector` — the connector advances DNS / TCP / TLS across multiple ticks so the runner is not blocked.  Once `connector.state == "ready"`, the underlying socket must expose the four-method contract:
+`HttpClient` does not care which library produces its sockets.  The `connector_factory` you pass is a callable of shape `(host: str, port: int, use_tls: bool) -> SocketConnector`.  The connector advances the TCP connect one tick at a time, but the DNS lookup and, on MicroPython / CircuitPython, the TLS handshake block the reactor for their duration — on a slow or unreachable host that can be seconds, freezing every other runner service, so connect before starting time-critical work.  Once `connector.state == "ready"`, the underlying socket must expose the four-method contract:
 
 | Method | Contract |
 |---|---|

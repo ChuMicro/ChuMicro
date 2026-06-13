@@ -126,6 +126,14 @@ _BOOTSTRAP_EXEC_PATTERNS = (
     "mpremote command failed",
 )
 
+#: An mpremote subprocess exceeded its timeout; the board's USB-CDC
+#: wedged mid-command.  Distinct from BOOTSTRAP_EXEC ("command failed"):
+#: a retry without a physical replug just hangs for the same timeout, so
+#: COMMAND_TIMED_OUT is non-retryable.
+_COMMAND_TIMEOUT_PATTERNS = (
+    "command timed out",
+)
+
 #: Deploy-call misconfiguration — wrong flag, missing file, etc.
 #: These are programmer errors, not runtime conditions.  Classifier
 #: only flags them to steer retry decisions; the message is what
@@ -177,6 +185,9 @@ _TRACEBACK_IN_MESSAGE_PATTERN = "traceback (most recent call last)"
 #:    ``RAW_REPL_UNRESPONSIVE``: explicit "no python here" is strictly
 #:    more specific than "port unreachable" or "REPL silent", and
 #:    points at a different recovery (install-firmware, not plug-in).
+#: 6. ``COMMAND_TIMED_OUT`` before ``BOOTSTRAP_EXEC_FAILED``: both carry
+#:    "mpremote command ..." text, but a timeout is a wedged-CDC hang
+#:    (non-retryable, replug), not a board-side exec error.
 _CLASSIFICATION_TABLE: tuple[
     tuple[tuple[str, ...], DeployFailureKind], ...
 ] = (
@@ -190,6 +201,7 @@ _CLASSIFICATION_TABLE: tuple[
     (_RAW_REPL_PATTERNS, DeployFailureKind.RAW_REPL_UNRESPONSIVE),
     (_INSUFFICIENT_MEMORY_PATTERNS, DeployFailureKind.INSUFFICIENT_MEMORY),
     (_FLASH_COPY_PATTERNS, DeployFailureKind.FLASH_COPY_FAILED),
+    (_COMMAND_TIMEOUT_PATTERNS, DeployFailureKind.COMMAND_TIMED_OUT),
     (_BOOTSTRAP_EXEC_PATTERNS, DeployFailureKind.BOOTSTRAP_EXEC_FAILED),
 )
 

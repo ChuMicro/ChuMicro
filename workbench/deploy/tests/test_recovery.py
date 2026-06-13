@@ -132,6 +132,14 @@ from chumicro_deploy.result import DeployResult
             "mpremote command failed (exit 1): fs cp reported error",
             DeployFailureKind.BOOTSTRAP_EXEC_FAILED,
         ),
+        # mpremote subprocess timeout: a wedged USB-CDC, not a board-side
+        # exec error.  Must win over the "mpremote command failed"
+        # bootstrap substring and route to the non-retryable replug path.
+        (
+            "mpremote command timed out after 120 s; the board's USB-CDC "
+            "likely wedged mid-command.\n  Fix: replug the board.",
+            DeployFailureKind.COMMAND_TIMED_OUT,
+        ),
         # Configuration error: caller misuse, not a runtime.
         (
             "connect() must be called before execute()",
@@ -192,6 +200,12 @@ def test_classify_deploy_failure_buckets(
 ) -> None:
     error = CircuitpythonTransportError(message)
     assert classify_deploy_failure(error) is expected_kind
+
+
+def test_command_timeout_is_not_retryable() -> None:
+    """A wedged-CDC timeout must not retry into the same 120 s hang."""
+    plan = recovery_plan_for(DeployFailureKind.COMMAND_TIMED_OUT)
+    assert plan.retryable is False
 
 
 def test_classify_works_on_both_transport_error_types() -> None:

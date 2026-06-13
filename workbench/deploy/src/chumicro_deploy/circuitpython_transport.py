@@ -568,19 +568,30 @@ class CircuitpythonTransport:
         """Return *drive_path*, or refuse a wrong-board wipe when it can't be verified.
 
         Reached when the serial probe gave no identity to match the
-        drive's ``boot_out.txt`` against.  One mounted CIRCUITPY* volume
-        is unambiguous.  With several, returning the drive that merely
-        came up first could land the rsync --delete on the wrong board,
-        so refuse instead.
+        drive's ``boot_out.txt`` against.  Only a mount carrying a
+        ``boot_out.txt`` counts as a real second board: a bare
+        ``CIRCUITPY*`` directory is the stale placeholder macOS leaves
+        after an unclean unmount, not another board, so it must not push
+        the count into "ambiguous" and false-refuse a single-board
+        deploy.  With two or
+        more real boards, returning the drive that merely came up first
+        could land the rsync --delete on the wrong one, so refuse and
+        name the candidates instead.
         """
-        mounts = circuitpy_drive._circuitpy_volume_candidates()
-        if len(mounts) > 1:
+        real_boards = [
+            mount
+            for mount in circuitpy_drive._circuitpy_volume_candidates()
+            if (mount / "boot_out.txt").is_file()
+        ]
+        if len(real_boards) > 1:
+            listing = "\n".join(f"    {mount}" for mount in real_boards)
             raise CircuitpythonTransportError(
                 f"cannot confirm {drive_path} is the connected board: the "
-                f"serial probe returned no identity and {len(mounts)} "
-                f"CIRCUITPY* volumes are mounted.  Refusing rather than risk "
-                f"a wrong-board wipe — unplug the other board(s), or replug / "
-                f"run `chumicro-workspace reset-board --yes` to restore the "
+                f"serial probe returned no identity and more than one "
+                f"CIRCUITPY* volume carries a boot_out.txt:\n{listing}\n"
+                f"  Refusing rather than risk a wrong-board wipe — unplug "
+                f"the other board(s), or replug / run "
+                f"`chumicro-workspace reset-board --yes` to restore the "
                 f"probe."
             )
         return drive_path

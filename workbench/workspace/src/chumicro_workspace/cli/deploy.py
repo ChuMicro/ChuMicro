@@ -174,6 +174,13 @@ def _resolve_deploy_layout(
     # stray reset can't ship.  app.py is the boot-shim entrypoint
     # (imported and run every boot); code.py / main.py are the plain-mode
     # entrypoints.
+    # Scope: only these three entrypoints are scanned, not the import
+    # graph.  module_calls_hard_reset flags any reset call, including one
+    # inside a function (the deliberate pattern the refusal recommends),
+    # so scanning imported modules with it would false-flag legitimate
+    # code.  A reset at an imported module's top level still runs at boot
+    # and is not caught here; that needs a top-level-only AST check.  The
+    # dotted form is matched; `from machine import reset` is not.
     for entrypoint_name in ("code.py", "main.py", "app.py"):
         entrypoint_path = project_dir / entrypoint_name
         if not entrypoint_path.is_file():
