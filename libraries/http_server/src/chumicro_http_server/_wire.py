@@ -537,6 +537,16 @@ class RequestParser:
                 ))
                 return True
             return False
+        # CRLF found.  Reject before slicing when the line itself exceeds
+        # the cap: the no-CRLF branch above only bounds buffer growth, so a
+        # line whose CRLF lands in the same chunk that first crosses the cap
+        # would otherwise parse, making the 414 cap soft by up to one recv
+        # chunk.  crlf_index is the byte length of the line.
+        if crlf_index > self._max_request_line_bytes:
+            self._fail(ServerRequestLineTooLargeError(
+                f"request line exceeds cap {self._max_request_line_bytes}",
+            ))
+            return True
         line = self._live_slice(0, crlf_index)
         self._consume(crlf_index + 2)
         try:
