@@ -59,3 +59,11 @@ while it stays up). Demos run to `DEMO_COMPLETE`; tail one minute under load.
   check-version, check-api all PASS). Helper unit tests + tracemalloc lane on sockets (incl. two
   added non-EAGAIN recv-error tests); full-stack + new `sleep_until` tests on runner. 47 generator
   tests pass. Real-board bake of the sockets demo: pending (rides Phase 5's bake).
+- 2026-06-13 Phase 2: `chumicro_requests.generators.fetch` (+ get/post/put/patch/delete) landed,
+  reusing `_wire` and the two client helpers, lazy-importing the socket helpers (no top-level
+  substrate import; `import chumicro_requests` stays sockets-free). Enabler fix in
+  `chumicro_runner._GeneratorWrapper.check()`: a socket-driven wait now resumes every tick even when
+  it also carries `next_deadline` (a socket read with a timeout), so ready bytes are not stalled
+  until the deadline; covered by a new runner test. `preflight --coverage-threshold 94` green
+  (requests 96.35% total, generators.py 100%; cross-runtime + check-version + check-api PASS).
+  requests 0.13.6 -> 0.14.0; runner 0.7.0 -> 0.7.1 (check() behavior). Real-board bake: pending Phase 5.

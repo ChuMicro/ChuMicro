@@ -186,6 +186,28 @@ def test_socket_wait_does_not_contribute_deadline():
     assert handle._wrapper.next_deadline(0) is None
 
 
+def test_socket_wait_with_deadline_resumes_before_deadline():
+    # A wait carrying both a socket and a deadline (a socket read with a
+    # timeout) resumes every tick on socket-readiness rather than staying
+    # gated until the deadline — otherwise ready bytes would sit unread.
+    # The deadline is far ahead, yet both ticks resume the generator.
+    ticks = FakeTicks()
+    runner = Runner(ticks=ticks)
+    resumes = []
+
+    def gen():
+        yield _Wait(sock=_Sock(), want_read=True, until_ms=10_000)
+        resumes.append(1)
+        yield _Wait(sock=_Sock(), want_read=True, until_ms=10_000)
+        resumes.append(2)
+
+    handle = runner.add_generator(gen())
+    runner.tick()  # now=0, far before the 10_000 deadline
+    runner.tick()
+    assert resumes == [1, 2]
+    assert handle.done is True
+
+
 def test_wrapper_tolerates_bare_object_missing_protocol_attrs():
     # The wrapper uses getattr with defaults, so a yielded value that
     # exposes only some of the protocol still works — the missing
