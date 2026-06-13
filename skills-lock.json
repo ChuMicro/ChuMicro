@@ -217,6 +217,12 @@
       "skillPath": ".agents/skills/scaffold-rules/SKILL.md",
       "computedHash": "423448960a6a6a3a01a47f5f90834796552d4649fe6df037c2ba17e12cde0c22"
     },
+    "schemdraw-circuit-generator": {
+      "source": "Takazudo/claude-resources",
+      "sourceType": "github",
+      "skillPath": "skills/schemdraw-circuit-generator/SKILL.md",
+      "computedHash": "55b480c3b60b7d9215d6644139acb8f77d0ba2701dcfbcac30ccfd1313bbe6a4"
+    },
     "security-review": {
       "source": "getsentry/skills",
       "sourceType": "github",
