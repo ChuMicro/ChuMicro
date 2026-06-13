@@ -2559,12 +2559,12 @@ class TestDriveVerification:
         ):
             transport._verify_drive_for_board(drive)
 
-    def test_refuses_when_probe_unidentifiable_and_multiple_mounts(
+    def test_refuses_when_probe_unidentifiable_and_two_real_boards(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """boot_out.txt present but the probe gives no identity, with more
-        than one CIRCUITPY* mounted -> refuse rather than risk a
-        wrong-board wipe on whichever drive came up first."""
+        """boot_out.txt present but the probe gives no identity, and a second
+        CIRCUITPY* mount also carries boot_out.txt -> refuse rather than risk
+        a wrong-board wipe, naming both candidate paths."""
         drive = tmp_path / "CIRCUITPY"
         drive.mkdir()
         (drive / "boot_out.txt").write_text(
@@ -2574,6 +2574,11 @@ class TestDriveVerification:
         )
         sibling = tmp_path / "CIRCUITPY 1"
         sibling.mkdir()
+        (sibling / "boot_out.txt").write_text(
+            "Adafruit CircuitPython 10.2.0 on 2026-01-01; Other Board\n"
+            "Board ID:other_board\nUID:DEADBEEF\n",
+            encoding="utf-8",
+        )
         monkeypatch.setattr(
             "chumicro_deploy.circuitpy_drive._circuitpy_volume_candidates",
             lambda: [drive, sibling],
@@ -2585,8 +2590,43 @@ class TestDriveVerification:
             drive_path=str(drive),
             reads=[_RAW_REPL_PROMPT],
         )
-        with pytest.raises(CircuitpythonTransportError, match="cannot confirm"):
+        with pytest.raises(
+            CircuitpythonTransportError, match="cannot confirm",
+        ) as caught:
             transport._verify_drive_for_board(drive)
+        # The refusal names both candidate paths so the user can see which
+        # mounts it's worried about, not just a bare count.
+        message = str(caught.value)
+        assert str(drive) in message
+        assert str(sibling) in message
+
+    def test_proceeds_when_sibling_mount_is_empty_stale(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """One real board plus a bare (boot_out.txt-less) CIRCUITPY* stale
+        mount is unambiguous: only the real board counts toward the
+        ambiguity check, so the deploy proceeds instead of false-refusing."""
+        drive = tmp_path / "CIRCUITPY"
+        drive.mkdir()
+        (drive / "boot_out.txt").write_text(
+            f"Adafruit CircuitPython 10.2.0 on 2026-01-01; {_TEST_BOOT_MACHINE}\n"
+            f"Board ID:test_board\nUID:{_TEST_BOOT_UID}\n",
+            encoding="utf-8",
+        )
+        stale = tmp_path / "CIRCUITPY 1"
+        stale.mkdir()  # bare placeholder, no boot_out.txt
+        monkeypatch.setattr(
+            "chumicro_deploy.circuitpy_drive._circuitpy_volume_candidates",
+            lambda: [drive, stale],
+        )
+        monkeypatch.setattr(
+            CircuitpythonTransport, "probe_implementation", lambda self: None,
+        )
+        transport, _ = self._make_transport(
+            drive_path=str(drive),
+            reads=[_RAW_REPL_PROMPT],
+        )
+        assert transport._verify_drive_for_board(drive) == drive
 
     def test_returns_drive_when_probe_unidentifiable_but_single_mount(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
