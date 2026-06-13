@@ -273,5 +273,11 @@ class KVStore:
 
     @property
     def bytes_used(self) -> int:
-        """Encoded size of the *current* in-memory dict (not the persisted payload)."""
+        """Encoded size of the *current* in-memory dict (not the persisted payload).
+
+        Allocates a full msgpack encode of the dict on every read just to
+        measure its length, and is not memoized — so read it sparingly.
+        A "how full am I?" gauge polled each tick pays the encode plus a
+        transient full-payload allocation on every call.
+        """
         return len(packb(self._data))

@@ -99,6 +99,10 @@ class InFlightPublish:
         self.retry_count = 0
         self.deadline_ticks = deadline_ticks
         self.callback = callback
+        # The DUP-flagged retransmit bytes, identical across every retry
+        # of this packet — built once on first retry and reused so a
+        # retry doesn't re-copy packet_bytes each time.
+        self.dup_packet_bytes = None
 
 
 class PendingResponse:
@@ -1531,10 +1535,14 @@ class MQTTClient:
                 return
             entry.retry_count += 1
             entry.deadline_ticks = self._deadline(self._ack_timeout_ms, now_ms=now_ms)
-            # Set the DUP flag (bit 3 of byte 0) per MQTT 3.1.1 §4.3.2.
-            retry_packet = bytearray(entry.packet_bytes)
-            retry_packet[0] |= 0x08
-            self._tx_queue.append(bytes(retry_packet))
+            # The DUP-flagged retransmit (bit 3 of byte 0, MQTT 3.1.1
+            # §4.3.2) is identical every retry, so build it once and reuse
+            # it instead of re-copying packet_bytes on each expiry.
+            if entry.dup_packet_bytes is None:
+                dup_packet = bytearray(entry.packet_bytes)
+                dup_packet[0] |= 0x08
+                entry.dup_packet_bytes = bytes(dup_packet)
+            self._tx_queue.append(entry.dup_packet_bytes)
 
         for pending in self._pending_responses:
             if self._ticks.ticks_diff(pending.deadline_ticks, now_ms) > 0:

@@ -873,8 +873,12 @@ class HttpClient:
 
     def _drive_send(self):
         """Push queued request bytes onto the socket; transition on completion."""
+        # Bind the buffer view once, not per iteration: a backpressured
+        # send loops here, and rebuilding memoryview(self._tx_buffer) each
+        # pass allocates a fresh base view every time.
+        tx_view = memoryview(self._tx_buffer)
         while self._tx_offset < len(self._tx_buffer):
-            view = memoryview(self._tx_buffer)[self._tx_offset:]
+            view = tx_view[self._tx_offset:]
             try:
                 sent = self._socket.send(view)
             except OSError as socket_error:
