@@ -6,7 +6,12 @@ import argparse
 import sys
 from pathlib import Path
 
-from chumicro_deploy import flash_firmware
+from chumicro_deploy import (
+    CircuitpythonTransportError,
+    FlashFirmwareError,
+    MicropythonTransportError,
+    flash_firmware,
+)
 from chumicro_deploy.firmware_url import (
     UnresolvedFirmwareError,
     derive_firmware_url,
@@ -59,19 +64,37 @@ def _cmd_install_firmware(args: argparse.Namespace) -> int:
             return 2
         print(f"install-firmware: resolved {firmware_url}")
 
+    # Auto-detect non-interactive from stdin TTY so a piped / CI run skips
+    # any flash-time prompts; an explicit --non-interactive always wins.
+    non_interactive = args.non_interactive or not sys.stdin.isatty()
     flash_fn = args._env.flash_firmware_fn
     if flash_fn is None:
         flash_fn = flash_firmware
 
-    flash_fn(
-        firmware_url,
-        device,
-        reflash_method=args.method,
-        bootloader_drive_path=args.bootloader_drive_path,
-        interactive=not args.non_interactive,
-        erase_flash=args.erase,
-        flash_offset=args.offset,
-    )
+    def _report_progress(fraction: float, message: str) -> None:
+        # A multi-MB download plus flash is otherwise a silent terminal for
+        # up to a minute; print each milestone so the user sees the board
+        # making progress instead of wondering whether it hung.
+        print(f"install-firmware: [{int(fraction * 100):3d}%] {message}")
+
+    try:
+        flash_fn(
+            firmware_url,
+            device,
+            reflash_method=args.method,
+            bootloader_drive_path=args.bootloader_drive_path,
+            interactive=not non_interactive,
+            erase_flash=args.erase,
+            flash_offset=args.offset,
+            on_progress=_report_progress,
+        )
+    except FlashFirmwareError as flash_error:
+        # FlashFirmwareError messages carry their own recovery guidance
+        # (bootloader-mode steps, "install esptool", a download 404 wrapped
+        # from URLError).  Surface the message and exit non-zero instead of
+        # dumping a traceback at the user.
+        print(f"install-firmware: {flash_error}", file=sys.stderr)
+        return 1
     return 0
 
 
@@ -107,11 +130,24 @@ def _cmd_reset_board(args: argparse.Namespace) -> int:
         return 2
 
     print(f"reset-board: wiping filesystem on {target}")
-    transport.connect()
     try:
-        transport.wipe_filesystem()
-    finally:
-        transport.disconnect()
+        transport.connect()
+        try:
+            transport.wipe_filesystem()
+        finally:
+            transport.disconnect()
+    except (CircuitpythonTransportError, MicropythonTransportError) as reset_error:
+        # A wedged board (FAT remount timeout, dropped USB) raises a
+        # transport error here.  reset-board is itself the destructive
+        # remediation, so the next move on failure is a physical replug;
+        # surface that instead of a traceback.
+        print(
+            f"reset-board: {reset_error}\n"
+            "  Replug the board and re-run; if it stays wedged, see "
+            "docs/troubleshooting/.",
+            file=sys.stderr,
+        )
+        return 1
     print(f"reset-board: {target} filesystem wiped.")
     return 0
 

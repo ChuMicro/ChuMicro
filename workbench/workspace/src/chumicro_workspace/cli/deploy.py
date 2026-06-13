@@ -16,8 +16,10 @@ from pathlib import Path
 from typing import Any
 
 from chumicro_deploy import (
+    CircuitpythonTransportError,
     Deployer,
     Device,
+    MicropythonTransportError,
     RecoveringDeployer,
 )
 from chumicro_deploy.config.default import load_devices_yml
@@ -504,6 +506,11 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
     """
     workspace = _resolve_workspace(args)
 
+    # Auto-detect non-interactive from stdin TTY so a piped / CI run skips
+    # the coaching prompts instead of blocking on input() (matches
+    # deploy-example); an explicit --non-interactive always wins.
+    non_interactive = args.non_interactive or not sys.stdin.isatty()
+
     # Pre-deploy fast health gate.  Catches the user-visible failure
     # modes that *would* deploy but ship junk to the device (missing
     # workspace.yml, malformed devices.yml, etc.).  Skips the slower
@@ -606,14 +613,28 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
                     f"{device.transport}@{device.address} before deploy",
                 )
             deleted: list[str] = []
-            result = _make_deploy_runner(
-                device, non_interactive=args.non_interactive,
-            ).deploy_diff(
-                source,
-                clean=args.clean,
-                wipe=args.wipe,
-                on_file_deleted=deleted.append,
-            )
+            try:
+                result = _make_deploy_runner(
+                    device, non_interactive=non_interactive,
+                ).deploy_diff(
+                    source,
+                    clean=args.clean,
+                    wipe=args.wipe,
+                    on_file_deleted=deleted.append,
+                )
+            except (CircuitpythonTransportError, MicropythonTransportError) as deploy_error:
+                # RecoveringDeployer already printed the coached recovery
+                # (and, interactively, offered a retry); in non-interactive
+                # mode it re-raises.  Absorb that here so a physical-layer
+                # failure exits cleanly instead of dumping a traceback, and
+                # continue so the remaining devices in a multi-device deploy
+                # still get their turn.
+                print(
+                    f"deploy: {device.transport}@{device.address}: {deploy_error}",
+                    file=sys.stderr,
+                )
+                exit_code = 1
+                continue
             for stale_path in deleted:
                 print(f"deploy: removed stale {stale_path}")
             if result.execute_output:
