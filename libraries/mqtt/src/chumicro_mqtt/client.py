@@ -133,7 +133,10 @@ class WhenOversized:
     DROP_SILENT = "drop_silent"
 
     #: Default.  Drop the payload, fire ``on_oversized(reported_length, topic)``,
-    #: still PUBACK so the broker doesn't retransmit.
+    #: still PUBACK so the broker doesn't retransmit.  ``topic`` is
+    #: ``None`` when the inbound topic itself overflowed ``rx_buffer_size``
+    #: (it was never decoded), so an ``on_oversized`` handler must guard
+    #: before calling string methods on it.
     DROP_WITH_EVENT = "drop_with_event"
 
     #: Treat as a protocol error: disconnect.  Use when application

@@ -197,6 +197,7 @@ class _BaseSession:
         self._handshake_deadline_ticks = None
         self._close_deadline_ticks = None
         self._pending_ping_deadline_ticks = None
+        self._next_auto_ping_ticks = None
 
         self.last_close_code = None
         self.last_close_reason = ""
@@ -283,7 +284,7 @@ class _BaseSession:
             self._handshake_deadline_ticks,
             self._close_deadline_ticks,
             self._pending_ping_deadline_ticks,
-            getattr(self, "_next_auto_ping_ticks", None),
+            self._next_auto_ping_ticks,
         ):
             if candidate is None:
                 continue

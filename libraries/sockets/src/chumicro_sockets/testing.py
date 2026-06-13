@@ -9,9 +9,10 @@ pattern downstream libs need:
   assert against this to confirm correct wire-format encoding.
 * :meth:`enqueue_recv` — script bytes the next :meth:`recv_into`
   call(s) will return.  Multiple chunks queue in FIFO order.
-* :meth:`enqueue_eagain` — script the next :meth:`send` or
-  :meth:`recv_into` to raise ``OSError(errno.EAGAIN)``.  Lets tests
-  exercise non-blocking partial-completion paths.
+* :meth:`enqueue_eagain_for_send` / :meth:`enqueue_eagain_for_recv` —
+  script the next :meth:`send` or :meth:`recv_into` to raise
+  ``OSError(errno.EAGAIN)``.  Lets tests exercise non-blocking
+  partial-completion paths.
 
 Idiom for downstream libs::
 
@@ -49,8 +50,9 @@ class FakeSocket:
 
     Exposes the cross-runtime TCP surface (``send`` / ``recv_into`` /
     ``close`` / ``setblocking`` / ``settimeout``); in addition,
-    :meth:`enqueue_recv` and :meth:`enqueue_eagain` script future
-    behavior and :attr:`sent` exposes the byte log.
+    :meth:`enqueue_recv` and :meth:`enqueue_eagain_for_send` /
+    :meth:`enqueue_eagain_for_recv` script future behavior and
+    :attr:`sent` exposes the byte log.
     """
 
     def __init__(self) -> None:

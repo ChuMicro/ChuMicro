@@ -1,6 +1,7 @@
 """Fires at a fixed ``period_ms`` cadence against a wrap-safe ticks source."""
 
 from chumicro_timing import ticks as _DEFAULT_TICKS
+from chumicro_timing.ticks import TICKS_HALFPERIOD
 
 
 class Heartbeat:
@@ -10,15 +11,25 @@ class Heartbeat:
         """Builds a heartbeat with ``period_ms`` interval; first fire lands one period later.
 
         Args:
-            period_ms: Interval between fires; must be greater than zero.
+            period_ms: Interval between fires.  Must be greater than zero
+                and less than ``TICKS_HALFPERIOD`` (half the tick ring);
+                a longer interval can never fire, because ``ticks_diff``
+                saturates at half the ring.
             ticks: Object with ``ticks_ms`` and ``ticks_diff`` methods.
                 Defaults to ``chumicro_timing.ticks``.
 
         Raises:
-            ValueError: When ``period_ms`` is not greater than zero.
+            ValueError: When ``period_ms`` is not greater than zero, or is
+                at least ``TICKS_HALFPERIOD`` (it could never fire).
         """
         if period_ms <= 0:
             raise ValueError("period_ms must be greater than zero")
+        if period_ms >= TICKS_HALFPERIOD:
+            raise ValueError(
+                f"period_ms must be < {TICKS_HALFPERIOD} (half the tick "
+                f"ring); a longer interval can never fire because "
+                f"ticks_diff saturates at half the ring",
+            )
 
         self.period_ms = period_ms
         self._ticks = ticks if ticks is not None else _DEFAULT_TICKS

@@ -5,8 +5,10 @@ in the ``"chu_kv"`` namespace.  Single-blob (rather than per-dict-key)
 because MP's ``esp32.NVS`` wrapper doesn't expose key enumeration;
 per-key storage would require a manifest blob for marginal wear gain.
 
-NVS is wear-leveled and atomic-on-commit at the substrate level, so
-no CRC framing here (unlike CP's NVM path).
+No CRC framing here (unlike CP's NVM path): a corrupt blob is caught
+when ``unpackb`` rejects its framing on load.  ``esp32.NVS`` is commonly
+described as wear-leveled and atomic-on-commit, but this layer neither
+provides nor verifies those properties.
 
 Tests inject an ``nvs`` substrate exposing ``set_blob(key, value)``,
 ``get_blob(key, buffer) -> length``, ``erase_key(key)``, ``commit()``.

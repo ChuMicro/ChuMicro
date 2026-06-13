@@ -383,8 +383,9 @@ class RequestParser:
         self._headers_bytes = 0
         self._buffer = bytearray()
         # Read cursor into ``_buffer``.  Each ``_consume(n)`` advances
-        # the cursor and only realloates the bytearray when at least
-        # half of it has been consumed.
+        # the cursor and only compacts the bytearray (an in-place memmove
+        # that drops the consumed prefix) once at least half of it has
+        # been consumed.
         self._read_offset = 0
         self.state = RequestParseState.REQUEST_LINE
         self.method = ""

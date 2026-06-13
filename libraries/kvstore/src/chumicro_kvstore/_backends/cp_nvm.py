@@ -112,10 +112,13 @@ class CpNvmBackend(Backend):
             + len(payload).to_bytes(2, "little")
             + crc.to_bytes(4, "little")
         )
-        # Write header + payload as a single contiguous span.  On
-        # CircuitPython the slab is ``microcontroller.nvm``, whose
-        # slice-assignment commits to flash atomically per slice.  On
-        # host tests the slab is a plain bytearray, so the assignment is
-        # just a memory write.
+        # Write the header then the payload as two separate slice-assigns.
+        # On CircuitPython the slab is ``microcontroller.nvm``; each slice
+        # commits to flash, but the two writes are not atomic together.  A
+        # power loss between them leaves a torn record, which the CRC
+        # rejects on the next load (``KVStoreCorrupt`` -> empty store), so
+        # a half-written record is never read back as valid.  On host
+        # tests the slab is a plain bytearray and the assigns are memory
+        # writes.
         self._nvm[0 : self.HEADER_SIZE] = header
         self._nvm[self.HEADER_SIZE : self.HEADER_SIZE + len(payload)] = payload
