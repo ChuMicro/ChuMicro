@@ -126,6 +126,38 @@ def project_app_exports_async_run(project_dir: Path) -> bool:
     return isinstance(_top_level_run_node(project_dir), ast.AsyncFunctionDef)
 
 
+def module_calls_hard_reset(path: Path) -> int | None:
+    """Return the line of a ``microcontroller.reset()`` / ``machine.reset()`` call in *path*, or ``None``.
+
+    Either call reboots the board.  In a shipped boot entrypoint, which
+    the board runs on every boot, a reset reboots the board, which
+    re-runs the entrypoint and resets again — a crash loop that bricks
+    the deploy cycle until the board is wiped.  Returns the first such
+    call's line so the deploy path can refuse it.  Matches the dotted
+    form (``microcontroller.reset()`` / ``machine.reset()``); a reset
+    reached only through ``from microcontroller import reset`` is not
+    detected.  A file that can't be read or parsed returns ``None``.
+    """
+    try:
+        source = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return None
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "reset"
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id in ("microcontroller", "machine")
+        ):
+            return node.lineno
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Static file helpers
 # ---------------------------------------------------------------------------

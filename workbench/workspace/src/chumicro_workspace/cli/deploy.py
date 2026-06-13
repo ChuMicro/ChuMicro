@@ -23,6 +23,7 @@ from chumicro_deploy import (
 from chumicro_deploy.config.default import load_devices_yml
 
 from chumicro_workspace.boot_shim import (
+    module_calls_hard_reset,
     project_app_exports_async_run,
     project_app_exports_run,
     project_boot_source,
@@ -164,6 +165,31 @@ def _resolve_deploy_layout(
             runtime's entrypoint convention.  The instance's str is
             the actionable user-facing message.
     """
+    # A microcontroller.reset() / machine.reset() in a shipped boot
+    # entrypoint crash-loops the board: it resets on boot, reboots,
+    # re-runs the entrypoint, and resets again, bricking the deploy cycle
+    # until the board is wiped.  Refuse before any layout choice so a
+    # stray reset can't ship.  app.py is the boot-shim entrypoint
+    # (imported and run every boot); code.py / main.py are the plain-mode
+    # entrypoints.
+    for entrypoint_name in ("code.py", "main.py", "app.py"):
+        entrypoint_path = project_dir / entrypoint_name
+        if not entrypoint_path.is_file():
+            continue
+        reset_line = module_calls_hard_reset(entrypoint_path)
+        if reset_line is not None:
+            raise _DeployLayoutError(
+                f"project {project_dir.name!r} ships {entrypoint_name} with "
+                f"a hard reset call (microcontroller.reset() / "
+                f"machine.reset()) at line {reset_line}, which chumicro "
+                f"refuses to deploy: a reset in the boot entrypoint reboots "
+                f"the board on every boot, crash-looping it until you wipe "
+                f"it.\n"
+                f"  Fix: move the reset into a module the entrypoint imports "
+                f"and calls only on a deliberate condition, never at boot in "
+                f"{entrypoint_name}.",
+            )
+
     if user_passed_boot_shim or user_passed_import_graph:
         # User-specified flags win; auto-detect is a no-op.
         return _ResolvedLayout(

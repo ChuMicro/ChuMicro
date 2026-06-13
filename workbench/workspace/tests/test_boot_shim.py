@@ -14,10 +14,15 @@ import pytest
 from chumicro_workspace.boot_shim import (
     SHIM_ENTRYPOINT_SOURCE,
     boot_shim_files,
+    module_calls_hard_reset,
     project_app_exports_async_run,
     project_app_exports_run,
     project_boot_source,
     project_boot_with_import_graph_source,
+)
+from chumicro_workspace.cli.deploy import (
+    _DeployLayoutError,
+    _resolve_deploy_layout,
 )
 from chumicro_workspace.deploy_source import RUNTIME_CONFIG_DEVICE_PATH
 from chumicro_workspace.workspace import WorkspaceLayout
@@ -468,3 +473,75 @@ class TestProjectBootWithImportGraphSource:
         # Universal entries still present.
         assert "/lib/external_lib.py" in files
         assert "/app.py" in files
+
+
+# ---------------------------------------------------------------------------
+# module_calls_hard_reset — refuse a crash-looping boot entrypoint
+# ---------------------------------------------------------------------------
+
+
+class TestModuleCallsHardReset:
+    def test_detects_microcontroller_reset(self, tmp_path: Path) -> None:
+        app = tmp_path / "app.py"
+        app.write_text(
+            "import microcontroller\ndef run():\n    microcontroller.reset()\n",
+        )
+        assert module_calls_hard_reset(app) == 3
+
+    def test_detects_machine_reset(self, tmp_path: Path) -> None:
+        app = tmp_path / "app.py"
+        app.write_text("import machine\nmachine.reset()\n")
+        assert module_calls_hard_reset(app) == 2
+
+    def test_clean_module_returns_none(self, tmp_path: Path) -> None:
+        app = tmp_path / "app.py"
+        app.write_text("def run():\n    print('ok')\n")
+        assert module_calls_hard_reset(app) is None
+
+    def test_unrelated_reset_method_ignored(self, tmp_path: Path) -> None:
+        # A ``.reset()`` on some other object is not a board reset.
+        app = tmp_path / "app.py"
+        app.write_text("def run():\n    widget.reset()\n")
+        assert module_calls_hard_reset(app) is None
+
+    def test_syntax_error_returns_none(self, tmp_path: Path) -> None:
+        app = tmp_path / "app.py"
+        app.write_text("def run(\n")
+        assert module_calls_hard_reset(app) is None
+
+    def test_missing_file_returns_none(self, tmp_path: Path) -> None:
+        assert module_calls_hard_reset(tmp_path / "nope.py") is None
+
+
+class TestDeployLayoutRefusesHardReset:
+    def test_app_py_with_reset_refused(self, tmp_path: Path) -> None:
+        (tmp_path / "app.py").write_text(
+            "import microcontroller\ndef run():\n    microcontroller.reset()\n",
+        )
+        with pytest.raises(_DeployLayoutError, match="hard reset"):
+            _resolve_deploy_layout(
+                project_dir=tmp_path,
+                target_entrypoint="code.py",
+                user_passed_boot_shim=False,
+                user_passed_import_graph=False,
+            )
+
+    def test_plain_code_py_with_reset_refused(self, tmp_path: Path) -> None:
+        (tmp_path / "code.py").write_text("import machine\nmachine.reset()\n")
+        with pytest.raises(_DeployLayoutError, match="hard reset"):
+            _resolve_deploy_layout(
+                project_dir=tmp_path,
+                target_entrypoint="code.py",
+                user_passed_boot_shim=False,
+                user_passed_import_graph=False,
+            )
+
+    def test_clean_project_resolves_to_boot_shim(self, tmp_path: Path) -> None:
+        (tmp_path / "app.py").write_text("def run():\n    print('ok')\n")
+        layout = _resolve_deploy_layout(
+            project_dir=tmp_path,
+            target_entrypoint="code.py",
+            user_passed_boot_shim=False,
+            user_passed_import_graph=False,
+        )
+        assert layout.boot_shim is True
