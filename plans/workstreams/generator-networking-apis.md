@@ -67,3 +67,12 @@ while it stays up). Demos run to `DEMO_COMPLETE`; tail one minute under load.
   until the deadline; covered by a new runner test. `preflight --coverage-threshold 94` green
   (requests 96.35% total, generators.py 100%; cross-runtime + check-version + check-api PASS).
   requests 0.13.6 -> 0.14.0; runner 0.7.0 -> 0.7.1 (check() behavior). Real-board bake: pending Phase 5.
+- 2026-06-13 Phase 3: `WebSocketClient/Connection.next_message()` + `InboundMessage` + bounded inbound
+  queue (`max_inbound_queue_size`, drop-oldest) landed on `_BaseSession`. First `next_message()` flips
+  data-frame delivery from on_text/on_binary to the queue; control-frame callbacks stay live. The wait
+  carries no `next_deadline` (the session is registered in its own right, so its deadlines gate the
+  loop). Cross-runtime trap caught + fixed: MicroPython's bounded `deque` raises `IndexError` on
+  overflow rather than dropping like CPython, so drop-oldest is enforced by evict-before-append in
+  `_enqueue_inbound` (surfaced by `test-micropython` in preflight). `preflight --coverage-threshold 94`
+  green (websockets 96.27% total; cross-runtime + check-* PASS). websockets 0.19.7 -> 0.20.0.
+  Real-board bake (incl. the dual-registration session+generator path): pending Phase 5.

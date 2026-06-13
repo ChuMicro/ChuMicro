@@ -32,6 +32,7 @@ from chumicro_websockets._wire import (
     CLOSE_NORMAL,
     DEFAULT_CLOSE_TIMEOUT_MS,
     DEFAULT_HANDSHAKE_TIMEOUT_MS,
+    DEFAULT_MAX_INBOUND_QUEUE_SIZE,
     DEFAULT_MAX_MESSAGE_BYTES,
     DEFAULT_MAX_TX_QUEUE_SIZE,
     DEFAULT_PONG_TIMEOUT_MS,
@@ -100,6 +101,7 @@ class Connection(_BaseSession):
         close_timeout_ms: int,
         ticks,
         on_connection_callback,
+        max_inbound_queue_size: int = DEFAULT_MAX_INBOUND_QUEUE_SIZE,
     ) -> None:
         _force_non_blocking(socket)
         self._init_session_state(
@@ -112,6 +114,7 @@ class Connection(_BaseSession):
             pong_timeout_ms=pong_timeout_ms,
             handshake_timeout_ms=handshake_timeout_ms,
             close_timeout_ms=close_timeout_ms,
+            max_inbound_queue_size=max_inbound_queue_size,
             ticks=ticks,
         )
 
@@ -370,6 +373,7 @@ class WebSocketServer:
         pong_timeout_ms: int = DEFAULT_PONG_TIMEOUT_MS,
         handshake_timeout_ms: int = DEFAULT_HANDSHAKE_TIMEOUT_MS,
         close_timeout_ms: int = DEFAULT_CLOSE_TIMEOUT_MS,
+        max_inbound_queue_size: int = DEFAULT_MAX_INBOUND_QUEUE_SIZE,
         ticks: object | None = None,
     ) -> None:
         self._listener = listener
@@ -384,6 +388,7 @@ class WebSocketServer:
         self._pong_timeout_ms = pong_timeout_ms
         self._handshake_timeout_ms = handshake_timeout_ms
         self._close_timeout_ms = close_timeout_ms
+        self._max_inbound_queue_size = max_inbound_queue_size
 
         if ticks is None:
             from chumicro_timing import ticks  # noqa: PLC0415 - DI fallback
@@ -503,6 +508,7 @@ class WebSocketServer:
                 pong_timeout_ms=self._pong_timeout_ms,
                 handshake_timeout_ms=self._handshake_timeout_ms,
                 close_timeout_ms=self._close_timeout_ms,
+                max_inbound_queue_size=self._max_inbound_queue_size,
                 ticks=self._ticks,
                 on_connection_callback=self._on_connection,
             )
