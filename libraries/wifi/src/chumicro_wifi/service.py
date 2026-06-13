@@ -66,6 +66,14 @@ def _select_adapter():
 class WifiService:
     """Drives a wifi adapter through connect / monitor / reconnect.
 
+    On CircuitPython the connect step blocks: ``wifi.radio.connect`` has
+    no non-blocking variant, so a connect attempt driven from
+    ``handle()`` stalls every co-scheduled runner service for up to
+    ``WifiConfig.connect_timeout_ms`` (default 15 s).  MicroPython and
+    CPython connect without stalling the loop.  Keep ``connect_timeout_ms``
+    modest on CP, or accept the stall during the infrequent connect /
+    reconnect windows.
+
     Args:
         config: A :class:`WifiConfig` with the credentials + tuning
             knobs.  Required.
