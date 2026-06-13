@@ -262,14 +262,14 @@ class _BaseSession:
         Returns ``None`` once the session reaches ``CLOSED`` (handle()
         will no-op from then on, so the runner does not need to wake on
         the socket).  Adapter wrappers from ``chumicro_sockets`` store
-        the pollable on ``_sock``; the property unwraps so ``select.poll``
+        the pollable on ``.sock``; the property unwraps so ``select.poll``
         registers the object the runtime's stream-poll ioctl knows.
         """
         if self._socket is None:
             return None
         if self.state == WebSocketState.CLOSED:
             return None
-        return getattr(self._socket, "_sock", self._socket)
+        return getattr(self._socket, "sock", self._socket)
 
     @property
     def io_wants_read(self):

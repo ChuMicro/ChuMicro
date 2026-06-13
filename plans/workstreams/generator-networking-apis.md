@@ -54,6 +54,21 @@ while it stays up). Demos run to `DEMO_COMPLETE`; tail one minute under load.
 
 ## Validation history
 
+- 2026-06-13 Final-phase bake (real boards on the "bench-ap" test network). The first `requests_fetch`
+  bake on the Pico W MP crashed in `Runner.wait` -> `poll.register` with `OSError: stream operation not
+  supported`: the generator read-waits handed the chumicro_sockets *wrapper* to select.poll instead of
+  the underlying pollable. Root cause + fix: every adapter socket wrapper exposes the pollable on
+  `.sock`, and the connector's own `io_socket` unwraps via `.sock` correctly — but the generator
+  read/write waits did not unwrap, and the reactive `io_socket` of mqtt / requests / websockets unwrapped
+  via the non-existent `._sock` (so they handed back the wrapper). Harmless on CPython host tests (raw
+  sockets have neither attr, so `._sock` passes through), it only bit on a real MP/CP device. Fixed all
+  five sites to `.sock` (the two generator wait shapes + the three reactive `io_socket` properties).
+  Also fixed a driver bug: `requests_fetch`/`websockets_stream` `--runtime` defaulted to `circuitpython`,
+  conflicting with `--device <mp-board>`; now `default=None` like the mqtt driver. After the fix,
+  `requests_fetch` ran green on the Pico W MP (264 KB): `WIFI_OK` -> `FETCHED status=200` -> clean exit.
+  VERSION patches: sockets 0.11.1, requests 0.14.1, mqtt 0.16.6, websockets 0.20.1. preflight green.
+
+
 - 2026-06-13 Phase 1: relocation landed. `preflight --coverage-threshold 94` green (lint, test 96%
   total, sockets 94.92% / runner 100% on `generators.py`, test-micropython, test-circuitpython,
   check-version, check-api all PASS). Helper unit tests + tracemalloc lane on sockets (incl. two

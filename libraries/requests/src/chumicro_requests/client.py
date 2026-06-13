@@ -557,7 +557,7 @@ class HttpClient:
         connector's in-flight pollable so the runner parks on the
         right handle between connect phases.  Once promoted, adapter
         wrappers from ``chumicro_sockets`` store the underlying
-        pollable on ``_sock``; bare CPython sockets and CircuitPython
+        pollable on ``.sock``; bare CPython sockets and CircuitPython
         TCP / TLS clients pass through unchanged.
         """
         if self._state == _RequestState.AWAITING_TRANSPORT:
@@ -565,7 +565,7 @@ class HttpClient:
         sock = self._socket
         if sock is None:
             return None
-        return getattr(sock, "_sock", sock)
+        return getattr(sock, "sock", sock)
 
     @property
     def io_wants_read(self):
