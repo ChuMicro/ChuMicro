@@ -687,6 +687,7 @@ def _flash_firmware_esptool(
     erase_flash: bool = True,
     flash_offset: str = "0x0",
     runner: Callable[..., subprocess.CompletedProcess] = subprocess.run,
+    sleep: Callable[[float], None] = time.sleep,
 ) -> None:
     """Shell out to ``esptool`` to write *firmware_path* to *device*.
 
@@ -709,6 +710,9 @@ def _flash_firmware_esptool(
             a reflash.
         flash_offset: Write offset for the firmware image.
         runner: Injectable subprocess runner.
+        sleep: Injectable sleep for the inter-invocation settle delay
+            (default ``time.sleep``).  Tests pass a no-op to skip the
+            real wait.
 
     Raises:
         FlashFirmwareError: When esptool is missing, the subprocess
@@ -784,7 +788,7 @@ def _flash_firmware_esptool(
         # this, the next invocation trips "Resource busy" because
         # the kernel still holds the cu.usbmodem FD briefly after
         # esptool returns.
-        time.sleep(1.0)
+        sleep(1.0)
 
     _report(
         on_progress,

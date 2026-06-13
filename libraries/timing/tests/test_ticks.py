@@ -7,6 +7,7 @@ so they run on CPython (via pytest) and on MicroPython/CircuitPython
 
 import chumicro_timing.ticks as ticks_module
 from chumicro_test_harness import raises
+from chumicro_timing.testing import FakeTicks
 
 # -- ticks_diff ring arithmetic --
 
@@ -70,3 +71,23 @@ def test_ticks_ms_fits_in_period() -> None:
     period = 1 << 29
     result = ticks_module.ticks_ms()
     assert 0 <= result < period
+
+
+# -- FakeTicks.sleep_ms advances the fake clock --
+
+
+def test_fake_ticks_sleep_ms_advances_reading() -> None:
+    """FakeTicks.sleep_ms moves ticks_ms() forward by the slept duration,
+    matching advance() — an honest fake where sleeping makes time pass."""
+    fake = FakeTicks(start_ms=100)
+    fake.sleep_ms(250)
+    assert fake.ticks_ms() == 350
+
+
+def test_fake_ticks_sleep_ms_folds_into_wrap_range() -> None:
+    """A sleep that crosses the 2**29 wrap boundary masks like advance():
+    ticks_ms() stays in [0, TICKS_MAX] and reads the wrapped value."""
+    fake = FakeTicks(start_ms=ticks_module.TICKS_MAX - 10)
+    fake.sleep_ms(30)
+    # (TICKS_MAX - 10 + 30) & TICKS_MAX == 19 after wrapping past TICKS_MAX.
+    assert fake.ticks_ms() == 19

@@ -27,6 +27,20 @@ class FakeTicks:
         """Bumps the current reading by ``amount_ms``."""
         self._current_ms += amount_ms
 
+    def sleep_ms(self, duration_ms: int) -> None:
+        """Advances the fake clock by ``duration_ms`` instead of sleeping for real.
+
+        An honest stand-in for a runtime ``time.sleep_ms``: in real
+        time sleeping makes the clock move, so this moves ``ticks_ms()``
+        forward by ``duration_ms`` and returns at once.  ``Runner.wait``
+        calls this when its socket-less idle path delegates to an
+        injected ``FakeTicks``, so a test waits zero wall-clock while the
+        fake time it gates on advances by the computed timeout.  Matches
+        ``advance``: the bump lands on the unmasked reading and
+        ``ticks_ms()`` folds it into the wrap-safe range.
+        """
+        self._current_ms += duration_ms
+
     def ticks_ms(self) -> int:
         """Returns the current reading masked into the wrap-safe 29-bit range."""
         return self._current_ms & TICKS_MAX

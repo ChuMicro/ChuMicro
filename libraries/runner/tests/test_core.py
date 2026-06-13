@@ -1632,6 +1632,49 @@ def test_sync_unregister_branch_when_default_poller_not_yet_built() -> None:
     assert id(sock) not in runner._registered_interest
 
 
+def test_wait_socketless_advances_fake_clock_via_injected_sleep_ms() -> None:
+    """wait() with no socket and a FakeTicks delegates the idle sleep to
+    the tick source: FakeTicks.sleep_ms advances ticks_ms by the
+    computed timeout instead of sleeping for real, so the next tick sees
+    the periodic task due."""
+    fake = FakeTicks(start_ms=0)
+    runner = Runner(ticks=fake)  # no poller, no socket
+    fired: list[int] = []
+    runner.add(handler=lambda now_ms: fired.append(now_ms), period_ms=100)
+
+    # Timeout is the period (100 ms); no socket registered, so wait
+    # sleeps it through FakeTicks.sleep_ms, advancing the fake clock.
+    runner.wait(fake.ticks_ms())
+
+    assert fake.ticks_ms() == 100
+    assert fired == []  # wait sleeps, it does not dispatch
+    runner.tick()  # now the 100 ms task is due
+    assert fired == [100]
+
+
+def test_wait_uses_module_sleep_when_tick_source_lacks_sleep_ms() -> None:
+    """A tick source without sleep_ms falls back to the module _sleep_ms;
+    the cached sleeper is the module helper, not a bound FakeTicks
+    method."""
+    from chumicro_runner import core as runner_core
+
+    class _NoSleepTicks:
+        def __init__(self) -> None:
+            self._now = 0
+
+        def ticks_ms(self) -> int:
+            return self._now
+
+        def ticks_diff(self, end: int, start: int) -> int:
+            return end - start
+
+        def ticks_add(self, ticks_val: int, delta: int) -> int:
+            return ticks_val + delta
+
+    runner = Runner(ticks=_NoSleepTicks())
+    assert runner._sleep_ms is runner_core._sleep_ms
+
+
 def _select_pollin() -> int:
     return select.POLLIN
 
