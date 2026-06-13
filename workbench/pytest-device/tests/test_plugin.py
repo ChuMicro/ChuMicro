@@ -877,6 +877,39 @@ class TestIsLibraryUnitTest:
         ) is False
 
 
+class TestIsLibraryFunctionalTest:
+    """Tests for _is_library_functional_test path-shape classification."""
+
+    def test_matches_libraries_functional_test_file(self) -> None:
+        assert plugin_session._is_library_functional_test(
+            Path("libraries/wifi/functional_tests/test_real.py"),
+        ) is True
+
+    def test_substring_helpers_dir_not_matched(self) -> None:
+        # A directory whose name merely contains "functional_tests" as a
+        # substring is not a functional test; the parts check rejects it.
+        assert plugin_session._is_library_functional_test(
+            Path("libraries/wifi/functional_tests_helpers/test_helper.py"),
+        ) is False
+
+    def test_excludes_unit_test_path(self) -> None:
+        assert plugin_session._is_library_functional_test(
+            Path("libraries/wifi/tests/test_unit.py"),
+        ) is False
+
+    def test_excludes_non_libraries_root(self) -> None:
+        # functional_tests under workbench is host-side, not a libraries
+        # device functional test.
+        assert plugin_session._is_library_functional_test(
+            Path("workbench/deploy/functional_tests/test_x.py"),
+        ) is False
+
+    def test_excludes_non_test_file(self) -> None:
+        assert plugin_session._is_library_functional_test(
+            Path("libraries/wifi/functional_tests/conftest.py"),
+        ) is False
+
+
 class TestSynthesizeUnixPortTargets:
     """Tests for the unix-port DeviceEntry synthesis."""
 

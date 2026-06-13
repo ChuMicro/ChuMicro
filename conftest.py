@@ -116,7 +116,11 @@ def pytest_collection_modifyitems(config, items):
     deselected: list = []
     selected: list = []
     for item in items:
-        if "functional_tests" in str(item.fspath):
+        # Match ``functional_tests`` as an exact path component, not a raw
+        # substring: a host test under a directory like
+        # ``functional_tests_helpers/`` must not be swept out of a default
+        # run.  Mirrors the parts check in _has_explicit_functional_arg.
+        if "functional_tests" in Path(str(item.fspath)).parts:
             deselected.append(item)
         else:
             selected.append(item)
