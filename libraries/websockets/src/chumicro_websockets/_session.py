@@ -618,7 +618,10 @@ class _BaseSession:
             if self._tx_partial is None:
                 if not self._tx_queue:
                     return
-                self._tx_partial = (self._tx_queue.popleft(), 0)
+                # Wrap the queued frame in a memoryview so the per-send
+                # slice below is a view over the unsent tail, not a fresh
+                # bytes copy of it on every drain iteration.
+                self._tx_partial = (memoryview(self._tx_queue.popleft()), 0)
             buffer, offset = self._tx_partial
             chunk = buffer[offset : offset + budget]
             try:

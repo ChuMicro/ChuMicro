@@ -562,6 +562,32 @@ class TestPublishQos1:
         retry_byte = sock.sent[first_send_length]
         assert retry_byte & 0x08  # DUP bit set on the retry
 
+    def test_qos1_retransmit_caches_dup_packet_across_retries(self) -> None:
+        # The DUP-flagged retransmit is built once and reused, not
+        # re-copied from packet_bytes on every ack-timeout expiry.
+        sock = FakeSocket()
+        sock.enqueue_recv(canned_connack_bytes(return_code=0))
+        ticks = FakeTicks()
+        client = new_client(sock, ticks)
+        client.connect()
+        drive(client, ticks, count=2)
+
+        client.publish("temp", b"42", qos=1)
+        drive(client, ticks, count=1)
+        entry = next(iter(client._in_flight.values()))  # noqa: SLF001
+        assert entry.dup_packet_bytes is None  # not built until first retry
+
+        ticks.advance(10_000)
+        drive(client, ticks, count=1)
+        first_dup = entry.dup_packet_bytes
+        assert first_dup is not None
+        assert first_dup[0] & 0x08  # DUP bit set
+
+        ticks.advance(10_000)
+        drive(client, ticks, count=1)
+        # Same object reused on the second retry, not re-copied.
+        assert entry.dup_packet_bytes is first_dup
+
     def test_qos1_publish_qos2_raises(self) -> None:
         sock = FakeSocket()
         sock.enqueue_recv(canned_connack_bytes(return_code=0))
