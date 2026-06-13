@@ -39,6 +39,8 @@ Highest priority. Bench on a real board after the fix (orchestration bug class).
 
 ### Phase 2 — Test/lint infrastructure integrity
 
+**Shipped 2026-06-13** (checks 0.12.1, workspace 0.42.0, pytest-device 0.16.3). Two scoped deviations from the review, recorded in the Validation history: TEST-5's device-side `return 1` was declined, and TEST-6 was fixed with a path-parts check rather than the libraries-only `_is_library_functional_test` (the conftest pass deselects workbench functional tests too).
+
 Restores trust in green preflights; mostly CPython-side and well-testable.
 
 - **TEST-1** (HIGH, `pytest-device/result_parser.py:109` + `collection.py:551`) — reconcile the device `SUMMARY total=/failed=` against per-test lines in `_require_batch_result`; `pytest.fail` on mismatch. *agent-reported, confirm.*
@@ -108,3 +110,4 @@ ECO-1 reported the AGENTS.md-referenced project skills missing from `.github/ski
 
 - 2026-06-13 — Workstream opened from the deep review report. ECO-1 confirmed resolved (skills present + tracked, working tree clean). No code phases shipped yet.
 - 2026-06-13 — Phase 1 shipped (runner 0.7.0). RUN-1: `tick()` isolates a faulting handler (catch `Exception`, count in `handler_errors`, report to an optional `on_handler_error(handle, exception)` hook) and clears `_pending` in `finally`; `KeyboardInterrupt`/`SystemExit`/`GeneratorExit` still propagate. RUN-2: documented the single-dispatch-then-return safety at `_dispatch_io_error` and trimmed the rule-violating `_mark_done` docstring. RUN-3: `connect()` threads `now_ms` into `connector.tick()` instead of literal `0`. 160 runner unit tests green, full preflight green. Real-board bake (Pico W, orchestration class) still pending.
+- 2026-06-13 — Phase 2 shipped. TEST-2/3/7 (checks 0.12.1): `_function_has_assertion` stops at nested scopes, `_silent_return_findings` checks `else:` bodies, and the final-statement carve-out is documented. TEST-4 (workspace 0.42.0): `module_calls_hard_reset` + a deploy guard refusing an entrypoint that calls `microcontroller.reset()`/`machine.reset()`. TEST-1 (pytest-device 0.16.2): `_assert_summary_reconciles` fails a batch on a missing SUMMARY or a dropped FAIL line; total-count is deliberately not reconciled because vanished tests are caught per-test as "not found". TEST-5: covered by TEST-1 plus the existing host emptiness and per-test guards; the device-side `return 1` was declined because `run_module`'s "report, host decides" contract is tested. TEST-6 (pytest-device 0.16.3): conftest deselection and the plugin pass now match `functional_tests` as a path component, so `functional_tests_helpers/` no longer false-matches. No new findings across existing suites; full preflight green.

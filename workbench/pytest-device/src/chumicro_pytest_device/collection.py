@@ -857,8 +857,7 @@ def pytest_collection_modifyitems(
     selected: list[pytest.Item] = []
     for item in items:
         if (
-            "functional_tests" in item.nodeid
-            and "libraries/" in item.nodeid
+            _is_library_functional_test(Path(str(item.fspath)))
             and not isinstance(item, DeviceRuntimeItem)
             and not is_host_only_test(Path(str(item.fspath)))
         ):
