@@ -26,9 +26,9 @@ from __future__ import annotations
 
 import ast
 from pathlib import Path
-from typing import cast
 
 from .protocol import validate_entrypoint_in_files
+from .source_minify import _DocstringStripper
 
 _TEMPLATE_PATH = Path(__file__).parent / "circuitpython_bootstrap_template.txt"
 
@@ -311,67 +311,23 @@ def _build_population_block(module_name: str, source_text: str) -> str:
     ])
 
 
-class _InlineDocstringStripper(ast.NodeTransformer):
-    """Remove docstrings before AST unparsing shrinks inline source.
-
-    The visit methods cast ``generic_visit`` back to the specific
-    node type.  `ast.NodeTransformer.generic_visit` is typed as
-    returning ``AST`` in typeshed, but per the documented
-    transformer contract a ``visit_<Specific>`` method that mutates
-    in place returns the same node type that was passed in.
-    """
-
-    def visit_Module(self, node: ast.Module) -> ast.Module:
-        node.body = _strip_docstring_from_body(node.body)
-        return cast(ast.Module, self.generic_visit(node))
-
-    def visit_ClassDef(self, node: ast.ClassDef) -> ast.ClassDef:
-        node.body = _strip_docstring_from_body(node.body, require_nonempty=True)
-        return cast(ast.ClassDef, self.generic_visit(node))
-
-    def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.FunctionDef:
-        node.body = _strip_docstring_from_body(node.body, require_nonempty=True)
-        return cast(ast.FunctionDef, self.generic_visit(node))
-
-    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> ast.AsyncFunctionDef:
-        node.body = _strip_docstring_from_body(node.body, require_nonempty=True)
-        return cast(ast.AsyncFunctionDef, self.generic_visit(node))
-
-
 def _prepare_inline_source(source_text: str) -> str:
-    """Strip comments and docstrings from inline RAM-mode source text."""
+    """Return RAM-mode inline source with docstrings and comments removed.
+
+    Parses, drops every docstring, and unparses; the unparse also discards
+    ``#`` comments and surplus whitespace, shrinking the embedded payload
+    hardest, which matters because RAM-mode source is packed into
+    size-bounded raw-REPL chunks.  Returns the text unchanged when it does
+    not parse.
+    """
     try:
         syntax_tree = ast.parse(source_text)
     except SyntaxError:
         return source_text
 
-    stripped_tree = _InlineDocstringStripper().visit(syntax_tree)
+    stripped_tree = _DocstringStripper().visit(syntax_tree)
     ast.fix_missing_locations(stripped_tree)
     return ast.unparse(stripped_tree)
-
-
-def _strip_docstring_from_body(
-    body: list[ast.stmt],
-    *,
-    require_nonempty: bool = False,
-) -> list[ast.stmt]:
-    """Return a body list with a leading docstring expression removed."""
-    if not body:
-        return [ast.Pass()] if require_nonempty else body
-
-    first_statement = body[0]
-    if not isinstance(first_statement, ast.Expr):
-        return body
-    if not isinstance(first_statement.value, ast.Constant):
-        return body
-    if not isinstance(first_statement.value.value, str):
-        return body
-    stripped_body = body[1:]
-    if stripped_body:
-        return stripped_body
-    if require_nonempty:
-        return [ast.Pass()]
-    return stripped_body
 
 
 def _chunk_script_blocks(

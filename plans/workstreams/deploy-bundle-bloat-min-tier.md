@@ -1,6 +1,6 @@
 # Workstream: deploy-bundle bloat overflows the minimum-tier flash
 
-Status: **proposed** (surfaced 2026-06-13 during the generator-networking-apis real-board bake).
+Status: **step 1 (docstring/comment strip) shipped 2026-06-13; steps 2-3 open.** Surfaced during the generator-networking-apis real-board bake.
 
 ## Problem
 
@@ -61,11 +61,14 @@ issue, not the mechanism.)
 
 ## Next steps
 
-1. **Strip docstrings/comments on the flash-stage path.** The machinery already
-   exists for RAM-mode (`circuitpython_bootstrap._strip_docstring_from_body`,
-   plus the `strip-comments` command). Apply it in `circuitpython_transport`'s
-   flash staging (and the MicroPython transport). Validate: deployed bytes drop
-   ~76% on `.py`, and the stripped libraries still import + run on-device.
+1. **Strip docstrings/comments on every device-stage path. SHIPPED** ([Decision 0090](../decisions/0090-deploy-strips-docstrings-and-comments.md)).
+   `chumicro_deploy.source_minify.strip_source` blanks docstrings and `#`
+   comments in place — line-preserving, behind an AST-equivalence guard that
+   ships a file verbatim if the scan would alter its code. Both transports call
+   `minify_python_tree` over the staging tree before transfer; RAM mode keeps
+   its `ast.unparse` path and shares only the docstring-stripping transformer.
+   Blanking rather than deleting was required so the on-device test runner's
+   host-computed chunk boundaries still line up.
 2. **Decide whether demo/app deploys stage the test harness.** A demo runs
    `app.py` and prints stdout markers the host reads over serial; the on-device
    test harness is for the *unit-test* sweep, not a demo. Excluding it from the
@@ -77,6 +80,19 @@ Boilerplate (copied `examples/helpers.py`, the inline runtime_config msgpack
 decoder, repeated wifi-up scaffolding) and per-library size (chumicro_mqtt ~2x
 the reference; the queued `/audit-embedded` passes) are real but secondary to the
 docstring-strip win above — re-measure each after step 1 lands.
+
+## Validation history
+
+- 2026-06-13 — Step 1 shipped and baked on real boards. `deploy-example sockets
+  tcp_roundtrip` to s2mini-cp (CP, flash) ran a full TCP round-trip; the deployed
+  `chumicro_sockets` `.py` measured ~12 KB on the drive with no docstrings, down
+  from the ~57 KB recorded above. The on-device unit sweep that overflowed before
+  (`test-unit-on-device --library sockets --deploy-mode flash`) now stages and
+  runs on the Pico W CP (256 KB): 49/65 pass, and the Pico W MP runs 65/65. The
+  16 `test_udp.py` failures on CircuitPython are pre-existing — they reproduce
+  identically with stripping turned off (a no-op `strip_source`) and on both CP
+  boards regardless of heap, so they are a separate `test_udp.py`-on-CP defect,
+  not a strip regression.
 
 ## Why it matters
 
