@@ -1,6 +1,6 @@
 # Workstream: Post-fix hardware + UX remediation (2026-06)
 
-Status: **in progress — opened 2026-06-13.** Phase 0 (coverage gap) done — WS-1 / HTTP-3 / HTTP-1 re-read and verified clean. Phase A (library correctness) next. Full evidence for every finding ID lives in the research artifact: [`plans/reviews/2026-06-13-post-fix-hardware-ux-review.md`](../reviews/2026-06-13-post-fix-hardware-ux-review.md).
+Status: **in progress — opened 2026-06-13.** Phase 0 (coverage gap) done — WS-1 / HTTP-3 / HTTP-1 re-read and verified clean. Phase A (library correctness, L1 + L2) shipped. Phase B (workbench failure handling) next. Full evidence for every finding ID lives in the research artifact: [`plans/reviews/2026-06-13-post-fix-hardware-ux-review.md`](../reviews/2026-06-13-post-fix-hardware-ux-review.md).
 
 Counts: 1 HIGH + 2 MEDIUM library, 1 MEDIUM cross-cutting (docs), 6 HIGH + 2 MEDIUM + 1 LOW workbench.
 
@@ -32,10 +32,10 @@ Five of six library review agents died on a transient API rate limit, so the lib
 
 Small, isolated, well-testable. L1 is the priority — a crash regression in a library everything logs through.
 
-**L1 shipped 2026-06-13 (logging 0.3.1). L2 paused 2026-06-13 — needs a user call: it reverses the RUN-1 user-approved isolate-handler-faults model, and `test_reentrant_tick_from_handler_is_isolated` locks the current behavior on purpose.**
+**Phase A complete 2026-06-13: L1 (logging 0.3.1) + L2 (runner 0.8.0) shipped. L2's behavior change was approved by the user 2026-06-13 — a re-entrant tick now propagates loudly.**
 
 - **L1** (HIGH, `libraries/logging/src/chumicro_logging/core.py:124`) — `Logger.log`'s `message % args` interpolation sat outside the `try/except` that wraps `handler.emit`, so a format/arg mismatch raised into the caller and broke the class's documented "logging never crashes the app" contract. **Shipped (logging 0.3.1):** guarded the interpolation in a `try/except Exception`, rendered a visible fallback `f"{message!r} % {args!r} (log-format error: …)"`, counted it in `handler_errors`; updated both docstrings; test `test_logger_format_mismatch_does_not_crash_the_caller`. *verified.*
-- **L2** (MEDIUM → design call, `libraries/runner/src/chumicro_runner/core.py:402-405,446-462`) — RUN-1's `except Exception` swallows the re-entrancy guard's `RuntimeError`, so a handler that re-enters `tick()` gets a silent `handler_errors` bump instead of a loud crash. **Paused — not a clean bug.** RUN-1's isolate-everything model was a user-approved decision and `test_reentrant_tick_from_handler_is_isolated` asserts "isolated and counted, not propagated" on purpose. The argument for changing it: a re-entrant `tick()` is *framework misuse* (a structural programming error), categorically different from a *service handler* raising a domain exception — the isolate model protects against the latter; silently counting the former hides a structural defect (asyncio, by contrast, raises loudly on re-entrant run). Proposed fix if the user agrees: a `ReentrantTickError(RuntimeError)` re-raised past the isolation, test rewritten to assert propagation, runner minor bump. Decision owner: user.
+- **L2** (MEDIUM, `libraries/runner/src/chumicro_runner/core.py`) — RUN-1's `except Exception` swallowed the re-entrancy guard's `RuntimeError`, so a handler that re-entered `tick()` got a silent `handler_errors` bump instead of a loud crash. **Shipped 2026-06-13 (runner 0.8.0), user-approved.** Re-entering the reactor is framework misuse, categorically different from a service handler raising a domain exception, so it now propagates. Added `ReentrantTickError(RuntimeError)` (exported), the guard raises it, and the dispatch loop re-raises it past the handler-fault isolation while ordinary faults stay isolated unchanged. Rewrote `test_reentrant_tick_from_handler_is_isolated` to `test_reentrant_tick_from_handler_propagates` (asserts it raises, `handler_errors == 0`, and the runner recovers once the offending handler is removed). *verified.*
 
 ### Phase B — Workbench failure-handling root cause
 
@@ -65,4 +65,5 @@ No behavior change. Make the substrate limits the user trips on visible where th
 
 - 2026-06-13 — Workstream opened from the post-fix review report.
 - 2026-06-13 — Phase 0: re-read `websockets/_wire.py` + `http_server/_wire.py` + `server.py`. WS-1, HTTP-3, HTTP-1 verified clean; no new actionable findings (one LOW `os.urandom` note recorded as GAP-OBS-1). No code changed.
-- 2026-06-13 — Phase A / L1 shipped (logging 0.3.1): guarded `Logger.log`'s `message % args` so a format mismatch renders a visible fallback + counts `handler_errors` instead of crashing the caller; test added. L2 paused pending a user decision (it reverses the RUN-1 isolate model).
+- 2026-06-13 — Phase A / L1 shipped (logging 0.3.1): guarded `Logger.log`'s `message % args` so a format mismatch renders a visible fallback + counts `handler_errors` instead of crashing the caller; test added.
+- 2026-06-13 — Phase A / L2 shipped (runner 0.8.0), user-approved: re-entrant `tick()` now propagates `ReentrantTickError` past the handler-fault isolation instead of being silently counted; ordinary handler faults stay isolated. Locking test rewritten to assert propagation. Error-path-only change (steady-state tick + allocation unchanged); real-board validation folds into the already-pending RUN-1 runner-tick bake. Phase A complete.
