@@ -463,8 +463,13 @@ class HttpClient:
                 returning a connector-shaped object works too.
             recv_budget_per_tick: Soft cap on bytes drained from the
                 socket in a single :meth:`handle` call.  Default 1024.
-                Bounds tick latency so concurrent runner tasks (LED
-                blink, control loop) keep getting CPU time.
+                The recv scratch is 512 B, so against a fast peer a
+                larger budget drains in up to ``budget // 512``
+                recv-and-feed iterations per tick — raising it trades
+                tick latency for throughput.  Keep it small (a few
+                hundred bytes to a couple KB) so concurrent runner tasks
+                (LED blink, control loop) keep getting CPU time within
+                the per-tick budget.
             max_body_bytes: Cap on a single response body.  Default
                 64 KB — minimum supported board has 256 KB MCU RAM,
                 so 64 KB leaves headroom.

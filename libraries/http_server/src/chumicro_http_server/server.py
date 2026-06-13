@@ -626,7 +626,12 @@ class HttpServer:
                 that hasn't reached ``DONE`` is dropped + the socket
                 is closed.
             recv_budget_per_tick: Per-connection recv cap per
-                :meth:`handle` call.  Bounds tick latency.
+                :meth:`handle` call.  The recv scratch is 512 B, so a
+                larger budget drains in up to ``budget // 512``
+                recv-and-feed iterations per tick against a fast peer —
+                raising it trades tick latency for throughput.  Keep it
+                small so concurrent connections and runner tasks keep
+                getting CPU time within the per-tick budget.
             send_budget_per_tick: Per-connection send cap per
                 :meth:`handle` call.  Higher than recv because
                 response bodies are typically small + we want them

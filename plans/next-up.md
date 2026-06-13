@@ -4,7 +4,7 @@
 
 ## Now
 
-- [ ] **Deep code review remediation (2026-06): 1 CRITICAL (runner fault isolation) + 11 HIGH + 18 MEDIUM across runner / test-infra / http+ws security / tick-budget / alloc / cross-runtime / workbench.** [`workstreams/deep-code-review-remediation.md`](workstreams/deep-code-review-remediation.md) (report: [`reviews/2026-06-13-deep-code-review.md`](reviews/2026-06-13-deep-code-review.md)). Status: in-progress; Phases 1-3 shipped, Phase 4 (tick-budget / blocking honesty) next.
+- [ ] **Deep code review remediation (2026-06): 1 CRITICAL (runner fault isolation) + 11 HIGH + 18 MEDIUM across runner / test-infra / http+ws security / tick-budget / alloc / cross-runtime / workbench.** [`workstreams/deep-code-review-remediation.md`](workstreams/deep-code-review-remediation.md) (report: [`reviews/2026-06-13-deep-code-review.md`](reviews/2026-06-13-deep-code-review.md)). Status: in-progress; Phases 1-4 shipped, Phase 5 (hot-path allocation sweep) next.
 - [ ] **Comment-generation round 18 (guided vs bare no-guidance control; honest naming; 4 guided voices + 2 bare) — built, awaiting dispatch + analysis** — see [`handoffs/2026-05-30-comment-generation-round18-guided-vs-bare.md`](handoffs/2026-05-30-comment-generation-round18-guided-vs-bare.md).  Status: deferred 2026-06-12 (user call — clean-room spend stays for a user-present session).
 
 ## Next
