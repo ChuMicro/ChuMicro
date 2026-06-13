@@ -109,35 +109,44 @@ class Logger:
         """
         return level >= self.level
 
-    def log(self, level: int, message: str) -> None:
-        """Emit *message* at *level* to every attached handler."""
+    def log(self, level: int, message: str, *args: object) -> None:
+        """Emit *message* at *level* to every attached handler.
+
+        When *args* is given the record is built as ``message % args``,
+        and only after the level gate — so a dropped record never pays
+        the interpolation.  Prefer ``log.info("x=%d", n)`` over a
+        pre-built f-string (``log.info(f"x={n}")``) so the formatting
+        stays off the hot path when the level is disabled.
+        """
         if level < self.level:
             return
+        if args:
+            message = message % args
         for handler in self._handlers:
             try:
                 handler.emit(level, self.name, message)
             except Exception:  # noqa: BLE001
                 self.handler_errors += 1
 
-    def debug(self, message: str) -> None:
-        """Emit at ``DEBUG``."""
-        self.log(DEBUG, message)
+    def debug(self, message: str, *args: object) -> None:
+        """Emit at ``DEBUG``, interpolating ``message % args`` past the gate."""
+        self.log(DEBUG, message, *args)
 
-    def info(self, message: str) -> None:
-        """Emit at ``INFO``."""
-        self.log(INFO, message)
+    def info(self, message: str, *args: object) -> None:
+        """Emit at ``INFO``, interpolating ``message % args`` past the gate."""
+        self.log(INFO, message, *args)
 
-    def warning(self, message: str) -> None:
-        """Emit at ``WARNING``."""
-        self.log(WARNING, message)
+    def warning(self, message: str, *args: object) -> None:
+        """Emit at ``WARNING``, interpolating ``message % args`` past the gate."""
+        self.log(WARNING, message, *args)
 
-    def error(self, message: str) -> None:
-        """Emit at ``ERROR``."""
-        self.log(ERROR, message)
+    def error(self, message: str, *args: object) -> None:
+        """Emit at ``ERROR``, interpolating ``message % args`` past the gate."""
+        self.log(ERROR, message, *args)
 
-    def critical(self, message: str) -> None:
-        """Emit at ``CRITICAL``."""
-        self.log(CRITICAL, message)
+    def critical(self, message: str, *args: object) -> None:
+        """Emit at ``CRITICAL``, interpolating ``message % args`` past the gate."""
+        self.log(CRITICAL, message, *args)
 
 
 class StreamHandler:

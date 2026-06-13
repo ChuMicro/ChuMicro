@@ -486,6 +486,34 @@ class TestTxQueueBackpressure:
         with raises(MQTTBackpressureError, match="tx queue full"):
             client.publish("topic/a", b"four", qos=0)
 
+    def test_callback_qos0_publish_reserves_two_slots(self) -> None:
+        # A callback-bearing QoS-0 publish enqueues a packet plus a
+        # marker (both pinning the payload), so it needs two free slots
+        # and is capacity-checked as one unit, not one item at a time.
+        sock = FakeSocket()
+        sock.enqueue_recv(canned_connack_bytes(return_code=0))
+        ticks = FakeTicks()
+        client = new_client(sock, ticks, max_tx_queue_size=3)
+        client.connect()
+        drive(client, ticks, count=2)
+        assert client.state == ProtocolState.CONNECTED
+
+        fired = []
+        client.publish(
+            "t", b"one", qos=0,
+            on_publish=lambda topic, payload: fired.append(1),
+        )
+        assert len(client._tx_queue) == 2  # packet + marker  # noqa: SLF001
+
+        # Only one slot is free (3 - 2); a second callback-publish needs
+        # two and must raise without half-landing its packet.
+        with raises(MQTTBackpressureError, match="tx queue full"):
+            client.publish(
+                "t", b"two", qos=0,
+                on_publish=lambda topic, payload: fired.append(2),
+            )
+        assert len(client._tx_queue) == 2  # atomic, packet not added  # noqa: SLF001
+
     def test_qos1_publish_rolls_back_packet_id_on_backpressure(self) -> None:
         """If the user-tx enqueue trips the cap, the in-flight allocation
         must be rolled back so the packet_id pool isn't leaked."""

@@ -156,6 +156,31 @@ def test_logger_drops_records_below_level() -> None:
     assert [record[0] for record in handler.records] == [WARNING, ERROR, CRITICAL]
 
 
+def test_logger_interpolates_percent_args_when_emitted() -> None:
+    handler = RecordingHandler()
+    logger = Logger("root", level=INFO, handlers=[handler])
+    logger.info("count=%d msg=%s", 5, "hi")
+    assert handler.records == [(INFO, "root", "count=5 msg=hi")]
+
+
+def test_logger_defers_interpolation_past_the_level_gate() -> None:
+    # A below-level record must not interpolate, so a mistyped arg can't
+    # raise — proving the formatting stays off the dropped-record path.
+    handler = RecordingHandler()
+    logger = Logger("root", level=WARNING, handlers=[handler])
+    logger.debug("%d", "not a number")  # would raise if interpolated
+    assert handler.records == []
+
+
+def test_logger_no_args_message_is_not_interpolated() -> None:
+    # With no args a literal ``%`` in the message passes through verbatim
+    # (``"100% done" % ()`` would otherwise raise).
+    handler = RecordingHandler()
+    logger = Logger("root", level=INFO, handlers=[handler])
+    logger.info("100% done")
+    assert handler.records == [(INFO, "root", "100% done")]
+
+
 def test_logger_level_setter_changes_threshold() -> None:
     handler = RecordingHandler()
     logger = Logger("root", level=ERROR, handlers=[handler])

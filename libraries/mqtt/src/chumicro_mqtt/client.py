@@ -687,15 +687,18 @@ class MQTTClient:
             packet = encode_publish(
                 topic=topic, payload=payload_bytes, qos=0, retain=retain,
             )
-            self._enqueue_user_tx(packet)
-            # QoS 0 has no ack, so fire the callback(s) once the bytes
-            # hit the wire.  Skip the marker enqueue entirely when no
-            # callback is wired, so the no-callback fast path stays
-            # single-slot.
+            # QoS 0 has no ack, so a callback fires once the bytes hit the
+            # wire via a marker entry.  Packet + marker enqueue as one
+            # capacity-checked unit so the pair can't half-land or slip
+            # the cap an item at a time (each pins payload_bytes, so both
+            # count).  No callback wired: single-slot fast path.
             if on_publish is not None or self.on_publish is not _no_callback:
                 self._enqueue_user_tx(
+                    packet,
                     ("__qos0_callback__", on_publish, topic, payload_bytes),
                 )
+            else:
+                self._enqueue_user_tx(packet)
             return
 
         packet_id = self._allocate_packet_id()
@@ -1258,23 +1261,32 @@ class MQTTClient:
                 return 0
             raise
 
-    def _enqueue_user_tx(self, item):
-        """Append a user-initiated packet/marker to the TX queue, honoring the cap.
+    def _enqueue_user_tx(self, *items):
+        """Append one or more user-initiated items as a unit, honoring the cap.
 
-        Raises :class:`MQTTBackpressureError` when the queue is full,
-        signaling the caller to drain via :meth:`handle` and retry.
+        Raises :class:`MQTTBackpressureError` when the queue lacks room
+        for every item, signaling the caller to drain via :meth:`handle`
+        and retry.  Multiple items (a QoS-0 packet plus its callback
+        marker) are checked together and enqueued atomically: the call
+        lands all of them or none, so a callback-bearing publish can't
+        half-land its packet without its marker, and can't slip the cap
+        one item at a time.  Each item occupies a slot and pins its own
+        payload reference, so the cap counts every item, not every
+        logical publish.
+
         Internal protocol packets (PUBACK responses, deadline-triggered
         retransmits, PINGREQ) bypass this cap because failing to enqueue
         them would break QoS-1 / keepalive guarantees.  The cap exists
         to catch a runaway publisher, not to block protocol bookkeeping.
         """
-        if len(self._tx_queue) >= self._max_tx_queue_size:
+        if len(self._tx_queue) + len(items) > self._max_tx_queue_size:
             raise MQTTBackpressureError(
-                f"tx queue full ({len(self._tx_queue)} >= "
+                f"tx queue full ({len(self._tx_queue)} + {len(items)} > "
                 f"{self._max_tx_queue_size}); call handle() to drain "
                 "and retry",
             )
-        self._tx_queue.append(item)
+        for item in items:
+            self._tx_queue.append(item)
 
     # ------------------------------------------------------------------
     # Internal: RX path
