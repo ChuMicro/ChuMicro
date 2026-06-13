@@ -293,8 +293,11 @@ class TestRetainedMessages:
             qos=0,
             retain=True,
         )
-        # Drive briefly to flush the wire write.
-        _drive_until(publisher, lambda: False, timeout_seconds=0.5)
+        # Drive until the QoS-0 PUBLISH has left the tx queue, then
+        # disconnect.  io_wants_write drops to False once handle()
+        # flushes the queued packet to the socket — far faster than a
+        # fixed wall-clock pad, and it actually confirms the write left.
+        assert _drive_until(publisher, lambda: not publisher.io_wants_write)
         publisher.disconnect()
 
         # Fresh subscriber.
@@ -314,6 +317,8 @@ class TestRetainedMessages:
         cleaner.connect()
         _drive_until(cleaner, lambda: cleaner.state == ProtocolState.CONNECTED)
         cleaner.publish("chumicro-mqtt-test/retain", b"", qos=0, retain=True)
-        _drive_until(cleaner, lambda: False, timeout_seconds=0.5)
+        # Flush the retained-clear PUBLISH the same way: wait for the tx
+        # queue to drain rather than padding a fixed half second.
+        assert _drive_until(cleaner, lambda: not cleaner.io_wants_write)
         cleaner.disconnect()
         subscriber.disconnect()

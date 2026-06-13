@@ -348,6 +348,29 @@ class WebSocketClient(_BaseSession):
             return None
         return getattr(self._socket, "_sock", self._socket)
 
+    def next_deadline(self, now_ms: int) -> int | None:
+        """Earliest tick at which ``handle()`` must run on a quiet socket.
+
+        While ``AWAITING_TRANSPORT`` with no pollable yet (the connector
+        is still resolving DNS, so ``io_socket`` is ``None`` and
+        ``Runner.wait`` has nothing to park on), this returns *now_ms* —
+        an immediate deadline that keeps the loop ticking the
+        tick-driven connector forward instead of sleeping toward the far
+        handshake-timeout deadline.  Once a pollable exists (TCP-connect
+        onward) or the connect phase ends, the shared handshake / close /
+        pong / auto-ping deadlines govern again.
+
+        Calls the base method by class rather than ``super()`` for the
+        same reason :attr:`io_socket` inlines: CircuitPython's
+        descriptor lookup through ``super()`` is unreliable here.
+        """
+        if (
+            self._connecting_phase == ConnectingPhase.AWAITING_TRANSPORT
+            and self.io_socket is None
+        ):
+            return now_ms
+        return _BaseSession.next_deadline(self, now_ms)
+
     def handle(self, now_ms: int) -> None:
         """One tick of progress: drain bounded inbound through the
         framing parser, then bounded outbound from the TX queue.  All
