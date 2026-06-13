@@ -416,7 +416,11 @@ class _BaseSession:
         oldest queued messages rather than growing the heap.
         """
         if self._inbound_queue is None:
-            self._inbound_queue = _new_tx_queue(self._max_inbound_queue_size)
+            # 2-arg deque (no overflow-check flag) drops the oldest item
+            # on append-when-full on every runtime — CPython via maxlen,
+            # MicroPython / CircuitPython via the default flags=0.  (The
+            # TX queue uses flags=1 to raise instead, for backpressure.)
+            self._inbound_queue = deque((), self._max_inbound_queue_size)
             self._inbound_to_queue = True
         read_wait = _InboundWait()
         while True:
@@ -617,11 +621,11 @@ class _BaseSession:
                 self.last_error = utf8_error
                 return
             if self._inbound_to_queue:
-                self._enqueue_inbound(InboundMessage(is_text=True, text=text))
+                self._inbound_queue.append(InboundMessage(is_text=True, text=text))
             else:
                 self.on_text(text)
         elif self._inbound_to_queue:
-            self._enqueue_inbound(InboundMessage(is_text=False, data=message_payload))
+            self._inbound_queue.append(InboundMessage(is_text=False, data=message_payload))
         else:
             self.on_binary(message_payload)
 
@@ -658,18 +662,6 @@ class _BaseSession:
                 f"message exceeded max_message_bytes={self._max_message_bytes}",
                 now_ms,
             )
-
-    def _enqueue_inbound(self, message) -> None:
-        """Append *message* to the inbound queue, dropping the oldest when full.
-
-        Evicts before appending so the append never lands on a full
-        deque: MicroPython's bounded ``deque`` raises ``IndexError`` on
-        overflow rather than dropping like CPython, so the drop-oldest
-        bound is enforced here for both runtimes.
-        """
-        if len(self._inbound_queue) >= self._max_inbound_queue_size:
-            self._inbound_queue.popleft()
-        self._inbound_queue.append(message)
 
     def _reset_inbound_state(self) -> None:
         """Clear reassembly state for the next message."""
