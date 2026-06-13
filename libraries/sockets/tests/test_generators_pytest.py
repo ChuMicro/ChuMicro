@@ -17,14 +17,14 @@ __chumicro_runtimes__ = ("cpython",)
 import gc
 import tracemalloc
 
-from chumicro_runner.generators import recv_exact, recv_until, send_all
+from chumicro_sockets.generators import recv_exact, recv_until, send_all
 from chumicro_sockets.testing import FakeSocket
 
 
 def _measure_growth(operation, *, warmup_iterations=50, sample_iterations=500):
     """Run *operation* warmup + sample times; return retained bytes growth.
 
-    Matches the convention used by the runner-side memory-pressure tests.
+    Matches the convention used by the other memory-pressure tests.
     """
     gc.collect()
     tracemalloc.start()
@@ -67,8 +67,7 @@ class TestSendAllEagainLoopStaysFlat:
 
 
 class TestRecvUntilEagainLoopStaysFlat:
-    """The canonical 1000-EAGAIN polling test the workstream calls out —
-    a cached read-wait should let a recv_until polling loop run
+    """A cached read-wait should let a recv_until polling loop run
     indefinitely with bounded heap."""
 
     def test_recv_until_eagain_iteration_no_growth(self):

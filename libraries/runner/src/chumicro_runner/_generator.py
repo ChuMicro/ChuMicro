@@ -18,9 +18,10 @@ None / False:
 
 The ``SocketConnector`` from ``chumicro_sockets`` already exposes
 these attributes natively, so a generator that wraps it can simply
-``yield connector`` — no extra wrapping needed.  The helpers in
-``chumicro_runner.generators`` build small private wait objects for
-the cases where a bare socket or a sleep needs the same surface.
+``yield connector`` — no extra wrapping needed.  Helper functions
+build small private wait objects for the other cases: the socket
+helpers in ``chumicro_sockets.generators`` for a bare socket,
+``sleep_until`` in ``chumicro_runner.generators`` for a deadline.
 
 Sequential I/O state machines that would otherwise need an explicit
 per-state ``check`` / ``handle`` object collapse to a top-to-bottom
