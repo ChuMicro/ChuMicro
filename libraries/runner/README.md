@@ -100,7 +100,7 @@ while True:
 
 | Symbol | Description |
 |---|---|
-| `Runner(ticks=None, poller=None)` | Tick-based service loop with shared timestamps.  `poller` is an injectable `select.poll`-shaped object consulted by `wait()`; the default is built lazily on the first wait that has a socket to register |
+| `Runner(ticks=None, poller=None, on_handler_error=None)` | Tick-based service loop with shared timestamps.  A handler that raises is isolated and counted in `handler_errors` so one faulting service can't stop the others; pass `on_handler_error(handle, exception)` to log, remove the task, or re-raise to fail fast.  `poller` is an injectable `select.poll`-shaped object consulted by `wait()`; the default is built lazily on the first wait that has a socket to register |
 | `Runner.add(task, handler=None, period_ms=None, start_after_ms=None, run_count=None)` | Register a task; returns a `TaskHandle` |
 | `Runner.add_periodic(handler, period_ms, start_after_ms=None, run_count=None)` | Register a periodic handler; returns a `TaskHandle` |
 | `Runner.add_generator(gen)` | Register a generator function (for sequential I/O written top-to-bottom); returns a `GeneratorHandle`.  See [Generator-driven sequential I/O](#generator-driven-sequential-io) |

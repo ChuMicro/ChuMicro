@@ -207,12 +207,10 @@ class _GeneratorWrapper:
             self._mark_done()
 
     def _mark_done(self) -> None:
-        """Finalize: clear the wait, flip the handle, drop the runner entry.
+        """Finalize the generator: clear the wait, set ``handle.done``, remove the runner entry.
 
-        Safe to call from inside ``handle`` / ``io_error`` — the runner
-        iterates its ``pending`` snapshot during ``tick`` and the
-        ``ipoll`` result iterator during ``wait``, neither of which is
-        the ``_entries`` list we mutate via ``TaskHandle.remove``.
+        Removing the entry clears ``_task_handle``, so a repeat call
+        removes nothing.
         """
         self._wait = None
         self._handle.done = True

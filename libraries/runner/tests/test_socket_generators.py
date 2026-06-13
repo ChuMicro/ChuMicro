@@ -96,6 +96,61 @@ def test_connect_handles_yield_from_in_outer_generator():
     assert received_sock == [sock]
 
 
+def test_connect_threads_runner_now_ms_into_connector_tick():
+    # The wrapper sends the runner's now_ms in at each resume; connect
+    # must pass that into connector.tick rather than a hardcoded 0, so a
+    # connector that tracks its own deadline sees the real clock.
+    sock = FakeSocket()
+
+    class _RecordingConnector:
+        io_wants_read = False
+        io_wants_write = True
+        io_socket = None
+
+        def __init__(self):
+            self.state = "awaiting_dns"
+            self.socket = None
+            self.last_error = None
+            self.ticks_seen = []
+            self._steps = ["awaiting_tcp", "ready"]
+
+        def next_deadline(self, now_ms):
+            return None
+
+        def tick(self, now_ms):
+            self.ticks_seen.append(now_ms)
+            if self.state in ("ready", "failed"):
+                return
+            self.state = self._steps.pop(0)
+            if self.state == "ready":
+                self.socket = sock
+
+        def cancel(self):
+            self.state = "failed"
+
+    connector = _RecordingConnector()
+    received = []
+
+    def outer():
+        result = yield from connect(connector)
+        received.append(result)
+
+    fake = FakeTicks()
+    runner = Runner(ticks=fake)
+    handle = runner.add_generator(outer())
+    now_ms = 0
+    while not handle.done:
+        fake.advance(1000)
+        now_ms = runner.tick()
+
+    assert received == [sock]
+    # The priming tick (during add_generator) has no clock yet, so 0;
+    # the resume tick threads the runner's real now_ms through.
+    assert connector.ticks_seen[0] == 0
+    assert now_ms > 0
+    assert connector.ticks_seen[-1] == now_ms
+
+
 # -- send_all --------------------------------------------------------
 
 
