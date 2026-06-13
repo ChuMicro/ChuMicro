@@ -373,7 +373,13 @@ def unpackb(data: bytes | bytearray | memoryview) -> object:
     It does not check that a structurally-valid payload has the type
     shape the caller expects.  Code persisting corruption- or
     attacker-reachable bytes (e.g. flash-backed config) still owns
-    type-shape validation of what comes back.
+    type-shape validation of what comes back.  It also owns a size
+    bound on attacker-controlled input: an array / map element count
+    is checked only against the remaining buffer, so an N-byte payload
+    can allocate an N-element container (roughly 8N bytes of pointers
+    on a 256 KB board).  Do not ``unpackb`` an unbounded peer-supplied
+    blob — an MQTT payload, an HTTP body — without first bounding its
+    length.
 
     Args:
         data: Msgpack-encoded data.
