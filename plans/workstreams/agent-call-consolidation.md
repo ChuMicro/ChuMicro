@@ -1,9 +1,13 @@
 # Workstream: clean-room agent-call consolidation — cut per-pipeline `claude -p` / agent dispatches
 
-Status: **proposed.**  From the 2026-06-12 next-up bullet: the clean-room pipelines accrete one agent
-per concern (writers, selector, summarizer, polish, legibility, speaker, drift checks) and the count
-needs cutting back or merging into same-run tasks.  This file is the inventory half — call counts per
-pipeline and a merge-candidate table.  Line numbers were read from code on 2026-06-12; re-derive before
+Status: **parked.**  Inventory complete 2026-06-12: no live agent pair merges safely. Every blind
+reader (summarizer, lenses, selector, validator) encodes a clean-room independence invariant, and the
+writer/patcher pair already runs concurrently in one phase. The only safe moves are two
+addition-avoidance constraints, both tracked where the work lands rather than as a standalone queue
+item: Phase 1 (the regen-comments report speaker ships with no new fact-drift agent) is
+`regen-report-voiced-speaker.md` item 4; Phase 2 (fold audit-skill page-prose only if a measured saving
+appears) is an optional measurement gate. This file stays as the dispatch inventory — call counts per
+pipeline and a merge-candidate table. Line numbers were read from code on 2026-06-12; re-derive before
 editing a dispatch.
 
 ## Problem
@@ -115,4 +119,6 @@ call — so they land alongside the speaker work, not before it.
 
 ## Validation history
 
-- (none yet)
+- 2026-06-13: parked. The inventory found no safe live merge; the two addition-avoidance constraints
+  were relocated to `regen-report-voiced-speaker.md` (Phase 1) and left as an optional measurement gate
+  (Phase 2). The matching next-up bullet was retired.
