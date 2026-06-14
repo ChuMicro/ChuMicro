@@ -9,8 +9,8 @@ orchestrate host-side counterparties (HTTP requests, MQTT publishes,
 etc.).
 
 The caller is expected to provide ``project_dir/app.py``; the harness
-(``support/test_harness/src``) is staged automatically so the
-inline bootstrap can ``_exec_as_namespace`` the entrypoint.
+modules the bootstrap imports are staged automatically so the inline
+bootstrap can ``_exec_as_namespace`` the entrypoint.
 
 Usage::
 

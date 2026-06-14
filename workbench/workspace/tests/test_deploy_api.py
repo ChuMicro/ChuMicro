@@ -7,6 +7,9 @@ marker queue.  Tests use FakeTransport + a monkeypatched
 
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -324,3 +327,43 @@ class TestDemoHarnessCoreReduction:
             "__init__.py", "runner.py", "discovery.py",
             "skip.py", "assertions.py",
         }
+
+    def test_reduced_harness_resolves_the_bootstrap_imports(
+        self, tmp_path: Path,
+    ) -> None:
+        """The real core-only mirror still imports run_module + _exec_as_namespace.
+
+        Mirrors the installed harness, then in a subprocess (with the mirror
+        ahead on PYTHONPATH) runs the bootstrap's exact imports and prints the
+        resolved module path.  The exit code proves the imports resolve with
+        network/patching absent, and the printed path proves the mirror — not
+        the full install — is what answered, so this exercises the reduction.
+        """
+        import chumicro_test_harness
+
+        harness_source = (
+            Path(chumicro_test_harness.__file__).resolve().parent.parent
+        )
+        mirror = deploy_api._stage_demo_harness_core(harness_source, tmp_path)
+
+        probe = (
+            "from chumicro_test_harness.runner import run_module\n"
+            "from chumicro_test_harness.discovery import _exec_as_namespace\n"
+            "import chumicro_test_harness.runner as runner_module\n"
+            "print(runner_module.__file__)\n"
+        )
+        result = subprocess.run(
+            [sys.executable, "-c", probe],
+            env={
+                **os.environ,
+                "PYTHONPATH": os.pathsep.join(
+                    [str(mirror), os.environ.get("PYTHONPATH", "")],
+                ),
+            },
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        assert result.returncode == 0, result.stderr
+        assert str(mirror) in result.stdout
