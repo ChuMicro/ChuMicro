@@ -36,7 +36,8 @@ def main():
         "Write JSON {drifted:[{symbol, why}]} to ./drift.json and reply DONE."
     )
     subprocess.run(
-        ["claude", "-p", prompt, "--safe-mode", "--allowedTools", "Read", "Write",
+        ["claude", "-p", prompt, "--setting-sources", "project,local", "--strict-mcp-config",
+         "--disable-slash-commands", "--allowedTools", "Read", "Write",
          "--permission-mode", "acceptEdits", "--model", "opus"],
         cwd=rundir, capture_output=True, text=True,
     )

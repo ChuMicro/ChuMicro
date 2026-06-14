@@ -20,7 +20,7 @@ Deeply evaluate Python source — a file, a class, or a library — and hand the
 
 ## Invariants (do not violate)
 
-**MUST READ:** [`../_shared/clean-room-pipeline.md`](../_shared/clean-room-pipeline.md) — the nine invariants every clean-room audit run obeys (clean room + deny rules, lens blindness by named inputs, single interactive layer, eval-first gated apply, safe-mode, no auto-commit, push-back forks, background + Monitor, reader findings outrank the orchestrator). Numbered references like "invariant 8" in this file point there. This skill's deltas:
+**MUST READ:** [`../_shared/clean-room-pipeline.md`](../_shared/clean-room-pipeline.md) — the nine invariants every clean-room audit run obeys (clean room + deny rules, lens blindness by named inputs, single interactive layer, eval-first gated apply, user-global memory out, no auto-commit, push-back forks, background + Monitor, reader findings outrank the orchestrator). Numbered references like "invariant 8" in this file point there. This skill's deltas:
 
 - **Lens → file map (invariant 2):** the correctness / hazard / coverage / clarity lenses read `stripped.py` (coverage also `tests.py`); only the drift lens, the validator's drift-finding re-check, and the patcher read `commented.py`, on purpose — it is the mechanism that finds traps a comment-anchored reader misses.
 - **Usage-path lens (invariant 1's sanctioned exception):** step 3b is this skill's in-session judging layer.

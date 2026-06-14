@@ -16,7 +16,7 @@ then carries the clean-room and the path findings together, and the existing sel
 machinery works on all of them.
 
 validate: the blind cross-check — stage every traced file comment-stripped under
-<rundir>/path_world/ and run ONE clean-room `claude -p` (--safe-mode, no project context, no
+<rundir>/path_world/ and run ONE clean-room `claude -p` (isolation flags, no project context, no
 prose to anchor on) that re-checks each path finding's fragments against the stripped sources.
 The full blind lens battery re-dispatched over the path would cost a clean-room run per traced
 area and mostly find the callers' own at-rest defects; this single blind checker buys the part
@@ -195,7 +195,8 @@ def cmd_validate(rundir, findings_path):
     json.dump(check, open(os.path.join(rundir, "path_findings_check.json"), "w"), indent=1)
 
     from audit_phase1 import CLEAN_ROOM_SETTINGS
-    completed = subprocess.run(["claude", "--safe-mode", "-p", VALIDATE_PROMPT,
+    completed = subprocess.run(["claude", "--setting-sources", "project,local", "--strict-mcp-config",
+                                "--disable-slash-commands", "-p", VALIDATE_PROMPT,
                                 "--allowedTools", "Read", "Write",
                                 "--permission-mode", "acceptEdits", "--model", "opus",
                                 "--output-format", "json", "--settings", CLEAN_ROOM_SETTINGS],

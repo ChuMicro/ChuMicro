@@ -133,13 +133,14 @@ CLEAN_ROOM_SETTINGS = json.dumps({"permissions": {"deny": [
 def claude_p_workflow(rundir, wf_name):
     """Run one clean-room `claude -p` from rundir that executes the named workflow to completion.
 
-    --safe-mode keeps user-global ~/.claude/CLAUDE.md, hooks, skills, plugins, and MCP servers out
-    of every judging layer (OAuth login and the Workflow/Task tools still work under it), so the
-    clean room guarantees what its name claims instead of warning about the leak. The headless
-    result envelope (is_error / result / total_cost_usd / session_id) lands in
-    <rundir>/claude_envelope.json so a degraded run names its cause and cost."""
+    The isolation flags (--setting-sources project,local, --strict-mcp-config,
+    --disable-slash-commands) keep user-global ~/.claude/CLAUDE.md, hooks, skills, plugins, and MCP
+    servers out of every judging layer; default auth keeps the OAuth login (only --bare would force
+    ANTHROPIC_API_KEY). The headless result envelope (is_error / result / total_cost_usd /
+    session_id) lands in <rundir>/claude_envelope.json so a degraded run names its cause and cost."""
     completed = subprocess.run(
-        ["claude", "--safe-mode", "-p",
+        ["claude", "--setting-sources", "project,local", "--strict-mcp-config",
+         "--disable-slash-commands", "-p",
          f"Use the Workflow tool to run the workflow at ./{wf_name} (call Workflow with scriptPath "
          f"./{wf_name}). Wait for full completion, then reply DONE.",
          "--allowedTools", "Workflow", "Task", "Read", "Write",

@@ -20,7 +20,7 @@ Deeply evaluate one change-set — a branch, a revision range, or the staged / w
 
 ## Invariants (do not violate)
 
-**MUST READ:** [`../_shared/clean-room-pipeline.md`](../_shared/clean-room-pipeline.md) — the nine invariants every clean-room audit run obeys (clean room + deny rules, lens blindness by named inputs, single interactive layer, eval-first gated apply, safe-mode, no auto-commit, push-back forks, background + Monitor, reader findings outrank the orchestrator). Numbered references like "invariant 8" in this file point there. This skill's deltas:
+**MUST READ:** [`../_shared/clean-room-pipeline.md`](../_shared/clean-room-pipeline.md) — the nine invariants every clean-room audit run obeys (clean room + deny rules, lens blindness by named inputs, single interactive layer, eval-first gated apply, user-global memory out, no auto-commit, push-back forks, background + Monitor, reader findings outrank the orchestrator). Numbered references like "invariant 8" in this file point there. This skill's deltas:
 
 - **Lens → file map (invariant 2):** trap, integration, usage, and coverage read comment-stripped copies; the intent and craft lenses read the commented `head/` tree on purpose (the intent record and prose drift are their material) — keep the lens prompts in `branch_wf.js` exact when editing them.
 - **The summarizer never sees the intent record.** Its read of the diff is the independent description the human compares the branch's claims against; feeding it the commit messages would collapse that check. It also reads only stripped copies — new docstrings are the branch's claims in prose form.
@@ -79,7 +79,7 @@ All lenses carry the **preflight-awareness rule**: never flag what this repo's d
 - The human was pointed at the page with the counts and the top items, and told whether the usage trace hit its staging cap.
 - Any selected fixes were applied as human-watched `Edit`s, each gated by the affected file's tests and a shown `git diff`, and left uncommitted.
 - Nothing was committed automatically; no ref was checked out or mutated.
-- No clean-room layer ran with `--add-dir` into the project, `--safe-mode` kept user-global memory out, no code lens saw a comment, and the summarizer never saw the intent record.
+- No clean-room layer ran with `--add-dir` into the project, the isolation flags (`--setting-sources project,local --strict-mcp-config --disable-slash-commands`) kept user-global memory out, no code lens saw a comment, and the summarizer never saw the intent record.
 
 ## Reference files
 

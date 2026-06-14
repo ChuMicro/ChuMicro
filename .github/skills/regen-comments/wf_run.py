@@ -58,8 +58,8 @@ def run_workflow(rundir, wf_name, required=(), retries=1, marker=None):
                 os.remove(p)
         start = time.time()
         subprocess.run(
-            ["claude", "-p", prompt, "--safe-mode",
-             "--allowedTools", "Workflow", "Task", "Read", "Write",
+            ["claude", "-p", prompt, "--setting-sources", "project,local", "--strict-mcp-config",
+             "--disable-slash-commands", "--allowedTools", "Workflow", "Task", "Read", "Write",
              "--permission-mode", "acceptEdits", "--model", "opus"],
             cwd=rundir, capture_output=True, text=True,
         )
