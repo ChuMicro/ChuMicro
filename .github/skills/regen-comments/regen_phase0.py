@@ -75,7 +75,8 @@ def main():
 
     # one clean-room claude -p: reads ./lib/, writes ./LIBRARY_FACTS.md (cwd outside the project = no CLAUDE.md)
     subprocess.run(
-        ["claude", "-p", library_prompt(), "--safe-mode",
+        ["claude", "-p", library_prompt(), "--setting-sources", "project,local",
+         "--strict-mcp-config", "--disable-slash-commands",
          "--allowedTools", "Read", "Grep", "Glob", "Write",
          "--permission-mode", "acceptEdits", "--model", "opus"],
         cwd=libroom, capture_output=True, text=True,

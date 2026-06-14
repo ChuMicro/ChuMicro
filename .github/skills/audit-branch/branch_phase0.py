@@ -121,8 +121,9 @@ def main():
         return
 
     prompt = PROMPT_HEAD.format(changed="\n".join(f"- {p}" for p in changed))
-    # --safe-mode: user-global memory, hooks, skills, plugins, and MCP stay out of the clean room
-    completed = subprocess.run(["claude", "--safe-mode", "-p", prompt, "--allowedTools", "Read", "Write",
+    # isolation flags below; default auth preserves OAuth (--bare would force ANTHROPIC_API_KEY instead)
+    completed = subprocess.run(["claude", "--setting-sources", "project,local", "--strict-mcp-config",
+                                "--disable-slash-commands", "-p", prompt, "--allowedTools", "Read", "Write",
                                 "--permission-mode", "acceptEdits", "--model", "opus",
                                 "--output-format", "json", "--settings", CLEAN_ROOM_SETTINGS],
                                cwd=rundir, capture_output=True, text=True)

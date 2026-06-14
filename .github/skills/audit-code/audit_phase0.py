@@ -57,8 +57,9 @@ def main():
             manifest.append("lib/" + rel)
     open(os.path.join(rundir, "lib_manifest.txt"), "w").write("\n".join(manifest) + "\n")
 
-    # --safe-mode: user-global memory, hooks, skills, plugins, and MCP stay out of the clean room
-    completed = subprocess.run(["claude", "--safe-mode", "-p", PROMPT, "--allowedTools", "Read", "Write",
+    # isolation flags below; default auth preserves OAuth (--bare would force ANTHROPIC_API_KEY instead)
+    completed = subprocess.run(["claude", "--setting-sources", "project,local", "--strict-mcp-config",
+                                "--disable-slash-commands", "-p", PROMPT, "--allowedTools", "Read", "Write",
                                 "--permission-mode", "acceptEdits", "--model", "opus",
                                 "--output-format", "json", "--settings", CLEAN_ROOM_SETTINGS],
                                cwd=rundir, capture_output=True, text=True)
