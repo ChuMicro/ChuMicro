@@ -297,3 +297,30 @@ class TestContextManagerTeardown:
 
         # The transport got a disconnect call as part of shutdown.
         assert any(name == "disconnect" for name, _ in fake.calls)
+
+
+class TestDemoHarnessCoreReduction:
+    """_stage_demo_harness_core drops the harness modules a demo never imports."""
+
+    def test_mirror_is_exactly_the_bootstrap_closure(self, tmp_path: Path) -> None:
+        """The mirrored package holds the core modules and neither network nor patching."""
+        package = tmp_path / "src" / "chumicro_test_harness"
+        package.mkdir(parents=True)
+        for name in (
+            "__init__.py", "runner.py", "discovery.py", "skip.py",
+            "assertions.py", "network.py", "patching.py",
+        ):
+            (package / name).write_text(f"# {name}\n")
+
+        mirrored = deploy_api._stage_demo_harness_core(
+            tmp_path / "src", tmp_path / "mirror",
+        )
+
+        staged = {
+            path.name
+            for path in (mirrored / "chumicro_test_harness").iterdir()
+        }
+        assert staged == {
+            "__init__.py", "runner.py", "discovery.py",
+            "skip.py", "assertions.py",
+        }

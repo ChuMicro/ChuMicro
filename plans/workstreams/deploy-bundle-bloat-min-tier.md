@@ -1,6 +1,6 @@
 # Workstream: deploy-bundle bloat overflows the minimum-tier flash
 
-Status: **step 1 (docstring/comment strip) shipped 2026-06-13; steps 2-3 open.** Surfaced during the generator-networking-apis real-board bake.
+Status: **step 1 (docstring/comment strip) shipped 2026-06-13; step 2 (demo harness-core reduction) shipped host-side 2026-06-14, real-board bake pending; step 3 reframed and blocked on a data-file runtime-marking decision.** Surfaced during the generator-networking-apis real-board bake.
 
 ## Problem
 
@@ -69,12 +69,32 @@ issue, not the mechanism.)
    its `ast.unparse` path and shares only the docstring-stripping transformer.
    Blanking rather than deleting was required so the on-device test runner's
    host-computed chunk boundaries still line up.
-2. **Decide whether demo/app deploys stage the test harness.** A demo runs
-   `app.py` and prints stdout markers the host reads over serial; the on-device
-   test harness is for the *unit-test* sweep, not a demo. Excluding it from the
-   demo/app deploy mode is what would let the Pico W CP fit. Measure its staged
-   byte cost, then gate it by deploy mode.
-3. **Make the 16 KB CA bundle opt-in** for non-TLS / BYO-context users (later).
+2. **Demo/app deploys stage only the harness bootstrap closure. SHIPPED (code;
+   real-board bake pending).** A demo's bootstrap imports only
+   `chumicro_test_harness.runner` + `.discovery` (closure: `__init__`,
+   `assertions`, `skip`). `deploy_project` now mirrors the harness into a temp
+   directory minus `network.py` (functional-test real-I/O helpers) and
+   `patching.py` (unit-test fakes) before staging, dropping **14.8 KB of source
+   / 6.7 KB on-flash after the step-1 strip** from every demo. The gate lives at
+   the `deploy_api` entry point, not behind `include_test_support`: functional
+   tests `import chumicro_test_harness.network` and deploy with the same
+   `include_test_support=False` a demo uses, so that flag cannot tell a demo from
+   a functional run. Functional and device-unit deploys (through pytest-device)
+   still stage the full harness. Closing check owed: a Pico W CP demo bake to
+   confirm the on-board drop and that the reduced harness still bootstraps.
+3. **The 16 KB CA bundle is MicroPython-only — drop it on CircuitPython deploys.**
+   Verified: `_ca_bundle.der` is read only by `_ca_bundle.read_der`, called only
+   from `_adapters/mp.py`; `cp.py` calls `load_verify_locations(cadata="")` or a
+   user PEM and never touches the shipped bundle (CP validates against its
+   firmware x509-crt-bundle). On a CP board the 16 KB `.der` is dead weight, so a
+   deterministic runtime drop beats the original "opt-in for non-TLS" framing and
+   targets the exact board that overflowed. Blocker: the runtime filter
+   (`__chumicro_runtimes__`, [Decision 0037](../decisions/0037-runtime-file-marking.md))
+   marks `.py` files only; excluding a *data file* by runtime needs a marking
+   convention — a sidecar marker, a runtime-suffixed name
+   (`_ca_bundle.micropython.der`), or a per-library deploy manifest. Route that
+   choice through `new-decision` before implementing. The MP non-TLS opt-out (a
+   BYO-context user still pays 16 KB) stays a later, separate lever.
 
 Boilerplate (copied `examples/helpers.py`, the inline runtime_config msgpack
 decoder, repeated wifi-up scaffolding) and per-library size (chumicro_mqtt ~2x
@@ -93,6 +113,13 @@ docstring-strip win above — re-measure each after step 1 lands.
   identically with stripping turned off (a no-op `strip_source`) and on both CP
   boards regardless of heap, so they are a separate `test_udp.py`-on-CP defect,
   not a strip regression.
+- 2026-06-14 — Step 2 (demo harness-core reduction) shipped host-side.
+  `deploy_project` mirrors the harness minus `network.py` + `patching.py`;
+  measured 14.8 KB raw / 6.7 KB on-flash dropped per demo via `strip_source`.
+  `test_deploy_api.py` `TestDemoHarnessCoreReduction` asserts the mirror is
+  exactly the bootstrap closure; the full workspace + deploy suites stay green
+  (1953 passed). A Pico W CP demo bake is still owed to confirm the on-board byte
+  drop and that the reduced harness still bootstraps a demo to completion.
 
 ## Why it matters
 
