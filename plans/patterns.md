@@ -291,6 +291,41 @@ input buffer (`PacketDecoder._buffer_view` in `chumicro_mqtt`,
 bytes for a downstream `.decode("utf-8")` or hashing, the wrap stays
 — memoryview lacks `.decode()`.
 
+## Allocation tests: `tracemalloc` catches leaks, `gc.mem_alloc` catches churn
+
+A CPython `tracemalloc` test that reads `get_traced_memory()[0]` after
+`gc.collect()` measures *net-retained* bytes — what survived the
+collection.  That catches a leak (a buffer growing unbounded, a cached
+object re-allocated and stashed each call).  It does **not** catch
+per-iteration churn: a `view[offset:]` slice or an f-string built and
+dropped inside the loop is freed by refcount the same tick, so it never
+appears in a post-collect snapshot.  A test that asserts "no per-iteration
+allocation" with this method is a leak detector wearing the wrong label —
+it passes whether or not the hot path churns.
+
+```python
+# Leak guard (host, valid): retained bytes stay flat across N iterations.
+gc.collect(); base = tracemalloc.get_traced_memory()[0]
+for _ in range(500): operation()
+gc.collect(); assert tracemalloc.get_traced_memory()[0] - base < 2048
+
+# Churn guard (the zero-alloc contract): bytes allocated between two
+# points with the collector off — MicroPython / CircuitPython only.
+gc.collect(); gc.disable()
+before = gc.mem_alloc()
+for _ in range(1000): tick()
+assert gc.mem_alloc() - before <= 64
+gc.enable()
+```
+
+**Why:** `gc.mem_alloc()` is an MP / CP API; CPython has no equivalent, so
+the steady-state zero-allocation contract is a device-runtime check, not a
+host one.  Keep the host `tracemalloc` lane — it catches genuine leaks
+cheaply — but scope its docstring to "retained growth," never "nothing per
+iteration."  Same trap as the import-ordering note below: the convenient
+host metric (peak RAM, net-retained) isn't the one that bites on the small
+allocator (fragmentation, churn).
+
 ## Device-library scaffolding cost — `__slots__` and pure-passthrough `@property`
 
 Two CPython idioms that read as "good Python hygiene" land as dead flash
