@@ -100,7 +100,12 @@ def fetch(
             response as-is (default ``DEFAULT_MAX_REDIRECTS``).
         max_body_bytes: Hard cap on the response body; over it the
             parser raises ``HttpOversizedError``.
-        timeout_ms: Deadline for the receive phase across all hops.
+        timeout_ms: Deadline for the receive phase only — reading the
+            response, summed across all redirect hops.  DNS resolution,
+            the TCP connect, the TLS handshake, and the request send run
+            through the ``connect`` / ``send_all`` generators and are
+            *not* bounded by it, so a peer that stalls before the first
+            response byte never trips ``HttpTimeoutError``.
         user_agent: Override the default ``User-Agent``.
         ticks: Optional ``chumicro_timing``-shaped tick source; falls
             back to ``chumicro_timing.ticks``.
@@ -109,7 +114,8 @@ def fetch(
         :class:`~chumicro_requests.client.Response`.
 
     Raises:
-        HttpTimeoutError: Receive phase exceeded *timeout_ms*.
+        HttpTimeoutError: Reading the response exceeded *timeout_ms*.
+            Not raised for a stalled connect, TLS handshake, or send.
         HttpOversizedError: Body exceeded *max_body_bytes*.
         HttpProtocolError: Response was not valid HTTP/1.1 or the peer
             closed mid-response.

@@ -1,4 +1,4 @@
-"""Tests for CHU033: no async / await / asyncio in device-bound code."""
+"""Tests for CHU033: no async / await / asyncio in first-party package code."""
 
 from __future__ import annotations
 
