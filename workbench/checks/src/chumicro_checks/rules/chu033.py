@@ -1,22 +1,24 @@
-"""CHU033: no ``async`` / ``await`` / asyncio in device-bound code.
+"""CHU033: no ``async`` / ``await`` / asyncio in first-party package code.
 
 The cooperative-concurrency model is generators (``def`` + ``yield from``)
 driven by the runner, not coroutines.  ``async`` / ``await`` and the
-``asyncio`` module are banned in device-bound and cross-runtime code:
-``await`` is not byte-identical across MicroPython and CircuitPython,
-the only ``asyncio`` path on CircuitPython has a broken stream layer,
-and a coroutine-bound event loop fights the tick-based runner.
+``asyncio`` module are banned across ``libraries/``, ``support/``, and
+``workbench/``.  On a device the reasons are concrete: ``await`` is not
+byte-identical across MicroPython and CircuitPython, the only ``asyncio``
+path on CircuitPython has a broken stream layer, and a coroutine-bound
+event loop fights the tick-based runner.  The host-side workbench tools
+are held to the same rule so the codebase carries one concurrency model;
+``functional_tests/`` is the lone carve-out, since its hardware-driving
+servers reach asyncio through a PyPI package (the websocket echo server
+does) and never run on a device.
 
 Flags, via AST (so the same keywords inside a string literal — e.g. a
 boot-shim error message that *rejects* ``async def run`` — are not hit):
 ``async def``, ``await``, ``async with``, ``async for``, and
 ``import`` / ``from`` of ``asyncio`` / ``uasyncio`` / ``_asyncio``.
 
-Scope: ``libraries/`` / ``support/`` / ``workbench/``, excluding
-``functional_tests/`` — those are host-only, hardware-driving test
-servers and drivers (the websocket echo server there is asyncio-based
-through the ``websockets`` PyPI package) and never run on a device.
-Suppress with ``# noqa: CHU033`` for a genuine host-only exception.
+``scripts/`` is not scanned — it is loose dev tooling, not a packaged
+tree.  Suppress with ``# noqa: CHU033`` for a genuine host-only exception.
 """
 
 from __future__ import annotations
@@ -31,7 +33,8 @@ from chumicro_checks._walker import iter_text_files
 
 _RULE_CODE = "CHU033"
 
-#: Top-level trees the ban covers (device-bound + cross-runtime code).
+#: Top-level packaged trees the ban covers (the device libraries plus the
+#: host-side workbench tools).
 _SCOPED_ROOTS: tuple[str, ...] = ("libraries", "support", "workbench")
 
 #: Module names whose import is banned.  A dotted import counts when its
@@ -40,7 +43,7 @@ _BANNED_MODULES: frozenset[str] = frozenset({"asyncio", "uasyncio", "_asyncio"})
 
 
 def _in_scope(filepath: Path, repo_root: Path) -> bool:
-    """Return whether *filepath* is device-bound code the ban covers.
+    """Return whether *filepath* sits in a tree the ban covers.
 
     ``.py`` files under ``libraries/`` / ``support/`` / ``workbench/``,
     minus any ``functional_tests/`` directory (host-only).
@@ -117,7 +120,7 @@ def _check_file(filepath: Path, repo_root: Path) -> list[Finding]:
 class CHU033_NoAsyncAwait(Rule):
     code = _RULE_CODE
     description = (
-        "no async / await / asyncio in device-bound code — use generators"
+        "no async / await / asyncio in first-party package code — use generators"
     )
 
     def check(self, repo_root: Path) -> list[Finding]:
