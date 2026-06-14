@@ -265,6 +265,11 @@ class TestDiscoverRuffPaths:
         paths = discover_ruff_paths()
         assert "scripts" in paths
 
+    def test_includes_github_skills(self, synthetic_workspace):
+        """``.github/skills`` (host-only eval drivers) is in the lint paths."""
+        paths = discover_ruff_paths()
+        assert ".github/skills" in paths
+
     def test_includes_library_source_dirs(self, synthetic_workspace):
         """Every library ``src/`` directory appears in the lint paths."""
         paths = discover_ruff_paths()

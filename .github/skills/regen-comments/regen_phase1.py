@@ -24,9 +24,9 @@ import sys
 
 SKILL = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, SKILL)
-from strip import extract_header  # noqa: E402  (always-on mechanical header preservation)
+from genre import GENRES, detect_genre  # noqa: E402
 from preflight import require_claude  # noqa: E402
-from genre import detect_genre, GENRES  # noqa: E402
+from strip import extract_header  # noqa: E402  (always-on mechanical header preservation)
 from wf_run import run_workflow  # noqa: E402
 
 

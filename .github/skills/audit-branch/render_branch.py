@@ -32,7 +32,12 @@ SKILL = os.path.dirname(os.path.abspath(__file__))
 PIPELINE = os.path.join(os.path.dirname(SKILL), "audit-code")
 sys.path.insert(0, PIPELINE)
 from render_eval import (  # noqa: E402
-    card_anchor, facts_html, load_room, patch_fields, path_features_section, render,
+    card_anchor,
+    facts_html,
+    load_room,
+    patch_fields,
+    path_features_section,
+    render,
 )
 
 ANGLE_HELP = {

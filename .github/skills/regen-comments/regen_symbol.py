@@ -25,7 +25,7 @@ sys.path.insert(0, SKILL)
 sys.path.insert(0, VOICES_DIR)
 from preflight import require_claude  # noqa: E402
 from voice_sample import load_voice_sample  # noqa: E402
-from wf_run import run_workflow, copy_winner, WRITER_ARTIFACTS  # noqa: E402
+from wf_run import WRITER_ARTIFACTS, copy_winner, run_workflow  # noqa: E402
 
 
 def main():

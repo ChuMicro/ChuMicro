@@ -21,6 +21,7 @@ import html
 import json
 import os
 import sys
+import webbrowser
 
 SKILL = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, SKILL)
@@ -319,7 +320,8 @@ def main():
     rundir = os.path.abspath(sys.argv[1])
     target = sys.argv[2]
     voices = sys.argv[3:6]
-    esc = lambda s: html.escape(s or "")
+    def esc(s):
+        return html.escape(s or "")
     syms = _symbols(open(target).read())
     fname = os.path.basename(target)
 

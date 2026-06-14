@@ -25,7 +25,7 @@ import sys
 
 SKILL = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, SKILL)
-from audit_phase1 import find_tests, _find_lib_root  # noqa: E402
+from audit_phase1 import _find_lib_root, find_tests  # noqa: E402
 
 GATE_FILE = os.path.join(SKILL, os.pardir, "_shared", "apply_gate.py")
 

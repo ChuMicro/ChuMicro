@@ -21,8 +21,8 @@ import sys
 
 SKILL = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, SKILL)
-from strip import strip_code  # noqa: E402
 from preflight import require_claude  # noqa: E402
+from strip import strip_code  # noqa: E402
 
 # Library FACTS come from the source contracts, not tests/build artifacts; keep those out of the triage.
 SKIP_DIRS = {"__pycache__", "tests", "functional_tests", ".git", ".scratch", ".idea", "build", "dist"}

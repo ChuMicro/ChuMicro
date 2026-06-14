@@ -262,11 +262,12 @@ def discover_source_roots() -> list[Path]:
 def discover_ruff_paths() -> list[str]:
     """Return paths to lint across the workspace.
 
-    Includes ``scripts/`` itself and the ``src/``, ``tests/``,
-    ``functional_tests/``, and ``examples/`` subdirectories of every
-    discovered package.  Directories that don't exist are skipped.
+    Includes ``scripts/`` and ``.github/skills/`` (both host-only
+    tooling) plus the ``src/``, ``tests/``, ``functional_tests/``, and
+    ``examples/`` subdirectories of every discovered package.  Package
+    subdirectories that don't exist are skipped.
     """
-    paths = ["scripts"]
+    paths = ["scripts", ".github/skills"]
     for package_dir in discover_package_dirs():
         relative_path = str(package_dir.relative_to(ROOT))
         for subdir in ["src", "tests", "functional_tests", "examples"]:
