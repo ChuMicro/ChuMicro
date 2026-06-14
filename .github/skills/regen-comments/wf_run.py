@@ -96,8 +96,9 @@ def copy_winner(rundir):
     merged = os.path.join(rundir, "merged.py")
     shutil.copy(win_file, merged)
     sys.path.insert(0, SKILL)
-    from normalize_stub_pass import normalize  # noqa: E402  (lazy: keeps this module import-light)
     import glob as _glob
+
+    from normalize_stub_pass import normalize  # noqa: E402  (lazy: keeps this module import-light)
     for candidate in _glob.glob(os.path.join(rundir, "runs", "run-*.py")) + [merged]:
         if normalize(candidate):
             print(f"  normalized docstring-redundant pass: {os.path.basename(candidate)}")

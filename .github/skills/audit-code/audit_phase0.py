@@ -16,9 +16,9 @@ import sys
 
 SKILL = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, SKILL)
-from strip import strip_code  # noqa: E402
-from preflight import require_claude  # noqa: E402
 from audit_phase1 import CLEAN_ROOM_SETTINGS  # noqa: E402
+from preflight import require_claude  # noqa: E402
+from strip import strip_code  # noqa: E402
 
 PROMPT = (
     "Read the comment-stripped library source under ./lib/ (the files are listed in ./lib_manifest.txt; read "

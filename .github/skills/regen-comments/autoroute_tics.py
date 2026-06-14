@@ -24,9 +24,9 @@ import sys
 SKILL = os.path.dirname(os.path.abspath(__file__))
 VOICES_DIR = os.path.normpath(os.path.join(SKILL, os.pardir, "_shared", "voices"))
 sys.path.insert(0, SKILL)
+from apply_selection import _is_class, set_docstring  # noqa: E402
 from flag_tics import scan, signatures, symbol_spans  # noqa: E402
-from splice_symbol import splice, _code_only, _find  # noqa: E402
-from apply_selection import set_docstring, _is_class  # noqa: E402
+from splice_symbol import _code_only, _find, splice  # noqa: E402
 from tics import detect  # noqa: E402
 
 

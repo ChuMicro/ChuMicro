@@ -56,7 +56,7 @@ def reattach(written_src, preserve):
         idxs = code_index.get(anchor, [])
         if anchor and len(idxs) == 1:                       # unique code line to attach to
             i = idxs[0]
-            if p.get("attach") == "trailing":               # ``# noqa`` rides the end of its code line:
+            if p.get("attach") == "trailing":               # a ``noqa`` directive rides the end of its code line:
                 # append only the directive suffix to the FILE's own code line -- restoring the lens's
                 # stored line verbatim once broke compilation when the lens recorded it with the wrong
                 # indentation (kvstore core.py 2026-06-10: an ``if`` re-indented 4->8 spaces)

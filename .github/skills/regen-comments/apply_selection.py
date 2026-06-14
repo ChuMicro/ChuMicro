@@ -43,7 +43,7 @@ import sys
 
 SKILL = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, SKILL)
-from splice_symbol import splice, _code_only, _find, _module_doc_node  # noqa: E402
+from splice_symbol import _code_only, _find, _module_doc_node, splice  # noqa: E402
 
 _HEADER = re.compile(r"^\s*regen-comments\s+(apply|voice)\s*(?:\(([^)]*)\))?\s*:\s*(.*)$")
 _EDIT_AT = re.compile(r"^#edit\s+(\S+)\s*$")

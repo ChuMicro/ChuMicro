@@ -41,7 +41,13 @@ SKILL = os.path.dirname(os.path.abspath(__file__))
 # two front doors); this skill stages differently but runs the same room machinery
 PIPELINE = os.path.join(os.path.dirname(SKILL), "audit-code")
 sys.path.insert(0, PIPELINE)
-from audit_phase1 import claude_p_workflow, find_tests, voice_persona, voice_register_sample, write_repros  # noqa: E402
+from audit_phase1 import (  # noqa: E402
+    claude_p_workflow,
+    find_tests,
+    voice_persona,
+    voice_register_sample,
+    write_repros,
+)
 from preflight import require_claude  # noqa: E402
 from strip import strip_code  # noqa: E402
 
