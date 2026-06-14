@@ -25,6 +25,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 
 SKILL = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, SKILL)
@@ -130,34 +131,70 @@ CLEAN_ROOM_SETTINGS = json.dumps({"permissions": {"deny": [
 ]}})
 
 
-def claude_p_workflow(rundir, wf_name):
+# Every artifact the evaluation workflow (audit_wf.js / branch_wf.js) writes -- the summarizer,
+# merger, validator, writer, and patcher each write one, unconditionally. The Workflow tool runs the
+# script in the BACKGROUND and returns at once, so the clean-room agent can reply DONE early and the
+# exiting `claude -p` kills the workflow mid-flight; completion is therefore verified by requiring
+# every one of these fresher than the launch, not by bare existence (a killed run leaves stale copies).
+EVAL_ARTIFACTS = ("summary.json", "eval.json", "validation.json", "patches.json", "written.json")
+
+
+def claude_p_workflow(rundir, wf_name, retries=1):
     """Run one clean-room `claude -p` from rundir that executes the named workflow to completion.
 
     The isolation flags (--setting-sources project,local, --strict-mcp-config,
     --disable-slash-commands) keep user-global ~/.claude/CLAUDE.md, hooks, skills, plugins, and MCP
     servers out of every judging layer; default auth keeps the OAuth login (only --bare would force
     ANTHROPIC_API_KEY). CLAUDE_CODE_WORKFLOWS=1 in the subprocess env enables the Workflow tool,
-    which headless `claude -p` leaves off by default. The headless result envelope (is_error /
-    result / total_cost_usd / session_id) lands in <rundir>/claude_envelope.json so a degraded run
-    names its cause and cost."""
-    completed = subprocess.run(
-        ["claude", "--setting-sources", "project,local", "--strict-mcp-config",
-         "--disable-slash-commands", "-p",
-         f"Use the Workflow tool to run the workflow at ./{wf_name} (call Workflow with scriptPath "
-         f"./{wf_name}). Wait for full completion, then reply DONE.",
-         "--allowedTools", "Workflow", "Task", "Read", "Write",
-         "--permission-mode", "acceptEdits", "--model", "opus", "--output-format", "json",
-         "--settings", CLEAN_ROOM_SETTINGS],
-        cwd=rundir, capture_output=True, text=True,
-        env={**os.environ, "CLAUDE_CODE_WORKFLOWS": "1"},
+    which headless `claude -p` leaves off by default.
+
+    Completion is verified by artifact mtime, not the agent's word: the agent polls the workflow's
+    final files before replying DONE, and a run that leaves any required artifact stale or missing
+    gets ONE relaunch before a loud halt. The headless result envelope (is_error / result /
+    total_cost_usd / session_id) lands in <rundir>/claude_envelope.json so a degraded run names its
+    cause and cost."""
+    prompt = (
+        f"Use the Workflow tool to run the workflow at ./{wf_name} (call Workflow with scriptPath "
+        f"./{wf_name}). It runs in the BACKGROUND and the tool returns immediately -- launching it is "
+        f"not finishing it, and if you stop responding the workflow is killed. Its final phase writes "
+        f"BOTH ./written.json and ./patches.json, and neither exists right now. After launching, poll "
+        f"by Read-ing both -- a missing-file error means the run is still going, so Read again (keep "
+        f"polling indefinitely; the lens battery plus the validator loop take minutes). Only when BOTH "
+        f"./written.json and ./patches.json exist and hold content, reply DONE."
     )
-    try:
-        envelope = json.loads(completed.stdout or "")
-    except ValueError:
-        envelope = {"unparseable_stdout_tail": (completed.stdout or "")[-2000:]}
-    envelope["stderr_tail"] = (completed.stderr or "")[-2000:]
-    json.dump(envelope, open(os.path.join(rundir, "claude_envelope.json"), "w"), indent=1)
-    return completed
+    completed, stale = None, []
+    for attempt in range(1 + retries):
+        for name in EVAL_ARTIFACTS:
+            path = os.path.join(rundir, name)
+            if os.path.exists(path):
+                os.remove(path)
+        start = time.time()
+        completed = subprocess.run(
+            ["claude", "--setting-sources", "project,local", "--strict-mcp-config",
+             "--disable-slash-commands", "-p", prompt,
+             "--allowedTools", "Workflow", "Task", "Read", "Write",
+             "--permission-mode", "acceptEdits", "--model", "opus", "--output-format", "json",
+             "--settings", CLEAN_ROOM_SETTINGS],
+            cwd=rundir, capture_output=True, text=True,
+            env={**os.environ, "CLAUDE_CODE_WORKFLOWS": "1"},
+        )
+        try:
+            envelope = json.loads(completed.stdout or "")
+        except ValueError:
+            envelope = {"unparseable_stdout_tail": (completed.stdout or "")[-2000:]}
+        envelope["stderr_tail"] = (completed.stderr or "")[-2000:]
+        json.dump(envelope, open(os.path.join(rundir, "claude_envelope.json"), "w"), indent=1)
+        stale = [name for name in EVAL_ARTIFACTS
+                 if not os.path.exists(os.path.join(rundir, name))
+                 or os.path.getmtime(os.path.join(rundir, name)) < start - 2]
+        if not stale:
+            return completed
+        if attempt < retries:
+            print(f"  evaluation incomplete: {', '.join(stale)} stale or missing; relaunching once...",
+                  flush=True)
+    sys.exit(f"evaluation workflow still incomplete after relaunch ({', '.join(stale)} stale/missing in "
+             f"{rundir}) -- the clean-room agent likely exited before the workflow finished; inspect "
+             f"the room's transcript and re-run.")
 
 
 def _stage(wf_src, rundir, **subs):
