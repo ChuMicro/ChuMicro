@@ -51,6 +51,7 @@ def main():
          "--allowedTools", "Workflow", "Task", "Read", "Write",
          "--permission-mode", "acceptEdits", "--model", "opus"],
         cwd=room, capture_output=True, text=True,
+        env={**os.environ, "CLAUDE_CODE_WORKFLOWS": "1"},
     )
 
     got = 0

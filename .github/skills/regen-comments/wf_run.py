@@ -62,6 +62,7 @@ def run_workflow(rundir, wf_name, required=(), retries=1, marker=None):
              "--disable-slash-commands", "--allowedTools", "Workflow", "Task", "Read", "Write",
              "--permission-mode", "acceptEdits", "--model", "opus"],
             cwd=rundir, capture_output=True, text=True,
+            env={**os.environ, "CLAUDE_CODE_WORKFLOWS": "1"},
         )
         # mtime, not existence: a prior run's leftovers satisfy existence and poison the result
         stale = [p for p in required
