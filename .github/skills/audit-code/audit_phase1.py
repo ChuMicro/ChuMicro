@@ -136,8 +136,10 @@ def claude_p_workflow(rundir, wf_name):
     The isolation flags (--setting-sources project,local, --strict-mcp-config,
     --disable-slash-commands) keep user-global ~/.claude/CLAUDE.md, hooks, skills, plugins, and MCP
     servers out of every judging layer; default auth keeps the OAuth login (only --bare would force
-    ANTHROPIC_API_KEY). The headless result envelope (is_error / result / total_cost_usd /
-    session_id) lands in <rundir>/claude_envelope.json so a degraded run names its cause and cost."""
+    ANTHROPIC_API_KEY). CLAUDE_CODE_WORKFLOWS=1 in the subprocess env enables the Workflow tool,
+    which headless `claude -p` leaves off by default. The headless result envelope (is_error /
+    result / total_cost_usd / session_id) lands in <rundir>/claude_envelope.json so a degraded run
+    names its cause and cost."""
     completed = subprocess.run(
         ["claude", "--setting-sources", "project,local", "--strict-mcp-config",
          "--disable-slash-commands", "-p",
@@ -147,6 +149,7 @@ def claude_p_workflow(rundir, wf_name):
          "--permission-mode", "acceptEdits", "--model", "opus", "--output-format", "json",
          "--settings", CLEAN_ROOM_SETTINGS],
         cwd=rundir, capture_output=True, text=True,
+        env={**os.environ, "CLAUDE_CODE_WORKFLOWS": "1"},
     )
     try:
         envelope = json.loads(completed.stdout or "")
