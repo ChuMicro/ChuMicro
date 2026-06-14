@@ -1,11 +1,13 @@
-"""Allocation profile for the socket-generator helpers.
+"""Retained-allocation guard for the socket-generator helpers.
 
-CPython-only lane: uses :mod:`tracemalloc` + :mod:`gc` to confirm
-that the EAGAIN-loop inside ``send_all`` / ``recv_until`` / ``recv_exact``
-allocates only the helper's own cached wait object and nothing per
-iteration.  Pins the steady-state allocation contract the helpers
-document — a regression that allocates inside the EAGAIN branch (e.g.
-formatting a debug string, copying the buffer) surfaces here.
+CPython-only lane: uses :mod:`tracemalloc` + :mod:`gc` to confirm the
+EAGAIN-loop inside ``send_all`` / ``recv_until`` / ``recv_exact`` retains
+no memory across iterations — the cached wait is reused, not re-allocated
+and stashed, and the accumulator does not grow without bound.  Measures
+net-retained bytes after ``gc.collect()``, so it catches a leak; it does
+not catch transient per-iteration churn (a slice freed by refcount the
+same tick is invisible here).  The on-device zero-allocation contract is
+verified separately with ``gc.mem_alloc()`` under ``gc.disable()``.
 
 The threshold matches the existing memory-pressure tests:  under
 2 KiB of growth across 500 sample iterations.
@@ -44,8 +46,8 @@ def _measure_growth(operation, *, warmup_iterations=50, sample_iterations=500):
 
 
 class TestSendAllEagainLoopStaysFlat:
-    """Each EAGAIN inside ``send_all`` reuses the cached write-wait;
-    no per-iteration heap growth should accumulate."""
+    """A ``send_all`` EAGAIN spin retains nothing across iterations:
+    the cached write-wait is reused, not re-allocated and stashed."""
 
     def test_send_all_eagain_iteration_no_growth(self):
         sock = FakeSocket()

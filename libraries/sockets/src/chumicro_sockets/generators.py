@@ -132,9 +132,10 @@ def send_all(sock: object, data: object) -> object:
     """Send every byte of *data*, yielding on ``EAGAIN``.
 
     Loops on ``sock.send`` until the whole buffer is written.  Each
-    EAGAIN yields a single cached ``_WriteWait(sock)`` — the helper
-    allocates the wait once outside the loop so steady-state
-    iterations are zero-allocation.
+    EAGAIN yields a single cached ``_WriteWait(sock)``, and the unsent
+    remainder is re-sliced only after a partial send makes progress —
+    so an EAGAIN spin reuses both the wait and the slice and allocates
+    nothing.
 
     Args:
         sock: Non-blocking TCP socket (typically returned by
@@ -152,9 +153,10 @@ def send_all(sock: object, data: object) -> object:
     total = len(view)
     offset = 0
     write_wait = _WriteWait(sock)
+    chunk = view
     while offset < total:
         try:
-            sent = sock.send(view[offset:])
+            sent = sock.send(chunk)
         except OSError as error:
             if error.args[0] == errno.EAGAIN:
                 yield write_wait
@@ -163,6 +165,7 @@ def send_all(sock: object, data: object) -> object:
         if sent == 0:
             raise OSError("peer closed during send")
         offset += sent
+        chunk = view[offset:]
 
 
 def recv_until(sock: object, separator: object, *, max_bytes: int) -> bytes:
@@ -230,8 +233,9 @@ def recv_exact(sock: object, byte_count: int) -> bytes:
     """Read exactly *byte_count* bytes; return them as ``bytes``.
 
     Loops on ``sock.recv_into`` into a pre-allocated *byte_count*-byte
-    buffer, advancing an offset across yields.  Each EAGAIN yields a
-    single cached private read-wait carrying *sock*.
+    buffer, re-slicing the unfilled tail only after a recv makes
+    progress — so an EAGAIN spin reuses both the cached read-wait and
+    the slice and allocates nothing.
 
     Args:
         sock: Non-blocking TCP socket.
@@ -255,10 +259,11 @@ def recv_exact(sock: object, byte_count: int) -> bytes:
     view = memoryview(buffer)
     offset = 0
     read_wait = _ReadWait(sock)
+    chunk = view
 
     while offset < byte_count:
         try:
-            nbytes = sock.recv_into(view[offset:])
+            nbytes = sock.recv_into(chunk)
         except OSError as error:
             if error.args[0] == errno.EAGAIN:
                 yield read_wait
@@ -267,5 +272,6 @@ def recv_exact(sock: object, byte_count: int) -> bytes:
         if nbytes == 0:
             raise OSError("peer closed before byte_count bytes")
         offset += nbytes
+        chunk = view[offset:]
 
     return bytes(buffer)
