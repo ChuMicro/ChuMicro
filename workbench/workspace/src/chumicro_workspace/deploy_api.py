@@ -32,8 +32,10 @@ Usage::
 
 from __future__ import annotations
 
+import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from types import TracebackType
 
 from chumicro_deploy import DeviceEntry, TransportProtocol, load_device_registry
@@ -242,6 +244,34 @@ def _resolve_workspace_root(project_dir: Path) -> Path:
     return project_dir.parents[1] if len(project_dir.parents) >= 2 else project_dir
 
 
+#: Harness modules a demo deploy leaves off the minimum-tier flash budget.
+#: A demo's bootstrap imports only ``chumicro_test_harness.runner`` and
+#: ``.discovery`` (whose closure is ``__init__`` + ``assertions`` + ``skip``).
+#: The ``network`` real-I/O helpers and ``patching`` fakes exist only to
+#: support test files, so a running demo never loads them — and on a 256 KB
+#: board their ~15 KB of source (before the device-stage strip) is the
+#: difference between a one-request demo fitting and ``No space left``.
+_DEMO_UNUSED_HARNESS_MODULES = ("network.py", "patching.py")
+
+
+def _stage_demo_harness_core(harness_source: Path, mirror_root: Path) -> Path:
+    """Mirror the harness package into *mirror_root* minus its test-only modules.
+
+    Copies every harness file except the ones in
+    :data:`_DEMO_UNUSED_HARNESS_MODULES` and returns the mirrored ``src``
+    directory to hand to ``transport.stage``.  A demo then carries only
+    the harness its bootstrap imports, not the network/patching modules
+    that exist for test files.
+    """
+    mirrored_source = mirror_root / "src"
+    shutil.copytree(
+        harness_source,
+        mirrored_source,
+        ignore=shutil.ignore_patterns(*_DEMO_UNUSED_HARNESS_MODULES),
+    )
+    return mirrored_source
+
+
 def deploy_project(
     project_dir: Path,
     *,
@@ -324,13 +354,16 @@ def deploy_project(
         extra_files = _build_runtime_config_extra_files(
             resolved_workspace_root, extra_runtime_config,
         )
-        transport.stage(
-            source_dirs,
-            [app_file],
-            harness_source,
-            extra_files=extra_files,
-            include_test_support=False,
-        )
+        # stage() fully consumes the harness dir (reads/copies it) before it
+        # returns, so the reduced mirror only has to outlive this call.
+        with TemporaryDirectory(prefix="chumicro-demo-harness-") as harness_mirror:
+            transport.stage(
+                source_dirs,
+                [app_file],
+                _stage_demo_harness_core(harness_source, Path(harness_mirror)),
+                extra_files=extra_files,
+                include_test_support=False,
+            )
         bootstrap = build_device_bootstrap(
             device_entry, transport, app_file, function_filter=None,
         )
