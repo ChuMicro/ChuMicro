@@ -596,7 +596,20 @@ class Runner:
             ):
                 handler = getattr(service, "io_error", None)
                 if handler is not None:
-                    handler(now_ms, eventmask)
+                    try:
+                        handler(now_ms, eventmask)
+                    except Exception as error:  # noqa: BLE001
+                        # A generator wrapper throws the POLLERR / POLLHUP
+                        # OSError into its body; a body that doesn't catch
+                        # it re-raises here.  Isolate and count it the way
+                        # tick() isolates a faulting handler, so the fault
+                        # can't escape wait() and kill the reactor loop.
+                        self.handler_errors += 1
+                        if self._on_handler_error is not None:
+                            try:
+                                self._on_handler_error(entry, error)
+                            except Exception:  # noqa: BLE001
+                                self.handler_errors += 1
                 # io_error may remove this entry (a generator wrapper
                 # drops itself on an uncaught error), mutating _entries
                 # mid-scan.  Returning after this single dispatch means

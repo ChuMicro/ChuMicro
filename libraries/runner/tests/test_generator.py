@@ -308,10 +308,10 @@ def test_unhandled_exception_during_advance_marks_done_and_is_isolated():
 
 
 def test_io_error_unhandled_propagates_done():
-    # If the generator does not catch the OSError, it propagates out of
-    # gen.throw().  The wrapper marks done and removes itself.  The
-    # error currently surfaces to the io_error caller (Runner.wait
-    # _dispatch_io_error); a future iteration may log + swallow.
+    # The wrapper re-raises an OSError the generator body doesn't catch
+    # (so the runner can observe and count it) and marks itself done.
+    # This pins the wrapper's re-raise contract by calling it directly;
+    # the runner isolates that re-raise so it can't escape wait().
     sock = _Sock()
 
     def gen():
@@ -323,6 +323,54 @@ def test_io_error_unhandled_propagates_done():
     with raises(OSError):
         handle._wrapper.io_error(now_ms=0, eventmask=0)
     assert handle.done is True
+
+
+def test_unhandled_io_error_through_dispatch_is_isolated():
+    # A generator that lets the io_error OSError propagate is dropped and
+    # counted at Runner._dispatch_io_error, so a POLLERR / POLLHUP during
+    # wait() can't kill the reactor loop — symmetry with tick()'s
+    # handler-fault isolation.
+    sock = _Sock()
+    faults = []
+    runner = Runner(
+        ticks=FakeTicks(),
+        on_handler_error=lambda handle, error: faults.append(error),
+    )
+
+    def gen():
+        yield _Wait(sock=sock, want_read=True)  # no try/except
+
+    handle = runner.add_generator(gen())
+    assert len(runner._entries) == 1
+
+    # Dispatch through the runner path, not the wrapper directly; must not raise.
+    runner._dispatch_io_error(sock, eventmask=0, now_ms=0)
+
+    assert handle.done is True
+    assert len(runner._entries) == 0
+    assert runner.handler_errors == 1
+    assert len(faults) == 1
+    assert isinstance(faults[0], OSError)
+
+
+def test_io_error_callback_that_raises_is_isolated():
+    # An on_handler_error hook that itself raises while reporting an
+    # io_error fault gets swallowed and counted too, so a buggy hook
+    # can't re-break the wait() loop the isolation just protected.
+    sock = _Sock()
+
+    def on_error(handle, error):
+        raise RuntimeError("buggy hook")
+
+    runner = Runner(ticks=FakeTicks(), on_handler_error=on_error)
+
+    def gen():
+        yield _Wait(sock=sock, want_read=True)  # no try/except
+
+    runner.add_generator(gen())
+    runner._dispatch_io_error(sock, eventmask=0, now_ms=0)  # must not raise
+
+    assert runner.handler_errors == 2
 
 
 # -- Cancellation ----------------------------------------------------
