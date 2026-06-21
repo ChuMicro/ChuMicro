@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""PostToolUse gate: an agent edit to the shared picker's renderer or validator re-runs
+"""PostToolUse gate: an agent edit to the webui picker's renderer or validator re-runs
 validate_picker.py immediately, so a structure, JS-syntax, namespace-drift, or validity
 regression surfaces in the same turn as the edit instead of waiting for a hand-run.
 Wired in .claude/settings.json (hooks → PostToolUse on Edit|Write|MultiEdit).
@@ -15,7 +15,7 @@ import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-WATCHED = re.compile(r"\.github/skills/_shared/picker/(render_picker|validate_picker)\.py$")
+WATCHED = re.compile(r"webui/(render_picker|validate_picker)\.py$")
 
 
 def main():
@@ -26,7 +26,7 @@ def main():
     file_path = (event.get("tool_input") or {}).get("file_path", "")
     if not WATCHED.search(file_path.replace(os.sep, "/")):
         sys.exit(0)
-    repo_root = os.path.abspath(os.path.join(HERE, *[os.pardir] * 4))
+    repo_root = os.path.abspath(os.path.join(HERE, os.pardir))
     result = subprocess.run([sys.executable, os.path.join(HERE, "validate_picker.py")],
                             capture_output=True, text=True, cwd=repo_root, timeout=120)
     if result.returncode != 0:

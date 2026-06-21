@@ -20,7 +20,7 @@ Usage:
   apply_selection.py apply <rundir> <voice> <blobfile> -> apply picks + edits to <rundir>/FINAL_<voice>.py
 
 Two blob grammars are accepted. The shared picker page (render_report.py / render_library.py via
-`_shared/picker/`) emits the PICKS form; the legacy form stays for compare.html and hand-typed blobs:
+`webui/`) emits the PICKS form; the legacy form stays for compare.html and hand-typed blobs:
 
   PICKS — regen-comments apply (<file.py> | library)
   KVStore.get = run-2                       (library page: kvstore.py#KVStore.get = run-2)

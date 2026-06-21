@@ -193,6 +193,11 @@ import os
 import re
 import sys
 
+_REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+sys.path.insert(0, _REPO)   # repo root — so `from webui import kit` resolves when run as a script
+from webui import kit  # the ONE shared palette + content-key
+from webui.theme import assert_full_dark_override
+
 BADGE_CLASSES = {
     "critical": "b-critical",
     "important": "b-important",
@@ -204,15 +209,20 @@ BADGE_CLASSES = {
     "low": "b-minor",
 }
 
-CSS = """
- :root{color-scheme:light;
-  --bg:#f4f6f9; --fg:#1c2230; --faint:#69707e; --card:#ffffff; --border:#dfe4ec;
-  --accent:#4f46e5; --blob-bg:#f8fafc; --bar:#ffffffeb; --note-bg:#fbfcfe; --chip:#eef0f6;
-  --why:#b45309; --fix:#15803d; --where:#1d4ed8}
- :root[data-theme=dark]{color-scheme:dark;
-  --bg:#11141b; --fg:#e3e7f0; --faint:#97a0b3; --card:#1a1f29; --border:#2a3242;
-  --accent:#8d97ff; --blob-bg:#11141b; --bar:#1a1f29eb; --note-bg:#161b24; --chip:#232a38;
-  --why:#fbbf24; --fix:#4ade80; --where:#93b4ff}
+# The palette is the ONE kit source. These local names ALIAS the kit's semantic
+# vars — alias values are var(...), so they are theme-correct (resolve per active theme) AND
+# exempt from the dark-override lint. The picker's existing CSS (which references --card /
+# --why / --fix / --where / --blob-bg / --bar / --note-bg) is left untouched but now draws
+# from one palette — killing the three-different-accents drift. color-scheme stays per-theme
+# (native form controls). Every hardcoded hex below is converted to a var (the dark-mode bug).
+_KIT_PALETTE = (
+    kit.palette_css() + "\n"
+    " :root{color-scheme:light; --card:var(--panel); --blob-bg:var(--bg); --bar:var(--panel);"
+    " --note-bg:var(--panel); --why:var(--warn); --fix:var(--good); --where:var(--accent)}\n"
+    " :root[data-theme=dark]{color-scheme:dark}\n"
+)
+
+CSS = _KIT_PALETTE + """
  body{font:16px/1.55 -apple-system,'Segoe UI',sans-serif;background:var(--bg);color:var(--fg);
   margin:0;padding:26px 20px 110px;max-width:var(--pagew,920px);margin-inline:auto}
  h1{font-size:24px;font-weight:600;margin:0 44px 6px 0}
@@ -239,7 +249,7 @@ CSS = """
  .fgroup button{font:inherit;font-size:13px;padding:3px 11px;border-radius:999px;border:1px solid var(--border);
   background:var(--card);color:var(--faint);cursor:pointer}
  .fgroup button:hover{color:var(--fg)}
- .fgroup button.active{border-color:#4f46e5;background:#4f46e5;color:#fff;font-weight:650}
+ .fgroup button.active{border-color:var(--accent);background:var(--accent);color:#fff;font-weight:650}
  .fgroup button.dead{opacity:.35;pointer-events:none}
  .fgroup .fcount{font-size:11px;margin-left:6px;opacity:.8}
  .nomatch{background:var(--card);border:1px dashed var(--border);border-radius:12px;padding:18px;
@@ -270,16 +280,16 @@ CSS = """
  .card.collapsed>.diffblock{order:4;flex:1 1 100%;margin:0}
  .cardid{font-weight:700;color:var(--accent);font-size:17px}
  .cardtitle{font-weight:630}
- .badge{font-size:11px;font-weight:700;letter-spacing:.4px;padding:2px 8px;border-radius:999px;color:#fff;background:#64748b}
- .b-critical{background:#dc2626} .b-important{background:#d97706} .b-minor{background:#64748b} .b-ambiguous{background:#7c3aed}
+ .badge{font-size:11px;font-weight:700;letter-spacing:.4px;padding:2px 8px;border-radius:999px;color:#fff;background:var(--faint)}
+ .b-critical{background:var(--bad)} .b-important{background:var(--warn)} .b-minor{background:var(--faint)} .b-ambiguous{background:var(--accent)}
  .srcchip{font-size:11.5px;color:var(--faint);background:var(--chip);border-radius:999px;padding:2px 9px}
  .cardmeta{margin:6px 0 0;font-size:12.5px;color:var(--faint)}
  .summary{margin:10px 0 0;font-size:15.5px}
  details.detail{margin:10px 0 0}
  details.detail>summary{cursor:pointer;font-size:13.5px;color:var(--accent)}
  details.detail .dtext{margin-top:6px;font-size:14.5px}
- .warning{margin:10px 0 0;background:color-mix(in srgb,#d97706 10%,transparent);
-  border:1px solid color-mix(in srgb,#d97706 35%,transparent);border-radius:8px;padding:7px 10px;font-size:14px}
+ .warning{margin:10px 0 0;background:color-mix(in srgb,var(--warn) 10%,transparent);
+  border:1px solid color-mix(in srgb,var(--warn) 35%,transparent);border-radius:8px;padding:7px 10px;font-size:14px}
  .warnflag{color:var(--why);font-size:15px;align-self:center;cursor:help}
  .field{display:flex;gap:10px;margin:11px 0 0;font-size:15px}
  .flabel{flex:0 0 auto;width:60px;box-sizing:border-box;text-align:center;font-size:11.5px;font-weight:800;
@@ -299,8 +309,8 @@ CSS = """
   font:13px/1.55 ui-monospace,Menlo,monospace}
  .diffloc{padding:4px 10px;background:var(--blob-bg);color:var(--faint);font-size:12px;border-bottom:1px solid var(--border)}
  .dline{padding:5px 10px;white-space:pre-wrap}
- .dold{background:color-mix(in srgb,#dc2626 9%,transparent)}
- .dnew{background:color-mix(in srgb,#16a34a 10%,transparent)}
+ .dold{background:color-mix(in srgb,var(--bad) 9%,transparent)}
+ .dnew{background:color-mix(in srgb,var(--good) 10%,transparent)}
  .cardbody{margin:9px 0 0;font-size:15px}
  .opts{display:flex;gap:16px;flex-wrap:wrap;margin-top:12px}
  .opts label{cursor:pointer;display:flex;align-items:center;gap:6px;font-size:15px}
@@ -317,7 +327,7 @@ CSS = """
  .ccol{border:1px solid var(--border);border-radius:10px;padding:9px 11px;background:var(--blob-bg);
   min-width:0;display:flex;flex-direction:column;cursor:pointer;transition:border-color .15s,box-shadow .15s}
  .ccol:hover{border-color:var(--accent)}
- .ccol:has(input:checked),.cedit:has(input:checked){border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+ .ccol:has(input:checked),.cedit:has(input:checked){border-color:var(--accent);box-shadow:0 0 0 1px var(--accent),0 4px 16px var(--glow)}
  .ccol>label,.cedit>label{cursor:pointer;font-size:14px;font-weight:620;display:flex;gap:7px;align-items:baseline}
  .ccol input,.cedit input{accent-color:var(--accent);flex:0 0 auto}
  .cchips{display:flex;gap:5px;flex-wrap:wrap;margin-top:5px}
@@ -354,8 +364,14 @@ CSS = """
  .selbar .row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
  .selbar button{font:inherit;padding:7px 16px;border-radius:8px;border:1px solid var(--border);
   background:var(--card);color:var(--fg);cursor:pointer;transition:background .5s,color .5s,border-color .5s}
- .selbar button.primary{background:#4f46e5;border-color:#4f46e5;color:#fff}
- .selbar button.confirm{background:#15803d;border-color:#15803d;color:#fff;transition:none}
+ .selbar button.primary{background:linear-gradient(135deg,var(--accent),var(--accent2));border-color:var(--accent);color:#fff;box-shadow:0 2px 12px var(--glow)}
+ .selbar button.primary:hover{filter:brightness(1.07)}
+ .selbar button.confirm{background:var(--good);border-color:var(--good);color:#fff;transition:none}
+ .selbar #acceptall{border-color:var(--accent);color:var(--accent)}
+ .opts label.issugg{outline:2px solid color-mix(in srgb,var(--accent) 45%,transparent);outline-offset:1px;border-radius:6px}
+ .sugg{color:var(--accent);font-size:11px;margin-left:3px}
+ .card.kbfocus{box-shadow:0 0 0 2px var(--accent)}
+ .kbhint{color:var(--faint);font-size:12px;margin-left:4px}
  #count{color:var(--faint)}
  .blobwrap{margin-left:auto}
  .blobwrap[open]{flex-basis:100%;margin-left:0}
@@ -372,12 +388,12 @@ SCRIPT = """
   var HEADER = 'PICKS \\u2014 ' + (window.SPEC.blob_header || window.SPEC.key || 'selection');
   var root = document.documentElement;
   var savedTheme = null;
-  try { savedTheme = localStorage.getItem('picker:theme'); } catch (e) {}
+  try { savedTheme = localStorage.getItem('chumicro:theme'); } catch (e) {}
   var dark = savedTheme ? savedTheme === 'dark' : (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
   function setTheme(d) {
     root.dataset.theme = d ? 'dark' : 'light';
     document.getElementById('themebtn').textContent = d ? 'light mode' : 'dark mode';
-    try { localStorage.setItem('picker:theme', d ? 'dark' : 'light'); } catch (e) {}
+    try { localStorage.setItem('chumicro:theme', d ? 'dark' : 'light'); } catch (e) {}
   }
   function load() { try { return JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) { return {}; } }
   function save(s) { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch (e) {} }
@@ -581,6 +597,50 @@ SCRIPT = """
     });
   });
   document.getElementById('copybtn').addEventListener('click', copy);
+  var acceptAll = document.getElementById('acceptall');
+  if (acceptAll) acceptAll.addEventListener('click', function () {
+    var n = 0;
+    document.querySelectorAll('.card[data-suggested]').forEach(function (c) {
+      if (c.classList.contains('fhidden')) return;            // respect the active facet filter
+      var v = c.dataset.suggested;
+      c.querySelectorAll('input[type=radio]').forEach(function (r) {
+        if (r.value === v && !r.checked) { r.checked = true; r.dispatchEvent(new Event('change', { bubbles: true })); n++; }
+      });
+    });
+    confirmFlash(acceptAll, n ? ('accepted ' + n) : 'all set');
+  });
+
+  // keyboard nav for fast triage: j/k (or arrows) move a focus ring; 'a' accepts the focused suggestion
+  var kbi = -1;
+  function kbCards() {
+    return Array.prototype.slice.call(document.querySelectorAll('.card')).filter(function (c) {
+      return !c.classList.contains('fhidden');
+    });
+  }
+  function kbFocus(i) {
+    var cards = kbCards();
+    if (!cards.length) return;
+    document.querySelectorAll('.card.kbfocus').forEach(function (c) { c.classList.remove('kbfocus'); });
+    kbi = (i + cards.length) % cards.length;
+    var c = cards[kbi];
+    c.classList.add('kbfocus');
+    c.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }
+  document.addEventListener('keydown', function (e) {
+    var tag = e.target.tagName;
+    if (tag === 'TEXTAREA' || tag === 'INPUT' || tag === 'SELECT') return;   // don't hijack typing
+    if (e.key === 'j' || e.key === 'ArrowDown') { e.preventDefault(); kbFocus(kbi + 1); }
+    else if (e.key === 'k' || e.key === 'ArrowUp') { e.preventDefault(); kbFocus(kbi - 1); }
+    else if (e.key === 'a') {
+      var cards = kbCards();
+      if (kbi < 0 || kbi >= cards.length) return;
+      var card = cards[kbi], v = card.dataset.suggested;
+      if (!v) return;
+      card.querySelectorAll('input[type=radio]').forEach(function (r) {
+        if (r.value === v && !r.checked) { r.checked = true; r.dispatchEvent(new Event('change', { bubbles: true })); }
+      });
+    }
+  });
   // Submit is the primary action when the page is served; on a file:// page it stays
   // hidden and Copy inherits the primary styling as the only hand-back path.
   var sb = document.getElementById('submitbtn');
@@ -757,7 +817,7 @@ def item_options(item, page_options):
     return item.get("options", page_options)
 
 
-def pick_area_html(item, options, default, option_help):
+def pick_area_html(item, options, default, option_help, suggested=None):
     """The card's interactive choice block — the strategy seam.
 
     Default strategy: one radio-label row. "columns" (item.pick_ui): one bordered box per candidate
@@ -816,9 +876,12 @@ def pick_area_html(item, options, default, option_help):
     for option in options:
         help_attr = f' title="{html.escape(option_help[option])}"' if option in option_help else ""
         checked = " checked" if option == default else ""
+        is_sugg = suggested is not None and option == suggested
+        cls = ' class="issugg"' if is_sugg else ""
+        mark = '<span class="sugg" title="agent suggestion">★</span>' if is_sugg else ""
         radio_labels.append(
-            f'<label{help_attr}><input type="radio" name="pick:{html.escape(item_id)}" '
-            f'value="{html.escape(option)}"{checked}> {html.escape(option)}</label>'
+            f'<label{cls}{help_attr}><input type="radio" name="pick:{html.escape(item_id)}" '
+            f'value="{html.escape(option)}"{checked}> {html.escape(option)}{mark}</label>'
         )
     return f'<div class="opts">{"".join(radio_labels)}</div>'
 
@@ -826,7 +889,10 @@ def pick_area_html(item, options, default, option_help):
 def card_html(item, page_options, page_default, option_help):
     item_id = str(item["id"])
     options = item_options(item, page_options)
-    default = item.get("default", page_default) if options else None
+    # `suggested` = the agent's recommended pick (the triage bulk layer): it pre-checks + marks the
+    # option and feeds the "accept all suggested" bulk action; falls back to a neutral default.
+    suggested = item.get("suggested") if options else None
+    default = suggested or (item.get("default", page_default) if options else None)
     badge = ""
     if item.get("badge"):
         badge_class = BADGE_CLASSES.get(str(item["badge"]).lower(), "")
@@ -871,7 +937,7 @@ def card_html(item, page_options, page_default, option_help):
     warning = f'<div class="warning">{html.escape(item["warning"])}</div>' if item.get("warning") else ""
     warn_flag = f'<span class="warnflag" title="{html.escape(item["warning"])}">&#9888;</span>' if item.get("warning") else ""
     body = f'<div class="cardbody">{item["body_html"]}</div>' if item.get("body_html") else ""
-    opts = pick_area_html(item, options, default, option_help)
+    opts = pick_area_html(item, options, default, option_help, suggested=suggested)
     note_hint = " (on an apply, this adjusts the wording)" if "apply" in options else ""
     notes = (
         f'<textarea class="notes" placeholder="notes on {html.escape(item_id)}{note_hint}…"></textarea>'
@@ -885,9 +951,10 @@ def card_html(item, page_options, page_default, option_help):
     facets_attr = ""
     if item.get("facets"):
         facets_attr = f' data-facets="{html.escape(json.dumps(item["facets"]), quote=True)}"'
+    sugg_attr = f' data-suggested="{html.escape(suggested)}"' if suggested else ""
     return (
         f'<div class="{card_classes}" id="{anchor_id(item_id)}" data-id="{html.escape(item_id)}"'
-        f' data-def="{html.escape(default or "")}"{fold_attr}{facets_attr}>'
+        f' data-def="{html.escape(default or "")}"{sugg_attr}{fold_attr}{facets_attr}>'
         f'<div class="cardhead">{chevron}<span class="cardid">{html.escape(item_id)}</span>{badge}{warn_flag}{source}'
         f'<span class="cardtitle">{html.escape(item.get("title", ""))}</span></div>'
         f"{summary}"
@@ -1002,9 +1069,22 @@ def main():
 
     sections = "".join(section_html(section) for section in spec.get("sections", []))
     legend = legend_html(spec.get("option_help"))
-    client_spec = json.dumps({"key": spec.get("key", ""), "blob_header": spec.get("blob_header", ""),
+    # localStorage namespace: an explicit author `key` wins; otherwise derive a CONTENT key so a
+    # regenerated page can't restore a DIFFERENT page's picks (the stale-verdict guard the kit
+    # gives every surface).
+    spec_key = spec.get("key") or kit.content_key(
+        {k: v for k, v in spec.items() if k != "key"}, prefix="auto")
+    client_spec = json.dumps({"key": spec_key, "blob_header": spec.get("blob_header", ""),
                               "expand_on": spec.get("expand_on", [])})
 
+    has_suggestions = any(it.get("suggested") for it in spec.get("items", []))
+    accept_btn = ('<button id="acceptall" title="select every suggested pick (respects the filter)">'
+                  '★ accept suggested</button>') if has_suggestions else ""
+    # `live` (spec field or --live) lets this page be DRIVEN through the live canvas (webui.session):
+    # inject the kit's re-serve channel (toast/progress CSS — the picker is --shadow-clash-free) + the
+    # SSE client, so the agent can push reload/toast into the open picker tab. Default off = unchanged.
+    live = bool(spec.get("live")) or ("--live" in sys.argv)
+    live_block = (f"<style>{kit.live_css()}</style><script>{kit.sse_client_js()}</script>") if live else ""
     page_width = int(spec.get("page_width", 920))
     page = f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8">
@@ -1026,6 +1106,8 @@ def main():
   <button class="primary" id="submitbtn" hidden>Submit to session</button>
   <button id="copybtn">Copy selection</button>
   <button id="resetbtn">Reset</button>
+  {accept_btn}
+  <span class="kbhint">j / k move · a accept</span>
   <details class="blobwrap"><summary>selection blob</summary>
   <textarea id="blob" readonly></textarea>
   <p class="hint">Submit sends this blob straight to the waiting session. No server? Copy it and paste it into the chat instead — same effect.</p>
@@ -1034,9 +1116,11 @@ def main():
 </div>
 <script>window.SPEC = {client_spec};</script>
 {SCRIPT}
+{live_block}
 </body></html>
 """
     output_path = os.path.join(output_dir, "picker.html")
+    assert_full_dark_override(page, label="decision picker")   # fail loud — never ship a half-theme
     with open(output_path, "w") as handle:
         handle.write(page)
     print(f"RENDERED {output_path}", flush=True)

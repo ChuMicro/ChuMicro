@@ -128,6 +128,7 @@ FIXTURE = {
             "title": "plain decision card on the page-wide option set",
             "badge": "IMPORTANT",
             "summary": "page options, page default, notes box",
+            "suggested": "discuss",            # triage bulk layer: ★ marker + the accept-all button
             "facets": {"severity": "med", "angle": "trap", "file": "a.py"},
         },
     ],
