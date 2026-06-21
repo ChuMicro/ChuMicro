@@ -531,7 +531,7 @@ agent_roles: [
 ]
 ```
 
-**Q6b-1:** "How many sub-agent roles does the skill orchestrate? (Roles, not invocations — `commenter-casual-friendly` is one role even when fired in parallel across four trees.)" `header: Agent roles`
+**Q6b-1:** "How many sub-agent roles does the skill orchestrate? (Roles, not invocations — the regen-comments writer is one role even when fired as four parallel passes over the same file.)" `header: Agent roles`
 
 Options:
 - "One — a single sub-agent doing one job"

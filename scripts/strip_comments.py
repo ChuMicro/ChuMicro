@@ -1,8 +1,7 @@
 """Strip docstrings and non-lint-exception comments from Python source.
 
-Produces a clean-slate baseline that the ``commenter-casual-friendly``
-sub-agent (or any commenter persona) can write fresh docstrings against,
-with no prompt influence from the original prose.
+Produces a clean-slate baseline that a comment writer can write fresh
+docstrings against, with no prompt influence from the original prose.
 
 Rules:
 
