@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Parse + apply the report.html / compare.html "Copy selection" blob (mechanical, no LLM).
+"""Parse + apply the interactive picker page's "Copy selection" blob (mechanical, no LLM).
 
 The interactive reports let the human pick, per symbol, which writer pass's docstring+comments to keep
 (the selector's winner is pre-checked as "suggested"), or type a replacement docstring, plus free-text
@@ -19,8 +19,9 @@ Usage:
   apply_selection.py parse <blobfile>                 -> print the parsed selection as JSON
   apply_selection.py apply <rundir> <voice> <blobfile> -> apply picks + edits to <rundir>/FINAL_<voice>.py
 
-Two blob grammars are accepted. The shared picker page (render_report.py / render_library.py via
-`webui/`) emits the PICKS form; the legacy form stays for compare.html and hand-typed blobs:
+Every interactive page now renders on the shared picker (`webui/`) and emits the PICKS form:
+the per-symbol decision page an `apply` blob, the voice-comparison page a `voice` blob whose single
+decision card carries the chosen voice. The legacy headers stay for hand-typed blobs.
 
   PICKS — regen-comments apply (<file.py> | library)
   KVStore.get = run-2                       (library page: kvstore.py#KVStore.get = run-2)
@@ -28,6 +29,9 @@ Two blob grammars are accepted. The shared picker page (render_report.py / rende
     edit <module>: exact docstring text\nwith newlines escaped   (the page's edit box, verbatim)
     note <module>: a plain note (newlines collapsed; on an edit pick with no edit line, the note
                    is decoded as the replacement text — pre-edit-channel pages put it there)
+
+  PICKS — regen-comments voice (<file.py>)
+  voice = cantrill                          (the voice-comparison page's single decision card)
 
   regen-comments apply (<file.py>): all suggested
   regen-comments apply (<file.py>): KVStore.get=run-2, <module>=edit
@@ -50,8 +54,10 @@ _EDIT_AT = re.compile(r"^#edit\s+(\S+)\s*$")
 _NOTE_AT = re.compile(r"^#note\s+(\S+)\s*:\s*(.*)$")
 _PICK = re.compile(r"^(.+?)\s*=\s*(run-\d+|edit|suggested)$")
 _SHARED_HEADER = re.compile(r"^\s*PICKS\s*[—-]+\s*regen-comments\s+apply\s*\(([^)]*)\)\s*$")
+_SHARED_VOICE_HEADER = re.compile(r"^\s*PICKS\s*[—-]+\s*regen-comments\s+voice\s*\(([^)]*)\)\s*$")
 _SHARED_NOTE = re.compile(r"^\s*note\s+(\S+)\s*:\s*(.*)$")
 _SHARED_EDIT = re.compile(r"^\s*edit\s+(\S+)\s*:\s*(.*)$")
+_ANY_PICK = re.compile(r"^(.+?)\s*=\s*(.+?)\s*$")   # <card id> = <value>, value unconstrained (a voice name)
 
 
 def _decode_note(text):
@@ -116,14 +122,35 @@ def parse_shared_blob(text):
     return list(selections.values()) or [section_for(scope)]
 
 
+def parse_shared_voice_blob(text):
+    """A shared-picker voice-pick blob (`PICKS — regen-comments voice (<file>)`) -> one voice selection.
+
+    The voice-comparison page carries a single decision card whose chosen value is the winning voice;
+    its per-symbol comparison cards are informational (no radios), so the only `<id> = <value>` line is
+    the voice. `(none)` (no pick) yields voice=None, which the orchestrator reads as "no voice chosen".
+    """
+    fname, voice = None, None
+    for line in text.splitlines():
+        header = _SHARED_VOICE_HEADER.match(line)
+        if header:
+            fname = header.group(1).strip() or None
+            continue
+        pick = _ANY_PICK.match(line.strip())
+        if pick and pick.group(2) != "(none)":
+            voice = pick.group(2)
+    return {"kind": "voice", "file": fname, "picks": {}, "edits": {}, "notes": [], "voice": voice}
+
+
 def parse_blob_multi(text):
     """Blob text -> [selection, ...]: the shared PICKS blob grouped per file, or one element per legacy
-    `regen-comments …` header (compare.html and hand-typed blobs).
+    `regen-comments …` header (the voice-comparison page and hand-typed blobs).
 
     Legacy: lines before the first header are ignored; each section's #edit / #note lines bind to the
     header above them. A single-file blob parses to a one-element list.
     """
     lines = text.splitlines()
+    if any(_SHARED_VOICE_HEADER.match(ln) for ln in lines):
+        return [parse_shared_voice_blob(text)]
     if any(_SHARED_HEADER.match(ln) for ln in lines):
         return parse_shared_blob(text)
     starts = [i for i, ln in enumerate(lines) if _HEADER.match(ln)]
