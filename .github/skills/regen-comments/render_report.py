@@ -2,7 +2,7 @@
 """Mechanical decision page for a completed regen-comments run (no LLM), on the shared picker.
 
 Builds a picker spec from a finished run room and renders it with the shared renderer
-(`../_shared/picker/render_picker.py`), so the human can judge CORRECTNESS, not just voice:
+(`webui/render_picker.py`), so the human can judge CORRECTNESS, not just voice:
   1. page-top context sections: an INDEPENDENT plain-English summary (summary.json — written from the
      code, never from the comments), the selection rationale (pick.json — which whole writer pass won
      and why, plus auto-routed symbols), the legibility / tic / ban flags, and the validated ledger;
@@ -38,7 +38,7 @@ import sys
 import webbrowser
 
 SKILL = os.path.dirname(os.path.abspath(__file__))
-RENDERER = os.path.normpath(os.path.join(SKILL, os.pardir, "_shared", "picker", "render_picker.py"))
+RENDERER = os.path.normpath(os.path.join(SKILL, os.pardir, os.pardir, os.pardir, "webui", "render_picker.py"))
 
 
 def _doc_hint(sugg, cand):

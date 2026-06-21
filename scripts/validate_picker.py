@@ -1,4 +1,4 @@
-"""Gate the shared picker tool (`.github/skills/_shared/picker/`) from `scripts/run.py`.
+"""Gate the shared picker tool (`webui/`) from `scripts/run.py`.
 
 A PostToolUse hook re-runs the static validator on every agent edit to the picker, but an edit
 made outside an agent session — a hand patch, a merge, a rebase — slips past that hook. This
@@ -31,7 +31,7 @@ import sys
 from repo_layout import ROOT
 from shared import run_command
 
-PICKER_DIR = ROOT / ".github" / "skills" / "_shared" / "picker"
+PICKER_DIR = ROOT / "webui"
 VALIDATOR = PICKER_DIR / "validate_picker.py"
 SMOKE = PICKER_DIR / "validate_picker_smoke.py"
 

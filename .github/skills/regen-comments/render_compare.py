@@ -28,7 +28,7 @@ sys.path.insert(0, SKILL)
 
 
 # Page machinery moved here from the pre-shared-picker render_report.py: compare.html is its
-# only remaining consumer (the decision page renders via ../_shared/picker/render_picker.py).
+# only remaining consumer (the decision page renders via webui/render_picker.py).
 CSS = """
  :root{
   --bg:#f3f5f8; --fg:#171c26; --muted:#5a6472; --faint:#8a93a0; --soft:#33405a;

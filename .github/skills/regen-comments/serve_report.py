@@ -7,7 +7,7 @@ and this server writes it to <dir>/selection.txt and prints one `SELECTION RECEI
 to stdout. The orchestrator runs this server in the background with a Monitor on its stdout, so a
 submit arrives in the session as an event — the same blob, the same in-session `apply_selection.py`
 parse and invariant-7 read as a paste. The server is transport only: it never reads, applies, or
-rewrites a FINAL. The decision page (picker.html) is served by ../_shared/picker/serve_picker.py
+rewrites a FINAL. The decision page (picker.html) is served by webui/serve_picker.py
 instead — same selection.txt + stdout contract, plus a spec-stale re-render on refresh.
 
 Binds 127.0.0.1 on a free port. Auto-opens the page unless REGEN_NO_OPEN is set.

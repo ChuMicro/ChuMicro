@@ -219,8 +219,8 @@ Render the report per [Output format](#output-format), write it to
 on disk at `<report-dir>/spec.json`:
 
 ```bash
-python3 .github/skills/_shared/picker/render_picker.py <report-dir>/spec.json
-PICKER_NO_OPEN=1 python3 .github/skills/_shared/picker/serve_picker.py <report-dir>   # run_in_background
+python3 webui/render_picker.py <report-dir>/spec.json
+PICKER_NO_OPEN=1 python3 webui/serve_picker.py <report-dir>   # run_in_background
 open <url>   # from the server's SERVING line; the session is the only opener
 ```
 
