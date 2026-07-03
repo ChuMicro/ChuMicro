@@ -25,6 +25,7 @@ from chumicro_websockets._session import (
     _no_callback,
 )
 from chumicro_websockets._wire import (
+    CLOSE_NORMAL,
     DEFAULT_CLOSE_TIMEOUT_MS,
     DEFAULT_HANDSHAKE_TIMEOUT_MS,
     DEFAULT_MAX_INBOUND_QUEUE_SIZE,
@@ -437,10 +438,53 @@ class WebSocketClient(_BaseSession):
         """Move from sending the upgrade request to reading the 101 response."""
         self._connecting_phase = ConnectingPhase.RECEIVING_HANDSHAKE
 
+    def close(self, code: int = CLOSE_NORMAL, reason: str = "") -> None:
+        """Initiate a graceful close, or abort an in-flight connect.
+
+        While CONNECTING there is no open WebSocket to run the CLOSE
+        handshake over, so a queued CLOSE frame could never be sent and
+        the next ``handle()`` would touch a ``None`` socket.  Instead
+        finalize directly: close any half-open handshake socket and let
+        :meth:`_on_finalized` cancel the in-flight connector.
+        """
+        if self.state in (WebSocketState.CLOSING, WebSocketState.CLOSED):
+            raise WebSocketStateError(
+                f"close() not allowed in state {self.state}",
+            )
+        if self.state == WebSocketState.CONNECTING:
+            if self.last_close_code is None:
+                self.last_close_code = code
+                self.last_close_reason = reason
+            try:
+                if self._socket is not None:
+                    self._socket.close()
+            except Exception:  # noqa: BLE001 - best-effort socket teardown
+                pass
+            self.state = WebSocketState.CLOSED
+            self._on_finalized()
+            self.on_close(self.last_close_code, self.last_close_reason)
+            return
+        self._send_close(code, reason, None)
+
     def _on_finalized(self) -> None:
-        """Clear handshake + auto-ping state when transitioning to CLOSED."""
+        """Clear handshake + auto-ping state and cancel an in-flight connector.
+
+        A connect that fails or is aborted before the transport is ready
+        (handshake timeout, ``close()`` during AWAITING_TRANSPORT) still
+        holds the connector, whose half-open socket the connector owns —
+        cancel it so the socket closes instead of leaking on ports with a
+        fixed socket pool, and clear the phase so ``io_socket`` reports
+        ``None`` once CLOSED.
+        """
         self._handshake_deadline_ticks = None
         self._next_auto_ping_ticks = None
+        if self._connector is not None:
+            try:
+                self._connector.cancel()
+            except Exception:  # noqa: BLE001 - best-effort connector teardown
+                pass
+            self._connector = None
+        self._connecting_phase = None
 
     # ------------------------------------------------------------------
     # Internal: handshake

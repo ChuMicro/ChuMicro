@@ -557,12 +557,18 @@ class _HandshakeLineParser:
             return -1
         return position - self._read_offset
 
-    def _live_slice(self, start, end=None):
-        """Slice of unconsumed data.  Indices are relative to the cursor."""
+    def _live_slice(self, start, length=None):
+        """Slice of unconsumed data starting *start* bytes past the cursor.
+
+        *start* is cursor-relative; *length* is a byte count (not an end
+        index), so the slice runs ``[start, start + length)`` from the
+        cursor.  ``length=None`` returns everything from *start* to the
+        end of the live region.
+        """
         absolute_start = self._read_offset + start
-        if end is None:
+        if length is None:
             return self._buffer[absolute_start:]
-        return self._buffer[absolute_start:absolute_start + end]
+        return self._buffer[absolute_start:absolute_start + length]
 
     def _consume(self, count):
         """Advance the cursor; compact when past the halfway mark.
@@ -576,7 +582,16 @@ class _HandshakeLineParser:
             self._read_offset = 0
 
     def _parse_header_line(self, line: bytes) -> None:
-        decoded = line.decode("iso-8859-1")
+        # MicroPython / CircuitPython decode as UTF-8 regardless of the
+        # named codec, so a stray high byte raises UnicodeError here;
+        # route it to a handshake failure like the first-line parsers do
+        # rather than letting it escape handle().
+        try:
+            decoded = line.decode("iso-8859-1")
+        except UnicodeError as decode_error:
+            raise self._fail(
+                f"undecodable bytes in header line: {decode_error}",
+            ) from decode_error
         colon_index = decoded.find(":")
         if colon_index == -1:
             raise self._fail(f"header line missing colon: {decoded!r}")
@@ -978,17 +993,23 @@ class FrameParser:
                 continue
 
             if state == FrameParseState.READING_HEADER:
-                need = 2 - len(self._buffer)
+                field_size = 2
             elif state == FrameParseState.READING_LEN16:
-                need = 2 - len(self._buffer)
+                field_size = 2
             elif state == FrameParseState.READING_LEN64:
-                need = 8 - len(self._buffer)
+                field_size = 8
             else:  # READING_MASK
-                need = 4 - len(self._buffer)
+                field_size = 4
+            need = field_size - len(self._buffer)
             take = need if need <= remaining else remaining
             self._buffer.extend(chunk_view[cursor : cursor + take])
             consumed += take
-            if len(self._buffer) < need:
+            # Completion compares the buffer against the field's total
+            # size, not the bytes-still-missing at loop entry: when a
+            # field trickles in across feeds (mask split 2/1/1, a 64-bit
+            # length split 4/2), ``need`` shrinks each pass, so testing
+            # against it would accept a short field and desync the stream.
+            if len(self._buffer) < field_size:
                 continue
 
             if state == FrameParseState.READING_HEADER:

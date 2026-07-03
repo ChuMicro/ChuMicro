@@ -307,8 +307,10 @@ class WebSocketServer:
 
     Knobs:
 
-    * ``max_connections``: default 2.  Inbound accepts past the cap
-      close immediately to bound heap + per-tick work.
+    * ``max_connections``: default 2.  While the cap is reached the
+      server stops calling ``accept()``, so excess clients wait in the
+      listen backlog (and time out there) until a slot frees; this
+      bounds heap + per-tick work.
     * ``max_message_bytes`` / ``recv_budget_per_tick`` /
       ``send_budget_per_tick`` / ``max_tx_queue_size`` /
       ``when_oversized`` / ``pong_timeout_ms`` /
@@ -343,10 +345,20 @@ class WebSocketServer:
         in the config manifest.
         """
         if listener is None:
-            from chumicro_sockets import tcp_listening_socket  # noqa: PLC0415
-            host = config.get("websockets.server.host", "0.0.0.0")
-            port = config.get("websockets.server.port", 8765)
-            listener = tcp_listening_socket(host, port, radio=radio)
+            # Lazy import through the skippable factory submodule so a
+            # client-only deploy (or one excluding factories) never pulls
+            # chumicro_sockets in via this eagerly-imported server module.
+            try:
+                from chumicro_websockets.sockets_factory import (  # noqa: PLC0415 - lazy
+                    chumicro_sockets_listener,
+                )
+            except ImportError as exception:
+                raise RuntimeError(
+                    "chumicro_websockets.sockets_factory not available "
+                    "(excluded via __chumicro_skip_factories__ or not on "
+                    "the board) — pass listener= explicitly.",
+                ) from exception
+            listener = chumicro_sockets_listener(config, radio=radio)
         return cls(
             listener=listener,
             on_connection=on_connection,
@@ -466,10 +478,19 @@ class WebSocketServer:
         # handle() can mutate the list without breaking iteration.
         for connection in list(self._connections):
             if connection.state == WebSocketState.CLOSED:
-                self._connections.remove(connection)
+                if connection in self._connections:
+                    self._connections.remove(connection)
                 continue
             connection.handle(now_ms)
-            if connection.state == WebSocketState.CLOSED:
+            # A connection callback may call server.close(), which
+            # finalizes and clears every connection; stop here rather
+            # than removing an entry that is already gone.
+            if self.closed:
+                return
+            if (
+                connection.state == WebSocketState.CLOSED
+                and connection in self._connections
+            ):
                 self._connections.remove(connection)
 
     # ------------------------------------------------------------------

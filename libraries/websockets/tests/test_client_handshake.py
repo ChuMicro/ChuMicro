@@ -143,6 +143,52 @@ class TestConnect:
         with raises(WebSocketURLError):
             client.connect("http://example.com/")
 
+    def test_close_during_connecting_cancels_connector_and_finalizes(self):
+        # Aborting a slow connect (state CONNECTING, no socket yet) must
+        # not queue a CLOSE frame it can never send — the next handle()
+        # would then recv_into a None socket.  Finalize directly and
+        # cancel the in-flight connector so its socket does not leak.
+        clock = FakeTicks()
+        captured = {}
+
+        def factory(host, port, use_tls):
+            connector = FakeSocketConnector(actions=[], socket=FakeSocket())
+            captured["connector"] = connector
+            return connector
+
+        client = WebSocketClient(connector_factory=factory, ticks=clock)
+        client.connect("ws://example.com/")
+        client.handle(clock.ticks_ms())  # AWAITING_TRANSPORT, connector idle
+        assert client._connecting_phase == ConnectingPhase.AWAITING_TRANSPORT
+        client.close()
+        assert client.state == WebSocketState.CLOSED
+        assert captured["connector"].state == "failed"  # cancel() fired
+        assert client.io_socket is None
+        client.handle(clock.ticks_ms())  # no crash: CLOSED short-circuits
+
+    def test_handshake_timeout_during_connecting_cancels_connector(self):
+        # A handshake-deadline expiry while still AWAITING_TRANSPORT must
+        # cancel the in-flight connector (its half-open socket would
+        # otherwise leak) and stop io_socket forwarding to it.
+        clock = FakeTicks()
+        captured = {}
+
+        def factory(host, port, use_tls):
+            connector = FakeSocketConnector(actions=[], socket=FakeSocket())
+            captured["connector"] = connector
+            return connector
+
+        client = WebSocketClient(
+            connector_factory=factory, ticks=clock, handshake_timeout_ms=1000,
+        )
+        client.connect("ws://example.com/")
+        client.handle(clock.ticks_ms())
+        clock.advance(1500)  # past the handshake deadline
+        client.handle(clock.ticks_ms())
+        assert client.state == WebSocketState.CLOSED
+        assert captured["connector"].state == "failed"
+        assert client.io_socket is None
+
     def test_double_connect_raises(self):
         client, _socket, _clock, _ = _make_client()
         client.connect("ws://example.com/")

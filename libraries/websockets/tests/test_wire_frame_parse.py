@@ -84,6 +84,40 @@ class TestFrameParserHappyPath:
         assert parser.state == FrameParseState.FRAME_READY
         assert parser.payload == b"hello"
 
+    def test_masked_frame_with_mask_key_split_across_feeds(self):
+        # A masked frame whose 4-byte mask key trickles in split 2/1/1
+        # (arbitrary TCP segmentation).  The header-field completion
+        # check must compare against the field's total size, not the
+        # bytes-still-missing at each feed, or a 3-byte mask key is
+        # accepted and the payload unmasks to garbage.
+        mask = b"mask"
+        plaintext = b"hi"
+        masked = bytes(plaintext[index] ^ mask[index & 3] for index in range(2))
+        # FIN=1, opcode=TEXT, MASK=1, len=2.
+        frame = b"\x81\x82" + mask + masked
+        parser = FrameParser()
+        # header (2) + first 2 mask bytes, then 1, then 1 + payload.
+        parser.feed(frame[0:4])
+        parser.feed(frame[4:5])
+        parser.feed(frame[5:6])
+        parser.feed(frame[6:])
+        assert parser.state == FrameParseState.FRAME_READY
+        assert parser.had_mask is True
+        assert parser.payload == plaintext
+
+    def test_64bit_length_split_across_feeds(self):
+        # The 8-byte extended length split 4/4 must not complete early.
+        payload = b"Z" * 400
+        frame = b"\x82\x7f" + struct.pack("!Q", 400) + payload
+        parser = FrameParser()
+        parser.feed(frame[0:2])       # header, transition to READING_LEN64
+        parser.feed(frame[2:6])       # first 4 length bytes
+        parser.feed(frame[6:10])      # last 4 length bytes
+        parser.feed(frame[10:])       # payload
+        assert parser.state == FrameParseState.FRAME_READY
+        assert parser.reported_length == 400
+        assert parser.payload == payload
+
     def test_consumed_count_stops_at_frame_boundary(self):
         # Feed two back-to-back frames.  First call consumes only frame 1.
         first = b"\x81\x03foo"
