@@ -26,6 +26,31 @@ from pathlib import Path
 REQUIRED_SDIST_DIRS = ("tests", "examples", "docs")
 
 
+def _declared_data_files(library_dir: Path) -> list[Path]:
+    """Return the on-disk data files a library's package declares.
+
+    A module names sibling data files it opens at runtime via
+    ``__chumicro_data_files__`` (e.g. ``chumicro_sockets/_ca_bundle.der``);
+    the ``.py`` walk can't otherwise see them.  Reuses
+    ``bundle_manager._bundle_data_files`` so the sdist gate discovers the
+    same set the mip/circup bundler stages.  Returns absolute paths of the
+    files that exist under the library's ``src/`` package (empty when the
+    library has no importable package).
+    """
+    from bundle_manager import _bundle_data_files
+    from repo_layout import find_package_dir
+
+    package_dir = find_package_dir(library_dir)
+    if package_dir is None:
+        return []
+    python_files = [
+        py_file
+        for py_file in sorted(package_dir.rglob("*.py"))
+        if "__pycache__" not in py_file.relative_to(package_dir).parts
+    ]
+    return _bundle_data_files(python_files)
+
+
 def _sdist_distribution_name(pyproject: dict) -> str:
     """Return the normalized sdist filename stem for a project.
 
@@ -96,6 +121,21 @@ def check_library_sdist(library_dir: Path) -> list[str]:
             problems.append(
                 f"{name}: sdist {sdist_path.name} is missing '{required}/' "
                 "— extend [tool.hatch.build.targets.sdist].only-include"
+            )
+
+    # Each declared __chumicro_data_files__ sibling (e.g. a bundled .der)
+    # must ride along in the sdist too: a curated consumer's deploy walker
+    # reads it from the unpacked tree, and a sdist config that narrows
+    # ``src/`` to ``*.py`` would silently drop it (same failure class as
+    # the missing-dir checks above, but for non-.py data).
+    member_set = set(members)
+    for data_source in _declared_data_files(library_dir):
+        relative = data_source.relative_to(library_dir).as_posix()
+        if f"{base}/{relative}" not in member_set:
+            problems.append(
+                f"{name}: sdist {sdist_path.name} is missing declared data "
+                f"file '{relative}' (__chumicro_data_files__) — a curated "
+                "consumer would install the module without its data file"
             )
 
     return problems

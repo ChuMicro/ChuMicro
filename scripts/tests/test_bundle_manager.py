@@ -561,6 +561,110 @@ class TestBuildCircupZips:
         assert zips == []
 
 
+def _write_bundle_manifest(
+    package_dir: Path, py_relpaths: list[str], data_relpaths: list[str] = (),
+) -> None:
+    """Write a mip-style package.json listing *current* package files.
+
+    Mirrors what ``build_bundle`` emits: each ``urls`` entry is
+    ``[target, source]`` with target ``"<package_name>/<relpath>"``.
+    """
+    package_name = package_dir.name
+    urls = [
+        [f"{package_name}/{relpath}", f"github:org/repo/{package_name}/{relpath}"]
+        for relpath in [*py_relpaths, *data_relpaths]
+    ]
+    (package_dir / "package.json").write_text(
+        json.dumps({"urls": urls, "version": "0.1.0"}) + "\n",
+    )
+
+
+class TestBuildCircupZipsManifestProtection:
+    """S1: circup zips ship only files this build's package.json declares.
+
+    The bundle repo is a fresh clone the release overlays new files onto
+    with ``cp -r`` (no delete), so a module removed or renamed upstream
+    lingers on disk.  build_circup_zips must not glob those stale files
+    into the zip — it ships what the regenerated manifest lists.
+    """
+
+    def _zip_names(self, path: Path) -> list[str]:
+        import zipfile
+
+        with zipfile.ZipFile(path) as archive:
+            return archive.namelist()
+
+    def test_source_zip_excludes_stale_py_not_in_manifest(self, tmp_path: Path):
+        bundle_dir = tmp_path / "bundle"
+        output_dir = tmp_path / "output"
+        package_dir = bundle_dir / "chumicro_example"
+        package_dir.mkdir(parents=True)
+        (package_dir / "__init__.py").write_text("# init")
+        (package_dir / "core.py").write_text("# core")
+        # A prior release shipped removed.py; the overlay left it on disk,
+        # but this build's manifest does not list it.
+        (package_dir / "removed.py").write_text("# stale, removed upstream")
+        _write_bundle_manifest(package_dir, ["__init__.py", "core.py"])
+
+        build_circup_zips(
+            bundle_dir, output_dir, "ChuMicro-Bundle", date_tag="20260101",
+        )
+        names = self._zip_names(output_dir / "chumicro-bundle-py-20260101.zip")
+        assert any(name.endswith("/core.py") for name in names)
+        assert any(name.endswith("/__init__.py") for name in names)
+        assert not any(name.endswith("/removed.py") for name in names)
+
+    def test_bytecode_zip_excludes_stale_mpy_not_in_manifest(self, tmp_path: Path):
+        bundle_dir = tmp_path / "bundle"
+        output_dir = tmp_path / "output"
+        package_dir = bundle_dir / "chumicro_example"
+        package_dir.mkdir(parents=True)
+        (package_dir / "__init__.py").write_text("# init")
+        (package_dir / "core.py").write_text("# core")
+        _write_bundle_manifest(package_dir, ["__init__.py", "core.py"])
+
+        cp_mpy_dir = bundle_dir / CP_MPY_FOLDER / "chumicro_example"
+        cp_mpy_dir.mkdir(parents=True)
+        (cp_mpy_dir / "__init__.mpy").write_bytes(b"C\x06mpy")
+        (cp_mpy_dir / "core.mpy").write_bytes(b"C\x06mpy")
+        # Stale bytecode from a removed module.
+        (cp_mpy_dir / "removed.mpy").write_bytes(b"C\x06mpy")
+
+        build_circup_zips(
+            bundle_dir, output_dir, "ChuMicro-Bundle", date_tag="20260101",
+        )
+        names = self._zip_names(output_dir / "chumicro-bundle-10.x-mpy-20260101.zip")
+        assert any(name.endswith("/core.mpy") for name in names)
+        assert any(name.endswith("/__init__.mpy") for name in names)
+        assert not any(name.endswith("/removed.mpy") for name in names)
+
+    def test_manifest_data_file_ships_in_both_zips(self, tmp_path: Path):
+        bundle_dir = tmp_path / "bundle"
+        output_dir = tmp_path / "output"
+        package_dir = bundle_dir / "chumicro_example"
+        package_dir.mkdir(parents=True)
+        (package_dir / "__init__.py").write_text("# init")
+        (package_dir / "_ca_bundle.der").write_bytes(b"\x30\x82der")
+        _write_bundle_manifest(
+            package_dir, ["__init__.py"], data_relpaths=["_ca_bundle.der"],
+        )
+
+        cp_mpy_dir = bundle_dir / CP_MPY_FOLDER / "chumicro_example"
+        cp_mpy_dir.mkdir(parents=True)
+        (cp_mpy_dir / "__init__.mpy").write_bytes(b"C\x06mpy")
+        (cp_mpy_dir / "_ca_bundle.der").write_bytes(b"\x30\x82der")
+
+        build_circup_zips(
+            bundle_dir, output_dir, "ChuMicro-Bundle", date_tag="20260101",
+        )
+        source_names = self._zip_names(output_dir / "chumicro-bundle-py-20260101.zip")
+        bytecode_names = self._zip_names(
+            output_dir / "chumicro-bundle-10.x-mpy-20260101.zip",
+        )
+        assert any(name.endswith("/_ca_bundle.der") for name in source_names)
+        assert any(name.endswith("/_ca_bundle.der") for name in bytecode_names)
+
+
 class TestCollectLibraryMetadata:
     """Tests for _collect_library_metadata (uses real workspace)."""
 

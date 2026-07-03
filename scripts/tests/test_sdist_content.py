@@ -115,6 +115,67 @@ class TestCheckLibrarySdist:
         assert check_library_sdist(library_dir) == ["mqtt: no pyproject.toml"]
 
 
+def _write_sdist_members(dest: Path, member_names: list[str]) -> None:
+    """Write a .tar.gz containing exactly *member_names* (each a 1-byte file)."""
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    with tarfile.open(dest, "w:gz") as archive:
+        for member in member_names:
+            payload = b"x"
+            info = tarfile.TarInfo(member)
+            info.size = len(payload)
+            archive.addfile(info, io.BytesIO(payload))
+
+
+class TestDeclaredDataFiles:
+    """S7: the sdist gate flags a declared __chumicro_data_files__ sibling
+    that the built tarball dropped."""
+
+    def _make_library_with_data_file(
+        self, root: Path, name: str, version: str, *, include_der: bool,
+    ) -> Path:
+        library_dir = root / name
+        package = f"chumicro_{name}"
+        pkg_dir = library_dir / "src" / package
+        pkg_dir.mkdir(parents=True)
+        (library_dir / "pyproject.toml").write_text(
+            _PYPROJECT.format(dist=name.replace("_", "-")),
+        )
+        (library_dir / "VERSION").write_text(f"{version}\n")
+        (pkg_dir / "__init__.py").write_text(
+            '__chumicro_data_files__ = ("_ca_bundle.der",)\n',
+        )
+        (pkg_dir / "_ca_bundle.der").write_bytes(b"\x30\x82der")
+
+        base = f"{package}-{version}"
+        members = [
+            f"{base}/src/{package}/__init__.py",
+            f"{base}/tests/placeholder",
+            f"{base}/examples/placeholder",
+            f"{base}/docs/placeholder",
+        ]
+        if include_der:
+            members.append(f"{base}/src/{package}/_ca_bundle.der")
+        _write_sdist_members(
+            library_dir / "dist" / f"{base}.tar.gz", members,
+        )
+        return library_dir
+
+    def test_declared_data_file_present_has_no_problem(self, tmp_path: Path):
+        library = self._make_library_with_data_file(
+            tmp_path, "sockets", "0.11.0", include_der=True,
+        )
+        assert check_library_sdist(library) == []
+
+    def test_missing_declared_data_file_flagged(self, tmp_path: Path):
+        library = self._make_library_with_data_file(
+            tmp_path, "sockets", "0.11.0", include_der=False,
+        )
+        problems = check_library_sdist(library)
+        assert len(problems) == 1
+        assert "_ca_bundle.der" in problems[0]
+        assert "__chumicro_data_files__" in problems[0]
+
+
 class TestCheckAllLibrarySdists:
     def test_aggregates_across_libraries(self, tmp_path: Path):
         good = _make_library(

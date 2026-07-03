@@ -836,3 +836,59 @@ class TestOrderLibrariesByDependency:
     def test_empty_input(self):
         """Empty input returns empty output."""
         assert order_libraries_by_dependency([], deps_for=lambda _: []) == []
+
+
+class TestReleaseTags:
+    """Tests for release_tags — stable-vs-experimental baseline selection."""
+
+    #: Order git's ``--sort=-v:refname`` emits with no ``versionsort.suffix``
+    #: configured: the ``-experimental`` suffix ranks *above* the bare stable
+    #: tag of the same version.
+    _MIXED_TAGS = (
+        "chumicro-timing-v0.10.0-experimental\n"
+        "chumicro-timing-v0.10.0\n"
+        "chumicro-timing-v0.9.0-experimental\n"
+        "chumicro-timing-v0.9.0\n"
+        "chumicro-timing-v0.3.0\n"
+    )
+
+    def _patch_tags(self, monkeypatch, output):
+        import subprocess
+
+        monkeypatch.setattr(
+            repo_layout, "run_git",
+            lambda *args, **kwargs: subprocess.CompletedProcess(
+                args=list(args), returncode=0, stdout=output,
+            ),
+        )
+
+    def test_default_returns_every_tag_newest_first(self, monkeypatch):
+        """Without stable_only, every tag (incl. experimental) is returned."""
+        self._patch_tags(monkeypatch, self._MIXED_TAGS)
+        tags = repo_layout.release_tags("timing")
+        assert tags[0] == "chumicro-timing-v0.10.0-experimental"
+        assert "chumicro-timing-v0.9.0-experimental" in tags
+
+    def test_stable_only_drops_experimental_so_stable_wins(self, monkeypatch):
+        """stable_only filters pre-release tags; the newest stable is first."""
+        self._patch_tags(monkeypatch, self._MIXED_TAGS)
+        tags = repo_layout.release_tags("timing", stable_only=True)
+        assert tags[0] == "chumicro-timing-v0.10.0"
+        assert all("-experimental" not in tag for tag in tags)
+        assert tags == [
+            "chumicro-timing-v0.10.0",
+            "chumicro-timing-v0.9.0",
+            "chumicro-timing-v0.3.0",
+        ]
+
+    def test_stable_only_with_no_stable_tags_returns_empty(self, monkeypatch):
+        """A package with only experimental tags has no stable baseline."""
+        self._patch_tags(
+            monkeypatch, "chumicro-timing-v0.2.0-experimental\n",
+        )
+        assert repo_layout.release_tags("timing", stable_only=True) == []
+
+    def test_no_tags_returns_empty(self, monkeypatch):
+        """No matching tags → empty list regardless of stable_only."""
+        self._patch_tags(monkeypatch, "")
+        assert repo_layout.release_tags("timing", stable_only=True) == []
