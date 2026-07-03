@@ -136,7 +136,9 @@ class Logger:
                     f"(log-format error: {format_error})"
                 )
                 self.handler_errors += 1
-        for handler in self._handlers:
+        # Iterate a snapshot so a handler that adds or removes a handler
+        # during emit doesn't shift the next handler out of this round.
+        for handler in tuple(self._handlers):
             try:
                 handler.emit(level, self.name, message)
             except Exception:  # noqa: BLE001
@@ -244,6 +246,9 @@ class BufferedHandler:
         self.level = level
         self._buffer = deque((), capacity)
         self.dropped = 0
+        #: Count of downstream emit failures swallowed during drain (a
+        #: read-only CIRCUITPY filesystem, full flash, detached console).
+        self.handler_errors = 0
 
     @property
     def buffered(self) -> int:
@@ -280,6 +285,14 @@ class BufferedHandler:
         flushed = 0
         while buffer:
             level, name, message = buffer.popleft()
-            emit(level, name, message)
+            # Guard the downstream emit: this runs on the runner tick, so
+            # a raised OSError (read-only filesystem, full flash, detached
+            # console) would otherwise escape into the tick loop and crash
+            # the app — the same crash-safety contract the Logger keeps.
+            # The record was already popped; drop it and count the fault.
+            try:
+                emit(level, name, message)
+            except Exception:  # noqa: BLE001 - a misbehaving handler can't crash the app
+                self.handler_errors += 1
             flushed += 1
         return flushed

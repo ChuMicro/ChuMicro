@@ -9,10 +9,10 @@ Runs on CPython, MicroPython, and CircuitPython.
 
 Example output::
 
-    flushed 3 records this tick
     INFO:sensor:reading 1
     INFO:sensor:reading 2
     INFO:sensor:reading 3
+    flushed 3 records this tick
 """
 
 from chumicro_logging import (
