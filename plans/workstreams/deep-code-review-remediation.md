@@ -1,6 +1,16 @@
 # Workstream: Deep code review remediation (2026-06)
 
-Status: **shipped (code) — Phases 1-9 landed 2026-06-13.** DEP-4 (deploy transport dedup) carved out to a standalone next-up item; real-board bakes for RUN-1, SOCK-2, and the WS-1 / WS-2 / MQTT-3 allocation wins remain pending (noted per phase and in the Validation history). Every finding ID below is fully evidenced in the research artifact: [`plans/reviews/2026-06-13-deep-code-review.md`](../reviews/2026-06-13-deep-code-review.md).
+Status: **COMPLETE (2026-07-03).**  Phases 1-9 shipped 2026-06-13; the pending real-board bakes
+closed 2026-07-03: RUN-1 fault isolation baked on Pico W MP AND CP (fault-first raising handler,
+25 healthy fires, 25-26 faults hooked + counted, loop never died — also closes post-fix-UX
+residual L2); SOCK-2's TLS handshake baked end-to-end on Pico W MP through BOTH the blocking
+`tls_client_socket` path and the `_MpConnector` TLS branch via `generators.connect` (the bake
+surfaced and fixed three silicon-only bugs: `load_verify_locations` rejects bytearray on rp2,
+test certs need device-epoch notBefore, and blocking mbedTLS reads fill the full requested size —
+see sockets 0.15.1 / pytest-device 0.17.3).  WS-1 / WS-2 / MQTT-3 correctness paths all ran on
+silicon the same day (websockets_stream + mqtt_pub_sub bakes); their bench-magnitude claims
+re-home to the performance-benchmarking workstream per the cross-reference below.  DEP-4 remains
+a standalone next-up item. Every finding ID below is fully evidenced in the research artifact: [`plans/reviews/2026-06-13-deep-code-review.md`](../reviews/2026-06-13-deep-code-review.md).
 
 Counts: 1 CRITICAL, 11 HIGH, 18 MEDIUM, ~12 LOW, plus 1 ecosystem callout (ECO-1, resolved before this workstream opened — see Phase 9).
 

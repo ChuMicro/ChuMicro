@@ -1,9 +1,10 @@
 # Workstream: generator (`yield from`) I/O surfaces for the networking libraries
 
-Status: **implementation complete + hardware-validated** on branch `generator-networking-apis`
-(2026-06-13). Pending: merge to main (another owner held main that day) and PyPI project creation for
-the new packages (`check-version` flags chumicro-sockets / -requests / -websockets as new). Follow-on
-concerns tracked separately: deploy-bundle bloat on min-tier flash, 0087 async-ban prose.
+Status: **COMPLETE (2026-07-03).**  Merged to main 2026-06; the follow-on demo work finished
+2026-07-03 — every generator demo opens on `Signal`/`wait_for` (ADR 0091), tails collapsed to
+`runner.run_until(handle)`, mqtt gained the receive-stream surface (`next_message()`, ADR 0089
+amended), and all demos baked green on real boards.  PyPI project creation rides the eventual
+first publication (Decision 0092 governs until then).
 
 Builds on Decision 0087 (generator substrate) by giving the networking libraries the two
 `yield from` surfaces that earn their place, and by fixing the demos that advertise a bad
