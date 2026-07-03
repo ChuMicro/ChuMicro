@@ -267,19 +267,19 @@ class _BaseSession:
 
     @property
     def io_socket(self):
-        """Underlying pollable socket while the session is live, else ``None``.
+        """The session's socket-ish object while live, else ``None``.
 
         Returns ``None`` once the session reaches ``CLOSED`` (handle()
         will no-op from then on, so the runner does not need to wake on
-        the socket).  Adapter wrappers from ``chumicro_sockets`` store
-        the pollable on ``.sock``; the property unwraps so ``select.poll``
-        registers the object the runtime's stream-poll ioctl knows.
+        the socket).  Returns :attr:`_socket` as-is otherwise; the runner
+        unwraps any ``.sock`` adapter wrapper at the poller before
+        registering with ``select.poll``.
         """
         if self._socket is None:
             return None
         if self.state == WebSocketState.CLOSED:
             return None
-        return getattr(self._socket, "sock", self._socket)
+        return self._socket
 
     @property
     def io_wants_read(self):

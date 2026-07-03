@@ -966,16 +966,15 @@ class MQTTClient:
 
     @property
     def io_socket(self):
-        """Underlying pollable socket while connected, connecting, or
+        """The MQTT socket-ish object while connected, connecting, or
         bringing up transport, else ``None``.
 
         While in ``AWAITING_TRANSPORT`` this forwards to the connector's
         in-flight pollable so ``Runner.wait`` parks correctly between
         connect phases.  While in ``CONNECTING`` / ``CONNECTED`` it
-        unwraps the MQTT socket (adapter wrappers from
-        ``chumicro_sockets`` store the pollable on ``.sock``).
-        ``DISCONNECTED`` and ``FAILED`` return ``None`` so the runner
-        does not wake on a dead handle.
+        returns the MQTT socket as-is; the runner unwraps any ``.sock``
+        adapter wrapper at the poller.  ``DISCONNECTED`` and ``FAILED``
+        return ``None`` so the runner does not wake on a dead handle.
         """
         if self.state == ProtocolState.AWAITING_TRANSPORT:
             return self._connector.io_socket if self._connector is not None else None
@@ -983,7 +982,7 @@ class MQTTClient:
             return None
         if self.state in (ProtocolState.DISCONNECTED, ProtocolState.FAILED):
             return None
-        return getattr(self._socket, "sock", self._socket)
+        return self._socket
 
     @property
     def io_wants_read(self):

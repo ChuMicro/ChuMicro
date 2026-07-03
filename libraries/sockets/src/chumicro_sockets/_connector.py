@@ -77,16 +77,16 @@ class SocketConnector:
 
     @property
     def io_socket(self):
-        """Underlying pollable for ``Runner.wait`` to register, or ``None``.
+        """The connector's socket-ish object for ``Runner.wait``, or ``None``.
 
-        Returns the registrable underlying of :attr:`socket` if set
-        (chumicro wrapper classes store the raw socket on ``.sock``;
-        bare sockets pass through).  ``None`` until the connector has
-        built its socket and after cleanup on ``failed`` / ``cancel``.
+        Returns :attr:`socket` as-is once built; the runner unwraps any
+        ``.sock`` adapter wrapper to the registrable pollable at the
+        poller.  ``None`` until the connector has built its socket and
+        after cleanup on ``failed`` / ``cancel``.
         """
         if self.socket is None:
             return None
-        return getattr(self.socket, "sock", self.socket)
+        return self.socket
 
     @property
     def io_wants_read(self):

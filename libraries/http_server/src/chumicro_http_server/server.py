@@ -83,19 +83,12 @@ _REASONS = {
 
 
 def _force_non_blocking(socket):
-    """Best-effort ``setblocking(False)`` on a socket.
+    """Flip an accepted connection to non-blocking.
 
-    Every accepted connection is flipped to non-blocking up front
-    so the per-connection state machine never stalls on a read or
-    write.
+    Every accepted connection is flipped up front so the per-connection
+    state machine never stalls on a read or write.
     """
-    setblocking = getattr(socket, "setblocking", None)
-    if setblocking is None:  # pragma: no cover - defensive (every supported sock has it)
-        return
-    try:
-        setblocking(False)
-    except (OSError, AttributeError):  # pragma: no cover - defensive
-        pass
+    socket.setblocking(False)
 
 
 def _split_pattern_path(path):
@@ -918,14 +911,15 @@ class HttpServer:
 
     @property
     def io_socket(self):
-        """The listener socket once opened (``handle()`` lazy-opens it
-        on first tick), else ``None``."""
+        """The listener socket-ish object once opened (``handle()``
+        lazy-opens it on first tick), else ``None``.
+
+        Returns :attr:`_listener` as-is; the runner unwraps any ``.sock``
+        adapter wrapper to the registrable pollable at the poller.
+        """
         if self._listener is None:
             return None
-        # chumicro_sockets listener wrappers expose the OS-level socket
-        # on ``.sock`` (not ``._sock``); the runner's poll set needs that
-        # pollable object, not the fileno-less wrapper.
-        return getattr(self._listener, "sock", self._listener)
+        return self._listener
 
     @property
     def io_wants_read(self):

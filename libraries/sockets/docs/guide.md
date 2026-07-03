@@ -97,7 +97,7 @@ Live-AP acceptance runs against the supported boards surfaced four limitations t
 |---|---|---|
 | CircuitPython on rp2 (Pi Pico W / Pi Pico 2 W) — TLS *server* | `tls_listening_socket` raises `UnsupportedSSLConfigError` up-front. The CYW43 TLS handshake path raises `OSError(32)` mid-handshake AND wedges the chip's station-mode state until you unplug-and-replug USB power. | Use an ESP32-family board for HTTPS server, or run MicroPython on the same Pi Pico W (verified working). TLS *client* on CircuitPython rp2 is unaffected. |
 | MicroPython on rp2 (Pi Pico W) | mbedTLS build rejects self-signed certs entirely (`ValueError('invalid cert')`) | Use a CA-signed cert.  For dev, skip TLS testing on this combo or use a real CA chain. |
-| MicroPython SSLSocket on some ports | Wrapped TLS socket lacks `settimeout` / `setblocking` / `fileno` | Wrapper forwards `settimeout` / `setblocking` to no-ops; non-blocking semantics still hold via the TLS layer.  Runner reads the connector's `io_socket` (already unwrapped to the registrable underlying socket); user code never deals with `fileno()`. |
+| MicroPython SSLSocket on some ports | Wrapped TLS socket lacks `settimeout` / `setblocking` / `fileno` | Wrapper forwards `settimeout` / `setblocking` to no-ops; non-blocking semantics still hold via the TLS layer.  Runner reads the connector's `io_socket` and unwraps it to the registrable underlying socket at the poller; user code never deals with `fileno()`. |
 | Stricter mbedTLS builds | Reject IP-only SAN certs | Generate certs with at least one DNS SAN.  On a LAN, `<hostname>.local` works via mDNS; set `server_hostname=` to that DNS name. |
 
 Tested on real CircuitPython and MicroPython boards for both plain TCP and TLS before each release.

@@ -337,7 +337,9 @@ class WebSocketClient(_BaseSession):
     def io_socket(self):
         """During AWAITING_TRANSPORT, forward to the in-flight connector
         so ``Runner.wait`` parks on the right pollable; otherwise return
-        the live session's socket (or ``None`` when CLOSED).
+        the live session's socket-ish object as-is (or ``None`` when
+        CLOSED).  The runner unwraps any ``.sock`` adapter wrapper at the
+        poller.
 
         Base-class behaviour is inlined here rather than chained via
         ``super().io_socket`` because CircuitPython's property /
@@ -350,7 +352,7 @@ class WebSocketClient(_BaseSession):
             return None
         if self.state == WebSocketState.CLOSED:
             return None
-        return getattr(self._socket, "sock", self._socket)
+        return self._socket
 
     def next_deadline(self, now_ms: int) -> int | None:
         """Earliest tick at which ``handle()`` must run on a quiet socket.

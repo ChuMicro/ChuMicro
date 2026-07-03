@@ -238,10 +238,8 @@ class NTPClient:
                     ) from exception
 
                 socket = chumicro_sockets_factory(radio=radio)
-                # Runner-shaped clients require non-blocking recv.  Guarded so
-                # test fakes without setblocking() still work.
-                if hasattr(socket, "setblocking"):
-                    socket.setblocking(False)
+                # Runner-shaped clients require non-blocking recv.
+                socket.setblocking(False)
             else:
                 socket = socket_factory()
         return cls(

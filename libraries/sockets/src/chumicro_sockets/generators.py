@@ -43,11 +43,10 @@ class _ReadWait:
     io_wants_read = True
 
     def __init__(self, sock: object) -> None:
-        # Unwrap to the registrable pollable: the adapter socket wrappers
-        # store the underlying stream on ``.sock``; select.poll can only
-        # register that, not the wrapper.  Bare CPython sockets and the
-        # test fakes have no ``.sock`` and pass through.
-        self.io_socket = getattr(sock, "sock", sock)
+        # Store the socket-ish object as-is; the runner unwraps any
+        # ``.sock`` adapter wrapper to the registrable pollable at the
+        # poller before handing it to select.poll.
+        self.io_socket = sock
 
 
 class _WriteWait:
@@ -56,11 +55,10 @@ class _WriteWait:
     io_wants_write = True
 
     def __init__(self, sock: object) -> None:
-        # Unwrap to the registrable pollable: the adapter socket wrappers
-        # store the underlying stream on ``.sock``; select.poll can only
-        # register that, not the wrapper.  Bare CPython sockets and the
-        # test fakes have no ``.sock`` and pass through.
-        self.io_socket = getattr(sock, "sock", sock)
+        # Store the socket-ish object as-is; the runner unwraps any
+        # ``.sock`` adapter wrapper to the registrable pollable at the
+        # poller before handing it to select.poll.
+        self.io_socket = sock
 
 
 def connect(
