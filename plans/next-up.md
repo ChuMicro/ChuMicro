@@ -5,7 +5,6 @@
 ## Now
 
 - [ ] **Comment-generation round 18 (guided vs bare no-guidance control; honest naming; 4 guided voices + 2 bare) — built, awaiting dispatch + analysis** — see [`handoffs/2026-05-30-comment-generation-round18-guided-vs-bare.md`](handoffs/2026-05-30-comment-generation-round18-guided-vs-bare.md).  Status: deferred 2026-06-12 (user call — clean-room spend stays for a user-present session).
-- [ ] **Import-graph hard-reset scan is top-level-only (post-fix-UX W8)** — the boot-shim guard walks only the entrypoint module; a hard reset reachable through an imported module ships unguarded.  Extend the scan across the staged closure.  (The workstream's other residual, the L2 runner-tick bake, closed with RUN-1 2026-07-03.)
 
 ## Next
 

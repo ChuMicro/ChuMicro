@@ -159,6 +159,47 @@ def _hard_reset_local_names(tree: ast.Module) -> tuple[set[str], set[str]]:
     return module_names, reset_names
 
 
+def source_calls_hard_reset_at_top_level(source: str) -> int | None:
+    """Line of a module-top-level board-reset call in *source*, or ``None``.
+
+    The closure-scan companion to :func:`module_calls_hard_reset`: an
+    imported module's top-level code runs at boot exactly like the
+    entrypoint's, so a reset there crash-loops the board just the same —
+    but a reset inside a ``def`` is the *recommended* pattern (called on
+    a deliberate condition), so this walk descends into top-level
+    ``if`` / ``try`` / loop / ``with`` blocks (they run at import) and
+    prunes at any function or class body (those run only when called).
+    Unreadable or unparseable source returns ``None`` — the deploy's
+    own compile step reports those failures with better context.
+    """
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return None
+    module_names, reset_names = _hard_reset_local_names(tree)
+    hit_line = None
+    stack = list(tree.body)
+    while stack:
+        node = stack.pop()
+        if isinstance(
+            node,
+            (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda),
+        ):
+            continue
+        if isinstance(node, ast.Call):
+            callee = node.func
+            named_reset = (
+                isinstance(callee, ast.Attribute)
+                and callee.attr == "reset"
+                and isinstance(callee.value, ast.Name)
+                and callee.value.id in module_names
+            ) or (isinstance(callee, ast.Name) and callee.id in reset_names)
+            if named_reset and (hit_line is None or node.lineno < hit_line):
+                hit_line = node.lineno
+        stack.extend(ast.iter_child_nodes(node))
+    return hit_line
+
+
 def module_calls_hard_reset(path: Path) -> int | None:
     """Return the line of a ``microcontroller.reset()`` / ``machine.reset()`` call in *path*, or ``None``.
 

@@ -5907,6 +5907,60 @@ class TestResolveProjectDeploySourceGuard:
             )
 
 
+class TestResolverRefusesBootReachableResets:
+    """The checked resolver scans every staged .py for top-level resets (W8)."""
+
+    def test_staged_module_with_top_level_reset_is_refused(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+    ) -> None:
+        from chumicro_workspace.cli import deploy as deploy_cli
+
+        class _StubSource:
+            def files(self):
+                return {
+                    "/code.py": b"import pkg.mod\n",
+                    "/lib/pkg/mod.py": b"import machine\nmachine.reset()\n",
+                }
+
+        monkeypatch.setattr(
+            deploy_cli,
+            "_resolve_project_deploy_source_unchecked",
+            lambda *args, **kwargs: ("flat", _StubSource()),
+        )
+        with pytest.raises(
+            deploy_cli._DeployLayoutError, match="top level, line 2",
+        ):
+            deploy_cli.resolve_project_deploy_source(
+                workspace=object(), device=object(), project_dir=tmp_path,
+            )
+
+    def test_in_function_reset_in_staged_module_is_allowed(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+    ) -> None:
+        from chumicro_workspace.cli import deploy as deploy_cli
+
+        class _StubSource:
+            def files(self):
+                return {
+                    "/code.py": b"import pkg.mod\n",
+                    "/lib/pkg/mod.py": (
+                        b"import machine\n"
+                        b"def recover():\n"
+                        b"    machine.reset()\n"
+                    ),
+                }
+
+        monkeypatch.setattr(
+            deploy_cli,
+            "_resolve_project_deploy_source_unchecked",
+            lambda *args, **kwargs: ("flat", _StubSource()),
+        )
+        layout, source = deploy_cli.resolve_project_deploy_source(
+            workspace=object(), device=object(), project_dir=tmp_path,
+        )
+        assert layout == "flat"
+
+
 def _seed_with_device(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, description: str | None = None,
 ) -> None:
