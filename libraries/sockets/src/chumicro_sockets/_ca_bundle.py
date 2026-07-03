@@ -43,6 +43,12 @@ viable on a 256 KB board.
 
 __chumicro_runtimes__ = ("micropython",)
 
+#: Sibling data file this module opens at runtime.  The deploy
+#: import-walker reads this marker (it can't see the runtime ``open``)
+#: and stages the listed files next to the module; without it the .der
+#: was silently dropped and the first TLS connect crashed with OSError.
+__chumicro_data_files__ = ("_ca_bundle.der",)
+
 #: Fallback flash-deploy location, used only if ``__file__`` is
 #: unavailable on a given MP build.
 _FALLBACK_PATH = "/lib/chumicro_sockets/_ca_bundle.der"

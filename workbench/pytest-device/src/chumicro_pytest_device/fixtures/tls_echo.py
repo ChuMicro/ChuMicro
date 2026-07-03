@@ -12,7 +12,7 @@ Two entry points:
   `(host, port, stop_event)`.
 
 Workbench-only (CPython). The cert helper imports the `cryptography`
-library lazily; it's already a transitive chumicro dep via ruamel.yaml.
+library lazily; it's a declared dependency of `chumicro-pytest-device`.
 """
 
 from __future__ import annotations

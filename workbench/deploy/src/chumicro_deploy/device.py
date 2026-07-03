@@ -165,7 +165,11 @@ class Device:
             mpremote_mode = (
                 "mount" if self.deploy_mode == DeployMode.RAM else "copy"
             )
-            return MicropythonTransport(self.address, mode=mpremote_mode)
+            return MicropythonTransport(
+                self.address,
+                baudrate=self.baudrate,
+                mode=mpremote_mode,
+            )
         # __post_init__ has already rejected anything except the two
         # supported runtimes, so we can assume circuitpython here.
         from .circuitpython_transport import CircuitpythonTransport
