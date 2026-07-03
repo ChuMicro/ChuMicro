@@ -15,6 +15,9 @@ Hardware-side staging is out of scope here.
 
 from __future__ import annotations
 
+from pathlib import Path
+
+from chumicro_pytest_device import runtime_config
 from chumicro_pytest_device.runtime_config import (
     get_required_keys,
     get_runtime_config,
@@ -135,6 +138,71 @@ class TestRequiredKeys:
         set_runtime_config(config, {"wifi.ssid": "x"})  # no required_keys
         assert get_required_keys(config) == ()
         assert missing_required_keys(config) == ()
+
+
+class TestPerLibraryScope:
+    """Two libraries' registrations must not clobber each other."""
+
+    def test_library_scope_derived_from_conftest_path(self) -> None:
+        """A functional-tests conftest path maps to its library name."""
+        assert runtime_config._library_scope_from_path(
+            Path("libraries/mqtt/functional_tests/conftest.py"),
+        ) == "mqtt"
+        assert runtime_config._library_scope_from_path(
+            Path("workbench/pytest-device/tests/test_runtime_config.py"),
+        ) is None
+
+    def test_two_libraries_keep_independent_payloads_and_required_keys(
+        self, monkeypatch,
+    ) -> None:
+        """Registering under two library scopes keeps each intact.
+
+        Before per-scope keying the second ``set_runtime_config`` call
+        overwrote the first, so one library's validation was lost or the
+        other's key was demanded of it.  Scoped by library name, each
+        library reads back only its own payload and required keys.
+        """
+        config = _StashConfigStub()
+        monkeypatch.setattr(runtime_config, "_caller_library_scope", lambda: "mqtt")
+        set_runtime_config(
+            config,
+            {"mqtt.broker.host": "h"},
+            required_keys=("mqtt.broker.host",),
+        )
+        monkeypatch.setattr(runtime_config, "_caller_library_scope", lambda: "wifi")
+        set_runtime_config(
+            config,
+            {"wifi.ssid": "s"},
+            required_keys=("wifi.ssid", "wifi.password"),
+        )
+
+        assert get_runtime_config(config, "mqtt") == {"mqtt.broker.host": "h"}
+        assert get_required_keys(config, "mqtt") == ("mqtt.broker.host",)
+        assert missing_required_keys(config, "mqtt") == ()
+
+        assert get_runtime_config(config, "wifi") == {"wifi.ssid": "s"}
+        assert missing_required_keys(config, "wifi") == ("wifi.password",)
+
+    def test_named_scope_falls_back_to_session_wide_registration(
+        self, monkeypatch,
+    ) -> None:
+        """A library with no registration inherits a session-wide one.
+
+        A non-library caller registers under the session-wide scope, and
+        a library that never called ``set_runtime_config`` still sees it.
+        """
+        config = _StashConfigStub()
+        monkeypatch.setattr(
+            runtime_config,
+            "_caller_library_scope",
+            lambda: runtime_config._DEFAULT_SCOPE,
+        )
+        set_runtime_config(
+            config, {"wifi.ssid": "s"}, required_keys=("wifi.ssid",),
+        )
+
+        assert get_required_keys(config, "unregistered-lib") == ("wifi.ssid",)
+        assert missing_required_keys(config, "unregistered-lib") == ()
 
 
 class TestEncodeRuntimeConfigExtraFiles:

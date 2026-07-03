@@ -53,7 +53,7 @@ from chumicro_deploy import (
     resolve_ide_devices,
 )
 
-from .backends import UnixPortBackend
+from .backends import _DEFAULT_EXECUTE_TIMEOUT_SECONDS, UnixPortBackend
 from .collection import (
     DevicePrepareItem,
     DeviceRunFileItem,
@@ -154,6 +154,16 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         help=(
             "unix-port CircuitPython binary path "
             "(overrides .tools/circuitpython.path and PATH lookup)"
+        ),
+    )
+    group.addoption(
+        "--unix-port-timeout",
+        type=float,
+        default=_DEFAULT_EXECUTE_TIMEOUT_SECONDS,
+        help=(
+            "per-file wall-clock ceiling (seconds) for a unix-port "
+            "worker subprocess; a file that exceeds it is killed and "
+            f"fails cleanly (default {_DEFAULT_EXECUTE_TIMEOUT_SECONDS:g})"
         ),
     )
     group.addoption(
@@ -415,12 +425,20 @@ def pytest_sessionstart(session: pytest.Session) -> None:
             "str | None",
             session.config.getoption("--circuitpython-binary", default=None),
         )
+        execute_timeout = cast(
+            "float",
+            session.config.getoption(
+                "--unix-port-timeout",
+                default=_DEFAULT_EXECUTE_TIMEOUT_SECONDS,
+            ),
+        )
         session._backend = UnixPortBackend(  # type: ignore[attr-defined]
             _workspace_root(session),
             binaries={
                 "micropython": mp_binary,
                 "circuitpython": cp_binary,
             },
+            execute_timeout_seconds=execute_timeout,
         )
         session._device_targets = _synthesize_unix_port_targets(  # type: ignore[attr-defined]
             runtime_override or "both",

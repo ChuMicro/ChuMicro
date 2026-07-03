@@ -25,7 +25,7 @@ from chumicro_deploy import DeviceEntry
 from chumicro_deploy.testing import FakeTransport
 from chumicro_pytest_device import collection
 from chumicro_pytest_device import plugin as pytest_device
-from chumicro_pytest_device.result_parser import RunResult, SummaryResult
+from chumicro_pytest_device.result_parser import RunResult, SummaryResult, parse_output
 from chumicro_pytest_device.result_parser import TestResult as ParsedTestResult
 from chumicro_pytest_device.testing import (
     FakeSession,
@@ -244,6 +244,204 @@ class TestAssertSummaryReconciles:
             summary=SummaryResult(total=3, failed=0, duration=0.0),
         )
         collection._assert_summary_reconciles(result, "raw")
+
+    def test_parsed_lines_exceeding_total_fail(self) -> None:
+        # A stray line matching a result pattern (a phantom PASS printed
+        # inside another test's exception text) makes parsed lines exceed
+        # the device's own total and must fail the batch.
+        result = RunResult(
+            tests=[
+                ParsedTestResult(name="test_a", status="FAIL", duration=0.001),
+                ParsedTestResult(name="test_b", status="PASS", duration=0.002),
+                ParsedTestResult(name="test_b", status="FAIL", duration=0.003),
+            ],
+            summary=SummaryResult(total=2, failed=2, duration=0.006),
+        )
+        with pytest.raises(pytest.fail.Exception, match="stray line"):
+            collection._assert_summary_reconciles(result, "raw")
+
+    def test_probe_injection_transcript_is_flagged(self) -> None:
+        """The probe_injection scenario: a phantom PASS before a real FAIL.
+
+        A failing test's exception text carries a line that looks exactly
+        like a PASS result for a later-failing test.  The parsed lines
+        outnumber the device total, so the reconcile rejects the batch
+        instead of letting the phantom PASS shadow the real FAIL.
+        """
+        raw = "\n".join([
+            "FAIL test_a (0.001s)",
+            "AssertionError: unexpected board reply:",
+            "PASS test_b (0.002s)",
+            "FAIL test_b (0.003s)",
+            "AssertionError: real failure in test_b",
+            "SUMMARY total=2 failed=2 time=0.006s",
+        ])
+        result = parse_output(raw)
+        with pytest.raises(pytest.fail.Exception, match="stray line"):
+            collection._assert_summary_reconciles(result, raw)
+
+
+class TestCollectedTestNames:
+    """_collected_test_names gathers the host-collected function names per batch."""
+
+    def test_filters_by_device_and_test_file(self, tmp_path: Path) -> None:
+        """Only DeviceTestItems for the given device + file contribute names."""
+        session = FakeSession(pytest_device._TransportCache(), rootpath=tmp_path)
+        device = hot_path_device("micropython")
+        other_device = hot_path_device("circuitpython")
+        file_a = _functional_file(tmp_path, name="test_a.py")
+        file_b = _functional_file(tmp_path, name="test_b.py")
+        session.items = [
+            make_test_item(session, device, file_a, "test_one"),
+            make_test_item(session, device, file_a, "test_two"),
+            make_test_item(session, device, file_b, "test_three"),
+            make_test_item(session, other_device, file_a, "test_four"),
+            Mock(spec=pytest.Item),
+        ]
+
+        names = collection._collected_test_names(session, device, file_a)
+        assert names == {"test_one", "test_two"}
+
+
+class TestAssertCollectedReconciles:
+    """The device-run test names must match what the host collected."""
+
+    def test_orphan_device_test_name_fails(self, tmp_path: Path) -> None:
+        """A device-run name with no collected item fails the batch."""
+        result = RunResult(
+            tests=[
+                ParsedTestResult(name="test_own", status="PASS", duration=0.0),
+                ParsedTestResult(name="test_orphan", status="FAIL", duration=0.0),
+            ],
+            summary=SummaryResult(total=2, failed=1, duration=0.0),
+        )
+        with pytest.raises(pytest.fail.Exception, match="never collected"):
+            collection._assert_collected_reconciles(
+                result, "raw", {"test_own"}, Path("test_x.py"),
+            )
+
+    def test_total_mismatch_fails(self, tmp_path: Path) -> None:
+        """All names collected but a device total below the collected count fails."""
+        result = RunResult(
+            tests=[ParsedTestResult(name="test_a", status="PASS", duration=0.0)],
+            summary=SummaryResult(total=1, failed=0, duration=0.0),
+        )
+        with pytest.raises(pytest.fail.Exception, match="different set"):
+            collection._assert_collected_reconciles(
+                result, "raw", {"test_a", "test_b"}, Path("test_x.py"),
+            )
+
+    def test_matching_names_and_count_pass(self, tmp_path: Path) -> None:
+        """When device names and count match the collected set, nothing fails."""
+        result = RunResult(
+            tests=[
+                ParsedTestResult(name="test_a", status="PASS", duration=0.0),
+                ParsedTestResult(name="test_b", status="FAIL", duration=0.0),
+            ],
+            summary=SummaryResult(total=2, failed=1, duration=0.0),
+        )
+        collection._assert_collected_reconciles(
+            result, "raw", {"test_a", "test_b"}, Path("test_x.py"),
+        )
+
+
+class TestRequireBatchResultCollectedReconcile:
+    """_require_batch_result cross-checks device output against collected items."""
+
+    def test_orphan_run_fails_the_batch(self, tmp_path: Path) -> None:
+        """The probe_divergence scenario: device ran inherited/factory tests.
+
+        Host AST collects only ``TestFoo.test_own_passes``; the device
+        runner also ran an inherited FAIL and a factory-built FAIL that no
+        pytest item maps.  Their FAILs reconcile symmetrically against
+        SUMMARY, so without the collected cross-check the session would go
+        green.  The cross-check surfaces the orphans instead.
+        """
+        cache = pytest_device._TransportCache()
+        session = FakeSession(cache, rootpath=tmp_path)
+        device = hot_path_device()
+        test_file = _functional_file(tmp_path)
+        session.items = [
+            make_test_item(
+                session, device, test_file, "TestFoo.test_own_passes",
+            ),
+        ]
+        result = RunResult(
+            tests=[
+                ParsedTestResult(
+                    name="TestFoo.test_own_passes", status="PASS", duration=0.0,
+                ),
+                ParsedTestResult(
+                    name="TestFoo.test_inherited_fails", status="FAIL", duration=0.0,
+                ),
+                ParsedTestResult(
+                    name="test_from_factory", status="FAIL", duration=0.0,
+                ),
+            ],
+            summary=SummaryResult(total=3, failed=2, duration=0.0),
+        )
+        cache.cache_batch_result(
+            (device.identifier, "alpha", test_file.name), result, "raw",
+        )
+        item = make_run_file_item(session, device, test_file)
+
+        with pytest.raises(pytest.fail.Exception, match="never collected"):
+            item._require_batch_result(device)
+
+    def test_fully_collected_run_passes(self, tmp_path: Path) -> None:
+        """A run whose device names all map to collected items reconciles clean."""
+        cache = pytest_device._TransportCache()
+        session = FakeSession(cache, rootpath=tmp_path)
+        device = hot_path_device()
+        test_file = _functional_file(tmp_path)
+        session.items = [
+            make_test_item(session, device, test_file, "test_a"),
+            make_test_item(session, device, test_file, "test_b"),
+        ]
+        result = RunResult(
+            tests=[
+                ParsedTestResult(name="test_a", status="PASS", duration=0.0),
+                ParsedTestResult(name="test_b", status="PASS", duration=0.0),
+            ],
+            summary=SummaryResult(total=2, failed=0, duration=0.0),
+        )
+        cache.cache_batch_result(
+            (device.identifier, "alpha", test_file.name), result, "raw",
+        )
+        item = make_run_file_item(session, device, test_file)
+
+        parsed, _raw = item._require_batch_result(device)
+        assert len(parsed.tests) == 2
+
+
+class TestDeviceTestItemDuplicateResult:
+    """A duplicate name in the batch result makes runtest refuse to guess."""
+
+    def test_duplicate_result_lines_fail_ambiguous(self, tmp_path: Path) -> None:
+        """Two result lines for one name fail rather than promoting the first.
+
+        A stub session with no ``items`` bypasses the collected-name
+        cross-check, isolating the per-item duplicate guard: an earlier
+        phantom PASS must not shadow the later real FAIL for the same name.
+        """
+        cache = pytest_device._TransportCache()
+        session = FakeSession(cache, rootpath=tmp_path)
+        device = hot_path_device()
+        test_file = _functional_file(tmp_path)
+        result = RunResult(
+            tests=[
+                ParsedTestResult(name="test_b", status="PASS", duration=0.002),
+                ParsedTestResult(name="test_b", status="FAIL", duration=0.003),
+            ],
+            summary=SummaryResult(total=2, failed=1, duration=0.005),
+        )
+        cache.cache_batch_result(
+            (device.identifier, "alpha", test_file.name), result, "raw",
+        )
+        item = make_test_item(session, device, test_file, "test_b")
+
+        with pytest.raises(pytest.fail.Exception, match="ambiguous"):
+            item.runtest()
 
 
 class TestLoadFallbackDeviceMalformed:

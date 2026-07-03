@@ -17,21 +17,77 @@ Two ways a test session sees "no config":
   ``load_runtime_config()`` and skip silently, the same path a fresh
   clone with no credentials hits.
 * ``required_keys`` is non-empty and one or more keys are missing
-  from the payload.  The plugin skips every ``DeviceTestItem`` at
-  collection time with an explicit ``"missing required runtime-config
+  from the payload.  The plugin skips that library's ``DeviceTestItem``s
+  at collection time with an explicit ``"missing required runtime-config
   keys: ..."`` message, which is preferable to the cryptic
   ``MissingConfigKey`` boot crash the silent-skip path produces when
   a test actually needs the value.
+
+Each library registers under its own scope (derived from the calling
+conftest's path), so two libraries' ``functional_tests`` conftests in
+one session validate and stage independently rather than the last
+``pytest_configure`` overwriting the rest.
 """
 
 from __future__ import annotations
 
+import inspect
 from collections.abc import Iterable
+from pathlib import Path
 
 import pytest
 
-_RUNTIME_CONFIG_KEY: pytest.StashKey[dict | None] = pytest.StashKey()
-_REQUIRED_KEYS_KEY: pytest.StashKey[tuple[str, ...]] = pytest.StashKey()
+#: Scope for registrations that can't be attributed to one library
+#: (a caller outside a ``libraries/<name>/functional_tests`` conftest).
+#: Such a registration applies session-wide, the pre-scoping behavior.
+_DEFAULT_SCOPE = "__session__"
+
+#: Per-scope payload map: ``{scope: payload}``.  Each library's
+#: ``functional_tests/conftest.py`` registers under its own library-name
+#: scope, so two libraries in one session can't clobber each other's
+#: staged runtime-config or required-keys validation.
+_RUNTIME_CONFIG_KEY: pytest.StashKey[dict[str, dict | None]] = pytest.StashKey()
+_REQUIRED_KEYS_KEY: pytest.StashKey[dict[str, tuple[str, ...]]] = pytest.StashKey()
+
+
+def _library_scope_from_path(path: Path) -> str | None:
+    """Return the library name for a ``libraries/<name>/functional_tests`` path.
+
+    Recognizes the ``libraries/<name>/functional_tests/...`` layout and
+    returns ``<name>`` — the same string a ``DeviceRuntimeItem`` carries
+    as ``library_name`` — so a conftest's registration and its library's
+    items resolve to one scope key.  Any other path returns ``None``.
+    """
+    parts = path.parts
+    for index, component in enumerate(parts):
+        if (
+            component == "functional_tests"
+            and index >= 2
+            and parts[index - 2] == "libraries"
+        ):
+            return parts[index - 1]
+    return None
+
+
+def _caller_library_scope() -> str:
+    """Return the library scope of the conftest that called this module.
+
+    Walks the call stack for the first frame whose file is a
+    ``libraries/<name>/functional_tests`` conftest and returns ``<name>``.
+    Falls back to :data:`_DEFAULT_SCOPE` for any other caller (a unit test
+    exercising the API directly), which keeps such registrations
+    session-wide.
+    """
+    frame = inspect.currentframe()
+    try:
+        while frame is not None:
+            scope = _library_scope_from_path(Path(frame.f_code.co_filename))
+            if scope is not None:
+                return scope
+            frame = frame.f_back
+    finally:
+        del frame
+    return _DEFAULT_SCOPE
 
 
 def set_runtime_config(
@@ -58,13 +114,19 @@ def set_runtime_config(
             (unconfigured-creds path).
         required_keys: Flat dotted keys this library's functional
             tests need in the staged payload.  When any required key
-            is absent (None payload OR a partial dict), every
-            :class:`DeviceTestItem` in the session is skipped at
-            collection time with an explicit message naming the
-            missing keys.  Default ``()`` means no validation,
-            existing behavior, on-device test handles its own miss.
+            is absent (None payload OR a partial dict), that library's
+            :class:`DeviceTestItem`s are skipped at collection time with
+            an explicit message naming the missing keys.  Default ``()``
+            means no validation, existing behavior, on-device test
+            handles its own miss.
 
     Notes:
+        The payload and required-keys are stored under the calling
+        library's scope (derived from the conftest's file path), so a
+        second library's ``set_runtime_config`` call in the same session
+        can't overwrite this one's.  A caller outside a library's
+        ``functional_tests`` conftest registers session-wide.
+
         RAM-mode runs cannot stage extra files (no writable
         device-side filesystem).  When a payload is registered AND
         the resolved deploy mode is RAM, ``transport.stage()`` raises
@@ -72,40 +134,72 @@ def set_runtime_config(
         the device's ``deploy_mode`` to ``"flash"`` (or set
         ``--deploy-mode=flash``) to fix.
     """
-    config.stash[_RUNTIME_CONFIG_KEY] = payload
-    config.stash[_REQUIRED_KEYS_KEY] = tuple(required_keys)
+    scope = _caller_library_scope()
+    payloads = config.stash.get(_RUNTIME_CONFIG_KEY, None)
+    if payloads is None:
+        payloads = {}
+        config.stash[_RUNTIME_CONFIG_KEY] = payloads
+    payloads[scope] = payload
+    required_map = config.stash.get(_REQUIRED_KEYS_KEY, None)
+    if required_map is None:
+        required_map = {}
+        config.stash[_REQUIRED_KEYS_KEY] = required_map
+    required_map[scope] = tuple(required_keys)
 
 
-def get_runtime_config(config: pytest.Config) -> dict | None:
-    """Return the most-recently-registered payload, or ``None``."""
-    return config.stash.get(_RUNTIME_CONFIG_KEY, None)
+def get_runtime_config(
+    config: pytest.Config, scope: str | None = None,
+) -> dict | None:
+    """Return the payload registered for *scope*, or ``None``.
 
-
-def get_required_keys(config: pytest.Config) -> tuple[str, ...]:
-    """Return the required-keys tuple from the latest :func:`set_runtime_config`
-    call, or ``()`` when no validation was requested.
+    A ``None`` *scope* reads the session-wide registration.  A named
+    scope with no registration of its own falls back to the session-wide
+    one, so a library that never registered a payload still sees any
+    session-wide default.
     """
-    return config.stash.get(_REQUIRED_KEYS_KEY, ())
+    payloads = config.stash.get(_RUNTIME_CONFIG_KEY, {})
+    key = scope if scope is not None else _DEFAULT_SCOPE
+    if key in payloads:
+        return payloads[key]
+    return payloads.get(_DEFAULT_SCOPE)
 
 
-def missing_required_keys(config: pytest.Config) -> tuple[str, ...]:
-    """Return required keys absent from the staged payload.
+def get_required_keys(
+    config: pytest.Config, scope: str | None = None,
+) -> tuple[str, ...]:
+    """Return the required-keys tuple registered for *scope*, or ``()``.
 
-    The plugin's ``pytest_collection_modifyitems`` hook calls this to
-    decide whether to skip every device test in the session.
+    Resolution mirrors :func:`get_runtime_config`: a named scope with no
+    registration falls back to the session-wide one.
+    """
+    required_map = config.stash.get(_REQUIRED_KEYS_KEY, {})
+    key = scope if scope is not None else _DEFAULT_SCOPE
+    if key in required_map:
+        return required_map[key]
+    return required_map.get(_DEFAULT_SCOPE, ())
+
+
+def missing_required_keys(
+    config: pytest.Config, scope: str | None = None,
+) -> tuple[str, ...]:
+    """Return *scope*'s required keys absent from its staged payload.
+
+    The plugin's ``pytest_collection_modifyitems`` hook calls this per
+    item, passing the item's ``library_name`` as *scope*, to decide
+    whether to skip that library's device tests.
 
     Returns:
-        Empty tuple when no required keys are registered (no
-        validation requested), or when every required key is present
-        in the staged payload.  The full required-keys tuple when the
-        payload is ``None`` and required keys are non-empty (nothing
+        Empty tuple when no required keys are registered for the scope
+        (no validation requested), or when every required key is present
+        in the scope's staged payload.  The full required-keys tuple when
+        the payload is ``None`` and required keys are non-empty (nothing
         staged, so everything is "missing").  A subset tuple, in
         declaration order, when the payload is a partial dict.
     """
-    required = get_required_keys(config)
+    required = get_required_keys(config, scope)
     if not required:
         return ()
-    payload = get_runtime_config(config)
+    payload = get_runtime_config(config, scope)
     if payload is None:
         return required
     return tuple(key for key in required if key not in payload)
