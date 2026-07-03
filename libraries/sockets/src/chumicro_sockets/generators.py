@@ -63,7 +63,12 @@ class _WriteWait:
         self.io_socket = getattr(sock, "sock", sock)
 
 
-def connect(connector: object) -> object:
+def connect(
+    connector: object,
+    *,
+    timeout_ms: int | None = None,
+    ticks: object | None = None,
+) -> object:
     """Drive *connector* across runner ticks; return its connected socket.
 
     Yields the connector itself on every tick so the wrapper reads
@@ -97,6 +102,17 @@ def connect(connector: object) -> object:
             ``tcp_client_connector`` / ``tls_client_connector`` return
             such objects; ``FakeSocketConnector`` in
             ``chumicro_sockets.testing`` is the test stand-in.
+        timeout_ms: Optional deadline in milliseconds for the whole
+            connect (DNS attempt + TCP + optional TLS).  ``None``
+            (default) waits indefinitely.  On expiry the connector is
+            cancelled and ``OSError(ETIMEDOUT)`` is raised.  The DNS
+            lookup runs as one synchronous ``getaddrinfo`` inside the
+            connector's first tick and is blocking-by-substrate on real
+            boards, so a hang *inside* that call cannot be interrupted —
+            the deadline is only checked between ticks.
+        ticks: ``chumicro_timing``-shaped tick source
+            (``ticks_ms`` / ``ticks_add`` / ``ticks_diff``).  Required
+            when *timeout_ms* is set; ignored otherwise.
 
     Yields:
         The connector itself, repeatedly, until terminal.
@@ -108,11 +124,20 @@ def connect(connector: object) -> object:
 
     Raises:
         OSError: Connector reached ``failed`` (DNS lookup, TCP
-            connect, or TLS handshake failed).  The connector's
-            ``last_error`` is what's raised.
+            connect, or TLS handshake failed) — the connector's
+            ``last_error`` is raised — or ``ETIMEDOUT`` when
+            *timeout_ms* elapsed before the connector became ready.
+        ValueError: *timeout_ms* was given without a *ticks* source.
     """
+    if timeout_ms is not None and ticks is None:
+        raise ValueError("connect(timeout_ms=...) requires a ticks source")
     sock = None
     now_ms = 0
+    deadline_ms = (
+        ticks.ticks_add(ticks.ticks_ms(), timeout_ms)
+        if timeout_ms is not None
+        else None
+    )
     try:
         while True:
             connector.tick(now_ms)
@@ -122,6 +147,11 @@ def connect(connector: object) -> object:
                 return sock
             if state == "failed":
                 raise connector.last_error
+            if (
+                deadline_ms is not None
+                and ticks.ticks_diff(deadline_ms, ticks.ticks_ms()) <= 0
+            ):
+                raise OSError(errno.ETIMEDOUT, "connect timed out")
             now_ms = yield connector
     finally:
         if sock is None:

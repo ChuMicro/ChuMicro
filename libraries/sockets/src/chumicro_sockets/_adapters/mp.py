@@ -4,10 +4,11 @@ One MP adapter covers every supported port (MP 1.26+ ships
 ``MICROPY_SSL_MBEDTLS=1`` on both ESP32 and RP2; the "no TLS on Pico
 W" folklore is pre-mbedTLS).
 
-``recv_into`` polyfill: MP's stream-backed socket exposes ``recv()``
-but not ``recv_into()``; :class:`_MpSocketWrapper` adapts via
-``recv() + memoryview-copy`` so downstream code sees the unified
-protocol.
+``recv_into`` polyfill: MP's lwIP socket exposes stream ``readinto``
+but not ``recv_into``; :class:`_MpSocketWrapper` forwards to
+``readinto(buffer, size)`` — filling the caller's buffer in place
+with no per-receive ``bytes`` allocation — so downstream code sees
+the unified protocol.
 
 TLS: always pass *host* as ``server_hostname`` (SNI-less verification
 breaks against modern brokers).
@@ -59,12 +60,15 @@ def _close_quietly(sock):  # pragma: no cover - device only
 class _MpSocketWrapper:
     """Adapts an MP stdlib socket to the chumicro_sockets protocol.
 
-    MP's socket lacks ``recv_into`` on the supported boards (1.26+
-    rp2 / esp32 ports), so the wrapper synthesizes it from
-    ``recv(nbytes) + buffer[:n] = data``.  Every other protocol
-    method is a direct attribute forward; the wrapper is a thin
-    object whose attribute resolution costs ~one dict lookup per
-    call site.
+    MP's lwIP socket lacks ``recv_into`` on the supported boards
+    (1.26+ rp2 / esp32 ports) but exposes the stream ``readinto``, so
+    the wrapper's ``recv_into`` forwards to ``readinto(buffer, size)``
+    — filling the caller's buffer directly with no per-receive
+    ``bytes`` allocation.  The mbedTLS ``SSLSocket`` exposes
+    ``readinto`` too, so one code path covers plain TCP and TLS.
+    Every other protocol method is a direct attribute forward; the
+    wrapper is a thin object whose attribute resolution costs ~one
+    dict lookup per call site.
     """
 
     def __init__(self, sock):
@@ -82,43 +86,38 @@ class _MpSocketWrapper:
         self.settimeout = getattr(sock, "settimeout", _no_op)
 
     def recv_into(self, buffer, nbytes=0):
-        """Polyfill ``recv_into`` via MP's ``recv``.
+        """Read into *buffer* via MP's stream ``readinto``.
 
-        ``recv(nbytes)`` returns up to *nbytes* bytes; we copy the
-        result into *buffer* and return the count.  ``recv`` returns
-        ``b""`` on a clean peer close, and the polyfill translates
-        that to ``0`` — the stdlib contract.
+        ``readinto(buffer, size)`` fills *buffer* in place with up to
+        *size* bytes and returns the count — no intermediate ``bytes``
+        object, so a steady recv-per-tick loop allocates nothing on
+        the hot path.  It returns ``0`` on a clean peer close (the
+        stdlib contract) and ``None`` when a non-blocking read would
+        block.
 
-        MP-specific contract divergence:
-
-        * Plain TCP non-blocking ``recv`` with no data raises
-          ``OSError(errno.EAGAIN)``.
-        * mbedTLS ``SSLSocket`` non-blocking ``recv`` with no data
-          returns ``None`` instead (mbedTLS ``WANT_READ`` /
-          ``WANT_WRITE`` maps to ``MP_EWOULDBLOCK`` internally, but
-          the Python-level surface for SSLSocket returns ``None``
-          rather than raising).
-
-        We **raise** ``OSError(errno.EAGAIN)`` on ``None`` so the
-        protocol contract — "EAGAIN on no data, 0 on clean peer
+        MP-specific contract divergence: plain TCP and mbedTLS
+        ``SSLSocket`` non-blocking ``readinto`` with no data available
+        both return ``None`` — the stream layer folds ``EAGAIN`` /
+        mbedTLS ``WANT_READ`` into a ``None`` result rather than
+        raising.  We **raise** ``OSError(errno.EAGAIN)`` on ``None`` so
+        the protocol contract — "EAGAIN on no data, 0 on clean peer
         close" — holds across plain TCP and TLS uniformly.  Without
-        it, a length-known TCP-style read on MP TLS cannot tell
-        "no data this tick" apart from "peer closed mid-response"
-        the moment a recv races ahead of the peer's send.
+        it, a length-known read cannot tell "no data this tick" apart
+        from "peer closed mid-response" the moment a recv races ahead
+        of the peer's send.
         """
-        # Clamp to the buffer's capacity: recv() must never return more
-        # bytes than fit, or the ``buffer[:copied] = data`` slice-assign
-        # below silently grows a bytearray (or corrupts a memoryview).
+        # Clamp to the buffer's capacity and pass the byte cap as the
+        # second arg: MP's stream ``readinto`` accepts an optional
+        # max-length (unlike CPython's), so ``readinto`` never writes
+        # past *nbytes* or the buffer end.
         size = min(nbytes, len(buffer)) if nbytes > 0 else len(buffer)
-        data = self.sock.recv(size)
-        if data is None:
-            # MP TLS WANT_READ surfaces as recv() returning None; raise
-            # the would-block errno so the recv-loop contract holds
-            # against plain TCP and TLS uniformly.
+        copied = self.sock.readinto(buffer, size)
+        if copied is None:
+            # A non-blocking readinto with no data returns None on both
+            # plain TCP and MP TLS; raise the would-block errno so the
+            # recv-loop contract holds against plain TCP and TLS
+            # uniformly.
             raise OSError(errno.EAGAIN, "would block")
-        copied = len(data)
-        if copied:
-            buffer[:copied] = data
         return copied
 
 

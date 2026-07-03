@@ -21,6 +21,7 @@ from __future__ import annotations
 #: CPython-only lane (pytest fixtures / host stdlib); not cross-runtime.
 __chumicro_runtimes__ = ("cpython",)
 
+import errno
 import socket
 import ssl
 import threading
@@ -201,6 +202,34 @@ class TestTLSAgainstSelfSignedServer:
         finally:
             sock.close()
 
+    def test_nonblocking_recv_into_reports_eagain_not_sslwant(
+        self,
+        tls_echo_server: tuple[str, int],
+        self_signed_cert: tuple[Path, Path],
+    ) -> None:
+        """A non-blocking TLS recv with no data pending raises
+        ``OSError(EAGAIN)``, not ``ssl.SSLWantReadError`` — the adapter
+        normalizes the would-block signal so tick-driven recv loops
+        (and websockets / mqtt over TLS) branch on EAGAIN uniformly."""
+        host, port = tls_echo_server
+        cert_path, _ = self_signed_cert
+        context = ssl_context_with_ca(cert_path.read_bytes())
+        sock = tls_client_socket(host, port, context=context)
+        try:
+            # The raw SSLSocket stays reachable on ``.sock`` — the runner
+            # registers that pollable, not the wrapper.
+            assert isinstance(sock.sock, ssl.SSLSocket)
+            sock.setblocking(False)
+            buffer = bytearray(64)
+            # We sent nothing, so the echo server has nothing to return;
+            # a raw non-blocking SSLSocket would raise SSLWantReadError.
+            with pytest.raises(OSError) as captured:
+                sock.recv_into(buffer, 64)
+            assert captured.value.args[0] == errno.EAGAIN
+            assert not isinstance(captured.value, ssl.SSLWantReadError)
+        finally:
+            sock.close()
+
     def test_default_context_rejects_self_signed(
         self,
         tls_echo_server: tuple[str, int],
@@ -236,3 +265,91 @@ class TestTLSAgainstSelfSignedServer:
                 assert payload in received
         finally:
             sock.close()
+
+
+class _FakeSSLSocket:
+    """Minimal ssl.SSLSocket stand-in for the wrapper unit tests.
+
+    ``recv`` / ``recv_into`` / ``send`` raise a scripted ``SSLWant*``
+    error or return a scripted value; the forwarded lifecycle methods
+    record that they fired.
+    """
+
+    def __init__(self, *, raise_error=None) -> None:
+        self._raise_error = raise_error
+        self.blocking: bool | None = None
+        self.timeout: float | None = None
+        self.closed = False
+        self.sent = bytearray()
+
+    def recv(self, nbytes: int) -> bytes:
+        if self._raise_error is not None:
+            raise self._raise_error
+        return b"x" * nbytes
+
+    def recv_into(self, buffer: bytearray, nbytes: int = 0) -> int:
+        if self._raise_error is not None:
+            raise self._raise_error
+        count = nbytes if nbytes else len(buffer)
+        buffer[:count] = b"a" * count
+        return count
+
+    def send(self, data: bytes) -> int:
+        if self._raise_error is not None:
+            raise self._raise_error
+        self.sent.extend(data)
+        return len(data)
+
+    def setblocking(self, flag: bool) -> None:
+        self.blocking = flag
+
+    def settimeout(self, seconds: float | None) -> None:
+        self.timeout = seconds
+
+    def close(self) -> None:
+        self.closed = True
+
+
+class TestCPythonTLSSocketWrapper:
+    """Unit checks of ``_CPythonTLSSocketWrapper``'s SSLWant* -> EAGAIN translation."""
+
+    def _wrapper(self, inner: _FakeSSLSocket) -> object:
+        from chumicro_sockets._adapters.cpython import (  # noqa: PLC0415
+            _CPythonTLSSocketWrapper,
+        )
+
+        return _CPythonTLSSocketWrapper(inner)
+
+    def test_recv_translates_want_read_to_eagain(self) -> None:
+        wrapper = self._wrapper(_FakeSSLSocket(raise_error=ssl.SSLWantReadError()))
+        with pytest.raises(OSError) as captured:
+            wrapper.recv(16)
+        assert captured.value.args[0] == errno.EAGAIN
+
+    def test_recv_into_translates_want_write_to_eagain(self) -> None:
+        wrapper = self._wrapper(_FakeSSLSocket(raise_error=ssl.SSLWantWriteError()))
+        with pytest.raises(OSError) as captured:
+            wrapper.recv_into(bytearray(8), 8)
+        assert captured.value.args[0] == errno.EAGAIN
+
+    def test_send_translates_want_write_to_eagain(self) -> None:
+        wrapper = self._wrapper(_FakeSSLSocket(raise_error=ssl.SSLWantWriteError()))
+        with pytest.raises(OSError) as captured:
+            wrapper.send(b"payload")
+        assert captured.value.args[0] == errno.EAGAIN
+
+    def test_passthrough_and_lifecycle_forwarding(self) -> None:
+        inner = _FakeSSLSocket()
+        wrapper = self._wrapper(inner)
+        assert wrapper.recv(4) == b"xxxx"
+        assert wrapper.send(b"hi") == 2
+        # Default-nbytes path fills the whole buffer; explicit-nbytes clamps.
+        buffer = bytearray(4)
+        assert wrapper.recv_into(buffer) == 4
+        assert wrapper.recv_into(buffer, 2) == 2
+        wrapper.setblocking(False)
+        wrapper.settimeout(1.5)
+        wrapper.close()
+        assert inner.blocking is False
+        assert inner.timeout == 1.5
+        assert inner.closed is True

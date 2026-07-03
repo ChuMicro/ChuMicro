@@ -15,6 +15,7 @@ Used:
 #: Source bundle only; never lands on a device.
 __chumicro_runtimes__ = ("cpython",)
 
+import errno
 import select
 import socket
 import ssl
@@ -49,7 +50,51 @@ def connect_tls(host, port, *, context=None, **_kwargs):
     cipher suites.
     """
     raw = socket.create_connection((host, port))
-    return _resolve_default_context(context).wrap_socket(raw, server_hostname=host)
+    wrapped = _resolve_default_context(context).wrap_socket(raw, server_hostname=host)
+    return _CPythonTLSSocketWrapper(wrapped)
+
+
+class _CPythonTLSSocketWrapper:
+    """Normalizes a CPython ``ssl.SSLSocket``'s would-block signal to ``OSError(EAGAIN)``.
+
+    Post-handshake, a non-blocking ``ssl.SSLSocket`` raises
+    ``ssl.SSLWantReadError`` / ``ssl.SSLWantWriteError`` where a plain
+    non-blocking socket raises ``OSError(EAGAIN)``.  The tick-driven
+    recv / send loops (``chumicro_sockets.generators`` and downstream
+    clients) branch on ``OSError(EAGAIN)``, so this wrapper translates
+    the ``SSLWant*`` exceptions on ``recv`` / ``recv_into`` / ``send``
+    to give TLS the same data-path contract as plain TCP.  The raw
+    ``SSLSocket`` stays on ``.sock`` so ``Runner.wait`` can register the
+    pollable (it reads ``getattr(io_socket, "sock", io_socket)``).
+    """
+
+    def __init__(self, sock):
+        self.sock = sock
+        # ``close`` / ``setblocking`` / ``settimeout`` need no
+        # translation — forward them straight to the SSLSocket.
+        self.close = sock.close
+        self.setblocking = sock.setblocking
+        self.settimeout = sock.settimeout
+
+    def recv_into(self, buffer, nbytes=0):
+        try:
+            if nbytes:
+                return self.sock.recv_into(buffer, nbytes)
+            return self.sock.recv_into(buffer)
+        except (ssl.SSLWantReadError, ssl.SSLWantWriteError):
+            raise OSError(errno.EAGAIN, "would block") from None
+
+    def recv(self, nbytes):
+        try:
+            return self.sock.recv(nbytes)
+        except (ssl.SSLWantReadError, ssl.SSLWantWriteError):
+            raise OSError(errno.EAGAIN, "would block") from None
+
+    def send(self, data):
+        try:
+            return self.sock.send(data)
+        except (ssl.SSLWantReadError, ssl.SSLWantWriteError):
+            raise OSError(errno.EAGAIN, "would block") from None
 
 
 def _resolve_default_context(context):
@@ -124,6 +169,11 @@ class _CPythonConnector(SocketConnector):
             if self.state == STATE_AWAITING_TLS:
                 if not self._tls_ready(self.socket):
                     return
+                # Handshake done: wrap so the ready socket's recv / send
+                # report EAGAIN (not ssl.SSLWant*) on a would-block.  The
+                # raw SSLSocket stayed unwrapped through the handshake so
+                # ``do_handshake`` and ``io_socket`` polling saw it directly.
+                self.socket = _CPythonTLSSocketWrapper(self.socket)
                 self.state = STATE_READY
                 return
         except Exception as error:  # noqa: BLE001 - any failure stops the machine

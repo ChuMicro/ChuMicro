@@ -181,6 +181,24 @@ def test_fetch_times_out_on_silent_peer():
         )
 
 
+def test_fetch_times_out_when_connect_never_completes():
+    # Connector stalls at awaiting_tcp (dns_ok only, no tcp_ok), so the
+    # connect phase never reaches ready; the overall deadline trips and
+    # fetch surfaces it as HttpTimeoutError (the connect generator raises
+    # OSError(ETIMEDOUT), which fetch translates).
+    def factory(host, port, use_tls):  # noqa: ARG001 - fake ignores args
+        return FakeSocketConnector(actions=["dns_ok"])
+
+    ticks = FakeTicks()
+    with raises(HttpTimeoutError):
+        _drive(
+            fetch(factory, "GET", "http://example.test/", ticks=ticks, timeout_ms=5),
+            ticks,
+            advance_ms=2,
+            max_steps=100,
+        )
+
+
 def test_fetch_raises_on_peer_close_before_response():
     sock = FakeSocket()
     sock.simulate_peer_close()  # recv_into returns 0 with no response sent

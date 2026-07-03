@@ -75,6 +75,55 @@ def test_connect_cancel_via_close_calls_connector_cancel():
     assert connector.last_error is not None
 
 
+class _FakeTicks:
+    """Hand-driven tick source: each ``ticks_ms`` reads the next scripted value.
+
+    ``ticks_add`` / ``ticks_diff`` are plain arithmetic — the tests stay
+    well inside the wrap-safe range, so no masking is needed.
+    """
+
+    def __init__(self, readings):
+        self._readings = list(readings)
+        self._last = self._readings[0] if self._readings else 0
+
+    def ticks_ms(self):
+        if self._readings:
+            self._last = self._readings.pop(0)
+        return self._last
+
+    def ticks_add(self, base, delta):
+        return base + delta
+
+    def ticks_diff(self, end, start):
+        return end - start
+
+
+def test_connect_raises_etimedout_when_deadline_elapses():
+    # Connector never leaves awaiting_tcp (dns_ok, then no more actions),
+    # so the deadline check trips.  Readings: deadline anchor 0 (-> 10),
+    # then 5 (still inside), then 20 (past) -> ETIMEDOUT.
+    connector = FakeSocketConnector(actions=["dns_ok"])
+    ticks = _FakeTicks([0, 5, 20])
+    gen = connect(connector, timeout_ms=10, ticks=ticks)
+
+    first = gen.send(None)  # dns_ok -> awaiting_tcp, deadline still ahead
+    assert first is connector
+
+    with raises(OSError) as captured:
+        gen.send(0)  # stays awaiting_tcp; now past the deadline
+    assert captured.value.args[0] == errno.ETIMEDOUT
+    # The connector was cancelled so an abandoned connect frees its socket.
+    assert connector.state == "failed"
+    assert connector.last_error is not None
+
+
+def test_connect_timeout_requires_ticks():
+    connector = FakeSocketConnector(actions=["dns_ok"])
+    gen = connect(connector, timeout_ms=10)
+    with raises(ValueError):
+        gen.send(None)
+
+
 # -- send_all --------------------------------------------------------
 
 
