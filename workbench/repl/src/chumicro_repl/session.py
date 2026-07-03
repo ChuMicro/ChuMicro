@@ -369,8 +369,14 @@ class ReplSession:
             if match is not None:
                 consumed_text = accumulated[:match.end()]
                 tail_text = accumulated[match.end():]
+                # Carry forward the decoded tail past the match plus the
+                # bytes ``decoder`` is still holding for an incomplete
+                # trailing code point, so a multibyte character split at
+                # the match boundary survives into the next call instead
+                # of decoding to U+FFFD once its continuation bytes land.
                 if tail_text:
                     self._read_remainder.extend(tail_text.encode("utf-8"))
+                self._read_remainder.extend(decoder.pending())
                 return consumed_text
             last_scanned = len(accumulated)
             try:

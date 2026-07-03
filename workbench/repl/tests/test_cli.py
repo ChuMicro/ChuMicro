@@ -134,3 +134,34 @@ class TestMainDispatch:
             ])
             _, kwargs = fake_tail.call_args
             assert kwargs["fail_on_traceback"] is False
+
+
+class TestConnectCoaching:
+    """Interactive/passthrough connect failures route through the coaching loop."""
+
+    def test_passthrough_connect_failure_renders_recovery_plan(self, capsys):
+        # A missing port raises FileNotFoundError (errno ENOENT) out of
+        # the port factory inside interactive(); the coaching loop
+        # classifies it as PORT_NOT_FOUND and renders that plan.
+        missing = FileNotFoundError(2, "No such file or directory")
+        with (
+            patch("chumicro_repl.tui.interactive", side_effect=missing) as fake,
+            patch("chumicro_repl.cli.sys.stdin") as fake_stdin,
+        ):
+            fake_stdin.isatty.return_value = False
+            with pytest.raises(FileNotFoundError):
+                cli.main(["--address", "/dev/cu.x", "--mode", "passthrough"])
+        # Non-interactive: coached exactly once, no retry prompt.
+        fake.assert_called_once_with("/dev/cu.x")
+        rendered = capsys.readouterr().out.lower()
+        assert "serial port path does not exist" in rendered
+
+    def test_connect_success_returns_through_the_wrapper(self):
+        with (
+            patch("chumicro_repl.tui.interactive", return_value=7) as fake,
+            patch("chumicro_repl.cli.sys.stdin") as fake_stdin,
+        ):
+            fake_stdin.isatty.return_value = False
+            result = cli.main(["--address", "/dev/cu.x", "--mode", "passthrough"])
+        assert result == 7
+        fake.assert_called_once_with("/dev/cu.x")

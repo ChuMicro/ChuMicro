@@ -92,6 +92,81 @@ class TestUtf8SerialDecode:
         assert "\U0001f642" in output.getvalue()
 
 
+class _SpewingPort:
+    """A board stuck in ``while True: print(...)``.
+
+    ``in_waiting`` always reports a byte and every ``read`` returns
+    more, so the buffer never settles to empty.  Total reads are
+    capped and raise past the cap, turning a regression into a loud
+    failure instead of an infinite loop that hangs the suite.
+    """
+
+    def __init__(self, cap: int = 100_000) -> None:
+        self.reads = 0
+        self.writes: list[bytes] = []
+        self._cap = cap
+
+    @property
+    def in_waiting(self) -> int:
+        return 1
+
+    def read(self, size: int = 1) -> bytes:
+        self.reads += 1
+        if self.reads > self._cap:
+            raise AssertionError(
+                f"exit drain never terminated — {self.reads} reads",
+            )
+        return b"."
+
+    def write(self, data: bytes) -> int:
+        self.writes.append(bytes(data))
+        return len(data)
+
+    def close(self) -> None:
+        pass
+
+    def reset_input_buffer(self) -> None:
+        pass
+
+
+class _TickingTime:
+    """Time source whose ``monotonic`` advances a fixed step per call.
+
+    Lets a wall-clock deadline be reached inside a loop that reads
+    greedily without ever sleeping.
+    """
+
+    def __init__(self, step: float = 0.1) -> None:
+        self._now = 0.0
+        self._step = step
+
+    def monotonic(self) -> float:
+        current = self._now
+        self._now += self._step
+        return current
+
+    def sleep(self, seconds: float) -> None:
+        self._now += seconds
+
+
+class TestExitDrainBounded:
+    """Ctrl-X returns even while the board streams without pause."""
+
+    def test_ctrl_x_exits_against_a_spewing_board(self):
+        port = _SpewingPort()
+        keyboard = FakeKeyboard([CTRL_X])
+        output = io.StringIO()
+        result = run_loop(
+            port, keyboard, output,
+            time=_TickingTime(step=0.1),
+            reconnect_seconds=0.0,
+        )
+        assert result == 0
+        # The drain ran but stopped at the exit deadline — not because
+        # the port ever reported an empty buffer (it never does).
+        assert 0 < port.reads < 1000
+
+
 class TestInteractiveWrapper:
     """:func:`interactive` wires up the run_loop with injected dependencies."""
 

@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from functools import partial
 
 
 def _add_device_args(parser: argparse.ArgumentParser) -> None:
@@ -112,10 +113,24 @@ def main(argv: list[str] | None = None) -> int:
             fail_on_traceback=args.fail_on_traceback,
             output=sys.stdout,
         ))
+    from .recovery import coached_session_start  # noqa: PLC0415
+
     if _resolve_mode(args.mode) == "line":
         from .tui import interactive_line  # noqa: PLC0415
 
-        return interactive_line(args.address)
-    from .tui import interactive  # noqa: PLC0415
+        connect = partial(interactive_line, args.address)
+    else:
+        from .tui import interactive  # noqa: PLC0415
 
-    return interactive(args.address)
+        connect = partial(interactive, args.address)
+    # Wrap the connect in the package's coaching loop so the common
+    # first-run failures (port not found / busy / permission denied)
+    # surface an actionable recovery plan instead of a bare pyserial
+    # traceback.  A TTY session gets the full classify-render-retry
+    # prompt; a piped or redirected stdin renders the plan once without
+    # prompting (max_attempts=1), so a non-interactive run never blocks
+    # on input.
+    isatty = getattr(sys.stdin, "isatty", None)
+    if callable(isatty) and isatty():
+        return coached_session_start(connect)
+    return coached_session_start(connect, max_attempts=1)

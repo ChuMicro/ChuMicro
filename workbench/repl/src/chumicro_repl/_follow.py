@@ -173,16 +173,22 @@ def tail(
                 if reconnect_seconds <= 0:
                     write_disconnect_notice(active_output, disconnect_error)
                     return ExitCode.DISCONNECTED
-                reconnected = _attempt_reconnect(
-                    output=active_output,
-                    error=disconnect_error,
-                    factory=active_factory,
-                    address=address,
-                    baudrate=resolved_baudrate,
-                    time=active_time,
-                    reconnect_seconds=reconnect_seconds,
-                    reconnect_interval=reconnect_interval,
-                )
+                try:
+                    reconnected = _attempt_reconnect(
+                        output=active_output,
+                        error=disconnect_error,
+                        factory=active_factory,
+                        address=address,
+                        baudrate=resolved_baudrate,
+                        time=active_time,
+                        reconnect_seconds=reconnect_seconds,
+                        reconnect_interval=reconnect_interval,
+                    )
+                except KeyboardInterrupt:
+                    # Ctrl-C during the replug wait ends the tail the
+                    # same way it does mid-read — a clean INTERRUPTED
+                    # exit rather than a propagated KeyboardInterrupt.
+                    return ExitCode.INTERRUPTED
                 if reconnected is None:
                     return ExitCode.DISCONNECTED
                 port = reconnected
@@ -256,9 +262,9 @@ def _attempt_reconnect(
     success, and a final "gave up" notice on timeout — all dim-styled
     so they don't blend into device output.
 
-    Catches :class:`KeyboardInterrupt` from the user's signal
-    handler and treats it as "stop reconnecting" — the caller's
-    return path turns that into :attr:`ExitCode.INTERRUPTED`.
+    A :class:`KeyboardInterrupt` raised during the retry wait (the
+    user's Ctrl-C) propagates to the caller unswallowed; :func:`tail`
+    catches it and returns :attr:`ExitCode.INTERRUPTED`.
 
     Args:
         output: Where to print the status notices.
