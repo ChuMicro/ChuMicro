@@ -18,15 +18,15 @@ import errno
 
 
 class FakeListener:
-    """Listener stub that hands out queued sockets on ``accept()``.
+    """Listener stub that hands out queued connections on ``accept()``.
 
-    Construct with a list of pre-loaded
-    :class:`~chumicro_sockets.testing.FakeSocket` instances.  Each
-    ``accept()`` call pops the next socket; an empty queue raises
-    ``OSError(errno.EAGAIN, "would block")`` matching the EAGAIN shape
-    the real listener uses on this host (``11`` on Linux / MP / CP,
-    ``35`` on macOS CPython) so the server's would-block handling
-    exercises unchanged.
+    Construct with a list of ``(FakeSocket, peer)`` tuples — the same
+    ``(socket, address)`` shape a real ``accept()`` returns, which the
+    server unpacks.  Each ``accept()`` call pops the next tuple; an empty
+    queue raises ``OSError(errno.EAGAIN, "would block")`` matching the
+    EAGAIN shape the real listener uses on this host (``11`` on Linux /
+    MP / CP, ``35`` on macOS CPython) so the server's would-block
+    handling exercises unchanged.
     """
 
     def __init__(self, connections):

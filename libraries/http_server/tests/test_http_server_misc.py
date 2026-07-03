@@ -5,6 +5,7 @@ import select
 
 from chumicro_http_server import (
     HttpServer,
+    Response,
     build_response,
     parse_charset,
 )
@@ -58,6 +59,81 @@ class TestHttpServerAcceptVariants:
         server.handle(ticks.ticks_ms())
         assert server.in_flight == 0
         assert server.listening is True
+
+
+class TestAuditFixes:
+    def test_unencodable_response_becomes_500_not_crash(self):
+        # A handler that returns a Response with a str body makes
+        # encode_response raise; it must be turned into a 500, not escape
+        # tick()/handle() and re-run the handler forever.
+        sock = FakeSocket()
+        sock.enqueue_recv(b"GET / HTTP/1.1\r\nHost: x\r\n\r\n")
+        invocations = []
+
+        def bad_handler(request):
+            invocations.append(1)
+            return Response(
+                status_code=200, reason="OK", headers={}, body="not-bytes",
+            )
+
+        server, ticks, _ = _make_server(
+            sockets=[(sock, ("peer", 1))], handler=bad_handler,
+        )
+        for _ in range(12):
+            server.handle(ticks.ticks_ms())  # must never raise
+            ticks.advance(1)
+        assert len(invocations) == 1  # handler ran once, not in a crash loop
+        assert b"500" in bytes(sock.sent)
+
+    def test_non_eagain_accept_error_is_scoped_not_fatal(self):
+        # A TLS handshake failure surfaces as a non-EAGAIN OSError from
+        # accept(); it must be recorded, not tear down the server loop.
+        class BadAcceptListener:
+            def accept(self):
+                raise OSError(1, "TLS handshake failed")
+
+            def close(self):
+                pass
+
+            def setblocking(self, _flag):
+                pass
+
+        ticks = FakeTicks()
+        server = HttpServer(
+            listener_factory=lambda: BadAcceptListener(),
+            handler=lambda request: build_response(200),
+            ticks=ticks,
+        )
+        server.handle(ticks.ticks_ms())  # must not raise
+        server.handle(ticks.ticks_ms())
+        assert server.listening is True
+        assert server.accept_errors == 2
+
+    def test_io_socket_unwraps_dot_sock_wrapper(self):
+        # A listener wrapper exposing the OS socket on .sock unwraps to
+        # the inner pollable, not the fileno-less wrapper.
+        inner = object()
+
+        class WrapperListener:
+            sock = inner
+
+            def accept(self):
+                return None
+
+            def close(self):
+                pass
+
+            def setblocking(self, _flag):
+                pass
+
+        ticks = FakeTicks()
+        server = HttpServer(
+            listener_factory=lambda: WrapperListener(),
+            handler=lambda request: build_response(200),
+            ticks=ticks,
+        )
+        server.handle(ticks.ticks_ms())  # lazy-open the listener
+        assert server.io_socket is inner
 
 
 class TestRequestParserBodyStateTransition:
@@ -135,8 +211,9 @@ class TestRunnerReactorContract:
     def test_io_socket_returns_listener_after_first_tick(self):
         server, ticks, _ = _make_server(sockets=[])
         server.handle(ticks.ticks_ms())
-        # FakeListener has no ``_sock`` wrapper, so the property returns
-        # it directly; production adapters expose ``_sock`` and unwrap.
+        # FakeListener exposes no ``.sock``, so the property returns it
+        # directly; production listener wrappers expose ``.sock`` and the
+        # property unwraps to that pollable OS-level socket.
         assert server.io_socket is server._listener
 
     def test_io_wants_read_after_listener_open(self):
@@ -157,8 +234,13 @@ class TestRunnerReactorContract:
         assert server.next_deadline(ticks.ticks_ms()) is None
 
     def test_next_deadline_returns_earliest_connection_deadline(self):
-        """Accept a connection, observe next_deadline as the
-        request-timeout deadline armed at accept time."""
+        """Accept a connection, observe next_deadline capped at the
+        short progress interval while a connection is in flight.
+
+        The connection's socket isn't in the runner's poll set (only the
+        listener is), so next_deadline must return a near-term wake — not
+        the far request-timeout deadline — or Runner.wait would sleep
+        while the connection's bytes sit unread."""
         peer = FakeSocket()
         # Stall the recv so the connection stays mid-request without
         # being treated as a peer close.  Without this the empty queue
@@ -174,8 +256,8 @@ class TestRunnerReactorContract:
 
         deadline = server.next_deadline(ticks.ticks_ms())
         assert deadline is not None
-        # request_timeout_ms is 1500 from the accept tick.
-        assert ticks.ticks_diff(deadline, accept_tick) == 1500
+        # Progress interval (20 ms) wins over the far 1500 ms deadline.
+        assert ticks.ticks_diff(deadline, accept_tick) == 20
 
     def test_runner_wait_registers_listener_for_accept_readiness(self):
         """End-to-end: drop HttpServer into a Runner with a FakePoller
