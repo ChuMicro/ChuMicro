@@ -23,6 +23,7 @@ markers.
 from chumicro_config import load_runtime_config
 from chumicro_runner import Runner
 from chumicro_sockets import ssl_context_with_ca, tls_client_socket
+from chumicro_test_harness.markers import marker
 from chumicro_wifi import WifiConfig, WifiService, WifiState
 
 _PROBE_PAYLOAD = b"hello chumicro tls\n"
@@ -40,7 +41,7 @@ wifi = WifiService(WifiConfig.from_config(config))
 
 def on_wifi_state(_old, new):
     if new == WifiState.CONNECTED:
-        print(f"WIFI_OK ip={wifi.ip}")
+        marker("WIFI_OK", ip=wifi.ip)
 
 
 wifi.on_state_change(on_wifi_state)
@@ -54,12 +55,12 @@ while wifi.state != WifiState.CONNECTED:
 
 # Wifi is up — synchronous TLS round trip with the custom-CA anchor.
 context = ssl_context_with_ca(ca_pem)
-print(f"CONNECTING host={echo_host} port={echo_port}")
+marker("CONNECTING", host=echo_host, port=echo_port)
 sock = tls_client_socket(echo_host, echo_port, context=context, radio=wifi.adapter.radio)
-print("CONNECTED")
+marker("CONNECTED")
 
 sock.send(_PROBE_PAYLOAD)
-print(f"SENT bytes={len(_PROBE_PAYLOAD)}")
+marker("SENT", bytes=len(_PROBE_PAYLOAD))
 
 buffer = bytearray(_RECV_BUFFER_SIZE)
 received = bytearray()
@@ -70,8 +71,6 @@ while b"\n" not in received:
     received.extend(buffer[:number_of_bytes])
 
 payload = bytes(received).rstrip(b"\n")
-# Marker values must be whitespace-free — parse_marker drops the
-# whole line otherwise — so the payload rides as hex.
-print(f"ECHO_RECEIVED bytes={len(payload)} payload_hex={payload.hex()}")
+marker("ECHO_RECEIVED", bytes=len(payload), payload_hex=payload)
 sock.close()
-print("DEMO_COMPLETE")
+marker("DEMO_COMPLETE")

@@ -16,6 +16,7 @@ import errno
 from chumicro_config import load_runtime_config
 from chumicro_runner import Runner
 from chumicro_sockets import tcp_client_connector
+from chumicro_test_harness.markers import marker
 from chumicro_wifi import WifiConfig, WifiService, WifiState
 
 
@@ -51,13 +52,14 @@ class EchoService:
         """Build the ``SocketConnector`` and move into ``connecting``."""
         if self.connector is not None or self.state == "done":
             return
-        print(f"CONNECTING host={self._host} port={self._port}")
+        marker("CONNECTING", host=self._host, port=self._port)
         try:
             self.connector = tcp_client_connector(
                 self._host, self._port, radio=self._radio,
             )
         except Exception as error:  # noqa: BLE001 - surface as marker, not traceback
-            print(f"CONNECT_FAILED error={error!r}")
+            marker("CONNECT_FAILED", error=type(error).__name__)
+            print(f"  detail: {error!r}")
             self.state = "done"
             return
         self.state = "connecting"
@@ -81,10 +83,11 @@ class EchoService:
             self._socket = self.connector.socket
             # Nonblocking so send() / recv() raise EAGAIN instead of stalling the runner.
             self._socket.setblocking(False)
-            print("CONNECTED")
+            marker("CONNECTED")
             self.state = "sending"
         elif self.connector.state == "failed":
-            print(f"CONNECT_FAILED error={self.connector.last_error!r}")
+            marker("CONNECT_FAILED", error=type(self.connector.last_error).__name__)
+            print(f"  detail: {self.connector.last_error!r}")
             self.state = "done"
 
     def _handle_sending(self):
@@ -96,15 +99,16 @@ class EchoService:
             except OSError as error:
                 if error.args[0] == errno.EAGAIN:
                     return
-                print(f"SEND_FAILED error={error!r}")
+                marker("SEND_FAILED", error=type(error).__name__)
+                print(f"  detail: {error!r}")
                 self.state = "done"
                 return
             if sent == 0:
-                print("SEND_FAILED error=peer-closed")
+                marker("SEND_FAILED", error="peer-closed")
                 self.state = "done"
                 return
             self._send_offset += sent
-        print(f"SENT bytes={len(self.PROBE_PAYLOAD)}")
+        marker("SENT", bytes=len(self.PROBE_PAYLOAD))
         self.state = "receiving"
 
     def _handle_receiving(self):
@@ -115,7 +119,8 @@ class EchoService:
         except OSError as error:
             # EAGAIN means no bytes yet — wait for the next read-ready tick.
             if error.args[0] != errno.EAGAIN:
-                print(f"RECV_FAILED error={error!r}")
+                marker("RECV_FAILED", error=type(error).__name__)
+                print(f"  detail: {error!r}")
                 self.state = "done"
             return
         if number_of_bytes == 0:
@@ -126,12 +131,10 @@ class EchoService:
         # The echo server terminates its reply with a newline.
         if b"\n" in self._received:
             payload = bytes(self._received).rstrip(b"\n")
-            # Marker values must be whitespace-free — parse_marker drops the
-            # whole line otherwise — so the payload rides as hex.
-            print(f"ECHO_RECEIVED bytes={len(payload)} payload_hex={payload.hex()}")
+            marker("ECHO_RECEIVED", bytes=len(payload), payload_hex=payload)
             self._socket.close()
             self.state = "done"
-            print("DEMO_COMPLETE")
+            marker("DEMO_COMPLETE")
 
     # Runner.wait() reads these to sleep on the right socket event:
     # delegate to the connector while connecting, then own the socket
@@ -143,7 +146,7 @@ class EchoService:
             return self.connector.io_socket
         if self._socket is None:
             return None
-        return getattr(self._socket, "sock", self._socket)
+        return self._socket
 
     @property
     def io_wants_read(self):
@@ -170,7 +173,7 @@ runner = Runner()
 
 def on_wifi_state(_old, new):
     if new == WifiState.CONNECTED:
-        print(f"WIFI_OK ip={wifi.ip}")
+        marker("WIFI_OK", ip=wifi.ip)
         # Link is up — kick off the round trip.
         echo.start()
 

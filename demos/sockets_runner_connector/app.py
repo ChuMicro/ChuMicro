@@ -20,8 +20,9 @@ Marker lines (``WIFI_OK``, ``CONNECTING``, ``CONNECTED``, ``SENT``,
 from chumicro_config import load_runtime_config
 from chumicro_runner import Runner
 from chumicro_runner.generators import Signal, wait_for
-from chumicro_sockets.generators import connect, recv_until, send_all
 from chumicro_sockets import tcp_client_connector
+from chumicro_sockets.generators import connect, recv_until, send_all
+from chumicro_test_harness.markers import marker
 from chumicro_wifi import WifiConfig, WifiService, WifiState
 
 PROBE_PAYLOAD = b"hello chumicro\n"
@@ -30,21 +31,19 @@ MAX_REPLY_BYTES = 256
 
 def echo_run(wifi, link_up, host, port):
     yield from wait_for(link_up)
-    print(f"WIFI_OK ip={wifi.ip}")
-    print(f"CONNECTING host={host} port={port}")
+    marker("WIFI_OK", ip=wifi.ip)
+    marker("CONNECTING", host=host, port=port)
     sock = yield from connect(
         tcp_client_connector(host, port, radio=wifi.adapter.radio),
     )
-    print("CONNECTED")
+    marker("CONNECTED")
     try:
         yield from send_all(sock, PROBE_PAYLOAD)
-        print(f"SENT bytes={len(PROBE_PAYLOAD)}")
+        marker("SENT", bytes=len(PROBE_PAYLOAD))
         reply = yield from recv_until(sock, b"\n", max_bytes=MAX_REPLY_BYTES)
         payload = reply.rstrip(b"\n")
-        # Marker values must be whitespace-free — parse_marker drops the
-        # whole line otherwise — so the payload rides as hex.
-        print(f"ECHO_RECEIVED bytes={len(payload)} payload_hex={payload.hex()}")
-        print("DEMO_COMPLETE")
+        marker("ECHO_RECEIVED", bytes=len(payload), payload_hex=payload)
+        marker("DEMO_COMPLETE")
     finally:
         sock.close()
 
