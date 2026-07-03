@@ -147,7 +147,7 @@ while True:
         topic,
         payload.encode(),
         qos=1,
-        on_publish=lambda _packet_id, flag=publish_done: flag.__setitem__(0, True),
+        on_publish=lambda _topic, _payload, flag=publish_done: flag.__setitem__(0, True),
     )
 
     led_counter = 0
