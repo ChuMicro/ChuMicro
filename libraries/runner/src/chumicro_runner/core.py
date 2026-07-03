@@ -29,8 +29,6 @@ import time
 
 from chumicro_timing import ticks as _DEFAULT_TICKS
 
-from chumicro_runner._generator import GeneratorHandle, _GeneratorWrapper
-
 # POSIX poll flags resolved once at import time so ``wait`` can translate
 # the duck-typed ``io_wants_read`` / ``io_wants_write`` bools into a
 # poll eventmask without an attribute lookup on every loop.  The
@@ -243,10 +241,17 @@ class Runner:
         # allocation-free (no per-call ``getattr``).
         self._sleep_ms = getattr(self._ticks, "sleep_ms", _sleep_ms)
         self._poller = poller
-        # id(sock) -> (sock, eventmask) for sockets currently in the
-        # poll set.  ``_sync_poll_set`` diffs against this on every
-        # ``wait`` so register / modify / unregister fire only on change.
+        # id(sock) -> [sock, registered_mask, sweep_mask, sweep_generation]
+        # for sockets in the poll set.  ``_sync_poll_set`` reuses these
+        # slots in place on every ``wait`` — re-stamping the generation
+        # and re-ORing the wanted mask — so a steady-state sync allocates
+        # nothing and calls the poller only when a mask changed.
+        # ``registered_mask`` is what the poller currently holds,
+        # ``sweep_mask`` is the interest accumulated this sweep, and
+        # ``sweep_generation`` marks the last sweep that touched the slot
+        # so sockets no service wants any more fall out.
         self._registered_interest: dict = {}
+        self._sweep_generation = 0
 
     def add(self, task: object | None = None,
             handler: object | None = None,
@@ -328,12 +333,15 @@ class Runner:
         self._entries.append(handle)
         return handle
 
-    def add_generator(self, gen: object) -> GeneratorHandle:
+    def add_generator(self, gen: object) -> "GeneratorHandle":  # noqa: F821 - GeneratorHandle is lazy-imported in the body to keep _generator off the eager import path, so the return annotation is a forward-ref string
         """Register a generator-driven service with the runner.
 
-        *gen* is a primed-or-unprimed generator object — call the
+        *gen* is a freshly constructed generator object — call the
         generator function once at the call site so its arguments are
-        captured (``runner.add_generator(echo_run(host, port, radio))``).
+        captured (``runner.add_generator(echo_run(host, port, radio))``),
+        but do not advance it yourself.  This method primes it, sending
+        ``None`` into its first ``yield``; a generator already advanced
+        past that yield would have its first wait silently skipped.
 
         The generator suspends by ``yield``-ing a duck-typed wait
         object — anything exposing ``io_socket`` / ``io_wants_read`` /
@@ -350,10 +358,21 @@ class Runner:
         runner on ``StopIteration`` so a finished generator does not
         linger as a dead entry.
 
+        The generator machinery is imported lazily on the first call so
+        an app that never registers a generator does not load it.  Make
+        that first call at startup rather than mid-loop, so the one-time
+        import does not land on a latency-sensitive tick.
+
         Args:
-            gen: A generator object.  Pre-primed or freshly constructed;
-                this method advances it to its first yield before returning.
+            gen: A freshly constructed generator object that has not been
+                advanced.  This method primes it to its first yield
+                before returning.
         """
+        from chumicro_runner._generator import (  # noqa: PLC0415
+            GeneratorHandle,
+            _GeneratorWrapper,
+        )
+
         handle = GeneratorHandle()
         wrapper = _GeneratorWrapper(gen, handle)
         task_handle = self.add(wrapper)
@@ -401,6 +420,13 @@ class Runner:
            Collect entries whose handlers should fire.
         2. Batch-fire all collected handlers.
         3. Decrement run counts and auto-remove exhausted entries.
+
+        A ``check`` function must not add or remove runner tasks: phase 1
+        walks the entry list in place, so a task added or removed from
+        inside a check is skipped or shifts a neighbor out of this tick's
+        scan.  Mutate the task set from a handler instead — phase 2 fires
+        handlers off a separate batched list, so ``add`` and
+        ``handle.remove()`` from a handler are safe.
 
         A handler raising ``Exception`` is isolated: the error is
         counted in ``handler_errors``, reported to the optional
@@ -562,8 +588,8 @@ class Runner:
                 # poll-set onto it so it lines up with the bookkeeping
                 # ``_sync_poll_set`` just produced.
                 self._poller = _SelectPollAdapter()
-                for sock, eventmask in self._registered_interest.values():
-                    self._poller.register(sock, eventmask)
+                for slot in self._registered_interest.values():
+                    self._poller.register(slot[0], slot[1])
             if timeout_ms is None:
                 # Sockets registered but no deadline anywhere: park in
                 # the poller until an event fires.  -1 blocks
@@ -673,20 +699,26 @@ class Runner:
 
         Registers sockets newly wanted, modifies on changed interest,
         unregisters sockets that have gone away or dropped to no
-        interest.  Idempotent: a no-change loop touches the poller
-        zero times.
+        interest.  Idempotent: a no-change loop touches the poller zero
+        times and allocates nothing.  The per-socket interest lives in
+        the persistent ``_registered_interest`` slots, re-ORed in place
+        and stamped with a per-sweep generation so a steady-state loop
+        allocates no scratch container.
         """
         registered = self._registered_interest
-        # IDs of sockets wanted this loop.  Second pass below diffs
-        # against the registered set to unregister anything that has
-        # gone away.
         poller = self._poller
-        # First accumulate the wanted interest per socket, OR-ing the
-        # eventmasks of every service that shares a socket — otherwise
-        # a second service's mask would clobber the first's and lose one
-        # service's wake direction (a reader and a writer on the same
-        # socket).  Keyed by id(sock) -> (sock, or-of-eventmasks).
-        wanted = {}
+        generation = self._sweep_generation + 1
+        self._sweep_generation = generation
+
+        # Accumulate this sweep's wanted interest into each socket's
+        # slot, OR-ing the eventmasks of every service that shares a
+        # socket — a reader and a writer on one socket must both keep
+        # their wake direction.  A new socket gets a slot; an existing
+        # slot is re-stamped on first sight this sweep and OR-ed on
+        # later sights, so no per-loop container is allocated.
+        # ``wanted_count`` is the distinct sockets wanted this sweep,
+        # used below to detect stale slots without a second pass.
+        wanted_count = 0
         for entry in self._entries:
             service = entry.service
             if service is None:
@@ -702,33 +734,44 @@ class Runner:
             if eventmask == 0:
                 continue
             sock_id = id(sock)
-            existing = wanted.get(sock_id)
-            wanted[sock_id] = (
-                sock,
-                eventmask if existing is None else existing[1] | eventmask,
-            )
+            slot = registered.get(sock_id)
+            if slot is None:
+                registered[sock_id] = [sock, 0, eventmask, generation]
+                wanted_count += 1
+            elif slot[3] != generation:
+                slot[2] = eventmask
+                slot[3] = generation
+                wanted_count += 1
+            else:
+                slot[2] |= eventmask
 
-        # Register newly wanted sockets, modify on changed interest.
-        for sock_id, entry_value in wanted.items():
-            sock, eventmask = entry_value
-            previous = registered.get(sock_id)
-            if previous is None:
-                registered[sock_id] = (sock, eventmask)
+        # Reconcile the poller against each wanted slot: register a
+        # socket whose registered mask is still 0, modify one whose
+        # accumulated mask changed.  ``registered_mask`` tracks the
+        # desired poll-set state even when ``poller is None`` (not yet
+        # lazy-built), so the replay in ``wait`` lines up.
+        for sock_id in registered:
+            slot = registered[sock_id]
+            if slot[3] != generation:
+                continue
+            sweep_mask = slot[2]
+            if slot[1] != sweep_mask:
                 if poller is not None:
-                    poller.register(sock, eventmask)
-            elif previous[1] != eventmask:
-                registered[sock_id] = (sock, eventmask)
-                if poller is not None:
-                    poller.modify(sock, eventmask)
+                    if slot[1] == 0:
+                        poller.register(slot[0], sweep_mask)
+                    else:
+                        poller.modify(slot[0], sweep_mask)
+                slot[1] = sweep_mask
 
-        # Drop sockets no service wants any more.
-        if len(registered) > len(wanted):
-            stale = [sid for sid in registered if sid not in wanted]
+        # Drop sockets no service wants any more (untouched this sweep).
+        if len(registered) > wanted_count:
+            stale = [sid for sid in registered
+                     if registered[sid][3] != generation]
             for sid in stale:
-                sock, _ = registered.pop(sid)
+                slot = registered.pop(sid)
                 if poller is not None:
                     try:
-                        poller.unregister(sock)
+                        poller.unregister(slot[0])
                     except (KeyError, OSError, ValueError):
                         # Poll-set divergence (socket already closed at
                         # the OS level, or unregistered out-of-band): the

@@ -475,6 +475,7 @@ The [examples](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner/e
 | `sensor_threshold.py` | Object-based check/handle with simulated sensor |
 | `multi_service.py` | Multiple services in one runner |
 | `runtime_control.py` | `TaskHandle` for dynamic period changes and removal |
+| `generator_basic.py` | Generator-driven service using `sleep_until` (no hardware) |
 | `circuitpython_blink.py` | LED blink on CircuitPython hardware |
 | `micropython_blink.py` | LED blink on MicroPython hardware |
 | `circuitpython_button_led.py` | Button + LED gate pattern on CircuitPython |

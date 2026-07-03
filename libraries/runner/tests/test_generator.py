@@ -16,6 +16,7 @@ wait classes from ``chumicro_runner.generators`` — proving the
 protocol is genuinely duck-typed rather than tied to specific types.
 """
 
+import chumicro_runner
 from chumicro_runner import GeneratorHandle, Runner
 from chumicro_test_harness import raises
 from chumicro_timing.testing import FakeTicks
@@ -568,3 +569,25 @@ def test_ready_wait_deadline_elapses_as_timeout_path():
     ticks.advance(60)
     runner.tick()
     assert len(resumed) == 1
+
+
+# -- Lazy GeneratorHandle re-export (PEP 562) --
+
+
+def test_generator_handle_attribute_is_lazily_exported():
+    """``chumicro_runner.GeneratorHandle`` resolves through the package
+    __getattr__ and is the same class ``add_generator`` returns, so the
+    generator machinery stays out of the eager import path yet callers
+    can still name the handle type."""
+    def noop_gen():
+        yield _Wait(until_ms=10)
+
+    handle = Runner(ticks=FakeTicks()).add_generator(noop_gen())
+    assert chumicro_runner.GeneratorHandle is type(handle)
+
+
+def test_unknown_package_attribute_raises_attribute_error():
+    """An attribute the package neither defines nor lazily re-exports
+    raises AttributeError rather than importing something unexpected."""
+    with raises(AttributeError):
+        _ = chumicro_runner.NotARealSymbol

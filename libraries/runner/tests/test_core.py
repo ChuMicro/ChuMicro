@@ -1290,6 +1290,25 @@ def test_wait_combines_read_and_write_into_one_eventmask() -> None:
     assert (sock, expected) in poller.register_calls
 
 
+def test_wait_stable_interest_touches_poller_once_across_sweeps() -> None:
+    """Repeated waits with unchanged io_* interest register the socket
+    once and issue no further register or modify calls — the poll-set
+    sync reuses its per-socket slot each sweep instead of rebuilding a
+    scratch container and re-diffing from scratch."""
+    poller = FakePoller()
+    runner = Runner(ticks=FakeTicks(), poller=poller)
+    sock = object()
+    service = _IOService(sock=sock, wants_read=True)
+    runner.add(service, period_ms=100)
+
+    for _ in range(5):
+        runner.wait(0)
+
+    assert len(poller.register_calls) == 1
+    assert poller.modify_calls == []
+    assert len(runner._registered_interest) == 1
+
+
 def test_wait_modifies_when_interest_changes() -> None:
     """Going from read-only to read+write fires modify, not a second register."""
     poller = FakePoller()
@@ -1772,14 +1791,16 @@ def test_sync_modify_branch_when_default_poller_not_yet_built() -> None:
 
     runner.wait(200)  # deadline already due; returns before the lazy build
     assert runner._poller is None
-    assert runner._registered_interest[id(sock)] == (sock, _select_pollin())
+    slot = runner._registered_interest[id(sock)]
+    assert slot[0] is sock and slot[1] == _select_pollin()
 
     service.io_wants_read = False
     service.io_wants_write = True
     runner.wait(200)  # modify branch with poller=None — no-op on poller, dict updates
 
     assert runner._poller is None
-    assert runner._registered_interest[id(sock)] == (sock, _select_pollout())
+    slot = runner._registered_interest[id(sock)]
+    assert slot[0] is sock and slot[1] == _select_pollout()
 
 
 def test_sync_unregister_branch_when_default_poller_not_yet_built() -> None:
