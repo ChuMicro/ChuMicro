@@ -27,6 +27,7 @@ import json
 from chumicro_config import load_runtime_config
 from chumicro_mqtt import MQTTClient, ProtocolState
 from chumicro_runner import Runner
+from chumicro_test_harness.markers import marker
 from chumicro_timing import ticks_add, ticks_diff, ticks_ms
 from chumicro_wifi import WifiConfig, WifiService, WifiState
 
@@ -61,11 +62,11 @@ start_ms = ticks_ms()
 
 def on_connect():
     """Connect-time setup, fired once: publish presence, subscribe to commands."""
-    print(f"MQTT_CONNECTED broker={broker} client_id={client_id}")
+    marker("MQTT_CONNECTED", broker=broker, client_id=client_id)
     mqtt.publish(state_topic, b"online", qos=1, retain=True, prefixed=False)
-    print(f"RETAINED_STATE_SENT topic={state_topic}")
+    marker("RETAINED_STATE_SENT", topic=state_topic)
     mqtt.subscribe(command_topic, qos=1, prefixed=False)
-    print(f"SUBSCRIBED topic={command_topic}")
+    marker("SUBSCRIBED", topic=command_topic)
 
 
 def on_command_message(topic, payload):
@@ -75,16 +76,17 @@ def on_command_message(topic, payload):
         else payload
     )
     command_received = True
-    print(f"CMD_RECEIVED topic={topic} payload={text}")
+    marker("CMD_RECEIVED", topic=topic, payload_hex=text.encode())
+    print(f"  text: {text}")
 
 
 def on_command_pattern(topic, _payload):
-    print(f"PATTERN_HIT topic={topic}")
+    marker("PATTERN_HIT", topic=topic)
 
 
 def on_wifi_state(_old, new):
     if new == WifiState.CONNECTED:
-        print(f"WIFI_OK ip={wifi.ip}")
+        marker("WIFI_OK", ip=wifi.ip)
         mqtt.connect()
 
 
@@ -100,7 +102,7 @@ def publish_telemetry(now_ms):
         "uptime_ms": ticks_diff(now_ms, start_ms),
     }).encode()
     mqtt.publish(telemetry_topic, payload, qos=1, prefixed=False)
-    print(f"TELEMETRY_SENT seq={telemetry_sent}")
+    marker("TELEMETRY_SENT", seq=telemetry_sent)
 
 
 mqtt.on_connect = on_connect
@@ -128,7 +130,7 @@ while True:
 
     if wrap_up_started_ms and ticks_diff(now_ms, wrap_up_started_ms) >= _FLUSH_DRAIN_MS:
         mqtt.disconnect()
-        print("DEMO_COMPLETE")
+        marker("DEMO_COMPLETE")
         break
 
     if ticks_diff(now_ms, overall_deadline_ms) >= 0:

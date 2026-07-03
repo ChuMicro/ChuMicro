@@ -20,13 +20,14 @@ Marker lines (``WIFI_OK``, ``WS_OPEN``, ``MESSAGE``, ``STREAM_CLOSED``,
 from chumicro_config import load_runtime_config
 from chumicro_runner import Runner
 from chumicro_runner.generators import Signal, wait_for
+from chumicro_test_harness.markers import marker
 from chumicro_websockets import WebSocketClient
 from chumicro_wifi import WifiConfig, WifiService, WifiState
 
 
 def receive_stream(wifi, link_up, session, url):
     yield from wait_for(link_up)
-    print(f"WIFI_OK ip={wifi.ip}")
+    marker("WIFI_OK", ip=wifi.ip)
     session.connect(url)
     runner.add(session)
     received = 0
@@ -36,13 +37,10 @@ def receive_stream(wifi, link_up, session, url):
             break
         received += 1
         text = message.text if message.is_text else repr(message.data)
-        # Marker values must be whitespace-free — parse_marker drops the
-        # whole line otherwise — so the marker carries the sequence
-        # number and the message text follows as a plain prose line.
-        print(f"MESSAGE seq={received}")
+        marker("MESSAGE", seq=received)
         print(f"  text: {text}")
-    print(f"STREAM_CLOSED count={received} code={session.last_close_code}")
-    print("DEMO_COMPLETE")
+    marker("STREAM_CLOSED", count=received, code=session.last_close_code)
+    marker("DEMO_COMPLETE")
 
 
 config = load_runtime_config()
@@ -61,7 +59,7 @@ def signal_link_up(_old, new):
         link_up.set(new)
 
 
-ws.on_open = lambda: print("WS_OPEN")
+ws.on_open = lambda: marker("WS_OPEN")
 wifi.on_state_change(signal_link_up)
 
 receive_handle = runner.add_generator(

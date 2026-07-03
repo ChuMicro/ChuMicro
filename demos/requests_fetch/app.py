@@ -21,17 +21,18 @@ from chumicro_requests.generators import get
 from chumicro_requests.sockets_factory import chumicro_sockets_connector_factory
 from chumicro_runner import Runner
 from chumicro_runner.generators import Signal, wait_for
+from chumicro_test_harness.markers import marker
 from chumicro_wifi import WifiConfig, WifiService, WifiState
 
 
 def fetch_run(wifi, link_up, url):
     yield from wait_for(link_up)
-    print(f"WIFI_OK ip={wifi.ip}")
+    marker("WIFI_OK", ip=wifi.ip)
     factory = chumicro_sockets_connector_factory(radio=wifi.adapter.radio)
-    print(f"FETCHING url={url}")
+    marker("FETCHING", url=url)
     response = yield from get(factory, url)
-    print(f"FETCHED status={response.status_code} bytes={len(response.body)}")
-    print("DEMO_COMPLETE")
+    marker("FETCHED", status=response.status_code, bytes=len(response.body))
+    marker("DEMO_COMPLETE")
 
 
 config = load_runtime_config()
