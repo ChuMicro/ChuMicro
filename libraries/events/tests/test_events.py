@@ -273,6 +273,100 @@ def test_handle_dispatch_snapshots_subscribers() -> None:
     assert late_recorder.events == [("topic", "second")]
 
 
+def test_handle_unsubscribe_self_still_delivers_later_handler() -> None:
+    """A handler unsubscribing itself mid-dispatch does not skip the handler behind it."""
+    bus = EventBus()
+    order = []
+    handle_box = {}
+
+    def first(topic: str, payload: object) -> None:
+        order.append("first")
+        bus.unsubscribe(handle_box["sub"])
+
+    second = RecordingSubscriber()
+    handle_box["sub"] = bus.subscribe("topic", first)
+    bus.subscribe("topic", second)
+    bus.publish("topic", "x")
+    bus.handle(now_ms=0)
+    assert order == ["first"]
+    assert second.events == [("topic", "x")]
+
+
+def test_handle_unsubscribe_peer_mid_dispatch_skips_that_peer() -> None:
+    """A handler that unsubscribes a not-yet-dispatched peer drops that peer this round."""
+    bus = EventBus()
+    order = []
+    handle_box = {}
+
+    def first(topic: str, payload: object) -> None:
+        order.append("first")
+        bus.unsubscribe(handle_box["second"])
+
+    second = RecordingSubscriber()
+    third = RecordingSubscriber()
+    bus.subscribe("topic", first)
+    handle_box["second"] = bus.subscribe("topic", second)
+    bus.subscribe("topic", third)
+    bus.publish("topic", "x")
+    bus.handle(now_ms=0)
+    assert order == ["first"]
+    assert second.events == []
+    assert third.events == [("topic", "x")]
+
+
+def test_handle_defers_events_published_from_a_handler() -> None:
+    """An event a handler publishes waits for the next handle() call, not the current one."""
+    bus = EventBus()
+    seen = []
+
+    def republisher(topic: str, payload: object) -> None:
+        seen.append(payload)
+        if payload == "first":
+            bus.publish("topic", "second")
+
+    bus.subscribe("topic", republisher)
+    bus.publish("topic", "first")
+    drained = bus.handle(now_ms=0)
+    assert seen == ["first"]
+    assert drained == 1
+    assert bus.buffered == 1
+    bus.handle(now_ms=0)
+    assert seen == ["first", "second"]
+
+
+def test_handle_self_republishing_handler_terminates() -> None:
+    """A handler that always republishes to its own topic still lets handle() return."""
+    bus = EventBus()
+    count = [0]
+
+    def loop(topic: str, payload: object) -> None:
+        count[0] += 1
+        bus.publish("topic", None)
+
+    bus.subscribe("topic", loop)
+    bus.publish("topic", None)
+    drained = bus.handle(now_ms=0)
+    # One record drained this call; the republished record waits for the next.
+    assert drained == 1
+    assert count[0] == 1
+    assert bus.buffered == 1
+
+
+def test_stale_subscription_from_dead_bus_does_not_unsubscribe_new_bus() -> None:
+    """A subscription minted on one bus never removes a handler from a different bus."""
+    first_bus = EventBus()
+    stale = first_bus.subscribe("topic", RecordingSubscriber())
+
+    second_bus = EventBus()
+    keeper = RecordingSubscriber()
+    second_bus.subscribe("topic", keeper)
+
+    assert second_bus.unsubscribe(stale) is False
+    second_bus.publish("topic", "x")
+    second_bus.handle(now_ms=0)
+    assert keeper.events == [("topic", "x")]
+
+
 # ---------------------------------------------------------------------------
 # Capacity / drop-oldest
 # ---------------------------------------------------------------------------
