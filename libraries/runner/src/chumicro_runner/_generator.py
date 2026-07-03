@@ -95,7 +95,8 @@ class _GeneratorWrapper:
     ``check`` / ``handle`` for tick scheduling, ``io_socket`` /
     ``io_wants_read`` / ``io_wants_write`` for poll-set membership,
     ``io_error`` for POLLERR / POLLHUP dispatch, and ``next_deadline``
-    so a ``Sleep`` token gates the wake timeout in ``Runner.wait``.
+    so a deadline-bearing wait (``sleep_until``) gates the wake timeout
+    in ``Runner.wait``.
 
     The wrapper writes ``handle.done = True`` and removes its
     ``TaskHandle`` from the runner the moment the generator finishes
