@@ -1,18 +1,18 @@
-# sockets_runner_connector — sockets via runner with a user-defined service
+# sockets_runner_connector_explicit — sockets via runner with a user-defined service
 
-End-to-end demo of the canonical pattern for **custom TCP protocols
-under runner**: write a tiny runner-service that hands its
-`SocketConnector` to the runner for the connect phase and then takes
-over for send / recv in its own `check` / `handle`.  Drop-in template
-for any protocol not covered by `HttpClient` / `MQTTClient` /
-`WebSocketClient`.
+The explicit `check` / `handle` expansion of
+[`sockets_runner_connector`](../sockets_runner_connector/): the same
+TCP echo round trip written as a hand-rolled runner-service instead of
+a generator.  Read it to see what the `connect` / `send_all` /
+`recv_until` generator helpers collapse — for new custom-protocol code,
+reach for the generator demo first.
 
-`EchoService` here is the template — a short state machine (`idle` →
+`EchoService` here writes it all out — a short state machine (`idle` →
 `connecting` → `sending` → `receiving` → `done`) plus the runner-ABI
 properties (`io_socket` / `io_wants_read` / `io_wants_write`) that
-let the runner sleep on socket-ready events instead of polling.
-Real custom-protocol code follows the same shape — only the
-wire-format logic in `_handle_sending` / `_handle_receiving` changes.
+let the runner sleep on socket-ready events instead of polling.  Only
+the wire-format logic in `_handle_sending` / `_handle_receiving`
+changes for a real custom protocol.
 
 ## What it shows
 
@@ -27,8 +27,8 @@ wire-format logic in `_handle_sending` / `_handle_receiving` changes.
   ordering, no sibling state polling between two entries.  The
   service's `io_*` properties delegate to the connector during the
   connect phase, then own the socket once `ready`.
-- **Service owns the socket after `ready`.**  `_finish_connecting`
-  grabs `self._socket = self._connector.socket`; from then on the
+- **Service owns the socket after `ready`.**  `_handle_connecting`
+  grabs `self._socket = self.connector.socket`; from then on the
   service's own `io_socket` / `io_wants_read` / `io_wants_write`
   describe the send and receive phases.  The connector goes inert
   (terminal state, both want-bits False) and the runner ignores it.
@@ -43,7 +43,7 @@ wire-format logic in `_handle_sending` / `_handle_receiving` changes.
 ## Run it
 
 ```bash
-.venv/bin/python demos/sockets_runner_connector/driver.py
+.venv/bin/python demos/sockets_runner_connector_explicit/driver.py
 ```
 
 Defaults: targets the first CircuitPython device in `devices.yml`.
@@ -65,7 +65,7 @@ driver: board WIFI_OK ip=10.0.0.42
 driver: board CONNECTING host=10.0.0.5 port=54321
 driver: board CONNECTED
 driver: board SENT bytes=15
-driver: board ECHO_RECEIVED bytes=14 payload=b'hello chumicro'
+driver: board ECHO_RECEIVED bytes=14 payload_hex=68656c6c6f206368756d6963726f
 driver: demo completed cleanly.
 ```
 
@@ -91,7 +91,7 @@ already-built-in-client equivalent.
 
 One-shot by design — this demo exits after one round trip.  For
 reconnect-capable adapters (wifi-up / wifi-down cycles), add a small
-`reset()` to clear `_connector` / `_socket` / buffers back to `idle`
+`reset()` to clear `connector` / `_socket` / buffers back to `idle`
 and call it from the wifi `DISCONNECTED` callback.
 
 ## Substrate honesty for the connect phase

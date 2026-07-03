@@ -64,6 +64,8 @@ while b"\n" not in received:
     received.extend(buffer[:number_of_bytes])
 
 payload = bytes(received).rstrip(b"\n")
-print(f"ECHO_RECEIVED bytes={len(payload)} payload={payload!r}")
+# Marker values must be whitespace-free — parse_marker drops the
+# whole line otherwise — so the payload rides as hex.
+print(f"ECHO_RECEIVED bytes={len(payload)} payload_hex={payload.hex()}")
 sock.close()
 print("DEMO_COMPLETE")

@@ -126,7 +126,9 @@ class EchoService:
         # The echo server terminates its reply with a newline.
         if b"\n" in self._received:
             payload = bytes(self._received).rstrip(b"\n")
-            print(f"ECHO_RECEIVED bytes={len(payload)} payload={payload!r}")
+            # Marker values must be whitespace-free — parse_marker drops the
+            # whole line otherwise — so the payload rides as hex.
+            print(f"ECHO_RECEIVED bytes={len(payload)} payload_hex={payload.hex()}")
             self._socket.close()
             self.state = "done"
             print("DEMO_COMPLETE")

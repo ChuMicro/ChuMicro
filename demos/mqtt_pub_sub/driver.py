@@ -111,25 +111,23 @@ def _await_marker_while_driving_host(
     The marker queue's wait_for is a blocking get; if the host MQTT
     client doesn't tick during that wait, its inbound stream stalls and
     later publishes (e.g. the board's QoS 1 telemetry) are missed.
-    Poll the marker queue in 20 ms slices, ticking the host client
-    between slices, until the marker arrives or the timeout fires.
+    ``MarkerQueue.poll`` checks without blocking, so the loop ticks the
+    host client between polls until the marker arrives or the timeout
+    fires.
     """
     deadline = time.monotonic() + timeout_s
     while True:
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
+        marker = session.runner.marker_queue.poll(marker_name)
+        if marker is not None:
+            return marker
+        if time.monotonic() >= deadline:
             raise MarkerTimeoutError(
                 f"driver: timed out after {timeout_s:.1f}s waiting for "
                 f"marker {marker_name!r}",
             )
         if host_client.check(ticks_ms()):
             host_client.handle(ticks_ms())
-        try:
-            return session.runner.marker_queue.wait_for(
-                marker_name, timeout_s=min(0.02, remaining),
-            )
-        except MarkerTimeoutError:
-            continue
+        time.sleep(0.02)
 
 
 def main(argv: list[str] | None = None) -> int:

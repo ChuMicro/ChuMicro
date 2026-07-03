@@ -111,7 +111,7 @@ def main(argv: list[str] | None = None) -> int:
         print(
             f"driver: board ECHO_RECEIVED "
             f"bytes={echo_marker.values.get('bytes')} "
-            f"payload={echo_marker.values.get('payload')}",
+            f"payload_hex={echo_marker.values.get('payload_hex')}",
         )
 
         session.wait_for("DEMO_COMPLETE", timeout_s=args.completion_timeout_s)

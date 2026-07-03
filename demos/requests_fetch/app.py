@@ -1,10 +1,11 @@
 """Board-side of the requests_fetch demo — one-shot HTTP GET via a generator.
 
-Brings wifi up with ``chumicro_wifi.WifiService``, then a generator
-does ``response = yield from get(connector_factory, url)`` driven by
-``Runner.add_generator``.  One request, written top-to-bottom: connect,
-send, receive, return the response — no polling a handle, no ``on_done``
-callback.
+``fetch_run`` expresses the whole lifecycle top-to-bottom: wait for the
+wifi link with ``wait_for``, build the connector factory, then
+``response = yield from get(connector_factory, url)`` driven by
+``Runner.add_generator``.  One request, no polling a handle, no
+``on_done`` callback; the ``Signal`` set from the wifi state-change
+callback resumes the generator once the link is up.
 
 Compare with ``libraries/requests/examples/periodic_get.py``, which
 drives the long-lived ``HttpClient`` (``check`` / ``handle``) for
@@ -19,7 +20,19 @@ from chumicro_config import load_runtime_config
 from chumicro_requests.generators import get
 from chumicro_requests.sockets_factory import chumicro_sockets_connector_factory
 from chumicro_runner import Runner
+from chumicro_runner.generators import Signal, wait_for
 from chumicro_wifi import WifiConfig, WifiService, WifiState
+
+
+def fetch_run(wifi, link_up, url):
+    yield from wait_for(link_up)
+    print(f"WIFI_OK ip={wifi.ip}")
+    factory = chumicro_sockets_connector_factory(radio=wifi.adapter.radio)
+    print(f"FETCHING url={url}")
+    response = yield from get(factory, url)
+    print(f"FETCHED status={response.status_code} bytes={len(response.body)}")
+    print("DEMO_COMPLETE")
+
 
 config = load_runtime_config()
 fetch_url = config["requests.fetch.url"]
@@ -28,26 +41,18 @@ wifi = WifiService(WifiConfig.from_config(config))
 runner = Runner()
 runner.add(wifi)
 
-fetch_handle = None
+link_up = Signal()
 
 
-def fetch_run(connector_factory, url):
-    print(f"FETCHING url={url}")
-    response = yield from get(connector_factory, url)
-    print(f"FETCHED status={response.status_code} bytes={len(response.body)}")
-    print("DEMO_COMPLETE")
-
-
-def on_wifi_state(_old, new):
-    global fetch_handle  # noqa: PLW0603
+def signal_link_up(_old, new):
     if new == WifiState.CONNECTED:
-        print(f"WIFI_OK ip={wifi.ip}")
-        factory = chumicro_sockets_connector_factory(radio=wifi.adapter.radio)
-        fetch_handle = runner.add_generator(fetch_run(factory, url=fetch_url))
+        link_up.set(new)
 
 
-wifi.on_state_change(on_wifi_state)
+wifi.on_state_change(signal_link_up)
 
-while fetch_handle is None or not fetch_handle.done:
+fetch_handle = runner.add_generator(fetch_run(wifi, link_up, fetch_url))
+
+while not fetch_handle.done:
     now_ms = runner.tick()
     runner.wait(now_ms)

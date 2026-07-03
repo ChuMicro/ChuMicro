@@ -1,10 +1,11 @@
 """Board-side of the websockets_stream demo — receive a message stream.
 
-Brings wifi up with ``chumicro_wifi.WifiService``, connects a
-``WebSocketClient`` to the host's WebSocket server, then a generator
-loop receives messages with ``yield from ws.next_message()``: wait for
-a message, print it, wait for the next, until the server closes the
-stream.
+``receive_stream`` expresses the whole lifecycle top-to-bottom: wait
+for the wifi link with ``wait_for``, connect the ``WebSocketClient``,
+then loop ``yield from session.next_message()``: wait for a message,
+print it, wait for the next, until the server closes the stream.  The
+``Signal`` set from the wifi state-change callback resumes the
+generator once the link is up.
 
 The session and the receive generator are both registered with the
 runner — the session does the frame I/O each tick, the generator drains
@@ -18,8 +19,31 @@ Marker lines (``WIFI_OK``, ``WS_OPEN``, ``MESSAGE``, ``STREAM_CLOSED``,
 
 from chumicro_config import load_runtime_config
 from chumicro_runner import Runner
+from chumicro_runner.generators import Signal, wait_for
 from chumicro_websockets import WebSocketClient
 from chumicro_wifi import WifiConfig, WifiService, WifiState
+
+
+def receive_stream(wifi, link_up, session, url):
+    yield from wait_for(link_up)
+    print(f"WIFI_OK ip={wifi.ip}")
+    session.connect(url)
+    runner.add(session)
+    received = 0
+    while True:
+        message = yield from session.next_message()
+        if message is None:
+            break
+        received += 1
+        text = message.text if message.is_text else repr(message.data)
+        # Marker values must be whitespace-free — parse_marker drops the
+        # whole line otherwise — so the marker carries counts and the
+        # message text follows as a plain prose line.
+        print(f"MESSAGE seq={received} bytes={len(message.data)}")
+        print(f"  text: {text}")
+    print(f"STREAM_CLOSED count={received} code={session.last_close_code}")
+    print("DEMO_COMPLETE")
+
 
 config = load_runtime_config()
 stream_url = config["websockets.stream.url"]
@@ -29,34 +53,21 @@ ws = WebSocketClient.from_config(config, radio=wifi.adapter.radio)
 runner = Runner()
 runner.add(wifi)
 
-receive_handle = None
+link_up = Signal()
 
 
-def receive_stream(session):
-    received = 0
-    while True:
-        message = yield from session.next_message()
-        if message is None:
-            break
-        received += 1
-        text = message.text if message.is_text else repr(message.data)
-        print(f"MESSAGE seq={received} text={text}")
-    print(f"STREAM_CLOSED count={received} code={session.last_close_code}")
-    print("DEMO_COMPLETE")
-
-
-def on_wifi_state(_old, new):
-    global receive_handle  # noqa: PLW0603
+def signal_link_up(_old, new):
     if new == WifiState.CONNECTED:
-        print(f"WIFI_OK ip={wifi.ip}")
-        ws.connect(stream_url)
-        runner.add(ws)
-        receive_handle = runner.add_generator(receive_stream(ws))
+        link_up.set(new)
 
 
 ws.on_open = lambda: print("WS_OPEN")
-wifi.on_state_change(on_wifi_state)
+wifi.on_state_change(signal_link_up)
 
-while receive_handle is None or not receive_handle.done:
+receive_handle = runner.add_generator(
+    receive_stream(wifi, link_up, ws, stream_url),
+)
+
+while not receive_handle.done:
     now_ms = runner.tick()
     runner.wait(now_ms)

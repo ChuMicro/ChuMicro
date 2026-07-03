@@ -44,7 +44,7 @@ driver: board WIFI_OK ip=10.0.0.42
 driver: board CONNECTING host=10.0.0.5 port=54321
 driver: board CONNECTED
 driver: board SENT bytes=15
-driver: board ECHO_RECEIVED bytes=14 payload=b'hello chumicro'
+driver: board ECHO_RECEIVED bytes=14 payload_hex=68656c6c6f206368756d6963726f
 driver: demo completed cleanly.
 ```
 

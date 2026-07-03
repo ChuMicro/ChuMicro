@@ -47,7 +47,7 @@ other end on their laptop with a one-liner (`curl ...`,
 `python -m http.server`, `nc -ul ...`), a docstring "Try it locally"
 section in the example file is usually enough.
 
-If the library is **server-side** (`http_server`, future
+If the library is **server-side** (`http_server`,
 `websockets`-server) or **needs non-trivial host infrastructure**
 (an MQTT broker, a websocket server, an orchestrated multi-step
 handshake), a demo carries its weight — the demo's `driver.py` packs
@@ -71,11 +71,10 @@ device from `devices.yml`.
 2. The `app.py` follows the same shape as a Category 1 board file:
    bring wifi up, do the work, print marker lines for sync, exit on
    completion or deadline.
-3. The `driver.py` builds a transport from the device registry,
-   stages + builds the bootstrap, runs the on-device code
-   concurrently via
-   `chumicro_pytest_device.concurrent_runner.DeviceBootstrapRunner`,
-   and uses whatever fixture helpers it needs from
+3. The `driver.py` deploys and runs the on-device code via
+   `chumicro_workspace.deploy_api.deploy_project`, which returns a
+   session; wait on the board's marker lines with `session.wait_for(...)`
+   and use whatever fixture helpers it needs from
    `chumicro_pytest_device.fixtures.*` to drive the round trip.
 4. `python scripts/run.py verify-demos` parses every `.py` under
    `demos/` and fails on syntax errors or empty files — preflight

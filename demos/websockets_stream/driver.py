@@ -132,8 +132,7 @@ def main(argv: list[str] | None = None) -> int:
 
         # Wait on the terminal STREAM_CLOSED marker (it carries the count,
         # which proves the messages arrived) rather than the intermediate
-        # WS_OPEN / MESSAGE markers — the marker queue drops non-matching
-        # lines while waiting, and a single corrupted serial line on a
+        # WS_OPEN / MESSAGE markers — a single corrupted serial line on a
         # non-terminal marker shouldn't fail an otherwise-clean run.
         closed_marker = session.wait_for(
             "STREAM_CLOSED", timeout_s=args.completion_timeout_s,
