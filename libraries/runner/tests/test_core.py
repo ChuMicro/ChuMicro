@@ -1732,31 +1732,31 @@ def test_add_periodic_period_ms_none_raises() -> None:
 
 # -- _sync_poll_set with default poller (still un-built) --
 #
-# When a service exposes an io_socket but contributes no deadline
-# (no period_ms, no next_deadline), _compute_timeout returns None and
-# wait() returns early without lazy-building the default adapter.
-# The registered_interest dict still updates on every _sync_poll_set.
-# A subsequent wait with flipped io_wants_* exercises the modify and
-# unregister branches while ``poller is None`` is still true.
+# When a service exposes an io_socket while the nearest deadline is
+# already due, wait() returns early without lazy-building the default
+# adapter.  The registered_interest dict still updates on every
+# _sync_poll_set.  A subsequent wait with flipped io_wants_* exercises
+# the modify and unregister branches while ``poller is None`` is still
+# true.
 
 
 def test_sync_modify_branch_when_default_poller_not_yet_built() -> None:
-    """A no-period io-service flapping read↔write across two waits
-    updates the registered_interest dict without crashing, even though
-    no poller has been built yet (timeouts were both None so wait
-    returned before the lazy build)."""
+    """An io-service flapping read↔write across two waits whose deadline
+    is already due updates the registered_interest dict without
+    crashing, even though no poller has been built yet (a due deadline
+    returns wait() before the lazy build)."""
     runner = Runner(ticks=FakeTicks())  # poller=None
     sock = object()
     service = _IOService(sock=sock, wants_read=True)
-    runner.add(service)  # no period_ms, no start_after_ms
+    runner.add(service, period_ms=100)  # next due at tick 100
 
-    runner.wait(0)  # _sync registers in dict; timeout None; returns early
+    runner.wait(200)  # deadline already due; returns before the lazy build
     assert runner._poller is None
     assert runner._registered_interest[id(sock)] == (sock, _select_pollin())
 
     service.io_wants_read = False
     service.io_wants_write = True
-    runner.wait(0)  # modify branch with poller=None — no-op on poller, dict updates
+    runner.wait(200)  # modify branch with poller=None — no-op on poller, dict updates
 
     assert runner._poller is None
     assert runner._registered_interest[id(sock)] == (sock, _select_pollout())
@@ -1769,16 +1769,43 @@ def test_sync_unregister_branch_when_default_poller_not_yet_built() -> None:
     runner = Runner(ticks=FakeTicks())  # poller=None
     sock = object()
     service = _IOService(sock=sock, wants_read=True)
-    runner.add(service)
+    runner.add(service, period_ms=100)
 
-    runner.wait(0)
+    runner.wait(200)  # deadline already due; returns before the lazy build
     assert id(sock) in runner._registered_interest
 
     service.io_socket = None
-    runner.wait(0)
+    runner.wait(200)
 
     assert runner._poller is None
     assert id(sock) not in runner._registered_interest
+
+
+def test_wait_parks_in_poller_when_only_socket_driven_services() -> None:
+    """A socket-driven service with no deadline anywhere makes wait()
+    block in ipoll with the infinite timeout (-1) instead of returning
+    immediately and busy-spinning the tick loop."""
+    poller = FakePoller()
+    runner = Runner(ticks=FakeTicks(), poller=poller)
+    sock = object()
+    service = _IOService(sock=sock, wants_read=True)
+    runner.add(service)  # no period_ms — no deadline source at all
+
+    runner.wait(0)
+
+    assert poller.ipoll_calls == [-1]
+
+
+def test_wait_returns_when_no_sockets_and_no_deadline() -> None:
+    """Handler-only entries contribute neither sockets nor deadlines, and
+    nothing can wake a sleep — wait() returns instead of blocking."""
+    poller = FakePoller()
+    runner = Runner(ticks=FakeTicks(), poller=poller)
+    runner.add(handler=lambda now_ms: None)
+
+    runner.wait(0)
+
+    assert poller.ipoll_calls == []
 
 
 def test_wait_socketless_advances_fake_clock_via_injected_sleep_ms() -> None:

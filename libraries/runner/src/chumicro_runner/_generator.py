@@ -15,13 +15,23 @@ None / False:
 * ``next_deadline``: absolute tick at which the wrapper should resume
   the generator; ``None`` means "resume on the next tick after an
   ipoll wake or any other deadline elapses."
+* ``ready(now_ms) -> bool``: optional event predicate.  A wait
+  exposing it (and no socket) suspends the generator until ``ready``
+  returns True or ``next_deadline`` elapses (the timeout path) — the
+  shape ``chumicro_runner.generators.Signal`` implements for
+  completions that originate in callback-style services.
+
+A bare ``yield`` (sending ``None``) suspends for exactly one tick:
+the wrapper substitutes a private next-tick wait, so ``None`` in the
+wait slot strictly means the generator finished.
 
 The ``SocketConnector`` from ``chumicro_sockets`` already exposes
 these attributes natively, so a generator that wraps it can simply
 ``yield connector`` — no extra wrapping needed.  Helper functions
 build small private wait objects for the other cases: the socket
 helpers in ``chumicro_sockets.generators`` for a bare socket,
-``sleep_until`` in ``chumicro_runner.generators`` for a deadline.
+``sleep_until`` in ``chumicro_runner.generators`` for a deadline,
+``Signal`` / ``wait_for`` there for a callback-completed event.
 
 Sequential I/O state machines that would otherwise need an explicit
 per-state ``check`` / ``handle`` object collapse to a top-to-bottom
@@ -36,6 +46,15 @@ touch directly.
 """
 
 from chumicro_timing.ticks import ticks_diff
+
+
+class _NextTickWait:
+    """Wait stored for a bare ``yield``: no socket, no deadline, no
+    ready predicate, so the wrapper resumes the generator on the next
+    tick.  One module-level instance serves every generator."""
+
+
+_NEXT_TICK_WAIT = _NextTickWait()
 
 
 class GeneratorHandle:
@@ -112,6 +131,15 @@ class _GeneratorWrapper:
         # gates the resume on its deadline.
         if getattr(wait, "io_socket", None) is not None:
             return True
+        # An event wait exposes ready(now_ms): resume once it fires, or
+        # when its next_deadline elapses (the timeout path); otherwise
+        # stay suspended so the wait is not busy-polled.
+        ready = getattr(wait, "ready", None)
+        if ready is not None:
+            if ready(now_ms):
+                return True
+            deadline = self.next_deadline(now_ms)
+            return deadline is not None and ticks_diff(now_ms, deadline) >= 0
         deadline = self.next_deadline(now_ms)
         if deadline is not None:
             return ticks_diff(now_ms, deadline) >= 0
@@ -176,7 +204,7 @@ class _GeneratorWrapper:
 
     def _advance(self, value: object) -> None:
         try:
-            self._wait = self._gen.send(value)
+            wait = self._gen.send(value)
         except StopIteration:
             self._mark_done()
         except BaseException:
@@ -185,15 +213,21 @@ class _GeneratorWrapper:
             # if a caller catches the exception further up the stack.
             self._mark_done()
             raise
+        else:
+            # A bare ``yield`` sends None; substitute the next-tick
+            # wait so a None wait slot strictly means finished.
+            self._wait = wait if wait is not None else _NEXT_TICK_WAIT
 
     def _advance_throw(self, error: BaseException) -> None:
         try:
-            self._wait = self._gen.throw(error)
+            wait = self._gen.throw(error)
         except StopIteration:
             self._mark_done()
         except BaseException:
             self._mark_done()
             raise
+        else:
+            self._wait = wait if wait is not None else _NEXT_TICK_WAIT
 
     def _close(self) -> None:
         """Cancellation path: close the generator and remove from runner.

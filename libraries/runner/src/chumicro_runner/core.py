@@ -524,13 +524,16 @@ class Runner:
            ``next_due_ms`` and every service's
            ``next_deadline(now_ms)``, minus *now_ms*.
         3. Blocks in ``ipoll(timeout_ms)`` over the registered poll set
-           if any socket is registered, otherwise sleeps the timeout.
-           The socket-less sleep delegates to the injected tick source's
-           ``sleep_ms`` when it has one (so a ``FakeTicks`` advances its
-           own clock instead of burning wall time), otherwise the
-           runtime ``time.sleep_ms`` / ``time.sleep``.  Returns
-           immediately if no timeout source applies or the next deadline
-           is already in the past.
+           if any socket is registered — indefinitely when no entry
+           contributes a deadline, so a purely socket-driven service
+           set parks the CPU until an event fires.  With no sockets
+           registered, sleeps the timeout: the socket-less sleep
+           delegates to the injected tick source's ``sleep_ms`` when it
+           has one (so a ``FakeTicks`` advances its own clock instead
+           of burning wall time), otherwise the runtime
+           ``time.sleep_ms`` / ``time.sleep``.  Returns immediately
+           when the next deadline is already due, or when there is
+           neither a socket nor a deadline to wait on.
 
         For each ipoll event whose mask carries POLLERR or POLLHUP
         (socket error / hangup), looks up the registered service whose
@@ -550,7 +553,7 @@ class Runner:
         """
         self._sync_poll_set()
         timeout_ms = self._compute_timeout(now_ms)
-        if timeout_ms is None or timeout_ms <= 0:
+        if timeout_ms is not None and timeout_ms <= 0:
             return
 
         if self._registered_interest:
@@ -561,6 +564,11 @@ class Runner:
                 self._poller = _SelectPollAdapter()
                 for sock, eventmask in self._registered_interest.values():
                     self._poller.register(sock, eventmask)
+            if timeout_ms is None:
+                # Sockets registered but no deadline anywhere: park in
+                # the poller until an event fires.  -1 blocks
+                # indefinitely on every runtime's poll/ipoll.
+                timeout_ms = -1
             for item in self._poller.ipoll(timeout_ms):
                 # MicroPython / CircuitPython ipoll yields a reused
                 # tuple ``(sock, eventmask)``; CPython poll().poll()
@@ -571,6 +579,10 @@ class Runner:
                 if eventmask & _POLL_ERROR_MASK:
                     self._dispatch_io_error(obj, eventmask, now_ms)
         else:
+            if timeout_ms is None:
+                # Neither sockets nor deadlines: nothing can wake a
+                # sleep, so return and let the caller's loop proceed.
+                return
             self._sleep_ms(timeout_ms)
 
     def _dispatch_io_error(self, obj: object, eventmask: int, now_ms: int) -> None:

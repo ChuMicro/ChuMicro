@@ -117,15 +117,25 @@ while True:
 
 ### Generator helpers (opt-in sub-module)
 
-`chumicro_runner.generators` carries four socket-driven helpers and one sleep helper for writing sequential I/O without per-state plumbing.  Import explicitly so plain-runner consumers stay free of the load:
+`chumicro_runner.generators` carries the scheduler-side helpers — a sleep and an event token — while the socket-driven helpers live in `chumicro_sockets.generators`.  Import explicitly so plain-runner consumers stay free of the load:
 
 | Symbol | Description |
 |---|---|
-| `connect(connector)` | Drive any `SocketConnector`-shaped object to ready across runner ticks; return the connected socket via PEP 380 (`sock = yield from connect(connector)`) |
-| `send_all(sock, data)` | Send every byte of *data* with an EAGAIN-yielding inner loop |
-| `recv_until(sock, separator, max_bytes=...)` | Read until *separator* appears, capped at *max_bytes* (heap-DoS guard) |
-| `recv_exact(sock, byte_count)` | Read exactly *byte_count* bytes |
 | `sleep_until(until_ms)` | Suspend until the absolute tick `until_ms`; pair with `chumicro_timing.ticks_add(ticks_ms(), delay_ms)` |
+| `Signal` | One-slot completion token a callback-style service `set(value)`s; reusable via `clear()` |
+| `wait_for(signal, deadline_ms=...)` | Suspend until *signal* is set; return its value, or raise `OSError(ETIMEDOUT)` past the optional deadline |
+| `connect(connector)` — `chumicro_sockets.generators` | Drive any `SocketConnector`-shaped object to ready across runner ticks; return the connected socket via PEP 380 (`sock = yield from connect(connector)`) |
+| `send_all(sock, data)` — `chumicro_sockets.generators` | Send every byte of *data* with an EAGAIN-yielding inner loop |
+| `recv_until(sock, separator, max_bytes=...)` — `chumicro_sockets.generators` | Read until *separator* appears, capped at *max_bytes* (heap-DoS guard) |
+| `recv_exact(sock, byte_count)` — `chumicro_sockets.generators` | Read exactly *byte_count* bytes |
+
+A `Signal` bridges callback-land into a generator body — hand `signal.set` to a service as its callback, then `value = yield from wait_for(signal)`:
+
+```python
+link_up = Signal()
+wifi.on_state_change(lambda old, new: link_up.set(new))
+state = yield from wait_for(link_up)
+```
 
 ### Testing
 
@@ -232,7 +242,7 @@ while not handle.done:
     runner.wait(now_ms)
 ```
 
-The generator yields a wait — typically a `connector`, a socket-bound wait from `send_all` / `recv_until` / `recv_exact`, or a deadline from `sleep_until` — and the runner resumes it when the underlying socket is ready (or, for `sleep_until`, when the deadline passes).  `try / finally` runs whether the generator returns normally, raises, or gets cancelled via `handle.cancel()` (which sends `GeneratorExit` into the body).
+The generator yields a wait — typically a `connector`, a socket-bound wait from `send_all` / `recv_until` / `recv_exact`, a deadline from `sleep_until`, or a `Signal` completed from callback-land — and the runner resumes it when the wait is satisfied.  A bare `yield` suspends for exactly one tick.  `try / finally` runs whether the generator returns normally, raises, or gets cancelled via `handle.cancel()` (which sends `GeneratorExit` into the body).
 
 ### When to pick generators vs check/handle
 

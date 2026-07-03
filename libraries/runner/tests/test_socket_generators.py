@@ -8,8 +8,10 @@ the socket helpers that now live in ``chumicro_sockets.generators`` —
 proving the scheduler wrapper and the socket helpers compose.
 """
 
+import errno
+
 from chumicro_runner import Runner
-from chumicro_runner.generators import sleep_until
+from chumicro_runner.generators import Signal, sleep_until, wait_for
 from chumicro_sockets.generators import connect, recv_until, send_all
 from chumicro_sockets.testing import FakeSocket, FakeSocketConnector
 from chumicro_timing.testing import FakeTicks
@@ -158,3 +160,91 @@ def test_full_lifecycle_connect_send_recv_under_runner():
     assert bytes(sock.sent) == b"hello\n"
     assert received == [b"echo:hello\n"]
     assert sock.closed is True
+
+
+# -- Signal / wait_for -----------------------------------------------
+
+
+def test_signal_wait_for_returns_value_set_by_callback():
+    # wait_for suspends until another service's handler sets the
+    # signal, then resumes on the following tick and returns the
+    # stored value.
+    ticks = FakeTicks()
+    runner = Runner(ticks=ticks)
+    outcome = []
+    link_up = Signal()
+
+    def waiter():
+        outcome.append((yield from wait_for(link_up)))
+
+    handle = runner.add_generator(waiter())
+    runner.tick()
+    runner.tick()
+    assert outcome == []
+
+    runner.add(handler=lambda now_ms: link_up.set("192.0.2.7"), run_count=1)
+    runner.tick()
+    runner.tick()
+    assert outcome == ["192.0.2.7"]
+    assert handle.done
+
+
+def test_signal_wait_for_deadline_raises_etimedout_inside_generator():
+    # Past deadline_ms with the signal unset, wait_for raises
+    # OSError(ETIMEDOUT) inside the generator body — catchable there —
+    # and clears the timeout it parked on the signal.
+    ticks = FakeTicks()
+    runner = Runner(ticks=ticks)
+    caught = []
+    never = Signal()
+
+    def waiter():
+        try:
+            yield from wait_for(never, deadline_ms=100)
+        except OSError as error:
+            caught.append(error.args[0])
+
+    handle = runner.add_generator(waiter())
+    runner.tick()
+    assert caught == []
+    ticks.advance(150)
+    runner.tick()
+    assert caught == [errno.ETIMEDOUT]
+    assert handle.done
+    assert never.next_deadline is None
+
+
+def test_signal_reuse_after_clear():
+    # One Signal serves sequential waits: set/return, clear, wait
+    # again — is_set and value fully re-arm.
+    runner = Runner(ticks=FakeTicks())
+    outcomes = []
+    signal = Signal()
+
+    def waiter():
+        outcomes.append((yield from wait_for(signal)))
+        signal.clear()
+        outcomes.append((yield from wait_for(signal)))
+
+    runner.add_generator(waiter())
+    signal.set("first")
+    runner.tick()
+    assert outcomes == ["first"]
+    signal.set("second")
+    runner.tick()
+    assert outcomes == ["first", "second"]
+
+
+def test_signal_wait_contributes_no_wake_timeout():
+    # A pending signal wait exposes no deadline of its own, so
+    # _compute_timeout stays governed by the other services — the
+    # setter's wake source is what un-parks the loop.
+    ticks = FakeTicks()
+    runner = Runner(ticks=ticks)
+    signal = Signal()
+
+    def waiter():
+        yield from wait_for(signal)
+
+    runner.add_generator(waiter())
+    assert runner._compute_timeout(ticks.ticks_ms()) is None
