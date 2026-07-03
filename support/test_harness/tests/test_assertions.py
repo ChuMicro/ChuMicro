@@ -9,6 +9,7 @@ real silicon, the same way every networking library's tests do.
 """
 
 from chumicro_test_harness.assertions import raises
+from chumicro_test_harness.skip import _SkipException, skip
 
 
 def test_raises_catches_expected_exception():
@@ -92,3 +93,21 @@ def test_raises_value_is_none_until_block_exits():
     ctx = raises(ValueError)
     assert ctx.value is None
     assert ctx.exception is None
+
+
+def test_raises_does_not_suppress_skip():
+    """`raises(Exception)` lets a `skip()` propagate instead of swallowing it.
+
+    `skip()` raises a BaseException-derived sentinel (pytest's `Skipped`
+    on the host, `_SkipException` on device), not an `Exception` subclass.
+    An over-broad `raises(Exception)` wrapping `skip()` therefore does not
+    treat the skip as the expected exception; it propagates, matching
+    pytest semantics on both host and device.
+    """
+    propagated = False
+    try:
+        with raises(Exception):
+            skip("skip must propagate through raises(Exception)")
+    except _SkipException:
+        propagated = True
+    assert propagated

@@ -449,3 +449,156 @@ def test_run_module_skip_does_not_count_as_failure(capsys) -> None:
     assert "SKIP test_one (not applicable)" in output
     assert "FAIL test_two" in output
     assert "SUMMARY total=2 failed=1" in output
+
+
+def test_run_module_fails_generator_bodied_test(capsys) -> None:
+    """A ``test_*`` with a stray ``yield`` fails instead of a hollow PASS.
+
+    Calling a generator function returns a generator object without
+    running the body, so the failing assertion never executes. The runner
+    reports FAIL naming the cause and counts it as failed, never PASS.
+    """
+    def test_generator_body():
+        assert 2 + 2 == 5, "this assertion never runs"
+        yield
+
+    module = SimpleNamespace(test_generator_body=test_generator_body)
+
+    result = run_module(module)
+    output = capsys.readouterr().out
+
+    assert result == 1
+    assert "FAIL test_generator_body" in output
+    assert "PASS test_generator_body" not in output
+    assert "generator or coroutine" in output
+    assert "SUMMARY total=1 failed=1" in output
+
+
+def test_run_module_fails_async_bodied_test(capsys) -> None:
+    """An ``async def test_*`` fails instead of passing as an un-awaited coroutine.
+
+    Calling a coroutine function returns a coroutine object without
+    running the body. The runner detects the un-run coroutine and fails
+    it, matching the generator treatment.
+    """
+    async def test_async_body():  # noqa: CHU033 - this test proves the runner FAILs an async-bodied test; it must define one
+        raise AssertionError("this never runs")
+
+    module = SimpleNamespace(test_async_body=test_async_body)
+
+    result = run_module(module)
+    output = capsys.readouterr().out
+
+    assert result == 1
+    assert "FAIL test_async_body" in output
+    assert "PASS test_async_body" not in output
+    assert "SUMMARY total=1 failed=1" in output
+
+
+def test_run_module_fails_generator_bodied_class_method(capsys) -> None:
+    """A generator-bodied ``test_*`` method on a ``Test*`` class fails, not passes.
+
+    The un-run generator detection applies to bound methods too: the
+    method's returned generator object flags the never-run body.
+    """
+    class TestGen:
+        def test_generator_method(self):
+            raise AssertionError("never runs")
+            yield
+
+    module = SimpleNamespace(TestGen=TestGen)
+
+    result = run_module(module)
+    output = capsys.readouterr().out
+
+    assert result == 1
+    assert "FAIL TestGen.test_generator_method" in output
+    assert "PASS TestGen.test_generator_method" not in output
+    assert "SUMMARY total=1 failed=1" in output
+
+
+def test_run_module_contains_class_constructor_error(capsys) -> None:
+    """A ``Test*`` constructor that raises fails only its own method, not the suite.
+
+    Discovery constructs a fresh instance per method. When the
+    constructor raises, that method is reported FAIL (attributed by
+    ``Class.method`` name) and every sibling module-level test still
+    runs, with a consistent SUMMARY.
+    """
+    def test_aaa_first() -> None:
+        pass
+
+    class TestBoom:
+        def __init__(self) -> None:
+            raise RuntimeError("constructor blew up during discovery")
+
+        def test_method(self) -> None:
+            pass
+
+    def test_zzz_last() -> None:
+        pass
+
+    module = SimpleNamespace(
+        test_aaa_first=test_aaa_first,
+        TestBoom=TestBoom,
+        test_zzz_last=test_zzz_last,
+    )
+
+    result = run_module(module)
+    output = capsys.readouterr().out
+
+    assert result == 1
+    assert "FAIL TestBoom.test_method" in output
+    assert "RuntimeError: constructor blew up during discovery" in output
+    assert "PASS test_aaa_first" in output
+    assert "PASS test_zzz_last" in output
+    assert "SUMMARY total=3 failed=1" in output
+
+
+def test_run_module_contains_attribute_access_error(capsys) -> None:
+    """A ``test_*`` attribute whose access raises fails only itself.
+
+    Reading the attribute during discovery raises (a property with a side
+    effect). The runner reports FAIL for that name and keeps running the
+    remaining tests instead of truncating the file.
+    """
+    class ModuleLike:
+        @property
+        def test_side_effect(self):
+            raise RuntimeError("getattr side effect")
+
+        @property
+        def test_ok(self):
+            return lambda: None
+
+    module = ModuleLike()
+
+    result = run_module(module)
+    output = capsys.readouterr().out
+
+    assert result == 1
+    assert "FAIL test_side_effect" in output
+    assert "RuntimeError: getattr side effect" in output
+    assert "PASS test_ok" in output
+    assert "SUMMARY total=2 failed=1" in output
+
+
+def test_run_module_discovery_order_is_sorted(capsys) -> None:
+    """Tests run in sorted name order, matching the host collector's ordering.
+
+    ``dir()`` is unsorted on MicroPython and CircuitPython; the runner
+    sorts it so device execution order is deterministic and matches the
+    host's ``sorted`` collection.
+    """
+    calls: list[str] = []
+
+    module = SimpleNamespace(
+        test_zebra=lambda: calls.append("zebra"),
+        test_apple=lambda: calls.append("apple"),
+        test_mango=lambda: calls.append("mango"),
+    )
+
+    run_module(module)
+    capsys.readouterr()
+
+    assert calls == ["apple", "mango", "zebra"]

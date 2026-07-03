@@ -155,6 +155,41 @@ class TestParseTestFunctions:
         names = collection._parse_test_functions(test_file)
         assert names == []
 
+    def test_collects_async_test_functions(self, tmp_path: Path) -> None:
+        """``async def test_*`` is collected so the device FAIL has an item.
+
+        The runner discovers an ``async def test_*`` via ``dir()`` and
+        fails it (its body never runs — calling it only builds an
+        un-awaited coroutine). Collecting the name here gives that FAIL a
+        pytest item; without it the device-run name is an orphan that
+        fails the whole file's reconcile. Covers both module-level async
+        functions and async ``Test*`` methods.
+        """
+        source = textwrap.dedent("""\
+            async def test_async_top_level():
+                pass
+
+            def test_plain():
+                pass
+
+            class TestAsyncMethods:
+                async def test_async_method(self):
+                    pass
+
+                def test_sync_method(self):
+                    pass
+        """)
+        test_file = tmp_path / "test_async.py"
+        test_file.write_text(source)
+
+        names = collection._parse_test_functions(test_file)
+        assert names == [
+            "TestAsyncMethods.test_async_method",
+            "TestAsyncMethods.test_sync_method",
+            "test_async_top_level",
+            "test_plain",
+        ]
+
     def test_pytest_style_file_yields_nothing(self, tmp_path: Path) -> None:
         """A fixture-only pytest-style file yields no discoverable tests.
 
