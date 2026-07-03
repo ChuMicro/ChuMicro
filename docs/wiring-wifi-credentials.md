@@ -23,9 +23,9 @@ mqtt:
     port: 1883
 ```
 
-Then deploy with `chumicro-workspace deploy <project>`.  The bake-and-deploy pipeline merges `workspace.yml` + `secrets.toml` + per-project `config.toml` and writes the result to `/runtime_config.msgpack` on the device.  The example reads it back via `chumicro_config.load_runtime_config()` — see [`chumicro-config`](../libraries/config/) for the standard pattern.
+Then deploy with `chumicro-workspace deploy <project>`.  The bake-and-deploy pipeline merges `workspace.yml` + `secrets.toml` + per-project `project_config.toml` and writes the result to `/runtime_config.msgpack` on the device.  The example reads it back via `chumicro_config.load_runtime_config()` — see [`chumicro-config`](../libraries/config/) for the standard pattern.
 
-The two-file split (`workspace.yml` for non-secret defaults, `secrets.toml` for credentials) is intentional — `workspace.yml` can be shared across teammates if you want, while `secrets.toml` never leaves your machine.  Per-project overrides go in `projects/<name>/config.toml`.
+The two-file split (`workspace.yml` for non-secret defaults, `secrets.toml` for credentials) is intentional — `workspace.yml` can be shared across teammates if you want, while `secrets.toml` never leaves your machine.  Per-project overrides go in `projects/<name>/project_config.toml`.
 
 ## Raw single-file deploy (no workspace)
 
