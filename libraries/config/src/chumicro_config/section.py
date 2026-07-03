@@ -55,13 +55,8 @@ class RuntimeConfig:
         return key in self._data
 
 
-def is_config_like(value) -> bool:
-    """Return ``True`` when *value* is a :class:`RuntimeConfig` or plain dict.
-
-    Same type check :func:`load_section` applies internally. Useful
-    when a ``from_config`` builds its own instance instead of calling
-    :func:`load_section`.
-    """
+def _is_config_like(value) -> bool:
+    """Return ``True`` when *value* is a :class:`RuntimeConfig` or plain dict."""
     return isinstance(value, (RuntimeConfig, dict))
 
 
@@ -87,7 +82,7 @@ def load_section(
         raise InvalidConfigType(
             "load_section requires a runtime config; got None",
         )
-    if not is_config_like(config):
+    if not _is_config_like(config):
         raise InvalidConfigType(
             f"load_section requires a RuntimeConfig or dict, "
             f"got {type(config).__name__}",

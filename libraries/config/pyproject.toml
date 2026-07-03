@@ -13,7 +13,7 @@ authors = [
     { name = "ChuMicro" },
 ]
 dependencies = [
-    "chumicro-msgpack",
+    "chumicro-msgpack>=0.2.0",
 ]
 keywords = [
     "circuitpython", "micropython", "microcontroller", "embedded",
