@@ -51,6 +51,7 @@ CYW43_PM_DISABLE = const(0xA11140)
 #: ``import sys; print(sys.implementation._machine)`` at the REPL).
 CYW43_MACHINES = (
     "Raspberry Pi Pico W with RP2040",
+    "Raspberry Pi Pico 2 W with RP2350",
 )
 
 
@@ -89,6 +90,12 @@ class MpWifiAdapter(WifiAdapter):
             ``import esp32``).  Tests pass this explicitly to
             exercise either branch on CPython.
     """
+
+    # MP's wlan.connect() dispatches a non-blocking join and returns
+    # immediately; is_linked() reports success on a later tick.  The
+    # service must treat connect() == False as an attempt still in
+    # flight, not a settled failure.
+    connect_blocks = False
 
     def __init__(self, wlan=None, *, stack=None):
         if stack is None:
@@ -142,15 +149,9 @@ class MpWifiAdapter(WifiAdapter):
         applied here at configure time so the first link is
         already in the user's preferred mode.
         """
-        self._wlan.active(True)
         if config.hostname is not None:
-            try:
-                self._wlan.config(dhcp_hostname=config.hostname)
-            except (OSError, ValueError):
-                # Some MP builds reject hostname config when the
-                # interface is up.  Tolerate the failure rather than
-                # blocking deploy.
-                pass
+            self._apply_hostname(config.hostname)
+        self._wlan.active(True)
         if self._stack == "cyw43" and not config.power_save:
             try:
                 self._wlan.config(pm=CYW43_PM_DISABLE)
@@ -160,6 +161,33 @@ class MpWifiAdapter(WifiAdapter):
                 # firmware default, meaning user code may notice idle
                 # latency spikes but the connection still works.
                 pass
+
+    def _apply_hostname(self, hostname):
+        """Set the DHCP hostname, before the interface comes up.
+
+        ``network.hostname(...)`` is the portable API (CYW43 / rp2 and
+        recent ESP-IDF); ``wlan.config(dhcp_hostname=...)`` is the
+        ESP-port-only fallback.  The ESP kwarg raises ``ValueError`` on
+        CYW43, which is why the portable call is tried first — otherwise
+        the hostname silently never applies on a Pi Pico W.
+        """
+        try:
+            import network  # pragma: no cover - MP runtime path
+            network_hostname = getattr(network, "hostname", None)
+        except ImportError:
+            network_hostname = None
+        if network_hostname is not None:
+            try:
+                network_hostname(hostname)
+                return
+            except (OSError, ValueError):
+                pass
+        try:
+            self._wlan.config(dhcp_hostname=hostname)
+        except (OSError, ValueError):
+            # No hostname knob on this build; tolerate rather than
+            # blocking deploy.
+            pass
 
     def connect(self, config):
         """Begin / drive the association via ``wlan.connect``.
@@ -176,9 +204,26 @@ class MpWifiAdapter(WifiAdapter):
         the sole driver of retry behavior.  CYW43 has no firmware
         supervisor, so no supervisor-off call fires.
         """
+        # Already linked: don't re-issue wlan.connect(), which on
+        # ESP-IDF aborts and restarts the established association (or
+        # raises) and on CYW43 drops progress.  The service polls
+        # is_linked() during an in-flight attempt, so this guard fires
+        # when the association completed between the dispatch and the
+        # service's next attempt.
+        if self._wlan.isconnected():
+            self._disable_supervisor_once()
+            return True
         self._wlan.connect(config.ssid, config.password)
         if not self._wlan.isconnected():
             return False
+        self._disable_supervisor_once()
+        return True
+
+    def _disable_supervisor_once(self):
+        """Drop the ESP-IDF firmware auto-reconnect supervisor after the
+        first link-up so the library's reconnect supervisor is the sole
+        driver.  No-op on CYW43 (no firmware supervisor) and after the
+        first call."""
         if self._stack == "espidf" and not self._supervisor_disabled:
             try:
                 self._wlan.config(reconnects=0)
@@ -189,7 +234,6 @@ class MpWifiAdapter(WifiAdapter):
                 # because the library's reconnect supervisor still
                 # works without the firmware-side guarantee.
                 pass
-        return True
 
     def disconnect(self):
         """Drop the active association.  Safe to call when no association is up."""

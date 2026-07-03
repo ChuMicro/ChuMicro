@@ -36,6 +36,13 @@ class _FakeWlan:
         self._ip = ip
         self._connect_outcome = True
         self._connect_exception = None
+        # Deferred-association mode: connect() records a pending join and
+        # isconnected() stays False until link_after ticks of connect()
+        # calls — modelling MP's non-blocking wlan.connect(), whose real
+        # association takes seconds.  None keeps the synchronous shape.
+        self._link_after = None
+        self._pending_polls = 0
+        self.connect_dispatch_count = 0
         self.calls = []
         self.config_calls = []
 
@@ -47,15 +54,28 @@ class _FakeWlan:
 
     def connect(self, ssid, password):
         self.calls.append(("connect", ssid, password))
+        self.connect_dispatch_count += 1
         if self._connect_exception is not None:
             raise self._connect_exception
+        if self._link_after is not None:
+            # Defer: the join is dispatched but not yet linked.
+            self._pending_polls = self._link_after
+            return
         self._connected = bool(self._connect_outcome)
+
+    def set_deferred_link(self, *, link_after):
+        """Model a non-blocking join that links after *link_after* isconnected() polls."""
+        self._link_after = link_after
 
     def disconnect(self):
         self.calls.append(("disconnect",))
         self._connected = False
 
     def isconnected(self):
+        if self._link_after is not None and self._pending_polls > 0:
+            self._pending_polls -= 1
+            if self._pending_polls == 0:
+                self._connected = bool(self._connect_outcome)
         return self._connected
 
     def ifconfig(self):
@@ -105,6 +125,18 @@ def test_default_stack_detection_picks_cyw43_for_pico_w_machine() -> None:
     import chumicro_wifi._adapters.mp as mp_mod
     original = mp_mod._get_machine_name
     mp_mod._get_machine_name = lambda: "Raspberry Pi Pico W with RP2040"
+    try:
+        assert MpWifiAdapter._detect_stack() == "cyw43"
+    finally:
+        mp_mod._get_machine_name = original
+
+
+def test_default_stack_detection_picks_cyw43_for_pico_2w_machine() -> None:
+    """The Pi Pico 2 W (RP2350) machine string also routes to ``cyw43``,
+    so its power-save-disable knob fires and adapter.name is truthful."""
+    import chumicro_wifi._adapters.mp as mp_mod
+    original = mp_mod._get_machine_name
+    mp_mod._get_machine_name = lambda: "Raspberry Pi Pico 2 W with RP2350"
     try:
         assert MpWifiAdapter._detect_stack() == "cyw43"
     finally:
@@ -478,3 +510,59 @@ def test_service_drives_cyw43_adapter_through_full_lifecycle() -> None:
     # No supervisor-off knob on cyw43.
     reconnects_calls = [call for call in wlan.config_calls if "reconnects" in call]
     assert reconnects_calls == []
+
+
+def test_service_waits_out_deferred_association_without_failing() -> None:
+    """A non-blocking join that links after several polls reaches CONNECTED
+    instead of counting each in-flight poll as a failed attempt."""
+    from chumicro_timing.testing import FakeTicks
+    from chumicro_wifi import WifiService, WifiState
+
+    wlan = _FakeWlan()
+    wlan.set_deferred_link(link_after=5)  # links on the 5th isconnected() poll
+    adapter = MpWifiAdapter(wlan=wlan, stack="cyw43")
+    config = WifiConfig(
+        ssid="HomeNet",
+        password="secret",
+        reconnect_max=3,
+        connect_timeout_ms=10_000,
+        reconnect_backoff_start_ms=1000,
+    )
+    ticks = FakeTicks()
+    service = WifiService(config, adapter=adapter, ticks=ticks)
+
+    for _ in range(8):
+        service.handle(ticks.ticks_ms())
+        ticks.advance(1000)
+        if service.state == WifiState.CONNECTED:
+            break
+    assert service.state == WifiState.CONNECTED
+    # The join was dispatched exactly once, not re-issued on every poll.
+    assert wlan.connect_dispatch_count == 1
+
+
+def test_service_fails_after_connect_timeout_when_link_never_comes_up() -> None:
+    """A dispatched join that never links counts one failed attempt per
+    connect_timeout_ms window and eventually reaches FAILED."""
+    from chumicro_timing.testing import FakeTicks
+    from chumicro_wifi import WifiService, WifiState
+
+    wlan = _FakeWlan()
+    wlan.set_deferred_link(link_after=10_000)  # effectively never links
+    adapter = MpWifiAdapter(wlan=wlan, stack="cyw43")
+    config = WifiConfig(
+        ssid="HomeNet",
+        password="secret",
+        reconnect_max=2,
+        connect_timeout_ms=5000,
+        reconnect_backoff_start_ms=1000,
+    )
+    ticks = FakeTicks()
+    service = WifiService(config, adapter=adapter, ticks=ticks)
+
+    for _ in range(200):
+        service.handle(ticks.ticks_ms())
+        ticks.advance(1000)
+        if service.state == WifiState.FAILED:
+            break
+    assert service.state == WifiState.FAILED
