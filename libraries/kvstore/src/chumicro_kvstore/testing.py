@@ -95,9 +95,13 @@ class FakeKVStore(KVStore):
         """Adjust the simulated capacity mid-test.
 
         Lets tests cross the ``KVStoreFull`` threshold deterministically
-        without manufacturing a giant payload.
+        without manufacturing a giant payload.  Updates both the backend
+        and the ``KVStore.capacity`` snapshot taken at construction, so
+        raising the cap mid-test actually takes effect (the store's own
+        pre-check reads its snapshot, not the backend).
         """
         self._memory_backend.capacity = capacity
+        self.capacity = capacity
 
     @property
     def raw_payload(self) -> bytes:

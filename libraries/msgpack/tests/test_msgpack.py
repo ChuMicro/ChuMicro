@@ -627,6 +627,30 @@ def test_moderate_nesting_still_roundtrips() -> None:
     assert _pure_unpackb(_pure_packb(value)) == [[[[0]]]]
 
 
+def test_encode_refuses_nesting_the_decoder_would_reject() -> None:
+    """packb enforces the same depth bound as unpackb, so it never emits
+    bytes the same library cannot read back (which a store would persist
+    and then lose silently on the next load)."""
+    deep = 0
+    for _ in range(9):  # one past _MAX_DEPTH (8)
+        deep = [deep]
+    with raises(ValueError):
+        _pure_packb(deep)
+    # The deepest value packb DOES accept round-trips cleanly.
+    ok = 0
+    for _ in range(8):
+        ok = [ok]
+    assert _pure_unpackb(_pure_packb(ok)) == ok
+
+
+def test_container_map_key_raises_value_error_not_type_error() -> None:
+    """A structurally-valid map with a container key surfaces as ValueError
+    (the untrusted-input contract), not a raw TypeError."""
+    # {[]: 0} — fixmap len 1, fixarray len 0 (key), 0 (value).
+    with raises(ValueError):
+        _pure_unpackb(b"\x81\x90\x00")
+
+
 def test_exact_buffer_no_trailing_roundtrips() -> None:
     """A buffer holding exactly one object (no slack) still decodes."""
     assert _pure_unpackb(_pure_packb({"a": [1, 2], "b": "x"})) == {

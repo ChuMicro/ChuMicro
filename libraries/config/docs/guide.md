@@ -20,7 +20,7 @@ config = load_runtime_config()                       # /runtime_config.msgpack
 wifi = WifiService(WifiConfig.from_config(config))   # reads + types wifi.* keys
 ```
 
-`load_runtime_config()` opens `/runtime_config.msgpack` (the default path — see `DEFAULT_RUNTIME_CONFIG_PATH`), msgpack-decodes it, and returns a `RuntimeConfig` — a thin lookup wrapper over the flat-key payload.  Every chumicro library reads its own prefix's keys (`wifi.ssid`, `mqtt.broker`, …) from that one object.
+`load_runtime_config()` opens `/runtime_config.msgpack` (the default path — see `DEFAULT_RUNTIME_CONFIG_PATH`), msgpack-decodes it, and returns a `RuntimeConfig` — a thin lookup wrapper over the flat-key payload.  Every chumicro library reads its own prefix's keys (`wifi.ssid`, `mqtt.broker.host`, …) from that one object.
 
 ## Writing a `from_config` for your own library
 
@@ -143,14 +143,14 @@ The runtime config is one msgpack file at `/runtime_config.msgpack`.  Its on-dev
     "wifi.ssid": "HomeNet",
     "wifi.password": "secret",
     "wifi.hostname": "back-porch",
-    "mqtt.broker": "mqtt.local",
-    "mqtt.port": 1883,
+    "mqtt.broker.host": "mqtt.local",
+    "mqtt.broker.port": 1883,
     "ntp.servers": ["pool.ntp.org"],
     "app.sample_period_ms": 5000,
 }
 ```
 
-On device, `load_runtime_config()` reads this file back and returns a `RuntimeConfig` that behaves like a flat dict — `config["wifi.ssid"]`, `"mqtt.broker" in config`, etc.
+On device, `load_runtime_config()` reads this file back and returns a `RuntimeConfig` that behaves like a flat dict — `config["wifi.ssid"]`, `"mqtt.broker.host" in config`, etc.
 
 ### How the workspace tool produces it
 
@@ -163,8 +163,8 @@ ssid = "HomeNet"
 password = "secret"
 hostname = "back-porch"
 
-[mqtt]
-broker = "mqtt.local"
+[mqtt.broker]
+host = "mqtt.local"
 port = 1883
 
 [ntp]

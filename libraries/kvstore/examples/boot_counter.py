@@ -10,7 +10,7 @@ CircuitPython (with the runtime-appropriate persistent backend).
 Example output::
 
     Boot count: 1
-    Bytes used: 8 / 9223372036854775807
+    Bytes used: 13 / 9223372036854775807
     Backend: memory
 """
 

@@ -35,7 +35,7 @@ print(restored)      # {'ssid': 'MyNetwork', 'configured': True}
 
 `pack` and `unpack` write to and read from stream objects (anything with `.write()` or `.read()`).  This matches CircuitPython's native `msgpack` API.
 
-When writing to a file, socket, or NVM wrapper, prefer `pack` over `packb` — it writes directly to the destination without building an intermediate `bytes` object in RAM.
+When writing to a file, socket, or NVM wrapper, `pack(obj, stream)` reads cleaner than `packb` + write.  On CircuitPython's native encoder it also writes directly to the destination without an intermediate `bytes` object; on the pure-Python path (MicroPython, CPython) `pack` encodes to `bytes` first and then writes, so it is not a RAM saving there.
 
 ```python
 from io import BytesIO
@@ -53,7 +53,7 @@ print(result)  # {'key': [1, 2, 3]}
 
 `packb` and `unpackb` work with `bytes` objects directly.  They are convenient when you need the encoded data in memory — for example, to measure its length before writing it with a framing header, or to pass it to an API that expects `bytes`.
 
-On microcontrollers, be aware that `packb` allocates a temporary `bytearray`, grows it during encoding, then copies it to `bytes`.  For small payloads (typical settings dicts) this is fine.  For larger data or tight loops, prefer the stream-based `pack` to avoid the intermediate allocation.
+On microcontrollers, be aware that `packb` allocates a temporary `bytearray`, grows it during encoding, then copies it to `bytes`.  For small payloads (typical settings dicts) this is fine.  On the pure-Python path `pack` calls `packb` internally, so it does not reduce this allocation; only the native CircuitPython encoder streams without the intermediate buffer.
 
 ```python
 from chumicro_msgpack import packb, unpackb
@@ -70,7 +70,7 @@ print(original)  # [1, 'hello', None, True]
 
 ## Decoding corrupt or untrusted input
 
-`unpackb` is a *trusting* decoder, not a spec validator. It is safe against malformed *framing* — truncated, over-length, or trailing-garbage input, and nesting deeper than 32 levels, all raise `ValueError` instead of returning a silently-wrong value. This matters for flash-backed config and kvstore, where a power-loss-truncated payload must fail loudly rather than decode as a structurally-valid wrong dict.
+`unpackb` is a *trusting* decoder, not a spec validator. It is safe against malformed *framing* — truncated, over-length, or trailing-garbage input, and nesting deeper than 8 levels, all raise `ValueError` instead of returning a silently-wrong value. `packb` enforces the same depth bound on encode, so anything it accepts round-trips. This matters for flash-backed config and kvstore, where a power-loss-truncated payload must fail loudly rather than decode as a structurally-valid wrong dict.
 
 What it does **not** do is check that a structurally-valid payload has the type shape you expect — a packed `{"port": "80"}` decodes fine when your code wants `{"port": 80}`. Code persisting corruption- or attacker-reachable bytes still owns type-shape validation of what comes back.
 
@@ -115,7 +115,7 @@ Unsupported types raise `TypeError`.  Integers outside the 32-bit range raise `O
 
 `unpackb` accepts `bytes`, `bytearray`, and `memoryview`, so you can decode directly from a pre-allocated buffer without copying.  Internally the decoder treats the input as a `memoryview` end-to-end — slices stay as views; only the final `bytes` / `str` results are heap allocations.
 
-`packb` builds a `bytearray` that grows as encoding proceeds, then copies to `bytes` once at the end.  MicroPython's bytearray uses capacity-doubling, so a typical settings dict (~50 bytes encoded) goes through ~5 reallocations during the build.
+`packb` builds a `bytearray` that grows as encoding proceeds, then copies to `bytes` once at the end.  MicroPython extends a bytearray with exact-fit reallocations (an `append` adds 8 bytes of slack), so the realloc count scales with the number of tokens written rather than a fixed geometric series.
 
 `pack` and `unpack` (stream-based) match the signatures CircuitPython's native C `msgpack` module exposes and delegate to it on hardware that ships it.  On every other runtime — MicroPython, CPython, CircuitPython unix-port — `pack` calls `packb` and writes the result to the stream in one shot; it does **not** stream incrementally.  If you need true streaming on those runtimes, write your own loop around `packb` per element.
 

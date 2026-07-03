@@ -92,9 +92,19 @@ class MpLittlefsBackend(Backend):
 
         handle = self._fs.open(self._tmp_path, "wb")
         try:
-            handle.write(payload)
-        finally:
-            handle.close()
+            try:
+                handle.write(payload)
+            finally:
+                handle.close()
+        except OSError:
+            # A failed write (e.g. ENOSPC) leaves a partial temp file on
+            # flash; remove it so it doesn't linger and eat space, then
+            # re-raise for the caller.
+            try:
+                self._fs.remove(self._tmp_path)
+            except OSError:
+                pass  # already gone, or the fs can't remove it
+            raise
         # Sync before rename so the bytes hit flash before the
         # directory entry flips.  LittleFS makes the rename itself
         # atomic; the sync ensures the *contents* aren't half-written

@@ -16,7 +16,15 @@ Tests inject an ``nvs`` substrate exposing ``set_blob(key, value)``,
 
 __chumicro_runtimes__ = ("micropython",)
 
-from chumicro_kvstore.core import Backend, KVStoreFull
+import errno
+
+from chumicro_kvstore.core import Backend, KVStoreCorrupt, KVStoreFull
+
+#: ESP-IDF ``ESP_ERR_NVS_NOT_FOUND`` — the "key absent" error code
+#: MicroPython's ``esp32.NVS`` surfaces via ``OSError`` on a real board
+#: (host fakes use ``errno.ENOENT``).  Any other NVS error means the
+#: blob is present but unreadable, which must not read as blank.
+_ESP_ERR_NVS_NOT_FOUND = 0x1102
 
 
 class MpNvsBackend(Backend):
@@ -65,8 +73,18 @@ class MpNvsBackend(Backend):
         read_buffer = bytearray(self.capacity)
         try:
             length = self._nvs.get_blob(self.PAYLOAD_KEY, read_buffer)
-        except OSError:
-            return b""
+        except OSError as error:
+            code = error.args[0] if error.args else None
+            if code in (errno.ENOENT, _ESP_ERR_NVS_NOT_FOUND):
+                return b""  # key absent: an empty store, not corruption
+            # Anything else (buffer too small for the stored blob, type
+            # mismatch) means the payload is present but unreadable into
+            # our buffer.  Surface it as corrupt so _auto_load reports
+            # is_corrupt rather than returning blank — which the store
+            # would then overwrite, losing the data.
+            raise KVStoreCorrupt(
+                f"NVS read failed for key {self.PAYLOAD_KEY!r} (error {code})",
+            ) from error
         return bytes(memoryview(read_buffer)[:length])
 
     def save(self, payload: bytes) -> None:

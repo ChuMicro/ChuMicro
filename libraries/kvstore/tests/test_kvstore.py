@@ -181,6 +181,63 @@ def test_commit_if_changed_writes_when_changed() -> None:
     assert store.commit_if_changed() is True
 
 
+def test_commit_if_changed_does_not_encode_when_clean() -> None:
+    """A clean store skips the encode entirely (no allocation on the
+    every-tick no-change path the guide recommends)."""
+    store = KVStore(backend="memory")
+    store["alpha"] = 1
+    store.commit()
+    # Sabotage packb so any encode attempt is loud; a clean store must
+    # not call it.
+    import chumicro_kvstore.core as core_mod
+
+    original = core_mod.packb
+    core_mod.packb = lambda _data: (_ for _ in ()).throw(
+        AssertionError("commit_if_changed encoded a clean store"),
+    )
+    try:
+        assert store.commit_if_changed() is False
+    finally:
+        core_mod.packb = original
+
+
+def test_commit_rejects_undecodable_deep_nesting() -> None:
+    """commit() refuses a value too deeply nested for the decoder, so the
+    store never persists bytes it can't read back on the next load."""
+    store = KVStore(backend="memory")
+    deep = 0
+    for _ in range(9):  # past msgpack _MAX_DEPTH (8)
+        deep = [deep]
+    store["deep"] = deep
+    with raises(ValueError):
+        store.commit()
+
+
+def test_commit_allowed_when_backend_capacity_is_zero_sentinel() -> None:
+    """A custom backend that only implements load/save (leaving the base
+    capacity default 0 = unbounded) accepts commits rather than rejecting
+    even a 1-byte empty-dict payload."""
+    from chumicro_kvstore.core import Backend
+
+    class _MinimalBackend(Backend):
+        name = "minimal"
+
+        def __init__(self):
+            self._payload = b""
+
+        def load(self):
+            return self._payload
+
+        def save(self, payload):
+            self._payload = bytes(payload)
+
+    store = KVStore(backend=_MinimalBackend())
+    assert store.capacity == 0
+    store["k"] = 1
+    store.commit()  # must not raise KVStoreFull from the zero-cap default
+    assert store.commit_if_changed() is False
+
+
 def test_reload_picks_up_external_payload() -> None:
     """Backend payload set externally is visible after ``reload``."""
     backend = MemoryBackend()
