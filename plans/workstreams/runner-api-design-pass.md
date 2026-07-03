@@ -6,7 +6,7 @@ callable-check shape and the second `next_deadline` convention are deleted outri
 consumers migrated in the same commit; `add_periodic` stays on teaching merit (it is sugar,
 not compat).  Factory = one contract, local copies (decided).  M31 = **shipped** (mqtt 0.20.0
 `next_message()` + 0089 amended in place, 2026-07-03).  M51 shipped with the 0092 removal
-wave.  Remaining: section 4's factory contract ADR + ntp alignment.  The four escalated design questions from the
+wave.  Section 4 shipped as Decision 0093 + ntp 0.11.0 (deferred open).  **All four items closed 2026-07-03.**  The four escalated design questions from the
 straggler fan-out, with options and a recommendation each.  All four reshape public surfaces the
 demos teach, so they get decided together, with the user, before any code.
 

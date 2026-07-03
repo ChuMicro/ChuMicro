@@ -448,6 +448,9 @@ class TestFromConfig:
         assert client.server == "time.example.com"
         assert client.port == 4242
         assert client.timeout_ms == 1234
+        # Deferred open: the factory is stored, not called, until query().
+        assert client.socket is None
+        client.query()
         assert client.socket is sock
 
     def test_defaults_apply_when_keys_absent(self) -> None:
@@ -478,10 +481,10 @@ class TestFromConfig:
         client = NTPClient.from_config({}, socket=sock)
         assert client.socket is sock
 
-    def test_explicit_socket_factory_is_called_once(self) -> None:
-        """Passing a custom socket_factory delegates socket creation.
-        Factory is invoked exactly once during from_config — eager
-        construction since NTPClient takes its socket positionally."""
+    def test_explicit_socket_factory_is_deferred_to_first_query(self) -> None:
+        """A custom socket_factory delegates socket creation, deferred:
+        construction is side-effect-free and query() invokes the
+        factory exactly once."""
         call_count = [0]
         sock = FakeUDPSocket()
 
@@ -490,6 +493,8 @@ class TestFromConfig:
             return sock
 
         client = NTPClient.from_config({}, socket_factory=factory)
+        assert call_count[0] == 0
+        client.query()
         assert call_count[0] == 1
         assert client.socket is sock
 
@@ -515,7 +520,7 @@ class TestFromConfig:
         """When neither *socket* nor *socket_factory* is passed,
         ``from_config`` builds a factory that calls
         ``chumicro_ntp.sockets_factory.chumicro_sockets_factory(radio=...)``
-        and sets the resulting socket non-blocking."""
+        on the first query and sets the resulting socket non-blocking."""
         captured: dict = {}
         sock = FakeUDPSocket()
 
@@ -530,6 +535,8 @@ class TestFromConfig:
         sf.chumicro_sockets_factory = fake_chumicro_sockets_factory
         try:
             client = NTPClient.from_config({}, radio="fake-radio")
+            assert captured == {}  # deferred: nothing opened yet
+            client.query()
         finally:
             sf.chumicro_sockets_factory = original
 
@@ -593,6 +600,37 @@ class TestFromConfig:
                 sys.modules.pop("chumicro_ntp.sockets_factory", None)
             else:
                 sys.modules["chumicro_ntp.sockets_factory"] = original
+
+
+def test_socket_factory_defers_open_to_first_query():
+    """Construction with a factory is side-effect-free; query() opens once."""
+    opened = []
+
+    def factory():
+        opened.append(1)
+        return FakeUDPSocket()
+
+    client = NTPClient(socket_factory=factory)
+    assert opened == []
+    assert client.socket is None
+
+    client.query()
+    assert opened == [1]
+    assert client.socket is not None
+
+    # A later query reuses the same socket — the factory ran once.
+    client._result = None  # clear the in-flight guard for the re-query
+    client.query()
+    assert opened == [1]
+
+
+def test_socket_and_factory_are_mutually_exclusive():
+    from chumicro_test_harness import raises  # noqa: PLC0415
+
+    with raises(ValueError):
+        NTPClient(socket=FakeUDPSocket(), socket_factory=FakeUDPSocket)
+    with raises(ValueError):
+        NTPClient()
 
 
 # sockets_factory submodule lives in test_ntp_pytest.py
