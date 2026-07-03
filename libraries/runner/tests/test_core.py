@@ -1256,6 +1256,53 @@ def test_wait_registers_service_socket() -> None:
     assert poller.ipoll_calls == [100]
 
 
+class _AdapterWrapper:
+    """Stand-in for a chumicro_sockets adapter wrapper: the runtime's
+    pollable lives on ``.sock``, the wrapper itself is not registrable."""
+
+    def __init__(self, sock: object) -> None:
+        self.sock = sock
+
+
+def test_wait_unwraps_adapter_wrapper_before_registering() -> None:
+    """An ``io_socket`` returning an adapter wrapper registers the inner
+    pollable — the unwrap lives in the runner, so no producer has to
+    remember the ``.sock`` convention (a missed producer-side unwrap
+    used to hand the wrapper to ``poll.register``, an OSError on MP)."""
+    poller = FakePoller()
+    runner = Runner(ticks=FakeTicks(), poller=poller)
+    inner = object()
+    service = _IOService(sock=_AdapterWrapper(inner), wants_read=True)
+    runner.add(service, period_ms=100)
+
+    runner.wait(0)
+
+    assert (inner, select.POLLIN) in poller.register_calls
+    assert all(
+        not isinstance(entry[0], _AdapterWrapper)
+        for entry in poller.register_calls
+    )
+
+
+def test_wait_dispatches_io_error_through_adapter_wrapper() -> None:
+    """POLLERR reported for the inner pollable still matches a service
+    whose ``io_socket`` returns the wrapper — the io_error reverse
+    lookup unwraps the same way registration does."""
+    poller = FakePoller()
+    runner = Runner(ticks=FakeTicks(), poller=poller)
+    inner = object()
+    service = _IOServiceWithErrorHook(
+        sock=_AdapterWrapper(inner), wants_read=True,
+    )
+    runner.add(service, period_ms=100)
+    runner.wait(0)  # First wait registers the inner pollable.
+
+    poller.set_ready(inner, select.POLLERR)
+    runner.wait(0)
+
+    assert service.io_error_calls == [(0, select.POLLERR)]
+
+
 def test_wait_ors_masks_when_two_services_share_one_socket() -> None:
     """A reader and a writer on the same socket register the OR of their
     interests, so neither service's wake direction is lost."""

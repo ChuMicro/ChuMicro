@@ -74,6 +74,20 @@ class ReentrantTickError(RuntimeError):
 _native_sleep_ms = getattr(time, "sleep_ms", None)
 
 
+def _pollable_of(io_socket: object) -> object:
+    """Return the object ``select.poll`` can register for *io_socket*.
+
+    Adapter wrappers from ``chumicro_sockets`` expose the runtime's
+    pollable on ``.sock``; bare sockets pass through.  The unwrap lives
+    here — at the one consumer — so a service's ``io_socket`` may
+    return either shape and no producer has to remember the wrapper
+    convention (six producer-side unwraps were audited into existence
+    the hard way; a missed one hands the wrapper to ``poll.register``,
+    which raises ``OSError`` on MicroPython).
+    """
+    return getattr(io_socket, "sock", io_socket)
+
+
 def _sleep_ms(timeout_ms: int) -> None:
     """Sleep approximately *timeout_ms* milliseconds across runtimes."""
     if _native_sleep_ms is not None:
@@ -667,6 +681,7 @@ class Runner:
             sock = getattr(service, "io_socket", None)
             if sock is None:
                 continue
+            sock = _pollable_of(sock)
             if sock is obj or (
                 isinstance(obj, int)
                 and hasattr(sock, "fileno")
@@ -726,6 +741,7 @@ class Runner:
             sock = getattr(service, "io_socket", None)
             if sock is None:
                 continue
+            sock = _pollable_of(sock)
             eventmask = 0
             if getattr(service, "io_wants_read", False):
                 eventmask |= _POLLIN
