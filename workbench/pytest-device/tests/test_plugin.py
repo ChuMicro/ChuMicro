@@ -876,6 +876,14 @@ class TestIsLibraryUnitTest:
             Path("libraries/timing/tests/conftest.py"),
         ) is False
 
+    def test_matches_when_ancestor_dir_named_tests(self) -> None:
+        # A checkout under an ancestor directory named ``tests`` must not
+        # shadow the real ``libraries/<name>/tests`` component: the
+        # predicate scans every ``tests`` part, not just the first.
+        assert plugin_session._is_library_unit_test(
+            Path("/home/ci/tests/chumicro/libraries/timing/tests/test_x.py"),
+        ) is True
+
 
 class TestIsLibraryFunctionalTest:
     """Tests for _is_library_functional_test path-shape classification."""
@@ -908,6 +916,16 @@ class TestIsLibraryFunctionalTest:
         assert plugin_session._is_library_functional_test(
             Path("libraries/wifi/functional_tests/conftest.py"),
         ) is False
+
+    def test_matches_when_ancestor_dir_named_functional_tests(self) -> None:
+        # An ancestor directory named ``functional_tests`` must not
+        # shadow the real ``libraries/<name>/functional_tests`` component.
+        assert plugin_session._is_library_functional_test(
+            Path(
+                "/srv/functional_tests/repo/libraries/wifi/"
+                "functional_tests/test_real.py",
+            ),
+        ) is True
 
 
 class TestSynthesizeUnixPortTargets:

@@ -155,10 +155,16 @@ def _is_library_functional_test(file_path: Path) -> bool:
         and "functional_tests" in file_path.parts
     ):
         return False
-    functional_index = file_path.parts.index("functional_tests")
-    return (
-        functional_index >= 2
-        and file_path.parts[functional_index - 2] == "libraries"
+    # Scan every ``functional_tests`` component, not just the first:
+    # a checkout under an ancestor directory named ``functional_tests``
+    # would otherwise pin ``.index`` to that ancestor and hide the real
+    # ``libraries/<name>/functional_tests`` two levels up.
+    parts = file_path.parts
+    return any(
+        component == "functional_tests"
+        and index >= 2
+        and parts[index - 2] == "libraries"
+        for index, component in enumerate(parts)
     )
 
 
@@ -176,10 +182,16 @@ def _is_library_unit_test(file_path: Path) -> bool:
         and "tests" in file_path.parts
     ):
         return False
-    tests_index = file_path.parts.index("tests")
-    return (
-        tests_index >= 2
-        and file_path.parts[tests_index - 2] == "libraries"
+    # Scan every ``tests`` component, not just the first: a checkout
+    # under an ancestor directory named ``tests`` would otherwise pin
+    # ``.index`` to that ancestor and hide the real
+    # ``libraries/<name>/tests`` two levels up.
+    parts = file_path.parts
+    return any(
+        component == "tests"
+        and index >= 2
+        and parts[index - 2] == "libraries"
+        for index, component in enumerate(parts)
     )
 
 

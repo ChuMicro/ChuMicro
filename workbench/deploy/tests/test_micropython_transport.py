@@ -327,6 +327,52 @@ class TestStage:
 
         transport.disconnect()
 
+    def test_copy_mode_stages_libraries_under_lib_and_tests_at_root(
+        self, tmp_path,
+    ) -> None:
+        """Copy mode lands library + harness packages under lib/, tests at root.
+
+        Pushed via ``fs cp -r staging/. :``, lib/ becomes the device's
+        /lib and imports resolve through the production sys.path order
+        ('.frozen' before '/lib') rather than the '' root entry that
+        precedes '.frozen'.  Test files stay at the root so the harness
+        opens them by bare filename from the device cwd.
+        """
+        source_dir = tmp_path / "src"
+        package_dir = source_dir / "chumicro_timing"
+        package_dir.mkdir(parents=True)
+        (package_dir / "__init__.py").write_text("# init")
+
+        harness_dir = tmp_path / "harness"
+        harness_package = harness_dir / "chumicro_test_harness"
+        harness_package.mkdir(parents=True)
+        (harness_package / "__init__.py").write_text("# harness")
+
+        test_file = tmp_path / "test_example.py"
+        test_file.write_text("def test_ok(): pass")
+
+        runner = FakeRunner()
+        serial = FakeSerialTransport(address="/dev/ttyUSB0")
+        transport = MicropythonTransport(
+            "/dev/ttyUSB0",
+            mode="copy",
+            runner=runner,
+            transport_factory=_factory_for(serial),
+            time=_RecordingTime(),
+        )
+        transport.stage([source_dir], [test_file], harness_dir)
+
+        staging = Path(transport._staging_path)
+        # Library + harness under lib/ (device /lib), test file at root.
+        assert (staging / "lib" / "chumicro_timing" / "__init__.py").exists()
+        assert (staging / "lib" / "chumicro_test_harness" / "__init__.py").exists()
+        assert (staging / "test_example.py").exists()
+        assert not (staging / "chumicro_timing").exists()
+        # 'lib' is the tracked device root entry alongside the test file.
+        assert transport._staged_device_entries == ["lib", "test_example.py"]
+
+        transport.disconnect()
+
     def test_copy_mode_second_stage_deletes_prior_library_tree(
         self, tmp_path,
     ) -> None:
@@ -357,7 +403,11 @@ class TestStage:
         )
         transport.stage([lib_a], [], harness_dir)
         first_entries = list(transport._staged_device_entries)
-        assert "chumicro_a" in first_entries
+        # Copy mode stages library packages under lib/, so the tracked
+        # top-level device entry is 'lib' (containing chumicro_a), not
+        # the package name at the root.
+        assert first_entries == ["lib"]
+        assert (Path(transport._staging_path) / "lib" / "chumicro_a").is_dir()
 
         transport.stage([lib_b], [], harness_dir)
 
@@ -389,9 +439,12 @@ class TestStage:
             and "os.listdir('/')" in command[-1] and "_keep" in command[-1]
         ) == 1
         assert not any("mkfs" in command[-1] for command in commands)
-        # New roots recorded, chumicro_a is no longer tracked.
-        assert "chumicro_b" in transport._staged_device_entries
-        assert "chumicro_a" not in transport._staged_device_entries
+        # The tracked root stays 'lib', now holding chumicro_b's tree
+        # and no longer chumicro_a (the prior lib/ was removed above).
+        assert transport._staged_device_entries == ["lib"]
+        staging_lib = Path(transport._staging_path) / "lib"
+        assert (staging_lib / "chumicro_b").is_dir()
+        assert not (staging_lib / "chumicro_a").exists()
 
         transport.disconnect()
 
@@ -433,7 +486,8 @@ class TestStage:
         # No raise despite the rm failure.
         transport.stage([lib_b], [], harness_dir)
 
-        assert "chumicro_b" in transport._staged_device_entries
+        assert transport._staged_device_entries == ["lib"]
+        assert (Path(transport._staging_path) / "lib" / "chumicro_b").is_dir()
 
         transport.disconnect()
 

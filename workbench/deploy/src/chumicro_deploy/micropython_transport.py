@@ -31,6 +31,7 @@ from .flash_drive import DEVICE_KEEP_SET
 from .protocol import (
     PROBE_IMPLEMENTATION_SCRIPT,
     DeviceImplementation,
+    UnsupportedExtraFilesError,
     parse_probe_output,
     validate_entrypoint_in_files,
 )
@@ -413,13 +414,32 @@ class MicropythonTransport:
             extra_files: Non-Python files to land at named device paths
                 (typically ``{"/runtime_config.msgpack": <bytes>}``) so
                 test code can call ``chumicro_config.load_runtime_config()``.
-                Both ``copy`` and ``mount`` modes support this — the
-                staging-tree write below lands the bytes wherever the
-                mode-specific transfer step picks them up from.
-                MicroPython has a writable filesystem in both modes;
-                no equivalent of CircuitPython's ``UnsupportedExtraFilesError``
-                applies here.
+                **Copy mode only.**  Copy mode rsyncs the staging tree to
+                flash, so a file staged for ``/runtime_config.msgpack``
+                lands at that absolute path.  **Mount mode raises**
+                :class:`UnsupportedExtraFilesError`: mpremote
+                ``mount_local`` lands the staging tree at ``/remote``, so
+                the bytes would appear at ``/remote/runtime_config.msgpack``
+                — invisible to a reader that opens the absolute
+                ``/runtime_config.msgpack``.
+
+        Raises:
+            UnsupportedExtraFilesError: ``mode == "mount"`` and
+                *extra_files* is non-empty.  Switch the device's
+                ``deploy_mode`` to ``"copy"`` to fix.
         """
+        if extra_files and self.mode == "mount":
+            raise UnsupportedExtraFilesError(
+                "MicropythonTransport(mode='mount') cannot stage extra_files "
+                f"({sorted(extra_files.keys())!r}) — mpremote mount_local "
+                "lands the staging tree at /remote, so a file staged for an "
+                "absolute device path like /runtime_config.msgpack would "
+                "appear at /remote/runtime_config.msgpack and stay invisible "
+                "to a reader opening the absolute path.  Set the device's "
+                "deploy_mode to 'copy' before staging tests that need a "
+                "runtime_config or other on-device file.",
+            )
+
         self._include_test_support = include_test_support
         # Drop any mount/tempdir left from a prior stage() on this
         # transport so a re-stage starts from a clean tempdir.
@@ -438,10 +458,20 @@ class MicropythonTransport:
         staging_path = Path(self._staging_dir.name)
         self._staging_path = staging_path
 
+        # Library + harness packages go under lib/ in copy mode so they
+        # import through the device's /lib with production sys.path order
+        # (MP's default ['', '.frozen', '/lib']).  Staging them at the
+        # device root would resolve them via the '' entry that precedes
+        # '.frozen', masking a frozen-module shadow the real /lib deploy
+        # would hit.  Mount mode keeps them at the staging root: mpremote
+        # mount_local lands the tree at /remote and inserts /remote (not
+        # /remote/lib) on sys.path.
+        library_root = staging_path / "lib" if self.mode == "copy" else staging_path
+        library_root.mkdir(parents=True, exist_ok=True)
         for source_dir in source_dirs:
-            self._copy_tree(source_dir, staging_path)
+            self._copy_tree(source_dir, library_root)
 
-        self._copy_tree(harness_source, staging_path)
+        self._copy_tree(harness_source, library_root)
 
         for test_file in test_files:
             destination = staging_path / test_file.name
