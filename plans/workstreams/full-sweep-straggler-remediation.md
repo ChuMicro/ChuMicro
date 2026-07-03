@@ -70,9 +70,15 @@ was stale).  Four demos' `payload={payload!r}` markers (whitespace in values —
 demo-side half) now ride as `payload_hex`, and `websockets_stream`'s MESSAGE marker carries
 counts with the text as prose.
 
-After merge: dependency graph regenerated (three dead `chumicro-config` deps dropped); pending —
-bake `sockets_runner_connector`, `requests_fetch`, and `websockets_stream` on real boards (also
-exercises the sockets MP `readinto` recv path on silicon).
+After merge: dependency graph regenerated (three dead `chumicro-config` deps dropped).  Bakes
+complete 2026-07-03: `sockets_runner_connector` green on BOTH Pico W boards (MP + CP; the CP board
+needed a reflash to stock 10.2.1 — its custom alpha build wedged flash staging, matching the
+tracked bench issue), `requests_fetch` and `websockets_stream` green on Pico W MP.  The
+websockets bake caught two real bugs the host lanes could not: the client's inlined `io_socket`
+still unwrapped via the non-existent `._sock` (June's five-site fix missed this sixth site;
+MP-only because only the MP adapter wraps plain TCP), and the rewritten demo crashed its
+generator on text frames (`len(message.data)` with `data=None`) — the death was silent
+per deferred M49, which this incident upgrades from nice-to-have to next-in-line.
 
 ## Track B — un-audited areas
 
@@ -88,7 +94,9 @@ adversarial verify → triage → fix → commit, before the next area starts.
    pytest-device); 21 probe-confirmed findings (K1–K21, five critical false-pass holes in the
    gate rules), all fixed 2026-07-03 with the probes lifted into the unit suite; report at
    [reviews/2026-07-03-checks-rules-audit.md](../reviews/2026-07-03-checks-rules-audit.md).
-3. `workbench/pytest-device` code beyond the staging findings (backends, result parsing, plugin).
+3. **DONE** `workbench/pytest-device` — 5 findings (P1–P5; core reconcile defenses verified
+   sound — crash/OOM/truncation/dropped-FAIL all go red), all fixed 2026-07-03; report at
+   [reviews/2026-07-03-pytest-device-audit.md](../reviews/2026-07-03-pytest-device-audit.md).
 4. `scripts/` (bundle/release/publish pipeline, run.py task plumbing — publishes packages, so
    correctness bugs here ship bad artifacts).
 5. `support/test_harness` (already one finding, L77 tick-wraparound, from a cross-cutting hunter).
