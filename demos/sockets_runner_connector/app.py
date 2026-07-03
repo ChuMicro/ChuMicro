@@ -1,10 +1,12 @@
 """Board-side echo demo — sockets via runner, generator shape.
 
-``echo_run`` expresses the full lifecycle top-to-bottom: build a
-``SocketConnector``, drive it to ``ready`` via ``connect``, send a
-probe via ``send_all``, receive the echo via ``recv_until``, close.
-``Runner.add_generator`` drives it across ticks; the wait-tokens
-the helpers yield gate ipoll wake-ups on the right socket events.
+``echo_run`` expresses the full lifecycle top-to-bottom: wait for the
+wifi link with ``wait_for``, build a ``SocketConnector``, drive it to
+``ready`` via ``connect``, send a probe via ``send_all``, receive the
+echo via ``recv_until``, close.  ``Runner.add_generator`` drives it
+across ticks; the wait-tokens the helpers yield gate ipoll wake-ups
+on the right socket events, and the ``Signal`` set from the wifi
+state-change callback resumes the generator once the link is up.
 
 Compare with ``demos/sockets_runner_connector_explicit/app.py`` —
 the same wire behaviour expressed as an explicit ``check`` / ``handle``
@@ -17,6 +19,7 @@ Marker lines (``WIFI_OK``, ``CONNECTING``, ``CONNECTED``, ``SENT``,
 
 from chumicro_config import load_runtime_config
 from chumicro_runner import Runner
+from chumicro_runner.generators import Signal, wait_for
 from chumicro_sockets.generators import connect, recv_until, send_all
 from chumicro_sockets import tcp_client_connector
 from chumicro_wifi import WifiConfig, WifiService, WifiState
@@ -25,16 +28,22 @@ PROBE_PAYLOAD = b"hello chumicro\n"
 MAX_REPLY_BYTES = 256
 
 
-def echo_run(host, port, radio):
+def echo_run(wifi, link_up, host, port):
+    yield from wait_for(link_up)
+    print(f"WIFI_OK ip={wifi.ip}")
     print(f"CONNECTING host={host} port={port}")
-    sock = yield from connect(tcp_client_connector(host, port, radio=radio))
+    sock = yield from connect(
+        tcp_client_connector(host, port, radio=wifi.adapter.radio),
+    )
     print("CONNECTED")
     try:
         yield from send_all(sock, PROBE_PAYLOAD)
         print(f"SENT bytes={len(PROBE_PAYLOAD)}")
         reply = yield from recv_until(sock, b"\n", max_bytes=MAX_REPLY_BYTES)
         payload = reply.rstrip(b"\n")
-        print(f"ECHO_RECEIVED bytes={len(payload)} payload={payload!r}")
+        # Marker values must be whitespace-free — parse_marker drops the
+        # whole line otherwise — so the payload rides as hex.
+        print(f"ECHO_RECEIVED bytes={len(payload)} payload_hex={payload.hex()}")
         print("DEMO_COMPLETE")
     finally:
         sock.close()
@@ -48,20 +57,18 @@ wifi = WifiService(WifiConfig.from_config(config))
 runner = Runner()
 runner.add(wifi)
 
-echo_handle = None
+link_up = Signal()
 
 
-def on_wifi_state(_old, new):
-    global echo_handle  # noqa: PLW0603
+def signal_link_up(_old, new):
     if new == WifiState.CONNECTED:
-        print(f"WIFI_OK ip={wifi.ip}")
-        echo_handle = runner.add_generator(
-            echo_run(echo_host, echo_port, radio=wifi.adapter.radio),
-        )
+        link_up.set(new)
 
 
-wifi.on_state_change(on_wifi_state)
+wifi.on_state_change(signal_link_up)
 
-while echo_handle is None or not echo_handle.done:
+echo_handle = runner.add_generator(echo_run(wifi, link_up, echo_host, echo_port))
+
+while not echo_handle.done:
     now_ms = runner.tick()
     runner.wait(now_ms)

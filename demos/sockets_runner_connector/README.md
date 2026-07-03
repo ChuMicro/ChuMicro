@@ -20,9 +20,11 @@ fan-out, complex error recovery, long-lived multi-phase sessions).
 ## What it shows
 
 - **One generator, one `runner.add_generator(echo_run(...))`.**  The
-  generator captures host / port / radio at call time, yields wait
-  tokens to suspend, and returns when the round trip completes.  No
-  user-defined class, no `io_*` plumbing.
+  generator waits for the wifi link with `yield from wait_for(link_up)`
+  — a `Signal` the wifi state-change callback sets — then connects,
+  sends, and receives top-to-bottom, returning when the round trip
+  completes.  No user-defined class, no `io_*` plumbing, no
+  callback-set module global.
 - **`connect` drives the connector across ticks.**  Wraps the
   existing `SocketConnector` lifecycle (DNS -> TCP -> ready) and
   yields `WriteReady` / `ReadReady` so the runner sleeps on the
@@ -65,7 +67,7 @@ driver: board WIFI_OK ip=10.0.0.42
 driver: board CONNECTING host=10.0.0.5 port=54321
 driver: board CONNECTED
 driver: board SENT bytes=15
-driver: board ECHO_RECEIVED bytes=14 payload=b'hello chumicro'
+driver: board ECHO_RECEIVED bytes=14 payload_hex=68656c6c6f206368756d6963726f
 driver: demo completed cleanly.
 ```
 
