@@ -33,17 +33,26 @@ Usage::
 from __future__ import annotations
 
 import shutil
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import TracebackType
 
-from chumicro_deploy import DeviceEntry, TransportProtocol, load_device_registry
+from chumicro_deploy import (
+    DeviceCaps,
+    DeviceEntry,
+    TransportProtocol,
+    find_libraries_requiring_flash,
+    load_device_registry,
+    resolve_deploy_mode,
+)
 from msgpack import packb
 
 from .device_orchestration import (
     build_device_bootstrap,
     build_transport_for_entry,
+    resolve_effective_deploy_mode,
     resolve_library_source_dirs,
 )
 from .device_runner import DeviceBootstrapRunner
@@ -276,6 +285,53 @@ def _stage_demo_harness_core(harness_source: Path, mirror_root: Path) -> Path:
     return mirrored_source
 
 
+def _staged_file_names(source_dirs: list[Path]) -> list[str]:
+    """Every file the closure stages, by name.
+
+    ``transport.stage`` copies whole ``src`` trees, so the flash-mode
+    data-file check must see them all.  ``__pycache__`` is build cruft
+    the staging never carries, so excluding it stops a stray ``.pyc``
+    from wrongly forcing flash.
+    """
+    names: list[str] = []
+    for source_dir in source_dirs:
+        for path in source_dir.rglob("*"):
+            if path.is_file() and "__pycache__" not in path.parts:
+                names.append(path.name)
+    return names
+
+
+def _resolve_project_deploy_mode(
+    device_entry: DeviceEntry,
+    deploy_mode: str | None,
+    source_dirs: list[Path],
+) -> str:
+    """Return the deploy mode after applying flash-promotion policy.
+
+    Starts from the configured mode (explicit override, then the device
+    entry, then the workspace default) and asks
+    :func:`chumicro_deploy.resolve_deploy_mode` to promote RAM to flash
+    when the source closure carries a ``requires_flash`` library or a
+    non-``.py`` data file RAM mode can't reliably place on the device.
+    A promotion message prints to stderr; the deploy always continues.
+    Mirrors the gating the CLI ``Deployer`` and the pytest-device plugin
+    apply, so a programmatic deploy of a flash-only closure onto a
+    RAM-configured board doesn't silently OOM on import.
+    """
+    configured = resolve_effective_deploy_mode(device_entry, deploy_mode)
+    mode, message = resolve_deploy_mode(
+        configured,
+        staged_files=_staged_file_names(source_dirs),
+        device_caps=DeviceCaps(supports_ram_mode=device_entry.supports_ram_mode),
+        requires_flash_libs=find_libraries_requiring_flash(source_dirs),
+        resolution_unit=None,
+        force=None,
+    )
+    if message is not None:
+        print(message, file=sys.stderr)
+    return mode
+
+
 def deploy_project(
     project_dir: Path,
     *,
@@ -346,15 +402,24 @@ def deploy_project(
     device_entry = _select_device(
         resolved_workspace_root, device_id=device_id, runtime=runtime,
     )
-    transport = build_transport_for_entry(device_entry, deploy_mode=deploy_mode)
+    # Resolve the source closure before building the transport: the
+    # deploy mode depends on what the closure ships (a requires_flash
+    # library or a data file promotes RAM to flash), and the transport
+    # is built for the resolved mode.
+    source_dirs = resolve_library_source_dirs(
+        project_dir,
+        libraries_root=libraries_root,
+        test_files=[app_file],
+    )
+    resolved_deploy_mode = _resolve_project_deploy_mode(
+        device_entry, deploy_mode, source_dirs,
+    )
+    transport = build_transport_for_entry(
+        device_entry, deploy_mode=resolved_deploy_mode,
+    )
     transport.connect()
 
     try:
-        source_dirs = resolve_library_source_dirs(
-            project_dir,
-            libraries_root=libraries_root,
-            test_files=[app_file],
-        )
         extra_files = _build_runtime_config_extra_files(
             resolved_workspace_root, extra_runtime_config,
         )

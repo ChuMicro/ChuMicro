@@ -74,28 +74,25 @@ class TestKeywordCompleter:
 class TestCompletionCache:
     def test_get_missing_returns_none(self) -> None:
         cache = CompletionCache()
-        assert cache.get("") is None
-        assert cache.get("foo") is None
+        assert cache.get() is None
 
     def test_put_then_get_round_trip(self) -> None:
         cache = CompletionCache()
-        cache.put("", ["alpha", "beta", "alpha"])
+        cache.put(["alpha", "beta", "alpha"])
         # Stored deduplicated + sorted.
-        assert cache.get("") == ("alpha", "beta")
+        assert cache.get() == ("alpha", "beta")
 
-    def test_clear_drops_everything(self) -> None:
+    def test_clear_drops_the_names(self) -> None:
         cache = CompletionCache()
-        cache.put("", ["a"])
-        cache.put("foo", ["b"])
+        cache.put(["a"])
         cache.clear()
-        assert cache.get("") is None
-        assert cache.get("foo") is None
+        assert cache.get() is None
 
     def test_get_after_put(self) -> None:
         cache = CompletionCache()
-        assert cache.get("") is None
-        cache.put("", ["a"])
-        assert cache.get("") == ("a",)
+        assert cache.get() is None
+        cache.put(["a"])
+        assert cache.get() == ("a",)
 
 
 class TestDeviceCompleter:
@@ -104,11 +101,11 @@ class TestDeviceCompleter:
         assert list(completer.candidates("")) == []
         assert list(completer.candidates("foo")) == []
 
-    def test_fetcher_called_once_per_namespace(self) -> None:
-        calls: list[str] = []
+    def test_fetcher_called_once_then_cached(self) -> None:
+        calls = [0]
 
-        def fetcher(expression: str):
-            calls.append(expression)
+        def fetcher():
+            calls[0] += 1
             return ["foo", "bar", "baz"]
 
         completer = DeviceCompleter(fetcher=fetcher)
@@ -117,13 +114,13 @@ class TestDeviceCompleter:
         assert sorted(first) == ["bar", "baz", "foo"]
         # Second Tab hits the cache — no additional fetch call.
         list(completer.candidates("ba"))
-        assert calls == [""]
+        assert calls[0] == 1
 
     def test_fetcher_returning_none_no_cache(self) -> None:
         """A timeout-shape failure shouldn't poison the cache forever."""
         call_count = [0]
 
-        def flaky_fetcher(_expression: str):
+        def flaky_fetcher():
             call_count[0] += 1
             if call_count[0] == 1:
                 return None  # first attempt fails
@@ -137,7 +134,7 @@ class TestDeviceCompleter:
 
     def test_prefix_filters_cached_candidates(self) -> None:
         completer = DeviceCompleter(
-            fetcher=lambda _: ["alpha", "anchor", "beta"],
+            fetcher=lambda: ["alpha", "anchor", "beta"],
         )
         result = list(completer.candidates("a"))
         assert sorted(result) == ["alpha", "anchor"]
@@ -146,7 +143,7 @@ class TestDeviceCompleter:
         """The CompletionCache exposed via .cache lets callers invalidate on reset."""
         call_count = [0]
 
-        def fetcher(_expression: str):
+        def fetcher():
             call_count[0] += 1
             return [f"snapshot_{call_count[0]}"]
 
@@ -323,19 +320,6 @@ class TestFetchDeviceNames:
         assert b"print(repr(dir()))" in joined
         assert b"\x04" in joined
         assert joined.endswith(b"\x02")
-
-    def test_expression_parameter_substitutes_into_dir(self) -> None:
-        port = FakeSerialPort(read_chunks=[
-            b"raw REPL; CTRL-B to exit\r\n>",
-            b"OK['radio', 'connect']\n\x04\x04>",
-            b"\r\n>>> ",
-        ])
-        names = fetch_device_names(
-            port, expression="wifi", time=FakeTime(),
-        )
-        assert names == ["connect", "radio"]
-        joined = b"".join(port.writes)
-        assert b"print(repr(dir(wifi)))" in joined
 
     def test_timeout_returns_none(self) -> None:
         # No raw-REPL banner ever arrives; the fetcher times out and

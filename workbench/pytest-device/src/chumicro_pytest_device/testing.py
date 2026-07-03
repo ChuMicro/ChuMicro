@@ -75,12 +75,14 @@ class FakeConfig:
 class FakeSession:
     """Minimal ``pytest.Session`` stand-in.
 
-    Carries the three attributes the plugin reads off the session:
-    a session-scoped ``_TransportCache``, a ``DeviceBackend``, and a
-    :class:`FakeConfig`.  The cache attribute is named with the
-    leading-underscore form the production plugin uses
-    (``_device_transport_cache``) so tests can pass the session
-    straight into production code paths.
+    Carries the attributes the plugin reads off the session: a
+    session-scoped ``_TransportCache``, a ``DeviceBackend``, a
+    :class:`FakeConfig`, and the collected-item list ``items`` (empty by
+    default; a test populates it with the ``DeviceTestItem``s the
+    collected-vs-ran reconcile checks the device output against).  The
+    cache attribute is named with the leading-underscore form the
+    production plugin uses (``_device_transport_cache``) so tests can
+    pass the session straight into production code paths.
     """
 
     def __init__(
@@ -92,6 +94,7 @@ class FakeSession:
         self._device_transport_cache = cache
         self._backend = _device_backend.DeviceBackend()
         self.config = FakeConfig(rootpath=rootpath)
+        self.items: list = []
 
 
 def hot_path_device(runtime: str = "circuitpython") -> DeviceEntry:

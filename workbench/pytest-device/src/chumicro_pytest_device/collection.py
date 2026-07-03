@@ -112,14 +112,13 @@ def _collected_test_names(
 ) -> set[str]:
     """Return the ``function_name``s the host collected for one file batch.
 
-    Walks the session's ``DeviceTestItem``s, keeping those that target
+    Walks ``session.items`` for ``DeviceTestItem``s that target
     *device_entry* and came from *test_file*, and returns their bare
     ``function_name``s (the same qualified form the harness prints, no
-    per-runtime display suffix).  The ``getattr`` guard degrades to an
-    empty set for session stubs that never populate ``items``.
+    per-runtime display suffix).
     """
     names: set[str] = set()
-    for item in getattr(session, "items", ()):
+    for item in session.items:
         if not isinstance(item, DeviceTestItem):
             continue
         target = item.target_device
@@ -295,13 +294,10 @@ def _device_items(
 ) -> Iterator[DeviceTestItem]:
     """Yield every collected ``DeviceTestItem`` that targets *device_entry*.
 
-    The ``getattr`` guard handles test stubs (``FakeSession``) that
-    don't populate ``items``: an absent attribute yields nothing rather
-    than raising, so callers degrade to an empty result.  Skips items
-    with no resolved target and items pointing at a different device by
-    ``identifier``.
+    Skips items with no resolved target and items pointing at a
+    different device by ``identifier``.
     """
-    for item in getattr(session, "items", ()):
+    for item in session.items:
         if not isinstance(item, DeviceTestItem):
             continue
         target = item.target_device
@@ -676,14 +672,9 @@ class DeviceRuntimeItem(pytest.Item):
         collected_names = _collected_test_names(
             self.session, device_entry, self.test_file,
         )
-        # An empty set means only a session stub with no ``items`` (the
-        # running item is itself collected in a real session), so the
-        # cross-check is skipped rather than flagging every device result
-        # as an orphan.
-        if collected_names:
-            _assert_collected_reconciles(
-                result, raw_output, collected_names, self.test_file,
-            )
+        _assert_collected_reconciles(
+            result, raw_output, collected_names, self.test_file,
+        )
         return result, raw_output
 
     def repr_failure(
@@ -1005,9 +996,7 @@ def pytest_collection_modifyitems(
     for item in items:
         if not isinstance(item, DeviceRuntimeItem):
             continue
-        missing = missing_required_keys(
-            config, scope=getattr(item, "library_name", None),
-        )
+        missing = missing_required_keys(config, scope=item.library_name)
         if not missing:
             continue
         skip_reason = (
@@ -1100,14 +1089,13 @@ def _deselect_items_missing_required_features(
     for item in items:
         if not isinstance(item, DeviceRuntimeItem):
             continue
-        # Defensive ``getattr`` for both fields. Test stubs that mock
-        # ``DeviceRuntimeItem`` via ``spec=`` won't expose attributes
-        # set in ``__init__``.  Skip gracefully so the feature pass
-        # never breaks an unrelated test.
-        device = getattr(item, "target_device", None)
-        test_file = getattr(item, "test_file", None)
-        if device is None or test_file is None:
+        # ``target_device`` is ``None`` until a device resolves for the
+        # item; a feature marker can't be evaluated without a target to
+        # probe, so skip those.
+        device = item.target_device
+        if device is None:
             continue
+        test_file = item.test_file
         marker = read_features_marker(test_file)
         if not marker:
             continue

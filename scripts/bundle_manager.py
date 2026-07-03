@@ -464,7 +464,7 @@ def _manifest_current_relpaths(package_dir: Path) -> set[Path] | None:
     carries a prior release's removed or renamed modules — the ``cp -r``
     overlay that merges each release onto the accumulated bundle clone
     never deletes.  Returns ``None`` when the directory has no manifest
-    (not a staged bundle package), so the caller falls back to the raw tree.
+    (not a staged bundle package).
     """
     manifest_path = package_dir / "package.json"
     if not manifest_path.is_file():
@@ -549,28 +549,21 @@ def build_circup_zips(
         zipfile.ZipFile(bytecode_zip_path, "w", zipfile.ZIP_DEFLATED) as bytecode_zip,
     ):
         # .py source bundle: the .py + declared data files this build's
-        # package.json manifest lists (so a stale module the overlay left
-        # on disk can't ride in), falling back to the raw tree for a
-        # directory with no manifest (hand-built inputs / tests).
+        # package.json manifest lists, so a stale module the overlay left
+        # on disk can't ride in.
         for package_dir in package_dirs:
             package_name = package_dir.name
             current = _manifest_current_relpaths(package_dir)
-            if current is not None:
-                source_files = [
-                    (package_dir / relative_path, relative_path)
-                    for relative_path in sorted(current)
-                    if (package_dir / relative_path).is_file()
-                ]
-            else:
-                python_files = sorted(package_dir.rglob("*.py"))
-                source_files = [
-                    (source_file, source_file.relative_to(package_dir))
-                    for source_file in python_files
-                ]
-                source_files += [
-                    (data_source, data_source.relative_to(package_dir))
-                    for data_source in _bundle_data_files(python_files)
-                ]
+            if current is None:
+                raise ValueError(
+                    f"{package_dir} has no package.json manifest; every "
+                    f"staged bundle package carries one."
+                )
+            source_files = [
+                (package_dir / relative_path, relative_path)
+                for relative_path in sorted(current)
+                if (package_dir / relative_path).is_file()
+            ]
             for source_file, relative_path in source_files:
                 archive_path = f"{source_bundle_name}/lib/{package_name}/{relative_path}"
                 source_zip.write(source_file, archive_path)

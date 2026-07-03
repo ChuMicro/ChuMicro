@@ -201,6 +201,7 @@ class TestDeviceTestItemRuntestSkip:
             (device.identifier, "alpha", test_file.name), skip_result, "raw",
         )
         item = make_test_item(session, device, test_file, "test_one")
+        session.items = [item]
 
         with pytest.raises(pytest.skip.Exception, match="no wifi on this board"):
             item.runtest()
@@ -420,14 +421,20 @@ class TestDeviceTestItemDuplicateResult:
     def test_duplicate_result_lines_fail_ambiguous(self, tmp_path: Path) -> None:
         """Two result lines for one name fail rather than promoting the first.
 
-        A stub session with no ``items`` bypasses the collected-name
-        cross-check, isolating the per-item duplicate guard: an earlier
-        phantom PASS must not shadow the later real FAIL for the same name.
+        The host collected ``test_b`` and ``test_c``; the device output
+        carries two ``test_b`` lines and no ``test_c`` line, so the
+        two-item collected count reconciles against the device total of
+        two.  runtest then reaches the per-item duplicate guard, which
+        refuses to let an earlier phantom PASS shadow the later real FAIL.
         """
         cache = pytest_device._TransportCache()
         session = FakeSession(cache, rootpath=tmp_path)
         device = hot_path_device()
         test_file = _functional_file(tmp_path)
+        session.items = [
+            make_test_item(session, device, test_file, "test_b"),
+            make_test_item(session, device, test_file, "test_c"),
+        ]
         result = RunResult(
             tests=[
                 ParsedTestResult(name="test_b", status="PASS", duration=0.002),

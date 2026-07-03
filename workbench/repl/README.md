@@ -77,7 +77,7 @@ if result is ExitCode.TRACEBACK_DETECTED:
 | `interactive_line(device)` | Line-mode TUI — host-side line editor with persistent per-device history, `:edit` / `:save` / `:load` / `:snippets` builtins, Tab against keywords + on-device `dir()` |
 | `interactive(device)` | Passthrough TUI — `mpremote`-compatible keybindings (Ctrl-C / Ctrl-D / Ctrl-X / Ctrl-E), auto-reconnect through the configured serial-port factory, Ctrl-X quits without rebooting the device |
 | `tail(device, seconds, *, fail_on_traceback=True)` → `ExitCode` | Stream serial output for a window, highlight tracebacks as they arrive, return one of the `ExitCode` enum values |
-| `fetch_device_names(port, *, expression="")` → `list[str] \| None` | Drive the friendly→raw→`dir(<expression>)`→friendly round-trip in one call; the engine behind line-mode Tab completion.  Useful if you're embedding completion in your own session shape. |
+| `fetch_device_names(port)` → `list[str] \| None` | Drive the friendly→raw→`dir()`→friendly round-trip in one call; the engine behind line-mode Tab completion.  Useful if you're embedding completion in your own session shape. |
 | `build_default_completer(*, port=None, cache=None)` | `prompt_toolkit`-shaped completer wrapping `KeywordCompleter` + (optionally, when `port` is given) `DeviceCompleter`.  Caller-owned `cache` lets `:rescan`-style invalidation hook in. |
 | `detect_patterns(text)` / `colorize(text)` | Streaming pattern detector + ANSI renderer for CP `Traceback` / `safe mode` / `Hard fault`, MP `Traceback` / `MPY: soft reboot` banners |
 | `classify_session_failure(error)` → `ReplFailureKind` | Standalone classifier for building your own orchestrator on top of `ReplSession` |

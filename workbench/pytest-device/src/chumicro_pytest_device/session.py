@@ -25,7 +25,6 @@ from .transport_cache import _TransportCache
 
 if TYPE_CHECKING:
     from .backends import Backend
-    from .pr_summary import DeviceRunResult  # noqa: F401, kept for type hints downstream
 
 
 #: On-device path for the staged runtime-config payload.  Matches

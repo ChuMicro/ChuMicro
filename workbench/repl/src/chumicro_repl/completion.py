@@ -7,7 +7,7 @@ adapter.
 
 The device-backed source drives a friendly-REPL to raw-REPL to
 ``dir()`` round-trip per Tab and caches the result, so successive
-Tabs in the same namespace are served from memory.  The fetcher
+Tabs are served from memory.  The fetcher
 runs synchronously inside the prompt_toolkit callback because the
 line-mode loop is parked in ``session.prompt(...)`` while the user
 is typing, so nothing else is touching the port.
@@ -41,10 +41,9 @@ if TYPE_CHECKING:  # pragma: no cover -type-only
 
 
 #: Callable signature for the fetcher that backs a :class:`DeviceCompleter`.
-#: ``expression`` is ``""`` for the top-level namespace (``dir()``) or
-#: ``"foo.bar"`` for ``dir(foo.bar)``.  Returning ``None`` is a soft
+#: Returns the device's top-level ``dir()`` names, or ``None`` on a soft
 #: failure (timeout / parse error) — callers retry on the next Tab.
-NamespaceFetcher = Callable[[str], Iterable[str] | None]
+NamespaceFetcher = Callable[[], Iterable[str] | None]
 
 
 #: Identifier-ish character class for the trailing token of a
@@ -141,35 +140,33 @@ class KeywordCompleter:
 
 
 class CompletionCache:
-    """In-memory cache keyed by namespace expression.
+    """In-memory cache of the device's top-level ``dir()`` names.
 
-    ``""`` keys the bare namespace (``dir()``); ``"foo"`` keys
-    ``dir(foo)``; ``"foo.bar"`` keys ``dir(foo.bar)``.  Unbounded;
-    the cache clears on every device reset.
+    Holds one sorted, de-duplicated tuple until :meth:`clear` drops it
+    (called on every device reset).
     """
 
     def __init__(self) -> None:
-        self._table: dict[str, tuple[str, ...]] = {}
+        self._names: tuple[str, ...] | None = None
 
-    def get(self, key: str) -> tuple[str, ...] | None:
-        return self._table.get(key)
+    def get(self) -> tuple[str, ...] | None:
+        return self._names
 
-    def put(self, key: str, names: Iterable[str]) -> None:
-        self._table[key] = tuple(sorted(set(names)))
+    def put(self, names: Iterable[str]) -> None:
+        self._names = tuple(sorted(set(names)))
 
     def clear(self) -> None:
-        """Drop every cached entry — call on device reset."""
-        self._table.clear()
+        """Drop the cached names — call on device reset."""
+        self._names = None
 
 
 class DeviceCompleter:
     """Cache-fronted completer driven by a :class:`NamespaceFetcher`.
 
-    The first query for a given namespace key calls the fetcher and
-    stores the result; subsequent queries for any prefix in that
-    namespace hit the cache.  A ``None`` from the fetcher is a soft
-    failure (timeout, parse error) and is not cached, so the next Tab
-    retries.
+    The first query calls the fetcher for the device's ``dir()`` names
+    and stores them; subsequent queries for any prefix hit the cache.
+    A ``None`` from the fetcher is a soft failure (timeout, parse error)
+    and is not cached, so the next Tab retries.
     """
 
     def __init__(
@@ -187,14 +184,12 @@ class DeviceCompleter:
         return self._cache
 
     def candidates(self, prefix: str) -> Iterable[str]:
-        # Only the bare namespace ("") is queried; attribute
-        # completion is not implemented.
-        cached = self._cache.get("")
+        cached = self._cache.get()
         if cached is None and self._fetcher is not None:
-            fetched = self._fetcher("")
+            fetched = self._fetcher()
             if fetched is not None:
-                self._cache.put("", fetched)
-                cached = self._cache.get("")
+                self._cache.put(fetched)
+                cached = self._cache.get()
         if not cached:
             return iter(())
         if not prefix:
@@ -308,13 +303,12 @@ def _read_until_marker(
 def fetch_device_names(
     port: SerialPort,
     *,
-    expression: str = "",
     time: TimeSource | None = None,
     timeout: float = _FETCH_TIMEOUT_SECONDS,
 ) -> list[str] | None:
-    """Query the device for ``dir(<expression>)`` and return the names.
+    """Query the device for its top-level ``dir()`` and return the names.
 
-    Drives one friendly-REPL → raw-REPL → ``print(repr(dir(...)))`` →
+    Drives one friendly-REPL → raw-REPL → ``print(repr(dir()))`` →
     friendly-REPL round-trip.  Reads through the friendly-banner
     reprint so its bytes do not surface into the next drain.
 
@@ -322,8 +316,6 @@ def fetch_device_names(
         port: Open :class:`SerialPort` already in friendly REPL.  The
             fetcher leaves the device back in friendly REPL on every
             return path (success, parse failure, timeout).
-        expression: ``""`` for the top-level namespace (``dir()``);
-            ``"foo"`` / ``"foo.bar"`` for ``dir(foo)`` / ``dir(foo.bar)``.
         time: Injectable :class:`TimeSource` for tests.  Defaults to
             the stdlib ``time`` module.
         timeout: Per-round-trip wall-clock budget.  Default 2 s.
@@ -336,10 +328,7 @@ def fetch_device_names(
     """
     active_time = time if time is not None else cast(TimeSource, _time_module)
     deadline = active_time.monotonic() + timeout
-    source = (
-        f"print(repr(dir({expression})))\r\n" if expression
-        else "print(repr(dir()))\r\n"
-    )
+    source = "print(repr(dir()))\r\n"
     try:
         # friendly → raw
         port.reset_input_buffer()
@@ -435,9 +424,7 @@ def build_default_completer(
     if port is None:
         return PromptToolkitCompleter(CombinedCompleter([keyword_source]))
     device_source = DeviceCompleter(
-        fetcher=lambda expression: fetch_device_names(
-            port, expression=expression, time=time,
-        ),
+        fetcher=lambda: fetch_device_names(port, time=time),
         cache=cache,
     )
     return PromptToolkitCompleter(

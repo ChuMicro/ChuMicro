@@ -173,12 +173,12 @@ class TestBuiltinCommands:
         from chumicro_repl.completion import CompletionCache
 
         cache = CompletionCache()
-        cache.put("", ["alpha", "beta"])
-        assert cache.get("") == ("alpha", "beta")
+        cache.put(["alpha", "beta"])
+        assert cache.get() == ("alpha", "beta")
         context = _context(completion_cache=cache)
         keep_running = BUILTIN_COMMANDS["rescan"](context, "")
         assert keep_running is True
-        assert cache.get("") is None
+        assert cache.get() is None
         assert "completion cache cleared" in context.output.getvalue()
 
     def test_rescan_no_cache_explains(self) -> None:

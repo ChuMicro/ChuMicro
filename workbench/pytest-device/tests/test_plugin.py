@@ -1494,6 +1494,9 @@ class TestDeviceRunFileItemRuntest:
         )
 
         test_file = _make_functional_test_file(tmp_path, "alpha")
+        hot_path_session.items = [
+            make_test_item(hot_path_session, device, test_file, "test_one"),
+        ]
         item = make_run_file_item(hot_path_session, device, test_file)
         item.runtest()
 
@@ -1534,6 +1537,7 @@ class TestDeviceTestItemRuntest:
         item = make_test_item(
             hot_path_session, device, test_file, "test_one",
         )
+        hot_path_session.items = [item]
         item.runtest()  # must not raise.
         assert item.reported_duration == pytest.approx(0.001)
 
@@ -1549,6 +1553,10 @@ class TestDeviceTestItemRuntest:
         )
 
         test_file = _make_functional_test_file(tmp_path, "alpha")
+        hot_path_session.items = [
+            make_test_item(hot_path_session, device, test_file, "test_one"),
+            make_test_item(hot_path_session, device, test_file, "test_two"),
+        ]
         item = make_test_item(
             hot_path_session, device, test_file, "test_two",
         )
@@ -1567,6 +1575,9 @@ class TestDeviceTestItemRuntest:
         )
 
         test_file = _make_functional_test_file(tmp_path, "alpha")
+        hot_path_session.items = [
+            make_test_item(hot_path_session, device, test_file, "test_one"),
+        ]
         item = make_test_item(
             hot_path_session, device, test_file, "test_nonexistent",
         )
@@ -1589,6 +1600,10 @@ class TestDeviceTestItemRuntest:
         )
 
         test_file = _make_functional_test_file(tmp_path, "alpha")
+        hot_path_session.items = [
+            make_test_item(hot_path_session, device, test_file, "test_one"),
+            make_test_item(hot_path_session, device, test_file, "test_two"),
+        ]
         item_one = make_test_item(
             hot_path_session, device, test_file, "test_one",
         )
@@ -1709,14 +1724,20 @@ class TestPytestCollectionModifyItemsRequiredKeys:
     def _make_device_item_mock(nodeid: str = "tests/test_x.py::test_y") -> object:
         """Return a Mock satisfying ``isinstance(item, DeviceRuntimeItem)``.
 
-        The deselect-sweep guard reads ``item.nodeid`` as a string, so
-        we set it explicitly. Leaving it as a Mock raises TypeError
-        on ``"functional_tests" in item.nodeid``.
+        Sets the attributes ``pytest_collection_modifyitems`` reads off a
+        real ``DeviceRuntimeItem``: ``nodeid`` (the deselect sweep reads
+        it as a string), ``library_name`` (the missing-keys scope),
+        ``target_device`` (``None`` here, so the feature pass skips the
+        item), and ``test_file``.  A bare ``Mock(spec=...)`` exposes none
+        of these — they are set in ``__init__``, not on the class.
         """
         from unittest.mock import Mock  # noqa: PLC0415
 
         item = Mock(spec=collection.DeviceRuntimeItem)
         item.nodeid = nodeid
+        item.library_name = "alpha"
+        item.target_device = None
+        item.test_file = Path("tests/test_x.py")
         return item
 
     @staticmethod
@@ -1857,9 +1878,11 @@ class TestPytestCollectionModifyItemsRequiredKeys:
         mqtt_item = Mock(spec=collection.DeviceRuntimeItem)
         mqtt_item.nodeid = "libraries/mqtt/functional_tests/test_x.py::test_y"
         mqtt_item.library_name = "mqtt"
+        mqtt_item.target_device = None
         wifi_item = Mock(spec=collection.DeviceRuntimeItem)
         wifi_item.nodeid = "libraries/wifi/functional_tests/test_x.py::test_y"
         wifi_item.library_name = "wifi"
+        wifi_item.target_device = None
 
         items = [mqtt_item, wifi_item]
         collection.pytest_collection_modifyitems(config, items)
@@ -1960,13 +1983,16 @@ class TestPytestCollectionModifyItemsFeatures:
         nodeid: str = "libraries/x/functional_tests/test_y.py::test_anything",
     ) -> object:
         """Return a Mock satisfying ``isinstance(item, DeviceRuntimeItem)``
-        with ``target_device`` and ``test_file`` populated."""
+        with ``target_device``, ``test_file``, and ``library_name``
+        populated (the attributes ``pytest_collection_modifyitems`` reads
+        off a real item across its feature and missing-keys passes)."""
         from unittest.mock import Mock  # noqa: PLC0415
 
         item = Mock(spec=collection.DeviceRuntimeItem)
         item.nodeid = nodeid
         item.target_device = device
         item.test_file = test_file
+        item.library_name = "x"
         item.session = session
         return item
 

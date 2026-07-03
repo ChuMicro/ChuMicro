@@ -29,7 +29,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[4]))   # repo root — for the shared webui toolkit
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # repo root — for the shared webui toolkit
 from webui.server import serve_oneshot
 
 RENDERER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "render_picker.py")
