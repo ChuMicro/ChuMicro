@@ -10,10 +10,14 @@ keyword.  Three concrete transports + the host-side
 * CircuitPython flash mode: writes each ``(device_path, bytes)``
   pair into the local staging tree at the matching relative path,
   ready for rsync to push to the CIRCUITPY drive.
-* MicroPython copy / mount mode: writes each pair into the staging
-  tree (copy mode rsyncs it to flash, mount mode mounts the dir as
-  the device filesystem.  Both end states give the device a file
-  at the requested path).
+* MicroPython copy mode: writes each pair into the staging tree,
+  which the ``fs cp`` rsync then pushes to flash so the file lands at
+  the requested absolute path.
+* MicroPython mount mode: raises :class:`UnsupportedExtraFilesError`.
+  mpremote ``mount_local`` lands the tree at ``/remote``, so a file
+  staged for ``/runtime_config.msgpack`` would appear at
+  ``/remote/runtime_config.msgpack`` — invisible to a reader opening
+  the absolute path.
 * :class:`FakeTransport`: stores the bytes in
   ``staged_extra_files`` for assert-on by tests.
 
@@ -246,7 +250,8 @@ class TestCircuitpythonFlashModeStagingTree:
 
 
 # ---------------------------------------------------------------------------
-# MicroPython transport: both copy and mount modes accept extra_files.
+# MicroPython transport: copy mode lands extra_files in the staging tree;
+# mount mode raises because mount_local lands the tree at /remote.
 # ---------------------------------------------------------------------------
 
 
@@ -281,7 +286,7 @@ def mp_mount_transport():
 
 
 class TestMicropythonStagingTreeExtraFiles:
-    """The shared staging-tree write covers both mount and copy modes."""
+    """Copy mode lands extra_files in the staging tree; mount mode refuses."""
 
     def test_copy_mode_lands_extra_files_in_staging(
         self, mp_copy_transport: MicropythonTransport, tmp_path: Path,
@@ -304,12 +309,31 @@ class TestMicropythonStagingTreeExtraFiles:
             # And that mpremote got dispatched (copy mode pushes the tree).
             assert run.called
 
-    def test_mount_mode_lands_extra_files_in_staging(
+    def test_mount_mode_raises_on_non_empty_extra_files(
         self, mp_mount_transport: MicropythonTransport, tmp_path: Path,
     ) -> None:
-        # Mount mode opens a persistent serial connection + calls
-        # `mount_local`, both are heavy.  Patch `_ensure_serial` to
-        # supply a stubbed serial that records the mount call.
+        # mount_local lands the tree at /remote, so an absolute-path
+        # extra_file like /runtime_config.msgpack would be invisible.
+        # Refuse loudly (mirroring the CircuitPython RAM-mode raise)
+        # rather than silently stage it where no reader looks.
+        with pytest.raises(
+            UnsupportedExtraFilesError, match="cannot stage extra_files",
+        ):
+            mp_mount_transport.stage(
+                source_dirs=[],
+                test_files=[],
+                harness_source=tmp_path,
+                extra_files={"/runtime_config.msgpack": b"\x80"},
+            )
+        # The refusal happens before any serial/mount work.
+        assert mp_mount_transport._serial is None
+
+    def test_mount_mode_with_no_extra_files_passes_through(
+        self, mp_mount_transport: MicropythonTransport, tmp_path: Path,
+    ) -> None:
+        # Bare mount-mode stage (no extra_files) must not regress: only
+        # non-empty extra_files raises.  Patch `_ensure_serial` to supply
+        # a stubbed serial that records the mount call.
         class _SerialStub:
             def __init__(self) -> None:
                 self.mount_calls = 0
@@ -330,12 +354,8 @@ class TestMicropythonStagingTreeExtraFiles:
                 source_dirs=[],
                 test_files=[],
                 harness_source=tmp_path,
-                extra_files={"/runtime_config.msgpack": b"\x80"},
             )
 
-        staging = mp_mount_transport._staging_path
-        assert staging is not None
-        assert (staging / "runtime_config.msgpack").read_bytes() == b"\x80"
         assert stub.mount_calls == 1
 
     def test_nested_extra_file_path_creates_parents(
