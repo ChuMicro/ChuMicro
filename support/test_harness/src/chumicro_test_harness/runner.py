@@ -16,15 +16,24 @@ try:
 except ImportError:  # pragma: no cover - MicroPython and CircuitPython may omit traceback.
 	traceback = None
 
-# Cross-runtime monotonic seconds: CPython/CircuitPython expose
-# time.monotonic(). MicroPython only has time.ticks_ms().
+# Cross-runtime monotonic clock. ``_now`` returns an opaque tick sample;
+# ``_elapsed_seconds`` turns two samples into a float of elapsed seconds.
+# CPython/CircuitPython expose time.monotonic() (float seconds, plain
+# subtraction). MicroPython has only time.ticks_ms(), whose counter wraps
+# at ~2**30 ms (~12.4 days uptime); raw subtraction across that wrap goes
+# negative, so durations must be diffed with time.ticks_diff.
 if hasattr(time, "monotonic"):
-	_now_seconds = time.monotonic
-else:  # pragma: no cover
-	# MicroPython fallback. time.monotonic always exists on CPython.
-	def _now_seconds():
-		"""Return monotonic seconds from MicroPython's ``ticks_ms``."""
-		return time.ticks_ms() / 1000
+	_now = time.monotonic
+
+	def _elapsed_seconds(start, end):
+		"""Return seconds between two ``time.monotonic`` samples."""
+		return end - start
+else:  # pragma: no cover - MicroPython path, exercised on real boards.
+	_now = time.ticks_ms
+
+	def _elapsed_seconds(start, end):
+		"""Return seconds between two ``time.ticks_ms`` samples, wrap-safe."""
+		return time.ticks_diff(end, start) / 1000
 
 
 _MEM_FREE_AVAILABLE = hasattr(gc, "mem_free")
@@ -130,7 +139,7 @@ def run_module(module, name_filter=None):
 	total = 0
 	failed = 0
 
-	run_start = _now_seconds()
+	run_start = _now()
 
 	# Auto-GC stays enabled (default).  Each test is bracketed by an
 	# explicit ``gc.collect()`` for the per-test delta measurement, but
@@ -157,7 +166,7 @@ def run_module(module, name_filter=None):
 			gc.collect()
 			test_heap_before = gc.mem_free()
 
-		test_start = _now_seconds()
+		test_start = _now()
 		try:
 			function()
 		except _SkipException as skip_error:
@@ -168,26 +177,26 @@ def run_module(module, name_filter=None):
 				gc.collect()
 			print(f"SKIP {name} ({skip_error})")
 		except Exception as error:  # pragma: no cover - exercised indirectly by tests.
-			test_end = _now_seconds()
+			test_end = _now()
 			heap_suffix = ""
 			if gc_tracking:
 				gc.collect()
 				test_delta = gc.mem_free() - test_heap_before
 				sign = "+" if test_delta >= 0 else ""
 				heap_suffix = f", heap {sign}{test_delta}"
-			duration = test_end - test_start
+			duration = _elapsed_seconds(test_start, test_end)
 			failed += 1
 			print(f"FAIL {name} ({duration:.3f}s{heap_suffix})")
 			_print_exception(error)
 		else:
-			test_end = _now_seconds()
+			test_end = _now()
 			heap_suffix = ""
 			if gc_tracking:
 				gc.collect()
 				test_delta = gc.mem_free() - test_heap_before
 				sign = "+" if test_delta >= 0 else ""
 				heap_suffix = f", heap {sign}{test_delta}"
-			duration = test_end - test_start
+			duration = _elapsed_seconds(test_start, test_end)
 			print(f"PASS {name} ({duration:.3f}s{heap_suffix})")
 
 	if gc_tracking:
@@ -197,7 +206,7 @@ def run_module(module, name_filter=None):
 		sign = "+" if delta >= 0 else ""
 		print(f"HEAP {module_heap_after} bytes free (delta {sign}{delta} bytes)")
 
-	total_duration = _now_seconds() - run_start
+	total_duration = _elapsed_seconds(run_start, _now())
 
 	if total == 0:
 		print("NO TESTS FOUND")
