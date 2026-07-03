@@ -17,6 +17,7 @@ import signal
 import subprocess
 import sys
 import threading
+import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -2522,6 +2523,131 @@ def _format_test_libraries_functional_command(
     return " ".join(parts)
 
 
+def sweep_devices(
+    *,
+    device_ids: list[str] | None = None,
+    demo: str = "sockets_runner_connector",
+    skip_demo: bool = False,
+    functional: bool = False,
+    library: str | None = None,
+    deploy_mode: str | None = None,
+) -> int:
+    """Run the bench-board sweep across every registered device.
+
+    Formalizes the previously ad-hoc four-board pass: for each device
+    in ``devices.yml`` (registry order), deploy and run a demo as the
+    smoke layer, plus that board's library functional suite when
+    ``functional`` is set.  Boards run strictly serially — the bench
+    shares serial ports and host-side demo endpoints, so concurrent
+    access deadlocks (Decision 0048).  Adding a board to the sweep is
+    a ``devices.yml`` entry, not a code change.
+
+    Args:
+        device_ids: Limit the sweep to these device IDs (registry
+            order is replaced by the given order).  ``None`` sweeps
+            every registered device.
+        demo: Demo directory name under ``demos/`` whose ``driver.py``
+            is the smoke layer.
+        skip_demo: Skip the demo layer (requires ``functional``).
+        functional: Also run each board's library functional suite.
+        library: Limit the functional layer to one library.
+        deploy_mode: Deploy-mode override for the functional layer.
+
+    Returns:
+        ``0`` when every cell passes, ``1`` on any failure, ``2`` for
+        configuration problems (bad device ID, unknown demo, nothing
+        to run).
+    """
+    from chumicro_deploy.config.default import (  # noqa: PLC0415 - deferred heavy import
+        DeviceConfigError,
+        load_device_registry,
+    )
+
+    run_demo = not skip_demo
+    if not run_demo and not functional:
+        print("sweep-devices: --skip-demo without --functional leaves nothing to run.")
+        return 2
+
+    try:
+        devices, _ = load_device_registry(workspace_root=ROOT)
+    except DeviceConfigError as error:
+        print(f"sweep-devices: {error}")
+        return 2
+
+    if device_ids:
+        by_id = {entry.identifier: entry for entry in devices}
+        unknown = [device_id for device_id in device_ids if device_id not in by_id]
+        if unknown:
+            print(
+                f"sweep-devices: unknown device id(s): {', '.join(unknown)} "
+                f"(registered: {', '.join(sorted(by_id))})"
+            )
+            return 2
+        devices = [by_id[device_id] for device_id in device_ids]
+
+    if not devices:
+        print("sweep-devices: no devices registered in devices.yml.")
+        return 2
+
+    driver = ROOT / "demos" / demo / "driver.py"
+    if run_demo and not driver.is_file():
+        available = sorted(
+            path.parent.name for path in (ROOT / "demos").glob("*/driver.py")
+        )
+        print(
+            f"sweep-devices: no demo named {demo!r} "
+            f"(available: {', '.join(available)})"
+        )
+        return 2
+
+    failed = False
+    rows: list[tuple[str, str, str, str, float]] = []
+    for entry in devices:
+        demo_cell = "-"
+        functional_cell = "-"
+        started = time.monotonic()
+        # flush=True on the cell headers: with stdout redirected to a
+        # file the parent's prints are block-buffered while the child
+        # writes the inherited fd directly, so an unflushed header
+        # would land *after* the child output it introduces.
+        if run_demo:
+            print(f"== sweep {entry.identifier} :: demo {demo} ==", flush=True)
+            code = run_command(
+                [PYTHON, str(driver), "--device", entry.identifier],
+                environment=pythonpath_environment(),
+            )
+            demo_cell = "PASS" if code == 0 else "FAIL"
+            failed = failed or code != 0
+        if functional:
+            print(f"== sweep {entry.identifier} :: functional ==", flush=True)
+            device_kwargs = {f"{entry.runtime}_device": entry.identifier}
+            code = test_libraries_functional(
+                runtime=entry.runtime,
+                library=library,
+                deploy_mode=deploy_mode,
+                **device_kwargs,
+            )
+            functional_cell = "PASS" if code == 0 else "FAIL"
+            failed = failed or code != 0
+        rows.append((
+            entry.identifier,
+            entry.runtime,
+            demo_cell,
+            functional_cell,
+            time.monotonic() - started,
+        ))
+
+    print("== sweep summary ==")
+    width = max(len("device"), *(len(identifier) for identifier, *_ in rows))
+    print(f"{'device':<{width}}  {'runtime':<13} {'demo':<5} {'functional':<10} elapsed")
+    for identifier, runtime, demo_cell, functional_cell, elapsed in rows:
+        print(
+            f"{identifier:<{width}}  {runtime:<13} {demo_cell:<5} "
+            f"{functional_cell:<10} {elapsed:.0f}s"
+        )
+    return 1 if failed else 0
+
+
 def _library_has_cross_runtime_unit_suite(library_dir: Path) -> bool:
     """True when ``library_dir/tests`` holds a device-unit-eligible file.
 
@@ -3276,6 +3402,56 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
 
+    sweep_devices_parser = subparsers.add_parser(
+        "sweep-devices",
+        description=(
+            "Run the bench-board sweep across every device registered in "
+            "devices.yml, in sequence: a demo deploy+run as the smoke "
+            "layer, plus each board's library functional suite with "
+            "--functional.  Formalizes the routine multi-board bench pass."
+        ),
+        help=(
+            "run the demo smoke sweep (+ optional functional suite) on "
+            "every board in devices.yml"
+        ),
+    )
+    sweep_devices_parser.add_argument(
+        "--device",
+        action="append",
+        dest="device_ids",
+        metavar="DEVICE_ID",
+        help="limit the sweep to this device id (repeatable)",
+    )
+    sweep_devices_parser.add_argument(
+        "--demo",
+        default="sockets_runner_connector",
+        help=(
+            "demo under demos/ whose driver.py is the smoke layer "
+            "(default: sockets_runner_connector)"
+        ),
+    )
+    sweep_devices_parser.add_argument(
+        "--skip-demo",
+        action="store_true",
+        help="skip the demo smoke layer (requires --functional)",
+    )
+    sweep_devices_parser.add_argument(
+        "--functional",
+        action="store_true",
+        help="also run each board's library functional suite",
+    )
+    sweep_devices_parser.add_argument(
+        "--library",
+        help="limit the functional layer to one library",
+    )
+    sweep_devices_parser.add_argument(
+        "--deploy-mode",
+        dest="deploy_mode",
+        choices=["ram", "flash"],
+        default=None,
+        help="deploy-mode override for the functional layer",
+    )
+
     check_version_parser = subparsers.add_parser(
         "check-version", help="check VERSION enforcement for changed libraries",
     )
@@ -3683,6 +3859,16 @@ def main(argv: list[str]) -> int:
             deploy_mode=args.deploy_mode,
             library=args.library,
             per_file=args.per_file,
+        )
+
+    if args.task == "sweep-devices":
+        return sweep_devices(
+            device_ids=args.device_ids,
+            demo=args.demo,
+            skip_demo=args.skip_demo,
+            functional=args.functional,
+            library=args.library,
+            deploy_mode=args.deploy_mode,
         )
 
     if args.task == "build":
