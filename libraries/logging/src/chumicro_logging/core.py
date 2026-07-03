@@ -168,8 +168,10 @@ class Logger:
 class StreamHandler:
     """Synchronous handler writing formatted records to a writable stream.
 
-    Calls ``stream.write(line + "\\n")`` and ``stream.flush()`` (when
-    available) for every emitted record.  On microcontrollers this
+    For every emitted record, writes the formatted line and a trailing
+    newline as two separate ``stream.write`` calls, then ``stream.flush()``
+    (when available).  Two writes avoid allocating a concatenated
+    ``line + "\\n"`` string per record.  On microcontrollers the stream
     typically resolves to the serial console via ``sys.stdout``; on
     CPython any file-like object works.
 
@@ -242,7 +244,7 @@ class BufferedHandler:
         if capacity < 1:
             raise ValueError("capacity must be at least 1")
         self._downstream = downstream
-        self.capacity = capacity
+        self._capacity = capacity
         self.level = level
         self._buffer = deque((), capacity)
         self.dropped = 0
@@ -255,11 +257,19 @@ class BufferedHandler:
         """Records currently buffered, awaiting flush."""
         return len(self._buffer)
 
+    @property
+    def capacity(self) -> int:
+        """Maximum buffered records.  Read-only: the deque's ``maxlen``
+        is frozen at construction, so a mutable attribute would let the
+        drop accounting desync from the actual drop-oldest behavior.
+        """
+        return self._capacity
+
     def emit(self, level: int, name: str, message: str) -> None:
         """Buffer the record.  Drop the oldest if full."""
         if level < self.level:
             return
-        if len(self._buffer) >= self.capacity:
+        if len(self._buffer) >= self._capacity:
             self.dropped += 1
         # deque(maxlen=capacity) drops the oldest record automatically.
         self._buffer.append((level, name, message))

@@ -95,14 +95,17 @@ embedded runtimes the per-record allocation is the dominant cost —
 prefer `BufferedHandler` in front of it for hot paths.
 
 `Logger` itself stores a reference to each handler in a list and an
-integer error counter.  The handler list snapshot returned by
-`logger.handlers` is a tuple, so iterating it does not allocate.
+integer error counter.  `logger.handlers` builds a fresh tuple snapshot
+on every access, so read it once and hold the result rather than
+re-reading it in a loop.
 
 ## Platform notes
 
 Runs identically on CPython, MicroPython, and CircuitPython.  No
-runtime-specific code paths and no `sys.implementation` checks — the
-library uses only `sys` and built-in types.
+`sys.implementation` checks.  The library imports only `sys` and
+`collections.deque` from the stdlib; the one runtime branch is a
+`from micropython import const` try-import that falls back to an
+identity `const` on CPython.
 
 `StreamHandler`'s default stream is `sys.stdout`, which on
 microcontrollers writes to the serial console; on CPython any
