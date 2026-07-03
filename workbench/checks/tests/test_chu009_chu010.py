@@ -209,10 +209,19 @@ class TestCHU010:
 
 
 class TestEdgeCases:
-    def test_syntax_error_skipped(self, tmp_path: Path) -> None:
+    def test_syntax_error_reported_under_both_codes(
+        self, tmp_path: Path,
+    ) -> None:
+        # An unparseable test file surfaces under each rule that scanned
+        # it, rather than passing silently as clean.
         _stage_test(tmp_path, "foo", "tests", "def broken(\n")
-        assert CHU009.check(tmp_path) == []
-        assert CHU010.check(tmp_path) == []
+        chu009 = CHU009.check(tmp_path)
+        chu010 = CHU010.check(tmp_path)
+        assert len(chu009) == 1
+        assert chu009[0].code == "CHU009"
+        assert "syntax error" in chu009[0].message
+        assert len(chu010) == 1
+        assert chu010[0].code == "CHU010"
 
 
 class TestRuleMetadata:
@@ -435,5 +444,126 @@ class TestSilentReturnEdgeCases:
                     assert a()
                 else:
                     assert b()
+        """)
+        assert CHU009.check(tmp_path) == []
+
+
+class TestSilentReturnInCompoundBodies:
+    """CHU009 flags a trailing ``return`` ending a non-``if`` compound body."""
+
+    def test_except_return_flagged(self, tmp_path: Path) -> None:
+        # The canonical hardware-missing skip: except-body return ends
+        # the test, so the assertion after the try never runs.
+        _stage_test(tmp_path, "foo", "tests", """
+            def test_thing() -> None:
+                try:
+                    hardware = object()
+                except OSError:
+                    return
+                assert hardware is not None
+        """)
+        findings = CHU009.check(tmp_path)
+        assert len(findings) == 1
+        assert findings[0].code == "CHU009"
+
+    def test_for_body_return_flagged(self, tmp_path: Path) -> None:
+        # A return as the last statement of a for body ends the test on
+        # the first iteration and orphans the assertion below.
+        _stage_test(tmp_path, "foo", "tests", """
+            def test_thing() -> None:
+                for attempt in range(3):
+                    return
+                assert attempt == 2
+        """)
+        findings = CHU009.check(tmp_path)
+        assert len(findings) == 1
+        assert findings[0].code == "CHU009"
+
+    def test_while_body_return_flagged(self, tmp_path: Path) -> None:
+        _stage_test(tmp_path, "foo", "tests", """
+            def test_thing() -> None:
+                while ready():
+                    return
+                assert done()
+        """)
+        assert len(CHU009.check(tmp_path)) == 1
+
+    def test_with_body_return_flagged(self, tmp_path: Path) -> None:
+        _stage_test(tmp_path, "foo", "tests", """
+            def test_thing() -> None:
+                with ctx() as handle:
+                    return
+                assert handle.closed
+        """)
+        assert len(CHU009.check(tmp_path)) == 1
+
+    def test_for_else_return_flagged(self, tmp_path: Path) -> None:
+        _stage_test(tmp_path, "foo", "tests", """
+            def test_thing() -> None:
+                for item in items():
+                    process(item)
+                else:
+                    return
+                assert False
+        """)
+        assert len(CHU009.check(tmp_path)) == 1
+
+    def test_try_finally_return_flagged(self, tmp_path: Path) -> None:
+        _stage_test(tmp_path, "foo", "tests", """
+            def test_thing() -> None:
+                try:
+                    result = compute()
+                finally:
+                    return
+                assert result == 1
+        """)
+        assert len(CHU009.check(tmp_path)) == 1
+
+    def test_except_pass_cleanup_not_flagged(self, tmp_path: Path) -> None:
+        # ``except ...: pass`` swallowing a cleanup error skips nothing —
+        # execution continues after the try, so it is a normal idiom.
+        _stage_test(tmp_path, "foo", "tests", """
+            def test_thing() -> None:
+                resource = acquire()
+                assert resource.ok
+                try:
+                    resource.release()
+                except OSError:
+                    pass
+        """)
+        assert CHU009.check(tmp_path) == []
+
+    def test_for_body_pass_not_flagged(self, tmp_path: Path) -> None:
+        # A ``pass`` ending a loop body is a no-op, not an early exit.
+        _stage_test(tmp_path, "foo", "tests", """
+            def test_thing() -> None:
+                for item in drain():
+                    pass
+                assert done()
+        """)
+        assert CHU009.check(tmp_path) == []
+
+    def test_except_return_noqa_suppresses(self, tmp_path: Path) -> None:
+        _stage_test(tmp_path, "foo", "tests", """
+            def test_thing() -> None:
+                try:
+                    hardware = object()
+                except OSError:
+                    return  # noqa: CHU009
+                assert hardware is not None
+        """)
+        assert CHU009.check(tmp_path) == []
+
+    def test_return_in_except_inside_closure_not_flagged(self, tmp_path: Path) -> None:
+        # An except-body return inside a nested factory is that
+        # callable's logic, not the test silently passing.
+        _stage_test(tmp_path, "foo", "tests", """
+            def test_thing() -> None:
+                def factory():
+                    try:
+                        return build()
+                    except OSError:
+                        return None
+                assert factory() is not None
         """)
         assert CHU009.check(tmp_path) == []

@@ -37,9 +37,57 @@ class TestSilentNoOp:
         _adr(tmp_path, "README.md", "# Decisions\n\nStatus: `accepted`\n")
         assert CHU019.check(tmp_path) == []
 
-    def test_file_without_status_skipped(self, tmp_path: Path) -> None:
-        _adr(tmp_path, "0099-notes.md", "# Just notes\n\nNo status here.\n")
+    def test_non_numbered_file_without_status_skipped(self, tmp_path: Path) -> None:
+        # A ``.md`` with neither an NNNN- prefix nor a lifecycle marker
+        # is genuinely not a decision record: still a silent no-op.
+        _adr(tmp_path, "notes.md", "# Just notes\n\nNo status here.\n")
         assert CHU019.check(tmp_path) == []
+
+
+class TestMissingStatusLine:
+    """A numbered / marker-carrying record must carry a parseable Status."""
+
+    def test_numbered_record_without_status_flagged(self, tmp_path: Path) -> None:
+        _adr(tmp_path, "0099-notes.md", "# 0099: Just notes\n\nNo status here.\n")
+        findings = CHU019.check(tmp_path)
+        assert len(findings) == 1
+        assert findings[0].code == "CHU019"
+        assert "no parseable `Status:` line" in findings[0].message
+
+    def test_superseded_marker_without_status_flagged(self, tmp_path: Path) -> None:
+        # Probe P1: a supersession filename whose body has no Status
+        # line must not escape every marker check.
+        _adr(
+            tmp_path,
+            "0042-SUPERSEDED-BY-0043-old-thing.md",
+            "# 0042: old thing\n\nSome prose without any status field.\n",
+        )
+        findings = CHU019.check(tmp_path)
+        assert len(findings) == 1
+        assert "no parseable `Status:` line" in findings[0].message
+
+    def test_bold_styled_status_treated_as_missing(self, tmp_path: Path) -> None:
+        # ``**Status:** accepted`` doesn't match the ^Status: parser, so
+        # the record reads as having no parseable status — flagged, not
+        # silently skipped.
+        _adr(
+            tmp_path,
+            "0050-styled.md",
+            "# 0050: styled\n\n**Status:** accepted\nDate: `x`\n",
+        )
+        findings = CHU019.check(tmp_path)
+        assert len(findings) == 1
+        assert "no parseable `Status:` line" in findings[0].message
+
+    def test_inert_marker_without_status_flagged(self, tmp_path: Path) -> None:
+        _adr(
+            tmp_path,
+            "0004-INERT-bootstrap.md",
+            "# 0004: bootstrap\n\nArchived: spent, no status field.\n",
+        )
+        findings = CHU019.check(tmp_path)
+        assert len(findings) == 1
+        assert "no parseable `Status:` line" in findings[0].message
 
 
 class TestClean:

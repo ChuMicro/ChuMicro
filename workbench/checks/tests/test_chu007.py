@@ -94,11 +94,14 @@ class TestSuppression:
 
 
 class TestEdgeCases:
-    def test_syntax_error_skipped(self, tmp_path: Path) -> None:
+    def test_syntax_error_reported(self, tmp_path: Path) -> None:
         _make_library(tmp_path, "wifi")
         _make_workbench_module(tmp_path, "tool", "x.py", "def broken(\n")
-        # Unparseable file: silent skip, no crash.
-        assert CHU007.check(tmp_path) == []
+        # Unparseable file: reported as a finding, not silently skipped.
+        findings = CHU007.check(tmp_path)
+        assert len(findings) == 1
+        assert findings[0].code == "CHU007"
+        assert "syntax error" in findings[0].message
 
     def test_relative_import_with_no_module(self, tmp_path: Path) -> None:
         _make_library(tmp_path, "wifi")

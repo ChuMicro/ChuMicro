@@ -40,6 +40,34 @@ class TestSectionHeadingBanners:
         assert len(findings) == 1
         assert "Update" in findings[0].message
 
+    def test_h3_update_heading_flagged(self, tmp_path: Path) -> None:
+        # An h3 banner is the same banned shape as h2.
+        _stage_decision(
+            tmp_path,
+            "0042-foo",
+            "## Context\n\nBaseline.\n\n### Update (2026-01-02)\n\nLater.\n",
+        )
+        findings = CHU024.check(tmp_path)
+        assert len(findings) == 1
+        assert "Update" in findings[0].message
+
+    def test_parenless_dated_update_heading_flagged(self, tmp_path: Path) -> None:
+        # No parenthesis, just a trailing date.
+        _stage_decision(
+            tmp_path,
+            "0042-foo",
+            "## Context\n\nBaseline.\n\n## Update 2026-01-03\n\nLater.\n",
+        )
+        assert len(CHU024.check(tmp_path)) == 1
+
+    def test_plural_updates_heading_flagged(self, tmp_path: Path) -> None:
+        _stage_decision(
+            tmp_path,
+            "0042-foo",
+            "## Context\n\nBaseline.\n\n## Updates\n\nLater.\n",
+        )
+        assert len(CHU024.check(tmp_path)) == 1
+
     def test_amendments_heading_flagged(self, tmp_path: Path) -> None:
         _stage_decision(
             tmp_path,

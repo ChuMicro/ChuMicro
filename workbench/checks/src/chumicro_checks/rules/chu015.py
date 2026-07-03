@@ -42,6 +42,7 @@ import ast
 import re
 from pathlib import Path
 
+from chumicro_checks._ast import parse_or_syntax_finding
 from chumicro_checks._finding import Finding
 from chumicro_checks._noqa import line_suppresses
 from chumicro_checks._rule import Rule
@@ -146,10 +147,9 @@ def _check_file(filepath: Path, repo_root: Path) -> list[Finding]:
         text = filepath.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
         return []
-    try:
-        tree = ast.parse(text, filename=str(filepath))
-    except SyntaxError:
-        return []
+    tree, syntax_findings = parse_or_syntax_finding(text, filepath, _RULE_CODE)
+    if tree is None:
+        return syntax_findings
     doc_node = _module_docstring_node(tree)
     if doc_node is None:
         return []

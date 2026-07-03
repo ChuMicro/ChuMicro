@@ -64,6 +64,53 @@ class TestBulletCap:
         assert f"cap {_BULLET_CAP}" in findings[0].message
         assert "no sub-bullets" in findings[0].message
 
+    def test_numbered_sub_list_fires(self, tmp_path: Path) -> None:
+        # Ordered sub-items are the same "needs structure" shape as
+        # dash sub-bullets and must count toward the cap.
+        _make_repo_with_next_up(tmp_path, """
+            ## Next
+
+            - big item with hidden structure:
+              1. sub-step one
+              2. sub-step two
+              3. sub-step three
+        """)
+        findings = CHU011.check(tmp_path)
+        assert len(findings) == 1
+        assert findings[0].code == "CHU011"
+        assert "4 bullet markers" in findings[0].message
+
+    def test_paren_ordered_sub_list_fires(self, tmp_path: Path) -> None:
+        _make_repo_with_next_up(tmp_path, """
+            ## Next
+
+            - item
+              1) first
+              2) second
+        """)
+        assert len(CHU011.check(tmp_path)) == 1
+
+    def test_star_sub_bullet_fires(self, tmp_path: Path) -> None:
+        _make_repo_with_next_up(tmp_path, """
+            ## Next
+
+            - item
+              * sub with a star marker
+        """)
+        assert len(CHU011.check(tmp_path)) == 1
+
+    def test_version_number_in_bullet_body_does_not_count(
+        self, tmp_path: Path,
+    ) -> None:
+        # ``1.2.3`` mid-line is not a list marker (no space after the
+        # first dot), so a bullet mentioning a version stays clean.
+        _make_repo_with_next_up(tmp_path, """
+            ## Next
+
+            - bump chumicro-checks to 1.2.3 before the release
+        """)
+        assert CHU011.check(tmp_path) == []
+
     def test_per_bullet_noqa_suppresses(self, tmp_path: Path) -> None:
         _make_repo_with_next_up(tmp_path, """
             ## Next

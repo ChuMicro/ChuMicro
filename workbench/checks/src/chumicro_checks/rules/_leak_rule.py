@@ -13,8 +13,11 @@ Each ``LeakRule`` instance carries:
   directories to walk under the current repo.  An empty list means
   silent no-op (the rule's targets don't exist in this repo shape).
 * ``patterns`` — tuple of ``(re.Pattern, message, scope_predicate)``;
-  each pattern fires only when ``scope_predicate(filepath)`` returns
-  True, so a per-rule package-exemption stays local to that rule.
+  each pattern fires only when ``scope_predicate(relative_path)``
+  returns True, where ``relative_path`` is the file's path relative to
+  the repo root.  A per-rule package-exemption stays local to that
+  rule, and keying it on the repo-relative path means a leading-segment
+  exemption can't be tricked by the absolute checkout path.
 * ``suffixes`` — file extensions walked.
 """
 
@@ -72,21 +75,30 @@ class LeakRule(Rule):
                 if filepath in seen_paths:
                     continue
                 seen_paths.add(filepath)
-                findings.extend(self._check_file(filepath))
+                findings.extend(self._check_file(filepath, repo_root))
         return findings
 
-    def _check_file(self, filepath: Path) -> list[Finding]:
+    def _check_file(self, filepath: Path, repo_root: Path) -> list[Finding]:
         try:
             text = filepath.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
             return []
+        # Scope predicates test the repo-root-relative path, so an
+        # exemption keyed on a leading segment (``packages/``,
+        # ``workbench/checks/``) matches the tree's own layout rather
+        # than a coincidental segment in the absolute checkout path
+        # above the repo root.
+        try:
+            scope_path = filepath.relative_to(repo_root)
+        except ValueError:
+            scope_path = filepath
         findings: list[Finding] = []
         for line_number, line in enumerate(text.splitlines(), start=1):
             if line_suppresses(line, self.code):
                 continue
             scrubbed = strip_noqa(line)
             for pattern, message, scope_predicate in self._patterns:
-                if not scope_predicate(filepath):
+                if not scope_predicate(scope_path):
                     continue
                 if pattern.search(scrubbed):
                     findings.append(

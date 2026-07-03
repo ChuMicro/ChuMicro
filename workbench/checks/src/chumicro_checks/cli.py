@@ -21,7 +21,13 @@ Exit codes::
 
     0   no findings
     1   one or more findings
-    2   usage error (unknown rule code, bad config)
+    2   usage error: an unknown ``--select`` / ``--ignore`` rule code,
+        or an auto-discovered root with no workspace marker that linted
+        nothing
+
+A malformed ``pyproject.toml`` is not caught here: ``load_config``
+lets ``tomllib.TOMLDecodeError`` propagate, so the interpreter exits 1
+with the parse traceback rather than this ``2``.
 """
 
 from __future__ import annotations
@@ -46,6 +52,19 @@ def _find_repo_root(start: Path) -> Path:
         if (directory / ".git").exists() or (directory / "pyproject.toml").exists():
             return directory
     return candidate
+
+
+def _is_workspace_root(path: Path) -> bool:
+    """Return whether *path* looks like a real workspace / repo root.
+
+    A workspace root carries a ``.git`` checkout or the ``workspace.yml``
+    marker.  Every package directory in the mono-repo has a
+    ``pyproject.toml`` but neither of those, so nearest-ancestor
+    discovery run from inside a package lands on the package, not the
+    workspace — a green exit against a tree with no ``libraries/`` /
+    ``plans/`` / ``AGENTS.md`` to lint.  This distinguishes the two.
+    """
+    return (path / ".git").exists() or (path / "workspace.yml").is_file()
 
 
 def _parse_codes(raw: str | None) -> set[str]:
@@ -114,6 +133,20 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
 
     repo_root = (args.root or _find_repo_root(Path.cwd())).resolve()
+
+    # Nearest-ancestor discovery from inside a package directory lands on
+    # that package (it has a pyproject.toml), not the workspace.  When
+    # the root was auto-discovered and carries no workspace marker, say
+    # so on stderr so a green exit isn't mistaken for a clean workspace.
+    root_is_suspect = args.root is None and not _is_workspace_root(repo_root)
+    if root_is_suspect:
+        print(
+            f"chumicro-checks: resolved workspace root to {repo_root}, which "
+            f"carries no workspace marker (.git or workspace.yml).  If this is "
+            f"not the workspace root, run from it or pass --root.",
+            file=sys.stderr,
+        )
+
     config = load_config(repo_root)
 
     # CLI --select overrides config's ignore list entirely.
@@ -128,7 +161,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         findings.extend(rules[code].check(repo_root))
 
     if not findings:
-        return 0
+        # A suspect root that produced no findings almost certainly
+        # linted nothing; exit non-zero so the empty pass isn't read as
+        # a clean workspace.
+        return 2 if root_is_suspect else 0
 
     for finding in findings:
         print(finding.render(root=repo_root))

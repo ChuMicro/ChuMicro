@@ -21,6 +21,20 @@ asserting.  Two shapes are flagged::
         return                # early bare return, orphans the
         assert result()       # assertions after it
 
+    def test_hardware() -> None:
+        try:
+            probe = open_hardware()
+        except OSError:
+            return            # ends the test, every assertion below
+        assert probe.ready    # never runs
+
+A trailing ``return`` at the end of an ``except`` handler, a ``for`` /
+``while`` body (or its ``else``), a ``with`` body, or a ``try``
+``finally`` body is flagged the same way — each ends the test early and
+orphans the assertions after the enclosing statement.  A ``pass`` in
+those positions is left alone: an ``except OSError: pass`` swallowing a
+cleanup error skips nothing and is a normal idiom.
+
 The test_harness runner reports any test that returns without
 raising as PASS, and pytest does the same.  Use
 ``chumicro_test_harness.skip(reason)`` (or ``raise AssertionError(...)``
@@ -50,6 +64,7 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+from chumicro_checks._ast import parse_or_syntax_finding
 from chumicro_checks._finding import Finding
 from chumicro_checks._noqa import line_suppresses
 from chumicro_checks._rule import Rule
@@ -172,18 +187,54 @@ def _ifs_in_scope(func: ast.FunctionDef):
             stack.append(child)
 
 
+def _return_bodies_in_scope(func: ast.FunctionDef):
+    """Yield the bodies of non-``if`` compound statements in *func*.
+
+    Descends compound statements but stops at nested ``def`` /
+    ``lambda`` / ``class`` (same closure carve-out as
+    :func:`_ifs_in_scope`).  Yields the body list of every
+    ``except`` handler, ``for`` / ``while`` body and ``else``,
+    ``with`` body, and ``try`` ``finally`` body — the positions where a
+    trailing ``return`` ends the test early.  The ``try`` body and the
+    ``if`` family are handled elsewhere.
+    """
+    stack = list(func.body)
+    while stack:
+        node = stack.pop()
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef,
+                             ast.Lambda, ast.ClassDef)):
+            continue
+        if isinstance(node, ast.ExceptHandler):
+            yield node.body
+        elif isinstance(node, ast.For | ast.AsyncFor | ast.While):
+            yield node.body
+            if node.orelse:
+                yield node.orelse
+        elif isinstance(node, ast.With | ast.AsyncWith):
+            yield node.body
+        elif isinstance(node, ast.Try) and node.finalbody:
+            yield node.finalbody
+        for child in ast.iter_child_nodes(node):
+            stack.append(child)
+
+
 def _silent_return_findings(
     func: ast.FunctionDef, filepath: Path, source_lines: list[str]
 ) -> list[Finding]:
     """Flag any control flow that makes a test PASS without asserting.
 
-    Two shapes, both reported as the test silently passing:
+    Three shapes, all reported as the test silently passing:
 
     * ``Return`` / ``Pass`` as the **last** statement of any ``if``
       body — the guarded branch skips every assertion below it.
     * a bare ``return`` / ``pass`` that is a direct statement of the
       test body and not its final statement — an early exit that
       orphans the assertions after it.
+    * ``Return`` as the last statement of an ``except`` handler, a
+      ``for`` / ``while`` body or ``else``, a ``with`` body, or a
+      ``try`` ``finally`` body — the same early-exit skip, one level
+      deeper.  ``Pass`` in those positions is deliberately not flagged
+      (it skips nothing).
 
     A bare ``return`` / ``pass`` as the test body's **final** statement is
     deliberately not flagged: a trailing exit after the assertions ran is
@@ -241,6 +292,11 @@ def _silent_return_findings(
                     last_else,
                 )
 
+    for compound_body in _return_bodies_in_scope(func):
+        last = compound_body[-1] if compound_body else None
+        if isinstance(last, ast.Return):
+            _emit(last.lineno, (_source_line(source_lines, last.lineno),), last)
+
     body = func.body
     for index, stmt in enumerate(body):
         if index == len(body) - 1:
@@ -289,10 +345,9 @@ def _check_file_for_code(
         text = filepath.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
         return []
-    try:
-        tree = ast.parse(text, filename=str(filepath))
-    except SyntaxError:
-        return []
+    tree, syntax_findings = parse_or_syntax_finding(text, filepath, code)
+    if tree is None:
+        return syntax_findings
 
     source_lines = text.splitlines()
     findings: list[Finding] = []

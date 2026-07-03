@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from chumicro_checks.rules.chu027 import CHU027
+from chumicro_checks.rules.chu027 import CHU027, _extract_comment_blocks
 
 #: A 12-token block, long enough to clear the min-token floor.
 _LONG_BLOCK = (
@@ -35,6 +35,45 @@ class TestSilentNoOp:
         _stage_lib(tmp_path, "foo", "x.py", _LONG_BLOCK + "\nvalue = 1\n")
         _stage_lib(tmp_path, "bar", "x.py", "# Different comment entirely.\nvalue = 2\n")
         assert CHU027.check(tmp_path) == []
+
+
+class TestTokenizerTrippingFile:
+    """A file that trips the tokenizer must not crash the whole run."""
+
+    def test_extract_comment_blocks_swallows_token_error(self) -> None:
+        # An unterminated triple-quoted string raises
+        # ``tokenize.TokenError`` (not SyntaxError) from
+        # ``generate_tokens``; the extractor must catch it and return
+        # an empty list rather than propagate.
+        blocks = _extract_comment_blocks(
+            "x = '''unterminated\n", Path("bad.py"), "libraries/foo",
+        )
+        assert blocks == []
+
+    def test_bad_file_does_not_crash_check(self, tmp_path: Path) -> None:
+        # An unterminated triple-quote trips the tokenizer and is also a
+        # syntax error: the run must not crash, and the file surfaces as
+        # a syntax finding rather than a silent skip.
+        _stage_lib(tmp_path, "foo", "bad.py", "x = '''unterminated\n")
+        findings = CHU027.check(tmp_path)
+        assert len(findings) == 1
+        assert findings[0].code == "CHU027"
+        assert "syntax error" in findings[0].message
+
+    def test_bad_file_does_not_mask_real_duplicate(self, tmp_path: Path) -> None:
+        # A tokenizer-tripping file alongside a genuine duplicate: the
+        # duplicate is still reported, and the bad file adds its own
+        # syntax finding.
+        _stage_lib(tmp_path, "foo", "x.py", _LONG_BLOCK + "\nvalue = 1\n")
+        _stage_lib(tmp_path, "bar", "x.py", _LONG_BLOCK + "\nvalue = 2\n")
+        _stage_lib(tmp_path, "baz", "bad.py", "y = '''still unterminated\n")
+        findings = CHU027.check(tmp_path)
+        duplicate_findings = [
+            f for f in findings if "duplicate" in f.message
+        ]
+        syntax_findings = [f for f in findings if "syntax error" in f.message]
+        assert len(duplicate_findings) == 2
+        assert len(syntax_findings) == 1
 
 
 class TestCrossPackageDuplication:

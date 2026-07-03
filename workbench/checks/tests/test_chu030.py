@@ -117,6 +117,60 @@ class TestForbiddenImports:
         _stage_demo(tmp_path, "ok_demo", source)
         assert CHU030.check(tmp_path) == []
 
+    def test_from_parent_import_of_forbidden_submodule_flagged(
+        self, tmp_path: Path,
+    ) -> None:
+        # ``from chumicro_workspace import pipeline`` names the forbidden
+        # ``chumicro_workspace.pipeline`` as an imported member, even
+        # though ``chumicro_workspace`` itself is an allowed parent.
+        source = (
+            "from chumicro_workspace import pipeline\n"
+            + _CLEAN_DRIVER
+        )
+        _stage_demo(tmp_path, "bad_demo", source)
+        findings = CHU030.check(tmp_path)
+        assert len(findings) == 1
+        assert findings[0].code == "CHU030"
+        assert "chumicro_workspace.pipeline" in findings[0].message
+
+    def test_from_parent_import_mixed_members_flags_each_forbidden(
+        self, tmp_path: Path,
+    ) -> None:
+        # deploy_api is allowed, pipeline and device_runner are not, so
+        # both forbidden members on the one line are flagged.
+        source = (
+            "from chumicro_workspace import deploy_api, pipeline, device_runner\n"
+            "deploy_api.deploy_project(project_dir=None, device_id='x', "
+            'deploy_mode="flash")\n'
+        )
+        _stage_demo(tmp_path, "bad_demo", source)
+        findings = CHU030.check(tmp_path)
+        assert len(findings) == 2
+        messages = " ".join(finding.message for finding in findings)
+        assert "chumicro_workspace.pipeline" in messages
+        assert "chumicro_workspace.device_runner" in messages
+
+    def test_from_parent_import_allowed_member_clean(self, tmp_path: Path) -> None:
+        # ``from chumicro_workspace import deploy_api`` names only an
+        # allowed member, so the import line stays clean.
+        source = (
+            "from chumicro_workspace import deploy_api\n"
+            "deploy_api.deploy_project(project_dir=None, device_id='x', "
+            'deploy_mode="flash")\n'
+        )
+        _stage_demo(tmp_path, "ok_demo", source)
+        assert CHU030.check(tmp_path) == []
+
+    def test_from_parent_import_forbidden_member_noqa_suppresses(
+        self, tmp_path: Path,
+    ) -> None:
+        source = (
+            "from chumicro_workspace import pipeline  # noqa: CHU030\n"
+            + _CLEAN_DRIVER
+        )
+        _stage_demo(tmp_path, "ok_demo", source)
+        assert CHU030.check(tmp_path) == []
+
 
 class TestDeployModeEnforcement:
     def test_deploy_mode_flash_literal_ok(self, tmp_path: Path) -> None:

@@ -5,7 +5,7 @@ align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
 **The workspace lint rules ruff can't express — for ChuMicro mono-repos and downstream workspaces.**
 
-A small CLI + rule set (`CHU001`–`CHU026`) covering descriptive names, mono-repo-vs-published-tree isolation, workbench-doesn't-import-libraries, silent test skips, plans-doc brevity, command-table parity, docstring-capability honesty, cross-runtime example imports, coverage-claim honesty, whitespace / line-ending hygiene in doc + plan trees ruff never sees, archived-decision marker consistency, ADR-authoring discipline, governance-doc orphan detection, and other policies that ruff doesn't have a check for.  Drop it on any CPython 3.11+ workspace; rules silently no-op in repos where their target paths don't exist, so it's safe in the mono-repo, the workspace-template, or a downstream user workspace alike.
+A small CLI + rule set (`CHU001`–`CHU033`, with `CHU021`–`CHU023` retired) covering descriptive names, mono-repo-vs-published-tree isolation, workbench-doesn't-import-libraries, silent test skips, plans-doc brevity, command-table parity, docstring-capability honesty, cross-runtime example imports, coverage-claim honesty, whitespace / line-ending hygiene in doc + plan trees ruff never sees, archived-decision marker consistency, ADR-authoring discipline, governance-doc orphan detection, demo-surface isolation, the no-async-in-library-code contract, and other policies that ruff doesn't have a check for.  Drop it on any CPython 3.11+ workspace; rules silently no-op in repos where their target paths don't exist, so it's safe in the mono-repo, the workspace-template, or a downstream user workspace alike.
 
 <br clear="left">
 
@@ -64,6 +64,11 @@ Each rule walks the paths it targets and silently no-ops in repos where those pa
 | `CHU026` | Governance docs referenced from AGENTS.md must be auto-loaded via CLAUDE.md's `@`-include chain |
 | `CHU027` | No cross-site duplicate comment / docstring blocks — explain once in a canonical home |
 | `CHU028` | No cross-ADR principle duplication — one invariant, one home |
+| `CHU029` | Every ADR must carry a non-empty `Summary:` frontmatter field |
+| `CHU030` | Demo drivers may reach only `chumicro_workspace.deploy_api` and must pin `deploy_mode="flash"` |
+| `CHU031` | noqa / pragma explanations use ` - ` separators, not em-dash / en-dash / double-hyphen |
+| `CHU032` | No cross-reference pointer phrases in publishable comments — each stands alone for a cold reader |
+| `CHU033` | No `async` / `await` / `asyncio` in first-party package code — use generators |
 
 ### Configuration
 

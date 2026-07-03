@@ -9,6 +9,9 @@ from chumicro_checks.rules.chu016 import CHU016
 _EX = "libraries/foo/examples/demo.py"
 
 _CROSS = '__chumicro_runtimes__ = ("circuitpython", "micropython")\n'
+_CROSS_ANNOTATED = (
+    '__chumicro_runtimes__: tuple = ("circuitpython", "micropython")\n'
+)
 _CP_ONLY = '__chumicro_runtimes__ = ("circuitpython",)\n'
 
 
@@ -67,6 +70,18 @@ class TestFlags:
         assert len(findings) == 1
         assert findings[0].line == 4  # marker(1) os(2) sys(3) network(4)
 
+    def test_annotated_runtimes_declaration_still_scoped(
+        self, tmp_path: Path,
+    ) -> None:
+        # ``__chumicro_runtimes__: tuple = (...)`` is an AnnAssign, not
+        # an Assign; the rule must still read the declared runtimes and
+        # flag the CircuitPython-only import.
+        _stage(tmp_path, _EX, _CROSS_ANNOTATED + "import board\n")
+        findings = CHU016.check(tmp_path)
+        assert len(findings) == 1
+        assert "board" in findings[0].message
+        assert "micropython" in findings[0].message
+
 
 class TestCorrectPatternsNotFlagged:
     def test_single_runtime_example_top_level_import_ok(
@@ -74,6 +89,17 @@ class TestCorrectPatternsNotFlagged:
     ) -> None:
         # CircuitPython-only example may import board at top level.
         _stage(tmp_path, _EX, _CP_ONLY + "import board\n")
+        assert CHU016.check(tmp_path) == []
+
+    def test_annotated_single_runtime_declaration_read_correctly(
+        self, tmp_path: Path,
+    ) -> None:
+        # An annotated CP-only declaration is parsed, so a top-level
+        # board import stays clean (only one runtime declared).
+        annotated_cp_only = (
+            '__chumicro_runtimes__: tuple = ("circuitpython",)\n'
+        )
+        _stage(tmp_path, _EX, annotated_cp_only + "import board\n")
         assert CHU016.check(tmp_path) == []
 
     def test_guarded_under_implementation_branch_ok(

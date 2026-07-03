@@ -2,8 +2,10 @@
 
 Two sub-checks against ``plans/next-up.md``:
 
-1. Every top-level ``- `` bullet contains at most ONE bullet marker
-   (the lead line itself).  Sub-bullets are forbidden. Anything that
+1. Every top-level ``- `` bullet contains at most ONE list marker
+   (the lead line itself).  Sub-bullets are forbidden — counted markers
+   include dash / star / plus bullets and ``1.`` / ``2)`` ordered
+   items, so an ordered sub-list doesn't slip the cap.  Anything that
    needs structure should be promoted to a workstream file under
    ``plans/workstreams/`` (open) or ``plans/workstreams/archive/``
    (shipped) and replaced here by a one-line pointer.
@@ -26,6 +28,7 @@ no-op rather than error.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from chumicro_checks._finding import Finding
@@ -36,13 +39,19 @@ _BULLET_CAP = 1
 _DONE_HEADING_PREFIX = "Done"
 _NOQA_TAG = "<!-- " + "noqa: " + _RULE_CODE + " -->"
 
+#: Any list marker counted toward a bullet's cap: dash / star / plus
+#: unordered bullets and ``1.`` / ``2)`` ordered items.  An ordered
+#: sub-list is the same "needs structure → promote it" shape a dash
+#: sub-bullet is, so it counts too.
+_ANY_BULLET = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s")
+
 
 def _is_top_level_bullet(line: str) -> bool:
     return line.startswith("- ")
 
 
 def _is_any_bullet(line: str) -> bool:
-    return line.lstrip(" \t").startswith("- ")
+    return _ANY_BULLET.match(line) is not None
 
 
 def _is_heading(line: str) -> bool:

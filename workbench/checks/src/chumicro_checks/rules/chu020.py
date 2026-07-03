@@ -14,6 +14,10 @@ delimiters paired with a bold/italic wrapper (the AGENTS.md "Writing
 tone" ban list itself uses ``**"X"**``) is data, not assertion.  That
 keeps the rule off the very documentation that names what it bans.
 
+An apostrophe flanked by word characters on both sides (``isn't``,
+``user's``) is a contraction or possessive, not a quote delimiter, so
+it never opens a pair — ``Don't call it robust`` still fires.
+
 ``Note that`` is intentionally NOT in the matcher.  ``\\bNote that\\b``
 fires on legitimate technical prose (``Note that the API requires a
 trailing slash``). The FP rate makes a noqa-heavy rule that hollows
@@ -51,6 +55,28 @@ _SENTENCE_OPENERS = re.compile(
 _QUOTE_DELIMS = ("`", "'", '"')
 
 
+def _delimiter_positions(line: str, delim: str) -> list[int]:
+    """Return the indices where *delim* acts as a quote delimiter.
+
+    Every occurrence counts, except an apostrophe sitting between two
+    word characters (``isn't``, ``user's``): those are contractions and
+    possessives, not quotation, so they must not be mistaken for an open
+    quote pair.  Backticks and double quotes have no intra-word form and
+    count wherever they appear.
+    """
+    positions: list[int] = []
+    for index, char in enumerate(line):
+        if char != delim:
+            continue
+        if delim == "'":
+            before_word = index > 0 and line[index - 1].isalnum()
+            after_word = index + 1 < len(line) and line[index + 1].isalnum()
+            if before_word and after_word:
+                continue
+        positions.append(index)
+    return positions
+
+
 def _is_paired_quoted(line: str, match_start: int, match_end: int) -> bool:
     """True when the match sits between paired quote / backtick delimiters.
 
@@ -59,8 +85,9 @@ def _is_paired_quoted(line: str, match_start: int, match_end: int) -> bool:
     appear again somewhere after the match so we know a close is coming.
     """
     for delim in _QUOTE_DELIMS:
-        before = line[:match_start].count(delim)
-        after = delim in line[match_end:]
+        positions = _delimiter_positions(line, delim)
+        before = sum(1 for position in positions if position < match_start)
+        after = any(position >= match_end for position in positions)
         if before % 2 == 1 and after:
             return True
     return False

@@ -50,6 +50,46 @@ class TestSilentNoOp:
         assert CHU028.check(tmp_path) == []
 
 
+class TestFencedCodeBlocks:
+    """A code/config sample shared across ADRs is not principle duplication."""
+
+    def test_shared_fenced_block_not_flagged(self, tmp_path: Path) -> None:
+        # The same 20+ token snippet inside a code fence in two ADRs: it
+        # is code, not a duplicated principle, so it stays clean.  The
+        # surrounding prose differs per ADR.
+        fenced = "```\n" + _LONG_PARAGRAPH + "\n```\n"
+        _stage_adr(
+            tmp_path, "0042-foo",
+            "## Example\n\n" + fenced + "\nThe alpha handler owns the "
+            "first path through the reactor and nothing else touches it.\n",
+        )
+        _stage_adr(
+            tmp_path, "0043-bar",
+            "## Example\n\n" + fenced + "\nThe beta driver owns a totally "
+            "separate path and shares no prose with the other record here.\n",
+        )
+        assert CHU028.check(tmp_path) == []
+
+    def test_shared_prose_around_shared_fence_still_flagged(
+        self, tmp_path: Path,
+    ) -> None:
+        # The fence is excluded, but the duplicated prose paragraph
+        # outside it is still caught.
+        fenced = "```\nsome shared config sample here\n```\n"
+        _stage_adr(
+            tmp_path, "0042-foo",
+            "## Context\n\n" + _LONG_PARAGRAPH + "\n\n" + fenced,
+        )
+        _stage_adr(
+            tmp_path, "0043-bar",
+            "## Context\n\n" + _LONG_PARAGRAPH + "\n\n" + fenced,
+        )
+        findings = CHU028.check(tmp_path)
+        # Exactly the prose paragraph is duplicated (one finding per ADR).
+        assert len(findings) == 2
+        assert all(finding.code == "CHU028" for finding in findings)
+
+
 class TestCrossAdrDuplication:
     def test_two_adrs_sharing_paragraph_flagged(
         self, tmp_path: Path,

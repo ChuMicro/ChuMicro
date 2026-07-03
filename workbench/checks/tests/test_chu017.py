@@ -60,6 +60,19 @@ class TestFlags:
         )
         assert len(CHU017.check(tmp_path)) == 1
 
+    def test_trailing_no_intensifier_still_fires(self, tmp_path: Path) -> None:
+        # ``no`` after the overclaim strengthens it ("no exceptions"),
+        # so the sentence must still fire — the negation must sit
+        # *before* the overclaim to exempt it.
+        _stage(
+            tmp_path,
+            "docs/x.md",
+            "The gate holds 95% of shipped code, no exceptions.\n",
+        )
+        findings = CHU017.check(tmp_path)
+        assert len(findings) == 1
+        assert findings[0].code == "CHU017"
+
 
 class TestExemptions:
     """The corrected / meta statements of the contract must pass."""
@@ -69,6 +82,18 @@ class TestExemptions:
             tmp_path,
             "docs/x.md",
             "It is 94 % of reachable lines, not 94 % of shipped code.\n",
+        )
+        assert CHU017.check(tmp_path) == []
+
+    def test_adjacent_negation_before_overclaim_not_flagged(
+        self, tmp_path: Path,
+    ) -> None:
+        # ``does not cover all code`` — the negator sits a few tokens
+        # before the overclaim, so it is an honest negated claim.
+        _stage(
+            tmp_path,
+            "docs/x.md",
+            "The 95% figure does not cover all code.\n",
         )
         assert CHU017.check(tmp_path) == []
 

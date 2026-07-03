@@ -53,6 +53,7 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+from chumicro_checks._ast import parse_or_syntax_finding
 from chumicro_checks._finding import Finding
 from chumicro_checks._rule import Rule
 
@@ -157,10 +158,9 @@ def _check_file(filepath: Path) -> list[Finding]:
         return []
     source_lines = text.splitlines()
 
-    try:
-        tree = ast.parse(text, filename=str(filepath))
-    except SyntaxError:
-        return []
+    tree, syntax_findings = parse_or_syntax_finding(text, filepath, _RULE_CODE)
+    if tree is None:
+        return syntax_findings
 
     findings: list[Finding] = []
     for node in ast.walk(tree):
@@ -183,18 +183,41 @@ def _check_file(filepath: Path) -> list[Finding]:
             if node.module is None:
                 continue
             forbidden, replacement = _is_forbidden_module(node.module)
-            if forbidden and not _line_has_noqa(source_lines, node.lineno):
-                findings.append(
-                    Finding(
-                        path=filepath,
-                        line=node.lineno,
-                        code=_RULE_CODE,
-                        message=(
-                            f"demo imports from {node.module!r} — use "
-                            f"{replacement} instead"
+            if forbidden:
+                if not _line_has_noqa(source_lines, node.lineno):
+                    findings.append(
+                        Finding(
+                            path=filepath,
+                            line=node.lineno,
+                            code=_RULE_CODE,
+                            message=(
+                                f"demo imports from {node.module!r} — use "
+                                f"{replacement} instead"
+                            ),
                         ),
-                    ),
-                )
+                    )
+                continue
+            # ``from chumicro_workspace import pipeline`` imports a
+            # forbidden submodule as a member of an allowed parent
+            # package: ``node.module`` alone is fine, so test each
+            # member's qualified ``parent.member`` name too.
+            for alias in node.names:
+                qualified = f"{node.module}.{alias.name}"
+                member_forbidden, replacement = _is_forbidden_module(qualified)
+                if member_forbidden and not _line_has_noqa(
+                    source_lines, node.lineno,
+                ):
+                    findings.append(
+                        Finding(
+                            path=filepath,
+                            line=node.lineno,
+                            code=_RULE_CODE,
+                            message=(
+                                f"demo imports {qualified!r} — use "
+                                f"{replacement} instead"
+                            ),
+                        ),
+                    )
         elif isinstance(node, ast.Call) and _is_deploy_project_call(node):
             message = _check_deploy_mode_kwarg(node)
             if message is not None and not _line_has_noqa(

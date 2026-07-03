@@ -2,13 +2,20 @@
 
 Runner-shaped services receive ``now_ms`` once per tick from the
 runner and must reuse that value across every deadline computed that
-tick.  Calling ``self._ticks.ticks_ms()`` (or
-``self._ticks_ms()``) inside a method that already has ``now_ms`` in
-scope produces a second timestamp microseconds later, breaking the
-"one shared instant per tick" guarantee.
+tick.  Refetching the current instant inside a method that already has
+``now_ms`` in scope produces a second timestamp microseconds later,
+breaking the "one shared instant per tick" guarantee.  Every
+dependency-injection spelling of the fetch is flagged:
 
-This rule flags any ``.ticks_ms()`` call inside a function that takes
-a ``now_ms`` parameter, unless the call is guarded by an
+* ``self._ticks.ticks_ms()`` / ``self._ticks_ms()`` — a provider held
+  on ``self``.
+* ``ticks.ticks_ms()`` — a provider passed in as a parameter or bound
+  to a local.
+* ``ticks_ms()`` — a bare call to a name imported from the timing
+  library (``from chumicro_timing import ticks_ms``).
+
+This rule flags any such refetch inside a function that takes a
+``now_ms`` parameter, unless the call is guarded by an
 ``if now_ms is None:`` branch. The codified pattern for helpers
 shared between tick-path callers (which pass ``now_ms``) and
 user-entry callers (which don't).
@@ -24,6 +31,7 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+from chumicro_checks._ast import parse_or_syntax_finding
 from chumicro_checks._finding import Finding
 from chumicro_checks._noqa import line_suppresses
 from chumicro_checks._rule import Rule
@@ -64,22 +72,32 @@ def _function_takes_now_ms(func: ast.FunctionDef) -> bool:
 
 
 def _is_ticks_ms_call(node: ast.Call) -> bool:
-    """Return whether *node* is a ``self._ticks.ticks_ms()`` or
-    ``self._ticks_ms()`` invocation with zero positional args."""
+    """Return whether *node* refetches the current tick with zero args.
+
+    Matches every dependency-injection spelling of the fetch:
+
+    * ``ticks_ms()`` — a bare call to an imported name.
+    * ``<name>.ticks_ms()`` / ``<name>._ticks_ms()`` — a provider held
+      in a parameter, local, or on ``self`` (``self._ticks_ms()``).
+    * ``<name>.<attr>.ticks_ms()`` — a provider one attribute deep
+      (``self._ticks.ticks_ms()``).
+    """
     if node.args or node.keywords:
         return False
     callee = node.func
+    if isinstance(callee, ast.Name):
+        return callee.id == "ticks_ms"
     if not isinstance(callee, ast.Attribute):
         return False
     if callee.attr not in _TICKS_MS_ATTRS:
         return False
-    # callee.value is the bit before ``.ticks_ms``: either ``self``
-    # (for ``self._ticks_ms()``) or ``self._ticks`` / similar.
+    # callee.value is the bit before ``.ticks_ms``: a bare name
+    # (``ticks`` / ``self``) or one attribute deep (``self._ticks``).
     receiver = callee.value
-    if isinstance(receiver, ast.Name) and receiver.id == "self":
+    if isinstance(receiver, ast.Name):
         return True
     if isinstance(receiver, ast.Attribute):
-        return isinstance(receiver.value, ast.Name) and receiver.value.id == "self"
+        return isinstance(receiver.value, ast.Name)
     return False
 
 
@@ -161,10 +179,9 @@ def _check_file(filepath: Path, repo_root: Path) -> list[Finding]:
         text = filepath.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
         return []
-    try:
-        tree = ast.parse(text, filename=str(filepath))
-    except SyntaxError:
-        return []
+    tree, syntax_findings = parse_or_syntax_finding(text, filepath, _RULE_CODE)
+    if tree is None:
+        return syntax_findings
     source_lines = text.splitlines()
     findings: list[Finding] = []
     for method in _iter_methods(tree):

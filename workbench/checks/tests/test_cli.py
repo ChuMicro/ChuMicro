@@ -6,7 +6,12 @@ from pathlib import Path
 
 import pytest
 from chumicro_checks import Finding, Rule
-from chumicro_checks.cli import _find_repo_root, _parse_codes, main
+from chumicro_checks.cli import (
+    _find_repo_root,
+    _is_workspace_root,
+    _parse_codes,
+    main,
+)
 
 
 def test_help_exits_cleanly(capsys: pytest.CaptureFixture[str]) -> None:
@@ -110,6 +115,66 @@ def test_finding_render_keeps_absolute_when_unrelated(tmp_path: Path) -> None:
 def test_finding_render_without_root_uses_path_as_is() -> None:
     finding = Finding(path=Path("relative/foo.py"), line=4, code="CHU999", message="m")
     assert finding.render() == "relative/foo.py:4: CHU999 m"
+
+
+class TestWorkspaceRootGuard:
+    """Auto-discovery landing on a non-workspace dir must not pass silently."""
+
+    def test_is_workspace_root_detects_git(self, tmp_path: Path) -> None:
+        (tmp_path / ".git").mkdir()
+        assert _is_workspace_root(tmp_path) is True
+
+    def test_is_workspace_root_detects_workspace_yml(self, tmp_path: Path) -> None:
+        (tmp_path / "workspace.yml").write_text("name: x\n")
+        assert _is_workspace_root(tmp_path) is True
+
+    def test_bare_package_dir_is_not_workspace_root(self, tmp_path: Path) -> None:
+        (tmp_path / "pyproject.toml").write_text("[project]\nname='p'\n")
+        assert _is_workspace_root(tmp_path) is False
+
+    def test_autodiscovered_non_workspace_root_warns_and_exits_nonzero(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        # Simulate running from inside a bare package directory: a
+        # pyproject.toml but no .git / workspace.yml.  Nothing is linted,
+        # so the empty pass must warn and exit non-zero rather than 0.
+        package = tmp_path / "libraries" / "mqtt"
+        package.mkdir(parents=True)
+        (package / "pyproject.toml").write_text("[project]\nname='chumicro-mqtt'\n")
+        monkeypatch.chdir(package)
+        exit_code = main([])
+        captured = capsys.readouterr()
+        assert exit_code == 2
+        assert "no workspace marker" in captured.err
+
+    def test_explicit_root_never_warns(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        # An explicit --root is the user's choice; no guard message.
+        (tmp_path / "pyproject.toml").write_text("[project]\nname='p'\n")
+        exit_code = main(["--root", str(tmp_path)])
+        captured = capsys.readouterr()
+        assert exit_code == 0
+        assert captured.err == ""
+
+    def test_autodiscovered_workspace_root_exits_zero_silently(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        # A real auto-discovered workspace root (workspace.yml present)
+        # with no findings is a clean pass: exit 0, no warning.
+        (tmp_path / "workspace.yml").write_text("name: x\n")
+        monkeypatch.chdir(tmp_path)
+        exit_code = main([])
+        assert exit_code == 0
+        assert "no workspace marker" not in capsys.readouterr().err
 
 
 def test_dunder_main_module_imports_cli_main() -> None:

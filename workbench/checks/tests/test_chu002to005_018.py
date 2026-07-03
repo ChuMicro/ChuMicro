@@ -129,6 +129,71 @@ class TestCHU005:
         _stage(tmp_path, "scripts/notes.md", "for the record:\n\n    indented\n")
         assert CHU005.check(tmp_path) == []
 
+    def test_blank_after_multiline_signature_flagged(self, tmp_path: Path) -> None:
+        # The header spans three lines; its ``):`` closes on its own
+        # line, and the blank after it is still a blank-after-opener.
+        _stage(
+            tmp_path,
+            "scripts/foo.py",
+            "def fetch(\n    url,\n):\n\n    return 1\n",
+        )
+        findings = CHU005.check(tmp_path)
+        assert len(findings) == 1
+        assert "blank line after block opener" in findings[0].message
+
+    def test_blank_after_multiline_signature_with_return_annotation_flagged(
+        self, tmp_path: Path,
+    ) -> None:
+        _stage(
+            tmp_path,
+            "scripts/foo.py",
+            "def fetch(\n    url,\n) -> int:\n\n    return 1\n",
+        )
+        assert len(CHU005.check(tmp_path)) == 1
+
+    def test_blank_after_async_def_flagged(self, tmp_path: Path) -> None:
+        _stage(
+            tmp_path,
+            "scripts/foo.py",
+            "async def fetch():\n\n    return 1\n",
+        )
+        findings = CHU005.check(tmp_path)
+        assert len(findings) == 1
+
+    def test_multiline_call_close_not_treated_as_opener(
+        self, tmp_path: Path,
+    ) -> None:
+        # A multi-line function *call* closes on a bare ``)`` (no colon),
+        # so a blank line after it is not a block-opener violation.
+        _stage(
+            tmp_path,
+            "scripts/foo.py",
+            "result = compute(\n    value,\n)\n\nreturn result\n",
+        )
+        assert CHU005.check(tmp_path) == []
+
+    def test_multiline_signature_noqa_on_close_suppresses(
+        self, tmp_path: Path,
+    ) -> None:
+        _stage(
+            tmp_path,
+            "scripts/foo.py",
+            "def fetch(\n    url,\n):  # noqa: CHU005\n\n    return 1\n",
+        )
+        assert CHU005.check(tmp_path) == []
+
+    def test_blank_before_nested_def_after_multiline_header_clean(
+        self, tmp_path: Path,
+    ) -> None:
+        # The nested-definition exemption still applies to multi-line
+        # headers: a blank before a nested ``def`` stays clean.
+        _stage(
+            tmp_path,
+            "scripts/foo.py",
+            "if (\n    condition\n):\n\n    def handler():\n        return 1\n",
+        )
+        assert CHU005.check(tmp_path) == []
+
 
 class TestPackageScope:
     def test_libraries_src_in_scope(self, tmp_path: Path) -> None:
@@ -143,6 +208,36 @@ class TestPackageScope:
         # Top-level package files like pyproject.toml or mkdocs.yml are
         # NOT scanned.
         _stage(tmp_path, "libraries/foo/pyproject.toml", "x = 1\n\n")
+        assert CHU002.check(tmp_path) == []
+
+    def test_package_readme_in_scope(self, tmp_path: Path) -> None:
+        # The package-root README is the most user-visible publishable
+        # prose, so its whitespace hygiene is enforced.
+        _stage(tmp_path, "libraries/foo/README.md", "# Title   \n")
+        findings = CHU004.check(tmp_path)
+        assert len(findings) == 1
+        assert findings[0].code == "CHU004"
+
+    def test_package_readme_eof_newline_in_scope(self, tmp_path: Path) -> None:
+        _stage(tmp_path, "libraries/foo/README.md", "# Title\n\n\n\n")
+        findings = CHU002.check(tmp_path)
+        assert len(findings) == 1
+
+    def test_package_docs_tree_in_scope(self, tmp_path: Path) -> None:
+        # The generated per-package docs/ tree ships to the docs site.
+        _stage(tmp_path, "libraries/foo/docs/guide.md", "trailing   \n")
+        findings = CHU004.check(tmp_path)
+        assert len(findings) == 1
+
+    def test_package_readme_crlf_in_scope(self, tmp_path: Path) -> None:
+        _stage(tmp_path, "libraries/foo/README.md", "# Title\r\nBody\n")
+        findings = CHU018.check(tmp_path)
+        assert len(findings) == 1
+
+    def test_package_root_mkdocs_still_out_of_scope(self, tmp_path: Path) -> None:
+        # README is the only package-root prose file promoted into
+        # scope; other package-root metadata stays excluded.
+        _stage(tmp_path, "libraries/foo/mkdocs.yml", "site_name: x\n\n")
         assert CHU002.check(tmp_path) == []
 
 
