@@ -377,6 +377,63 @@ def test_io_error_callback_that_raises_is_isolated():
 # -- Cancellation ----------------------------------------------------
 
 
+def test_handle_error_records_generator_death():
+    # M49: a body that raises mid-run leaves the exception on
+    # handle.error, so a `while not handle.done` driver can report why
+    # the task ended instead of discovering a silent death by timeout.
+    def gen():
+        yield
+        raise ValueError("body died")
+
+    runner = Runner(ticks=FakeTicks())
+    handle = runner.add_generator(gen())
+    assert handle.error is None
+
+    runner.tick()  # resumes past the bare yield; the body raises
+
+    assert handle.done is True
+    assert isinstance(handle.error, ValueError)
+    assert runner.handler_errors == 1
+
+
+def test_handle_error_reaches_on_handler_error_hook():
+    # The same death also fires the runner-level hook (the loud half of
+    # M49) with the same exception instance the handle recorded.
+    faults = []
+
+    def gen():
+        yield
+        raise ValueError("body died")
+
+    runner = Runner(
+        ticks=FakeTicks(),
+        on_handler_error=lambda handle, error: faults.append(error),
+    )
+    handle = runner.add_generator(gen())
+    runner.tick()
+
+    assert len(faults) == 1
+    assert faults[0] is handle.error
+
+
+def test_handle_error_stays_none_on_normal_return_and_cancel():
+    def finishes():
+        yield
+
+    def runs_forever():
+        while True:
+            yield
+
+    runner = Runner(ticks=FakeTicks())
+    finished = runner.add_generator(finishes())
+    runner.tick()
+    assert finished.done is True and finished.error is None
+
+    cancelled = runner.add_generator(runs_forever())
+    cancelled.cancel()
+    assert cancelled.done is True and cancelled.error is None
+
+
 def test_cancel_fires_finally_block_in_generator():
     cleanup_ran = [False]
 
