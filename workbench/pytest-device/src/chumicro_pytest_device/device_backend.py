@@ -36,7 +36,6 @@ from .session import (
     _libraries_root,
     _session_cache,
     _session_per_file,
-    _target_is_device_unit,
 )
 from .transport_cache import _TransportCache
 
@@ -158,7 +157,11 @@ def _stage_one_item(
         _harness_source_dir(session),
         extra_modules=_sibling_extra_modules([item.test_file]),
         extra_files=_encode_runtime_config_extra_files(session.config),
-        include_test_support=_target_is_device_unit(session.config),
+        # Fakes stage for every device session, not just the unit
+        # sweep: functional tests import them too (e.g. timing's
+        # sleep_ms), and gating on device-unit silently dropped
+        # testing.py from functional deploys for over a month.
+        include_test_support=True,
     )
 
 

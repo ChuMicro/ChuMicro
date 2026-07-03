@@ -1268,5 +1268,9 @@ def _bulk_stage_for_device(
         extra_files=_encode_runtime_config_extra_files(
             session.config, scope=library_filter,
         ),
-        include_test_support=_target_is_device_unit(session.config),
+        # Fakes stage for every device session, not just the unit
+        # sweep: functional tests import them too (e.g. timing's
+        # sleep_ms), and gating on device-unit silently dropped
+        # testing.py from functional deploys for over a month.
+        include_test_support=True,
     )

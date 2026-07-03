@@ -95,7 +95,7 @@ def test_micropython_tail_detects_real_traceback(
     deploy exec returns; tail catches the trailing traceback bytes.
     """
     device = _build_device(micropython_device, deploy_mode="ram")
-    deploy_result = Deployer(device).deploy(
+    deploy_result = Deployer(device).deploy_diff(
         FileMapSource(
             {"/main.py": "raise ValueError('chu-tail-bang')"},
             entrypoint="/main.py",

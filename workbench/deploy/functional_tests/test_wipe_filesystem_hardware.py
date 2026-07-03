@@ -32,13 +32,13 @@ from pathlib import Path
 
 import pytest
 from chumicro_deploy import (
-    CircuitpythonTransport,
     Deployer,
     Device,
     DeviceEntry,
     FileMapSource,
-    MicropythonTransport,
 )
+from chumicro_deploy.circuitpython_transport import CircuitpythonTransport
+from chumicro_deploy.micropython_transport import MicropythonTransport
 
 
 def _resolve_mpremote() -> str:
@@ -188,15 +188,10 @@ def test_circuitpython_wipe_reformats_circuitpy_drive(
     board to a known-quiet state, and by leaving no host-side write
     in flight when the wipe begins.
     """
-    from chumicro_deploy.circuitpython_transport import (
-        _circuitpy_volume_candidates,
-    )
+    from chumicro_deploy.circuitpy_drive import _circuitpy_volume_candidates
 
-    candidates = _circuitpy_volume_candidates()
-    if not candidates:
+    if not _circuitpy_volume_candidates():
         pytest.skip("no CIRCUITPY drive mounted on the host")
-    drive_path = candidates[0]
-    sentinel = drive_path / "wipe_test_sentinel.txt"
 
     plant_device = Device(
         transport=circuitpython_flash_device.runtime,
@@ -215,10 +210,6 @@ def test_circuitpython_wipe_reformats_circuitpy_drive(
         ),
     )
     assert plant_result.success, plant_result.execute_output
-    assert sentinel.is_file(), (
-        f"sentinel did not land via deploy: "
-        f"{sorted(child.name for child in drive_path.iterdir())}"
-    )
 
     transport = CircuitpythonTransport(
         circuitpython_flash_device.address,
@@ -227,6 +218,19 @@ def test_circuitpython_wipe_reformats_circuitpy_drive(
     )
     transport.connect()
     try:
+        # Resolve the drive the way the transport does — first
+        # candidate corrected by the board-identity probe.  A raw
+        # ``candidates[0]`` watches whichever volume the OS mounted
+        # first, which on a multi-board bench is a *different* board's
+        # CIRCUITPY.
+        drive_path = transport._verify_drive_for_board(
+            transport._resolve_circuitpy_drive(),
+        )
+        sentinel = drive_path / "wipe_test_sentinel.txt"
+        assert sentinel.is_file(), (
+            f"sentinel did not land via deploy: "
+            f"{sorted(child.name for child in drive_path.iterdir())}"
+        )
         transport.wipe_filesystem()
     finally:
         transport.disconnect()

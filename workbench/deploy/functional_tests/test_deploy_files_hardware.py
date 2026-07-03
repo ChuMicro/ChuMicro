@@ -1,4 +1,4 @@
-"""Hardware-gated tests for Deployer.deploy + transport.deploy_files.
+"""Hardware-gated tests for Deployer.deploy_diff + transport.deploy_files.
 
 Exercises the real ``MicropythonTransport.deploy_files`` and
 ``CircuitpythonTransport.deploy_files`` paths against plugged-in
@@ -41,7 +41,7 @@ def test_micropython_ram_deploy_runs_entrypoint(
     source = FileMapSource(
         {"/main.py": "print('chu-deploy-mp-ram')"}, entrypoint="/main.py"
     )
-    result = deployer.deploy(source, on_file_staged=staged.append)
+    result = deployer.deploy_diff(source, on_file_staged=staged.append)
     assert result.success, result.execute_output
     assert "chu-deploy-mp-ram" in result.execute_output
     assert staged == ["/main.py"]
@@ -66,7 +66,7 @@ def test_micropython_deploy_with_lib_module(
         },
         entrypoint="/main.py",
     )
-    result = deployer.deploy(source)
+    result = deployer.deploy_diff(source)
     assert result.success, result.execute_output
     assert "hi-chu" in result.execute_output
 
@@ -85,7 +85,7 @@ def test_micropython_copy_deploy_runs_entrypoint(
     source = FileMapSource(
         {"/main.py": "print('chu-deploy-mp-copy')"}, entrypoint="/main.py"
     )
-    result = deployer.deploy(source)
+    result = deployer.deploy_diff(source)
     assert result.success, result.execute_output
     assert "chu-deploy-mp-copy" in result.execute_output
     assert result.traceback is None
@@ -108,7 +108,7 @@ def test_circuitpython_ram_deploy_runs_entrypoint(
     source = FileMapSource(
         {"/code.py": "print('chu-deploy-cp-ram')"}, entrypoint="/code.py"
     )
-    result = deployer.deploy(source, on_file_staged=staged.append)
+    result = deployer.deploy_diff(source, on_file_staged=staged.append)
     assert result.success, result.execute_output
     assert "chu-deploy-cp-ram" in result.execute_output
     assert staged == ["/code.py"]
@@ -139,7 +139,7 @@ def test_circuitpython_ram_deploy_with_lib_module(
         },
         entrypoint="/code.py",
     )
-    result = deployer.deploy(source)
+    result = deployer.deploy_diff(source)
     assert result.success, result.execute_output
     assert "hi-cp-ram" in result.execute_output
 
@@ -152,7 +152,7 @@ def test_deploy_with_directory_source(
 
     Unlike the :class:`FileMapSource`-based tests above, this exercises
     :class:`DirectorySource`'s lazy-walk path, where the walk happens
-    once, inside ``Deployer.deploy``'s ``source.files()`` call.
+    once, inside ``Deployer.deploy_diff``'s ``source.files()`` call.
     """
     project = tmp_path / "proj"
     project.mkdir()
@@ -164,7 +164,7 @@ def test_deploy_with_directory_source(
     device = _build_device(circuitpython_device, deploy_mode="ram")
     deployer = Deployer(device)
     source = DirectorySource(project, entrypoint="/code.py")
-    result = deployer.deploy(source)
+    result = deployer.deploy_diff(source)
     assert result.success, result.execute_output
     assert "OK!" in result.execute_output
 
@@ -178,7 +178,7 @@ def test_circuitpython_flash_deploy_runs_entrypoint(
     source = FileMapSource(
         {"/code.py": "print('chu-deploy-cp-flash')"}, entrypoint="/code.py"
     )
-    result = deployer.deploy(source)
+    result = deployer.deploy_diff(source)
     assert result.success, result.execute_output
     assert "chu-deploy-cp-flash" in result.execute_output
 
@@ -201,6 +201,6 @@ def test_circuitpython_flash_deploy_with_lib_module(
         },
         entrypoint="/code.py",
     )
-    result = deployer.deploy(source)
+    result = deployer.deploy_diff(source)
     assert result.success, result.execute_output
     assert "hi-cp" in result.execute_output
