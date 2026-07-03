@@ -16,9 +16,10 @@ exchange terminates.  Single in-flight query at a time, mirroring
 `chumicro_requests.HttpClient.busy` semantics.
 
 The UDP socket is **injected** — `NTPClient(socket=...)` accepts any
-object that satisfies `chumicro_sockets.UDPSocket`.  Tests inject
+object satisfying the duck-typed UDP contract below (`sendto` /
+`recvfrom_into` / `close` / `setblocking`).  Tests inject
 `FakeUDPSocket` from `chumicro_sockets.testing`; apps inject a real
-socket either directly or via the
+socket either directly (`chumicro_sockets.udp_socket`) or via the
 `chumicro_ntp.sockets_factory.chumicro_sockets_factory()` helper.
 
 A few notes on dependencies:
@@ -63,19 +64,31 @@ to Unix-epoch seconds — feed it into `time.gmtime` (CPython) /
 
 | Method | Contract |
 |---|---|
-| `sendto(payload, address) -> int` | Sends `payload` (a `bytes`) to `address` (a `(host, port)` tuple).  Raises `OSError(EAGAIN \| EWOULDBLOCK)` when the send buffer is full. |
+| `sendto(payload, host, port) -> int` | Sends `payload` (a `bytes`) to `(host, port)` as separate args.  Raises `OSError(EAGAIN \| EWOULDBLOCK)` when the send buffer is full. |
 | `recvfrom_into(buffer) -> (nbytes, address)` | Reads into `buffer`, returning the byte count and sender.  Raises `OSError(EAGAIN \| EWOULDBLOCK)` on no data. |
 | `close() -> None` | Releases the socket. |
 | `setblocking(flag) -> None` | Best-effort.  Absence is tolerated. |
 
-`chumicro_sockets.udp_socket` is one valid producer.  Stdlib `socket.socket(AF_INET, SOCK_DGRAM)` after `setblocking(False)` is another.  Tests inject `chumicro_sockets.testing.FakeUDPSocket`:
+`chumicro_sockets.udp_socket` is the built-in producer; `chumicro_sockets.testing.FakeUDPSocket` is the test double.  A raw stdlib `socket.socket(AF_INET, SOCK_DGRAM)` does **not** fit directly — its `sendto` takes `(data, address)`, not the separated `(data, host, port)` this contract calls — so wrap it in a small adapter if you must:
 
 ```python
 import socket as stdlib_socket
 
-sock = stdlib_socket.socket(stdlib_socket.AF_INET, stdlib_socket.SOCK_DGRAM)
-sock.setblocking(False)
-client = NTPClient(socket=sock, server="my.lan.ntp")
+class _StdlibUdpAdapter:
+    def __init__(self, sock):
+        self._sock = sock
+    def sendto(self, payload, host, port):
+        return self._sock.sendto(payload, (host, port))
+    def recvfrom_into(self, buffer):
+        return self._sock.recvfrom_into(buffer)
+    def close(self):
+        self._sock.close()
+    def setblocking(self, flag):
+        self._sock.setblocking(flag)
+
+raw = stdlib_socket.socket(stdlib_socket.AF_INET, stdlib_socket.SOCK_DGRAM)
+raw.setblocking(False)
+client = NTPClient(socket=_StdlibUdpAdapter(raw), server="my.lan.ntp")
 ```
 
 If you supply your own transport and want `chumicro_sockets` dropped from the deploy entirely, add a module-level constant to your entrypoint and the chumicro-workspace deployer will filter the default factory out of the import graph:

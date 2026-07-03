@@ -104,6 +104,32 @@ def test_parse_response_rejects_kiss_of_death() -> None:
         _parse_response(bytes(packet))
 
 
+def test_parse_response_rejects_zero_transmit_timestamp() -> None:
+    # RFC 4330 §5: a zero transmit timestamp must be discarded, not
+    # era-lifted into a bogus 2036 reading.
+    packet = bytearray(48)
+    packet[0] = 0x24  # server mode
+    packet[1] = 1     # stratum 1
+    # bytes 40-47 (transmit timestamp) left zero.
+    with raises(NTPError):
+        _parse_response(bytes(packet))
+
+
+def test_query_drains_stale_datagram_before_sending() -> None:
+    # A late reply to a previous (timed-out) exchange sitting in the
+    # socket buffer must be drained by query(), not accepted as the
+    # answer to the new request.
+    sock = FakeUDPSocket()
+    ticks = FakeTicks()
+    client = NTPClient(socket=sock, ticks=ticks)
+    sock.enqueue_recv(_server_response(1_600_000_000))  # stale, buffered
+    request = client.query()
+    sock.enqueue_recv(_server_response(1_700_000_000))  # the real reply
+    client.handle(now_ms=ticks.ticks_ms())
+    assert request.done is True
+    assert request.unix_seconds == 1_700_000_000
+
+
 # ---------------------------------------------------------------------------
 # NTPClient construction
 # ---------------------------------------------------------------------------
@@ -336,9 +362,11 @@ def test_handle_propagates_non_eagain_socket_error() -> None:
 
 def test_handle_short_response_marks_failed() -> None:
     sock = FakeUDPSocket()
-    sock.enqueue_recv(b"too short")
     client = NTPClient(socket=sock)
     request = client.query()
+    # Enqueue after query() so it's the reply to this request, not a
+    # stale datagram query() would drain.
+    sock.enqueue_recv(b"too short")
     client.handle(now_ms=0)
     assert request.done is True
     assert isinstance(request.error, NTPError)
@@ -348,9 +376,9 @@ def test_handle_invalid_mode_marks_failed() -> None:
     sock = FakeUDPSocket()
     bad_response = bytearray(_server_response(1))
     bad_response[0] = 0x23  # client mode in a "response"
-    sock.enqueue_recv(bytes(bad_response))
     client = NTPClient(socket=sock)
     request = client.query()
+    sock.enqueue_recv(bytes(bad_response))
     client.handle(now_ms=0)
     assert request.done is True
     assert isinstance(request.error, NTPError)
