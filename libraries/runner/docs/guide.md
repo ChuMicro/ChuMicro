@@ -265,7 +265,26 @@ while not handle.done:
     runner.wait(now_ms)
 ```
 
-Each `yield from` is a scheduler checkpoint; between yields, other services registered on the same runner get their turn.  `handle.done` flips True the moment the generator returns; `handle.cancel()` raises `GeneratorExit` inside the body so any `finally` block runs the cleanup.
+Each `yield from` is a scheduler checkpoint; between yields, other services registered on the same runner get their turn.  A bare `yield` suspends for exactly one tick.  `handle.done` flips True the moment the generator returns; `handle.cancel()` raises `GeneratorExit` inside the body so any `finally` block runs the cleanup.
+
+#### Waiting on a callback-completed event
+
+`Signal` + `wait_for` (in `chumicro_runner.generators`) suspend a generator until a callback-style service reports a one-time completion, which removes the state-change-callback-plus-module-flag preamble from sequential flows.  Hand `signal.set` (or a small wrapper) to the service as its callback, then `yield from`:
+
+```python
+from chumicro_runner.generators import Signal, wait_for
+
+link_up = Signal()
+wifi.on_state_change(lambda old, new: link_up.set(new))
+
+
+def main_run(wifi):
+    yield from wait_for(link_up)          # suspend until wifi's callback fires
+    sock = yield from connect(tcp_client_connector(HOST, PORT, radio=wifi.adapter.radio))
+    ...
+```
+
+`wait_for(signal, deadline_ms=...)` bounds the wait: past the absolute-ticks deadline it raises `OSError(ETIMEDOUT)` inside the generator body, where a `try / except OSError` can route to a retry or a clean shutdown.  Reuse one signal across sequential waits by calling `signal.clear()` between them.  Scope discipline: this is for one-time completions a sequential flow genuinely blocks on — reactive fan-out and fire-and-forget acks stay callbacks.
 
 #### Choosing between `add` and `add_generator`
 

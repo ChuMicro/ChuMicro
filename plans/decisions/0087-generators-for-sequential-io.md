@@ -22,7 +22,7 @@ Two further pieces of runtime evidence sharpen the choice of *syntax* once the s
 
 ### 1. Sequential I/O uses generator functions
 
-Library code expresses sequential I/O state machines as **generator functions** registered with the runner via `runner.add_generator(gen) -> GeneratorHandle`. The generator suspends by `yield`-ing a duck-typed wait object — anything exposing `io_socket` / `io_wants_read` / `io_wants_write` / `next_deadline`. The runner reads those each `wait()` to register the socket with ipoll, and resumes the generator via `.send(now_ms)` once the socket is ready or the deadline elapses. The runner's external dispatch surface is unchanged — internally the wrapper satisfies the same check/handle/io_* contract everything else does.
+Library code expresses sequential I/O state machines as **generator functions** registered with the runner via `runner.add_generator(gen) -> GeneratorHandle`. The generator suspends by `yield`-ing a duck-typed wait object — anything exposing `io_socket` / `io_wants_read` / `io_wants_write` / `next_deadline`, or the event predicate `ready(now_ms)` added by [Decision 0091](0091-event-wait-tokens-for-generator-tasks.md). The runner reads those each `wait()` to register the socket with ipoll, and resumes the generator via `.send(now_ms)` once the socket is ready, the deadline elapses, or the event fires. The runner's external dispatch surface is unchanged — internally the wrapper satisfies the same check/handle/io_* contract everything else does.
 
 ```python
 from chumicro_sockets import tcp_client_connector
@@ -79,7 +79,7 @@ The cost is that post-PEP-492 Python authors expect `async`/`await` as the moder
 
 ## Consequences
 
-- New `chumicro_runner` public API: `runner.add_generator(gen) -> GeneratorHandle`, `GeneratorHandle.done`, `GeneratorHandle.cancel()`. The wait objects a generator yields are **duck-typed, not named classes** — any object exposing `io_socket` / `io_wants_read` / `io_wants_write` / `next_deadline` works (an earlier `ReadReady` / `WriteReady` / `Sleep` token design with `ready()` / `result()` methods was dropped as needless ceremony). Internal `_GeneratorWrapper` stays private. Existing check/handle services and their registration paths are unchanged.
+- New `chumicro_runner` public API: `runner.add_generator(gen) -> GeneratorHandle`, `GeneratorHandle.done`, `GeneratorHandle.cancel()`. The wait objects a generator yields are **duck-typed, not named classes** — any object exposing `io_socket` / `io_wants_read` / `io_wants_write` / `next_deadline` works (an earlier `ReadReady` / `WriteReady` / `Sleep` token design with `ready()` / `result()` methods was dropped as needless ceremony; [Decision 0091](0091-event-wait-tokens-for-generator-tasks.md) later added the `ready(now_ms)` predicate alone, as a duck-typed attribute for event waits, keeping named classes and `result()` out). Internal `_GeneratorWrapper` stays private. Existing check/handle services and their registration paths are unchanged.
 
 - A yielded wait exposes `io_socket` + `io_wants_read` / `io_wants_write` (poll interest) and an optional `next_deadline` (a timeout). They are **not** awaitables — no `__await__`. They are cacheable: an EAGAIN-loop helper constructs one wait outside the loop and re-yields it, so steady-state iterations allocate nothing.
 

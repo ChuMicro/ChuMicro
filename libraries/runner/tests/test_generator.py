@@ -489,3 +489,82 @@ def test_yield_from_helper_return_value_is_received_by_caller():
         runner.tick()
 
     assert received == ["produced-value"]
+
+
+# -- bare yield + ready-wait protocol --------------------------------
+
+
+def test_bare_yield_resumes_next_tick():
+    """A bare ``yield`` suspends for exactly one tick — the generator
+    resumes on the following tick and runs to completion instead of
+    wedging with ``done`` stuck False."""
+    runner = Runner(ticks=FakeTicks())
+    progress = []
+
+    def stepper():
+        progress.append("first")
+        yield
+        progress.append("second")
+        yield
+        progress.append("third")
+
+    handle = runner.add_generator(stepper())
+    assert progress == ["first"]
+    runner.tick()
+    assert progress == ["first", "second"]
+    assert not handle.done
+    runner.tick()
+    assert progress == ["first", "second", "third"]
+    assert handle.done
+
+
+def test_ready_wait_gates_resume():
+    """A wait exposing ``ready(now_ms)`` keeps the generator suspended
+    while False and resumes it on the tick after ready flips True."""
+    runner = Runner(ticks=FakeTicks())
+    resumed = []
+
+    class _EventWait:
+        def __init__(self):
+            self.fired = False
+
+        def ready(self, now_ms):
+            return self.fired
+
+    event_wait = _EventWait()
+
+    def waiter():
+        resumed.append((yield event_wait))
+
+    handle = runner.add_generator(waiter())
+    runner.tick()
+    runner.tick()
+    assert resumed == []
+    event_wait.fired = True
+    runner.tick()
+    assert len(resumed) == 1
+    assert handle.done
+
+
+def test_ready_wait_deadline_elapses_as_timeout_path():
+    """A ready-wait carrying ``next_deadline`` resumes when the deadline
+    elapses even though ready stays False, and stays suspended before it."""
+    ticks = FakeTicks()
+    runner = Runner(ticks=ticks)
+    resumed = []
+
+    class _NeverReadyWait:
+        next_deadline = 50
+
+        def ready(self, now_ms):
+            return False
+
+    def waiter():
+        resumed.append((yield _NeverReadyWait()))
+
+    runner.add_generator(waiter())
+    runner.tick()
+    assert resumed == []
+    ticks.advance(60)
+    runner.tick()
+    assert len(resumed) == 1
