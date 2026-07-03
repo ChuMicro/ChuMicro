@@ -1870,6 +1870,56 @@ def test_run_until_returns_false_on_timeout() -> None:
     assert result is False
 
 
+def test_run_until_handle_form_runs_generator_to_completion() -> None:
+    """Passing a generator handle runs until it finishes and returns True."""
+    ticks = FakeTicks()
+    runner = Runner(ticks=ticks)
+    steps = []
+
+    def flow():
+        steps.append("a")
+        yield
+        steps.append("b")
+
+    handle = runner.add_generator(flow())
+    result = runner.run_until(handle)
+
+    assert result is True
+    assert steps == ["a", "b"]
+    assert handle.done is True
+
+
+def test_run_until_handle_form_reraises_task_death() -> None:
+    """A handle whose task died re-raises handle.error from run_until,
+    so a demo fails loudly instead of exiting clean."""
+    ticks = FakeTicks()
+    runner = Runner(ticks=ticks)
+
+    def dies():
+        yield
+        raise ValueError("task died")
+
+    handle = runner.add_generator(dies())
+    caught = None
+    try:
+        runner.run_until(handle)
+    except ValueError as error:
+        caught = error
+
+    assert caught is handle.error
+    assert handle.done is True
+
+
+def test_run_until_bare_timeout_runs_for_the_window() -> None:
+    """predicate=None with a timeout reads as "run for this long" — a
+    drain window — and returns False at the deadline."""
+    ticks = FakeTicks()
+    runner = Runner(ticks=ticks)
+    runner.add_periodic(lambda now_ms: None, period_ms=10)
+
+    assert runner.run_until(timeout_ms=50) is False
+
+
 def test_wait_socketless_advances_fake_clock_via_injected_sleep_ms() -> None:
     """wait() with no socket and a FakeTicks delegates the idle sleep to
     the tick source: FakeTicks.sleep_ms advances ticks_ms by the

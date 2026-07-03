@@ -53,7 +53,4 @@ def signal_link_up(_old, new):
 wifi.on_state_change(signal_link_up)
 
 fetch_handle = runner.add_generator(fetch_run(wifi, link_up, fetch_url))
-
-while not fetch_handle.done:
-    now_ms = runner.tick()
-    runner.wait(now_ms)
+runner.run_until(fetch_handle)

@@ -78,6 +78,4 @@ def receive_stream():
 runner = Runner()
 runner.add(ws)
 handle = runner.add_generator(receive_stream())
-while not handle.done:
-    now_ms = runner.tick()
-    runner.wait(now_ms)
+runner.run_until(handle)

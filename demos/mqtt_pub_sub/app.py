@@ -28,7 +28,7 @@ from chumicro_config import load_runtime_config
 from chumicro_mqtt import MQTTClient, ProtocolState
 from chumicro_runner import Runner
 from chumicro_test_harness.markers import marker
-from chumicro_timing import ticks_add, ticks_diff, ticks_ms
+from chumicro_timing import ticks_diff, ticks_ms
 from chumicro_wifi import WifiConfig, WifiService, WifiState
 
 _TELEMETRY_COUNT = 3
@@ -66,7 +66,17 @@ def on_connect():
     mqtt.publish(state_topic, b"online", qos=1, retain=True, prefixed=False)
     marker("RETAINED_STATE_SENT", topic=state_topic)
     mqtt.subscribe(command_topic, qos=1, prefixed=False)
-    marker("SUBSCRIBED", topic=command_topic)
+
+
+def on_subscribe(topic, granted_qos):
+    """SUBACK arrived: the subscription is live at the broker.
+
+    The marker fires here, not at the subscribe() call — the host
+    driver gates its command publish on SUBSCRIBED, and a marker
+    printed at enqueue time races the broker (a command published
+    before the broker processes the SUBSCRIBE is dropped unseen).
+    """
+    marker("SUBSCRIBED", topic=topic)
 
 
 def on_command_message(topic, payload):
@@ -106,6 +116,7 @@ def publish_telemetry(now_ms):
 
 
 mqtt.on_connect = on_connect
+mqtt.on_subscribe = on_subscribe
 mqtt.on_message = on_command_message
 mqtt.add_pattern_handler("demo/+/cmd", on_command_pattern)
 wifi.on_state_change(on_wifi_state)
@@ -115,30 +126,19 @@ runner.add(wifi)
 runner.add(mqtt)
 runner.add_periodic(publish_telemetry, period_ms=_TELEMETRY_INTERVAL_MS)
 
-overall_deadline_ms = ticks_add(start_ms, _DEMO_DEADLINE_MS)
-wrap_up_started_ms = 0
+if not runner.run_until(
+    lambda: telemetry_sent >= _TELEMETRY_COUNT and command_received,
+    timeout_ms=_DEMO_DEADLINE_MS,
+):
+    print(
+        f"STATUS: FAIL_DEMO_DEADLINE "
+        f"telemetry_sent={telemetry_sent} "
+        f"command_received={command_received}",
+    )
+    raise SystemExit(1)
 
-while True:
-    now_ms = runner.tick()
-
-    if (
-        telemetry_sent >= _TELEMETRY_COUNT
-        and command_received
-        and wrap_up_started_ms == 0
-    ):
-        wrap_up_started_ms = now_ms
-
-    if wrap_up_started_ms and ticks_diff(now_ms, wrap_up_started_ms) >= _FLUSH_DRAIN_MS:
-        mqtt.disconnect()
-        marker("DEMO_COMPLETE")
-        break
-
-    if ticks_diff(now_ms, overall_deadline_ms) >= 0:
-        print(
-            f"STATUS: FAIL_DEMO_DEADLINE "
-            f"telemetry_sent={telemetry_sent} "
-            f"command_received={command_received}",
-        )
-        raise SystemExit(1)
-
-    runner.wait(now_ms)
+# Drain window: keep ticking so the broker's QoS-1 acks land before
+# the disconnect tears the socket down.
+runner.run_until(timeout_ms=_FLUSH_DRAIN_MS)
+mqtt.disconnect()
+marker("DEMO_COMPLETE")

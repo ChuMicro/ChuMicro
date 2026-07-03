@@ -242,11 +242,10 @@ def echo_run(host, port, radio):
 
 runner = Runner()
 handle = runner.add_generator(echo_run("echo.example", 7, radio=wifi_radio))
-
-while not handle.done:
-    now_ms = runner.tick()
-    runner.wait(now_ms)
+runner.run_until(handle)
 ```
+
+`run_until(handle)` drives the tick/wait loop until the generator finishes — and re-raises `handle.error` if the task died, so a broken flow fails loudly instead of exiting clean.  Pass a callable instead for arbitrary conditions, or just `timeout_ms=` to run for a fixed window (a QoS-ack drain, a settling period).
 
 Each `yield from` is a scheduler checkpoint; between yields, other services registered on the same runner get their turn.  A bare `yield` suspends for exactly one tick.  `handle.done` flips True the moment the generator returns, dies, or is cancelled; `handle.error` holds the exception when the body raised (`None` otherwise), so a `while not handle.done` loop can report *why* a task ended — check it after the loop, or wire `Runner(on_handler_error=...)` for a loud callback at the moment of death.  `handle.cancel()` raises `GeneratorExit` inside the body so any `finally` block runs the cleanup.
 
