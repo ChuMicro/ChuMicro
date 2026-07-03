@@ -22,6 +22,12 @@ class EventBus:
     drains. ``now_ms`` is accepted for protocol compliance and unused here.
     """
 
+    # Process-wide monotonic counter giving every bus a distinct id.
+    # id(self) would recycle a GC'd bus's address, letting a stale
+    # Subscription (its per-bus token restarts at 0) match an unrelated
+    # new bus and unsubscribe the wrong handler.
+    _bus_counter = 0
+
     def __init__(self, capacity: int = 64) -> None:
         """Builds a bus that buffers up to ``capacity`` pending events.
 
@@ -33,6 +39,8 @@ class EventBus:
         """
         if capacity < 1:
             raise ValueError("capacity must be at least 1")
+        EventBus._bus_counter += 1
+        self._bus_id = EventBus._bus_counter
         self.capacity = capacity
         self._queue = deque((), capacity)
         self._subscribers: dict = {}
@@ -73,7 +81,7 @@ class EventBus:
             bucket = []
             self._subscribers[topic] = bucket
         bucket.append((token, handler))
-        return Subscription(bus_id=id(self), token=token, topic=topic)
+        return Subscription(bus_id=self._bus_id, token=token, topic=topic)
 
     def unsubscribe(self, subscription: Subscription) -> bool:
         """Removes the handler bound to ``subscription`` from this bus.
@@ -85,7 +93,7 @@ class EventBus:
             ``True`` when the handler was found and removed.
             ``False`` when the subscription is foreign to this bus or already gone.
         """
-        if subscription._bus_id != id(self):
+        if subscription._bus_id != self._bus_id:
             return False
         bucket = self._subscribers.get(subscription.topic)
         if not bucket:
@@ -127,28 +135,45 @@ class EventBus:
         return len(self._queue) > 0
 
     def handle(self, now_ms: int) -> int:
-        """Drains every queued event, invokes matching handlers, and returns the drain count.
+        """Drains the events queued at entry, invokes matching handlers, and returns the drain count.
 
         Handler exceptions are swallowed and bump ``handler_errors``.
+        An event a handler publishes during dispatch is left for the
+        next ``handle()`` call, so a handler that republishes to its own
+        topic cannot loop this call forever.
         """
         drained = 0
         delivered = 0
-        while self._queue:
+        # Snapshot the drain budget: only events already queued at entry
+        # are drained this call.  Draining while the queue is non-empty
+        # would dispatch events a handler publishes mid-call in the same
+        # call, and a self-republishing handler would never let handle()
+        # return.
+        pending = len(self._queue)
+        for _ in range(pending):
             topic, payload = self._queue.popleft()
             bucket = self._subscribers.get(topic)
             if bucket:
-                # Snapshot length so a handler that subscribes mid-dispatch isn't called this round.
-                snapshot_count = len(bucket)
-                index = 0
-                # Re-check len(bucket) per iteration so a mid-dispatch unsubscribe can't overrun.
-                while index < snapshot_count and index < len(bucket):
-                    _token, handler = bucket[index]
+                # Dispatch from an immutable snapshot so subscription
+                # changes a handler makes mid-dispatch don't shift the
+                # iteration: a handler subscribed now is absent from the
+                # snapshot (waits for the next event), and a handler
+                # unsubscribed now (itself or a peer) is dropped before
+                # its turn by the liveness check below rather than
+                # shifting a later handler out of its slot.
+                for token, handler in tuple(bucket):
+                    live = False
+                    for current_token, _current_handler in bucket:
+                        if current_token == token:
+                            live = True
+                            break
+                    if not live:
+                        continue
                     try:
                         handler(topic, payload)
                     except Exception:  # noqa: BLE001
                         self.handler_errors += 1
                     delivered += 1
-                    index += 1
             drained += 1
         self.drained += drained
         self.delivered += delivered
@@ -156,4 +181,9 @@ class EventBus:
 
     def clear(self) -> None:
         """Empties the pending queue without invoking any handler; lifetime counters survive."""
-        self._queue = deque((), self.capacity)
+        # Drain in place rather than rebinding a fresh deque: MicroPython
+        # and CircuitPython deques have no clear(), and reallocating the
+        # ring buffer mid-runtime churns the heap.
+        queue = self._queue
+        while queue:
+            queue.popleft()

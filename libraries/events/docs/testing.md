@@ -27,9 +27,9 @@ def test_wifi_state_reaches_audit_log():
 
 `RecordingSubscriber(topic_filter="wifi.state")` constructs a
 filtered recorder — events whose topic doesn't match the filter are
-dropped.  Useful when wiring one recorder against `bus.publisher("*")`-
-shaped patterns or when a single recorder is shared across many
-topics.  Call `clear()` between assertions.
+dropped.  Useful when one recorder is subscribed to several topics but
+a test only wants to assert on one topic's traffic.  Call `clear()`
+between assertions.
 
 ## Verifying handler-error swallowing
 
@@ -58,15 +58,15 @@ def test_failing_subscriber_does_not_crash_bus():
     assert survivor.events == [("topic", "x")]
 ```
 
-## Usage from other libraries
+## Usage from an application
 
-Libraries that depend on `chumicro-events` can import the fakes directly:
+An application that wires an `EventBus` into its own services imports the fake directly to assert on event traffic:
 
 ```python
 from chumicro_events.testing import RecordingSubscriber
 ```
 
-Project convention: libraries that expose injectable services ship their own test fakes alongside the production code.
+No other ChuMicro library depends on `chumicro-events`; the fake is for application and bus tests. Project convention: a library that exposes injectable services ships its own test fakes alongside the production code.
 
 ## API Reference
 
