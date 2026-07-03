@@ -80,13 +80,17 @@ The full-sweep audit hunted the 15 libraries, demos, packaging, workspace *docs*
 harness/deploy seam. Never hunted: the dev-tooling code below. One area at a time: hunter →
 adversarial verify → triage → fix → commit, before the next area starts.
 
-1. `workbench/workspace` **code** (CLI, device_runner, markers session, deploy_source, loaders) —
-   includes root-causing the demo-driver ~10.0 s marker stall (suspect: a `timeout=10.0` default
-   in the markers-session / execute-streaming read path).
-2. `workbench/pytest-device` code beyond the staging findings (backends, result parsing, plugin).
-3. `scripts/` (bundle/release/publish pipeline, run.py task plumbing — publishes packages, so
+1. **DONE** `workbench/workspace` code — 6 findings (W1–W6), all fixed 2026-07-03; report at
+   [reviews/2026-07-03-workspace-code-audit.md](../reviews/2026-07-03-workspace-code-audit.md).
+   Root-caused the demo-driver ~10.0 s marker stall (whitespace-valued markers silently dropped
+   by `parse_marker`, not a serial timeout).
+2. **DONE** `workbench/checks` — hunted out of listed order (fix agents were editing
+   pytest-device); 21 probe-confirmed findings (K1–K21, five critical false-pass holes in the
+   gate rules), all fixed 2026-07-03 with the probes lifted into the unit suite; report at
+   [reviews/2026-07-03-checks-rules-audit.md](../reviews/2026-07-03-checks-rules-audit.md).
+3. `workbench/pytest-device` code beyond the staging findings (backends, result parsing, plugin).
+4. `scripts/` (bundle/release/publish pipeline, run.py task plumbing — publishes packages, so
    correctness bugs here ship bad artifacts).
-4. `workbench/checks` (CHU rules — false-pass bugs silently disable repo gates).
 5. `support/test_harness` (already one finding, L77 tick-wraparound, from a cross-cutting hunter).
 6. `workbench/repl`.
 7. `webui/` (dev-only, lowest risk, last).
