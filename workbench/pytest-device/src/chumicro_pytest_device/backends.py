@@ -108,6 +108,16 @@ class Backend(Protocol):
 _HARNESS_SCRIPT_RELATIVE = "support/test_harness/run_cross_runtime.py"
 _TOOLS_DIR_NAME = ".tools"
 
+#: Wall-clock ceiling for one ``UnixPortBackend.execute`` subprocess, in
+#: seconds.  A single test file that infinite-loops or blocks (a
+#: ``socket.recv`` / ``select`` regression a fake would paper over) would
+#: otherwise hang the whole lane with no per-file attribution, since
+#: ``subprocess.run`` waits forever without a ``timeout``.  The slowest
+#: in-tree unit file runs in well under a second under either unix-port
+#: binary, so 120 s clears any real file by a wide margin while still
+#: bounding a wedged one.  Override per run via ``--unix-port-timeout``.
+_DEFAULT_EXECUTE_TIMEOUT_SECONDS = 120.0
+
 
 def _read_prepared_binary_marker(
     workspace_root: Path, runtime: str,
@@ -169,16 +179,23 @@ class UnixPortBackend:
         binaries: Optional ``{runtime: path}`` overrides from
             ``--micropython-binary`` / ``--circuitpython-binary``.
             ``None`` means "resolve via marker file / PATH at use time".
+        execute_timeout_seconds: Per-file wall-clock ceiling for the
+            worker subprocess.  A file that exceeds it is killed and
+            surfaced as a :class:`BackendExecuteError` naming the file,
+            so a single hanging test fails cleanly and the sweep
+            continues.  Threaded in from ``--unix-port-timeout``.
     """
 
     def __init__(
         self,
         workspace_root: Path,
         binaries: dict[str, str | None] | None = None,
+        execute_timeout_seconds: float = _DEFAULT_EXECUTE_TIMEOUT_SECONDS,
     ) -> None:
         self._workspace_root = workspace_root
         self._binary_overrides: dict[str, str | None] = binaries or {}
         self._resolved: dict[str, str] = {}
+        self._execute_timeout_seconds = execute_timeout_seconds
 
     def _resolve(self, runtime: str) -> str:
         cached = self._resolved.get(runtime)
@@ -245,6 +262,11 @@ class UnixPortBackend:
         a single test FAIL produces exit 1 but the per-test lines are
         what we want to report.  Only a fully empty output with a
         non-zero exit gets surfaced as :class:`BackendExecuteError`.
+
+        A file that runs longer than ``execute_timeout_seconds`` is
+        killed and surfaced as a :class:`BackendExecuteError` naming the
+        file and the ceiling, so a hanging or infinite-looping test
+        fails this one file cleanly instead of stalling the whole lane.
         """
         binary = self._resolve(target.runtime)
         harness = self._harness_script()
@@ -261,7 +283,16 @@ class UnixPortBackend:
                 capture_output=True,
                 text=True,
                 check=False,
+                timeout=self._execute_timeout_seconds,
             )
+        except subprocess.TimeoutExpired as error:
+            raise BackendExecuteError(
+                f"unix-port subprocess for {item.test_file} timed out "
+                f"after {self._execute_timeout_seconds:g}s "
+                f"({target.runtime}); the process was killed so a "
+                f"hanging or infinite-looping test in this file fails "
+                f"cleanly instead of stalling the lane.",
+            ) from error
         except OSError as error:
             raise BackendExecuteError(
                 f"unix-port subprocess failed to spawn "

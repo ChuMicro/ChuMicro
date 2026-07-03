@@ -1782,6 +1782,59 @@ class TestPytestCollectionModifyItemsRequiredKeys:
         collection.pytest_collection_modifyitems(config, items)
         non_device_item.add_marker.assert_not_called()
 
+    def test_missing_key_skips_only_its_own_library(self, monkeypatch) -> None:
+        """One library's missing key skips its items, not a second library's.
+
+        Two conftests register under different library scopes in one
+        session: mqtt is missing its broker host, wifi is complete.  Only
+        mqtt's item is skipped — wifi's registration is not clobbered by
+        mqtt's, and mqtt's missing key does not reach into wifi's items.
+        """
+        from unittest.mock import Mock  # noqa: PLC0415
+
+        from chumicro_pytest_device import runtime_config  # noqa: PLC0415
+        from chumicro_pytest_device.runtime_config import (  # noqa: PLC0415
+            set_runtime_config,
+        )
+
+        class _Stub:
+            def __init__(self) -> None:
+                self.stash: dict = {}
+                self.hook = SimpleNamespace(
+                    pytest_deselected=lambda **_kwargs: None,
+                )
+
+            def getoption(self, _name, default=None):  # noqa: ANN001
+                return default
+
+        config = _Stub()
+        monkeypatch.setattr(runtime_config, "_caller_library_scope", lambda: "mqtt")
+        set_runtime_config(
+            config, {"wifi.ssid": "x"}, required_keys=("mqtt.broker.host",),
+        )
+        monkeypatch.setattr(runtime_config, "_caller_library_scope", lambda: "wifi")
+        set_runtime_config(
+            config,
+            {"wifi.ssid": "x", "wifi.password": "p"},
+            required_keys=("wifi.ssid", "wifi.password"),
+        )
+
+        mqtt_item = Mock(spec=collection.DeviceRuntimeItem)
+        mqtt_item.nodeid = "libraries/mqtt/functional_tests/test_x.py::test_y"
+        mqtt_item.library_name = "mqtt"
+        wifi_item = Mock(spec=collection.DeviceRuntimeItem)
+        wifi_item.nodeid = "libraries/wifi/functional_tests/test_x.py::test_y"
+        wifi_item.library_name = "wifi"
+
+        items = [mqtt_item, wifi_item]
+        collection.pytest_collection_modifyitems(config, items)
+
+        mqtt_item.add_marker.assert_called_once()
+        assert "mqtt.broker.host" in (
+            mqtt_item.add_marker.call_args.args[0].kwargs["reason"]
+        )
+        wifi_item.add_marker.assert_not_called()
+
 
 class TestPytestCollectionModifyItemsFeatures:
     """Feature-marker filtering: items targeting devices that don't
@@ -1961,10 +2014,16 @@ class TestPytestCollectionModifyItemsFeatures:
         assert items == []
         assert config.deselected == [item]
 
-    def test_probe_failure_emits_warning_and_deselects(
+    def test_probe_failure_emits_warning_and_skips(
         self, tmp_path: Path, recwarn: pytest.WarningsRecorder,
     ) -> None:
-        """An unreachable device yields warning plus deselect, never a crash."""
+        """An unreachable device warns and skips the item, never deselects it.
+
+        A probe error is "device unreachable", distinct from a
+        successful probe that lacks the feature.  The item stays in the
+        run with a skip marker naming the error, so a flaky probe surfaces
+        in the tally instead of quietly shrinking the run to green.
+        """
         test_file = self._write_feature_test_file(
             tmp_path, marker_tuple='("esp32",)',
         )
@@ -1978,8 +2037,14 @@ class TestPytestCollectionModifyItemsFeatures:
         items = [item]
         collection.pytest_collection_modifyitems(config, items)
 
-        assert items == []
-        assert config.deselected == [item]
+        # Not deselected: still in the item list, absent from deselect.
+        assert items == [item]
+        assert config.deselected == []
+        # Skipped in place, with the probe error named in the reason.
+        item.add_marker.assert_called_once()
+        skip_marker = item.add_marker.call_args.args[0]
+        assert "offline-board" in skip_marker.kwargs["reason"]
+        assert "device went away" in skip_marker.kwargs["reason"]
         warning_messages = [str(warning.message) for warning in recwarn.list]
         assert any(
             "offline-board" in message and "device went away" in message

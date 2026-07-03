@@ -45,15 +45,17 @@ _ENCODED_RUNTIME_CONFIG_KEY: pytest.StashKey[tuple[int, bytes]] = (
 
 
 def _encode_runtime_config_extra_files(
-    config: pytest.Config,
+    config: pytest.Config, scope: str | None = None,
 ) -> dict[str, bytes] | None:
     """Return the ``extra_files`` dict to pass to ``transport.stage()``.
 
-    Returns ``None`` when no conftest registered a payload (default
-    state for libraries with no runtime-config requirements, plus the
-    silent-skip path when credentials aren't configured).  Returns a
-    one-entry dict mapping :data:`_RUNTIME_CONFIG_DEVICE_PATH` to the
-    msgpack-encoded payload otherwise.
+    Returns ``None`` when the library being staged registered no payload
+    (default state for libraries with no runtime-config requirements,
+    plus the silent-skip path when credentials aren't configured).
+    Returns a one-entry dict mapping :data:`_RUNTIME_CONFIG_DEVICE_PATH`
+    to the msgpack-encoded payload otherwise.  *scope* is the library
+    name of the batch being staged, so each library stages its own
+    registered payload rather than whichever conftest ran last.
 
     Encoding uses ``use_single_float=True`` so float values round-trip
     through CircuitPython's native ``msgpack`` decoder (CP doesn't
@@ -62,7 +64,7 @@ def _encode_runtime_config_extra_files(
     per file batch, and re-encoding the same dotted-key dict 50+ times
     is wasted work.
     """
-    payload = get_runtime_config(config)
+    payload = get_runtime_config(config, scope)
     if payload is None:
         return None
     cached = config.stash.get(_ENCODED_RUNTIME_CONFIG_KEY, None)

@@ -178,3 +178,50 @@ class TestExecute:
             backend.execute(
                 _item_for(workspace / "test_a.py"), _unix_port_target(),
             )
+
+
+class TestExecuteTimeout:
+    """A worker that runs past the timeout is killed and named, not left hanging."""
+
+    def test_hanging_worker_times_out_naming_the_file(
+        self, tmp_path: Path,
+    ) -> None:
+        """A file that exceeds the timeout raises, naming the file and ceiling.
+
+        The worker script sleeps far longer than the 0.5 s timeout, so
+        ``subprocess.run`` kills it and the backend surfaces a
+        ``BackendExecuteError`` naming the file — one wedged file fails
+        cleanly instead of stalling the lane.
+        """
+        workspace = _workspace_with_harness(
+            tmp_path, "import time\ntime.sleep(30)\n",
+        )
+        test_file = workspace / "test_hang.py"
+        backend = UnixPortBackend(
+            workspace,
+            binaries={"micropython": sys.executable},
+            execute_timeout_seconds=0.5,
+        )
+
+        with pytest.raises(BackendExecuteError, match="timed out") as excinfo:
+            backend.execute(_item_for(test_file), _unix_port_target())
+        assert "test_hang.py" in str(excinfo.value)
+        assert "0.5s" in str(excinfo.value)
+
+    def test_fast_file_under_the_timeout_returns_output(
+        self, tmp_path: Path,
+    ) -> None:
+        """A file that finishes within the timeout returns its captured output."""
+        workspace = _workspace_with_harness(
+            tmp_path, "print('PASS test_a (0.01s)')\n",
+        )
+        backend = UnixPortBackend(
+            workspace,
+            binaries={"micropython": sys.executable},
+            execute_timeout_seconds=30.0,
+        )
+
+        output = backend.execute(
+            _item_for(workspace / "test_a.py"), _unix_port_target(),
+        )
+        assert "PASS test_a" in output

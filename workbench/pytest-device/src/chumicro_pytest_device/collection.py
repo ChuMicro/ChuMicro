@@ -63,7 +63,7 @@ from .session import (
 
 
 def _assert_summary_reconciles(result: RunResult, raw_output: str) -> None:
-    """Fail the batch on a missing SUMMARY line or a dropped FAIL result.
+    """Fail the batch on a missing SUMMARY, a dropped FAIL, or a phantom line.
 
     The device prints an authoritative ``SUMMARY total=N failed=M`` as the
     last line of a complete run.  Its absence means the run was truncated
@@ -71,11 +71,17 @@ def _assert_summary_reconciles(result: RunResult, raw_output: str) -> None:
     partial transcript that reads green when the surviving lines all
     passed.  A ``failed`` count higher than the parsed FAIL lines means a
     failure result was dropped from the output, which is the dangerous
-    case: a real failure silently vanishing into a pass.  The total count
-    is deliberately not reconciled here — a test that appears in fewer
-    output lines than expected is caught per-test as "not found in device
-    output", which pinpoints the missing test instead of failing the
-    whole batch.
+    case: a real failure silently vanishing into a pass.
+
+    More parsed result lines than the device's own ``total`` means a
+    stray line that looks like a PASS/FAIL/SKIP was injected — free-form
+    board prose, print-debugging, or an exception message that happens to
+    match a result pattern.  A phantom ``PASS test_b`` emitted before
+    ``test_b``'s real ``FAIL`` would let the first-match per-test lookup
+    report PASS, so an extra line over ``total`` fails the batch.  The
+    fewer-lines direction (``total`` exceeds parsed lines) is deliberately
+    left to the per-test "not found in device output" guard, which
+    pinpoints the missing test instead of failing the whole batch.
     """
     summary = result.summary
     if summary is None:
@@ -89,6 +95,78 @@ def _assert_summary_reconciles(result: RunResult, raw_output: str) -> None:
             f"Device SUMMARY reports failed={summary.failed} but {parsed_failed} "
             f"FAIL line(s) were parsed; a failure result was dropped from the "
             f"output (board crash or serial glitch):\n{raw_output}"
+        )
+    if len(result.tests) > summary.total:
+        pytest.fail(
+            f"Device output parsed {len(result.tests)} result line(s) but "
+            f"SUMMARY reports total={summary.total}; a stray line matching a "
+            f"PASS/FAIL/SKIP pattern was injected and could mask a real "
+            f"result via first-match lookup:\n{raw_output}"
+        )
+
+
+def _collected_test_names(
+    session: pytest.Session,
+    device_entry: DeviceEntry,
+    test_file: Path,
+) -> set[str]:
+    """Return the ``function_name``s the host collected for one file batch.
+
+    Walks the session's ``DeviceTestItem``s, keeping those that target
+    *device_entry* and came from *test_file*, and returns their bare
+    ``function_name``s (the same qualified form the harness prints, no
+    per-runtime display suffix).  The ``getattr`` guard degrades to an
+    empty set for session stubs that never populate ``items``.
+    """
+    names: set[str] = set()
+    for item in getattr(session, "items", ()):
+        if not isinstance(item, DeviceTestItem):
+            continue
+        target = item.target_device
+        if target is None or target.identifier != device_entry.identifier:
+            continue
+        if item.test_file != test_file:
+            continue
+        names.add(item.function_name)
+    return names
+
+
+def _assert_collected_reconciles(
+    result: RunResult,
+    raw_output: str,
+    collected_names: set[str],
+    test_file: Path,
+) -> None:
+    """Fail the batch when the device ran tests the host never collected.
+
+    Host-side collection walks the file's AST
+    (:func:`_parse_test_functions`): module-level ``def test_*`` and the
+    direct ``test_*`` children of a ``class Test*``.  The on-device runner
+    discovers tests at runtime via ``dir()``, which also surfaces
+    ``test_*`` methods *inherited* from a base class and module-level
+    ``test_name = _factory()`` bindings — tests with no ``DeviceTestItem``
+    to map their result onto.  A FAIL among them reconciles symmetrically
+    against SUMMARY (the orphan FAIL inflates both the parsed and reported
+    counts) and the session exits green.  Cross-checking the device-run
+    names against the collected set surfaces the orphan instead of
+    dropping it, and a device ``total`` that differs from the collected
+    count catches the same divergence by cardinality.
+    """
+    orphans = sorted(
+        {test.name for test in result.tests if test.name not in collected_names}
+    )
+    if orphans:
+        pytest.fail(
+            f"Device ran test(s) the host never collected for {test_file.name}: "
+            f"{', '.join(orphans)}; these have no pytest item, so a FAIL among "
+            f"them would reconcile against SUMMARY and vanish into a green "
+            f"run:\n{raw_output}"
+        )
+    if result.summary is not None and result.summary.total != len(collected_names):
+        pytest.fail(
+            f"Device SUMMARY reports total={result.summary.total} but the host "
+            f"collected {len(collected_names)} test(s) for {test_file.name}; the "
+            f"device ran a different set than was collected:\n{raw_output}"
         )
 
 
@@ -584,6 +662,17 @@ class DeviceRuntimeItem(pytest.Item):
         if not result.tests:
             pytest.fail(f"No test results in device output:\n{raw_output}")
         _assert_summary_reconciles(result, raw_output)
+        collected_names = _collected_test_names(
+            self.session, device_entry, self.test_file,
+        )
+        # An empty set means only a session stub with no ``items`` (the
+        # running item is itself collected in a real session), so the
+        # cross-check is skipped rather than flagging every device result
+        # as an orphan.
+        if collected_names:
+            _assert_collected_reconciles(
+                result, raw_output, collected_names, self.test_file,
+            )
         return result, raw_output
 
     def repr_failure(
@@ -642,16 +731,30 @@ class DeviceTestItem(DeviceRuntimeItem):
         result, raw_output = self._require_batch_result(device_entry)
 
         # Find this specific test in the results.
-        for test_result in result.tests:
-            if test_result.name == self.function_name:
-                self.reported_duration = test_result.duration
-                if test_result.status == "FAIL":
-                    pytest.fail(
-                        f"Device test FAIL: {self.function_name}\n{raw_output}"
-                    )
-                if test_result.status == "SKIP":
-                    pytest.skip(test_result.message or "Skipped on device")
-                return
+        matches = [
+            test_result
+            for test_result in result.tests
+            if test_result.name == self.function_name
+        ]
+        if len(matches) > 1:
+            # Two result lines carry this name: the output is ambiguous,
+            # so first-match promotion could report an earlier PASS while
+            # a later line is the real FAIL.  Refuse to guess.
+            pytest.fail(
+                f"Device output has {len(matches)} result lines for "
+                f"{self.function_name!r}; the result is ambiguous and an "
+                f"earlier PASS must not shadow a later FAIL:\n{raw_output}"
+            )
+        if matches:
+            test_result = matches[0]
+            self.reported_duration = test_result.duration
+            if test_result.status == "FAIL":
+                pytest.fail(
+                    f"Device test FAIL: {self.function_name}\n{raw_output}"
+                )
+            if test_result.status == "SKIP":
+                pytest.skip(test_result.message or "Skipped on device")
+            return
 
         # Test name not found in output. May have been filtered or
         # errored before reaching the harness.
@@ -840,18 +943,21 @@ def pytest_collection_modifyitems(
     2. Deselect every :class:`DeviceRuntimeItem` whose test file
        declares :data:`__chumicro_features__` requirements that the
        target device doesn't satisfy.  Lazy-probes each device only
-       when at least one feature-marked item targets it. Warns rather
-       than failing if the probe can't reach the device, so an offline
-       board doesn't poison the whole session.  Items are
-       *deselected*, not skipped. Feature mismatches mean the test
-       genuinely shouldn't run on that device, not that it's pending.
-    3. Apply a session-wide skip marker to every
-       :class:`DeviceRuntimeItem` when the conftest declared required
-       runtime-config keys via :func:`set_runtime_config(...,
-       required_keys=...)` and one or more are absent from the staged
-       payload.  Catches "I forgot to populate ``mqtt.broker.host`` in
-       ``secrets.toml``" before the device boots and crashes with a
-       cryptic ``MissingConfigKey``.
+       when at least one feature-marked item targets it.  A successful
+       probe that lacks the feature *deselects* the item (the test
+       genuinely shouldn't run there, not that it's pending).  A probe
+       that *errors* (offline board, transport glitch) instead *skips*
+       the item with a reason naming the error, so a flaky probe surfaces
+       in the tally rather than quietly shrinking the run.
+    3. Apply a skip marker to each :class:`DeviceRuntimeItem` whose
+       library's conftest declared required runtime-config keys via
+       :func:`set_runtime_config(..., required_keys=...)` with one or
+       more absent from that library's staged payload.  Keyed per
+       library scope so two libraries' conftests don't cross-skip:
+       library A's missing key can't skip library B's tests.  Catches
+       "I forgot to populate ``mqtt.broker.host`` in ``secrets.toml``"
+       before the device boots and crashes with a cryptic
+       ``MissingConfigKey``.
     """
     deselected: list[pytest.Item] = []
     selected: list[pytest.Item] = []
@@ -885,18 +991,21 @@ def pytest_collection_modifyitems(
                 item for item in items if id(item) not in feature_dropped
             ]
 
-    missing = missing_required_keys(config)
-    if missing:
+    for item in items:
+        if not isinstance(item, DeviceRuntimeItem):
+            continue
+        missing = missing_required_keys(
+            config, scope=getattr(item, "library_name", None),
+        )
+        if not missing:
+            continue
         skip_reason = (
             "Functional tests require runtime-config keys not present "
             f"in the staged payload: {', '.join(missing)}.  Populate "
             "them in your secrets.toml (or the per-project config) and "
             "re-run."
         )
-        skip_marker = pytest.mark.skip(reason=skip_reason)
-        for item in items:
-            if isinstance(item, DeviceRuntimeItem):
-                item.add_marker(skip_marker)
+        item.add_marker(pytest.mark.skip(reason=skip_reason))
 
 
 def _read_library_platforms(library_dir: Path) -> tuple[str, ...] | None:
@@ -953,7 +1062,7 @@ def _deselect_items_for_non_targeting_libraries(
 def _deselect_items_missing_required_features(
     items: list[pytest.Item],
 ) -> list[pytest.Item]:
-    """Return items whose target device lacks a feature their file declares.
+    """Return items to deselect because their device lacks a declared feature.
 
     Reads :data:`__chumicro_features__` from each ``DeviceRuntimeItem``'s
     test file via AST.  When at least one item declares features, lazy-
@@ -961,10 +1070,14 @@ def _deselect_items_missing_required_features(
     cache, parses :data:`FEATURE_PROBE_SCRIPT` output, and caches the
     result on the session's ``_device_features_cache``.
 
-    A probe failure (offline device, transport error) is *not* a hard
-    failure: a warning is emitted and the device's feature set is
-    treated as empty for this session.  Tests requiring the missing
-    feature get deselected for that device, the rest still run.
+    Two outcomes for a feature-gated item.  A device that probed
+    successfully but lacks the required feature contributes its item to
+    the returned deselect list.  A device whose probe *raised* (offline,
+    transport error) is a different case: a warning is emitted and the
+    item is marked skip in place (reason names the error) rather than
+    deselected, so the flaky probe stays visible instead of silently
+    dropping the item.  Applying the skip marker is a side effect; only
+    deselect candidates are returned.
 
     Args:
         items: The current item list.  Items reach back to their
@@ -1000,6 +1113,16 @@ def _deselect_items_missing_required_features(
     )
     session._device_features_cache = cache  # type: ignore[attr-defined]
 
+    # Devices whose probe raised, mapped to the error text.  A probe
+    # failure ("device unreachable") is a different condition from a
+    # successful probe that lacks the feature ("feature absent"), so the
+    # two get different treatments below.
+    probe_errors: dict[str, str] = cast(
+        "dict[str, str]",
+        getattr(session, "_device_feature_probe_errors", None) or {},
+    )
+    session._device_feature_probe_errors = probe_errors  # type: ignore[attr-defined]
+
     devices_to_probe: dict[str, DeviceEntry] = {
         device.identifier: device
         for _, device, _ in feature_targets
@@ -1018,19 +1141,35 @@ def _deselect_items_missing_required_features(
                 warnings.warn(
                     f"Feature probe failed for device {device_id!r}: "
                     f"{error}.  Tests declaring "
-                    f"`__chumicro_features__` will be deselected for "
+                    f"`__chumicro_features__` will be skipped for "
                     f"this device.",
                     stacklevel=3,
                 )
                 cache[device_id] = frozenset()
+                probe_errors[device_id] = str(error)
             else:
                 cache[device_id] = parse_feature_probe_output(output)
 
-    return [
-        item
-        for item, device, required in feature_targets
-        if not required.issubset(cache[device.identifier])
-    ]
+    # A probe *error* skips the device's feature-gated items (visible in
+    # the pass/skip tally, reason names the error) rather than deselecting
+    # them, so a flaky probe doesn't quietly shrink the run to a green
+    # subset.  Silent deselection is reserved for a *successful* probe
+    # that genuinely lacks the required feature.
+    deselected: list[pytest.Item] = []
+    for item, device, required in feature_targets:
+        device_id = device.identifier
+        probe_error = probe_errors.get(device_id)
+        if probe_error is not None:
+            item.add_marker(pytest.mark.skip(
+                reason=(
+                    f"Feature probe failed for device {device_id!r}: "
+                    f"{probe_error}"
+                ),
+            ))
+            continue
+        if not required.issubset(cache[device_id]):
+            deselected.append(item)
+    return deselected
 
 def _sibling_extra_modules(test_files: list[Path]) -> list[Path]:
     """Return underscore-prefixed sibling ``.py`` modules of *test_files*.
@@ -1127,6 +1266,8 @@ def _bulk_stage_for_device(
         seen_test_files,
         _harness_source_dir(session),
         extra_modules=_sibling_extra_modules(seen_test_files),
-        extra_files=_encode_runtime_config_extra_files(session.config),
+        extra_files=_encode_runtime_config_extra_files(
+            session.config, scope=library_filter,
+        ),
         include_test_support=_target_is_device_unit(session.config),
     )

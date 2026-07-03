@@ -114,6 +114,7 @@ class TestPytestAddoption:
             "--circuitpython-device",
             "--micropython-binary",
             "--circuitpython-binary",
+            "--unix-port-timeout",
             "--deploy-mode",
             "--pr-summary",
             "--pr-summary-command",
@@ -138,6 +139,27 @@ class TestPytestAddoption:
             "device", "device-unit", "unix-port",
         )
         assert by_name["--target"]["default"] == "device"
+
+    def test_unix_port_timeout_is_a_float_with_generous_default(self) -> None:
+        """``--unix-port-timeout`` parses as a float and defaults generously.
+
+        The default matches the backend's own ceiling constant, and it is
+        far above the sub-second slowest in-tree unit file so no real file
+        trips it.
+        """
+        from chumicro_pytest_device.backends import (  # noqa: PLC0415
+            _DEFAULT_EXECUTE_TIMEOUT_SECONDS,
+        )
+
+        parser = _RecordingParser()
+        pytest_device.pytest_addoption(parser)  # type: ignore[arg-type]
+        by_name = {args[0]: kwargs for args, kwargs in parser.group.options}
+        assert by_name["--unix-port-timeout"]["type"] is float
+        assert (
+            by_name["--unix-port-timeout"]["default"]
+            == _DEFAULT_EXECUTE_TIMEOUT_SECONDS
+        )
+        assert _DEFAULT_EXECUTE_TIMEOUT_SECONDS >= 60
 
 
 class TestPytestConfigure:
