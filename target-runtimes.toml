@@ -9,3 +9,40 @@ version = "10.2.0"
 
 [micropython]
 version = "v1.26.0"
+
+[heap]
+# Free-heap ceilings for the unix-port test lanes, measured on the
+# reference Pi Pico W bench boards 2026-07-03: MicroPython 201,360 B
+# and CircuitPython 126,288 B free after boot.  The lanes spawn each
+# worker with `-X heapsize=<budget>` so an import-time or test-time
+# MemoryError that would brick a real board shows up in preflight
+# instead of on first flash.  Budgets sit under the measured ceiling
+# to leave runtime headroom for wifi buffers and app state.
+micropython = "192K"
+circuitpython = "120K"
+
+# Per-library overrides — only with a measured justification in the
+# commit that adds one.  A test FILE that legitimately needs more heap
+# than the budget (big fixtures, wide tables) raises its library here;
+# production code must still fit the defaults on a real board.
+[heap.overrides]
+# Measured 2026-07-03 (smallest green budget for the library's full
+# unix-lane suite, statement-chunked).  Budgets above the physical
+# Pico W free heap (MP 201K / CP 126K) are test-lane artifacts, not
+# production claims: the unix lane runs UNSTRIPPED sources while
+# real-board deploys strip docstrings/comments (Decision 0090), and
+# every library's bare production import measures <= 44 KB at the
+# default budget.  Slimming these suites back under the defaults is
+# tracked follow-up work.
+# CP budgets are whole-file (CircuitPython's production default is
+# flash mode, which execs whole files; the CP unix build also FATALs
+# on long chunk sequences — revisit at the next CP toolchain bump), so
+# they carry the whole-file compile transient MP's chunked lane avoids.
+msgpack = { circuitpython = "136K" }
+wifi = { circuitpython = "136K" }
+sockets = { circuitpython = "160K" }
+runner = { micropython = "320K", circuitpython = "320K" }
+http_server = { micropython = "208K", circuitpython = "192K" }
+requests = { micropython = "256K", circuitpython = "224K" }
+mqtt = { micropython = "320K", circuitpython = "256K" }
+websockets = { micropython = "320K", circuitpython = "224K" }

@@ -41,6 +41,111 @@ def _item_for(test_file: Path) -> SimpleNamespace:
     return SimpleNamespace(test_file=test_file)
 
 
+class TestHeapBudget:
+    """Board-shaped heap budgets: config precedence, spawn args, OOM hint."""
+
+    @staticmethod
+    def _workspace_with_budgets(tmp_path: Path, toml_text: str) -> Path:
+        workspace = _workspace_with_harness(
+            tmp_path, "import sys\nprint(sys.argv)\nprint('SUMMARY total=0 failed=0 time=0.0s')\n",
+        )
+        (workspace / "target-runtimes.toml").write_text(toml_text)
+        return workspace
+
+    def test_runtime_default_budget_reaches_the_spawn(self, tmp_path: Path) -> None:
+        # The fake harness echoes argv, so the -X heapsize pair the
+        # backend injects is visible in the captured output.
+        workspace = self._workspace_with_budgets(
+            tmp_path, '[heap]\nmicropython = "192K"\n',
+        )
+        backend = UnixPortBackend(
+            workspace, binaries={"micropython": sys.executable},
+        )
+        output = backend.execute(
+            _item_for(workspace / "test_x.py"), _unix_port_target(),
+        )
+        # CPython (the fake binary) swallows -X options it doesn't know,
+        # so assert on the resolver instead of argv echo for the pair.
+        assert backend._heap_budget("micropython", None) == "192K"
+        assert "SUMMARY" in output
+
+    def test_library_override_beats_runtime_default(self, tmp_path: Path) -> None:
+        workspace = self._workspace_with_budgets(
+            tmp_path,
+            '[heap]\nmicropython = "192K"\n'
+            '[heap.overrides.kvstore]\nmicropython = "256K"\n',
+        )
+        backend = UnixPortBackend(
+            workspace, binaries={"micropython": sys.executable},
+        )
+        assert backend._heap_budget("micropython", "kvstore") == "256K"
+        assert backend._heap_budget("micropython", "timing") == "192K"
+        assert backend._heap_budget("circuitpython", "kvstore") is None
+
+    def test_cli_override_and_off_switch(self, tmp_path: Path) -> None:
+        workspace = self._workspace_with_budgets(
+            tmp_path, '[heap]\nmicropython = "192K"\n',
+        )
+        pinned = UnixPortBackend(
+            workspace, binaries={"micropython": sys.executable},
+            heapsize="64K",
+        )
+        assert pinned._heap_budget("micropython", "kvstore") == "64K"
+        disabled = UnixPortBackend(
+            workspace, binaries={"micropython": sys.executable},
+            heapsize="off",
+        )
+        assert disabled._heap_budget("micropython", None) is None
+
+    def test_missing_heap_table_means_no_ceiling(self, tmp_path: Path) -> None:
+        workspace = _workspace_with_harness(tmp_path, "print('x')\n")
+        backend = UnixPortBackend(
+            workspace, binaries={"micropython": sys.executable},
+        )
+        assert backend._heap_budget("micropython", None) is None
+
+    def test_memoryerror_without_summary_names_the_budget(
+        self, tmp_path: Path,
+    ) -> None:
+        # A worker that dies on the board-shaped heap before SUMMARY
+        # surfaces as policy (budget named, override path coached),
+        # not as a generic parse failure.
+        workspace = _workspace_with_harness(
+            tmp_path,
+            "print('importing big thing')\nraise MemoryError('allocation failed')\n",
+        )
+        (workspace / "target-runtimes.toml").write_text(
+            '[heap]\nmicropython = "192K"\n',
+        )
+        backend = UnixPortBackend(
+            workspace, binaries={"micropython": sys.executable},
+        )
+        with pytest.raises(BackendExecuteError, match="heapsize=192K") as excinfo:
+            backend.execute(
+                _item_for(workspace / "test_oom.py"), _unix_port_target(),
+            )
+        assert "OOM a real Pico W" in str(excinfo.value)
+        assert "heap.overrides" in str(excinfo.value)
+
+    def test_memoryerror_with_summary_is_not_intercepted(
+        self, tmp_path: Path,
+    ) -> None:
+        # A test that legitimately exercises MemoryError handling and
+        # still completes its run keeps normal reporting.
+        workspace = _workspace_with_harness(
+            tmp_path,
+            "print('caught MemoryError in a test')\n"
+            "print('SUMMARY total=1 failed=0 time=0.1s')\n",
+        )
+        backend = UnixPortBackend(
+            workspace, binaries={"micropython": sys.executable},
+        )
+        output = backend.execute(
+            _item_for(workspace / "test_ok.py"), _unix_port_target(),
+        )
+        assert "SUMMARY" in output
+
+
 class TestResolve:
     """Binary resolution order and failure modes."""
 

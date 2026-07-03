@@ -32,10 +32,14 @@ time we defer it so static analysis doesn't see the cycle.
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
+import tomllib
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
+
+from chumicro_workspace.device_orchestration import chunk_boundaries_for
 
 if TYPE_CHECKING:
     from chumicro_deploy import DeviceEntry
@@ -118,6 +122,27 @@ _TOOLS_DIR_NAME = ".tools"
 #: bounding a wedged one.  Override per run via ``--unix-port-timeout``.
 _DEFAULT_EXECUTE_TIMEOUT_SECONDS = 120.0
 
+#: Sentinel for --unix-port-heapsize: read budgets from
+#: target-runtimes.toml [heap].  "0" / "off" disables the ceiling.
+HEAPSIZE_FROM_CONFIG = "config"
+
+
+def _load_heap_budgets(workspace_root: Path) -> dict:
+    """Read the ``[heap]`` table from ``target-runtimes.toml``.
+
+    Returns the raw table (per-runtime defaults + ``overrides``
+    sub-table), or an empty dict when the file or table is absent —
+    absent means "no ceiling", preserving pre-budget behavior for
+    workspaces that haven't declared one.
+    """
+    config_path = workspace_root / "target-runtimes.toml"
+    if not config_path.is_file():
+        return {}
+    with config_path.open("rb") as handle:
+        data = tomllib.load(handle)
+    heap = data.get("heap", {})
+    return heap if isinstance(heap, dict) else {}
+
 
 def _read_prepared_binary_marker(
     workspace_root: Path, runtime: str,
@@ -191,11 +216,42 @@ class UnixPortBackend:
         workspace_root: Path,
         binaries: dict[str, str | None] | None = None,
         execute_timeout_seconds: float = _DEFAULT_EXECUTE_TIMEOUT_SECONDS,
+        heapsize: str = HEAPSIZE_FROM_CONFIG,
     ) -> None:
         self._workspace_root = workspace_root
         self._binary_overrides: dict[str, str | None] = binaries or {}
         self._resolved: dict[str, str] = {}
         self._execute_timeout_seconds = execute_timeout_seconds
+        self._heapsize = heapsize
+        self._heap_budgets: dict | None = None
+
+    def _heap_budget(self, runtime: str, library_name: str | None) -> str | None:
+        """Resolve the ``-X heapsize`` budget for one worker spawn.
+
+        Precedence: the constructor / ``--unix-port-heapsize`` override
+        ("0" or "off" disables the ceiling entirely), then the
+        library's entry in ``target-runtimes.toml [heap.overrides]``,
+        then the runtime's ``[heap]`` default.  ``None`` means spawn
+        with the port's native multi-MB heap — the pre-budget behavior,
+        kept only for workspaces with no ``[heap]`` table.
+        """
+        if self._heapsize != HEAPSIZE_FROM_CONFIG:
+            if self._heapsize in ("0", "off"):
+                return None
+            return self._heapsize
+        if self._heap_budgets is None:
+            self._heap_budgets = _load_heap_budgets(self._workspace_root)
+        overrides = self._heap_budgets.get("overrides", {})
+        if library_name and library_name in overrides:
+            per_library = overrides[library_name]
+            if isinstance(per_library, dict):
+                budget = per_library.get(runtime)
+                if budget is not None:
+                    return str(budget)
+            elif per_library is not None:
+                return str(per_library)
+        budget = self._heap_budgets.get(runtime)
+        return None if budget is None else str(budget)
 
     def _resolve(self, runtime: str) -> str:
         cached = self._resolved.get(runtime)
@@ -270,12 +326,46 @@ class UnixPortBackend:
         """
         binary = self._resolve(target.runtime)
         harness = self._harness_script()
-        command = [
-            binary,
+        command = [binary]
+        budget = self._heap_budget(
+            target.runtime, getattr(item, "library_name", None),
+        )
+        if budget is not None:
+            # Board-shaped heap: an import chain or test workload that
+            # cannot fit a real Pico W MemoryErrors HERE, in preflight,
+            # instead of on first flash.
+            command += ["-X", f"heapsize={budget}"]
+        command += [
             str(harness),
             "--worker",
             str(item.test_file),
         ]
+        boundaries = None
+        if target.runtime == "micropython":
+            # Chunked exec is the MicroPython fidelity shape (real MP
+            # sweeps stage statement-chunked).  CircuitPython's
+            # production default is flash mode, which execs whole
+            # files, so CP runs whole-file — the faithful shape for
+            # both runtimes.
+            try:
+                boundaries = chunk_boundaries_for(Path(item.test_file))
+            except (OSError, SyntaxError):
+                # Chunking is a fidelity optimization; a file the host
+                # can't read or parse still runs whole-file so the
+                # worker reports the real failure with its own
+                # diagnostics.
+                boundaries = None
+        environment = None
+        if boundaries:
+            # Statement-chunked exec, same as real-board staging: the
+            # whole-file compile transient of a large test module is a
+            # host-lane artifact a chunk-staged board never pays.  The
+            # CSV rides an env var because the MP unix port FATALs on
+            # argv elements longer than a few hundred bytes.
+            environment = dict(os.environ)
+            environment["CHUMICRO_CHUNK_BOUNDARIES"] = ",".join(
+                str(line_no) for line_no in boundaries
+            )
         try:
             completed = subprocess.run(  # noqa: S603, args fully controlled
                 command,
@@ -284,6 +374,7 @@ class UnixPortBackend:
                 text=True,
                 check=False,
                 timeout=self._execute_timeout_seconds,
+                env=environment,
             )
         except subprocess.TimeoutExpired as error:
             raise BackendExecuteError(
@@ -299,6 +390,23 @@ class UnixPortBackend:
                 f"({target.runtime}): {error}",
             ) from error
         output = completed.stdout + completed.stderr
+        if "MemoryError" in output and "SUMMARY " not in output:
+            # The worker died on the board-shaped heap before the
+            # harness could print its SUMMARY: this code would OOM a
+            # real Pico W.  Name the budget so the failure reads as
+            # policy, not mystery.
+            budget = self._heap_budget(
+                target.runtime, getattr(item, "library_name", None),
+            )
+            raise BackendExecuteError(
+                f"unix-port worker for {item.test_file} hit MemoryError "
+                f"under the board-shaped heap budget "
+                f"({target.runtime} heapsize={budget}) before completing "
+                f"— an import chain or workload this size would OOM a "
+                f"real Pico W.  Slim it, or raise the library's entry "
+                f"in target-runtimes.toml [heap.overrides] with a "
+                f"measured justification.\n\n{output}",
+            )
         if not output.strip():
             raise BackendExecuteError(
                 f"unix-port subprocess returned no output "
