@@ -36,7 +36,7 @@ def main(argv: list[str] | None = None) -> int:
         help="device id from devices.yml (default: first matching --runtime)",
     )
     parser.add_argument(
-        "--runtime", default="circuitpython",
+        "--runtime", default=None,
         help="runtime to pick the default device for (circuitpython | micropython)",
     )
     parser.add_argument(
