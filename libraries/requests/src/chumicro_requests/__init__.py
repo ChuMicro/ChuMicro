@@ -27,7 +27,10 @@ from chumicro_requests._wire import (
     parse_url,
     resolve_redirect_url,
 )
-from chumicro_requests.client import (
+
+gc.collect()
+
+from chumicro_requests.client import (  # noqa: E402, I001 - preceded by gc.collect().
     HttpClient,
     RequestHandle,
     Response,

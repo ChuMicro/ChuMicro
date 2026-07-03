@@ -149,6 +149,42 @@ class TestHttpClientPost:
             client.post("ftp://bad/", body=b"x")
 
 
+class TestRequestBodyRam:
+    """Body bytes aren't held in duplicate longer than a hop needs them."""
+
+    def test_tx_buffer_released_once_send_completes(self):
+        # A recv with no queued response stalls the request in RECEIVING;
+        # the transmit buffer must be empty by then, not still pinning a
+        # second copy of the request bytes through the receive phase.
+        socket = FakeSocket()
+        client, ticks, _ = make_client(socket_or_factory=socket)
+        client.post("http://example.test/api", body=b"payload-body")
+        for _ in range(10):
+            client.handle(ticks.ticks_ms())
+            ticks.advance(1)
+        assert client.io_wants_read is True  # noqa: SLF001 - in RECEIVING
+        assert client._tx_buffer == b""  # noqa: SLF001 - released at send end
+        assert client._tx_offset == 0  # noqa: SLF001
+
+    def test_original_body_not_captured_when_redirects_disabled(self):
+        # max_redirects=0 makes 307/308 replay impossible, so the replay
+        # copy of the body must not be retained.
+        socket = FakeSocket()
+        client, _ticks, _ = make_client(socket_or_factory=socket)
+        client.post(
+            "http://example.test/api", body=b"payload-body", max_redirects=0,
+        )
+        assert client._original_body is None  # noqa: SLF001
+
+    def test_original_body_captured_when_redirects_allowed(self):
+        socket = FakeSocket()
+        client, _ticks, _ = make_client(socket_or_factory=socket)
+        client.post(
+            "http://example.test/api", body=b"payload-body", max_redirects=3,
+        )
+        assert client._original_body == b"payload-body"  # noqa: SLF001
+
+
 class TestMergeDefaultHeader:
     """Helper: caller-supplied headers override the default."""
 

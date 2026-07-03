@@ -544,6 +544,11 @@ class HttpClient:
         self._state = _RequestState.IDLE
         self._socket = None
         self._handle = None  # current RequestHandle
+        # Handle whose on_done callback is due to fire.  Set when a
+        # request finishes and drained by _fire_completion after the
+        # per-tick pipeline, so a raising callback surfaces to the
+        # caller's loop instead of into the pipeline's error handling.
+        self._completed_handle = None
         self.url = None
         self._tx_buffer = b""  # request bytes pending send
         self._tx_offset = 0
@@ -774,7 +779,20 @@ class HttpClient:
         """
         if self._state == _RequestState.IDLE:
             return
+        self._drive_tick(now_ms)
+        # Fire the finished request's on_done callback here, after the
+        # pipeline tick — a callback that raises, or that issues a
+        # follow-up request, must reach the caller's loop rather than be
+        # caught by _drive_tick's HttpError / OSError handlers and
+        # misattributed to whatever request is now in flight.
+        self._fire_completion()
 
+    def _drive_tick(self, now_ms):
+        """Run one pipeline tick: timeout check, connector, send, recv.
+
+        Completion callbacks are not fired here; :meth:`handle` fires
+        them after this returns.
+        """
         if self._deadline_ticks is not None and self._ticks.ticks_diff(
             self._deadline_ticks, now_ms,
         ) <= 0:
@@ -796,6 +814,18 @@ class HttpClient:
             self._fail(protocol_error)
         except OSError as socket_error:
             self._fail(HttpError(f"socket error: {socket_error}"))
+
+    def _fire_completion(self):
+        """Invoke the finished handle's on_done callback, if one is pending.
+
+        Runs outside the pipeline tick so a callback that raises or
+        issues a follow-up request is not caught by the pipeline's
+        error handling and does not corrupt a newly-started request.
+        """
+        finished_handle = self._completed_handle
+        self._completed_handle = None
+        if finished_handle is not None:
+            finished_handle._invoke_done()  # noqa: SLF001 - internal handoff
 
     def _advance_connector(self, now_ms):
         """Tick the in-flight connector one phase; promote socket when ``ready``.
@@ -840,16 +870,19 @@ class HttpClient:
                 "pass body= or json= but not both",
             )
         encoded_body = _encode_body(body, json_body)
-        # Capture the user's request shape for 307/308 redirect replay
-        # — we need method + body + headers + the json-default-content-
-        # type flag to rebuild the on-the-wire bytes for the next hop.
-        self._original_method = method
-        self._original_headers = headers
-        self._original_body = encoded_body
-        self._original_json_body = json_body
         self._redirects_remaining = (
             max_redirects if max_redirects is not None else self._default_max_redirects
         )
+        # Capture the user's request shape for 307/308 redirect replay
+        # — method + body + headers + the json-default-content-type
+        # flag rebuild the on-the-wire bytes for the next hop.  The
+        # body copy is retained only when a redirect can actually fire;
+        # with redirects disabled it would pin a duplicate of the whole
+        # body for nothing.
+        self._original_method = method
+        self._original_headers = headers
+        self._original_body = encoded_body if self._redirects_remaining > 0 else None
+        self._original_json_body = json_body
         timeout = timeout_ms if timeout_ms is not None else self._default_timeout_ms
         self._deadline_ticks = self._ticks.ticks_add(self._ticks.ticks_ms(), timeout)
         self._handle = RequestHandle(url=url, on_done=on_done)
@@ -917,6 +950,12 @@ class HttpClient:
             if sent <= 0:
                 return  # Socket would block — wait for next tick.
             self._tx_offset += sent
+        # Release the sent request bytes before the receive phase — the
+        # response path never re-reads them, and holding the full
+        # request (headers + body) pinned through receive would keep a
+        # second copy of the body resident for the whole exchange.
+        self._tx_buffer = b""
+        self._tx_offset = 0
         self._state = _RequestState.RECEIVING
 
     def _drive_recv(self):
@@ -1020,6 +1059,11 @@ class HttpClient:
         except HttpError as redirect_error:
             self._handle._set_error(redirect_error)  # noqa: SLF001
             self._reset_socket()
+        except Exception as unexpected_error:  # noqa: BLE001 - the socket is already torn down; any escape here leaves the handle unresolved and unreachable
+            self._handle._set_error(  # noqa: SLF001
+                HttpError(f"redirect hop failed: {unexpected_error}"),
+            )
+            self._reset_socket()
 
     def _fail(self, error):
         """Attach *error* to the in-flight handle, close the socket, reset."""
@@ -1077,9 +1121,11 @@ class HttpClient:
     def _reset_socket(self):
         """Close the socket best-effort and clear all per-request state.
 
-        Fires the finished handle's completion callback last, after the
-        client is fully idle, so a callback that issues the next request
-        doesn't trip :class:`HttpBusyError`.
+        Queues the finished handle's completion callback on
+        :attr:`_completed_handle` rather than firing it here — the
+        client is fully idle by the time :meth:`_fire_completion` runs
+        it, so a callback that issues the next request doesn't trip
+        :class:`HttpBusyError`.
         """
         self._close_socket_only()
         finished_handle = self._handle
@@ -1092,4 +1138,4 @@ class HttpClient:
         self._deadline_ticks = None
         self._redirects_remaining = 0
         if finished_handle is not None:
-            finished_handle._invoke_done()  # noqa: SLF001 - internal handoff
+            self._completed_handle = finished_handle

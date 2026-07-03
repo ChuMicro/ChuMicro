@@ -13,7 +13,6 @@ authors = [
     { name = "ChuMicro" },
 ]
 dependencies = [
-    "chumicro-config",
     "chumicro-sockets",
     "chumicro-timing",
 ]
@@ -34,6 +33,7 @@ classifiers = [
 [project.optional-dependencies]
 test = [
     "pytest",
+    "chumicro-config",
     "chumicro-test-harness",
     "chumicro-pytest-device",
     "chumicro-workspace",

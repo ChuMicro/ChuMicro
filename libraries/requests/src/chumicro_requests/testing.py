@@ -185,8 +185,6 @@ class FakeHttpClient:
         Passing both *body* and *json* raises ``ValueError`` to match
         the production validation.
         """
-        if body is not None and json is not None:
-            raise ValueError("pass body= or json= but not both")
         return self._start_request(
             "POST", url, headers=headers, body=body, json_body=json,
             timeout_ms=timeout_ms, max_redirects=max_redirects, on_done=on_done,
@@ -204,8 +202,6 @@ class FakeHttpClient:
         on_done: object | None = None,
     ) -> RequestHandle:
         """Mirror :meth:`HttpClient.put` against the scripted queue."""
-        if body is not None and json is not None:
-            raise ValueError("pass body= or json= but not both")
         return self._start_request(
             "PUT", url, headers=headers, body=body, json_body=json,
             timeout_ms=timeout_ms, max_redirects=max_redirects, on_done=on_done,
@@ -223,8 +219,6 @@ class FakeHttpClient:
         on_done: object | None = None,
     ) -> RequestHandle:
         """Mirror :meth:`HttpClient.patch` against the scripted queue."""
-        if body is not None and json is not None:
-            raise ValueError("pass body= or json= but not both")
         return self._start_request(
             "PATCH", url, headers=headers, body=body, json_body=json,
             timeout_ms=timeout_ms, max_redirects=max_redirects, on_done=on_done,
@@ -281,6 +275,8 @@ class FakeHttpClient:
         timeout_ms, max_redirects, on_done,
     ):
         """Record the call, pop the scripted outcome, return a handle."""
+        if body is not None and json_body is not None:
+            raise ValueError("pass body= or json= but not both")
         if self._handle is not None:
             raise HttpBusyError(
                 f"FakeHttpClient busy on {self._url!r}; "
