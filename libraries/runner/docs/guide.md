@@ -306,7 +306,7 @@ The runner deliberately does not use `async` / `await` or the `asyncio` module. 
 3. **Allocation budget on CircuitPython.**  CircuitPython compiles `await x` to `load_method __await__; call; YIELD_FROM`; every `await` allocates a fresh generator from the `__await__()` call.  `yield from x` is one bytecode on every runtime.
 4. **Smaller lint surface.**  A user who has never seen `async def` cannot reach for `import asyncio`.
 
-`async def` / `await` / `async with` / `async for` and `import asyncio` / `import uasyncio` are banned across `libraries/` / `support/` / `workbench/` — see [the style guide's lint section](../../../docs/contributing/style-guide.md#lint) for the contributor-facing rule.
+`async def` / `await` / `async with` / `async for` and `import asyncio` / `import uasyncio` are banned across `libraries/` / `support/` / `workbench/` — see [the contributor style guide](https://github.com/ChuMicro/ChuMicro/blob/main/docs/contributing/style-guide.md) for the contributor-facing rule.
 
 ## Period-gated services
 

@@ -585,7 +585,8 @@ class Runner:
                 return
             self._sleep_ms(timeout_ms)
 
-    def run_until(self, predicate=None, *, timeout_ms=None) -> bool:
+    def run_until(self, predicate: object | None = None, *,
+                  timeout_ms: int | None = None) -> bool:
         """Drive ``tick()`` + ``wait()`` until *predicate* is truthy.
 
         The one-call form of the standard ``while ...: tick(); wait()``
