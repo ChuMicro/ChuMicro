@@ -26,7 +26,7 @@ Small, focused libraries for microcontrollers and laptops.  Use what you need �
 | **[sockets](sockets/)** | Cross-runtime TCP + TLS + UDP — one protocol per shape over CP `socketpool`, MP `socket`/`ssl`, and CPython stdlib.  Substrate for the network libraries above and below. |
 | **[ntp](ntp/)** | Runner-shaped SNTP client over an injected UDP socket.  Pure-Python, cross-runtime; gets the device clock close enough for TLS validity-period checks. |
 | **[requests](requests/)** | Non-blocking HTTP/1.1 client — LED keeps blinking through a TLS handshake, mid-timeout, or against a stalled peer. |
-| **[http_server](http_server/)** | Non-blocking HTTP/1.1 server — `@server.route` decorator with method dispatch + path params; per-connection state machine advances one chunk per tick.  Serves TLS on every supported runtime/board pair *except* CircuitPython on RP2040. |
+| **[http_server](http_server/)** | Non-blocking HTTP/1.1 server — `@server.route` decorator with method dispatch + path params; per-connection state machine advances one chunk per tick.  Serves TLS on every supported runtime/board pair *except* CircuitPython on RP2040/RP2350 (rp2 port). |
 | **[mqtt](mqtt/)** | Non-blocking MQTT 3.1.1 client (QoS 0 + 1) — runner-shaped, no threads or async.  Concurrent QoS 1 publishes, configurable oversized-message policy, last-will + retain. |
 | **[websockets](websockets/)** | Non-blocking WebSocket client + server — RFC 6455 framing + masking, runner-shaped, plays alongside [`http_server`](http_server/) for combined HTTP/WS deployments. |
 

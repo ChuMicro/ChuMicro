@@ -1,8 +1,10 @@
 # Documentation build dependencies.
 # Used by docs-deploy.yml and promote.yml to keep tooling versions in sync.
-zensical
-mkdocstrings[python]
+# Pinned exact to match requirements-dev.txt — unpinned zensical once
+# resolved to different versions on two machines and fail-the-build'd on
+# cross-tree links.
+zensical==0.0.39
+mkdocstrings[python]==1.0.4
 # mike is installed from the Zensical fork (squidfunk/mike) which includes
 # alias management improvements not yet on PyPI.
-# Pinned to 2.2.0+zensical-0.1.0 (2026-03-29).
-git+https://github.com/squidfunk/mike.git@0f62791256ebeba60d20d2f1d8fe6ec3b7d1e2b3
+mike @ git+https://github.com/squidfunk/mike.git@2d4ad799442f4592db8ad53b179bfb33db8c69ac

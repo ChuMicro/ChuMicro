@@ -187,9 +187,9 @@ A passing preflight is the bar for opening a PR.
 
 ### Coverage gates
 
-Every library has a per-library coverage gate (85% by default, configured in each library's `pyproject.toml`).  If your tests don't exercise enough lines, `run.py test` fails with the `Missing` column showing exactly which lines need coverage.
+Every library runs under a coverage gate (85% by default, from `[tool.coverage.report] fail_under` in the root `pyproject.toml`).  If your tests don't exercise enough lines, `run.py test` fails with the `Missing` column showing exactly which lines need coverage.
 
-You don't need to opt in — `pytest` and preflight apply the gate automatically.  Agent-driven workflows clear a 94% gate instead of 85%; the tooling switches threshold automatically.
+You don't need to opt in — `pytest` and preflight apply the gate automatically.  Agent-driven workflows clear a 94% gate instead of 85% by passing `--coverage-threshold 94` to `run.py test` / `preflight` (raise or lower per package with `--elevated-packages`).
 
 The [cheat sheet](docs/contributing/cheat-sheet.md) has the command for browsing covered vs uncovered lines as an HTML report.
 
@@ -320,8 +320,8 @@ python scripts/run.py test -k test_heartbeat_poll   # filter, like pytest's -k
 
 What the wrapper adds over bare `pytest`:
 
-- **Per-package subprocesses** — each library runs in its own pytest invocation, so each one's `pyproject.toml` `addopts` (coverage source, threshold, exclusion patterns) takes effect independently.  Bare `pytest libraries/` runs everything in one process under the workspace-root config, which doesn't enforce per-library coverage gates.
-- **Per-library coverage threshold** — agent-generated code must clear 94%, human contributors 85% (Decision 0025).  Preflight fails if any library dips below; bare pytest does not gate on this.
+- **Per-package subprocesses** — each library runs in its own pytest invocation with coverage scoped to that package, so a gap in one library isn't masked by coverage elsewhere.  Bare `pytest libraries/` runs everything in one process under the workspace-root config, which doesn't enforce per-library coverage gates.
+- **Per-library coverage threshold** — the root `pyproject.toml` `fail_under` sets 85%; agents raise it to 94% with `--coverage-threshold 94` (Decision 0025).  Preflight fails if any library dips below; bare pytest does not gate on this.
 - **Changed-package detection** — the default scope uses `git diff` against `main` to skip libraries whose source hasn't changed.  Useful when you're iterating on one library and don't want to re-run unrelated suites.
 - **CI parity** — CI invokes `python scripts/run.py test --all` verbatim, so "passes under `run.py test`" is the load-bearing signal before pushing.
 
@@ -526,10 +526,10 @@ This scaffolds `libraries/my-sensor/` with a working starter — tests pass at 1
 For a host-only workbench tool (CPython only, ships to PyPI):
 
 ```bash
-python -m chumicro_workspace new --workbench my-tool
+python scripts/run.py new-library --workbench my-tool
 ```
 
-The `scripts/run.py new-library` shim is library-only today; the workbench scaffolder is reachable through the underlying CLI.  Full walkthrough: [Adding a Workbench Package](docs/contributing/workbench.md).
+The `scripts/run.py new-library` shim scaffolds a host-only tool under `workbench/` with `--workbench`.  Full walkthrough: [Adding a Workbench Package](docs/contributing/workbench.md).
 
 Before scaffolding, skim [Adding a New Library § Before you start](docs/contributing/new-library.md#before-you-start) — a two-minute scope check whether your idea is already in flight, already decided against, or in the wrong category.
 

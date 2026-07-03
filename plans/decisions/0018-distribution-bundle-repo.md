@@ -44,14 +44,13 @@ ChuMicro/ChuMicro-Bundle/              # (or ChuMicro-Bundle-Experimental)
 ├── chumicro_timing/
 │   ├── package.json
 │   ├── __init__.py / .mpy
-│   ├── ticks.py / .mpy
-│   └── testing.py / .mpy
+│   └── ticks.py / .mpy
 ├── chumicro_runner/
 │   └── ...
 └── (GitHub Releases for circup)
 ```
 
-Each library directory contains both `.py` and `.mpy` for every module, plus a `package.json` for `mip`.
+Each library directory contains both `.py` and `.mpy` for every module, plus a `package.json` for `mip`.  Test-support modules (`testing.py`, marked `__chumicro_test_support__ = True`) are excluded from the bundle by `scripts/bundle_manager.py`.
 
 ### 3. `mip` installation via `package.json`
 
