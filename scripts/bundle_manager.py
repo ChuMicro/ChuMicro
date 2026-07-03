@@ -454,6 +454,40 @@ def _derive_bundle_id(repo_name: str) -> str:
     return repo_name.lower().replace("_", "-")
 
 
+def _manifest_current_relpaths(package_dir: Path) -> set[Path] | None:
+    """Return the package-relative paths this build declared current.
+
+    ``build_bundle`` regenerates ``<package>/package.json`` every release,
+    listing only the files the current source tree produced (the same
+    manifest mip installs from).  Reading it lets the circup zips ship
+    exactly the current tree even though the bundle repo on disk still
+    carries a prior release's removed or renamed modules — the ``cp -r``
+    overlay that merges each release onto the accumulated bundle clone
+    never deletes.  Returns ``None`` when the directory has no manifest
+    (not a staged bundle package), so the caller falls back to the raw tree.
+    """
+    manifest_path = package_dir / "package.json"
+    if not manifest_path.is_file():
+        return None
+    try:
+        manifest = json.loads(manifest_path.read_text())
+    except (json.JSONDecodeError, OSError):
+        return None
+    prefix = f"{package_dir.name}/"
+    relpaths: set[Path] = set()
+    for entry in manifest.get("urls", []):
+        if not isinstance(entry, (list, tuple)) or not entry:
+            continue
+        # Each manifest entry is ``[target, source]``; target is
+        # ``"<package_name>/<relpath>"`` for both .py and data files.
+        target = entry[0]
+        if not isinstance(target, str):
+            continue
+        relative = target[len(prefix):] if target.startswith(prefix) else target
+        relpaths.add(Path(relative))
+    return relpaths
+
+
 def build_circup_zips(
     bundle_dir: Path,
     output_dir: Path,
@@ -514,29 +548,56 @@ def build_circup_zips(
         zipfile.ZipFile(source_zip_path, "w", zipfile.ZIP_DEFLATED) as source_zip,
         zipfile.ZipFile(bytecode_zip_path, "w", zipfile.ZIP_DEFLATED) as bytecode_zip,
     ):
-        # .py source bundle: all .py files from root package directories,
-        # plus the sibling data files those modules declare via
-        # __chumicro_data_files__ (read from the staged .py markers).
+        # .py source bundle: the .py + declared data files this build's
+        # package.json manifest lists (so a stale module the overlay left
+        # on disk can't ride in), falling back to the raw tree for a
+        # directory with no manifest (hand-built inputs / tests).
         for package_dir in package_dirs:
             package_name = package_dir.name
-            python_files = sorted(package_dir.rglob("*.py"))
-            for source_file in python_files:
-                relative_path = source_file.relative_to(package_dir)
+            current = _manifest_current_relpaths(package_dir)
+            if current is not None:
+                source_files = [
+                    (package_dir / relative_path, relative_path)
+                    for relative_path in sorted(current)
+                    if (package_dir / relative_path).is_file()
+                ]
+            else:
+                python_files = sorted(package_dir.rglob("*.py"))
+                source_files = [
+                    (source_file, source_file.relative_to(package_dir))
+                    for source_file in python_files
+                ]
+                source_files += [
+                    (data_source, data_source.relative_to(package_dir))
+                    for data_source in _bundle_data_files(python_files)
+                ]
+            for source_file, relative_path in source_files:
                 archive_path = f"{source_bundle_name}/lib/{package_name}/{relative_path}"
                 source_zip.write(source_file, archive_path)
-            for data_source in _bundle_data_files(python_files):
-                relative_path = data_source.relative_to(package_dir)
-                archive_path = f"{source_bundle_name}/lib/{package_name}/{relative_path}"
-                source_zip.write(data_source, archive_path)
 
         # .mpy bytecode bundle: CircuitPython .mpy from circuitpython-10.x-mpy/,
         # plus any raw data files staged alongside them (non-.mpy siblings).
+        # The CP mpy folder carries no manifest of its own, so derive the
+        # current set from the source package's manifest (each current .py
+        # maps to its .mpy; data files ship raw) and skip any stale .mpy
+        # whose source .py this build no longer declares.
         for mpy_dir in cp_mpy_package_dirs:
             package_name = mpy_dir.name
+            current = _manifest_current_relpaths(bundle_dir / package_name)
+            allowed: set[Path] | None = None
+            if current is not None:
+                allowed = {
+                    relative_path.with_suffix(".mpy")
+                    if relative_path.suffix == ".py"
+                    else relative_path
+                    for relative_path in current
+                }
             for staged_file in sorted(mpy_dir.rglob("*")):
                 if not staged_file.is_file():
                     continue
                 relative_path = staged_file.relative_to(mpy_dir)
+                if allowed is not None and relative_path not in allowed:
+                    continue
                 archive_path = f"{bytecode_bundle_name}/lib/{package_name}/{relative_path}"
                 bytecode_zip.write(staged_file, archive_path)
 

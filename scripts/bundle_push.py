@@ -2,8 +2,11 @@
 
 Used by release.yml (experimental) and promote.yml (stable) to push the
 bundle staging tree into ChuMicro-Bundle-Experimental or ChuMicro-Bundle.
-Handles the no-op case (staging identical to current bundle) by exiting 0
-without creating a tag.
+When the staging tree is identical to the current bundle there is nothing
+to commit; the run still exits 0 only after confirming the release tag is
+on the remote, and (re)pushes a committed-but-unpushed tag left behind by
+a prior run that failed after committing (never a green exit with the tag
+missing).
 
 Usage::
 
@@ -58,6 +61,15 @@ def _has_staged_changes(bundle_dir: Path) -> bool:
     return result.returncode != 0
 
 
+def _tag_on_remote(bundle_dir: Path, tag: str) -> bool:
+    """Return whether *tag* already exists on the ``origin`` remote."""
+    result = subprocess.run(
+        ["git", "ls-remote", "--tags", "origin", tag],
+        cwd=bundle_dir, check=False, capture_output=True, text=True,
+    )
+    return result.returncode == 0 and bool(result.stdout.strip())
+
+
 def push_bundle(bundle_dir: Path, tag: str, commit_message: str) -> int:
     """Configure git, stage everything, commit + tag + push if there are changes."""
     if not bundle_dir.is_dir():
@@ -70,6 +82,25 @@ def push_bundle(bundle_dir: Path, tag: str, commit_message: str) -> int:
 
     if not _has_staged_changes(bundle_dir):
         print("No changes to commit.")
+        if _tag_on_remote(bundle_dir, tag):
+            return 0
+        # A prior run committed the bundle but failed before/at the tag
+        # push, so a re-run over the same checkout finds nothing staged
+        # yet the release tag is still missing from the remote.  Push it
+        # rather than returning 0 with the release untagged.  ``git tag``
+        # may fail if the tag already exists locally (created by that
+        # failed run) — ignore that; the push of the explicit tag refspec
+        # below is the real gate and fails if the tag truly can't be sent.
+        print(
+            f"::warning::No staged changes but tag {tag} is not on the remote; "
+            "pushing the committed-but-unpushed tag.",
+        )
+        _run(["git", "tag", tag], cwd=bundle_dir)
+        push = _run(["git", "push", "origin", "main", tag], cwd=bundle_dir)
+        if push.returncode != 0:
+            print("::error::Bundle push failed.", file=sys.stderr)
+            return push.returncode
+        print(f"✓ Pushed {tag} to bundle repository at {bundle_dir}")
         return 0
 
     commit = _run(["git", "commit", "-m", commit_message], cwd=bundle_dir)

@@ -192,6 +192,7 @@ class TestMainDispatch:
                 "package_workers": run._DEFAULT_PACKAGE_PARALLEL_WORKERS,
                 "quiet": False,
                 "slow_test_threshold_s": run._DEFAULT_SLOW_TEST_THRESHOLD_CPYTHON,
+                "allow_no_tests": False,
             }),
         ]
 
@@ -221,6 +222,7 @@ class TestMainDispatch:
                 "package_workers": run._DEFAULT_PACKAGE_PARALLEL_WORKERS,
                 "quiet": False,
                 "slow_test_threshold_s": run._DEFAULT_SLOW_TEST_THRESHOLD_CPYTHON,
+                "allow_no_tests": False,
             }),
         ]
 
@@ -1119,7 +1121,11 @@ class TestTestCpython:
         assert commands == []
 
     def test_filter_swallows_exit_code_5(self, monkeypatch, fake_root):
-        """pytest exit code 5 (no tests collected) does not propagate as a failure."""
+        """pytest exit code 5 (no tests collected) does not propagate as a failure.
+
+        ``--allow-no-tests`` opts out of the zero-collected floor so this
+        exercises the exit-5 normalization in isolation.
+        """
         package_dir = _make_test_package(fake_root, "timing")
         monkeypatch.setattr(run, "discover_package_dirs", lambda: [package_dir])
 
@@ -1137,8 +1143,39 @@ class TestTestCpython:
             [package_dir],
             filter_expression="timing/test_nothing_matches",
             no_cov=True,
+            allow_no_tests=True,
         )
         assert result == 0
+
+    def test_filter_matching_nothing_fails_by_default(self, monkeypatch, fake_root):
+        """A -k filter that selects zero tests fails (the S6 zero-collected floor)."""
+        package_dir = _make_test_package(fake_root, "timing")
+        monkeypatch.setattr(run, "discover_package_dirs", lambda: [package_dir])
+        monkeypatch.setattr(run, "stream_subprocess", lambda command, **_kw: (5, ""))
+        monkeypatch.setattr(run, "run_command", lambda *_a, **_kw: 0)
+
+        result = run.test_cpython(
+            [package_dir],
+            filter_expression="timing/test_nothing_matches",
+            no_cov=True,
+        )
+        assert result == 1
+
+    def test_allow_no_tests_opts_out_of_floor(self, monkeypatch, fake_root, capsys):
+        """--allow-no-tests turns the zero-collected failure back into a pass."""
+        package_dir = _make_test_package(fake_root, "timing")
+        monkeypatch.setattr(run, "discover_package_dirs", lambda: [package_dir])
+        monkeypatch.setattr(run, "stream_subprocess", lambda command, **_kw: (5, ""))
+        monkeypatch.setattr(run, "run_command", lambda *_a, **_kw: 0)
+
+        result = run.test_cpython(
+            [package_dir],
+            filter_expression="timing/test_nothing_matches",
+            no_cov=True,
+            allow_no_tests=True,
+        )
+        assert result == 0
+        assert "selected 0 tests" not in capsys.readouterr().out
 
     def test_real_failure_propagates(self, monkeypatch, fake_root):
         """Non-zero non-5 exit codes from pytest propagate as the function's return."""
@@ -1299,6 +1336,35 @@ class TestPytestOutputFilter:
         assert filter_state.consume("==== no tests ran in 0.01s ====")
         assert filter_state.passed == 0
         assert filter_state.skipped == 0
+
+    def test_ansi_colored_summary_is_parsed(self):
+        """A summary wrapped in ANSI SGR codes (FORCE_COLOR / tty) still parses.
+
+        Without the sanitizer the coloured line no longer starts with ``=``,
+        so the regex misses it and every count stays 0 (the S2 bug).
+        """
+        colored = (
+            "\x1b[32m===== \x1b[1m\x1b[32m5 passed\x1b[0m\x1b[32m, "
+            "2 deselected in 0.03s\x1b[0m\x1b[32m =====\x1b[0m"
+        )
+        filter_state = run._PytestOutputFilter()
+        assert filter_state.consume(colored)
+        assert filter_state.passed == 5
+        assert filter_state.deselected == 2
+        assert filter_state.duration_s == 0.03
+
+    def test_ansi_colored_durations_header_is_parsed(self):
+        """A coloured ``slowest durations`` header still opens the block."""
+        filter_state = run._PytestOutputFilter()
+        assert filter_state.consume(
+            "\x1b[1m\x1b[33m===== slowest durations =====\x1b[0m",
+        )
+        assert filter_state.consume(
+            "1.20s call     libraries/mqtt/tests/test_x.py::test_y",
+        )
+        assert filter_state.slow_tests == [
+            (1.20, "libraries/mqtt/tests/test_x.py::test_y"),
+        ]
 
     def test_durations_block_captures_call_phase_only(self):
         """``call`` rows feed slow_tests; setup/teardown rows are absorbed but ignored."""

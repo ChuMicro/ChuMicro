@@ -37,10 +37,14 @@ from __future__ import annotations
 
 import argparse
 import ast
+import io
 import re
 import sys
+import tokenize
 from collections.abc import Iterable
 from pathlib import Path
+
+from chumicro_deploy.source_minify import _code_signature
 
 _LINT_EXCEPTION_PATTERN = re.compile(
     r"#\s*(noqa|type:\s*ignore|pylint:\s*disable|pragma:\s*no\s*cover|mypy:|ruff:)",
@@ -103,48 +107,41 @@ def _strip_docstrings(source: str) -> str:
 
 
 def _strip_comments(source: str) -> str:
-    """Removes ``#`` comments unless they carry a lint-exception annotation."""
+    """Removes ``#`` comments unless they carry a lint-exception annotation.
+
+    Uses :mod:`tokenize` to find real ``COMMENT`` tokens, so a ``#`` inside
+    a string literal — including one on an interior line of a multi-line
+    string — is left untouched (a per-line scanner that reset its string
+    state each line would misread it as a comment and corrupt the string).
+    A full-line comment drops its line; an inline comment keeps the code
+    before it; lint-exception comments (``# noqa`` etc.) are preserved.
+    """
+    try:
+        comment_columns = {
+            token.start[0]: token.start[1]
+            for token in tokenize.generate_tokens(io.StringIO(source).readline)
+            if token.type == tokenize.COMMENT
+        }
+    except (tokenize.TokenError, IndentationError, SyntaxError):
+        # Untokenizable input: leave it alone.  ``strip_file`` re-parses and
+        # equivalence-checks the result, so nothing broken ships downstream.
+        return source
+
     output: list[str] = []
-    for raw_line in source.splitlines(keepends=True):
-        stripped = raw_line.lstrip()
-        if stripped.startswith("#"):
-            if _LINT_EXCEPTION_PATTERN.search(stripped):
-                output.append(raw_line)
-            continue
-        in_string: str | None = None
-        comment_index: int | None = None
-        column = 0
-        while column < len(raw_line):
-            ch = raw_line[column]
-            if in_string is None:
-                if raw_line[column : column + 3] in ('"""', "'''"):
-                    in_string = raw_line[column : column + 3]
-                    column += 3
-                    continue
-                if ch == '"' or ch == "'":
-                    in_string = ch
-                elif ch == "#":
-                    comment_index = column
-                    break
-            else:
-                if len(in_string) == 3:
-                    if raw_line[column : column + 3] == in_string:
-                        in_string = None
-                        column += 3
-                        continue
-                elif ch == in_string and (column == 0 or raw_line[column - 1] != "\\"):
-                    in_string = None
-            column += 1
-        if comment_index is None:
+    for line_number, raw_line in enumerate(source.splitlines(keepends=True), start=1):
+        column = comment_columns.get(line_number)
+        if column is None:
             output.append(raw_line)
             continue
-        trailing = raw_line[comment_index:]
-        if _LINT_EXCEPTION_PATTERN.search(trailing):
+        comment = raw_line[column:]
+        if _LINT_EXCEPTION_PATTERN.search(comment):
             output.append(raw_line)
             continue
-        prefix = raw_line[:comment_index].rstrip()
-        if prefix:
-            output.append(prefix + "\n")
+        prefix = raw_line[:column]
+        if prefix.strip() == "":
+            # Whole-line comment: drop the line entirely.
+            continue
+        output.append(prefix.rstrip() + "\n")
     return "".join(output)
 
 
@@ -166,6 +163,13 @@ def _collapse_blank_runs(source: str) -> str:
 def strip_file(src_text: str) -> str:
     """Strips one Python source string and returns the cleaned text.
 
+    Guards the strip with a parse-tree equivalence check (the same one
+    ``chumicro_deploy.source_minify.strip_source`` uses): if removing
+    docstrings and comments changed anything else about the code — the
+    corruption class an ``ast.parse``-only check misses because the broken
+    output still parses — the original text is returned verbatim rather
+    than a silently altered file.
+
     Raises:
         SyntaxError: When the input doesn't parse, or when the stripped
             output unexpectedly fails to parse (a script bug).
@@ -174,6 +178,8 @@ def strip_file(src_text: str) -> str:
     intermediate = _strip_comments(intermediate)
     cleaned = _collapse_blank_runs(intermediate)
     ast.parse(cleaned)
+    if _code_signature(ast.parse(src_text)) != _code_signature(ast.parse(cleaned)):
+        return src_text
     return cleaned
 
 

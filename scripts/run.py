@@ -779,6 +779,7 @@ def test_cpython(
     package_workers: int = _DEFAULT_PACKAGE_PARALLEL_WORKERS,
     quiet: bool = False,
     slow_test_threshold_s: float = _DEFAULT_SLOW_TEST_THRESHOLD_CPYTHON,
+    allow_no_tests: bool = False,
 ) -> int:
     """Run the CPython test suite for the given packages.
 
@@ -809,6 +810,13 @@ def test_cpython(
     preserve whatever scope was already selected (``--all``,
     ``--libraries``, or change detection).  Library-scoped filters
     override the scope and target only the named libraries.
+
+    When *filter_expression* is active every package's pytest exit-5
+    ("no tests collected") is normalized to 0 and coverage — which would
+    otherwise flag a zero-test package — is skipped, so a filter that
+    matches nothing would report a silent green.  Guard against that: if
+    a filter selected zero tests across every chosen package, fail with a
+    clear message unless *allow_no_tests* opts out.
     """
     resolved = _resolve_filter_and_scope(filter_expression, package_dirs)
     if resolved is None:
@@ -951,6 +959,25 @@ def test_cpython(
     ):
         print(line)
 
+    # Zero-collected floor.  A ``-k`` filter that deselects everything
+    # leaves each phase at exit 5 (normalized to 0) with the coverage gate
+    # skipped, so nothing catches "the filter matched no tests".  Fail
+    # loudly when a filter is active but no test actually ran, unless the
+    # caller explicitly allows a zero-test run.
+    tests_run = sum(result.passed + result.skipped for result in collector.results)
+    if (
+        filter_expression is not None
+        and overall_exit_code == 0
+        and tests_run == 0
+        and not allow_no_tests
+    ):
+        print(
+            f"ERROR: filter {filter_expression!r} selected 0 tests across the "
+            "chosen packages — nothing ran.  Re-check the filter, or pass "
+            "--allow-no-tests if a zero-test run is expected.",
+        )
+        return 1
+
     if no_cov:
         return overall_exit_code
     return _combine_and_report_coverage(
@@ -1063,6 +1090,25 @@ _PYTEST_RESULT_FULL = re.compile(
 )
 _PYTEST_NO_TESTS_RAN = re.compile(r"^=+\s*no tests ran\s+in\s+\d+\.\d+s")
 
+#: ANSI CSI escape sequences (SGR colour codes and friends).  pytest
+#: colourizes its summary, ``slowest durations`` header, and coverage
+#: failure line whenever it writes to a tty or sees ``FORCE_COLOR``.  A
+#: coloured ``\x1b[32m=== 5 passed …\x1b[0m`` no longer starts with ``=``,
+#: so the summary regexes below miss it and the parsed counts stay 0.
+#: Strip these before matching (see :func:`_strip_ansi`).
+_ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+
+
+def _strip_ansi(text: str) -> str:
+    """Return *text* with ANSI escape sequences removed.
+
+    Shared sanitizer applied at the front of :meth:`_PytestOutputFilter.consume`
+    so the summary / durations / deselected / coverage-failure regexes match
+    the same whether pytest emitted plain or coloured output.  Only used for
+    *parsing*; the original (possibly coloured) line still flows to the log.
+    """
+    return _ANSI_ESCAPE.sub("", text)
+
 
 @dataclass
 class _PytestRunResult:
@@ -1144,7 +1190,10 @@ class _PytestOutputFilter:
         self._in_slow_block = False
 
     def consume(self, text: str) -> bool:
-        stripped = text.rstrip()
+        # Strip ANSI colour first: under FORCE_COLOR / a tty pytest wraps its
+        # summary and durations lines in SGR escapes, which would otherwise
+        # defeat the anchored regexes below and leave every count at 0.
+        stripped = _strip_ansi(text).rstrip()
         coverage_failure = _PYTEST_COVERAGE_FAILURE.search(stripped)
         if coverage_failure is not None:
             # Record the percentages and drop the unlabeled line; the
@@ -3363,6 +3412,13 @@ def _build_parser() -> argparse.ArgumentParser:
         help="skip coverage collection",
     )
     test_parser.add_argument(
+        "--allow-no-tests", action="store_true",
+        help=(
+            "allow a filtered run to select zero tests without failing "
+            "(default: a -k filter that matches nothing is an error)"
+        ),
+    )
+    test_parser.add_argument(
         "--coverage-threshold", type=int, metavar="PCT",
         help=(
             "override coverage fail-under percentage "
@@ -3520,6 +3576,7 @@ def main(argv: list[str]) -> int:
             package_workers=args.package_workers,
             quiet=args.quiet,
             slow_test_threshold_s=args.slow_test_threshold_cpython,
+            allow_no_tests=args.allow_no_tests,
         )
 
     if args.task == "verify-examples":

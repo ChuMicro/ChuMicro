@@ -90,9 +90,15 @@ def _check_one_package(
     package_root = ROOT / parent_dir / package_basename
     output_lines: list[str] = []
 
-    tags = release_tags(package_basename)
+    # Compare against the last *stable* release: the stable-channel gate
+    # must not baseline against an ``-experimental`` tag, which git's
+    # version sort would otherwise rank above the stable tag of the same
+    # version and let a breaking change slip through under-reported.
+    tags = release_tags(package_basename, stable_only=True)
     if not tags:
-        output_lines.append(f"SKIP: {package_label} — no previous release tag found.")
+        output_lines.append(
+            f"SKIP: {package_label} — no previous stable release tag found.",
+        )
         return True, output_lines
     tag = tags[0]
 

@@ -52,12 +52,12 @@ class TestPushBundle:
         assert result == 1
         assert "does not exist" in capsys.readouterr().err
 
-    def test_returns_zero_when_no_staged_changes(
+    def test_returns_zero_when_no_changes_and_tag_on_remote(
         self, tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
         capsys: pytest.CaptureFixture,
     ) -> None:
-        """No staged changes → exit 0 (no-op re-run)."""
+        """No staged changes and the tag already on the remote → clean exit 0."""
         bundle_dir = tmp_path / "bundle"
         bundle_dir.mkdir()
 
@@ -69,6 +69,7 @@ class TestPushBundle:
 
         monkeypatch.setattr(bundle_push, "_run", fake_run)
         monkeypatch.setattr(bundle_push, "_has_staged_changes", lambda _: False)
+        monkeypatch.setattr(bundle_push, "_tag_on_remote", lambda *_: True)
 
         result = bundle_push.push_bundle(
             bundle_dir, "2026.05.10", "Update: timing v1.0.0",
@@ -81,6 +82,65 @@ class TestPushBundle:
         assert "commit" not in commands
         assert "tag" not in commands
         assert "push" not in commands
+
+    def test_pushes_unpushed_tag_when_committed_but_not_on_remote(
+        self, tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """No staged changes but the tag is missing on the remote → push it.
+
+        Models a prior run that committed the bundle then failed at the tag
+        push: the re-run finds nothing staged yet must not exit 0 with the
+        release untagged.
+        """
+        bundle_dir = tmp_path / "bundle"
+        bundle_dir.mkdir()
+
+        calls: list[list[str]] = []
+
+        def fake_run(command: list[str], cwd: Path) -> subprocess.CompletedProcess[bytes]:
+            calls.append(command)
+            return subprocess.CompletedProcess(command, 0)
+
+        monkeypatch.setattr(bundle_push, "_run", fake_run)
+        monkeypatch.setattr(bundle_push, "_has_staged_changes", lambda _: False)
+        monkeypatch.setattr(bundle_push, "_tag_on_remote", lambda *_: False)
+
+        result = bundle_push.push_bundle(
+            bundle_dir, "2026.05.10", "Update: timing v1.0.0",
+        )
+
+        assert result == 0
+        commands = [call[1] for call in calls if call[0] == "git"]
+        assert "commit" not in commands  # nothing to commit
+        assert "tag" in commands
+        assert "push" in commands
+        # The push carries the tag refspec.
+        push_call = next(call for call in calls if call[:2] == ["git", "push"])
+        assert "2026.05.10" in push_call
+
+    def test_returns_push_failure_when_repushing_unpushed_tag(
+        self, tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A failed re-push of the unpushed tag propagates its exit code."""
+        bundle_dir = tmp_path / "bundle"
+        bundle_dir.mkdir()
+
+        def fake_run(command: list[str], cwd: Path) -> subprocess.CompletedProcess[bytes]:
+            if command[:2] == ["git", "push"]:
+                return subprocess.CompletedProcess(command, 9)
+            return subprocess.CompletedProcess(command, 0)
+
+        monkeypatch.setattr(bundle_push, "_run", fake_run)
+        monkeypatch.setattr(bundle_push, "_has_staged_changes", lambda _: False)
+        monkeypatch.setattr(bundle_push, "_tag_on_remote", lambda *_: False)
+
+        result = bundle_push.push_bundle(
+            bundle_dir, "2026.05.10", "Update: timing v1.0.0",
+        )
+
+        assert result == 9
 
     def test_commits_tags_and_pushes_when_changes_present(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,

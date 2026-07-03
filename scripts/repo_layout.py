@@ -601,22 +601,38 @@ def order_libraries_by_dependency(
     return ordered
 
 
-def release_tags(library_name: str) -> list[str]:
+def release_tags(library_name: str, *, stable_only: bool = False) -> list[str]:
     """Return release tags for a publishable package, sorted newest first.
 
     Tags are emitted by ``release.yml`` as ``chumicro-<name>-v<version>``
     (with an optional ``-experimental`` suffix).  The glob here matches that
     canonical format for both ``libraries/`` and ``workbench/`` packages.
 
+    ``git``'s ``-v:refname`` version sort, with no ``versionsort.suffix``
+    configured, ranks a pre-release tag (``…-v0.10.0-experimental``) *above*
+    the bare stable tag of the same version (``…-v0.10.0``).  Callers that
+    need the last *stable* release — the API-breakage baseline compares the
+    stable channel against it — must pass ``stable_only=True`` so an
+    experimental tag can't shadow the stable one it was cut ahead of.
+
     Args:
         library_name: Package basename (e.g. ``"timing"`` or ``"deploy"``).
+        stable_only: Drop pre-release tags (any ``-<suffix>`` after the
+            version, e.g. ``-experimental``), leaving only bare-version
+            stable releases.  Defaults to ``False`` (every tag).
     """
+    prefix = f"chumicro-{library_name}-v"
     result = run_git(
-        "tag", "--list", f"chumicro-{library_name}-v*", "--sort=-v:refname",
+        "tag", "--list", f"{prefix}*", "--sort=-v:refname",
     )
     if result.returncode != 0 or not result.stdout.strip():
         return []
-    return result.stdout.strip().splitlines()
+    tags = result.stdout.strip().splitlines()
+    if stable_only:
+        # A pre-release marker is a ``-`` in the version portion (SemVer
+        # denotes pre-releases that way); a bare stable version has none.
+        tags = [tag for tag in tags if "-" not in tag[len(prefix):]]
+    return tags
 
 
 def pythonpath_environment() -> dict[str, str]:
