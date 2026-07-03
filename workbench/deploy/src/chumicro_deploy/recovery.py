@@ -19,15 +19,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from .circuitpython_transport import (
-    CircuitpythonMidDeployDisconnected,
-    CircuitpythonTransportError,
-)
 from .macos_fskit import detect_fskit_wedge
-from .micropython_transport import (
-    MicropythonMidDeployDisconnected,
-    MicropythonTransportError,
-)
+from .protocol import DeviceTransportError, MidDeployDisconnected
 from .recovery_kind import DeployFailureKind, RecoveryPlan
 from .recovery_plans import PLANS
 from .result import DeployResult
@@ -221,10 +214,7 @@ def classify_deploy_failure(error: Exception) -> DeployFailureKind:
     # Typed disconnect subclasses skip the string-pattern dance.
     # They were raised because the device dropped, period.  Routes
     # to PORT_UNAVAILABLE — the recovery is "plug it back in".
-    if isinstance(
-        error,
-        (CircuitpythonMidDeployDisconnected, MicropythonMidDeployDisconnected),
-    ):
+    if isinstance(error, MidDeployDisconnected):
         return DeployFailureKind.PORT_UNAVAILABLE
 
     message = str(error).lower()
@@ -482,10 +472,7 @@ class RecoveringDeployer:
             attempt += 1
             try:
                 result = call()
-            except (
-                CircuitpythonTransportError,
-                MicropythonTransportError,
-            ) as error:
+            except DeviceTransportError as error:
                 kind = self._resolve_kind(error)
                 plan = recovery_plan_for(kind)
                 self._report_failure(

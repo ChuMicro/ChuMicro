@@ -26,22 +26,34 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, cast
 
+from ._device_scripts import (
+    CLEAR_ENTRYPOINTS_SCRIPT,
+    LIST_ALL_SCRIPT,
+    LIST_SCOPE_SCRIPT,
+    WIPE_FILESYSTEM_SCRIPT,
+    clean_slate_script,
+    delete_files_script,
+    parse_scope_listing,
+    remove_entries_script,
+)
 from ._line_dispatcher import StreamingLineDispatcher
 from .flash_drive import DEVICE_KEEP_SET
 from .protocol import (
     PROBE_IMPLEMENTATION_SCRIPT,
     DeviceImplementation,
+    DeviceTransportError,
+    MidDeployDisconnected,
+    TimeSource,
     UnsupportedExtraFilesError,
     parse_probe_output,
     validate_entrypoint_in_files,
+    write_files_to_staging,
 )
 from .runtime_marker import file_targets_runtime, is_test_support_module
 from .source_minify import minify_python_tree
 
 if TYPE_CHECKING:  # pragma: no cover - type-only
     from mpremote.transport_serial import SerialTransport
-
-    from .circuitpython_transport import TimeSource
 
 
 #: Idle timeout (seconds) for ``exec_raw`` on the bootstrap path
@@ -61,36 +73,25 @@ _EXECUTE_IDLE_TIMEOUT: float = 300.0
 #: MicropythonTransportError instead.
 _MPREMOTE_SUBPROCESS_TIMEOUT: float = 120.0
 
+#: Idle timeout (seconds) for the short interactive raw-REPL ops
+#: (scope listing, delete, clear-entrypoints).  These scripts print
+#: little and return fast, so a tight bound catches a wedged board
+#: sooner than :data:`_EXECUTE_IDLE_TIMEOUT` would.
+_INTERACTIVE_OP_TIMEOUT: float = 30.0
 
-class MicropythonTransportError(Exception):
+
+class MicropythonTransportError(DeviceTransportError):
     """Raised when an mpremote command fails."""
 
 
-class MicropythonMidDeployDisconnected(MicropythonTransportError):
+class MicropythonMidDeployDisconnected(
+    MicropythonTransportError, MidDeployDisconnected,
+):
     """Raised when the device drops mid-deploy.
 
-    Subclass so callers can ``except`` "the cable came out" without
-    conflating it with other mpremote transport errors (mount
-    failure, copy failure, bootstrap exec failed).
-
-    The original :class:`OSError` is attached as :attr:`cause` so
-    callers that need the underlying errno can read it without
-    re-parsing :func:`str` of the wrapper.
+    The MicroPython face of :class:`.protocol.MidDeployDisconnected`
+    (which owns the message shape and the :attr:`cause` attribute).
     """
-
-    def __init__(self, cause: OSError, context: str = "") -> None:
-        prefix = f"device disconnected during {context}" if context else (
-            "device disconnected"
-        )
-        super().__init__(f"{prefix}: {cause}")
-        self.cause = cause
-
-
-#: Sentinel prefix the on-device scope-listing script emits in front of
-#: every found file path.  Host-side parsing scans for this marker so
-#: any incidental ``print()`` from an autorun ``boot.py`` etc. doesn't
-#: contaminate the listing.
-_SCOPE_LISTING_MARKER: str = "__CHU_F:"
 
 
 #: Directory / file basenames the test-harness staging path skips when
@@ -103,96 +104,8 @@ _STAGE_EXCLUDED_NAMES: frozenset[str] = frozenset(
 )
 
 
-#: Implements the additive (``clean_slate=False``) walk for
-#: :func:`chumicro_deploy.protocol.is_in_deploy_scope`.  Pure stdlib —
-#: ``os.listdir`` + ``os.stat`` — so it runs on every CP / MP build
-#: without preinstalling helper libs.  Missing dirs and per-file
-#: ``OSError`` are tolerated so a fresh-flashed board (no ``/lib/``
-#: yet) returns an empty listing instead of erroring out.  Embedding
-#: the path constants directly in the on-device script keeps each
-#: side self-contained and the host doesn't need to marshal a values
-#: list every call.
-_LIST_SCOPE_SCRIPT: str = (
-    "import os\n"
-    "def _walk(p):\n"
-    "    try:\n"
-    "        names = os.listdir(p)\n"
-    "    except OSError:\n"
-    "        return\n"
-    "    for name in names:\n"
-    "        full = p + '/' + name if p != '/' else '/' + name\n"
-    "        try:\n"
-    "            stat = os.stat(full)\n"
-    "        except OSError:\n"
-    "            continue\n"
-    "        if stat[0] & 0x4000:\n"
-    "            _walk(full)\n"
-    "        else:\n"
-    "            print('__CHU_F:' + full)\n"
-    "for path in ('/code.py', '/main.py', '/active.py', '/runtime_config.msgpack'):\n"
-    "    try:\n"
-    "        os.stat(path)\n"
-    "    except OSError:\n"
-    "        continue\n"
-    "    print('__CHU_F:' + path)\n"
-    "_walk('/lib')\n"
-)
-
-#: Implements the ``clean_slate=True`` walk: every file on the device.
-#: The host filters out :data:`flash_drive.DEVICE_KEEP_SET` (and any
-#: dot-prefixed path) post-walk.
-_LIST_ALL_SCRIPT: str = (
-    "import os\n"
-    "def _walk(p):\n"
-    "    try:\n"
-    "        names = os.listdir(p)\n"
-    "    except OSError:\n"
-    "        return\n"
-    "    for name in names:\n"
-    "        full = p + '/' + name if p != '/' else '/' + name\n"
-    "        try:\n"
-    "            stat = os.stat(full)\n"
-    "        except OSError:\n"
-    "            continue\n"
-    "        if stat[0] & 0x4000:\n"
-    "            _walk(full)\n"
-    "        else:\n"
-    "            print('__CHU_F:' + full)\n"
-    "_walk('/')\n"
-)
-
-
-#: Implements the MicroPython half of the wipe_filesystem contract
-#: documented on :meth:`TransportProtocol.wipe_filesystem`.
-#:
-#: Substrate-dispatched: each MicroPython port exposes its flash /
-#: data partition through a different module.  The dispatch covers
-#: rp2 and esp32; other ports raise ``RuntimeError`` so the failure
-#: has a name instead of surfacing as "mkfs got no block device."
-_WIPE_FILESYSTEM_SCRIPT: str = (
-    "import os, sys, machine\n"
-    "if sys.platform == 'rp2':\n"
-    "    import rp2\n"
-    "    _block_dev = rp2.Flash()\n"
-    "elif sys.platform == 'esp32':\n"
-    "    import esp32\n"
-    "    _block_dev = esp32.Partition.find("
-    "esp32.Partition.TYPE_DATA, label='vfs')[0]\n"
-    "else:\n"
-    "    raise RuntimeError("
-    "'chumicro_deploy.wipe_filesystem: unsupported MicroPython "
-    "platform ' + sys.platform)\n"
-    "try:\n"
-    "    os.umount('/')\n"
-    "except OSError:\n"
-    "    pass\n"
-    "os.VfsLfs2.mkfs(_block_dev)\n"
-    "machine.soft_reset()\n"
-)
-
-
 #: Wall-clock pause between issuing ``machine.soft_reset()`` (inside
-#: :data:`_WIPE_FILESYSTEM_SCRIPT`) and re-opening the persistent
+#: :data:`._device_scripts.WIPE_FILESYSTEM_SCRIPT`) and re-opening the persistent
 #: serial transport.  rp2 and esp32 keep their host-side USB-CDC alive
 #: across a soft reset, so this is settle time for the runtime to
 #: remount ``/`` on the freshly-formatted volume.
@@ -208,26 +121,6 @@ _WIPE_REBOOT_SETTLE_SECONDS: float = 2.0
 #: race it.  Reuses the wipe-reboot settle value.
 _RESET_RETRY_ATTEMPTS: int = 4
 _RESET_RETRY_SETTLE_SECONDS: float = _WIPE_REBOOT_SETTLE_SECONDS
-
-
-def _parse_scope_listing(output: str) -> list[str]:
-    """Extract device paths from the scope-listing script's stdout.
-
-    Filters to lines starting with :data:`_SCOPE_LISTING_MARKER` so
-    surrounding output (raw-REPL banner, autorun prints) doesn't
-    contaminate the result.  Returns deduplicated paths in the
-    order they appear.
-    """
-    seen: set[str] = set()
-    result: list[str] = []
-    for line in output.splitlines():
-        if not line.startswith(_SCOPE_LISTING_MARKER):
-            continue
-        path = line[len(_SCOPE_LISTING_MARKER):].strip()
-        if path and path not in seen:
-            seen.add(path)
-            result.append(path)
-    return result
 
 
 def _resolve_mpremote_binary() -> str:
@@ -443,12 +336,7 @@ class MicropythonTransport:
         self._include_test_support = include_test_support
         # Drop any mount/tempdir left from a prior stage() on this
         # transport so a re-stage starts from a clean tempdir.
-        if self._mounted and self._serial is not None:
-            try:
-                self._serial.umount_local()
-            except Exception:  # pragma: no cover - best-effort cleanup
-                pass
-            self._mounted = False
+        self._drop_active_mount()
         if self._staging_dir is not None:
             self._staging_dir.cleanup()
             self._staging_dir = None
@@ -641,14 +529,9 @@ class MicropythonTransport:
         Returns:
             Captured stdout from the device.
         """
-        self._ensure_serial()
-        try:
-            result = self._serial.exec_raw(script, timeout=timeout)
-        except Exception as error:
-            raise MicropythonTransportError(
-                f"Device run_script failed: {error}"
-            ) from error
-        return _decode_exec_result(result)
+        return self._exec_or_classify(
+            script, timeout=timeout, failure_context="Device run_script failed",
+        )
 
     def soft_reset(self) -> None:
         """Soft-reset the device to clear interpreter state.
@@ -679,15 +562,8 @@ class MicropythonTransport:
         # Umount while the device-side mount state is still live.  After
         # Ctrl-D the ``os`` module and mount hook are gone and
         # ``umount_local`` would error when it tries to run
-        # ``os.umount(...)``.  umount_local also unwraps the
-        # SerialIntercept on the host side, which is required before
-        # the next mount_local wraps again.
-        if self._mounted:
-            try:
-                self._serial.umount_local()
-            except Exception:  # pragma: no cover - best-effort cleanup
-                pass
-            self._mounted = False
+        # ``os.umount(...)``.
+        self._drop_active_mount()
         try:
             self._serial.exit_raw_repl()
         except Exception:  # pragma: no cover - best-effort cleanup
@@ -885,24 +761,13 @@ class MicropythonTransport:
 
         if self._staging_dir is not None:
             self._staging_dir.cleanup()
-        if self._mounted and self._serial is not None:
-            try:
-                self._serial.umount_local()
-            except Exception:  # pragma: no cover -best-effort cleanup
-                pass
-            self._mounted = False
+        self._drop_active_mount()
 
         self._staging_dir = tempfile.TemporaryDirectory(prefix="chumicro_deploy_")
         staging_path = Path(self._staging_dir.name)
         self._staging_path = staging_path
 
-        for device_path in sorted(files.keys()):
-            relative = device_path.lstrip("/")
-            destination = staging_path / relative
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            destination.write_bytes(files[device_path])
-            if on_file_staged is not None:
-                on_file_staged(device_path)
+        write_files_to_staging(staging_path, files, on_file_staged)
 
         # Strip docstrings and comments from every staged .py before the
         # transfer so the board carries code, not prose.
@@ -966,13 +831,11 @@ class MicropythonTransport:
             return output
 
         script = f"{sys_path_prefix}exec(open({entrypoint_on_device!r}).read())"
-        try:
-            result = self._serial.exec_raw(script, timeout=_EXECUTE_IDLE_TIMEOUT)
-        except Exception as error:
-            raise MicropythonTransportError(
-                f"Device deploy-execute failed: {error}"
-            ) from error
-        output = _decode_exec_result(result)
+        output = self._exec_or_classify(
+            script,
+            timeout=_EXECUTE_IDLE_TIMEOUT,
+            failure_context="Device deploy-execute failed",
+        )
         if on_execute_line is not None:
             for output_line in output.splitlines():
                 on_execute_line(output_line)
@@ -982,30 +845,22 @@ class MicropythonTransport:
         """Implements the contract on :meth:`TransportProtocol.list_files_in_scope`.
 
         Copy mode dispatches the on-device walk via raw REPL
-        (:data:`_LIST_ALL_SCRIPT` for ``clean_slate=True``,
-        :data:`_LIST_SCOPE_SCRIPT` otherwise).  Mount mode (RAM)
-        returns an empty list.
+        (:data:`._device_scripts.LIST_ALL_SCRIPT` for
+        ``clean_slate=True``, :data:`._device_scripts.LIST_SCOPE_SCRIPT`
+        otherwise).  Mount mode (RAM) returns an empty list.
 
         Raises :class:`MicropythonTransportError` on raw-REPL failure.
         """
         if self.mode != "copy":
             return []
-        if self._mounted and self._serial is not None:
-            try:
-                self._serial.umount_local()
-            except Exception:  # pragma: no cover -best-effort cleanup
-                pass
-            self._mounted = False
-        self._ensure_serial()
-        script = _LIST_ALL_SCRIPT if clean_slate else _LIST_SCOPE_SCRIPT
-        try:
-            result = self._serial.exec_raw(script, timeout=30)
-        except Exception as error:
-            raise MicropythonTransportError(
-                f"list_files_in_scope failed: {error}",
-            ) from error
-        output = _decode_exec_result(result)
-        listed = _parse_scope_listing(output)
+        self._drop_active_mount()
+        script = LIST_ALL_SCRIPT if clean_slate else LIST_SCOPE_SCRIPT
+        output = self._exec_or_classify(
+            script,
+            timeout=_INTERACTIVE_OP_TIMEOUT,
+            failure_context="list_files_in_scope failed",
+        )
+        listed = parse_scope_listing(output)
         if not clean_slate:
             return listed
         keep = set(DEVICE_KEEP_SET)
@@ -1040,52 +895,12 @@ class MicropythonTransport:
             return
         if self.mode != "copy":
             return
-        if self._mounted and self._serial is not None:
-            try:
-                self._serial.umount_local()
-            except Exception:  # pragma: no cover -best-effort cleanup
-                pass
-            self._mounted = False
-        self._ensure_serial()
-        # `repr(paths)` round-trips a list of strings cleanly into
-        # a Python literal — no manual escaping required.
-        script = (
-            "import os\n"
-            f"_paths = {paths!r}\n"
-            "for _path in _paths:\n"
-            "    try:\n"
-            "        os.remove(_path)\n"
-            "    except OSError:\n"
-            "        pass\n"
-            "def _reap(p):\n"
-            "    try:\n"
-            "        entries = os.listdir(p)\n"
-            "    except OSError:\n"
-            "        return\n"
-            "    for name in entries:\n"
-            "        if name.startswith('.'):\n"
-            "            continue\n"
-            "        full = p + '/' + name if p != '/' else '/' + name\n"
-            "        try:\n"
-            "            stat = os.stat(full)\n"
-            "        except OSError:\n"
-            "            continue\n"
-            "        if stat[0] & 0x4000:\n"
-            "            _reap(full)\n"
-            "    if p != '/':\n"
-            "        try:\n"
-            "            if not os.listdir(p):\n"
-            "                os.rmdir(p)\n"
-            "        except OSError:\n"
-            "            pass\n"
-            "_reap('/')\n"
+        self._drop_active_mount()
+        self._exec_or_classify(
+            delete_files_script(paths),
+            timeout=_INTERACTIVE_OP_TIMEOUT,
+            failure_context="delete_files failed",
         )
-        try:
-            self._serial.exec_raw(script, timeout=30)
-        except Exception as error:
-            raise MicropythonTransportError(
-                f"delete_files failed: {error}",
-            ) from error
 
     def clear_entrypoints(self) -> None:
         """Remove ``main.py`` / ``code.py`` and confirm they are gone.
@@ -1101,32 +916,12 @@ class MicropythonTransport:
         """
         if self.mode != "copy":
             return
-        if self._mounted and self._serial is not None:
-            try:
-                self._serial.umount_local()
-            except Exception:  # pragma: no cover -best-effort cleanup
-                pass
-            self._mounted = False
-        self._ensure_serial()
-        script = (
-            "import os\n"
-            "for _p in ('main.py', 'code.py'):\n"
-            "    try:\n"
-            "        os.remove(_p)\n"
-            "    except OSError:\n"
-            "        pass\n"
-            "    try:\n"
-            "        os.stat(_p)\n"
-            "        raise RuntimeError('entrypoint still present: ' + _p)\n"
-            "    except OSError:\n"
-            "        pass\n"
+        self._drop_active_mount()
+        self._exec_or_classify(
+            CLEAR_ENTRYPOINTS_SCRIPT,
+            timeout=_INTERACTIVE_OP_TIMEOUT,
+            failure_context="clear_entrypoints failed",
         )
-        try:
-            self._serial.exec_raw(script, timeout=30)
-        except Exception as error:
-            raise MicropythonTransportError(
-                f"clear_entrypoints failed: {error}",
-            ) from error
 
     def wipe_filesystem(self) -> None:
         """Implements the contract on :meth:`TransportProtocol.wipe_filesystem`.
@@ -1148,15 +943,10 @@ class MicropythonTransport:
         # script invalidates the raw-REPL framing on whatever transport
         # owns the port at the time, so we deliberately don't try to
         # reuse the persistent transport across the call.
-        if self._mounted and self._serial is not None:
-            try:
-                self._serial.umount_local()
-            except Exception:  # pragma: no cover - best-effort cleanup
-                pass
-            self._mounted = False
+        self._drop_active_mount()
         self._close_serial()
         try:
-            self._run_mpremote(["exec", _WIPE_FILESYSTEM_SCRIPT])
+            self._run_mpremote(["exec", WIPE_FILESYSTEM_SCRIPT])
         except MicropythonTransportError as error:
             raise MicropythonTransportError(
                 f"wipe_filesystem failed: {error}",
@@ -1175,6 +965,53 @@ class MicropythonTransport:
             return
         self._serial = self._transport_factory(self.address, self.baudrate)
         self._serial.enter_raw_repl(soft_reset=True)
+
+    def _drop_active_mount(self) -> None:
+        """Umount the live staging mount, if any (best-effort).
+
+        Every flash-touching op and every serial handoff must drop the
+        mount first: mpremote's ``mount_local`` wraps the serial in a
+        ``SerialIntercept`` that must be unwrapped before the port is
+        reused, and the device-side mount hook refuses to replace a
+        live mount (``EPERM``).  No-op when nothing is mounted or the
+        serial is already gone.
+        """
+        if self._mounted and self._serial is not None:
+            try:
+                self._serial.umount_local()
+            except Exception:  # pragma: no cover - best-effort cleanup
+                pass
+            self._mounted = False
+
+    def _exec_or_classify(
+        self, script: str, *, timeout: float, failure_context: str,
+    ) -> str:
+        """Run *script* over the persistent raw REPL, classifying failure.
+
+        Opens the serial transport if needed, then ``exec_raw``s the
+        script.  Any failure is re-raised as a
+        :class:`MicropythonTransportError` whose message starts with
+        *failure_context* — these prefixes are load-bearing:
+        :func:`chumicro_deploy.recovery.classify_deploy_failure`
+        pattern-matches them, so pass the existing per-op wording, not
+        new phrasing.
+
+        Args:
+            script: Self-contained Python source to run on the device.
+            timeout: Inter-byte idle timeout for the script's output.
+            failure_context: Message prefix for the classified error.
+
+        Returns:
+            Decoded stdout (stderr appended) from the device.
+        """
+        self._ensure_serial()
+        try:
+            result = self._serial.exec_raw(script, timeout=timeout)
+        except Exception as error:
+            raise MicropythonTransportError(
+                f"{failure_context}: {error}"
+            ) from error
+        return _decode_exec_result(result)
 
     def _trigger_soft_reboot_and_read(self) -> str:
         """Exit raw REPL, soft-reboot, read main.py output, return user text.
@@ -1280,12 +1117,7 @@ class MicropythonTransport:
         if self._serial is None:
             return
         try:
-            if self._mounted:
-                try:
-                    self._serial.umount_local()
-                except Exception:  # pragma: no cover - best-effort cleanup
-                    pass
-                self._mounted = False
+            self._drop_active_mount()
             try:
                 self._serial.exit_raw_repl()
             except Exception:  # pragma: no cover - best-effort cleanup
@@ -1311,24 +1143,7 @@ class MicropythonTransport:
         One device-side script, one round trip, best-effort per entry.
         A hard failure here would mask the staging it precedes.
         """
-        keep = sorted(DEVICE_KEEP_SET)
-        script = (
-            "import os\n"
-            "def _rm(p):\n"
-            "    try:\n"
-            "        for e in os.listdir(p):\n"
-            "            _rm(p + '/' + e)\n"
-            "        os.rmdir(p)\n"
-            "    except OSError:\n"
-            "        try:\n"
-            "            os.remove(p)\n"
-            "        except OSError:\n"
-            "            pass\n"
-            f"_keep = {keep!r}\n"
-            "for _e in os.listdir('/'):\n"
-            "    if _e not in _keep:\n"
-            "        _rm('/' + _e)\n"
-        )
+        script = clean_slate_script(DEVICE_KEEP_SET)
         try:
             # mpremote subprocess (not the persistent serial): the
             # serial is closed at entry and the `fs cp` that follows is
@@ -1353,24 +1168,8 @@ class MicropythonTransport:
         guard.  A hard failure here would mask the staging operation
         it precedes.
         """
-        listed = ", ".join(repr(name) for name in entries)
-        script = (
-            "import os\n"
-            "def _rm(p):\n"
-            "    try:\n"
-            "        for e in os.listdir(p):\n"
-            "            _rm(p + '/' + e)\n"
-            "        os.rmdir(p)\n"
-            "    except OSError:\n"
-            "        try:\n"
-            "            os.remove(p)\n"
-            "        except OSError:\n"
-            "            pass\n"
-            f"for _n in ({listed},):\n"
-            "    _rm(_n)\n"
-        )
         try:
-            self._run_mpremote(["exec", script])
+            self._run_mpremote(["exec", remove_entries_script(entries)])
         except MicropythonTransportError:  # pragma: no cover - hardware-only
             # Leftovers are reclaimed on the next switch; never let a
             # cleanup error stand in for the real staging result.

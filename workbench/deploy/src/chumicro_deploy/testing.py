@@ -94,8 +94,8 @@ class FakeTime:
     """Deterministic seconds-domain time source for host-side tests.
 
     Bundles ``monotonic()`` and ``sleep()`` into a single injectable
-    object that satisfies the ``TimeSource`` protocol used by
-    :class:`~chumicro_deploy.CircuitpythonTransport`.  ``monotonic()``
+    object that satisfies :class:`chumicro_deploy.protocol.TimeSource`
+    (both device transports take one).  ``monotonic()``
     is **stable**: repeated calls return the same value until the
     clock is explicitly advanced.  ``sleep(duration)`` auto-advances
     the clock by *duration* without any real wait, so production

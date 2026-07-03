@@ -262,6 +262,67 @@ class UnsupportedExtraFilesError(NotImplementedError):
     """
 
 
+class TimeSource(Protocol):
+    """Structural interface for an injectable time source.
+
+    ``FakeTime`` from :mod:`chumicro_deploy.testing` is one conforming
+    implementation that eliminates wall-clock waits.
+    """
+
+    def monotonic(self) -> float: ...
+    def sleep(self, seconds: float) -> None: ...
+
+
+class DeviceTransportError(Exception):
+    """Base for both runtimes' transport errors.
+
+    Orchestration that treats the transports uniformly — the
+    ``RecoveringDeployer`` retry loop, the failure classifier —
+    catches this instead of enumerating per-runtime subclasses, so
+    adding a runtime doesn't mean auditing every catch site.
+    """
+
+
+class MidDeployDisconnected(DeviceTransportError):
+    """Base for the per-runtime "device dropped mid-deploy" errors.
+
+    A distinct branch so callers can ``except`` "the cable came out"
+    without conflating it with other transport errors.  The original
+    :class:`OSError` is attached as :attr:`cause` so callers that
+    need the underlying errno can read it without re-parsing
+    :func:`str` of the wrapper.
+    """
+
+    def __init__(self, cause: OSError, context: str = "") -> None:
+        prefix = f"device disconnected during {context}" if context else (
+            "device disconnected"
+        )
+        super().__init__(f"{prefix}: {cause}")
+        self.cause = cause
+
+
+def write_files_to_staging(
+    staging_path: Path,
+    files: Mapping[str, bytes],
+    on_file_staged: Callable[[str], None] | None = None,
+) -> None:
+    """Write a device-path → bytes mapping into a host staging tree.
+
+    The shared front half of both transports' ``deploy_files``:
+    sorted for deterministic staging order, leading slashes stripped
+    so the device-path → staging-path translation is reversible,
+    parent dirs created on demand, per-file callback fired after each
+    write.
+    """
+    for device_path in sorted(files):
+        relative = device_path.lstrip("/")
+        destination = staging_path / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(files[device_path])
+        if on_file_staged is not None:
+            on_file_staged(device_path)
+
+
 @runtime_checkable
 class TransportProtocol(Protocol):
     """Minimum transport contract every device transport must satisfy."""

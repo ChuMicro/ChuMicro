@@ -303,3 +303,76 @@ class TestProbeVersionStringification:
         assert self._run_probe_with_version(
             (3, 12, 0, "final", 0),
         ) == "3.12.0"
+
+
+class TestSharedTransportErrorHierarchy:
+    """Both runtimes' errors hang off the shared protocol-level bases.
+
+    Orchestration (RecoveringDeployer's catch, the classifier's typed
+    disconnect fast-path) keys on the bases, so a new runtime's errors
+    join recovery by subclassing — no catch-site audit.
+    """
+
+    def test_both_transport_errors_are_device_transport_errors(self) -> None:
+        from chumicro_deploy import DeviceTransportError
+        from chumicro_deploy.circuitpython_transport import (
+            CircuitpythonTransportError,
+        )
+        from chumicro_deploy.micropython_transport import (
+            MicropythonTransportError,
+        )
+
+        assert issubclass(CircuitpythonTransportError, DeviceTransportError)
+        assert issubclass(MicropythonTransportError, DeviceTransportError)
+
+    def test_both_disconnects_are_mid_deploy_disconnected(self) -> None:
+        from chumicro_deploy import MidDeployDisconnected
+        from chumicro_deploy.circuitpython_transport import (
+            CircuitpythonMidDeployDisconnected,
+            CircuitpythonTransportError,
+        )
+        from chumicro_deploy.micropython_transport import (
+            MicropythonMidDeployDisconnected,
+            MicropythonTransportError,
+        )
+
+        cp_error = CircuitpythonMidDeployDisconnected(OSError(6, "gone"), "rsync")
+        mp_error = MicropythonMidDeployDisconnected(OSError(6, "gone"), "fs cp")
+        for error, runtime_base in (
+            (cp_error, CircuitpythonTransportError),
+            (mp_error, MicropythonTransportError),
+        ):
+            assert isinstance(error, MidDeployDisconnected)
+            assert isinstance(error, runtime_base)
+            assert "device disconnected during" in str(error)
+            assert error.cause.errno == 6
+
+
+class TestWriteFilesToStaging:
+    """The shared deploy_files staging-tree writer."""
+
+    def test_writes_sorted_strips_slashes_and_fires_callback(
+        self, tmp_path,
+    ) -> None:
+        from chumicro_deploy.protocol import write_files_to_staging
+
+        staged: list[str] = []
+        write_files_to_staging(
+            tmp_path,
+            {
+                "/lib/pkg/mod.py": b"MOD",
+                "/main.py": b"MAIN",
+            },
+            staged.append,
+        )
+
+        assert (tmp_path / "lib" / "pkg" / "mod.py").read_bytes() == b"MOD"
+        assert (tmp_path / "main.py").read_bytes() == b"MAIN"
+        assert staged == ["/lib/pkg/mod.py", "/main.py"]
+
+    def test_callback_is_optional(self, tmp_path) -> None:
+        from chumicro_deploy.protocol import write_files_to_staging
+
+        write_files_to_staging(tmp_path, {"/code.py": b"X"})
+
+        assert (tmp_path / "code.py").read_bytes() == b"X"

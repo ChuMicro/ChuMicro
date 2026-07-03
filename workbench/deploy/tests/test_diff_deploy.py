@@ -442,7 +442,7 @@ class TestMicropythonScopeListingParser:
     """Module-level parser for the on-device listing script."""
 
     def test_extracts_marked_lines_only(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        from chumicro_deploy.micropython_transport import _parse_scope_listing
+        from chumicro_deploy._device_scripts import parse_scope_listing
 
         output = (
             "boot ok\n"
@@ -451,10 +451,10 @@ class TestMicropythonScopeListingParser:
             "__CHU_F:/lib/foo.py\n"
             "__CHU_F:/lib/foo.py\n"  # dedup
         )
-        assert _parse_scope_listing(output) == ["/code.py", "/lib/foo.py"]
+        assert parse_scope_listing(output) == ["/code.py", "/lib/foo.py"]
 
     def test_empty_output_returns_empty_list(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        from chumicro_deploy.micropython_transport import _parse_scope_listing
+        from chumicro_deploy._device_scripts import parse_scope_listing
 
-        assert _parse_scope_listing("") == []
-        assert _parse_scope_listing("nothing matches\n") == []
+        assert parse_scope_listing("") == []
+        assert parse_scope_listing("nothing matches\n") == []
