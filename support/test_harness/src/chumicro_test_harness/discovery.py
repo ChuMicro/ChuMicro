@@ -186,7 +186,7 @@ def _parent_dir(file_path):
     return head if head else "."
 
 
-def run_one_file(test_file, root_dir="."):
+def run_one_file(test_file, root_dir=".", chunk_boundaries=None):
     """Set up sys.path, exec the file, run its tests, return 0/1 exit code.
 
     Inserts the test file's own directory on ``sys.path`` before exec so
@@ -206,7 +206,7 @@ def run_one_file(test_file, root_dir="."):
         sys.path.insert(0, test_dir)
     print(f"== {test_file} ==")
     try:
-        test_module = _exec_as_namespace(test_file)
+        test_module = _exec_as_namespace(test_file, chunk_boundaries=chunk_boundaries)
     except ImportError as error:
         print(
             f"FAIL {test_file} — import failed: {error} "

@@ -115,6 +115,7 @@ class TestPytestAddoption:
             "--micropython-binary",
             "--circuitpython-binary",
             "--unix-port-timeout",
+            "--unix-port-heapsize",
             "--deploy-mode",
             "--pr-summary",
             "--pr-summary-command",

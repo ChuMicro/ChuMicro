@@ -28,7 +28,7 @@ _STUB_WORKER = textwrap.dedent(
     import re
     import sys
 
-    test_file = sys.argv[-1]
+    test_file = sys.argv[sys.argv.index("--worker") + 1]
     with open(test_file) as handle:
         source = handle.read()
     names = re.findall(r"^def (test_\\w+)", source, re.MULTILINE)

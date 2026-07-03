@@ -53,7 +53,11 @@ from chumicro_deploy import (
     resolve_ide_devices,
 )
 
-from .backends import _DEFAULT_EXECUTE_TIMEOUT_SECONDS, UnixPortBackend
+from .backends import (
+    _DEFAULT_EXECUTE_TIMEOUT_SECONDS,
+    HEAPSIZE_FROM_CONFIG,
+    UnixPortBackend,
+)
 from .collection import (
     DevicePrepareItem,
     DeviceRunFileItem,
@@ -164,6 +168,16 @@ def pytest_addoption(parser: pytest.Parser) -> None:
             "per-file wall-clock ceiling (seconds) for a unix-port "
             "worker subprocess; a file that exceeds it is killed and "
             f"fails cleanly (default {_DEFAULT_EXECUTE_TIMEOUT_SECONDS:g})"
+        ),
+    )
+    group.addoption(
+        "--unix-port-heapsize",
+        default=HEAPSIZE_FROM_CONFIG,
+        help=(
+            "heap ceiling for unix-port workers (e.g. 192K); default "
+            "reads per-runtime budgets from target-runtimes.toml "
+            "[heap]; pass 0 or off to spawn with the port's native "
+            "multi-MB heap"
         ),
     )
     group.addoption(
@@ -432,6 +446,13 @@ def pytest_sessionstart(session: pytest.Session) -> None:
                 default=_DEFAULT_EXECUTE_TIMEOUT_SECONDS,
             ),
         )
+        heapsize = cast(
+            "str",
+            session.config.getoption(
+                "--unix-port-heapsize",
+                default=HEAPSIZE_FROM_CONFIG,
+            ),
+        )
         session._backend = UnixPortBackend(  # type: ignore[attr-defined]
             _workspace_root(session),
             binaries={
@@ -439,6 +460,7 @@ def pytest_sessionstart(session: pytest.Session) -> None:
                 "circuitpython": cp_binary,
             },
             execute_timeout_seconds=execute_timeout,
+            heapsize=heapsize,
         )
         session._device_targets = _synthesize_unix_port_targets(  # type: ignore[attr-defined]
             runtime_override or "both",
