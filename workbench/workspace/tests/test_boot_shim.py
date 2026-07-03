@@ -19,6 +19,7 @@ from chumicro_workspace.boot_shim import (
     project_app_exports_run,
     project_boot_source,
     project_boot_with_import_graph_source,
+    source_calls_hard_reset_at_top_level,
 )
 from chumicro_workspace.cli.deploy import (
     _DeployLayoutError,
@@ -478,6 +479,54 @@ class TestProjectBootWithImportGraphSource:
 # ---------------------------------------------------------------------------
 # module_calls_hard_reset — refuse a crash-looping boot entrypoint
 # ---------------------------------------------------------------------------
+
+
+class TestSourceCallsHardResetAtTopLevel:
+    """Top-level-only scan: import-time resets flagged, in-function allowed."""
+
+    def test_flags_bare_top_level_reset(self) -> None:
+        line = source_calls_hard_reset_at_top_level(
+            "import machine\nmachine.reset()\n",
+        )
+        assert line == 2
+
+    def test_flags_reset_inside_top_level_if(self) -> None:
+        # A conditional at module scope still runs at import.
+        source = (
+            "import microcontroller\n"
+            "CRASHED = True\n"
+            "if CRASHED:\n"
+            "    microcontroller.reset()\n"
+        )
+        assert source_calls_hard_reset_at_top_level(source) == 4
+
+    def test_allows_reset_inside_function_body(self) -> None:
+        source = (
+            "import machine\n"
+            "def recover():\n"
+            "    machine.reset()\n"
+        )
+        assert source_calls_hard_reset_at_top_level(source) is None
+
+    def test_allows_function_nested_in_top_level_if(self) -> None:
+        source = (
+            "import machine\n"
+            "if True:\n"
+            "    def recover():\n"
+            "        machine.reset()\n"
+        )
+        assert source_calls_hard_reset_at_top_level(source) is None
+
+    def test_flags_aliased_and_from_import_forms(self) -> None:
+        assert source_calls_hard_reset_at_top_level(
+            "import machine as m\nm.reset()\n",
+        ) == 2
+        assert source_calls_hard_reset_at_top_level(
+            "from microcontroller import reset as r\nr()\n",
+        ) == 2
+
+    def test_unparseable_source_returns_none(self) -> None:
+        assert source_calls_hard_reset_at_top_level("def broken(:\n") is None
 
 
 class TestModuleCallsHardReset:

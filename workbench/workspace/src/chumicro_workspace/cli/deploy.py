@@ -30,6 +30,7 @@ from chumicro_workspace.boot_shim import (
     project_app_exports_run,
     project_boot_source,
     project_boot_with_import_graph_source,
+    source_calls_hard_reset_at_top_level,
 )
 from chumicro_workspace.cli._common import (
     _add_device_selector,
@@ -174,13 +175,12 @@ def _resolve_deploy_layout(
     # stray reset can't ship.  app.py is the boot-shim entrypoint
     # (imported and run every boot); code.py / main.py are the plain-mode
     # entrypoints.
-    # Scope: only these three entrypoints are scanned, not the import
-    # graph.  module_calls_hard_reset flags any reset call, including one
-    # inside a function (the deliberate pattern the refusal recommends),
-    # so scanning imported modules with it would false-flag legitimate
-    # code.  A reset at an imported module's top level still runs at boot
-    # and is not caught here; that needs a top-level-only AST check.  The
-    # dotted form is matched; `from machine import reset` is not.
+    # Scope: these three entrypoints get the strict scan (any reset,
+    # even inside a function — an entrypoint has no business resetting).
+    # The rest of the staged closure gets the top-level-only scan in
+    # resolve_project_deploy_source, so an imported module may keep a
+    # reset inside a deliberate-condition function but not at module
+    # top level.  Aliased and from-import forms are matched by both.
     for entrypoint_name in ("code.py", "main.py", "app.py"):
         entrypoint_path = project_dir / entrypoint_name
         if not entrypoint_path.is_file():
@@ -281,7 +281,37 @@ def _resolve_deploy_layout(
     )
 
 
-def resolve_project_deploy_source(
+def resolve_project_deploy_source(*args, **kwargs):
+    """Resolve the deploy layout + source, refusing boot-reachable resets.
+
+    Wraps :func:`_resolve_project_deploy_source_unchecked` with the
+    closure-wide hard-reset scan: every staged ``.py``'s module top
+    level runs at boot, so a ``machine.reset()`` /
+    ``microcontroller.reset()`` there crash-loops the board exactly
+    like one in the entrypoint (which its own stricter scan already
+    refuses).  Resets inside function bodies stay allowed — that is
+    the recommended deliberate-condition pattern.
+    """
+    layout, source = _resolve_project_deploy_source_unchecked(*args, **kwargs)
+    for staged_path, content in source.files().items():
+        if not staged_path.endswith(".py"):
+            continue
+        reset_line = source_calls_hard_reset_at_top_level(
+            content.decode("utf-8", "replace"),
+        )
+        if reset_line is not None:
+            raise _DeployLayoutError(
+                f"staged module {staged_path!r} calls a board hard reset "
+                f"(microcontroller.reset() / machine.reset()) at module "
+                f"top level, line {reset_line} — top-level code runs on "
+                f"every boot, so this crash-loops the board until it is "
+                f"wiped.  Move the reset inside a function called only on "
+                f"a deliberate condition.",
+            )
+    return layout, source
+
+
+def _resolve_project_deploy_source_unchecked(
     *,
     workspace: WorkspaceLayout,
     device: Device,
