@@ -28,15 +28,19 @@ class Signal:
     one signal serves many sequential waits; a suspended wait allocates
     nothing per tick.
 
-    ``next_deadline`` holds the optional timeout as an absolute
-    ``ticks_ms`` value — ``wait_for`` manages it; leave it alone when
-    yielding a signal directly.
+    ``next_deadline(now_ms)`` reports the optional timeout as an
+    absolute ``ticks_ms`` value — ``wait_for`` manages it; leave it
+    alone when yielding a signal directly.
     """
 
     def __init__(self) -> None:
         self.is_set = False
         self.value = None
-        self.next_deadline: int | None = None
+        self._deadline_ms: int | None = None
+
+    def next_deadline(self, now_ms: int) -> int | None:
+        """Absolute tick deadline gating the wait, or ``None`` for indefinite."""
+        return self._deadline_ms
 
     def set(self, value: object = None) -> None:
         """Complete the signal, storing *value* for the waiting generator."""
@@ -87,7 +91,7 @@ def wait_for(signal: Signal, *, deadline_ms: int | None = None) -> object:
             signal was set.  Raised inside the generator body, so the
             generator catches it there or lets it end the task.
     """
-    signal.next_deadline = deadline_ms
+    signal._deadline_ms = deadline_ms
     try:
         while not signal.is_set:
             now_ms = yield signal
@@ -98,15 +102,18 @@ def wait_for(signal: Signal, *, deadline_ms: int | None = None) -> object:
             ):
                 raise OSError(errno.ETIMEDOUT)
     finally:
-        signal.next_deadline = None
+        signal._deadline_ms = None
     return signal.value
 
 
 class _DeadlineWait:
-    """Private deadline-wait shape — ``next_deadline=until_ms``."""
+    """Private deadline-wait shape carrying one absolute deadline."""
 
     def __init__(self, until_ms: int) -> None:
-        self.next_deadline = until_ms
+        self._until_ms = until_ms
+
+    def next_deadline(self, now_ms: int) -> int | None:
+        return self._until_ms
 
 
 def sleep_until(until_ms: int) -> object:

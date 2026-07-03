@@ -23,7 +23,7 @@ def test_sleep_until_yields_deadline_wait():
     gen = sleep_until(1000)
     first = gen.send(None)
     # The yielded wait carries the absolute deadline the wrapper reads.
-    assert first.next_deadline == 1000
+    assert first.next_deadline(0) == 1000
     assert getattr(first, "io_socket", None) is None
     try:
         gen.send(0)
@@ -211,7 +211,7 @@ def test_signal_wait_for_deadline_raises_etimedout_inside_generator():
     runner.tick()
     assert caught == [errno.ETIMEDOUT]
     assert handle.done
-    assert never.next_deadline is None
+    assert never.next_deadline(0) is None
 
 
 def test_signal_reuse_after_clear():

@@ -4,11 +4,11 @@ Register work with a ``Runner``, then call ``tick()`` in a loop.
 Each ``tick()`` captures the current time once, checks every
 registered task, and fires the handlers whose gates have passed.
 
-Three registration shapes are accepted: object-based (``.check`` +
-``.handle`` methods), callable-based (check function + handler),
-and handler-only (fires every tick, or per period if one is set).
-See ``Runner.add`` for signatures.  ``add_periodic`` is the periodic
-shortcut.
+Two registration shapes are accepted: object-based (``.check`` +
+``.handle`` methods) and handler-only (fires every tick, or per
+period if one is set).  See ``Runner.add`` for signatures.
+``add_periodic`` is the periodic shortcut; ``add_generator`` drives
+a linear generator flow.
 
 ``TaskHandle`` (returned from registration) carries runtime state
 and supports ``set_period`` / ``remove``.
@@ -161,7 +161,7 @@ class TaskHandle:
         # Retained so ``Runner.wait`` can read the service's optional
         # ``io_socket`` / ``io_wants_read`` / ``io_wants_write`` and
         # ``next_deadline`` attributes each loop.  ``None`` for
-        # callable-based or handler-only registrations.
+        # handler-only registrations.
         self.service = service
 
     def set_period(self, period_ms: int | None) -> None:
@@ -287,9 +287,11 @@ class Runner:
         Returns a ``TaskHandle`` for runtime mutation.
 
         Args:
-            task: Object with ``.check()`` and ``.handle()``, or a
-                callable ``check_function(now_ms) -> bool``.
-            handler: Optional callable ``handler(now_ms)``.
+            task: Object with ``.check()`` and ``.handle()``.
+                Mutually exclusive with *handler*.
+            handler: Callable ``handler(now_ms)`` fired on schedule
+                (pair with *period_ms* / *run_count*).  Mutually
+                exclusive with *task*.
             period_ms: Optional interval in milliseconds.
             start_after_ms: Optional initial delay before the task
                 becomes eligible.  Overrides the first period.
@@ -306,25 +308,25 @@ class Runner:
                 between fires but drifting by the tick's lateness.
                 Requires *period_ms*.
         """
-        # ``service`` is the originating task object when registration was
-        # object-based or "task-with-check + handler" — those are the
-        # shapes that may also expose ``io_*`` / ``next_deadline`` for
-        # ``Runner.wait``.  Pure callable / handler-only registrations
-        # have no service to read.
+        # ``service`` is the originating task object when registration
+        # was object-based — the shape that may also expose ``io_*`` /
+        # ``next_deadline`` for ``Runner.wait``.  Handler-only
+        # registrations have no service to read.
         service: object | None = None
-        if handler is not None:
-            # Callable-based or handler-only.
-            if task is not None and not callable(task):
-                check_function = task.check
-                service = task
-            else:
-                check_function = task  # callable or None (handler-only)
-            handler_function = handler
-        elif task is not None:
+        if task is not None and handler is not None:
+            raise ValueError(
+                "Pass a task object OR a handler callable, not both "
+                "(the separate check-plus-handler shape was removed; "
+                "give the object a handle() or gate inside the handler)"
+            )
+        if task is not None:
             # Object-based: must have .check() and .handle().
             check_function = task.check
             handler_function = task.handle
             service = task
+        elif handler is not None:
+            check_function = None
+            handler_function = handler
         else:
             raise ValueError(
                 "Provide a task object (with .check() and .handle()) "

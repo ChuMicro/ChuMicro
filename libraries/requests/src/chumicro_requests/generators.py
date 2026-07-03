@@ -60,10 +60,11 @@ class _ReadDeadlineWait:
     io_wants_read = True
 
     def __init__(self, sock, deadline_ms):
-        # Unwrap to the registrable pollable (the adapter wrapper stores
-        # it on ``.sock``); select.poll can't register the wrapper.
-        self.io_socket = getattr(sock, "sock", sock)
-        self.next_deadline = deadline_ms
+        self.io_socket = sock
+        self._deadline_ms = deadline_ms
+
+    def next_deadline(self, now_ms):
+        return self._deadline_ms
 
 
 def fetch(

@@ -268,4 +268,4 @@ def test_read_deadline_wait_exposes_socket_and_deadline():
     wait = _ReadDeadlineWait(sock, 1234)
     assert wait.io_socket is sock
     assert wait.io_wants_read is True
-    assert wait.next_deadline == 1234
+    assert wait.next_deadline(0) == 1234
