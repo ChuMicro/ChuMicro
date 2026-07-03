@@ -68,11 +68,27 @@ def _pool_for(radio):
     return _POOL
 
 
+def _close_quietly(sock):
+    """Best-effort close of an in-flight socket, ignoring teardown errors."""
+    try:
+        sock.close()
+    except Exception:  # noqa: BLE001 - best-effort teardown
+        pass
+
+
 def connect_tcp(host, port, *, radio):
     """Open a plain TCP connection via the CP socketpool."""
     pool = _pool_for(radio)
     sock = pool.socket(pool.AF_INET, pool.SOCK_STREAM)
-    sock.connect((host, port))
+    try:
+        sock.connect((host, port))
+    except Exception:
+        # Close the in-flight socket before re-raising: CircuitPython's
+        # socketpool is a small fixed pool, so a reconnect loop against a
+        # down peer that abandons failed sockets to GC exhausts it and
+        # wedges with "Out of sockets".
+        _close_quietly(sock)
+        raise
     return sock
 
 
@@ -103,8 +119,16 @@ def connect_tls(host, port, *, context=None, radio):
     pool = _pool_for(radio)
     context = _resolve_default_context(context)
     raw = pool.socket(pool.AF_INET, pool.SOCK_STREAM)
-    wrapped = context.wrap_socket(raw, server_hostname=host)
-    wrapped.connect((host, port))
+    try:
+        wrapped = context.wrap_socket(raw, server_hostname=host)
+    except Exception:
+        _close_quietly(raw)  # wrap failed: the raw socket is still ours
+        raise
+    try:
+        wrapped.connect((host, port))
+    except Exception:
+        _close_quietly(wrapped)
+        raise
     return wrapped
 
 
@@ -420,15 +444,17 @@ class _CPConnector(SocketConnector):
             if self.state == STATE_AWAITING_TCP:
                 pool = _pool_for(self._radio)
                 sock = pool.socket(pool.AF_INET, pool.SOCK_STREAM)
+                # Assign the raw socket immediately so ``_fail()`` (via
+                # the outer except) can close it even if wrap_socket
+                # below raises — otherwise a TLS setup failure leaks the
+                # raw pool socket.
+                self.socket = sock
                 if self._tls:
                     self._context = _resolve_default_context(self._context)
                     sock = self._context.wrap_socket(
                         sock, server_hostname=self._host,
                     )
-                # Assign before the blocking connect so ``_fail()`` (via
-                # the outer except) finds the partially-built socket to
-                # close on connect failure.
-                self.socket = sock
+                    self.socket = sock  # rebind so _fail closes the wrapper
                 # Blocking connect — completes TCP and (if wrapped)
                 # the TLS handshake before returning.
                 sock.connect(self.sockaddr)

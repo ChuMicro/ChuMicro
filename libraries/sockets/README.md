@@ -31,9 +31,9 @@ For bundle setup, pre-compiled `.mpy` bundles, the experimental channel, and det
 ```python
 from chumicro_sockets import tcp_client_socket, tls_client_socket
 
-# Plain TCP — runtime picks the right adapter.  CP auto-detects
-# `wifi.radio`; MP and CPython have no equivalent.  No kwarg needed.
-sock = tcp_client_socket("broker.example.com", 1883)
+# Plain TCP — runtime picks the right adapter.  On CircuitPython pass
+# radio=wifi.radio; the kwarg is ignored on MicroPython / CPython.
+sock = tcp_client_socket("broker.example.com", 1883, radio=wifi.radio)
 sock.send(b"PING\r\n")
 buffer = bytearray(128)
 nbytes = sock.recv_into(buffer, 128)
@@ -48,7 +48,7 @@ sock.close()
 sock = tls_client_socket("api.example.com", 443)
 ```
 
-> **CP boards without a `wifi` module** (SAMD M0, etc.) still need an explicit `radio=` — pass whatever radio object your board exposes. The kwarg is also there for multi-radio prototypes that want to bypass the auto-detect.
+> **CircuitPython** always needs an explicit `radio=` — the socketpool is built from it (`socketpool.SocketPool(radio)`).  Pass `wifi.radio`, or whatever radio object your board exposes.  MicroPython and CPython ignore the kwarg.
 
 For tests, `chumicro_sockets.testing.FakeSocket` implements the same
 protocol against in-memory bytearrays so downstream libraries
@@ -68,14 +68,14 @@ without hitting the network.
 | `ssl_context_no_verify()` | Build an `ssl.SSLContext` that **skips** certificate verification.  Explicit opt-out — named so a reviewer can grep for it. |
 | `set_default_ca_bundle(pem_bytes)` | Replace the CA bundle used by `tls_client_socket(context=None)` on MicroPython.  No-op on CP / CPython.  Pass `None` to revert to the library-shipped bundle. |
 | `ssl_context_with_cert_and_key_paths(cert_path, key_path)` | Server-side `ssl.SSLContext` from PEM file paths.  CP-portable shape. |
-| `TCPClientSocket` (Protocol) | TCP surface (`send`, `recv_into`, `close`, `setblocking`, `settimeout`, `fileno`). |
-| `UDPSocket` (Protocol) | UDP surface (`sendto(data, host, port)`, `recvfrom_into(buffer, nbytes=0) -> (n, (host, port))`, `close`, `setblocking`, `settimeout`, `fileno`, `getsockname`). |
+| TCP socket surface (duck-typed) | `send`, `recv_into`, `close`, `setblocking`, `settimeout`.  Any object exposing these works; no named Protocol class is exported. |
+| UDP socket surface (duck-typed) | `sendto(data, host, port)`, `recvfrom_into(buffer, nbytes=0) -> (n, (host, port))`, `close`, `setblocking`.  Any object exposing these works. |
 | `UnsupportedSSLConfigError` | Raised when the requested TLS shape isn't supported by the current runtime (e.g. CP's in-memory cert+key). |
 | `chumicro_sockets.testing.FakeSocket` / `FakeUDPSocket` | In-memory test doubles covering the full TCP / UDP protocol. |
 
 ## Where this fits
 
-Depends on [`chumicro-timing`](../timing/) for ticks; uses [`chumicro-wifi`](../wifi/)'s radio on CircuitPython for transport.  Substrate for every networked library that follows: [`chumicro-requests`](../requests/), [`chumicro-http-server`](../http_server/), [`chumicro-mqtt`](../mqtt/), [`chumicro-websockets`](../websockets/), and [`chumicro-ntp`](../ntp/).
+No runtime dependencies.  On CircuitPython the caller passes a radio (e.g. `wifi.radio`, or `chumicro-wifi`'s adapter radio) from which the socketpool is built.  Substrate for every networked library that follows: [`chumicro-requests`](../requests/), [`chumicro-http-server`](../http_server/), [`chumicro-mqtt`](../mqtt/), [`chumicro-websockets`](../websockets/), and [`chumicro-ntp`](../ntp/).
 
 ## Platform support
 
@@ -85,7 +85,7 @@ Works on CPython, MicroPython, and CircuitPython.
 
 | Example | What it shows |
 |---|---|
-| [`tcp_roundtrip.py`](examples/tcp_roundtrip.py) | Real TCP connect → send → recv → close.  Same shape on every runtime; CP auto-detects `wifi.radio`. |
+| [`tcp_roundtrip.py`](examples/tcp_roundtrip.py) | Real TCP connect → send → recv → close.  Same shape on every runtime; pass `radio=wifi.radio` on CircuitPython. |
 | [`tls_with_custom_ca.py`](examples/tls_with_custom_ca.py) | Custom-CA TLS via `ssl_context_with_ca`.  Documents the substrate quirks observed on Pi Pico W mbedTLS in the docstring. |
 | [`udp_echo_client.py`](examples/udp_echo_client.py) | Board-side UDP echo client — wifi up, send datagram to a host echo server, read echo back, non-blocking.  Cross-runtime (CP + MP). |
 

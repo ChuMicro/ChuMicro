@@ -213,6 +213,30 @@ def test_recv_until_raises_when_exceeding_max_bytes():
         gen.send(None)
 
 
+def test_recv_until_returns_when_separator_within_cap_in_final_chunk():
+    # The separator ends at byte 6 (within max_bytes=10) even though the
+    # chunk carries trailing bytes past the cap; the message must be
+    # returned, not rejected as too-long.
+    sock = FakeSocket()
+    sock.enqueue_recv(b"hello\ntrailing-bytes-past-cap")
+    gen = recv_until(sock, b"\n", max_bytes=10)
+    try:
+        gen.send(None)
+    except StopIteration as stop:
+        assert stop.value == b"hello\n"
+    else:
+        raise AssertionError("recv_until did not return")
+
+
+def test_recv_until_raises_when_separator_lands_past_cap():
+    # The separator is at byte 15, past max_bytes=10 — too long, reject.
+    sock = FakeSocket()
+    sock.enqueue_recv(b"x" * 15 + b"\n")
+    gen = recv_until(sock, b"\n", max_bytes=10)
+    with raises(OSError):
+        gen.send(None)
+
+
 def test_recv_until_raises_when_peer_closes_before_separator():
     sock = FakeSocket()
     sock.enqueue_recv(b"partial")
