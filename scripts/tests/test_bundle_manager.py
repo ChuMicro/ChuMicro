@@ -11,7 +11,9 @@ from bundle_manager import (
     EXPERIMENTAL_BUNDLE_REPO,
     MPY_FORMAT_FOLDER,
     STABLE_BUNDLE_REPO,
+    _bundle_data_files,
     _collect_library_metadata,
+    _data_files_from,
     _derive_bundle_id,
     _find_bundle_modules,
     _read_chumicro_dependencies,
@@ -231,6 +233,50 @@ class TestFindBundleModules:
         _, _, mp_files = _find_bundle_modules(tmp_path, target_runtime="micropython")
         mp_filenames = {file.name for file in mp_files}
         assert "cp.py" not in mp_filenames
+
+
+class TestDataFilesExtraction:
+    """Tests for _data_files_from and _bundle_data_files."""
+
+    def test_reads_tuple_marker(self, tmp_path: Path):
+        """A tuple ``__chumicro_data_files__`` yields its string entries in order."""
+        module = tmp_path / "mod.py"
+        module.write_text('__chumicro_data_files__ = ("a.der", "b.bin")\n')
+        assert _data_files_from(module) == ["a.der", "b.bin"]
+
+    def test_reads_list_marker(self, tmp_path: Path):
+        """A list literal marker is read the same as a tuple."""
+        module = tmp_path / "mod.py"
+        module.write_text("__chumicro_data_files__ = ['a.der']\n")
+        assert _data_files_from(module) == ["a.der"]
+
+    def test_absent_marker_returns_empty(self, tmp_path: Path):
+        """A module without the marker yields no data files."""
+        module = tmp_path / "mod.py"
+        module.write_text("x = 1\n")
+        assert _data_files_from(module) == []
+
+    def test_syntax_error_returns_empty(self, tmp_path: Path):
+        """An unparseable module yields no data files rather than raising."""
+        module = tmp_path / "mod.py"
+        module.write_text("def (:\n")
+        assert _data_files_from(module) == []
+
+    def test_bundle_data_files_resolves_existing_siblings(self, tmp_path: Path):
+        """Only siblings that exist on disk are returned; missing names drop."""
+        module = tmp_path / "mod.py"
+        module.write_text('__chumicro_data_files__ = ("present.der", "missing.der")\n')
+        (tmp_path / "present.der").write_bytes(b"\x00")
+        assert _bundle_data_files([module]) == [tmp_path / "present.der"]
+
+    def test_bundle_data_files_dedupes(self, tmp_path: Path):
+        """Two modules naming the same sibling file yield it once."""
+        (tmp_path / "shared.der").write_bytes(b"\x00")
+        module_a = tmp_path / "a.py"
+        module_a.write_text('__chumicro_data_files__ = ("shared.der",)\n')
+        module_b = tmp_path / "b.py"
+        module_b.write_text('__chumicro_data_files__ = ("shared.der",)\n')
+        assert _bundle_data_files([module_a, module_b]) == [tmp_path / "shared.der"]
 
 
 class TestReadChuMicroDependencies:
@@ -454,6 +500,55 @@ class TestBuildCircupZips:
             # Should be empty — no CircuitPython .mpy files staged.
             assert bytecode_zip.namelist() == []
 
+    def test_source_zip_includes_declared_data_file(self, tmp_path: Path):
+        """The source zip carries a __chumicro_data_files__ sibling next to its module."""
+        bundle_dir = tmp_path / "bundle"
+        output_dir = tmp_path / "output"
+
+        package_dir = bundle_dir / "chumicro_example"
+        package_dir.mkdir(parents=True)
+        (package_dir / "__init__.py").write_text("# init")
+        (package_dir / "_ca_bundle.py").write_text(
+            '__chumicro_data_files__ = ("_ca_bundle.der",)\n',
+        )
+        (package_dir / "_ca_bundle.der").write_bytes(b"\x30\x82der")
+
+        build_circup_zips(
+            bundle_dir, output_dir, "ChuMicro-Bundle", date_tag="20260101",
+        )
+        import zipfile
+
+        source_zip_path = output_dir / "chumicro-bundle-py-20260101.zip"
+        with zipfile.ZipFile(source_zip_path) as source_zip:
+            names = source_zip.namelist()
+        assert any(name.endswith("_ca_bundle.der") for name in names)
+        assert any(name.endswith("_ca_bundle.py") for name in names)
+
+    def test_bytecode_zip_includes_staged_data_file(self, tmp_path: Path):
+        """The bytecode zip carries raw data files staged beside the .mpy modules."""
+        bundle_dir = tmp_path / "bundle"
+        output_dir = tmp_path / "output"
+
+        package_dir = bundle_dir / "chumicro_example"
+        package_dir.mkdir(parents=True)
+        (package_dir / "__init__.py").write_text("# init")
+
+        cp_mpy_dir = bundle_dir / CP_MPY_FOLDER / "chumicro_example"
+        cp_mpy_dir.mkdir(parents=True)
+        (cp_mpy_dir / "__init__.mpy").write_bytes(b"C\x06mpy")
+        (cp_mpy_dir / "_ca_bundle.der").write_bytes(b"\x30\x82der")
+
+        build_circup_zips(
+            bundle_dir, output_dir, "ChuMicro-Bundle", date_tag="20260101",
+        )
+        import zipfile
+
+        bytecode_zip_path = output_dir / "chumicro-bundle-10.x-mpy-20260101.zip"
+        with zipfile.ZipFile(bytecode_zip_path) as bytecode_zip:
+            names = bytecode_zip.namelist()
+        assert any(name.endswith("_ca_bundle.der") for name in names)
+        assert any(name.endswith("__init__.mpy") for name in names)
+
     def test_no_packages_returns_empty(self, tmp_path: Path):
         """Empty bundle directory returns empty list."""
         bundle_dir = tmp_path / "bundle"
@@ -569,6 +664,69 @@ def _make_test_library(tmp_path: Path, name: str = "fakelib") -> Path:
     )
     (library_dir / "README.md").write_text(f"# chumicro-{name}\n\nFake.\n")
     return library_dir
+
+
+def _make_data_file_library(tmp_path: Path) -> Path:
+    """A library whose MicroPython-only module declares a sibling data file.
+
+    Mirrors chumicro_sockets: ``_ca_bundle.py`` is marked micropython-only
+    and names ``_ca_bundle.der`` via ``__chumicro_data_files__``.
+    """
+    library_dir = _make_test_library(tmp_path, name="datalib")
+    package_dir = library_dir / "src" / "chumicro_datalib"
+    (package_dir / "_ca_bundle.py").write_text(
+        '__chumicro_runtimes__ = ("micropython",)\n'
+        '__chumicro_data_files__ = ("_ca_bundle.der",)\n',
+    )
+    (package_dir / "_ca_bundle.der").write_bytes(b"\x30\x82fake-der")
+    return library_dir
+
+
+class TestBundleDataFiles:
+    """build_bundle stages and manifests __chumicro_data_files__ siblings."""
+
+    def test_source_bundle_stages_and_lists_data_file(self, tmp_path: Path) -> None:
+        """The source bundle copies the .der and lists it in package.json urls."""
+        library_dir = _make_data_file_library(tmp_path)
+        staging_dir = tmp_path / "staging"
+        staging_dir.mkdir()
+        build_bundle(library_dir, "0.1.0", staging_dir)
+
+        package_dir = staging_dir / "chumicro_datalib"
+        assert (package_dir / "_ca_bundle.der").is_file()
+        manifest = json.loads((package_dir / "package.json").read_text())
+        assert any(entry[0].endswith("_ca_bundle.der") for entry in manifest["urls"])
+
+    def test_mp_mpy_stages_raw_der_and_lists_it(self, tmp_path: Path) -> None:
+        """The mpy6 bundle ships the .der raw (uncompiled) and lists it in urls."""
+        library_dir = _make_data_file_library(tmp_path)
+        staging_dir = tmp_path / "staging"
+        staging_dir.mkdir()
+        fake_mpy = _make_fake_mpy_cross(tmp_path / "tools")
+        build_bundle(
+            library_dir, "0.1.0", staging_dir, mp_mpy_cross=str(fake_mpy),
+        )
+
+        mpy_dir = staging_dir / MPY_FORMAT_FOLDER / "chumicro_datalib"
+        # The .der ships raw (its own bytes, uncompiled); the module beside
+        # it compiles to _ca_bundle.mpy as usual.
+        assert (mpy_dir / "_ca_bundle.der").read_bytes() == b"\x30\x82fake-der"
+        manifest = json.loads((mpy_dir / "package.json").read_text())
+        assert any(target.endswith("_ca_bundle.der") for target, _ in manifest["urls"])
+
+    def test_cp_mpy_excludes_micropython_only_data_file(self, tmp_path: Path) -> None:
+        """A micropython-only module and its .der stay out of the CircuitPython bundle."""
+        library_dir = _make_data_file_library(tmp_path)
+        staging_dir = tmp_path / "staging"
+        staging_dir.mkdir()
+        fake_mpy = _make_fake_mpy_cross(tmp_path / "tools")
+        build_bundle(
+            library_dir, "0.1.0", staging_dir, cp_mpy_cross=str(fake_mpy),
+        )
+
+        cp_mpy_dir = staging_dir / CP_MPY_FOLDER / "chumicro_datalib"
+        assert not (cp_mpy_dir / "_ca_bundle.der").exists()
+        assert not (cp_mpy_dir / "_ca_bundle.mpy").exists()
 
 
 class TestBuildBundle:
