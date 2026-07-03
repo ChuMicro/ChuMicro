@@ -87,6 +87,12 @@ class HttpOversizedError(HttpError):
 #: 256 KB MCU RAM minimum board.
 DEFAULT_MAX_BODY_BYTES = const(65536)
 
+#: Default cap on the accumulated status-line + header (and chunk-frame)
+#: bytes before the body.  ``max_body_bytes`` bounds only the body, so
+#: without this a peer dribbling header bytes with no CRLF could grow the
+#: staging buffer until the heap is exhausted on a 264 KB board.
+DEFAULT_MAX_HEADER_BYTES = const(16384)
+
 #: Default per-tick recv cap.  Keeps tick latency LED-friendly.
 DEFAULT_RECV_BUDGET_PER_TICK = const(1024)
 
@@ -208,13 +214,24 @@ def parse_url(url: str) -> tuple[str, str, int, str]:
     if not rest:
         raise HttpURLError(f"url is missing host: {url!r}")
 
-    slash_index = rest.find("/")
-    if slash_index == -1:
-        host_and_port = rest
+    # The authority (host[:port]) ends at the first '/', '?', or '#'.
+    # Splitting only on '/' would fold a query into the host
+    # ('http://host?q=1') or into the port ('http://host:8080?q=1' ->
+    # non-integer port error).
+    authority_end = len(rest)
+    for delimiter in ("/", "?", "#"):
+        index = rest.find(delimiter)
+        if index != -1 and index < authority_end:
+            authority_end = index
+    host_and_port = rest[:authority_end]
+    remainder = rest[authority_end:]
+    if not remainder:
         path = "/"
+    elif remainder[0] == "/":
+        path = remainder
     else:
-        host_and_port = rest[:slash_index]
-        path = rest[slash_index:]
+        # '?...' or '#...' with no path segment: origin-form path is '/'.
+        path = "/" + remainder
 
     if not host_and_port:
         raise HttpURLError(f"url is missing host: {url!r}")
@@ -528,6 +545,7 @@ class ResponseParser:
         self,
         *,
         max_body_bytes: int = DEFAULT_MAX_BODY_BYTES,
+        max_header_bytes: int = DEFAULT_MAX_HEADER_BYTES,
         body_buffer: bytearray | None = None,
         body_buffer_view: memoryview | None = None,
     ) -> None:
@@ -536,6 +554,10 @@ class ResponseParser:
         Args:
             max_body_bytes: Hard cap on body size — bigger triggers the
                 ``WhenOversized`` policy.
+            max_header_bytes: Hard cap on the accumulated status-line +
+                header (and chunk-frame) bytes staged before the body;
+                exceeding it fails with :class:`HttpProtocolError` so a
+                peer can't grow the staging buffer without bound.
             body_buffer: Optional caller-owned ``bytearray`` to use as
                 the steady-state body buffer.  When provided (typically
                 by ``HttpClient`` so the buffer survives across requests),
@@ -550,6 +572,7 @@ class ResponseParser:
                 one.  Required when ``body_buffer`` is provided.
         """
         self._max_body_bytes = max_body_bytes
+        self._max_header_bytes = max_header_bytes
         self._buffer = bytearray()
         # Read cursor into ``_buffer``.  Each ``_consume(n)`` advances
         # the cursor and only compacts the bytearray when at least
@@ -652,8 +675,12 @@ class ResponseParser:
     def feed(self, chunk):
         """Append *chunk* to the parser's buffer and advance the state.
 
-        Raises :class:`HttpProtocolError` (or :class:`HttpOversizedError`)
-        when the bytes can't be reconciled with HTTP/1.1.
+        A protocol / oversize failure latches :attr:`state` to ``ERROR``
+        and stores the exception on :attr:`error` rather than raising
+        here — the driving client checks the state and re-raises
+        :attr:`error`.  (The three non-ASCII line-decode failures are the
+        only paths that raise directly, for the client's request-line
+        error path.)
         """
         if self.state in (ParseState.DONE, ParseState.ERROR):
             return
@@ -664,6 +691,17 @@ class ResponseParser:
                 # state machine via _buffer because each chunk is framed.
                 self._absorb_body_bytes(chunk)
             else:
+                # Pre-body states (status line, headers, chunk framing)
+                # stage into _buffer.  Cap the live accumulation so a
+                # peer dribbling bytes with no CRLF can't grow it until
+                # the heap is exhausted.
+                live = len(self._buffer) - self._read_offset
+                if live + len(chunk) > self._max_header_bytes:
+                    self._fail(HttpProtocolError(
+                        "response header section exceeded "
+                        f"{self._max_header_bytes} bytes",
+                    ))
+                    return
                 self._buffer.extend(chunk)
         self._advance()
 
@@ -801,9 +839,19 @@ class ResponseParser:
 
     def _enter_body_state(self):
         """Headers-complete: figure out body framing."""
-        if self.status_code in NO_BODY_STATUS_CODES or (
-            100 <= self.status_code < 200
-        ):
+        # A 1xx interim response (100 Continue, 103 Early Hints, ...) is
+        # not the final response: discard its status/headers and parse
+        # the next status line.  101 Switching Protocols is terminal
+        # here (this client issues no Upgrade), so it falls through to
+        # the no-body path.
+        if 100 <= self.status_code < 200 and self.status_code != 101:
+            self.status_code = None
+            self.reason = ""
+            self.http_version = ""
+            self.headers = CaseInsensitiveDict()
+            self.state = ParseState.STATUS
+            return
+        if self.status_code in NO_BODY_STATUS_CODES:
             self.state = ParseState.DONE
             return
         # Transfer-Encoding takes precedence over Content-Length per
@@ -851,11 +899,18 @@ class ResponseParser:
                 return
             self.state = ParseState.BODY
             self._body_write_offset = 0
-            # Don't pre-allocate the body upfront: _absorb_body_chunk
-            # writes in place when the bytes fit in current capacity,
-            # otherwise rebinds _body to an exact-size replacement.
-            # The caller's body_buffer (when supplied) lets responses
-            # that fit complete with no per-request allocation at all.
+            # Pre-allocate the full body once when it won't fit the
+            # steady-state buffer.  content_length is already capped at
+            # max_body_bytes above, so this allocation is bounded — and
+            # it replaces the quadratic path where _absorb_body_chunk
+            # rebinds an exact-size buffer per recv chunk (a 64 KiB body
+            # fed in 512 B chunks was 126 reallocations and ~4 MiB of
+            # copying).  A response that fits the caller's body_buffer
+            # still completes with no per-request allocation.
+            if content_length > self._body_capacity:
+                self._body = bytearray(content_length)
+                self._body_view = memoryview(self._body)
+                self._body_capacity = content_length
             # Any bytes left in the buffer after the header CRLF are
             # the start of the body — flush into the body absorber.
             if self._live_len() > 0:

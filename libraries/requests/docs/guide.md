@@ -116,12 +116,15 @@ print(response.text)
 so charset overrides apply to JSON responses too.
 
 The `connector_factory` argument is a callable
-`(host, port, use_tls) -> TCPClientSocket`. The bundled
+`(host, port, use_tls) -> SocketConnector` — a tick-driven connector,
+not a ready socket (see [Bring your own transport](#bring-your-own-transport)
+below for the connector contract). The bundled
 `chumicro_requests.sockets_factory.chumicro_sockets_connector_factory(radio=..., ssl_context=...)`
 returns one wired to `chumicro-sockets`. The helper lives in an opt-in
 submodule so users with a custom transport never trigger the
-`chumicro-sockets` deploy. Tests typically pass a hand-rolled factory
-that returns a `chumicro_sockets.testing.FakeSocket`.
+`chumicro-sockets` deploy. Tests pass a factory returning a
+`chumicro_sockets.testing.FakeSocketConnector` (which wraps a
+`FakeSocket`).
 
 ## Bring your own transport
 

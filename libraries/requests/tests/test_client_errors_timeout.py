@@ -158,3 +158,25 @@ class TestHttpClientErrors:
         handle = client.get("http://example.test/")
         with raises(HttpError, match="before done"):
             _ = handle.result
+
+
+class SSLWantReadError(OSError):
+    """Mimics ssl.SSLWantReadError: an OSError subclass whose errno is
+    SSL_ERROR_WANT_READ (2), not EAGAIN."""
+
+    def __init__(self) -> None:
+        super().__init__(2, "The operation did not complete (read)")
+
+
+class TestWouldBlockClassification:
+    def test_ssl_want_read_and_ewouldblock_are_would_block(self):
+        from chumicro_requests.client import _EWOULDBLOCK, _is_would_block
+
+        assert _is_would_block(SSLWantReadError()) is True
+        assert _is_would_block(OSError(errno.EAGAIN, "again")) is True
+        assert _is_would_block(OSError(_EWOULDBLOCK, "wouldblock")) is True
+
+    def test_genuine_socket_error_is_not_would_block(self):
+        from chumicro_requests.client import _is_would_block
+
+        assert _is_would_block(OSError(errno.ECONNRESET, "reset")) is False
