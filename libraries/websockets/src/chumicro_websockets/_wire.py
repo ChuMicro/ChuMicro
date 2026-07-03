@@ -1134,18 +1134,19 @@ def make_mask_key() -> bytes:
 
 def encode_frame(
     opcode: int,
-    payload: bytes,
+    payload,
     *,
     fin: bool = True,
     mask: bytes | None = None,
-) -> bytes:
+) -> bytearray:
     """Encode a single websocket frame for outbound transmission.
 
     Args:
         opcode: One of ``OPCODE_*`` (``OPCODE_TEXT``, ``OPCODE_BINARY``,
             ``OPCODE_PING``, ``OPCODE_PONG``, ``OPCODE_CLOSE``,
             ``OPCODE_CONTINUATION``).
-        payload: Frame payload as ``bytes``.  Empty allowed.
+        payload: Frame payload as any buffer (``bytes`` / ``bytearray``
+            / ``memoryview``).  Empty allowed.
         fin: Whether this is the final frame of a message.  Always
             ``True`` in v1 outbound (no outbound fragmentation).
             Exposed for tests.
@@ -1155,7 +1156,9 @@ def encode_frame(
             servers MUST NOT.
 
     Returns:
-        Encoded frame as ``bytes`` ready for ``socket.send``.
+        Encoded frame as a ``bytearray`` ready for ``socket.send``
+        (which accepts any buffer).  Returning the working buffer
+        directly skips a full-frame ``bytes`` copy on the send path.
 
     Raises:
         WebSocketProtocolError: Control frame opcode with payload
@@ -1193,7 +1196,7 @@ def encode_frame(
             parts[payload_offset + index] ^= mask[index & 3]
     else:
         parts.extend(payload)
-    return bytes(parts)
+    return parts
 
 
 # ---------------------------------------------------------------------------

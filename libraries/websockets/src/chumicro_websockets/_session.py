@@ -206,8 +206,10 @@ class _BaseSession:
         # we don't churn the heap with ~1 KB allocations per handle()
         # call.  Capped at 512 B so a session configured with a large
         # ``recv_budget_per_tick`` doesn't pin a big steady-state
-        # buffer.  The recv loop calls back for the next chunk in the
-        # same tick if the budget remains.
+        # buffer.  ``_drain_inbound`` refills it in a loop within one
+        # tick until the full per-tick budget is consumed, so the cap
+        # bounds resident RAM without throttling throughput below the
+        # configured budget.
         recv_scratch_size = min(recv_budget_per_tick, 512)
         self._recv_buffer = bytearray(recv_scratch_size)
         self._recv_view = memoryview(self._recv_buffer)
@@ -362,13 +364,15 @@ class _BaseSession:
             raise WebSocketStateError(
                 f"send_binary() requires OPEN state, was {self.state}",
             )
-        if isinstance(data, (bytearray, memoryview)):
-            data = bytes(data)
-        elif not isinstance(data, bytes):
+        if not isinstance(data, (bytes, bytearray, memoryview)):
             raise TypeError(
                 f"send_binary() requires bytes, bytearray, or memoryview; "
                 f"got {type(data).__name__}",
             )
+        # No defensive copy: ``_enqueue_user_frame`` encodes the frame
+        # synchronously here, so ``encode_frame`` reads the buffer before
+        # this call returns — a caller mutating it afterward can't affect
+        # the already-encoded frame.
         self._enqueue_user_frame(OPCODE_BINARY, data)
 
     def send_ping(self, payload: bytes = b"") -> None:
@@ -514,18 +518,30 @@ class _BaseSession:
     # -- inbound drain (post-handshake) -----------------------------------
 
     def _drain_inbound(self, now_ms: int) -> None:
-        """Read up to recv_budget bytes and feed the frame parser."""
-        chunk = self._recv_chunk(self._recv_budget_per_tick)
-        if chunk is None:
-            return
-        if not chunk:
-            self._fail_with_error(
-                WebSocketProtocolError(
-                    "peer closed TCP without sending a CLOSE frame",
-                ),
-            )
-            return
-        self._feed_frame_bytes(chunk, now_ms)
+        """Read up to recv_budget bytes and feed the frame parser.
+
+        The scratch buffer caps a single ``recv_into`` at 512 B, so a
+        larger ``recv_budget_per_tick`` is honoured by looping: each pass
+        reads one <=512 B chunk and feeds it, stopping once the budget is
+        spent, the socket has no more data (EAGAIN), the peer closed, or
+        the session finalized inside frame dispatch.
+        """
+        remaining = self._recv_budget_per_tick
+        while remaining > 0:
+            chunk = self._recv_chunk(remaining)
+            if chunk is None:
+                return
+            if not chunk:
+                self._fail_with_error(
+                    WebSocketProtocolError(
+                        "peer closed TCP without sending a CLOSE frame",
+                    ),
+                )
+                return
+            self._feed_frame_bytes(chunk, now_ms)
+            if self.state == WebSocketState.CLOSED:
+                return
+            remaining -= len(chunk)
 
     def _feed_frame_bytes(self, chunk: bytes, now_ms: int) -> None:
         """Push *chunk* through :class:`FrameParser`, handling completed frames."""

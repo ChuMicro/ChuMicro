@@ -93,6 +93,13 @@ class TestEncodeFrame:
         # Empty payload still includes mask bytes.
         assert encoded == b"\x89\x80mask"
 
+    def test_returns_bytearray_for_zero_copy_send(self):
+        # encode_frame returns its working bytearray directly rather than
+        # a bytes() snapshot; socket.send accepts a bytearray buffer, so
+        # the send path skips a full-frame copy.
+        encoded = encode_frame(OPCODE_TEXT, b"hi")
+        assert isinstance(encoded, bytearray)
+
     def test_make_mask_key_length(self):
         assert len(make_mask_key()) == 4
         # Non-deterministic, but two calls almost surely differ.
