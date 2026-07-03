@@ -155,19 +155,6 @@ def _encode_map(value: dict, buffer: bytearray, depth: int) -> None:
 # Decoding
 # ---------------------------------------------------------------------------
 
-# Tag bytes that are valid msgpack but outside the chumicro 32-bit /
-# 16-bit subset.  Decoding one points the producer at the fix instead
-# of saying "unsupported byte".
-_OUT_OF_SUBSET = {
-    0xcb: ("float64", "encode with msgpack.packb(obj, use_single_float=True)"),
-    0xcf: ("uint64", "keep integers in [-2**31, 2**32-1]"),
-    0xd3: ("int64", "keep integers in [-2**31, 2**32-1]"),
-    0xc6: ("bin32", "bytes payloads must be under 65 536 bytes"),
-    0xdb: ("str32", "strings must be under 65 536 bytes"),
-    0xdd: ("array32", "arrays must be under 65 536 elements"),
-    0xdf: ("map32", "maps must be under 65 536 entries"),
-}
-
 # Cap on decoder recursion depth. A Pi Pico W under MicroPython
 # exhausts pystack at 17 nested containers, so the guard has to trip
 # well below that on the smallest supported board. 8 leaves room for
@@ -306,12 +293,33 @@ def _decode(data: memoryview, offset: int, depth: int) -> tuple:
     if byte >= 0xe0:
         return byte - 256, offset + 1
 
-    out_of_subset = _OUT_OF_SUBSET.get(byte)
-    if out_of_subset is not None:
-        name, fix = out_of_subset
-        raise ValueError(f"{name} (0x{byte:02x}) not in chumicro msgpack subset; {fix}")
+    raise _unsupported_byte_error(byte)
 
-    raise ValueError(f"unsupported msgpack type byte: 0x{byte:02x}")
+
+def _unsupported_byte_error(byte: int) -> ValueError:
+    """Return the ValueError for a *byte* no decode branch matched.
+
+    A byte that is valid msgpack but outside the chumicro 32-bit /
+    16-bit subset gets a message naming the tag and the producer-side
+    fix; anything else gets the plain "unsupported byte".  The
+    tag-to-guidance table lives here rather than at module scope so it
+    costs no import-time RAM on the healthy path that never decodes an
+    out-of-subset byte.
+    """
+    out_of_subset = {
+        0xcb: ("float64", "encode with msgpack.packb(obj, use_single_float=True)"),
+        0xcf: ("uint64", "keep integers in [-2**31, 2**32-1]"),
+        0xd3: ("int64", "keep integers in [-2**31, 2**32-1]"),
+        0xc6: ("bin32", "bytes payloads must be under 65 536 bytes"),
+        0xdb: ("str32", "strings must be under 65 536 bytes"),
+        0xdd: ("array32", "arrays must be under 65 536 elements"),
+        0xdf: ("map32", "maps must be under 65 536 entries"),
+    }
+    guidance = out_of_subset.get(byte)
+    if guidance is not None:
+        name, fix = guidance
+        return ValueError(f"{name} (0x{byte:02x}) not in chumicro msgpack subset; {fix}")
+    return ValueError(f"unsupported msgpack type byte: 0x{byte:02x}")
 
 
 def _decode_array(data: memoryview, offset: int, length: int, depth: int) -> tuple:
