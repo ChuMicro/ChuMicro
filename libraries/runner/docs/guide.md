@@ -121,7 +121,7 @@ A socket-owning service exposes the duck-typed attributes the runner reads each 
 
 | Attribute | Type | Purpose |
 |---|---|---|
-| `io_socket` | pollable object or `None` | The socket whose readiness should wake the loop |
+| `io_socket` | socket-ish object or `None` | The socket whose readiness should wake the loop.  Either the pollable itself or an adapter wrapper exposing it on `.sock` — the runner unwraps `.sock` at registration, so producers never need to. |
 | `io_wants_read` | `bool` | Register `POLLIN` interest |
 | `io_wants_write` | `bool` | Register `POLLOUT` interest |
 | `next_deadline(now_ms)` | `int` or `None` | The next tick the service must run even if no I/O arrives (timeouts, keepalives) |
