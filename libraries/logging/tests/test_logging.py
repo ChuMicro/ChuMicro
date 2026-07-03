@@ -361,6 +361,17 @@ def test_buffered_handler_starts_empty() -> None:
     assert handler.check(now_ms=0) is False
 
 
+def test_buffered_handler_capacity_is_read_only() -> None:
+    # capacity backs the deque's frozen maxlen, so it must not be
+    # reassignable — a mutable attribute would let drop accounting
+    # desync from the actual drop-oldest behavior.
+    downstream = RecordingHandler()
+    handler = BufferedHandler(downstream=downstream, capacity=4)
+    with raises(AttributeError):
+        handler.capacity = 8
+    assert handler.capacity == 4
+
+
 def test_buffered_handler_buffers_records_without_emitting() -> None:
     downstream = RecordingHandler()
     handler = BufferedHandler(downstream=downstream, capacity=4)

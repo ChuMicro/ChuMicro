@@ -55,9 +55,11 @@ The default exception is `RuntimeError("handler boom")`.  Pass a
 custom exception via the `exception=` keyword to simulate specific
 failure modes.
 
-## Usage from other libraries
+## Usage from applications
 
-Libraries that depend on `chumicro-logging` can import the fakes directly:
+No other ChuMicro library imports `chumicro-logging`, so these fakes are
+for application and integration tests that build a `Logger` directly.
+Import them the same way:
 
 ```python
 from chumicro_logging.testing import RecordingHandler
