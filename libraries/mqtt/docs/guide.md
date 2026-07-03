@@ -150,6 +150,8 @@ client.connect()
 # drive a fresh connector through DNS / TCP / TLS one phase per tick.
 ```
 
+Reconnects are paced by exponential backoff: the first retry after a fresh failure fires immediately, then each subsequent attempt doubles its wait from 1 s up to a 60 s ceiling, so a persistent outage doesn't storm the broker or drain the battery. A successful `CONNACK` resets the schedule. Rejections that reconnecting can't fix — `CONNACK` return codes 1, 2, 4, and 5 (unacceptable protocol version, identifier rejected, bad username/password, not authorized) — latch the client `FAILED` and stop self-heal until the next explicit `connect()`. Return code 3 (server unavailable) stays transient and keeps retrying. A `SUBACK` rejection (granted QoS `0x80`) evicts that filter from the client's subscription set before it faults, so the reconnect's subscription replay doesn't re-issue the rejected topic and re-earn the same rejection forever.
+
 Without a factory the client transitions to `FAILED` on socket death and stays there until the caller manually tears down + reconstructs.
 
 The factory is also the recommended way to wire up the **initial** connect: the runner is not blocked for the round-trip, and the same code path serves both initial-connect and reconnect.  `MQTTClient.from_config(...)` builds the connector factory for you from `mqtt.broker.host` / `mqtt.broker.port` (and `ssl_context=` for TLS).

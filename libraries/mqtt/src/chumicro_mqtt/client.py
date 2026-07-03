@@ -84,6 +84,23 @@ _AWAIT_PUBACK = "puback"
 _AWAIT_SUBACK = "suback"
 _AWAIT_UNSUBACK = "unsuback"
 
+# Self-heal reconnect backoff.  A FAILED client with a connector_factory
+# rebuilds the transport, but retrying every tick storms the broker and
+# drains battery on a persistent failure (dead wifi, unreachable host).
+# The first retry after a fresh failure is immediate; each subsequent
+# retry doubles the wait from _SELF_HEAL_BACKOFF_BASE_MS up to
+# _SELF_HEAL_BACKOFF_CAP_MS.  A successful CONNACK resets the schedule.
+_SELF_HEAL_BACKOFF_BASE_MS = 1000
+_SELF_HEAL_BACKOFF_CAP_MS = 60000
+
+# CONNACK return codes that no amount of retrying can fix: unacceptable
+# protocol version (1), identifier rejected (2), bad username/password
+# (4), not authorized (5).  Reconnecting with the same CONNECT packet
+# would just re-earn the same rejection, so the client stops self-healing
+# and stays FAILED.  Code 3 (server unavailable) is transient and keeps
+# retrying with backoff.
+_PERMANENT_CONNACK_CODES = (1, 2, 4, 5)
+
 
 class InFlightPublish:
     """One outstanding QoS 1 PUBLISH awaiting a PUBACK.
@@ -112,13 +129,18 @@ class PendingResponse:
     and an optional callback that fires once on receipt.  Multiple
     pending responses can coexist: tracking is per-entry rather than
     via a single broad waiting-state lock.
+
+    SUBACK entries also carry the subscribed ``topic`` so a rejection
+    (granted_qos 0x80) can evict that filter from the client's
+    subscription set before it faults.
     """
 
-    def __init__(self, awaiting, deadline_ticks, packet_id=None, callback=None):
+    def __init__(self, awaiting, deadline_ticks, packet_id=None, callback=None, topic=None):
         self.awaiting = awaiting
         self.deadline_ticks = deadline_ticks
         self.packet_id = packet_id
         self.callback = callback
+        self.topic = topic
 
 
 # ---------------------------------------------------------------------------
@@ -475,6 +497,16 @@ class MQTTClient:
         self.on_oversized = _no_callback
         self._pattern_handlers = []
         self.last_error = None
+        # Self-heal reconnect pacing.  ``_self_heal_attempts`` counts
+        # consecutive failed reconnects (reset on a successful CONNACK);
+        # ``_self_heal_retry_at_ticks`` gates the next attempt so FAILED
+        # doesn't rebuild the transport every tick.  ``_permanent_failure``
+        # latches on a CONNACK rejection code that retrying can't fix
+        # (bad credentials, not authorized) so the client stops self-healing
+        # entirely until the next explicit ``connect()``.
+        self._self_heal_attempts = 0
+        self._self_heal_retry_at_ticks = None
+        self._permanent_failure = False
 
     # ------------------------------------------------------------------
     # Public lifecycle
@@ -517,6 +549,11 @@ class MQTTClient:
                 f"connect() requires DISCONNECTED state, was {self.state}",
             )
         self._user_wants_connected = True
+        # Fresh connect: clear any latched permanent failure and reset
+        # the self-heal backoff schedule from a prior FAILED session.
+        self._permanent_failure = False
+        self._self_heal_attempts = 0
+        self._self_heal_retry_at_ticks = None
         if self._socket is None:
             try:
                 self._connector = self._connector_factory()
@@ -832,6 +869,7 @@ class MQTTClient:
                 deadline_ticks=self._deadline(self._ack_timeout_ms),
                 packet_id=packet_id,
                 callback=_wrapped,
+                topic=topic,
             ),
         )
 
@@ -912,10 +950,14 @@ class MQTTClient:
         non-blocking recv and bails on EAGAIN, so any non-terminal
         state is worth a tick.  ``FAILED`` qualifies — ``handle()``'s
         FAILED branch is where ``_attempt_self_heal`` lives, and that
-        has to keep firing until the broker is reachable again.  Only
+        has to keep firing until the broker is reachable again.
         ``DISCONNECTED`` (a terminal state the user explicitly asked
-        for) is gated out.
+        for) and a permanently-failed client (a CONNACK rejection no
+        reconnect can fix) are gated out — neither has any handle work
+        left to do.
         """
+        if self.state == ProtocolState.FAILED and self._permanent_failure:
+            return False
         return self.state is not ProtocolState.DISCONNECTED
 
     # ------------------------------------------------------------------
@@ -1016,7 +1058,17 @@ class MQTTClient:
             if self.io_socket is None:
                 return now_ms
             return self._connector.next_deadline(now_ms)
-        if self.state in (ProtocolState.DISCONNECTED, ProtocolState.FAILED):
+        if self.state == ProtocolState.FAILED:
+            # A self-heal-eligible FAILED client wakes at its next backoff
+            # retry; a permanent failure (or no factory) parks forever.
+            if (
+                self._connector_factory is not None
+                and self._user_wants_connected
+                and not self._permanent_failure
+            ):
+                return self._self_heal_retry_at_ticks
+            return None
+        if self.state == ProtocolState.DISCONNECTED:
             return None
         ticks_diff = self._ticks.ticks_diff
         nearest = None
@@ -1074,8 +1126,18 @@ class MQTTClient:
         the same.
         """
         if self.state == ProtocolState.FAILED:
-            if self._connector_factory is None or not self._user_wants_connected:
+            if (
+                self._connector_factory is None
+                or not self._user_wants_connected
+                or self._permanent_failure
+            ):
                 return
+            if (
+                self._self_heal_retry_at_ticks is not None
+                and self._ticks.ticks_diff(self._self_heal_retry_at_ticks, now_ms) > 0
+            ):
+                return  # Backoff interval not elapsed yet; wait for a later tick.
+            self._arm_self_heal_backoff(now_ms)
             if not self._attempt_self_heal():
                 return
             # Self-heal succeeded — state is AWAITING_TRANSPORT.  Fall
@@ -1105,6 +1167,27 @@ class MQTTClient:
         except OSError as error:
             self.last_error = MQTTError(f"socket error: {error}")
             self.state = ProtocolState.FAILED
+
+    def _arm_self_heal_backoff(self, now_ms):
+        """Schedule the earliest tick the next self-heal attempt may run.
+
+        Doubles the wait from ``_SELF_HEAL_BACKOFF_BASE_MS`` per
+        consecutive attempt, capped at ``_SELF_HEAL_BACKOFF_CAP_MS``.
+        Called just before each attempt, so the current attempt runs now
+        and only a *subsequent* FAILED tick is gated.  A successful
+        CONNACK zeroes ``_self_heal_attempts`` and clears the deadline.
+        """
+        # Clamp the shift so a multi-hour outage doesn't grow an
+        # ever-larger big-int before the cap clips it (6 doublings of a
+        # 1 s base already exceeds the 60 s cap).
+        if self._self_heal_attempts >= 6:
+            delay_ms = _SELF_HEAL_BACKOFF_CAP_MS
+        else:
+            delay_ms = _SELF_HEAL_BACKOFF_BASE_MS << self._self_heal_attempts
+            if delay_ms > _SELF_HEAL_BACKOFF_CAP_MS:
+                delay_ms = _SELF_HEAL_BACKOFF_CAP_MS
+            self._self_heal_attempts += 1
+        self._self_heal_retry_at_ticks = self._deadline(delay_ms, now_ms=now_ms)
 
     def _attempt_self_heal(self):
         """Reset transient state, build a fresh connector, enter AWAITING_TRANSPORT.
@@ -1487,6 +1570,10 @@ class MQTTClient:
             # failure instead of silently inheriting a never-matched
             # subscription.
             if packet.granted_qos and 0x80 in packet.granted_qos:
+                # Evict the rejected filter from _subscriptions before
+                # faulting, so the self-heal reconnect's replay doesn't
+                # re-issue it and re-earn the same rejection forever.
+                self._evict_rejected_subscription(packet.packet_id)
                 raise MQTTProtocolError(
                     f"SUBACK rejection (packet_id {packet.packet_id}, "
                     f"granted_qos {packet.granted_qos}) — broker refused "
@@ -1535,9 +1622,18 @@ class MQTTClient:
                     f"{reason})"
                 )
             self.last_error = MQTTConnectError(message, return_code=packet.return_code)
+            # Codes 1/2/4/5 can't be fixed by reconnecting with the same
+            # CONNECT packet, so latch permanent-failure and stop
+            # self-healing.  Code 3 (server unavailable) stays transient.
+            if packet.return_code in _PERMANENT_CONNACK_CODES:
+                self._permanent_failure = True
             self.state = ProtocolState.FAILED
             return
         self.state = ProtocolState.CONNECTED
+        # Reconnect succeeded: clear the self-heal backoff schedule so a
+        # later transient drop starts its backoff fresh.
+        self._self_heal_attempts = 0
+        self._self_heal_retry_at_ticks = None
         self._next_ping_due_ticks = self._deadline(self._ping_interval_ms, now_ms=now_ms)
         self._replay_subscriptions()
         self.on_connect()
@@ -1575,8 +1671,23 @@ class MQTTClient:
                     deadline_ticks=self._deadline(self._ack_timeout_ms),
                     packet_id=packet_id,
                     callback=None,
+                    topic=topic,
                 ),
             )
+
+    def _evict_rejected_subscription(self, packet_id):
+        """Drop the topic filter tied to a rejected SUBACK from _subscriptions.
+
+        Looks up the pending SUBACK entry for *packet_id* to recover the
+        topic (a SUBACK carries only the id, not the filter) and removes
+        it so it is never replayed on reconnect.  A no-op when the entry
+        or its topic is absent.
+        """
+        for pending in self._pending_responses:
+            if pending.awaiting == _AWAIT_SUBACK and pending.packet_id == packet_id:
+                if pending.topic is not None:
+                    self._subscriptions.pop(pending.topic, None)
+                return
 
     def _discard_pending(self, awaiting, *, packet_id, callback_arg=None):
         """Find and remove the matching :class:`PendingResponse`, then fire its callback.
