@@ -210,10 +210,13 @@ def _safe_member_path(into: Path, name: str) -> Path:
     """Resolve archive member *name* under *into*, rejecting traversal.
 
     ``tarfile``'s ``data`` filter would cover this but only exists on
-    3.12+.  This package supports 3.11.
+    3.12+.  This package supports 3.11.  Containment is tested on path
+    boundaries: a plain ``str.startswith`` check would wrongly admit a
+    sibling like ``/x/foo-evil`` as inside ``/x/foo``.
     """
+    into_resolved = into.resolve()
     target = (into / name).resolve()
-    if not str(target).startswith(str(into.resolve())):
+    if not target.is_relative_to(into_resolved):
         raise LibraryFetchError(
             LibraryFetchFailureKind.BAD_ARCHIVE,
             f"archive member escapes extraction dir: {name!r}",

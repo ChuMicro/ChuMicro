@@ -97,10 +97,10 @@ class DeployedProject:
         """Block until *marker_name* arrives on the board's stdout.
 
         Forwards to :meth:`DeviceBootstrapRunner.wait_for`.  Non-matching
-        markers that arrive while the wait is pending are dropped (per
-        :class:`chumicro_workspace.markers.MarkerQueue`'s contract); to
-        observe a known marker sequence, call ``wait_for`` in the order
-        the board prints them.
+        markers that arrive while the wait is pending are retained (per
+        :class:`chumicro_workspace.markers.MarkerQueue`'s contract), so
+        waits may run out of print order; a timeout message names what
+        did arrive, including marker-shaped lines that failed to parse.
 
         Args:
             marker_name: The marker name to wait for (uppercase identifier).
@@ -138,7 +138,10 @@ class DeployedProject:
 
         Safe to call from a ``finally`` clause even when the bootstrap
         is still running — the runner's shutdown is best-effort and the
-        transport's ``disconnect()`` is tolerant of any state.
+        transport's ``disconnect()`` is tolerant of any state.  When
+        the first join times out, ``disconnect()`` fails the bg
+        thread's blocked read fast, so the follow-up reap bounds the
+        window where a stale thread still holds the dead transport.
         """
         if self._shutdown_called:
             return
@@ -150,6 +153,7 @@ class DeployedProject:
                 self.transport.disconnect()
             except Exception:  # noqa: BLE001, S110 - best-effort teardown
                 pass
+            self.runner.shutdown(timeout_s=1.0)
 
     def __enter__(self) -> DeployedProject:
         return self
