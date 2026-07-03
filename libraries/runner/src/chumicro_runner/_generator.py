@@ -61,7 +61,11 @@ class GeneratorHandle:
     """Public handle returned by ``Runner.add_generator``.
 
     Observe completion via ``.done`` (False while the generator is
-    running, True after it either returns normally or is cancelled).
+    running, True after it returns normally, dies on an exception, or
+    is cancelled).  ``.error`` distinguishes the outcomes: ``None`` for
+    a normal return or cancel, the exception instance when the body
+    raised — so a ``while not handle.done`` driver can report *why* a
+    task ended instead of discovering a silent death by timeout.
     Stop a long-running generator early via ``.cancel()``, which fires
     any ``finally`` blocks inside the generator body — the natural place
     to put socket close, deadline timer cancel, and so on.
@@ -69,6 +73,7 @@ class GeneratorHandle:
 
     def __init__(self) -> None:
         self.done = False
+        self.error: BaseException | None = None
         # Set by ``Runner.add_generator`` immediately after construction.
         # ``cancel`` clears it so the second call is a no-op without
         # needing a separate already-cancelled flag.
@@ -208,10 +213,13 @@ class _GeneratorWrapper:
             wait = self._gen.send(value)
         except StopIteration:
             self._mark_done()
-        except BaseException:
-            # Generator raised — it has terminated.  Drop the runner
-            # entry before re-raising so a dead wrapper does not linger
-            # if a caller catches the exception further up the stack.
+        except BaseException as error:
+            # Generator raised — it has terminated.  Record the death on
+            # the handle (per-task attribution for the driver's
+            # ``while not handle.done`` loop) and drop the runner entry
+            # before re-raising so a dead wrapper does not linger if a
+            # caller catches the exception further up the stack.
+            self._handle.error = error
             self._mark_done()
             raise
         else:
@@ -224,7 +232,8 @@ class _GeneratorWrapper:
             wait = self._gen.throw(error)
         except StopIteration:
             self._mark_done()
-        except BaseException:
+        except BaseException as died:
+            self._handle.error = died
             self._mark_done()
             raise
         else:

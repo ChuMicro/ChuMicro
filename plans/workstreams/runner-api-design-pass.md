@@ -1,6 +1,10 @@
 # Workstream: runner/task API design pass (M49 + M51 + M31 + factory shape)
 
-Status: **awaiting user verdicts** (2026-07-03).  The four escalated design questions from the
+Status: **verdicts in** (2026-07-03): M49 = both surfaces (decided); M51 = two front doors
+(decided — user confirmed after the full-break tradeoff was clarified as consumer breakage, not
+implementer effort); factory = one contract, local copies (decided); M31 = pending — the user
+questions whether ADR 0089's mqtt paragraph is right and asked for more information; analysis
+appended to section 3 below.  The four escalated design questions from the
 straggler fan-out, with options and a recommendation each.  All four reshape public surfaces the
 demos teach, so they get decided together, with the user, before any code.
 
@@ -47,6 +51,25 @@ Every mqtt consumer hand-rolls tick loops and mutable-cell lambdas for one-shot 
 **Recommendation: (c), revisit after the demos settle.**  The M31 finding predates `run_until`
 and the demo rewrites; the remaining hand-rolling is small, and (a) would add a second blessed
 loop idiom for the same job the runner now owns.  Cheap to reverse if real apps still hurt.
+
+**2026-07-03 analysis of whether ADR 0089's mqtt paragraph still holds** (requested at the
+verdict gate).  0089 rejected two specific shapes: `yield from mqtt.publish_acked(...)` — still
+right, QoS acking is internal bookkeeping nobody should block on — and
+`yield from mqtt.connected()`, whose stated rationale ("one-time setup better served by an
+on_connect callback") has aged: ADR 0091's `Signal`/`wait_for` post-dates it and already gives
+any app a linear connect-wait in three lines with zero mqtt API (`client.on_connect` sets a
+Signal; the generator does `yield from wait_for(connected)`), exactly how the demos now wait for
+wifi.  What 0089 never evaluated is the **receive-stream** flavor for mqtt — its own blessed
+flavor 2.  A single-subscription command consumer is structurally identical to websockets'
+`next_message()` (which shipped, baked, and reads well): a bounded inbound queue on the client
+plus `message = yield from client.next_message()`, with the callback fan-out surface unchanged
+for multi-topic apps — the same dual surface websockets kept.  Unlike the connect-wait, this one
+cannot be built from 0091 primitives (inbound payloads must queue inside the client), so it is a
+genuine library surface, not sugar.  **Refined proposal:** amend 0089's mqtt paragraph narrowly —
+mqtt gains the receive-stream flavor only (`next_message()`, bounded queue, drop-oldest, mirroring
+websockets' design and knob); connect stays reactive (0091 covers linear waits); publish/subscribe
+stay fire-and-forget (the rejected `publish_acked` stays rejected).  Design questions if adopted:
+one global inbound queue vs per-subscription; interaction with pattern handlers on first use.
 
 ## 4. Factory/from_config shape (M77 + ntp L52/L53)
 
