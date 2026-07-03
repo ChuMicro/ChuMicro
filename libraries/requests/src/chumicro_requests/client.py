@@ -50,6 +50,32 @@ from chumicro_requests._wire import (
     resolve_redirect_url,
 )
 
+# EWOULDBLOCK is absent from MicroPython's errno; fall back to EAGAIN
+# (they're the same value on the platforms that define both).
+_EWOULDBLOCK = getattr(errno, "EWOULDBLOCK", errno.EAGAIN)
+
+
+def _is_would_block(socket_error):
+    """Return whether *socket_error* means "no progress yet, retry later".
+
+    A non-blocking plain socket raises ``OSError(EAGAIN | EWOULDBLOCK)``.
+    A non-blocking ``ssl.SSLSocket`` on CPython instead raises
+    ``SSLWantReadError`` / ``SSLWantWriteError`` (``OSError`` subclasses
+    whose ``errno`` is ``SSL_ERROR_WANT_READ`` / ``WANT_WRITE``, not
+    EAGAIN), so treating only EAGAIN as would-block turned every HTTPS
+    request into a fatal error.  Matched by exception-class name to stay
+    dependency-free across runtimes (the MicroPython / CircuitPython TLS
+    adapters already normalize to EAGAIN, so the name never matches
+    there).
+    """
+    if socket_error.errno in (errno.EAGAIN, _EWOULDBLOCK):
+        return True
+    return type(socket_error).__name__ in (
+        "SSLWantReadError",
+        "SSLWantWriteError",
+    )
+
+
 # ---------------------------------------------------------------------------
 # WhenOversized policy
 # ---------------------------------------------------------------------------
@@ -480,8 +506,10 @@ class HttpClient:
                 Overridable per-call via ``timeout_ms=...``.  Default
                 10 000 ms.
             default_max_redirects: Default cap on 3xx hops the client
-                follows before failing with :class:`HttpError`.
-                Overridable per-call via ``max_redirects=...``.
+                follows.  When the budget is exhausted the last 3xx
+                response is returned as-is (not an ``HttpError``), same
+                as ``max_redirects=0``.  Overridable per-call via
+                ``max_redirects=...``.
                 ``0`` returns the 3xx response as-is without
                 following.  Default 5.
             user_agent: Override the default ``User-Agent`` header.
@@ -883,7 +911,7 @@ class HttpClient:
             try:
                 sent = self._socket.send(view)
             except OSError as socket_error:
-                if socket_error.errno == errno.EAGAIN:
+                if _is_would_block(socket_error):
                     return
                 raise
             if sent <= 0:
@@ -910,7 +938,7 @@ class HttpClient:
             try:
                 got = self._socket.recv_into(self._recv_view, capacity)
             except OSError as socket_error:
-                if socket_error.errno == errno.EAGAIN:
+                if _is_would_block(socket_error):
                     return
                 raise
             if got == 0:

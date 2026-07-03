@@ -35,6 +35,23 @@ class TestParseURL:
         result = parse_url("http://example.com:8080/path?query=1")
         assert result == ("http", "example.com", 8080, "/path?query=1")
 
+    def test_query_without_path_terminates_authority(self):
+        # '?' ends the authority: the query must not fold into the host.
+        assert parse_url("http://example.com?key=abc") == (
+            "http", "example.com", 80, "/?key=abc",
+        )
+
+    def test_query_without_path_with_explicit_port(self):
+        # '?' ends the authority before the port is misparsed.
+        assert parse_url("http://example.com:8080?q=1") == (
+            "http", "example.com", 8080, "/?q=1",
+        )
+
+    def test_fragment_without_path_terminates_authority(self):
+        assert parse_url("http://example.com#frag") == (
+            "http", "example.com", 80, "/#frag",
+        )
+
     def test_https_default_port(self):
         assert parse_url("https://example.com/") == ("https", "example.com", 443, "/")
 
@@ -343,16 +360,59 @@ class TestResponseParserStatusAndHeaders:
         assert parser.state == ParseState.DONE
         assert parser.body == b""
 
-    def test_status_1xx_skips_body(self):
+    def test_status_1xx_interim_is_discarded_and_parser_awaits_final(self):
+        # A 1xx interim response (100 Continue, 103 Early Hints) is not
+        # the final response: the parser discards it and returns to
+        # parsing the next status line, then completes on the real 200.
         parser = ResponseParser()
         parser.feed(b"HTTP/1.1 100 Continue\r\n\r\n")
+        assert parser.state == ParseState.STATUS
+        parser.feed(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nhi")
         assert parser.state == ParseState.DONE
+        assert parser.status_code == 200
+        assert parser.body == b"hi"
+
+    def test_status_103_early_hints_then_final_response(self):
+        parser = ResponseParser()
+        parser.feed(
+            b"HTTP/1.1 103 Early Hints\r\n"
+            b"Link: </style.css>; rel=preload\r\n\r\n",
+        )
+        assert parser.state == ParseState.STATUS
+        parser.feed(b"HTTP/1.1 204 No Content\r\n\r\n")
+        assert parser.state == ParseState.DONE
+        assert parser.status_code == 204
 
     def test_zero_content_length_completes(self):
         parser = ResponseParser()
         parser.feed(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")
         assert parser.state == ParseState.DONE
         assert parser.body == b""
+
+    def test_header_section_over_cap_fails_not_ooms(self):
+        # A peer dribbling header bytes with no CRLF must latch ERROR at
+        # the header-byte cap rather than growing the staging buffer
+        # forever.  feed() latches self.error; the client re-raises it.
+        parser = ResponseParser(max_header_bytes=1024)
+        for _ in range(20):
+            parser.feed(b"X" * 100)  # no CRLF; accumulates past 1024
+            if parser.state == ParseState.ERROR:
+                break
+        assert parser.state == ParseState.ERROR
+        assert isinstance(parser.error, HttpProtocolError)
+
+    def test_large_body_reassembles_across_small_chunks(self):
+        # The pre-allocated body path must reassemble a large
+        # Content-Length body fed in small recv-sized chunks intact.
+        body = bytes((index % 251) for index in range(4096))
+        parser = ResponseParser(max_body_bytes=8192)
+        parser.feed(b"HTTP/1.1 200 OK\r\nContent-Length: 4096\r\n\r\n")
+        offset = 0
+        while offset < len(body):
+            parser.feed(body[offset:offset + 200])
+            offset += 200
+        assert parser.state == ParseState.DONE
+        assert parser.body == body
 
     def test_no_reason_phrase(self):
         parser = ResponseParser()
