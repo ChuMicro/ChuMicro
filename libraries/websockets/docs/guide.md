@@ -136,7 +136,8 @@ MCU RAM, 2 MB physical / ~800 KB usable flash):
   larger than this trigger `WhenOversized` policy.  The parser runs
   a three-tier inbound size model (mirrors `chumicro-mqtt`):
   - Tier 1, frames ≤ `payload_buffer_size` (256 B) — reuse the
-    steady-state buffer, zero per-frame allocation.
+    steady-state parse buffer; delivery still materializes one `bytes`
+    snapshot of the payload per frame.
   - Tier 2, frames between `payload_buffer_size` and
     `max_payload_bytes` — one-shot `bytearray(payload_length)`,
     freed after delivery.
@@ -148,11 +149,15 @@ MCU RAM, 2 MB physical / ~800 KB usable flash):
     or close with 1009 (`DISCONNECT`).
 - `max_tx_queue_size` defaults to `8` outbound messages.  Enqueueing
   past the cap raises `WebSocketBackpressureError`.  System-driven
-  frames (auto-pong, close handshake) bypass the cap via 8 slots
-  of headroom.
-- `recv_budget_per_tick` / `send_budget_per_tick` default to `1024`
-  bytes each.  A 16 KB message takes ~16 ticks to drain end-to-end —
-  well within LED-blink latency.
+  frames (auto-pong, close handshake) bypass the cap into 8 slots of
+  headroom; a CLOSE always fits, and an auto-pong that would fill the
+  last slot under a ping flood is dropped (RFC 6455 §5.5.3 allows
+  answering only the most recent ping) rather than evicting a queued
+  frame.
+- `send_budget_per_tick` defaults to `1024` bytes.
+  `recv_budget_per_tick` defaults to `1024` but each tick reads at most
+  one 512-byte chunk, so inbound drains at 512 B/tick; a 16 KB message
+  takes ~32 ticks to drain end-to-end — well within LED-blink latency.
 - The frame parser is one-shot per frame: parsed payload moves
   out of the parser into the message reassembly buffer in the
   client / connection, then the parser resets to header-reading.

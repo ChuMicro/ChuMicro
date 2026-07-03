@@ -25,6 +25,7 @@ from chumicro_websockets import (
 )
 from chumicro_websockets._wire import (
     FrameParser,
+    FrameParseState,
     HandshakeRequestParser,
     encode_close_payload,
     encode_frame,
@@ -145,6 +146,56 @@ class TestControlFrames:
 
 
 class TestCloseHandshake:
+    def test_inbound_after_protocol_error_does_not_wedge(self):
+        # A reserved-opcode frame makes the parser latch ERROR and the
+        # session send CLOSE; when the peer's CLOSE echo then arrives,
+        # feeding it to the wedged parser must not spin handle() forever
+        # (the parser consumes nothing in ERROR).
+        client, socket, clock, _ = _make_client()
+        client.connect("ws://example.com/")
+        _drive_handshake(client, socket, clock)
+        socket.feed_inbound(b"\x83\x00")  # FIN=1, reserved opcode 0x3, len 0
+        client.handle(clock.ticks_ms())
+        assert client.state == WebSocketState.CLOSING
+        socket.feed_inbound(
+            _client_frame(OPCODE_CLOSE, encode_close_payload(CLOSE_NORMAL, "")),
+        )
+        client.handle(clock.ticks_ms())  # returns instead of hanging
+        assert client.state in (WebSocketState.CLOSING, WebSocketState.CLOSED)
+
+    def test_ping_flood_does_not_evict_queued_user_frames(self):
+        # Internal PONGs bypass the user cap into headroom, but a flood
+        # must never evict a queued user frame (CPython deque overflow)
+        # or crash (MP/CP raise on a full flags=1 deque).  All queued
+        # user texts must still reach the wire.
+        client, socket, clock, _ = _make_client(max_tx_queue_size=3)
+        client.connect("ws://example.com/")
+        _drive_handshake(client, socket, clock)
+        client.send_text("alpha")
+        client.send_text("bravo")
+        client.send_text("charlie")
+        # 30 pings in one inbound chunk -> 30 PONGs contend for headroom.
+        flood = b"".join(_client_frame(OPCODE_PING, b"") for _ in range(30))
+        socket.feed_inbound(flood)
+        for _ in range(80):
+            client.handle(clock.ticks_ms())
+        # Outbound frames are client-masked; parse + unmask to collect texts.
+        sent = socket.read_outbound()
+        texts = []
+        parser = FrameParser()
+        offset = 0
+        while offset < len(sent):
+            offset += parser.feed(sent, offset)
+            if parser.state == FrameParseState.FRAME_READY:
+                if parser.opcode == OPCODE_TEXT:
+                    texts.append(bytes(parser.payload))
+                parser.reset()
+            else:
+                break
+        assert b"alpha" in texts
+        assert b"bravo" in texts
+        assert b"charlie" in texts
+
     def test_close_sends_close_frame_and_transitions(self):
         client, socket, clock, _ = _make_client()
         client.connect("ws://example.com/")

@@ -266,6 +266,52 @@ class TestFragmentation:
         assert code == CLOSE_PROTOCOL_ERROR
 
 
+class TestServerCloseFromCallback:
+    def test_close_inside_connection_callback_does_not_raise(self):
+        # A connection callback that calls server.close() clears every
+        # connection; handle() must not then try to remove an entry that
+        # is already gone.
+        events = []
+
+        def on_open(conn):
+            def on_text(text):
+                events.append(text)
+                server_box["server"].close()
+            conn.on_text = on_text
+
+        server_box = {}
+        server, listener, clock = _make_server(on_connection=on_open)
+        server_box["server"] = server
+        peer, _key, _response = _drive_server_handshake(server, listener, clock)
+        peer.feed_inbound(_server_frame(OPCODE_TEXT, b"shutdown"))
+        server.handle(clock.ticks_ms())  # no ValueError from list.remove
+        assert events == ["shutdown"]
+        assert server.closed is True
+        assert server.connection_count == 0
+
+    def test_callback_exception_resets_parser_no_redeliver_or_wedge(self):
+        # A user callback raising mid-dispatch must not leave the parser
+        # in FRAME_READY: the frame must not be redelivered, and the next
+        # frame must still parse (a stuck FRAME_READY parser consumes 0).
+        calls = []
+
+        def on_open(conn):
+            def on_text(text):
+                calls.append(text)
+                if text == "boom":
+                    raise ValueError("handler blew up")
+            conn.on_text = on_text
+
+        server, listener, clock = _make_server(on_connection=on_open)
+        peer, _key, _response = _drive_server_handshake(server, listener, clock)
+        peer.feed_inbound(_server_frame(OPCODE_TEXT, b"boom"))
+        with raises(ValueError):
+            server.handle(clock.ticks_ms())  # callback raises, propagates
+        peer.feed_inbound(_server_frame(OPCODE_TEXT, b"next"))
+        server.handle(clock.ticks_ms())
+        assert calls == ["boom", "next"]
+
+
 class TestControlFrames:
     def test_inbound_ping_triggers_pong(self):
         observed = []

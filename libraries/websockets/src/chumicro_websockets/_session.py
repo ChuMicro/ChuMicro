@@ -220,6 +220,10 @@ class _BaseSession:
         self._post_handshake_carry = b""
 
         self._tx_queue = _new_tx_queue(max_tx_queue_size + 8)
+        # Structural bound of the tx deque; internal frames check this
+        # explicitly rather than leaning on the deque's overflow, which
+        # diverges across runtimes.
+        self._tx_queue_hard_cap = max_tx_queue_size + 8
         self._tx_partial = None  # (bytes, offset) when last send was short.
 
         self._inbound_message_buffer = bytearray()
@@ -487,12 +491,23 @@ class _BaseSession:
         self._tx_queue.append(encoded)
 
     def _enqueue_internal_frame(self, opcode: int, payload: bytes) -> None:
-        """Queue a system-driven frame (close, pong, auto-ping); no cap check.
+        """Queue a system-driven frame (close, pong, auto-ping) past the user cap.
 
-        Internal frames bypass ``max_tx_queue_size`` because the queue
-        was sized for user payloads + headroom.  The deque's structural
-        ``maxlen`` (= max_tx_queue_size + 8) bounds heap regardless.
+        Internal frames bypass ``max_tx_queue_size`` into the deque's
+        headroom, but the bound is enforced here rather than by the
+        deque's structural overflow — that overflow silently evicts the
+        oldest queued frame on CPython (possibly a user frame or the
+        CLOSE handshake) and raises ``IndexError`` on MicroPython /
+        CircuitPython.  A CLOSE may fill the last slot; a non-CLOSE
+        (PONG, auto-PING) stops one short so a CLOSE handshake always
+        fits, and the dropped PONG under a PING flood is permitted by
+        RFC 6455 §5.5.3 (answer only the most recent PING).
         """
+        limit = self._tx_queue_hard_cap
+        if opcode != OPCODE_CLOSE:
+            limit -= 1
+        if len(self._tx_queue) >= limit:
+            return
         encoded = encode_frame(opcode, payload, fin=True, mask=self._outbound_mask())
         self._tx_queue.append(encoded)
 
@@ -514,6 +529,12 @@ class _BaseSession:
 
     def _feed_frame_bytes(self, chunk: bytes, now_ms: int) -> None:
         """Push *chunk* through :class:`FrameParser`, handling completed frames."""
+        # A parser that already latched ERROR (a prior frame failed
+        # protocol validation and we're draining toward close) consumes
+        # nothing, so feeding it more bytes would loop on the same
+        # offset forever.  Drop inbound until the close handshake ends.
+        if self._frame_parser.state == FrameParseState.ERROR:
+            return
         offset = 0
         chunk_length = len(chunk)
         while offset < chunk_length:
@@ -523,12 +544,25 @@ class _BaseSession:
                 self._send_close(CLOSE_PROTOCOL_ERROR, str(protocol_error), now_ms)
                 self.last_error = protocol_error
                 return
+            if consumed == 0:
+                # No progress with bytes still available means the parser
+                # stopped in a terminal state; stop rather than spin.
+                return
             offset += consumed
             if self._frame_parser.state == FrameParseState.FRAME_READY:
-                self._dispatch_frame(now_ms)
+                try:
+                    self._dispatch_frame(now_ms)
+                finally:
+                    # Reset even if a user callback raised, so the parser
+                    # never lingers in FRAME_READY — which would redeliver
+                    # the same frame or wedge the next drain (a parser
+                    # stopped in FRAME_READY consumes nothing).  Skip the
+                    # reset once CLOSED: dispatch is done and the frame
+                    # fields are still wanted by the finalize path.
+                    if self.state != WebSocketState.CLOSED:
+                        self._frame_parser.reset()
                 if self.state == WebSocketState.CLOSED:
                     return
-                self._frame_parser.reset()
 
     def _dispatch_frame(self, now_ms: int) -> None:
         """Route a just-completed frame through the message-level state

@@ -13,7 +13,11 @@ the MP / CP unix-ports too.
 
 import chumicro_sockets
 from chumicro_test_harness.patching import SwapAttribute
-from chumicro_websockets.sockets_factory import chumicro_sockets_connector_factory
+from chumicro_websockets.sockets_factory import (
+    chumicro_sockets_connector_factory,
+    chumicro_sockets_listener,
+)
+from chumicro_websockets.testing import FakeListener
 
 
 class TestSocketsFactory:
@@ -93,3 +97,63 @@ class TestSocketsFactory:
 
         assert "chumicro_sockets_connector_factory" not in dir(chumicro_websockets)
         assert "chumicro_sockets_connector_factory" not in chumicro_websockets.__all__
+
+
+class TestListenerFactory:
+    def test_binds_via_tcp_listening_socket_with_config_host_port(self):
+        calls: list = []
+
+        def fake_listen(host, port, *, radio):
+            calls.append((host, port, radio))
+            return "listener"
+
+        config = {
+            "websockets.server.host": "192.0.2.1",
+            "websockets.server.port": 9001,
+        }
+        with SwapAttribute(chumicro_sockets, "tcp_listening_socket", fake_listen):
+            result = chumicro_sockets_listener(config, radio="radio-handle")
+
+        assert result == "listener"
+        assert calls == [("192.0.2.1", 9001, "radio-handle")]
+
+    def test_defaults_to_all_interfaces_port_8765(self):
+        calls: list = []
+
+        def fake_listen(host, port, *, radio):
+            calls.append((host, port, radio))
+            return "listener"
+
+        with SwapAttribute(chumicro_sockets, "tcp_listening_socket", fake_listen):
+            chumicro_sockets_listener({})
+
+        assert calls == [("0.0.0.0", 8765, None)]
+
+    def test_from_config_auto_listener_routes_through_the_factory(self):
+        """No listener= means from_config builds one via the factory helper."""
+        import chumicro_websockets.server as server_module
+        from chumicro_websockets import WebSocketServer
+
+        calls: list = []
+
+        def fake_listen(host, port, *, radio):
+            calls.append((host, port))
+            return FakeListener()
+
+        with SwapAttribute(chumicro_sockets, "tcp_listening_socket", fake_listen):
+            server = WebSocketServer.from_config(
+                {"websockets.server.port": 7000}, _noop_connection,
+            )
+
+        assert calls == [("0.0.0.0", 7000)]
+        assert server is not None
+        del server_module  # imported only to assert the module path resolves
+
+    def test_helper_not_re_exported_from_init(self):
+        import chumicro_websockets
+
+        assert "chumicro_sockets_listener" not in dir(chumicro_websockets)
+
+
+def _noop_connection(connection):  # noqa: ARG001 - required on_connection shape
+    return None
