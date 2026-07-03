@@ -32,9 +32,13 @@ from .circuitpython_bootstrap import build_circuitpython_deploy_scripts
 from .protocol import (
     PROBE_IMPLEMENTATION_SCRIPT,
     DeviceImplementation,
+    DeviceTransportError,
+    MidDeployDisconnected,
+    TimeSource,
     UnsupportedExtraFilesError,
     parse_probe_output,
     validate_entrypoint_in_files,
+    write_files_to_staging,
 )
 from .runtime_marker import file_targets_runtime, is_test_support_module
 
@@ -241,40 +245,20 @@ class SerialPort(Protocol):
     def reset_input_buffer(self) -> None: ...
 
 
-class TimeSource(Protocol):
-    """Structural interface for an injectable time source.
-
-    ``FakeTime`` from :mod:`chumicro_deploy.testing` is one conforming
-    implementation that eliminates wall-clock waits.
-    """
-
-    def monotonic(self) -> float: ...
-    def sleep(self, seconds: float) -> None: ...
-
-
-class CircuitpythonTransportError(Exception):
+class CircuitpythonTransportError(DeviceTransportError):
     """Raised when a CircuitPython serial operation fails."""
 
 
-class CircuitpythonMidDeployDisconnected(CircuitpythonTransportError):
+class CircuitpythonMidDeployDisconnected(
+    CircuitpythonTransportError, MidDeployDisconnected,
+):
     """Raised when the device drops mid-deploy.
 
-    Subclass so callers can ``except`` "the cable came out" without
-    conflating it with other transport errors (raw-REPL stuck,
-    bootstrap exec failed, drive missing).
-
-    The original :class:`OSError` (typically
-    :class:`serial.SerialException`) is attached as :attr:`cause`
-    so callers that need the underlying errno or message can read
-    it without re-parsing the wrapper's own ``str(error)``.
+    The CircuitPython face of :class:`.protocol.MidDeployDisconnected`
+    (which owns the message shape and the :attr:`cause` attribute).
+    The wrapped :class:`OSError` is typically a
+    :class:`serial.SerialException` here.
     """
-
-    def __init__(self, cause: OSError, context: str = "") -> None:
-        prefix = f"device disconnected during {context}" if context else (
-            "device disconnected"
-        )
-        super().__init__(f"{prefix}: {cause}")
-        self.cause = cause
 
 
 class CircuitpythonTransport:
@@ -1347,13 +1331,7 @@ class CircuitpythonTransport:
         try:
             with tempfile.TemporaryDirectory() as staging_directory:
                 staging_path = Path(staging_directory)
-                for device_path in sorted(files.keys()):
-                    relative = device_path.lstrip("/")
-                    staging_destination = staging_path / relative
-                    staging_destination.parent.mkdir(parents=True, exist_ok=True)
-                    staging_destination.write_bytes(files[device_path])
-                    if on_file_staged is not None:
-                        on_file_staged(device_path)
+                write_files_to_staging(staging_path, files, on_file_staged)
                 # Strip docstrings and comments from every staged .py before
                 # the push so the board carries code, not prose.  Capture the
                 # entrypoint's post-strip byte size now, while the staging tree
