@@ -1,6 +1,8 @@
 # Workstream: full-sweep audit stragglers + un-audited-area coverage
 
-Status: **Track A fix stage complete** (2026-07-03): 17-group agent fan-out returned 52 fixed /
+Status: **COMPLETE** (2026-07-03) — both tracks closed; residual items carry their own
+next-up bullets (API design pass, runner M49, test-support packaging policy, H37).
+Original status detail: Track A fix stage complete: 17-group agent fan-out returned 52 fixed /
 8 already-fixed / 5 escalated, all group test lanes green; merged behind one preflight gate with
 per-group commits.  **Track B**: area 1 (workspace code) hunted and fixed the same day — the
 demo-driver ~10.0 s "marker stall" root-caused to `parse_marker` silently dropping any marker
@@ -97,8 +99,15 @@ adversarial verify → triage → fix → commit, before the next area starts.
 3. **DONE** `workbench/pytest-device` — 5 findings (P1–P5; core reconcile defenses verified
    sound — crash/OOM/truncation/dropped-FAIL all go red), all fixed 2026-07-03; report at
    [reviews/2026-07-03-pytest-device-audit.md](../reviews/2026-07-03-pytest-device-audit.md).
-4. `scripts/` (bundle/release/publish pipeline, run.py task plumbing — publishes packages, so
-   correctness bugs here ship bad artifacts).
-5. `support/test_harness` (already one finding, L77 tick-wraparound, from a cross-cutting hunter).
-6. `workbench/repl`.
-7. `webui/` (dev-only, lowest risk, last).
+4. **DONE** `scripts/` — 7 findings (S1–S7; top: circup zips shipped stale/removed modules,
+   check_api could baseline against an `-experimental` tag), all fixed 2026-07-03; report at
+   [reviews/2026-07-03-scripts-pipeline-audit.md](../reviews/2026-07-03-scripts-pipeline-audit.md).
+5. **DONE** `support/test_harness` — 5 findings (T1–T5; top: generator/async-bodied tests
+   reported PASS with the body never executed — the one false-green the host reconcile could not
+   see; device now FAILs them and the host collector recognizes async defs), all fixed
+   2026-07-03; report at
+   [reviews/2026-07-03-test-harness-audit.md](../reviews/2026-07-03-test-harness-audit.md).
+6. **DONE** `workbench/repl` + 7. `webui/` — combined tail hunt: 5 repl findings (top: TUI
+   Ctrl-X wedge against a streaming board; CLI connect now wrapped in the Decision-0053 coaching
+   loop) + webui clean bar one escaping nit, all fixed 2026-07-03; report at
+   [reviews/2026-07-03-repl-webui-audit.md](../reviews/2026-07-03-repl-webui-audit.md).
