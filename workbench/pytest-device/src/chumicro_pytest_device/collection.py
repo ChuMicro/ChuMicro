@@ -184,6 +184,16 @@ def _parse_test_functions(filepath: Path) -> list[str]:
     name filters and per-item reporting line up between collection and
     execution.
 
+    ``async def test_*`` is collected too, at module level and as a
+    ``Test*`` method.  The runner discovers it via ``dir()`` and fails it
+    (an ``async def`` body never runs — calling it only builds an
+    un-awaited coroutine).  Collecting it here gives that FAIL a pytest
+    item to land on: without it the device-run name is an orphan that
+    fails the whole file's reconcile instead of just that one test.  A
+    generator-bodied ``def test_*`` (a stray ``yield``) needs no special
+    case — its AST node is a plain ``FunctionDef`` already matched below,
+    and the runner fails it the same way.
+
     Args:
         filepath: Path to the test file.
 
@@ -193,15 +203,16 @@ def _parse_test_functions(filepath: Path) -> list[str]:
     """
     source = filepath.read_text(encoding="utf-8")
     tree = ast.parse(source, filename=str(filepath))
+    function_defs = (ast.FunctionDef, ast.AsyncFunctionDef)
     names: list[str] = []
     for node in ast.iter_child_nodes(tree):
-        if isinstance(node, ast.FunctionDef) and node.name.startswith("test_"):
+        if isinstance(node, function_defs) and node.name.startswith("test_"):
             names.append(node.name)
         elif isinstance(node, ast.ClassDef) and node.name.startswith("Test"):
             names.extend(
                 f"{node.name}.{method.name}"
                 for method in ast.iter_child_nodes(node)
-                if isinstance(method, ast.FunctionDef)
+                if isinstance(method, function_defs)
                 and method.name.startswith("test_")
             )
     return sorted(names)

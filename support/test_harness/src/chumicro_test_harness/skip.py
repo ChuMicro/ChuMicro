@@ -19,12 +19,19 @@ if _pytest is not None:
     #: (which catches this type explicitly).
     _SkipException = _pytest.skip.Exception
 else:
-    class _SkipException(Exception):
+    class _SkipException(BaseException):
         """Fallback sentinel when pytest is not importable (MP / CP unix-ports, on-device runs).
 
         Caught by :func:`chumicro_test_harness.runner.run_module` to
         report the test as SKIP. Not part of the public API: call
         :func:`skip`.
+
+        Derives from ``BaseException``, not ``Exception``, to match
+        pytest's own ``Skipped`` (``pytest.skip.Exception``, which is
+        ``BaseException``-derived).  A test body wrapping ``skip()`` in an
+        over-broad ``raises(Exception)`` then behaves identically on both:
+        ``issubclass(_SkipException, Exception)`` is ``False``, so the skip
+        propagates rather than being swallowed as the "expected" exception.
         """
 
 
