@@ -155,9 +155,11 @@ MCU RAM, 2 MB physical / ~800 KB usable flash):
   answering only the most recent ping) rather than evicting a queued
   frame.
 - `send_budget_per_tick` defaults to `1024` bytes.
-  `recv_budget_per_tick` defaults to `1024` but each tick reads at most
-  one 512-byte chunk, so inbound drains at 512 B/tick; a 16 KB message
-  takes ~32 ticks to drain end-to-end — well within LED-blink latency.
+  `recv_budget_per_tick` also defaults to `1024`.  A single `recv_into`
+  fills a 512 B scratch buffer, so a tick reads the budget in 512-byte
+  chunks — 1024 B/tick at the default — until the budget is spent or the
+  socket has no more data; a 16 KB message takes ~16 ticks to drain
+  end-to-end, well within LED-blink latency.
 - The frame parser is one-shot per frame: parsed payload moves
   out of the parser into the message reassembly buffer in the
   client / connection, then the parser resets to header-reading.

@@ -254,6 +254,22 @@ class TestInboundData:
         client.handle(clock.ticks_ms())
         assert data == [b"\x00\x01\x02"]
 
+    def test_large_frame_drains_within_one_tick(self):
+        # The recv scratch caps a single recv_into at 512 B, but the
+        # drain loops until the 1024 B default recv_budget_per_tick is
+        # spent.  A 600 B payload (604 B on the wire, past the 512 B
+        # single-read cap) therefore completes and fires on_binary in a
+        # single handle() call rather than stalling until the next tick.
+        client, socket, clock, _ = _make_client()
+        data = []
+        client.on_binary = lambda payload: data.append(payload)
+        client.connect("ws://example.com/")
+        _drive_handshake(client, socket, clock)
+        payload = bytes(index & 0xFF for index in range(600))
+        socket.feed_inbound(_client_frame(OPCODE_BINARY, payload))
+        client.handle(clock.ticks_ms())
+        assert data == [payload]
+
     def test_invalid_utf8_text_closes_with_bad_data(self):
         client, socket, clock, _ = _make_client()
         client.connect("ws://example.com/")

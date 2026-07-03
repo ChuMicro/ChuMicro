@@ -26,7 +26,6 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-    "chumicro-config",
     "chumicro-sockets",
     "chumicro-timing",
 ]
@@ -34,6 +33,7 @@ dependencies = [
 [project.optional-dependencies]
 test = [
     "pytest",
+    "chumicro-config",
     "chumicro-test-harness",
     "chumicro-pytest-device",
     "chumicro-workspace",
