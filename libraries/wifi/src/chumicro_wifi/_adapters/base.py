@@ -31,6 +31,15 @@ class WifiAdapter:
 
     name = "base"
 
+    #: Whether :meth:`connect` blocks until the association resolves and
+    #: returns the final result (``True``, CircuitPython), or dispatches
+    #: a non-blocking join that ``is_linked`` reports on a later tick
+    #: (``False``, MicroPython).  ``WifiService`` reads this to decide
+    #: whether a ``connect() == False`` is a settled failure or an
+    #: attempt still in flight.  Defaults to ``True`` (the safe reading:
+    #: treat the result as final).
+    connect_blocks = True
+
     #: Runtime-specific radio handle.  Only meaningful on CircuitPython,
     #: where downstream libraries (``chumicro-sockets``,
     #: ``chumicro-ntp``) need a ``radio=`` argument routed through the

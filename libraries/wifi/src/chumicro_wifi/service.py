@@ -105,6 +105,13 @@ class WifiService:
         self._next_attempt_due_ms = self._ticks.ticks_ms()
         self._current_backoff_ms = config.reconnect_backoff_start_ms
         self._reconnect_attempts = 0
+        # Deadline (absolute tick) of an in-flight association on a
+        # non-blocking adapter (MicroPython): while set, handle() polls
+        # is_linked() each tick until the link comes up or the deadline
+        # elapses, so the association's normal seconds-long settle isn't
+        # miscounted as a burst of failed attempts.  ``None`` on blocking
+        # adapters (CircuitPython) and between attempts.
+        self._attempt_deadline_ms = None
         self._state_callbacks = []
 
         # Apply hostname / power-save / static-IP once.  The adapter
@@ -160,6 +167,8 @@ class WifiService:
             return False
         if self.state == WifiState.CONNECTED:
             return not self.adapter.is_linked()
+        if self._attempt_deadline_ms is not None:
+            return True  # in-flight association: poll every tick
         return self._ticks.ticks_diff(now_ms, self._next_attempt_due_ms) >= 0
 
     def handle(self, now_ms):
@@ -170,9 +179,13 @@ class WifiService:
         """
         if self.state == WifiState.CONNECTED:
             if not self.adapter.is_linked():
-                self._transition(WifiState.RECONNECTING)
+                # Update scheduling before firing the transition so a
+                # reentrant callback observes a consistent state (a fresh
+                # backoff and a due timer), not stale RECONNECTING values.
                 self._reset_backoff()
                 self._next_attempt_due_ms = now_ms
+                self._attempt_deadline_ms = None
+                self._transition(WifiState.RECONNECTING)
             return
 
         if self.state == WifiState.FAILED:
@@ -181,7 +194,14 @@ class WifiService:
         if self.state == WifiState.DISCONNECTED:
             self._transition(WifiState.CONNECTING)
 
-        # CONNECTING or RECONNECTING: attempt the substrate connect.
+        # An in-flight association (non-blocking adapter) is polled every
+        # tick, independent of the backoff gate.
+        if self._attempt_deadline_ms is not None:
+            self._poll_in_flight(now_ms)
+            return
+
+        # CONNECTING or RECONNECTING: start the next attempt once the
+        # backoff timer is due.
         if self._ticks.ticks_diff(now_ms, self._next_attempt_due_ms) < 0:
             return  # too early, checked once more next tick
 
@@ -197,13 +217,42 @@ class WifiService:
             ok = False
 
         if ok:
-            self.last_error = None
-            self._reset_backoff()
-            self._reconnect_attempts = 0
-            self._transition(WifiState.CONNECTED)
+            self._mark_connected()
             return
 
-        # Failed attempt: schedule the next one with exponential backoff.
+        if not self.adapter.connect_blocks:
+            # Non-blocking substrate: connect() dispatched the join and
+            # returned before it resolved.  Poll is_linked() over the
+            # connect_timeout_ms window before counting a failure, so a
+            # normal seconds-long association isn't read as a failed
+            # attempt on every tick.
+            self._attempt_deadline_ms = self._ticks.ticks_add(
+                now_ms, self._config.connect_timeout_ms,
+            )
+            return
+
+        # Blocking substrate: connect() already waited, so False is a
+        # settled failure.
+        self._register_failed_attempt()
+
+    def _poll_in_flight(self, now_ms):
+        """Poll an in-flight non-blocking association toward link-up or timeout."""
+        if self.adapter.is_linked():
+            self._mark_connected()
+            return
+        if self._ticks.ticks_diff(now_ms, self._attempt_deadline_ms) >= 0:
+            self._attempt_deadline_ms = None
+            self._register_failed_attempt()
+
+    def _mark_connected(self):
+        self.last_error = None
+        self._reset_backoff()
+        self._reconnect_attempts = 0
+        self._attempt_deadline_ms = None
+        self._transition(WifiState.CONNECTED)
+
+    def _register_failed_attempt(self):
+        """Count a settled failed attempt: back off, or fail terminally."""
         self._reconnect_attempts += 1
         if (
             self._config.reconnect_max is not None
@@ -212,7 +261,13 @@ class WifiService:
             self._transition(WifiState.FAILED)
             return
 
-        self._next_attempt_due_ms = self._ticks.ticks_add(now_ms, self._current_backoff_ms)
+        # Schedule the next attempt from the current clock, not a
+        # pre-attempt now_ms: a blocking connect can burn most of
+        # connect_timeout_ms, which would leave now_ms + backoff already
+        # in the past and retry back-to-back with no gap.
+        self._next_attempt_due_ms = self._ticks.ticks_add(
+            self._ticks.ticks_ms(), self._current_backoff_ms,
+        )
         self._current_backoff_ms = min(
             self._current_backoff_ms * 2,
             self._config.reconnect_backoff_max_ms,
@@ -224,7 +279,12 @@ class WifiService:
         old_state = self.state
         self.state = new_state
         for callback in self._state_callbacks:
-            callback(old_state, new_state)
+            # A raising callback must not abort the remaining callbacks
+            # or escape into the runner tick; record it and continue.
+            try:
+                callback(old_state, new_state)
+            except Exception as error:  # noqa: BLE001 - callbacks are user code
+                self.last_error = error
 
     def _reset_backoff(self):
         self._current_backoff_ms = self._config.reconnect_backoff_start_ms

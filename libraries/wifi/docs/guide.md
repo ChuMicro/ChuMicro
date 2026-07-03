@@ -96,7 +96,7 @@ wifi.on_state_change(bus.publisher("wifi.state"))
 | `ssid` | ✅ | — | AP SSID. |
 | `password` | ✅ | — | WPA passphrase. |
 | `hostname` | | `None` | Hostname advertised on the AP. |
-| `connect_timeout_ms` | | `15_000` | Per-attempt connect deadline. |
+| `connect_timeout_ms` | | `15_000` | Per-attempt connect deadline — a blocking wait on CircuitPython, the in-flight association poll window on MicroPython. |
 | `reconnect_backoff_start_ms` | | `1_000` | Initial reconnect delay. |
 | `reconnect_backoff_max_ms` | | `60_000` | Exponential-backoff cap. |
 | `reconnect_max` | | `None` (unlimited) | Attempts before entering `FAILED`. |
