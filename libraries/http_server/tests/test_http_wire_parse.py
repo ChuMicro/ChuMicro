@@ -54,6 +54,15 @@ class TestParseQuery:
         result = parse_query("k=1&k=2")
         assert result["k"] == "1, 2"
 
+    def test_keys_case_folded_and_merged(self):
+        # parse_query stores into a CaseInsensitiveDict, so keys differing
+        # only in case fold together into one lowercase entry and their
+        # values join with ", " — the documented limitation, since URL
+        # query keys are case-sensitive.
+        result = parse_query("Foo=1&foo=2")
+        assert len(result) == 1
+        assert result["foo"] == "1, 2"
+
 
 class TestRequestParser:
     def test_simple_get(self):
