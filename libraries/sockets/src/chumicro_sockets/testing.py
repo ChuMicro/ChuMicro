@@ -359,17 +359,16 @@ class FakeSocketConnector:
 
     @property
     def io_socket(self) -> object | None:
-        """Registrable pollable for ``Runner.wait``, or ``None``.
+        """The connector's socket-ish object for ``Runner.wait``, or ``None``.
 
-        Returns the registrable underlying of :attr:`socket` once it is
-        built (chumicro wrapper classes store the raw socket on
-        ``.sock``; bare sockets pass through), matching the real
-        connector.  ``None`` at ``awaiting_dns`` before the socket
+        Returns :attr:`socket` as-is once built, matching the real
+        connector; the runner unwraps any ``.sock`` adapter wrapper at
+        the poller.  ``None`` at ``awaiting_dns`` before the socket
         exists and after ``failed`` / ``cancel`` clear it.
         """
         if self.socket is None:
             return None
-        return getattr(self.socket, "sock", self.socket)
+        return self.socket
 
     @property
     def io_wants_read(self) -> bool:

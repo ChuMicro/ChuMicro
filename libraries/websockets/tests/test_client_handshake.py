@@ -384,15 +384,12 @@ class TestRunnerReactorContract:
         client._finalize_closed()  # force CLOSED
         assert client.io_socket is None
 
-    def test_io_socket_unwraps_adapter_wrapper_after_promotion(self):
-        # Regression: the MP adapter promotes the connector's socket to
-        # an _MpSocketWrapper-style object whose pollable lives on
-        # ``.sock``.  io_socket must return the inner pollable —
-        # registering the wrapper with select.poll raises
-        # OSError("stream operation not supported") on MicroPython.
-        # The client's inlined io_socket override unwrapped via the
-        # non-existent ``._sock`` until 2026-07-03; only real MP
-        # silicon ever hit it (CP hands back bare sockets).
+    def test_io_socket_returns_adapter_wrapper_as_is(self):
+        # After the MP adapter promotes the connector's socket to an
+        # _MpSocketWrapper-style object whose pollable lives on ``.sock``,
+        # io_socket returns that wrapper unchanged.  The runner unwraps
+        # the ``.sock`` pollable at the poller, so the client hands back
+        # its socket-ish object without inspecting it.
         client, socket, clock, _ = _make_client()
         client.connect("ws://example.com/")
         _drive_handshake(client, socket, clock)
@@ -401,8 +398,9 @@ class TestRunnerReactorContract:
             def __init__(self, sock):
                 self.sock = sock
 
-        client._socket = _AdapterWrapper(socket)
-        assert client.io_socket is socket
+        wrapper = _AdapterWrapper(socket)
+        client._socket = wrapper
+        assert client.io_socket is wrapper
 
     def test_io_wants_write_during_sending_handshake(self):
         client, _socket, clock, _ = _make_client()

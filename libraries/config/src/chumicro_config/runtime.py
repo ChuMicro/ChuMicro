@@ -16,8 +16,9 @@ def load_runtime_config(path: str | None = None) -> RuntimeConfig:
     Raises ``OSError`` if the file is missing, :class:`InvalidConfigType`
     if the payload isn't a dict or is malformed msgpack (e.g. a
     power-loss-truncated file, which ``unpackb`` rejects as bad framing).
-    *path* defaults to :data:`DEFAULT_RUNTIME_CONFIG_PATH` at call time
-    (resolved late so tests can monkey-patch the constant).
+    *path* defaults to :data:`DEFAULT_RUNTIME_CONFIG_PATH`, read from the
+    module constant at call time so that one documented ABI value stays
+    the single source of the on-device location.
     """
     if path is None:
         path = DEFAULT_RUNTIME_CONFIG_PATH

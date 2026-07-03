@@ -594,17 +594,14 @@ class HttpClient:
         ``Runner.wait`` registers this object with ``select.poll``.
         While in ``AWAITING_TRANSPORT`` this forwards to the
         connector's in-flight pollable so the runner parks on the
-        right handle between connect phases.  Once promoted, adapter
-        wrappers from ``chumicro_sockets`` store the underlying
-        pollable on ``.sock``; bare CPython sockets and CircuitPython
-        TCP / TLS clients pass through unchanged.
+        right handle between connect phases.  Once promoted, the
+        socket is returned as-is — the contract is "return your
+        socket-ish object"; the runner unwraps adapter wrappers'
+        ``.sock`` at the poller.
         """
         if self._state == _RequestState.AWAITING_TRANSPORT:
             return self._connector.io_socket if self._connector is not None else None
-        sock = self._socket
-        if sock is None:
-            return None
-        return getattr(sock, "sock", sock)
+        return self._socket
 
     @property
     def io_wants_read(self):

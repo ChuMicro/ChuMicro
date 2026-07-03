@@ -1147,9 +1147,12 @@ def encode_frame(
             ``OPCODE_CONTINUATION``).
         payload: Frame payload as any buffer (``bytes`` / ``bytearray``
             / ``memoryview``).  Empty allowed.
-        fin: Whether this is the final frame of a message.  Always
-            ``True`` in v1 outbound (no outbound fragmentation).
-            Exposed for tests.
+        fin: FIN bit for this frame (RFC 6455 §5.2) — clear on every
+            frame but the last of a fragmented message.  Production
+            always passes ``True`` (v1 sends no fragmented outbound
+            messages); decoder tests set it ``False`` to synthesize
+            genuinely fragmented inbound frames through this same encoder
+            rather than hand-assembling wire bytes.
         mask: ``None`` for server-side (no masking).  4-byte key
             (typically from :func:`make_mask_key`) for client-side.
             Per RFC 6455 §5.1, clients MUST mask outbound frames and

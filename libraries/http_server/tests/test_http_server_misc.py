@@ -109,33 +109,6 @@ class TestAuditFixes:
         assert server.listening is True
         assert server.accept_errors == 2
 
-    def test_io_socket_unwraps_dot_sock_wrapper(self):
-        # A listener wrapper exposing the OS socket on .sock unwraps to
-        # the inner pollable, not the fileno-less wrapper.
-        inner = object()
-
-        class WrapperListener:
-            sock = inner
-
-            def accept(self):
-                return None
-
-            def close(self):
-                pass
-
-            def setblocking(self, _flag):
-                pass
-
-        ticks = FakeTicks()
-        server = HttpServer(
-            listener_factory=lambda: WrapperListener(),
-            handler=lambda request: build_response(200),
-            ticks=ticks,
-        )
-        server.handle(ticks.ticks_ms())  # lazy-open the listener
-        assert server.io_socket is inner
-
-
 class TestRequestParserBodyStateTransition:
     """Exercise the parser state map's BODY branch via partial body."""
 
