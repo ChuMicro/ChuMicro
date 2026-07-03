@@ -12,8 +12,7 @@ Per-connection state machine::
         -> WANT_BODY            (skipped when Content-Length absent/0)
           -> DISPATCHING        (handler runs synchronously here)
             -> WANT_SEND_HEADERS
-              -> WANT_SEND_BODY
-                -> DONE
+              -> DONE
                            \\-> ERROR (any state)
 
 The handler is called once, after the full request (headers + any
@@ -164,6 +163,12 @@ class Request:
         and decodes the body with it.  Falls back to ``utf-8`` when no
         Content-Type / no charset is present — matches RFC 8259 §8.1
         for JSON and the web's current text default.
+
+        Only UTF-8 is decodable on every runtime.  MicroPython and
+        CircuitPython ship a UTF-8-only ``str`` codec, so a declared
+        non-UTF-8 charset (``latin-1``, ``iso-8859-1``, ...) either
+        raises or mis-decodes there.  Send UTF-8 bodies for portable
+        behavior.
         """
         return self.body.decode(parse_charset(self.headers.get("Content-Type")))
 
@@ -221,9 +226,29 @@ class _ConnState:
     WANT_BODY = "want_body"
     DISPATCHING = "dispatching"
     WANT_SEND_HEADERS = "want_send_headers"
-    WANT_SEND_BODY = "want_send_body"
     DONE = "done"
     ERROR = "error"
+
+
+#: Terminal connection states.  Hoisted to module scope so the per-tick
+#: ``is_done`` check reuses one tuple instead of rebuilding it every call —
+#: MicroPython and CircuitPython don't constant-fold tuples of attribute
+#: loads.
+_DONE_STATES = (_ConnState.DONE, _ConnState.ERROR)
+
+#: States in which the connection is still reading the request off the
+#: socket; drives the recv half of a tick.  Module-scoped for the same
+#: no-rebuild reason as :data:`_DONE_STATES`.
+_RECV_STATES = (
+    _ConnState.WANT_REQUEST_LINE,
+    _ConnState.WANT_HEADERS,
+    _ConnState.WANT_BODY,
+)
+
+#: Parser states at which :meth:`_Connection._drive_recv` stops looping —
+#: no more socket bytes can advance the parse.  Module-scoped so the
+#: per-recv-iteration test reuses one tuple.
+_PARSER_TERMINAL_STATES = (RequestParseState.DONE, RequestParseState.ERROR)
 
 
 class _Connection:
@@ -279,7 +304,7 @@ class _Connection:
 
     @property
     def is_done(self):
-        return self.state in (_ConnState.DONE, _ConnState.ERROR)
+        return self.state in _DONE_STATES
 
     def tick(self, now_ms, *, ticks_diff_func):
         """Advance the connection by one tick's worth of work."""
@@ -289,18 +314,11 @@ class _Connection:
             self._fail()
             return
         try:
-            if self.state in (
-                _ConnState.WANT_REQUEST_LINE,
-                _ConnState.WANT_HEADERS,
-                _ConnState.WANT_BODY,
-            ):
+            if self.state in _RECV_STATES:
                 self._drive_recv()
             if self.state == _ConnState.DISPATCHING:
                 self._dispatch_handler()
-            if self.state in (
-                _ConnState.WANT_SEND_HEADERS,
-                _ConnState.WANT_SEND_BODY,
-            ):
+            if self.state == _ConnState.WANT_SEND_HEADERS:
                 self._drive_send()
         except ServerLimitError as limit_error:
             # A sender-controlled allocation hit a documented cap before
@@ -342,9 +360,7 @@ class _Connection:
         consumed = 0
         budget = self._recv_budget
         scratch_size = len(self._recv_buffer)
-        while consumed < budget and self._parser.state not in (
-            RequestParseState.DONE, RequestParseState.ERROR,
-        ):
+        while consumed < budget and self._parser.state not in _PARSER_TERMINAL_STATES:
             capacity = min(scratch_size, budget - consumed)
             try:
                 got = self._socket.recv_into(self._recv_view, capacity)
@@ -950,13 +966,16 @@ class HttpServer:
         # Try to accept up to one new connection per tick.
         if len(self._connections) < self._max_connections:
             self._try_accept(now_ms)
-        # Advance every in-flight connection.  Iterate over a copy so
-        # connections can finish + be removed during the loop.
-        for connection in list(self._connections):
-            connection.tick(now_ms, ticks_diff_func=self._ticks.ticks_diff)
-            if connection.is_done:
-                connection.close()
-                self._connections.remove(connection)
+        # Advance every in-flight connection.  Guard the copy so an idle
+        # listener (the common case) doesn't allocate a fresh list every
+        # tick; iterate over a copy when non-empty so connections can
+        # finish + be removed during the loop.
+        if self._connections:
+            for connection in list(self._connections):
+                connection.tick(now_ms, ticks_diff_func=self._ticks.ticks_diff)
+                if connection.is_done:
+                    connection.close()
+                    self._connections.remove(connection)
 
     def _try_accept(self, now_ms):
         """Best-effort accept of one pending connection."""

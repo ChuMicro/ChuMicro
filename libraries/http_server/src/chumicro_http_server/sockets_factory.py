@@ -5,6 +5,7 @@ so users who pass their own ``listener_factory`` never pull
 :mod:`chumicro_sockets` into the deploy graph.
 """
 
+import chumicro_sockets
 from chumicro_config import MissingConfigKey
 
 
@@ -36,21 +37,16 @@ def chumicro_sockets_factory(config, *, radio=None, ssl_context=None):
     use_tls = ssl_context is not None or cert_path is not None
 
     def factory():
-        from chumicro_sockets import (  # noqa: PLC0415 - lazy
-            ssl_context_with_cert_and_key_paths,
-            tcp_listening_socket,
-            tls_listening_socket,
-        )
         if not use_tls:
-            return tcp_listening_socket(host, port, radio=radio)
+            return chumicro_sockets.tcp_listening_socket(host, port, radio=radio)
         context = (
             ssl_context
             if ssl_context is not None
-            else ssl_context_with_cert_and_key_paths(
+            else chumicro_sockets.ssl_context_with_cert_and_key_paths(
                 cert_path=cert_path, key_path=key_path,
             )
         )
-        return tls_listening_socket(
+        return chumicro_sockets.tls_listening_socket(
             host, port, context=context, radio=radio,
         )
 

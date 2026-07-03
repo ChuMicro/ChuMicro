@@ -87,17 +87,19 @@ verification across the supported board matrix:
 
 | Runtime + board | TLS server status | Notes |
 |---|---|---|
-| CircuitPython on ESP32-S2 (Lolin S2) | ✅ Works | ~6 KB context + ~35 KB handshake heap. |
+| CircuitPython on ESP32-S2 (Lolin S2) | ✅ Works | Bench-tested ~5 KB context (RSA-2048); each connection adds tens of KB during handshake — leave headroom. |
 | CircuitPython on rp2 (Pi Pico W / Pi Pico 2 W) | ❌ Refused (`UnsupportedSSLConfigError`) | `chumicro_sockets.tls_listening_socket` raises up-front; the underlying CYW43 TLS path raises `OSError(32)` mid-handshake AND wedges the chip's station-mode state. Use ESP32-family or MicroPython on rp2. |
 | MicroPython on ESP32-S2 | ✅ Works | Hardware-accelerated handshake; ~1 KB heap. |
 | MicroPython on rp2 (Pi Pico W) | ✅ Works (RSA-2048 only) | DER-encoded key; ~25 KB handshake heap; ECC keys fail at context build. |
 
 > **Why the CP-on-rp2 row?**  The CYW43 stack's TLS server path raises `OSError(32)` mid-handshake and wedges the chip's station state until a USB power-cycle.  No upstream fix is in flight; for HTTPS server work on rp2, use MicroPython.
 
-The TLS handshake is synchronous inside `wrap_socket(..., server_side=True)`;
-budget for a ~100–500 ms listener stall during accept.  Once the
-handshake completes, the per-connection state machine resumes its
-runner-shaped, LED-blink-friendly progression.
+The TLS handshake is synchronous inside `wrap_socket(..., server_side=True)`:
+the listener stalls until it completes — single-digit to tens of
+milliseconds on the supported board class with a local TLS client, longer
+on a slow uplink as TLS rounds-trip.  Once the handshake completes, the
+per-connection state machine resumes its runner-shaped,
+LED-blink-friendly progression.
 
 ## Examples
 

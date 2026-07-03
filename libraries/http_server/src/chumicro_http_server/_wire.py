@@ -298,6 +298,14 @@ class RequestParseState:
     ERROR = "error"
 
 
+#: Parser states in which no further :meth:`RequestParser.feed` can make
+#: progress.  Hoisted to module scope so the per-chunk membership test in
+#: ``feed`` / ``feed_eof`` reuses one tuple instead of rebuilding it every
+#: call — MicroPython and CircuitPython don't constant-fold tuples of
+#: attribute loads.
+_PARSER_TERMINAL_STATES = (RequestParseState.DONE, RequestParseState.ERROR)
+
+
 class RequestParser:
     """Streaming HTTP/1.1 request parser.
 
@@ -478,7 +486,7 @@ class RequestParser:
         Raises :class:`ServerProtocolError` when the bytes can't be
         reconciled with HTTP/1.1.
         """
-        if self.state in (RequestParseState.DONE, RequestParseState.ERROR):
+        if self.state in _PARSER_TERMINAL_STATES:
             return
         if chunk:
             if self.state == RequestParseState.BODY:
@@ -489,7 +497,7 @@ class RequestParser:
 
     def feed_eof(self):
         """Signal that the peer closed.  Mid-headers is a protocol error."""
-        if self.state in (RequestParseState.DONE, RequestParseState.ERROR):
+        if self.state in _PARSER_TERMINAL_STATES:
             return
         if self.state == RequestParseState.BODY and self._body_remaining > 0:
             self._fail(ServerProtocolError(
@@ -738,11 +746,14 @@ def split_target(target: str) -> tuple[str, str]:
 def parse_query(raw_query: str) -> "CaseInsensitiveDict":
     """Parse a ``foo=bar&baz=qux`` query string into a header-shaped dict.
 
-    Repeated keys join with ``,`` per the same RFC 7230 §3.2.2 rule
-    headers use — caller can `.split(",")` if they need both values.
-    Percent-decoding is **not** done in v1; URL-encoded values come
-    through as-is (most embedded REST APIs use bare alphanumeric
-    keys + values).  Documented as a limitation.
+    Returns a :class:`CaseInsensitiveDict`, so keys fold to lowercase and
+    two keys differing only in case merge into one entry (``a=1&A=2``
+    yields a single ``a`` -> ``1, 2``) — a limitation, since URL query
+    keys are case-sensitive.  Repeated keys join their values with ``, ``
+    (comma-space) via :meth:`CaseInsensitiveDict.add`; a caller splitting
+    them back apart uses ``.split(", ")``.  Percent-decoding is **not**
+    done; URL-encoded values come through as-is (most embedded REST APIs
+    use bare alphanumeric keys + values).
     """
     result = CaseInsensitiveDict()
     if not raw_query:
