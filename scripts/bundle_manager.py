@@ -39,6 +39,7 @@ Examples:
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 import shutil
 import subprocess
@@ -109,6 +110,55 @@ def _find_bundle_modules(
         and not is_test_support_module(py_file)
     ]
     return package_dir.name, package_dir, python_files
+
+
+def _data_files_from(python_file: Path) -> list[str]:
+    """Return the string entries of a module-level
+    ``__chumicro_data_files__`` assignment, or ``[]`` when absent.
+
+    Read via AST (no import) so it works on a host that can't import
+    the device module.  Names sibling data files the module opens at
+    runtime (e.g. ``chumicro_sockets/_ca_bundle.der``) that the .py /
+    .mpy walk can't otherwise discover.
+    """
+    try:
+        tree = ast.parse(python_file.read_bytes())
+    except (SyntaxError, ValueError):
+        return []
+    for node in tree.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        for target in node.targets:
+            if (
+                isinstance(target, ast.Name)
+                and target.id == "__chumicro_data_files__"
+                and isinstance(node.value, (ast.Tuple, ast.List))
+            ):
+                return [
+                    element.value
+                    for element in node.value.elts
+                    if isinstance(element, ast.Constant)
+                    and isinstance(element.value, str)
+                ]
+    return []
+
+
+def _bundle_data_files(python_files: list[Path]) -> list[Path]:
+    """Return sibling data files declared by *python_files*.
+
+    A module declares ``__chumicro_data_files__ = ("name", ...)`` to
+    name files it opens at runtime that the .py / .mpy walk can't see.
+    Returns the existing sibling files (in first-declared order,
+    de-duplicated) so the bundle ships them next to the module; a named
+    file absent from disk is skipped.
+    """
+    data_files: list[Path] = []
+    for python_file in python_files:
+        for data_name in _data_files_from(python_file):
+            data_source = python_file.parent / data_name
+            if data_source.is_file() and data_source not in data_files:
+                data_files.append(data_source)
+    return data_files
 
 
 def _read_chumicro_dependencies(library_dir: Path) -> list[str]:
@@ -217,6 +267,17 @@ def build_bundle(
         python_dest_file.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source_file, python_dest_file)
 
+    # Copy sibling data files declared via __chumicro_data_files__ (e.g.
+    # chumicro_sockets/_ca_bundle.der).  The .py walk can't see a runtime
+    # ``open`` of these, so without staging them the mip/circup channel
+    # ships the module but not its data file and a TLS connect crashes.
+    data_files = _bundle_data_files(python_files)
+    for data_source in data_files:
+        relative_path = data_source.relative_to(package_dir)
+        data_dest_file = output_dir / relative_path
+        data_dest_file.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(data_source, data_dest_file)
+
     # Copy README.md into the bundle directory so GitHub renders it when
     # users browse the bundle repo.  The file is not included in circup zips
     # (which only glob *.py and *.mpy) or mip manifests, so it never ends up
@@ -237,6 +298,11 @@ def build_bundle(
         py_relative_path = relative_path.as_posix()
         target = f"{package_name}/{py_relative_path}"
         source = f"github:{GITHUB_ORG}/{bundle_repo}/{package_name}/{py_relative_path}"
+        urls.append([target, source])
+    for data_source in data_files:
+        data_relative_path = data_source.relative_to(package_dir).as_posix()
+        target = f"{package_name}/{data_relative_path}"
+        source = f"github:{GITHUB_ORG}/{bundle_repo}/{package_name}/{data_relative_path}"
         urls.append([target, source])
 
     manifest: dict = {"urls": urls, "version": version}
@@ -279,6 +345,13 @@ def build_bundle(
             mpy_dest_file.parent.mkdir(parents=True, exist_ok=True)
             _compile_mpy(source_file, mpy_dest_file, cp_mpy_cross)
 
+        # Data files ship raw (not compiled) next to the .mpy modules.
+        for data_source in _bundle_data_files(cp_python_files):
+            relative_path = data_source.relative_to(package_dir)
+            data_dest_file = cp_mpy_dir / relative_path
+            data_dest_file.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(data_source, data_dest_file)
+
         print(f"Staged {CP_MPY_FOLDER}/{package_name} (CircuitPython) -> {cp_mpy_dir}")
 
     # --- MicroPython .mpy (for mip install) ---
@@ -310,6 +383,21 @@ def build_bundle(
             source = (
                 f"github:{GITHUB_ORG}/{bundle_repo}"
                 f"/{MPY_FORMAT_FOLDER}/{package_name}/{mpy_relative_path}"
+            )
+            mpy_urls.append([target, source])
+
+        # Data files ship raw (not compiled) and are listed in the mip
+        # manifest so mip downloads them alongside the .mpy modules.
+        for data_source in _bundle_data_files(mp_python_files):
+            relative_path = data_source.relative_to(package_dir)
+            data_relative_path = relative_path.as_posix()
+            data_dest_file = mpy_manifest_dir / relative_path
+            data_dest_file.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(data_source, data_dest_file)
+            target = f"{package_name}/{data_relative_path}"
+            source = (
+                f"github:{GITHUB_ORG}/{bundle_repo}"
+                f"/{MPY_FORMAT_FOLDER}/{package_name}/{data_relative_path}"
             )
             mpy_urls.append([target, source])
 
@@ -426,21 +514,31 @@ def build_circup_zips(
         zipfile.ZipFile(source_zip_path, "w", zipfile.ZIP_DEFLATED) as source_zip,
         zipfile.ZipFile(bytecode_zip_path, "w", zipfile.ZIP_DEFLATED) as bytecode_zip,
     ):
-        # .py source bundle: all .py files from root package directories.
+        # .py source bundle: all .py files from root package directories,
+        # plus the sibling data files those modules declare via
+        # __chumicro_data_files__ (read from the staged .py markers).
         for package_dir in package_dirs:
             package_name = package_dir.name
-            for source_file in sorted(package_dir.rglob("*.py")):
+            python_files = sorted(package_dir.rglob("*.py"))
+            for source_file in python_files:
                 relative_path = source_file.relative_to(package_dir)
                 archive_path = f"{source_bundle_name}/lib/{package_name}/{relative_path}"
                 source_zip.write(source_file, archive_path)
+            for data_source in _bundle_data_files(python_files):
+                relative_path = data_source.relative_to(package_dir)
+                archive_path = f"{source_bundle_name}/lib/{package_name}/{relative_path}"
+                source_zip.write(data_source, archive_path)
 
-        # .mpy bytecode bundle: CircuitPython .mpy from circuitpython-10.x-mpy/.
+        # .mpy bytecode bundle: CircuitPython .mpy from circuitpython-10.x-mpy/,
+        # plus any raw data files staged alongside them (non-.mpy siblings).
         for mpy_dir in cp_mpy_package_dirs:
             package_name = mpy_dir.name
-            for bytecode_file in sorted(mpy_dir.rglob("*.mpy")):
-                relative_path = bytecode_file.relative_to(mpy_dir)
+            for staged_file in sorted(mpy_dir.rglob("*")):
+                if not staged_file.is_file():
+                    continue
+                relative_path = staged_file.relative_to(mpy_dir)
                 archive_path = f"{bytecode_bundle_name}/lib/{package_name}/{relative_path}"
-                bytecode_zip.write(bytecode_file, archive_path)
+                bytecode_zip.write(staged_file, archive_path)
 
     created = [source_zip_path, bytecode_zip_path]
     for zip_path in created:

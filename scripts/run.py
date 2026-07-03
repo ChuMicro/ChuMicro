@@ -3134,7 +3134,7 @@ def _build_parser() -> argparse.ArgumentParser:
         dest="deploy_mode",
         choices=["ram", "flash"],
         default=None,
-        help="deploy mode: ram (default, no flash wear) or flash (persistent). "
+        help="deploy mode: flash (default, persistent) or ram (no flash wear). "
              "Overrides the per-device deploy_mode in devices.yml.",
     )
     test_workbench_functional_parser = subparsers.add_parser(
