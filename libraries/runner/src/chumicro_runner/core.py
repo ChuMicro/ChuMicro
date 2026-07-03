@@ -635,16 +635,21 @@ class Runner:
         loop that every demo would otherwise hand-roll::
 
             handle = runner.add_generator(echo_run(...))
-            runner.run_until(lambda: handle.done)
+            runner.run_until(handle)
 
         Ticks once, then loops: checks *predicate*, checks the timeout,
         then idles in ``wait()`` until the next event or deadline.
 
         Args:
-            predicate: Called with no arguments after each tick; the loop
-                returns ``True`` once it is truthy.  ``None`` never
-                completes on its own (pair with *timeout_ms*, or drive a
-                run that removes its own tasks).
+            predicate: Either a generator handle (anything exposing
+                ``done``) — the loop runs until it finishes, and if the
+                task died (``handle.error`` set) the error is re-raised
+                here so a demo fails loudly instead of exiting clean —
+                or a zero-argument callable checked after each tick; the
+                loop returns ``True`` once it is truthy.  ``None`` never
+                completes on its own (pair with *timeout_ms*: the
+                bare-timeout form reads as "run for this long", e.g. a
+                QoS-ack drain window).
             timeout_ms: Optional budget, checked between ticks against the
                 tick source.  Best-effort: if the loop is parked in
                 ``wait()`` on a socket with no deadline, the timeout is
@@ -653,14 +658,28 @@ class Runner:
                 hard bound matters.
 
         Returns:
-            ``True`` when *predicate* became truthy, ``False`` on timeout.
+            ``True`` when *predicate* became truthy (or the handle
+            finished cleanly), ``False`` on timeout.
+
+        Raises:
+            BaseException: The handle form re-raises ``handle.error``
+                when the awaited task died.
         """
+        handle = None
+        if predicate is not None and not callable(predicate):
+            handle = predicate
+            predicate = None
         ticks = self._ticks
         deadline = None
         if timeout_ms is not None:
             deadline = ticks.ticks_add(ticks.ticks_ms(), timeout_ms)
         while True:
             now_ms = self.tick()
+            if handle is not None and handle.done:
+                error = getattr(handle, "error", None)
+                if error is not None:
+                    raise error
+                return True
             if predicate is not None and predicate():
                 return True
             if deadline is not None and ticks.ticks_diff(now_ms, deadline) >= 0:

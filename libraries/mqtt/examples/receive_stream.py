@@ -79,6 +79,4 @@ def consume_commands():
 runner = Runner()
 runner.add(mqtt)
 handle = runner.add_generator(consume_commands())
-while not handle.done:
-    now_ms = runner.tick()
-    runner.wait(now_ms)
+runner.run_until(handle)

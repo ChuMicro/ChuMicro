@@ -67,7 +67,4 @@ def signal_link_up(_old, new):
 wifi.on_state_change(signal_link_up)
 
 echo_handle = runner.add_generator(echo_run(wifi, link_up, echo_host, echo_port))
-
-while not echo_handle.done:
-    now_ms = runner.tick()
-    runner.wait(now_ms)
+runner.run_until(echo_handle)

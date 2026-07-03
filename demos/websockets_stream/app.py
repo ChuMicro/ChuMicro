@@ -65,7 +65,4 @@ wifi.on_state_change(signal_link_up)
 receive_handle = runner.add_generator(
     receive_stream(wifi, link_up, ws, stream_url),
 )
-
-while not receive_handle.done:
-    now_ms = runner.tick()
-    runner.wait(now_ms)
+runner.run_until(receive_handle)
