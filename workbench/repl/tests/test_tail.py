@@ -141,6 +141,33 @@ class TestPortLifecycle:
         assert port.closed
 
 
+class TestReconnectInterrupt:
+    """Ctrl-C during the replug wait returns INTERRUPTED, not a traceback."""
+
+    def test_keyboard_interrupt_during_reconnect_returns_interrupted(self):
+        calls = {"n": 0}
+
+        def factory(address, baudrate, timeout):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                # First open: a port that drops mid-read.
+                return FakeSerialPort(read_chunks=[OSError("device dropped")])
+            # The reconnect attempt: the user presses Ctrl-C mid-wait.
+            raise KeyboardInterrupt
+
+        result = tail(
+            "/dev/cu.fake",
+            seconds=10.0,
+            output=io.StringIO(),
+            time=FakeTime(),
+            port_factory=factory,
+            reconnect_seconds=5.0,
+            reconnect_interval=0.1,
+        )
+        assert result is ExitCode.INTERRUPTED
+        assert calls["n"] == 2
+
+
 class TestDeviceResolution:
     """tail() accepts both Device instances and bare port path strings."""
 

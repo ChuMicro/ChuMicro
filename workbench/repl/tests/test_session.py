@@ -233,6 +233,19 @@ class TestReadUntil:
             with pytest.raises(ReplSessionError):
                 session.read_until(r"NEVER_MATCHES", timeout=0.01)
 
+    def test_multibyte_codepoint_split_at_marker_survives(self):
+        # 🙂 = f0 9f 99 82.  Its first two bytes arrive right after the
+        # READY marker; the continuation bytes land on the next call.
+        # The lead bytes must carry across the return, not be dropped.
+        session, port, _ = _build_session(read_chunks=_handshake_chunks())
+        with session:
+            port.feed(b"READY\xf0\x9f")
+            first = session.read_until("READY", timeout=1.0)
+            assert first == "READY"
+            port.feed(b"\x99\x82DONE")
+            second = session.read_until("DONE", timeout=1.0)
+            assert second == "🙂DONE"
+
 
 class TestDeviceResolution:
     """The constructor accepts a Device object as well as a port path."""

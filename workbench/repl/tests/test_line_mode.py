@@ -602,6 +602,89 @@ class TestEditCommand:
         assert "seed_b" in captured["seed"]
 
 
+class TestCommandExceptionContainment:
+    """A raising :command handler is contained; the session survives."""
+
+    def test_handler_exception_returns_to_prompt(self, tmp_path: Path) -> None:
+        def boom(_context: LineModeContext, _rest: str) -> bool:
+            raise ValueError("kaboom")
+
+        commands = dict(BUILTIN_COMMANDS, boom=boom)
+        port = _stub_port()
+        session = _StubPromptSession([":boom", ":quit"])
+        output = io.StringIO()
+        exit_code = run_line_mode(
+            port,
+            output=output,
+            address="/dev/cu.fake",
+            history_root=tmp_path,
+            commands=commands,
+            prompt_session=session,
+            time=_FastTime(),  # type: ignore[arg-type]
+        )
+        # The ValueError did not propagate out of run_line_mode; the loop
+        # coached with a one-liner and continued to the following :quit.
+        assert exit_code == 0
+        text = output.getvalue()
+        assert ":boom failed" in text
+        assert "kaboom" in text
+        assert "bye" in text
+
+    def test_edit_missing_editor_prints_named_message(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        port = _stub_port()
+        context = LineModeContext(
+            port=port,  # type: ignore[arg-type]
+            output=io.StringIO(),
+            snippets_root=tmp_path / "snippets",
+            editor="definitely-not-a-real-editor",
+        )
+        context.input_history.append("x = 1")
+
+        from chumicro_repl import line_mode as line_mode_module
+
+        def raise_missing(*, editor: str, file_path: Path) -> int:
+            raise FileNotFoundError(2, "No such file or directory", editor)
+
+        monkeypatch.setattr(line_mode_module, "_open_editor", raise_missing)
+        keep_running = BUILTIN_COMMANDS["edit"](context, "")
+        assert keep_running is True
+        text = context.output.getvalue()
+        assert "editor not found" in text
+        assert "definitely-not-a-real-editor" in text
+        # Nothing shipped to the device on the missing-editor path.
+        assert port.writes == []  # type: ignore[attr-defined]
+
+    def test_load_mid_replay_unplug_reports_write_failure(
+        self, tmp_path: Path,
+    ) -> None:
+        from chumicro_repl.testing import FakeSerialPort
+
+        snippets = tmp_path / "snippets"
+        snippets.mkdir()
+        (snippets / "boot.py").write_text("import board\n")
+        port = FakeSerialPort(
+            read_chunks=[],
+            raise_on_write=OSError("device disconnected"),
+        )
+        session = _StubPromptSession([":load boot"])
+        output = io.StringIO()
+        exit_code = run_line_mode(
+            port,
+            output=output,
+            address="/dev/cu.fake",
+            history_root=tmp_path,
+            snippets_root=snippets,
+            prompt_session=session,
+            time=_FastTime(),  # type: ignore[arg-type]
+        )
+        # The OSError from the replay write is caught like the plain-line
+        # path — a one-line report and a non-zero exit, not a traceback.
+        assert exit_code == 1
+        assert "write failed" in output.getvalue()
+
+
 class _FakeBuffer:
     def __init__(self, text: str = "") -> None:
         self.text = text

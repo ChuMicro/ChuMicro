@@ -123,3 +123,14 @@ class Utf8StreamDecoder:
         leftover = bytes(self._buffer)
         self._buffer.clear()
         return leftover.decode("utf-8", errors="replace")
+
+    def pending(self) -> bytes:
+        """Return the lead bytes held back awaiting their continuation.
+
+        These are the start of an incomplete trailing code point the
+        decoder has not emitted yet.  Returns a copy without consuming
+        them, so a caller draining decoded text around a boundary can
+        carry the partial sequence forward instead of dropping it; the
+        buffer keeps holding the same bytes for the next :meth:`decode`.
+        """
+        return bytes(self._buffer)

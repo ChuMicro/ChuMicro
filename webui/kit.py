@@ -130,7 +130,10 @@ function ensure(id){var e=document.getElementById(id);if(!e){e=document.createEl
 window.chuToast=function(text,kind){var t=ensure('chu-toast');t.textContent=text||'';t.className='chu-toast '+(kind||'');t.classList.add('show');
  clearTimeout(t._tt);t._tt=setTimeout(function(){t.classList.remove('show');},2600);};
 window.chuProgress=function(v,text){var p=ensure('chu-prog');p.className='chu-prog show';
- p.innerHTML='<div class="bar" style="width:'+Math.round((v||0)*100)+'%"></div><span>'+(text||'')+'</span>';
+ p.textContent='';
+ var bar=document.createElement('div');bar.className='bar';bar.style.width=Math.round((v||0)*100)+'%';
+ var label=document.createElement('span');label.textContent=text||'';
+ p.appendChild(bar);p.appendChild(label);
  if(v>=1)setTimeout(function(){p.classList.remove('show');},1200);};
 var es=new EventSource('__EVENTS_PATH__');
 es.onmessage=function(ev){var m;try{m=JSON.parse(ev.data);}catch(e){return;}

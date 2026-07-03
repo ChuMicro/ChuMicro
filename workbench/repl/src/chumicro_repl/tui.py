@@ -58,6 +58,13 @@ if TYPE_CHECKING:
 #: key echo feeling instantaneous; long enough not to peg a CPU.
 _POLL_INTERVAL = 0.005
 
+#: Wall-clock ceiling on the on-exit serial drain.  After Ctrl-X the
+#: loop keeps reading so the user sees the board's final output; a
+#: board stuck in a tight ``print`` loop would otherwise stream
+#: forever and Ctrl-X would never return.  The deadline caps the flush
+#: so Ctrl-X exits promptly no matter what the board is doing.
+_EXIT_DRAIN_SECONDS = 1.5
+
 
 class KeyInputReader(Protocol):
     """Structural interface for a non-blocking keyboard source.
@@ -218,13 +225,21 @@ def run_loop(
                         return outcome
                     port, decoder, detector = outcome
                     continue
-        # Drain serial output before honoring an exit request, so
-        # the user sees whatever the board printed in response to
-        # the last keystroke before the TUI vanishes.  On exit the
-        # drain loops until ``in_waiting`` reports zero so a sequence
-        # of small reads doesn't strand a final line.
+        # Drain serial output before honoring an exit request, so the
+        # user sees whatever the board printed in response to the last
+        # keystroke before the TUI vanishes.  On exit the drain loops
+        # until ``in_waiting`` reports zero or the exit-drain deadline
+        # elapses — the deadline keeps Ctrl-X responsive against a board
+        # printing in a tight loop, where ``in_waiting`` never settles.
         had_serial_activity = False
+        exit_drain_deadline = (
+            active_time.monotonic() + _EXIT_DRAIN_SECONDS
+            if exit_requested
+            else 0.0
+        )
         while True:
+            if exit_requested and active_time.monotonic() >= exit_drain_deadline:
+                break
             try:
                 available = port.in_waiting
                 if not available:

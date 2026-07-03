@@ -320,7 +320,15 @@ def _cmd_edit(context: LineModeContext, _rest: str) -> bool:
             handle.write("\n")
         tmp_path = Path(handle.name)
     try:
-        editor_exit = _open_editor(editor=context.editor, file_path=tmp_path)
+        try:
+            editor_exit = _open_editor(editor=context.editor, file_path=tmp_path)
+        except FileNotFoundError:
+            context.output.write(
+                f"line-mode: editor not found: {context.editor!r}; "
+                f"set $EDITOR to an editor that's installed\n",
+            )
+            context.output.flush()
+            return True
         if editor_exit != 0:
             context.output.write(
                 f"line-mode: editor exited {editor_exit}; nothing shipped\n",
@@ -657,7 +665,25 @@ def run_line_mode(
                 )
                 output.flush()
                 continue
-            keep_running = handler(context, rest)
+            try:
+                keep_running = handler(context, rest)
+            except OSError as error:
+                # A port drop mid-command (``:load`` / ``:edit`` replay)
+                # is fatal to the session the same way a dropped plain
+                # line is — the port is gone.  Report and exit non-zero.
+                output.write(f"line-mode: write failed: {error!r}\n")
+                output.flush()
+                return 1
+            except Exception as error:
+                # A buggy command handler must not tear down the whole
+                # session — coach with a one-liner and return to the
+                # prompt so in-progress history survives.
+                output.write(
+                    f"line-mode: :{name} failed: "
+                    f"{type(error).__name__}: {error}\n",
+                )
+                output.flush()
+                continue
             if not keep_running:
                 return 0
         elif line:
