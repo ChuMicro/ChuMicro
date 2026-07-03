@@ -37,9 +37,9 @@ def receive_stream(wifi, link_up, session, url):
         received += 1
         text = message.text if message.is_text else repr(message.data)
         # Marker values must be whitespace-free — parse_marker drops the
-        # whole line otherwise — so the marker carries counts and the
-        # message text follows as a plain prose line.
-        print(f"MESSAGE seq={received} bytes={len(message.data)}")
+        # whole line otherwise — so the marker carries the sequence
+        # number and the message text follows as a plain prose line.
+        print(f"MESSAGE seq={received}")
         print(f"  text: {text}")
     print(f"STREAM_CLOSED count={received} code={session.last_close_code}")
     print("DEMO_COMPLETE")
