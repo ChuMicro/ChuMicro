@@ -176,6 +176,34 @@ class TestFindBundleModules:
         filenames = {file.name for file in files}
         assert filenames == {"__init__.py", "cp_only.py", "mp_only.py"}
 
+    def test_data_files_inherit_their_modules_runtime_marker(
+        self, tmp_path: Path,
+    ):
+        """An MP-only module's declared data file is dropped from the
+        CircuitPython selection with it — the module-level runtime
+        filter runs before ``_bundle_data_files`` reads declarations,
+        so the 16 KB CA-bundle .der class never rides a CP channel.
+        Pins the bundle side of the cross-channel selection contract
+        (the deploy walker pins its own)."""
+        package_dir = tmp_path / "src" / "chumicro_example"
+        package_dir.mkdir(parents=True)
+        (package_dir / "__init__.py").write_text("")
+        (package_dir / "bundle.py").write_text(
+            '__chumicro_runtimes__ = ("micropython",)\n'
+            "__chumicro_data_files__ = ('roots.der',)\n",
+        )
+        (package_dir / "roots.der").write_bytes(b"DER")
+
+        _, _, cp_files = _find_bundle_modules(
+            tmp_path, target_runtime="circuitpython",
+        )
+        assert _bundle_data_files(cp_files) == []
+
+        _, _, mp_files = _find_bundle_modules(
+            tmp_path, target_runtime="micropython",
+        )
+        assert [f.name for f in _bundle_data_files(mp_files)] == ["roots.der"]
+
     def test_target_runtime_none_is_unfiltered(self, tmp_path: Path):
         """``target_runtime=None`` (legacy default) ships every file
         regardless of marker — preserved so external callers that haven't

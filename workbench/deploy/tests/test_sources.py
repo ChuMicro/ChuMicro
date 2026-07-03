@@ -268,6 +268,45 @@ class TestImportGraphSource:
         assert "/lib/netpkg/roots.der" in files
         assert files["/lib/netpkg/roots.der"] == b"\x00\x01\x02DERDATA"
 
+    def test_data_files_inherit_their_modules_runtime_marker(
+        self, tmp_path: Path,
+    ):
+        """A runtime-marked module's declared data files ship only to
+        that runtime: the module-level filter drops the module before
+        its ``__chumicro_data_files__`` are read, so a CP deploy stages
+        neither the MP-only module nor its .der while an MP deploy
+        stages both.  Pins the cross-channel selection contract (the
+        walker side; bundle_manager pins its own)."""
+        libs = tmp_path / "libs"
+        libs.mkdir()
+        pkg = libs / "netpkg"
+        pkg.mkdir()
+        (pkg / "__init__.py").write_text(
+            "try:\n"
+            "    import netpkg.bundle\n"
+            "except ImportError:\n"
+            "    pass\n",
+        )
+        (pkg / "bundle.py").write_text(
+            "__chumicro_runtimes__ = ('micropython',)\n"
+            "__chumicro_data_files__ = ('roots.der',)\n",
+        )
+        (pkg / "roots.der").write_bytes(b"DER")
+        entrypoint = tmp_path / "app.py"
+        entrypoint.write_text("import netpkg\n")
+
+        cp = ImportGraphSource(
+            entrypoint, search_paths=[libs], target_runtime="circuitpython",
+        ).files()
+        assert "/lib/netpkg/bundle.py" not in cp
+        assert "/lib/netpkg/roots.der" not in cp
+
+        mp = ImportGraphSource(
+            entrypoint, search_paths=[libs], target_runtime="micropython",
+        ).files()
+        assert "/lib/netpkg/bundle.py" in mp
+        assert "/lib/netpkg/roots.der" in mp
+
     def test_class_import_does_not_pull_in_case_mismatched_module(
         self, tmp_path: Path,
     ):
