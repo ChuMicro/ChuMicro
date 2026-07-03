@@ -99,6 +99,12 @@ def _parse_response(packet: bytes | memoryview) -> int:
         | (packet[42] << 8)
         | packet[43]
     )
+    if seconds_1900 == 0:
+        # RFC 4330 §5: a zero transmit timestamp is invalid and must be
+        # discarded.  Without this the era heuristic below would "lift"
+        # it to a bogus 2036-02-07 reading and hand back a valid-looking
+        # wrong time.
+        raise NTPError("SNTP zero transmit timestamp")
     # NTP era 0 ends 2036-02-07 when the 32-bit field wraps.  A value
     # below the 1900->1970 offset must be era 1; lift it by 2**32.
     # Heuristic holds until ~2106, then the hard upper bound.
@@ -131,8 +137,10 @@ class NTPResult:
         """Server's transmit timestamp converted to Unix-epoch seconds.
 
         Raises:
-            NTPError: The exchange ended in failure — read
-                :attr:`error` for the underlying exception.
+            Exception: Re-raises the stored :attr:`error` when the
+                exchange failed — an :class:`NTPError` for a protocol,
+                timeout, or cancellation failure, or the raw ``OSError``
+                from a failed send / recv.
             RuntimeError: The exchange has not finished yet.
         """
         if not self.done:
@@ -177,9 +185,11 @@ class NTPClient:
             * ``setblocking(flag: bool) -> None`` — best-effort;
               absence is tolerated.
 
-            :func:`chumicro_sockets.udp_socket` is one valid
-            producer; stdlib ``socket.socket(SOCK_DGRAM)`` after
-            ``setblocking(False)`` is another.  Tests inject
+            :func:`chumicro_sockets.udp_socket` is the valid producer.
+            A raw stdlib ``socket.socket(SOCK_DGRAM)`` does **not** fit:
+            its ``sendto`` takes ``(data, address)``, not the separated
+            ``(data, host, port)`` this contract calls, so wrap it in a
+            3-line adapter if you must bring your own.  Tests inject
             :class:`chumicro_sockets.testing.FakeUDPSocket`.
         server: NTP server hostname.  Defaults to ``"pool.ntp.org"``.
             Resolution is delegated to the runtime's name resolver.
@@ -279,14 +289,23 @@ class NTPClient:
         Returns:
             An :class:`NTPResult` the caller polls.
 
+        A synchronous ``sendto`` failure is not raised — it is delivered
+        on the returned result (``result.error`` is the ``OSError`` and
+        the result is already ``done``).
+
         Raises:
             RuntimeError: A query is already in flight (``busy``).
-            OSError: The synchronous ``sendto`` call failed.
         """
         if self.busy:
             raise RuntimeError(
                 "NTP query already in flight; await result before re-querying",
             )
+        # Discard any datagrams already buffered from a previous
+        # (timed-out or cancelled) exchange before sending.  Without
+        # this, a late reply to an old request sits in the socket buffer
+        # and the next handle() accepts it as the answer to this query —
+        # silently setting the clock from a stale timestamp.
+        self._drain_socket()
         now_ms = self._ticks.ticks_ms()
         result = NTPResult(ticks_started_ms=now_ms)
         try:
@@ -297,6 +316,23 @@ class NTPClient:
             return result
         self._result = result
         return result
+
+    def _drain_socket(self) -> None:
+        """Discard any datagrams already buffered on the socket.
+
+        Best-effort: reads into the shared recv buffer and drops each
+        datagram until ``recvfrom_into`` reports would-block (or any
+        other error), leaving the socket empty for a fresh exchange.
+        """
+        while True:
+            try:
+                received_count, _sender = self.socket.recvfrom_into(
+                    self._recv_buffer,
+                )
+            except OSError:
+                return  # would-block / no more data buffered
+            if received_count == 0:
+                return
 
     def check(self, now_ms: int) -> bool:
         """Return ``True`` when the runner should call :meth:`handle`.

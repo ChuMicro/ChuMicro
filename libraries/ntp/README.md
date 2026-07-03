@@ -31,17 +31,20 @@ For bundle setup, pre-compiled `.mpy` bundles, the experimental channel, and det
 ```python
 from chumicro_ntp import NTPClient
 from chumicro_ntp.sockets_factory import chumicro_sockets_factory
+from chumicro_timing import ticks_ms
 
-sock = chumicro_sockets_factory()
+# On CircuitPython pass radio=wifi.radio; the kwarg is ignored on MP / CPython.
+sock = chumicro_sockets_factory(radio=None)
+sock.setblocking(False)                     # required — a blocking recv wedges on packet loss
 client = NTPClient(socket=sock, server="pool.ntp.org")
 request = client.query()
 while not request.done:
-    if client.check(now_ms()):
-        client.handle(now_ms())
+    if client.check(ticks_ms()):
+        client.handle(ticks_ms())
 print("unix seconds:", request.unix_seconds)
 ```
 
-`chumicro_sockets_factory` lives in its own submodule so apps with a custom UDP transport don't pull `chumicro-sockets` into their device deploy.  Pass any `chumicro_sockets.UDPSocket`-shaped object to `NTPClient(socket=...)`.
+`chumicro_sockets_factory` lives in its own submodule so apps with a custom UDP transport don't pull `chumicro-sockets` into their device deploy.  Pass any object satisfying the `sendto` / `recvfrom_into` / `close` / `setblocking` contract (see `NTPClient`'s docstring) to `NTPClient(socket=...)` — `chumicro_sockets.udp_socket` and `chumicro_sockets.testing.FakeUDPSocket` are the built-in producers.
 
 ## What's included
 
