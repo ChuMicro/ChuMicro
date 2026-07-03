@@ -76,7 +76,7 @@ runner.add_periodic(store.commit_if_changed, period_ms=1000)
 
 Each backend exposes a `capacity` (bytes-of-encoded-payload).  `KVStore.bytes_used` reports the current encoded size; `KVStore.capacity` reports the backend's limit.
 
-CP NVM is the smallest — typically 256 bytes on SAMD21 boards and 8 KB on SAMD51 / RP2040 / ESP32 boards (it's per-chip; check your board's `microcontroller.nvm`).  After CRC framing overhead (10 bytes), you have your usable budget.  `commit()` raises `KVStoreFull` if the encoded payload won't fit; the in-memory dict is unchanged so you can drop a key and retry:
+CP NVM is the smallest — typically 256 bytes on SAMD21 boards, ~4 KB on RP2040 (the reference Pi Pico W), and 8 KB on SAMD51 / ESP32 boards (it's per-chip; check your board's `microcontroller.nvm`).  After CRC framing overhead (10 bytes), you have your usable budget.  `commit()` raises `KVStoreFull` if the encoded payload won't fit; the in-memory dict is unchanged so you can drop a key and retry:
 
 ```python
 try:
@@ -119,13 +119,17 @@ store.commit_if_changed()
 
 `clear()`, `pop(key, default)`, `keys()`, `values()`, `items()` follow `dict` semantics.  `commit` is **not** implied by mutating methods — you call it explicitly when you want the change persisted.
 
+## Value types
+
+Values are stored via msgpack in the chumicro subset: `None`, `bool`, `int` (32-bit), `str`, `bytes`, and nested `list` / `dict` up to 8 levels deep.  Floats encode as **32-bit** (`float32`), so a value like a `time.time()` timestamp loses precision through a commit / reload round-trip (e.g. `1751414400.5` reads back as `1751414400.0`).  Store timestamps and durations as integer milliseconds or seconds, not floats.
+
 ## Platform notes
 
 | Runtime | Backend chosen by `auto` | Capacity (typical) |
 |---|---|---|
 | CircuitPython | `nvm` (with CRC framing) | 256 B – 8 KB depending on chip |
 | MicroPython on ESP32-family | `nvs` (single blob in `chu_kv` namespace) | 512 B default; pass `capacity=N` for larger (~24 KB partition headroom) |
-| MicroPython on Pi Pico W (rp2) | `littlefs` (atomic file at `/_chu_kv.msgpack`) | filesystem-bounded (typically MB) |
+| MicroPython on Pi Pico W (rp2) | `littlefs` (atomic file at `/_chu_kv.msgpack`) | 16 KB default; pass `capacity=N` for larger (then filesystem-bounded) |
 | CPython | `memory` (in-process bytes) | unbounded |
 
 `MemoryBackend` is **lazy-imported** — device runtimes that resolve `auto` to `nvm` / `nvs` / `littlefs` never pay the ~700 B import cost.

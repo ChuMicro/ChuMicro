@@ -78,7 +78,7 @@ Works on CPython, MicroPython, and CircuitPython.
 
 ## Examples
 
-No standalone examples — see any consumer library (starting with `chumicro-wifi`) for the integrated usage shape.
+[`examples/end_to_end.py`](examples/end_to_end.py) shows the full read → `load_section` → typed-config flow on CPython; see any consumer library (starting with `chumicro-wifi`) for the integrated usage shape.
 
 ## Contributing
 

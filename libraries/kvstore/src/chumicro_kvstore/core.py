@@ -126,6 +126,11 @@ class KVStore:
         self._data: dict[str, object] = {}
         self._last_payload: bytes = b""
         self.is_corrupt: bool = False
+        # Set by the mapping mutators, cleared on persist / (re)load.
+        # ``commit_if_changed`` skips the encode entirely when clean, so
+        # the guide-blessed every-tick schedule allocates nothing in the
+        # steady no-change state.
+        self._dirty: bool = False
         self._auto_load()
 
     # --- lifecycle -------------------------------------------------
@@ -139,6 +144,9 @@ class KVStore:
         ``is_corrupt`` and behaves as empty.  ``reload()`` is the
         explicit form that callers use when they want the exception.
         """
+        # Loading (re)synchronizes with the backend, so nothing is
+        # pending afterward regardless of which branch we take.
+        self._dirty = False
         try:
             payload = self._backend.load()
         except KVStoreCorrupt:
@@ -172,6 +180,7 @@ class KVStore:
         Raises:
             KVStoreCorrupt: Backend payload failed integrity check.
         """
+        self._dirty = False
         payload = self._backend.load()  # may raise KVStoreCorrupt
         if not payload:
             self._data = {}
@@ -200,23 +209,35 @@ class KVStore:
         """Commit only if the encoded payload differs from last persisted.
 
         First-line wear defense for raw-flash backends.  Returns
-        ``True`` when a write happened, ``False`` when skipped.
+        ``True`` when a write happened, ``False`` when skipped.  Skips
+        the encode entirely when no mapping mutator ran since the last
+        persist, so scheduling it every tick costs nothing while the
+        data is unchanged.  A nested value mutated in place without a
+        mapping call (outside the documented API) won't be seen.
         """
+        if not self._dirty:
+            return False
         payload = packb(self._data)
         if payload == self._last_payload:
+            self._dirty = False
             return False
         self._persist(payload)
         return True
 
     def _persist(self, payload: bytes) -> None:
         """Capacity-check + save + state update, shared by both commit paths."""
-        if len(payload) > self.capacity:
+        # capacity <= 0 means "unbounded" (the Backend base default), so
+        # a custom backend that only implements load/save isn't blocked
+        # by a spurious zero cap that even an empty dict's 1-byte payload
+        # would exceed.
+        if 0 < self.capacity < len(payload):
             raise KVStoreFull(
                 f"payload size {len(payload)} exceeds capacity {self.capacity}"
             )
         self._backend.save(payload)
         self._last_payload = payload
         self.is_corrupt = False
+        self._dirty = False
 
     # --- mapping-style API -----------------------------------------
 
@@ -225,9 +246,11 @@ class KVStore:
 
     def __setitem__(self, key: str, value: object) -> None:
         self._data[key] = value
+        self._dirty = True
 
     def __delitem__(self, key: str) -> None:
         del self._data[key]
+        self._dirty = True
 
     def __contains__(self, key: object) -> bool:
         return key in self._data
@@ -257,6 +280,7 @@ class KVStore:
         supplied" (raise ``KeyError`` on missing) from "default is
         ``None``"; same idiom as ``dict.pop``.
         """
+        self._dirty = True
         if default:
             return self._data.pop(key, default[0])
         return self._data.pop(key)
@@ -264,10 +288,12 @@ class KVStore:
     def clear(self) -> None:
         """Remove every key from the in-memory dict (commit not implied)."""
         self._data.clear()
+        self._dirty = True
 
     def update(self, other: dict[str, object]) -> None:
         """Merge *other* into the in-memory dict (commit not implied)."""
         self._data.update(other)
+        self._dirty = True
 
     # --- introspection ---------------------------------------------
 

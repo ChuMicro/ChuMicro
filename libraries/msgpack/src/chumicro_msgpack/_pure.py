@@ -5,7 +5,6 @@ Supports None, bool, int (32-bit), float (32-bit), str, bytes,
 bytearray, list, tuple, and dict.
 """
 
-import gc
 import struct
 
 # ---------------------------------------------------------------------------
@@ -31,8 +30,16 @@ def _append_packed(buffer: bytearray, fmt: str, value: object, zero: bytes) -> N
     struct.pack_into(fmt, buffer, offset, value)
 
 
-def _encode(obj: object, buffer: bytearray) -> None:
-    """Append the msgpack encoding of *obj* to *buffer*."""
+def _encode(obj: object, buffer: bytearray, depth: int = 0) -> None:
+    """Append the msgpack encoding of *obj* to *buffer*.
+
+    *depth* mirrors the decoder's recursion counter so the encoder
+    refuses nesting the decoder would later reject.  Without this guard
+    ``packb`` accepts data ``unpackb`` cannot read back, and a store
+    that persisted it loses it silently on the next load.
+    """
+    if depth > _MAX_DEPTH:
+        raise ValueError("msgpack nesting too deep")
     if obj is True:
         buffer.append(0xc3)
     elif obj is False:
@@ -49,9 +56,9 @@ def _encode(obj: object, buffer: bytearray) -> None:
     elif isinstance(obj, (bytes, bytearray)):
         _encode_bin(obj, buffer)
     elif isinstance(obj, (list, tuple)):
-        _encode_array(obj, buffer)
+        _encode_array(obj, buffer, depth)
     elif isinstance(obj, dict):
-        _encode_map(obj, buffer)
+        _encode_map(obj, buffer, depth)
     else:
         raise TypeError(f"unsupported type: {type(obj).__name__}")
 
@@ -115,7 +122,7 @@ def _encode_bin(value: bytes | bytearray, buffer: bytearray) -> None:
     buffer.extend(value)
 
 
-def _encode_array(value: list | tuple, buffer: bytearray) -> None:
+def _encode_array(value: list | tuple, buffer: bytearray, depth: int) -> None:
     """Append *value* to *buffer* as a msgpack array."""
     length = len(value)
     if length <= 15:
@@ -126,10 +133,10 @@ def _encode_array(value: list | tuple, buffer: bytearray) -> None:
     else:
         raise OverflowError(f"array too long for msgpack: {length} elements")
     for item in value:
-        _encode(item, buffer)
+        _encode(item, buffer, depth + 1)
 
 
-def _encode_map(value: dict, buffer: bytearray) -> None:
+def _encode_map(value: dict, buffer: bytearray, depth: int) -> None:
     """Append *value* to *buffer* as a msgpack map."""
     length = len(value)
     if length <= 15:
@@ -140,8 +147,8 @@ def _encode_map(value: dict, buffer: bytearray) -> None:
     else:
         raise OverflowError(f"map too long for msgpack: {length} entries")
     for key, val in value.items():
-        _encode(key, buffer)
-        _encode(val, buffer)
+        _encode(key, buffer, depth + 1)
+        _encode(val, buffer, depth + 1)
 
 
 # ---------------------------------------------------------------------------
@@ -179,9 +186,6 @@ _MALFORMED = "malformed msgpack: truncated or over-length framing"
 _FRAMING_ERRORS = (IndexError,)
 if hasattr(struct, "error"):
     _FRAMING_ERRORS = (IndexError, struct.error)
-
-
-gc.collect()
 
 
 def _bounded_end(data: memoryview, start: int, length: int) -> int:
@@ -336,6 +340,12 @@ def _decode_map(data: memoryview, offset: int, length: int, depth: int) -> tuple
     for _ in range(length):
         key, offset = _decode(data, offset, depth + 1)
         value, offset = _decode(data, offset, depth + 1)
+        # A map key that decoded to a container is structurally valid
+        # msgpack but unusable as a dict key; surface it as the
+        # documented ValueError rather than letting the raw TypeError
+        # from result[key] escape the untrusted-input contract.
+        if isinstance(key, (list, dict)):
+            raise ValueError("msgpack map key is not hashable")
         result[key] = value
     return result, offset
 
@@ -348,9 +358,11 @@ def packb(obj: object) -> bytes:
     """Pack *obj* to msgpack bytes.
 
     Allocates a temporary ``bytearray`` that grows during encoding,
-    then copies to ``bytes``.  For small payloads this is fine; for
-    larger data or tight loops, prefer ``pack(obj, stream)`` to write
-    directly to a destination without the intermediate allocation.
+    then copies to ``bytes``.  On this pure-Python path ``pack(obj,
+    stream)`` does not avoid that allocation — it calls ``packb`` and
+    writes the result — so there is no allocation reason to prefer it
+    here; the no-intermediate-buffer property holds only on the native
+    CircuitPython encoder.
 
     Args:
         obj: Python object to serialize.
@@ -413,6 +425,11 @@ def unpackb(data: bytes | bytearray | memoryview) -> object:
 def pack(obj: object, stream: object) -> None:
     """Pack *obj* to *stream* in msgpack format.
 
+    On this pure-Python path the whole object is encoded to a ``bytes``
+    first and then written in one call, so it allocates the same as
+    ``packb`` (plus the write); it is not the lower-allocation option
+    the native encoder makes it.
+
     Args:
         obj: Python object to serialize.
         stream: Writable stream with a ``write()`` method.
@@ -421,12 +438,25 @@ def pack(obj: object, stream: object) -> None:
 
 
 def unpack(stream: object) -> object:
-    """Unpack one object from *stream*.
+    """Unpack a single object from *stream*.
+
+    On this pure-Python path the ENTIRE stream is read and decoded as
+    exactly one object: trailing bytes past the first object raise
+    ``ValueError``, and the read consumes everything (so it can't unpack
+    one object from a multi-object or still-open stream, and blocks on a
+    live socket until close).  The native CircuitPython decoder instead
+    reads incrementally and leaves the rest in the stream — so a
+    multi-record stream only works on the native path.  For framed or
+    multi-object data, drive :func:`unpackb` over an explicitly-bounded
+    slice instead.
 
     Args:
         stream: Readable stream with a ``read()`` method.
 
     Returns:
         Deserialized Python object.
+
+    Raises:
+        ValueError: Truncated framing, or bytes past the first object.
     """
     return unpackb(stream.read())

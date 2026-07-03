@@ -1,5 +1,7 @@
 """On-device reader for ``/runtime_config.msgpack`` (flat dotted-key shape)."""
 
+import errno
+
 from chumicro_msgpack import unpackb
 
 from chumicro_config.section import InvalidConfigType, RuntimeConfig
@@ -42,7 +44,13 @@ def _ensure_config_loaded() -> RuntimeConfig | None:
     if not _config_loaded:
         try:
             _config_cache = load_runtime_config()
-        except OSError:
+        except OSError as error:
+            # Only a genuinely-absent file means "no config" (None).  A
+            # real I/O failure (EIO / EACCES / a wedged filesystem) is
+            # not the same as absent and must not be silently masked;
+            # re-raise it.  errno is args[0] on every runtime.
+            if error.args and error.args[0] != errno.ENOENT:
+                raise
             _config_cache = None
         _config_loaded = True
     return _config_cache

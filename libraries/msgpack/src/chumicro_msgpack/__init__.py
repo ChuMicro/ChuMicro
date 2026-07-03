@@ -70,13 +70,32 @@ if sys.implementation.name == "circuitpython":
         def unpackb(data: bytes | bytearray | memoryview) -> object:  # pragma: no cover
             """Unpack msgpack *data* to a Python object using the native decoder.
 
+            Normalizes the native decoder to the pure decoder's contract:
+            truncated input (native ``EOFError``) and trailing bytes past
+            one object both surface as ``ValueError``, so a caller's
+            ``except ValueError`` for corrupt config behaves the same on
+            every runtime.
+
             Args:
                 data: Msgpack-encoded data.
 
             Returns:
                 Deserialized Python object.
+
+            Raises:
+                ValueError: Truncated framing, or bytes left over after
+                    the first object.
             """
-            return unpack(BytesIO(data))
+            buffer = BytesIO(data)
+            try:
+                result = unpack(buffer)
+            except EOFError as truncation_error:
+                raise ValueError(
+                    "malformed msgpack: truncated or over-length framing",
+                ) from truncation_error
+            if buffer.tell() != len(data):
+                raise ValueError("trailing bytes after msgpack value")
+            return result
 
         _native_loaded = True
     except ImportError:

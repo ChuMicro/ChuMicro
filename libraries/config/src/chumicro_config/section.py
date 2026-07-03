@@ -122,15 +122,18 @@ def try_load_section(
     required: tuple = (),
     optional: dict | None = None,
 ) -> object | None:
-    """Soft-load: return ``None`` whenever :func:`load_section` would raise.
+    """Soft-load: return ``None`` instead of the ``ConfigError`` raises.
 
     Three skip-paths return ``None``: *config* is ``None`` (no
     runtime config deployed), *config* is the wrong type, or a required
     key is missing.  Treat the ``None`` return as "this section isn't
-    configured, skip the feature."
+    configured, skip the feature."  Errors from constructing
+    *target_class* (a ``TypeError`` for an unexpected keyword, or the
+    class's own validation) are not skip-paths and propagate.
     """
-    if config is None or not is_config_like(config):
-        return None
+    # No upfront None / type guard: load_section already raises
+    # InvalidConfigType for a None or non-config-like argument, and the
+    # except below turns that into the same None return.
     try:
         return load_section(
             target_class,

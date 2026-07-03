@@ -46,7 +46,7 @@ print(restored)              # {0: 'MyNetwork', 1: 'secret', 2: True}
 
 | Symbol | Description |
 |---|---|
-| `pack(obj, stream)` | Pack an object directly to a writable stream — no intermediate buffer |
+| `pack(obj, stream)` | Pack an object to a writable stream (streams without an intermediate buffer on the native CircuitPython encoder; on the pure path it encodes to bytes first) |
 | `unpack(stream)` | Unpack one object from a readable stream |
 
 ### Bytes-based API
@@ -92,11 +92,11 @@ data = msgpack.packb(obj, use_single_float=True)
 # Caller's job: keep ints in [-2**31, 2**32-1] and lengths under 65 536.
 ```
 
-`use_single_float=True` switches PyPI msgpack from `float64` to `float32`, matching what chumicro reads.  This is what [`chumicro-workspace`](../../workbench/workspace) uses to write `runtime_config.msgpack` for the device.
+`use_single_float=True` switches PyPI msgpack from `float64` to `float32`, matching what chumicro reads.  This is what [`chumicro-workspace`](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/workspace) uses to write `runtime_config.msgpack` for the device.
 
 ## Where this fits
 
-Leaf — no upstream ChuMicro deps.  Used directly by [`chumicro-config`](../config/) to decode `/runtime_config.msgpack` on the device, and by host-side workspace tooling to write it.
+Leaf — no upstream ChuMicro deps.  Used directly by [`chumicro-config`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/config) to decode `/runtime_config.msgpack` on the device, and by host-side workspace tooling to write it.
 
 ## Platform support
 
