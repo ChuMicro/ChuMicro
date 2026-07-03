@@ -471,9 +471,54 @@ class ImportGraphSource:
             device_path = self._device_path_for(module_name, resolved_path)
             collected[device_path] = resolved_path.read_bytes()
             self._host_paths.append(resolved_path)
+            # Stage any sibling data files the module declares via
+            # __chumicro_data_files__ (e.g. a CA bundle .der).  The import
+            # walk can't see a runtime ``open`` of such a file, so without
+            # this it ships nowhere and the device crashes when the module
+            # reads it.
+            device_dir = device_path.rsplit("/", 1)[0] if "/" in device_path else ""
+            for data_name in self._data_files_from(resolved_path):
+                data_source = resolved_path.parent / data_name
+                if not data_source.is_file():
+                    continue
+                data_device_path = (
+                    f"{device_dir}/{data_name}" if device_dir else data_name
+                )
+                collected[data_device_path] = data_source.read_bytes()
+                self._host_paths.append(data_source)
             queue.extend(self._imports_from_file(resolved_path))
         self._check_dead_skips(visited)
         return collected
+
+    @staticmethod
+    def _data_files_from(path: Path) -> list[str]:
+        """Return the string entries of a module-level
+        ``__chumicro_data_files__`` assignment, or ``[]`` when absent.
+
+        Extracted by AST (not import) so it works on a host that can't
+        import the device module; names sibling data files the module
+        opens at runtime that the import graph can't otherwise discover.
+        """
+        try:
+            tree = ast.parse(path.read_bytes())
+        except (SyntaxError, ValueError):
+            return []
+        for node in tree.body:
+            if not isinstance(node, ast.Assign):
+                continue
+            for target in node.targets:
+                if (
+                    isinstance(target, ast.Name)
+                    and target.id == "__chumicro_data_files__"
+                    and isinstance(node.value, (ast.Tuple, ast.List))
+                ):
+                    return [
+                        element.value
+                        for element in node.value.elts
+                        if isinstance(element, ast.Constant)
+                        and isinstance(element.value, str)
+                    ]
+        return []
 
     def _check_dead_skips(self, visited: set[str]) -> None:
         """Emit an informational warning per user-written entry whose

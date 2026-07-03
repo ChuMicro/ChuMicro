@@ -243,6 +243,31 @@ class TestImportGraphSource:
         with pytest.raises(NotADirectoryError):
             ImportGraphSource(entrypoint, search_paths=[tmp_path / "missing"])
 
+    def test_declared_data_file_is_staged_alongside_its_module(
+        self, tmp_path: Path,
+    ):
+        """A module declaring ``__chumicro_data_files__`` gets its sibling
+        data files staged, since the import walk can't see the runtime
+        ``open`` of them (the CA-bundle .der regression)."""
+        libs = tmp_path / "libs"
+        libs.mkdir()
+        pkg = libs / "netpkg"
+        pkg.mkdir()
+        (pkg / "__init__.py").write_text("import netpkg.bundle\n")
+        (pkg / "bundle.py").write_text(
+            "__chumicro_data_files__ = ('roots.der',)\n"
+            "def load():\n"
+            "    return open('roots.der', 'rb').read()\n",
+        )
+        (pkg / "roots.der").write_bytes(b"\x00\x01\x02DERDATA")
+        entrypoint = tmp_path / "app.py"
+        entrypoint.write_text("import netpkg\n")
+        source = ImportGraphSource(entrypoint, search_paths=[libs])
+        files = source.files()
+        assert "/lib/netpkg/bundle.py" in files
+        assert "/lib/netpkg/roots.der" in files
+        assert files["/lib/netpkg/roots.der"] == b"\x00\x01\x02DERDATA"
+
     def test_class_import_does_not_pull_in_case_mismatched_module(
         self, tmp_path: Path,
     ):
