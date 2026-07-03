@@ -37,14 +37,31 @@ class _PurePythonPartial:
         """
         if not callable(func):
             raise TypeError(f"{func!r} is not callable")
+        if isinstance(func, _PurePythonPartial):
+            # Flatten a nested partial the way CPython does: the outer
+            # args extend the inner's, and outer keywords override inner
+            # ones — so .func / .args / .keywords match CPython instead
+            # of nesting one partial inside another.
+            merged_keywords = func.keywords.copy()
+            merged_keywords.update(keywords)
+            args = func.args + args
+            keywords = merged_keywords
+            func = func.func
         self.func = func
         self.args = args
         self.keywords = keywords
 
     def __call__(self, *args: object, **keywords: object) -> object:
         """Call the wrapped function with frozen + extra arguments."""
-        combined = self.keywords.copy()
-        combined.update(keywords)
+        if keywords:
+            combined = self.keywords.copy()
+            combined.update(keywords)
+        else:
+            # No call-time keywords: pass the frozen dict straight
+            # through (it's never mutated) rather than copying it every
+            # call — this is the hot path on the runtimes where this
+            # class actually runs.
+            combined = self.keywords
         return self.func(*self.args, *args, **combined)
 
     def __repr__(self) -> str:
@@ -56,6 +73,20 @@ class _PurePythonPartial:
 
 
 try:
-    from functools import partial  # noqa: F401 - CPython re-export
+    from functools import partial
+
+    # Feature-detect rather than trust the import: some MicroPython
+    # builds (micropython-lib) ship a degraded closure-based ``partial``
+    # that lacks the .func / .args / .keywords introspection attributes.
+    # If the imported partial can't introspect, fall back to the pure
+    # implementation so behavior is identical on every runtime.
+    _probe = partial(int, 0)
+    if not (
+        hasattr(_probe, "func")
+        and hasattr(_probe, "args")
+        and hasattr(_probe, "keywords")
+    ):  # pragma: no cover - only micropython-lib's degraded partial hits this
+        partial = _PurePythonPartial
+    del _probe
 except ImportError:  # pragma: no cover - MicroPython/CircuitPython fallback
     partial = _PurePythonPartial
