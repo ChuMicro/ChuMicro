@@ -71,6 +71,21 @@ def mp_adapter() -> Iterator[types.ModuleType]:
             chunk = self.recv_queue.pop(0)
             return chunk[:size] if len(chunk) > size else chunk
 
+        def readinto(self, buffer: bytearray, nbytes: int | None = None) -> int | None:
+            # Mirrors MP's stream ``readinto(buffer[, nbytes])``: copies
+            # up to ``nbytes`` (default: len(buffer)) from the recv queue
+            # into ``buffer``, returns the count, returns 0 on a clean
+            # close (empty queue).  A None return (would-block) is
+            # simulated per-test by overriding this method.
+            limit = len(buffer) if nbytes is None else min(nbytes, len(buffer))
+            if not self.recv_queue:
+                return 0
+            chunk = self.recv_queue.pop(0)
+            if len(chunk) > limit:
+                chunk = chunk[:limit]
+            buffer[: len(chunk)] = chunk
+            return len(chunk)
+
         def close(self) -> None:
             self._closed = True
 
@@ -151,16 +166,16 @@ class TestConnectTcp:
         assert underlying.family == 2
         assert underlying.kind == 1
 
-    def test_recv_into_polyfilled_via_recv(
+    def test_recv_into_forwards_to_readinto(
         self, mp_adapter: types.ModuleType,
     ) -> None:
-        """MP rp2/esp32 stream sockets expose recv() but NOT recv_into.
+        """MP rp2/esp32 lwIP sockets expose stream ``readinto`` but NOT recv_into.
 
         A bare ``sock.recv_into(buffer, n)`` raises
         ``AttributeError("'socket' object has no attribute 'recv_into'")``
-        on the real MP boards; the wrapper polyfills via ``recv()`` +
-        buffer copy.  This test pins the polyfill in place on every
-        refactor.
+        on the real MP boards; the wrapper forwards to
+        ``readinto(buffer, size)`` — zero-copy, no per-receive ``bytes``.
+        This test pins the forward in place on every refactor.
         """
         wrapper = mp_adapter.connect_tcp("broker.example.com", 1883)
         underlying = wrapper.sock
@@ -184,28 +199,28 @@ class TestConnectTcp:
     def test_recv_into_zero_on_clean_close(
         self, mp_adapter: types.ModuleType,
     ) -> None:
-        """Empty bytes from MP recv() means clean peer close — return 0."""
+        """Empty queue -> readinto returns 0, signalling a clean peer close."""
         wrapper = mp_adapter.connect_tcp("broker.example.com", 1883)
-        # No queued data + recv() returns b"" by stub default.
+        # No queued data + readinto returns 0 by stub default.
         buffer = bytearray(8)
         nbytes_read = wrapper.recv_into(buffer, 8)
         assert nbytes_read == 0
 
-    def test_recv_into_raises_eagain_when_recv_returns_none(
+    def test_recv_into_raises_eagain_when_readinto_returns_none(
         self, mp_adapter: types.ModuleType,
     ) -> None:
-        """MP TLS ``SSLSocket.recv()`` returns ``None`` for WANT_READ.
+        """MP non-blocking ``readinto`` returns ``None`` when it would block.
 
         The wrapper raises ``OSError(errno.EAGAIN)`` so callers see
         the same "no data this tick" contract as plain TCP.  Without
-        this, a length-known TCP-style read on MP TLS cannot tell
-        "no data yet" from "peer closed mid-response".
+        this, a length-known read cannot tell "no data yet" from
+        "peer closed mid-response".
         """
         import pytest  # noqa: PLC0415
 
         wrapper = mp_adapter.connect_tcp("broker.example.com", 1883)
         underlying = wrapper.sock
-        underlying.recv = lambda _size: None  # MP TLS WANT_READ shape
+        underlying.readinto = lambda *_args: None  # would-block shape
         buffer = bytearray(8)
         with pytest.raises(OSError) as captured:
             wrapper.recv_into(buffer, 8)

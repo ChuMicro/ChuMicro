@@ -100,12 +100,14 @@ def fetch(
             response as-is (default ``DEFAULT_MAX_REDIRECTS``).
         max_body_bytes: Hard cap on the response body; over it the
             parser raises ``HttpOversizedError``.
-        timeout_ms: Deadline for the receive phase only — reading the
-            response, summed across all redirect hops.  DNS resolution,
-            the TCP connect, the TLS handshake, and the request send run
-            through the ``connect`` / ``send_all`` generators and are
-            *not* bounded by it, so a peer that stalls before the first
-            response byte never trips ``HttpTimeoutError``.
+        timeout_ms: Deadline for the whole request — the TCP connect,
+            the TLS handshake, the request send, and the response read,
+            summed across all redirect hops.  On expiry
+            ``HttpTimeoutError`` is raised.  The one part not bounded is
+            DNS resolution: the connector resolves the host with a
+            synchronous ``getaddrinfo`` that is blocking-by-substrate on
+            real boards, so a stall *inside* the lookup cannot be
+            interrupted.
         user_agent: Override the default ``User-Agent``.
         ticks: Optional ``chumicro_timing``-shaped tick source; falls
             back to ``chumicro_timing.ticks``.
@@ -114,8 +116,10 @@ def fetch(
         :class:`~chumicro_requests.client.Response`.
 
     Raises:
-        HttpTimeoutError: Reading the response exceeded *timeout_ms*.
-            Not raised for a stalled connect, TLS handshake, or send.
+        HttpTimeoutError: The request exceeded *timeout_ms* during the
+            connect, TLS handshake, request send, or response read.  A
+            stall inside DNS resolution is not bounded (blocking
+            substrate).
         HttpOversizedError: Body exceeded *max_body_bytes*.
         HttpProtocolError: Response was not valid HTTP/1.1 or the peer
             closed mid-response.
@@ -162,7 +166,21 @@ def fetch(
             user_agent=user_agent,
         )
         connector = connector_factory(host, port, use_tls)
-        sock = yield from connect(connector)
+        connect_budget_ms = ticks.ticks_diff(deadline_ms, ticks.ticks_ms())
+        if connect_budget_ms <= 0:
+            raise HttpTimeoutError(
+                f"request to {current_url!r} exceeded {timeout_ms} ms",
+            )
+        try:
+            sock = yield from connect(
+                connector, timeout_ms=connect_budget_ms, ticks=ticks,
+            )
+        except OSError as connect_error:
+            if connect_error.args and connect_error.args[0] == errno.ETIMEDOUT:
+                raise HttpTimeoutError(
+                    f"request to {current_url!r} exceeded {timeout_ms} ms",
+                ) from connect_error
+            raise
         try:
             yield from send_all(sock, request_bytes)
             parser = ResponseParser(max_body_bytes=max_body_bytes)

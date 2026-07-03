@@ -31,10 +31,20 @@ import sys
 
 from _swap_helpers import BareStub, SocketpoolStub
 
+# ``socketpool`` is a firmware module absent from every host interpreter,
+# so the cp-adapter import always needs the stub.
 sys.modules.setdefault("socketpool", SocketpoolStub())
-sys.modules.setdefault("socket", BareStub())
-sys.modules.setdefault("ssl", BareStub())
-sys.modules.setdefault("select", BareStub())
+# ``socket`` / ``ssl`` / ``select`` are real, importable stdlib on
+# CPython, and pytest's own machinery (``selectors`` needs
+# ``select.select``) depends on them — stubbing them via
+# ``setdefault`` in an interpreter that hasn't imported them yet
+# poisons ``sys.modules`` for the whole session.  Only the
+# MicroPython / CircuitPython unix-ports lack an adapter-ready copy,
+# so install the placeholders there alone.
+if sys.implementation.name != "cpython":
+    sys.modules.setdefault("socket", BareStub())
+    sys.modules.setdefault("ssl", BareStub())
+    sys.modules.setdefault("select", BareStub())
 
 
 import chumicro_sockets  # noqa: E402 — load-order dependency on the stub above
@@ -361,6 +371,12 @@ class TestCPythonTLSDefaultContextRouting:
             def close(self) -> None:
                 captured["raw_closed"] = True
 
+            def setblocking(self, flag) -> None:  # noqa: ARG002
+                pass
+
+            def settimeout(self, seconds) -> None:  # noqa: ARG002
+                pass
+
         def fake_create_connection(address):
             captured["address"] = address
             return _FakeRawSocket()
@@ -391,8 +407,11 @@ class TestCPythonTLSDefaultContextRouting:
         assert captured.get("used_default_context") is True
         assert captured.get("server_hostname") == "example.com"
         assert captured.get("wrapped") is True
-        assert isinstance(result, _FakeRawSocket)
+        # tls_client_socket wraps the SSLSocket to normalize SSLWant* to
+        # EAGAIN; the raw socket stays reachable on ``.sock``.
+        assert isinstance(result.sock, _FakeRawSocket)
         result.close()
+        assert captured.get("raw_closed") is True
 
 
 # ---------------------------------------------------------------------------
