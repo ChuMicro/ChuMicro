@@ -118,6 +118,43 @@ class TestQuotedDataExemption:
         findings = CHU020.check(tmp_path)
         assert len(findings) == 1
 
+    def test_genuine_single_quoted_phrase_still_exempt(
+        self, tmp_path: Path,
+    ) -> None:
+        # A word actually wrapped in single quotes is data, exempt.
+        _stage(tmp_path, "AGENTS.md", "Avoid the word 'comprehensive'.\n")
+        assert CHU020.check(tmp_path) == []
+
+
+class TestContractionsAreNotQuotes:
+    """Contraction / possessive apostrophes must not fake a quote pair."""
+
+    def test_contraction_flanked_adjective_still_fires(
+        self, tmp_path: Path,
+    ) -> None:
+        # ``It's`` and ``isn't`` bracket the adjective with apostrophes,
+        # but those are contractions, not quotes: the adjective fires.
+        _stage(
+            tmp_path,
+            "docs/x.md",
+            "It's a comprehensive guide, isn't it.\n",
+        )
+        findings = CHU020.check(tmp_path)
+        assert len(findings) == 1
+        assert "comprehensive" in findings[0].message
+
+    def test_possessive_flanked_adjective_still_fires(
+        self, tmp_path: Path,
+    ) -> None:
+        _stage(
+            tmp_path,
+            "docs/x.md",
+            "Don't call it robust unless the user's tests prove it.\n",
+        )
+        findings = CHU020.check(tmp_path)
+        assert len(findings) == 1
+        assert "robust" in findings[0].message
+
 
 class TestScope:
     def test_next_up_out_of_scope(self, tmp_path: Path) -> None:

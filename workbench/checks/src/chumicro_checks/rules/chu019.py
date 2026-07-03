@@ -61,14 +61,37 @@ def _check_file(filepath: Path) -> list[Finding]:
     if _NOQA_TAG in text:
         return []
 
+    stem = filepath.stem
     status_match = _STATUS.search(text)
     if status_match is None:
-        # No Status field. Not a decision record, nothing to check.
+        # A numbered record (or one carrying a lifecycle marker) whose
+        # ``Status:`` line is missing or styled so the parser can't read
+        # it (``**Status:**``, indented) is exactly the malformed record
+        # most in need of flagging — the filename asserts a lifecycle the
+        # body can't confirm.  A non-numbered ``.md`` is genuinely not a
+        # decision record and stays a silent no-op.
+        if (
+            _PREFIX.match(stem) is not None
+            or _SUPERSEDED_MARKER.match(stem) is not None
+            or _INERT_MARKER.match(stem) is not None
+        ):
+            return [
+                Finding(
+                    path=filepath,
+                    line=1,
+                    code=_RULE_CODE,
+                    message=(
+                        "decision record has no parseable `Status:` line — "
+                        "the filename asserts a lifecycle the body can't "
+                        "confirm; add a `Status:` field at line start "
+                        "(e.g. `Status: accepted`)"
+                    ),
+                )
+            ]
         return []
     status = status_match.group(1).lower()
     status_line = _line_of(text, status_match.start())
 
-    stem = filepath.stem
     superseded_marker = _SUPERSEDED_MARKER.match(stem)
     inert_marker = _INERT_MARKER.match(stem)
     superseded_by = _SUPERSEDED_BY.search(text)

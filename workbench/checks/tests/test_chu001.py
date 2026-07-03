@@ -43,6 +43,54 @@ class TestSingleLetter:
         _stage(tmp_path, "scripts/foo.py", "for i, j in pairs:\n    pass\n")
         assert CHU001.check(tmp_path) == []
 
+    def test_comprehension_target_exempt(self, tmp_path: Path) -> None:
+        # ``sum(x for x in values)`` — the comprehension target is a
+        # loop binding, exempt like ``for i in range(n)``.
+        _stage(tmp_path, "scripts/foo.py", "total = sum(x for x in values)\n")
+        assert CHU001.check(tmp_path) == []
+
+    def test_list_comprehension_target_exempt(self, tmp_path: Path) -> None:
+        _stage(tmp_path, "scripts/foo.py", "squares = [n * n for n in items]\n")
+        assert CHU001.check(tmp_path) == []
+
+    def test_async_for_target_exempt(self, tmp_path: Path) -> None:
+        _stage(
+            tmp_path,
+            "scripts/foo.py",
+            "async def drain():\n    async for i in stream():\n        handle(i)\n",
+        )
+        assert CHU001.check(tmp_path) == []
+
+    def test_nested_tuple_loop_target_exempt(self, tmp_path: Path) -> None:
+        _stage(
+            tmp_path,
+            "scripts/foo.py",
+            "for a, (b, c) in rows:\n    pass\n",
+        )
+        assert CHU001.check(tmp_path) == []
+
+    def test_starred_loop_target_exempt(self, tmp_path: Path) -> None:
+        _stage(tmp_path, "scripts/foo.py", "for a, *rest in rows:\n    pass\n")
+        assert CHU001.check(tmp_path) == []
+
+    def test_single_letter_import_alias_flagged(self, tmp_path: Path) -> None:
+        _stage(tmp_path, "scripts/foo.py", "import struct as s\n")
+        findings = CHU001.check(tmp_path)
+        assert len(findings) == 1
+        assert findings[0].message == "single-letter name 's'"
+
+    def test_single_letter_from_import_alias_flagged(self, tmp_path: Path) -> None:
+        _stage(tmp_path, "scripts/foo.py", "from os import path as p\n")
+        findings = CHU001.check(tmp_path)
+        assert len(findings) == 1
+        assert "'p'" in findings[0].message
+
+    def test_single_letter_class_name_flagged(self, tmp_path: Path) -> None:
+        _stage(tmp_path, "scripts/foo.py", "class T:\n    pass\n")
+        findings = CHU001.check(tmp_path)
+        assert len(findings) == 1
+        assert findings[0].message == "single-letter name 'T'"
+
     def test_function_param_flagged(self, tmp_path: Path) -> None:
         _stage(tmp_path, "scripts/foo.py", "def func(x):\n    return x\n")
         findings = CHU001.check(tmp_path)
@@ -81,6 +129,15 @@ class TestBannedAbbreviations:
         findings = CHU001.check(tmp_path)
         assert any("'_src'" in finding.message for finding in findings)
 
+    def test_banned_abbreviation_import_alias_flagged(self, tmp_path: Path) -> None:
+        # Aliasing to a banned abbreviation dodges the check unless
+        # ``import ... as`` bindings are inspected.
+        _stage(tmp_path, "scripts/foo.py", "import subprocess as cmd\n")
+        findings = CHU001.check(tmp_path)
+        assert len(findings) == 1
+        assert "banned abbreviation" in findings[0].message
+        assert "'cmd'" in findings[0].message
+
     def test_descriptive_name_clean(self, tmp_path: Path) -> None:
         _stage(tmp_path, "scripts/foo.py", "environment = 'production'\n")
         assert CHU001.check(tmp_path) == []
@@ -97,9 +154,16 @@ class TestSuppression:
 
 
 class TestEdgeCases:
-    def test_syntax_error_skipped(self, tmp_path: Path) -> None:
+    def test_syntax_error_reported_not_silently_skipped(
+        self, tmp_path: Path,
+    ) -> None:
+        # An unparseable file must surface as a finding, not pass as
+        # clean — it named nothing the rule could check.
         _stage(tmp_path, "scripts/foo.py", "def broken(\n")
-        assert CHU001.check(tmp_path) == []
+        findings = CHU001.check(tmp_path)
+        assert len(findings) == 1
+        assert findings[0].code == "CHU001"
+        assert "syntax error" in findings[0].message
 
     def test_walks_libraries(self, tmp_path: Path) -> None:
         _stage(tmp_path, "libraries/wifi/src/wifi/x.py", "x = 1\n")

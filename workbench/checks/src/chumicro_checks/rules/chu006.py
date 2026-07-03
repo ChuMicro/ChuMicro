@@ -73,11 +73,14 @@ def _outside_chumicro_checks(filepath: Path) -> bool:
     return not _under_subdir(filepath, parent="workbench", child="checks")
 
 
-#: Top-level directories that signal a workspace cloned from the
-#: ChuMicro-Workspace-Template.  Files anywhere under these trees
-#: legitimately mention the workspace's own ``run.py`` shim. That
-#: IS the command runner in a user workspace, not the chumicro-style
-#: anti-pattern the bare-``run.py`` rule is meant to catch.
+#: Top-level directory names that signal a workspace cloned from the
+#: ChuMicro-Workspace-Template.  Files under a repo-root tree named one
+#: of these legitimately mention the workspace's own ``run.py`` shim.
+#: That IS the command runner in a user workspace, not the
+#: chumicro-style anti-pattern the bare-``run.py`` rule is meant to
+#: catch.  Matched against the *first* repo-relative segment only: a
+#: package's own ``examples/`` or ``tests/`` subdirectory
+#: (``libraries/pkg/examples/``) ships to consumers and stays in scope.
 _TEMPLATE_PATH_SEGMENTS: frozenset[str] = frozenset({
     "packages", "projects", "shared", "examples", "tests",
 })
@@ -93,20 +96,24 @@ def _outside_runpy_owners(filepath: Path) -> bool:
     * ``workbench/checks/`` — this package's own source legitimately
       describes the rule and the literal it flags
       (covered by :func:`_outside_chumicro_checks`).
-    * Template / workspace user-content trees (``packages/``,
-      ``projects/``, ``shared/``, ``examples/``, ``tests/``) —
-      in a workspace cloned from the template, the shim IS the
-      command runner.
+    * Template / workspace user-content trees whose repo-root directory
+      is ``packages/``, ``projects/``, ``shared/``, ``examples/``, or
+      ``tests/`` — in a workspace cloned from the template, the shim IS
+      the command runner.  Only the leading repo-relative segment is
+      consulted, so a publishable package's own ``examples/`` or
+      ``tests/`` subdirectory stays in scope.
 
     The rule fires only outside all three sets: on PyPI-publishable
     library or workbench code that shouldn't reference a host-only
-    shim.
+    shim.  *filepath* is the repo-root-relative path (supplied by
+    ``LeakRule``), so ``parts[0]`` is the workspace's top-level tree.
     """
     if not _outside_chumicro_workspace(filepath):
         return False
     if not _outside_chumicro_checks(filepath):
         return False
-    return not any(part in _TEMPLATE_PATH_SEGMENTS for part in filepath.parts)
+    parts = filepath.parts
+    return not (bool(parts) and parts[0] in _TEMPLATE_PATH_SEGMENTS)
 
 
 def _publishable_package_dirs(repo_root: Path) -> list[Path]:

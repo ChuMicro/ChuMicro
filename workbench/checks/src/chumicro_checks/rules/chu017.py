@@ -11,14 +11,21 @@ one of a closed set of codebase-extent overclaims (``shipped code``,
 ``the codebase``, ``all code``, ``every line``, ``fully covered``,
 …) that the measurement does not support.
 
-The false-positive guard is the exemption: a sentence that also
-carries a negator (``not`` / ``never`` / ``rather than`` / ``n't``)
-or an honest-scope qualifier (``CPython-reachable``,
-``post-exclusion``, ``post-pragma``, ``device-execution``,
-``reachable``, ``aggregate``) is the *corrected* or *meta* statement
-of the contract, not drift. Those are not flagged.  This is what
-keeps the rule off the very ADR / AGENTS text that states the honest
-scope.
+The false-positive guard is the exemption, in two halves:
+
+* A negator (``not`` / ``never`` / ``rather than`` / ``n't`` /
+  ``no``) that sits within a few tokens **before** the overclaim
+  phrase — ``does not cover all code``, ``never full coverage`` — is
+  an honest negated claim.  A negator elsewhere in the sentence does
+  not exempt: ``95% of shipped code, no exceptions`` still fires, since
+  the ``no`` strengthens the overclaim rather than negating it.
+* An honest-scope qualifier anywhere in the sentence
+  (``CPython-reachable``, ``post-exclusion``, ``post-pragma``,
+  ``device-execution``, ``reachable``, ``aggregate``) marks the
+  *corrected* or *meta* statement of the contract, not drift.
+
+Neither is flagged.  This is what keeps the rule off the very ADR /
+AGENTS text that states the honest scope.
 
 Scope: ``AGENTS.md``, ``docs/``, ``plans/decisions/``. Where the
 coverage contract and its claims live.  The churny ``plans/next-up``
@@ -54,11 +61,19 @@ _OVERCLAIM = re.compile(
     re.IGNORECASE,
 )
 
-#: Sentence carries the honest scope, a negation, or is the meta
-#: statement of the rule itself, not drift.
-_EXEMPT = re.compile(
-    r"\bnot\b|\bnever\b|rather than|n't\b|\bno\b"
-    r"|CPython-reachable|post-exclusion|post-pragma|post-`# pragma"
+#: A negation token.  Exempts an overclaim only when it sits a few
+#: tokens *before* the overclaim phrase (an honest negated claim like
+#: ``does not cover all code``), never merely somewhere in the sentence.
+_NEGATOR = re.compile(r"\bnot\b|\bnever\b|rather than|n't\b|\bno\b", re.IGNORECASE)
+
+#: How many whitespace tokens before the overclaim a negator may sit
+#: and still count as negating it.
+_NEGATION_WINDOW_TOKENS = 4
+
+#: Sentence carries the honest scope or is the meta statement of the
+#: rule itself, not drift.  Checked anywhere in the sentence.
+_SENTENCE_EXEMPT = re.compile(
+    r"CPython-reachable|post-exclusion|post-pragma|post-`# pragma"
     r"|device-execution|\breachable\b|\baggregate\b"
     r"|must carry|or be wrong|forbids|this scope",
     re.IGNORECASE,
@@ -66,6 +81,19 @@ _EXEMPT = re.compile(
 
 #: Sentence terminators (markdown prose).
 _SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+|\n{2,}")
+
+
+def _negation_precedes(sentence: str, overclaim_start: int) -> bool:
+    """Return whether a negator sits just before the overclaim phrase.
+
+    Looks only at the last :data:`_NEGATION_WINDOW_TOKENS` whitespace
+    tokens before *overclaim_start*, so ``does not cover all code``
+    (negator adjacent) is exempt but ``95% of shipped code, no
+    exceptions`` (negator after the claim) is not.
+    """
+    preceding_tokens = sentence[:overclaim_start].split()
+    window = " ".join(preceding_tokens[-_NEGATION_WINDOW_TOKENS:])
+    return _NEGATOR.search(window) is not None
 
 
 def _scan_relpaths(repo_root: Path) -> list[Path]:
@@ -104,7 +132,9 @@ def _check_file(filepath: Path) -> list[Finding]:
         overclaim = _OVERCLAIM.search(sentence)
         if overclaim is None:
             continue
-        if _EXEMPT.search(sentence):
+        if _SENTENCE_EXEMPT.search(sentence):
+            continue
+        if _negation_precedes(sentence, overclaim.start()):
             continue
         line = _line_of_offset(text, start + overclaim.start())
         if line - 1 < len(source_lines) and line_suppresses(

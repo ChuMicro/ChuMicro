@@ -13,7 +13,10 @@ Engine A applied to markdown paragraphs across
 * Extract each ADR's non-scaffolding paragraphs (split on blank
   lines. Markdown headers, ``Status: / Date: / Related: /
   Superseded by: / Archived:`` lines, and blockquote lines are
-  treated as boundaries, not content).
+  treated as boundaries, not content).  A fenced code block bounds a
+  paragraph and its contents are excluded entirely: a canonical config
+  or command snippet shared verbatim across two ADRs is legitimate, not
+  a duplicated principle.
 * Normalize to a tuple of lowercased alphanumeric word tokens
   (matching CHU027's normalizer so the engine has consistent shape).
 * Hash paragraphs at or above the minimum-token floor, then flag
@@ -59,8 +62,12 @@ _SCAFFOLDING_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"^\s*Superseded by:\s*"),
     re.compile(r"^\s*Archived:\s*"),
     re.compile(r"^\s*>\s"),                     # blockquote lines
-    re.compile(r"^\s*```"),                     # code fences
 )
+
+#: A fenced code-block delimiter line.  It bounds a paragraph and
+#: toggles fenced state; the fence and every line between fences is code
+#: or config, not principle prose, so none of it is hashed.
+_FENCE = re.compile(r"^\s*```")
 
 
 @dataclass(frozen=True)
@@ -95,6 +102,7 @@ def _extract_paragraphs(text: str, filepath: Path) -> list[_Paragraph]:
     current_lines: list[str] = []
     current_start = 0
     suppressed = False
+    in_fence = False
 
     def flush() -> None:
         nonlocal current_lines, current_start, suppressed
@@ -110,6 +118,16 @@ def _extract_paragraphs(text: str, filepath: Path) -> list[_Paragraph]:
         suppressed = False
 
     for line_no, line in enumerate(lines, start=1):
+        if _FENCE.match(line):
+            # A fence delimiter bounds the current paragraph and flips
+            # fenced state; neither it nor its contents are prose.
+            flush()
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            # Code / config sample inside a fence contributes no tokens,
+            # so a snippet shared verbatim across ADRs is not a duplicate.
+            continue
         stripped = line.strip()
         if not stripped:
             flush()

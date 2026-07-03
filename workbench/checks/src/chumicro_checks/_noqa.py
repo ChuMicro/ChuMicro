@@ -9,6 +9,12 @@ Two suppression syntaxes are recognized:
 
 Both forms accept a comma-separated list of codes (``# noqa: CHU006,
 CHU012``) and a bare form (``# noqa``) that suppresses every code.
+
+The ``noqa`` token must stand alone: after it (or after its code
+list) comes whitespace, a second ``#`` comment, or end of line.  Prose
+that merely starts with ``noqa`` — ``# noqa-tracking``, ``.noqa`` in a
+path, ```` `# noqa` `` `` mentioned in Markdown — is not a directive and
+suppresses nothing.
 """
 
 from __future__ import annotations
@@ -16,8 +22,8 @@ from __future__ import annotations
 import re
 
 _NOQA_PATTERNS: tuple[re.Pattern[str], ...] = (
-    re.compile(r"#\s*noqa(?::\s*([A-Z0-9, ]+))?"),
-    re.compile(r"<!--\s*noqa(?::\s*([A-Z0-9, ]+))?\s*-->"),
+    re.compile(r"#\s*noqa(?::\s*([A-Z0-9, ]+))?(?=[\s:#]|$)"),
+    re.compile(r"<!--\s*noqa\b(?::\s*([A-Z0-9, ]+))?\s*-->"),
 )
 
 

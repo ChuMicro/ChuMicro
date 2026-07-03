@@ -30,6 +30,7 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+from chumicro_checks._ast import parse_or_syntax_finding
 from chumicro_checks._finding import Finding
 from chumicro_checks._noqa import line_suppresses
 from chumicro_checks._rule import Rule
@@ -63,24 +64,37 @@ def _is_in_library_examples(filepath: Path, repo_root: Path) -> bool:
     )
 
 
+def _add_runtime_literals(value: ast.expr | None, runtimes: set[str]) -> None:
+    """Add the string elements of a tuple / list literal to *runtimes*."""
+    if isinstance(value, (ast.Tuple, ast.List)):
+        for elt in value.elts:
+            if isinstance(elt, ast.Constant) and isinstance(elt.value, str):
+                runtimes.add(elt.value)
+
+
 def _declared_runtimes(tree: ast.Module) -> set[str]:
-    """Runtimes listed in a top-level ``__chumicro_runtimes__``."""
+    """Runtimes listed in a top-level ``__chumicro_runtimes__``.
+
+    Recognizes both the plain assignment
+    (``__chumicro_runtimes__ = (...)``) and the annotated assignment
+    (``__chumicro_runtimes__: tuple = (...)``); the latter is an
+    ``ast.AnnAssign`` with a single ``target``, not an ``ast.Assign``.
+    """
     runtimes: set[str] = set()
     for node in tree.body:
-        if not isinstance(node, ast.Assign):
-            continue
-        if not any(
-            isinstance(target, ast.Name)
-            and target.id == "__chumicro_runtimes__"
-            for target in node.targets
-        ):
-            continue
-        if isinstance(node.value, (ast.Tuple, ast.List)):
-            for elt in node.value.elts:
-                if isinstance(elt, ast.Constant) and isinstance(
-                    elt.value, str,
-                ):
-                    runtimes.add(elt.value)
+        if isinstance(node, ast.Assign):
+            if any(
+                isinstance(target, ast.Name)
+                and target.id == "__chumicro_runtimes__"
+                for target in node.targets
+            ):
+                _add_runtime_literals(node.value, runtimes)
+        elif isinstance(node, ast.AnnAssign):
+            if (
+                isinstance(node.target, ast.Name)
+                and node.target.id == "__chumicro_runtimes__"
+            ):
+                _add_runtime_literals(node.value, runtimes)
     return runtimes
 
 
@@ -120,10 +134,9 @@ def _check_file(filepath: Path, repo_root: Path) -> list[Finding]:
         text = filepath.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
         return []
-    try:
-        tree = ast.parse(text, filename=str(filepath))
-    except SyntaxError:
-        return []
+    tree, syntax_findings = parse_or_syntax_finding(text, filepath, _RULE_CODE)
+    if tree is None:
+        return syntax_findings
     declared = _declared_runtimes(tree)
     if not declared & {"circuitpython", "micropython"}:
         return []

@@ -1,7 +1,9 @@
 """CHU024: banned ADR-authoring section markers in ``plans/decisions/``.
 
 The ADR README's "Edit the body in place" rule forbids history banners
-on accepted decision records: ``## Update (YYYY-MM-DD)`` sections,
+on accepted decision records: ``Update`` heading banners at any heading
+depth, dated or paren-less (``## Update (YYYY-MM-DD)``,
+``### Update (…)``, ``## Update 2026-01-03``, ``## Updates``),
 ``## Amendments`` / ``## Changelog`` / ``## Progress notes`` sections,
 ``Amended by Decision NNNN`` blockquotes, and "this decision has been
 revised" preambles.  An accepted ADR describes the *current* state of
@@ -32,8 +34,8 @@ _RULE_CODE = "CHU024"
 
 _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     (
-        re.compile(r"^\s*##\s+Update\s*\("),
-        "ADR ``## Update (...)`` banner — edit the body in place instead",
+        re.compile(r"^\s*#{2,}\s+Updates?\b"),
+        "ADR ``Update`` banner heading — edit the body in place instead",
     ),
     (
         re.compile(r"^\s*##\s+Amendments?\b"),

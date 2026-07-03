@@ -118,9 +118,14 @@ class TestSkips:
         _stage(tmp_path, _SRC, "import asynchat\nfrom asyncfoo import bar\n")
         assert CHU033.check(tmp_path) == []
 
-    def test_syntax_error_tolerated(self, tmp_path: Path) -> None:
+    def test_syntax_error_reported(self, tmp_path: Path) -> None:
+        # A ``--select CHU033`` run over an unparseable file must not be
+        # silently green: the file surfaces as a finding.
         _stage(tmp_path, _SRC, "def broken(:\n")
-        assert CHU033.check(tmp_path) == []
+        findings = CHU033.check(tmp_path)
+        assert len(findings) == 1
+        assert findings[0].code == "CHU033"
+        assert "syntax error" in findings[0].message
 
 
 class TestSuppression:

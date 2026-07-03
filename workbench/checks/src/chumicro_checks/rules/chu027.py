@@ -47,6 +47,7 @@ from dataclasses import dataclass
 from io import StringIO
 from pathlib import Path
 
+from chumicro_checks._ast import parse_or_syntax_finding
 from chumicro_checks._finding import Finding
 from chumicro_checks._noqa import line_suppresses
 from chumicro_checks._rule import Rule
@@ -108,7 +109,7 @@ def _extract_comment_blocks(text: str, filepath: Path, package: str) -> list[_Bl
     blocks: list[_Block] = []
     try:
         tokens = list(tokenize.generate_tokens(StringIO(text).readline))
-    except (tokenize.TokenizeError, SyntaxError, IndentationError):
+    except (tokenize.TokenError, SyntaxError, IndentationError):
         return []
     content_lines: list[str] = []
     block_start: int = 0
@@ -221,13 +222,23 @@ def _scan_roots(repo_root: Path) -> list[Path]:
     return roots
 
 
-def _collect_blocks(roots: list[Path], repo_root: Path) -> list[_Block]:
+def _collect_blocks(
+    roots: list[Path], repo_root: Path,
+) -> tuple[list[_Block], list[Finding]]:
+    """Return the qualifying blocks and one syntax finding per unparseable file."""
     blocks: list[_Block] = []
+    syntax_findings: list[Finding] = []
     for root in roots:
         for filepath in iter_text_files(root, suffixes=(".py",)):
             try:
                 text = filepath.read_text(encoding="utf-8")
             except (OSError, UnicodeDecodeError):
+                continue
+            tree, file_syntax = parse_or_syntax_finding(
+                text, filepath, _RULE_CODE,
+            )
+            if tree is None:
+                syntax_findings.extend(file_syntax)
                 continue
             package = _package_of(filepath, repo_root)
             source_lines = text.splitlines()
@@ -235,7 +246,8 @@ def _collect_blocks(roots: list[Path], repo_root: Path) -> list[_Block]:
             blocks.extend(_extract_docstring_blocks(
                 text, filepath, package, source_lines,
             ))
-    return [block for block in blocks if len(block.tokens) >= _MIN_TOKENS]
+    qualifying = [block for block in blocks if len(block.tokens) >= _MIN_TOKENS]
+    return qualifying, syntax_findings
 
 
 def _group_duplicates(blocks: list[_Block]) -> list[list[_Block]]:
@@ -267,8 +279,7 @@ class CHU027_CrossSiteDuplicate(Rule):
         roots = _scan_roots(repo_root)
         if not roots:
             return []
-        blocks = _collect_blocks(roots, repo_root)
-        findings: list[Finding] = []
+        blocks, findings = _collect_blocks(roots, repo_root)
         for group in _group_duplicates(blocks):
             sites = ", ".join(
                 f"{block.filepath.relative_to(repo_root)}:{block.line}"

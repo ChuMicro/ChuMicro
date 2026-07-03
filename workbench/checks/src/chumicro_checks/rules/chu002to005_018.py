@@ -21,15 +21,23 @@ root would false-positive on per-user files.
   suppression (a CR is never wanted in this repo's text files).
 * CHU005 — blank line immediately after a block opener (``def``,
   ``class``, ``if``, ``for``, ``while``, ``with``, ``try``, ``else``,
-  ``elif``, ``except``, ``finally``).  Python files only.  Suppress
-  with ``# noqa: CHU005`` on the block-opener line (the blank line
-  itself has no code to attach a comment to).  An exception fires
-  for the idiomatic blank-line-before-nested-definition pattern
-  (import-fallback blocks, conditional definitions): if the next
-  non-blank line is a ``def`` or ``class``, the blank stays clean.
+  ``elif``, ``except``, ``finally``, ``match``, ``case``, and the
+  ``async`` variants).  A multi-line header whose ``):`` closes on its
+  own line counts too.  Python files only.  Suppress with
+  ``# noqa: CHU005`` on the block-opener line (the blank line itself
+  has no code to attach a comment to).  An exception fires for the
+  idiomatic blank-line-before-nested-definition pattern (import-fallback
+  blocks, conditional definitions): if the next non-blank line is a
+  ``def`` or ``class``, the blank stays clean.
 
-Self-scope: scans top-level directories under the repo root.  In a
-tree without those, every rule returns no findings, a silent no-op.
+Self-scope: scans the top-level ``scripts/`` / ``plans/`` / ``docs/``
+trees, the workspace-template user-content trees, and inside each
+``libraries|workbench|support/<pkg>/`` package its ``src/``, ``tests/``,
+``functional_tests/``, ``examples/``, and ``docs/`` subdirectories plus
+the package-root ``README.md``.  Package-root metadata
+(``pyproject.toml``, ``mkdocs.yml``, ``VERSION``) stays out of scope.
+In a tree without any of those, every rule returns no findings, a
+silent no-op.
 """
 
 from __future__ import annotations
@@ -69,23 +77,39 @@ _SCAN_TOP_LEVELS: tuple[str, ...] = (
     "packages", "projects", "shared", "examples", "tests",
 )
 
-#: Per-package parent directories.  Inside each package directory, only
-#: the listed subdirs are scanned. pyproject.toml, mkdocs.yml, and
-#: other package-root metadata aren't part of the linter's scope.
+#: Per-package parent directories.  Inside each package directory, the
+#: listed subdirs are scanned in full, plus the package-root files in
+#: :data:`_PACKAGE_ROOT_FILES`.  pyproject.toml, mkdocs.yml, VERSION,
+#: and other package-root metadata stay out of the linter's scope.
 _PACKAGE_PARENTS: tuple[str, ...] = ("libraries", "workbench", "support")
 _PACKAGE_SUBDIRS: tuple[str, ...] = (
-    "src", "tests", "functional_tests", "examples",
+    "src", "tests", "functional_tests", "examples", "docs",
 )
+
+#: Package-root prose files scanned directly (the rest of the package
+#: root is metadata).  The README is the most user-visible publishable
+#: prose a package ships, so its whitespace hygiene matters as much as
+#: the source tree's.
+_PACKAGE_ROOT_FILES: tuple[str, ...] = ("README.md",)
 
 _BLOCK_OPENER = re.compile(
     r"^\s*(?:"
-    r"(?:def |class |if |elif |for |while |with |except\b).*:"
+    r"(?:async\s+)?(?:def |class |if |elif |for |while |with |except\b"
+    r"|match |case ).*:"
     r"|"
     r"(?:else|try|finally)\s*:"
     r")\s*(?:#.*)?\s*$"
 )
 
-_DEFINITION = re.compile(r"^\s*(?:def |class )")
+#: The final physical line of a *multi-line* block opener: a lone
+#: closing paren (optionally followed by a ``-> return-annotation``)
+#: then the terminating colon.  A multi-line ``def`` / ``class`` / ``if``
+#: header whose ``):`` lands on its own line ends here, so a blank line
+#: after it is still a blank-after-opener.  A multi-line function *call*
+#: closes on a bare ``)`` with no colon and does not match.
+_MULTILINE_OPENER_CLOSE = re.compile(r"^\s*\)\s*(?:->[^:]+)?:\s*(?:#.*)?$")
+
+_DEFINITION = re.compile(r"^\s*(?:async\s+)?(?:def |class )")
 
 
 def _is_skipped_part(part: str) -> bool:
@@ -104,6 +128,7 @@ def _iter_text_files(repo_root: Path) -> Iterator[Path]:
         candidate = repo_root / top_level
         if candidate.is_dir():
             roots.append(candidate)
+    package_root_files: list[Path] = []
     for parent_name in _PACKAGE_PARENTS:
         parent = repo_root / parent_name
         if not parent.is_dir():
@@ -115,6 +140,10 @@ def _iter_text_files(repo_root: Path) -> Iterator[Path]:
                 subdir = package / subdir_name
                 if subdir.is_dir():
                     roots.append(subdir)
+            for filename in _PACKAGE_ROOT_FILES:
+                candidate = package / filename
+                if candidate.is_file():
+                    package_root_files.append(candidate)
 
     seen: set[Path] = set()
     for root in roots:
@@ -129,6 +158,14 @@ def _iter_text_files(repo_root: Path) -> Iterator[Path]:
                 continue
             seen.add(candidate)
             yield candidate
+
+    for candidate in package_root_files:
+        if candidate.suffix not in _SCANNED_SUFFIXES:
+            continue
+        if candidate in seen:
+            continue
+        seen.add(candidate)
+        yield candidate
 
 
 def _read_text(filepath: Path) -> str | None:
@@ -272,7 +309,10 @@ def _check_chu005(filepath: Path, text: str) -> list[Finding]:
                     )
 
         if not is_blank and not in_triple_quote:
-            prev_was_block_opener = bool(_BLOCK_OPENER.match(stripped))
+            prev_was_block_opener = bool(
+                _BLOCK_OPENER.match(stripped)
+                or _MULTILINE_OPENER_CLOSE.match(stripped)
+            )
         else:
             prev_was_block_opener = False
         prev_line_text = raw

@@ -104,6 +104,22 @@ class TestRunPyPatterns:
         findings = CHU006.check(tmp_path)
         assert all("bare " + "run.py" not in finding.message for finding in findings)  # noqa: CHU006  assertion text matches the rule's own message
 
+    def test_bare_run_py_flagged_in_library_examples(self, tmp_path: Path) -> None:
+        # A package's own examples/ subdirectory ships to bundle
+        # consumers; a bare run.py ref there is a leak, not template
+        # user content. The exemption keys on the first repo-relative
+        # segment (``libraries``), not a coincidental ``examples`` part.
+        body = "# run with " + "run.py deploy\n"  # noqa: CHU006  fixture: rule-pattern data
+        _stage_publishable(tmp_path, "libraries", "wifi", "examples/demo.py", body)
+        findings = CHU006.check(tmp_path)
+        assert any("bare " + "run.py" in finding.message for finding in findings)  # noqa: CHU006  assertion text matches the rule's own message
+
+    def test_bare_run_py_flagged_in_library_tests(self, tmp_path: Path) -> None:
+        body = "# regenerate with " + "run.py fixtures\n"  # noqa: CHU006  fixture: rule-pattern data
+        _stage_publishable(tmp_path, "libraries", "wifi", "tests/test_x.py", body)
+        findings = CHU006.check(tmp_path)
+        assert any("bare " + "run.py" in finding.message for finding in findings)  # noqa: CHU006  assertion text matches the rule's own message
+
 
 class TestMonoRepoFraming:
     def test_chumicro_mono_repo_flagged(self, tmp_path: Path) -> None:
@@ -192,6 +208,19 @@ class TestSuppression:
         )
         assert CHU006.check(tmp_path) == []
 
+    def test_hyphenated_noqa_prose_does_not_suppress(self, tmp_path: Path) -> None:
+        # A hyphenated ``noqa`` token co-located with a leak is prose,
+        # not a directive, so the leak on the same line still fires.
+        # The ref is split in this source so the test file itself stays
+        # clean under CHU006.
+        body = (
+            '"""' + "Decision" + " 0042 lives upstream.  "
+            "# noqa-tracking follow-up\"\"\"\n"
+        )
+        _stage_publishable(tmp_path, "libraries", "wifi", "src/x.py", body)
+        findings = CHU006.check(tmp_path)
+        assert any("Decision/ADR NNNN" in finding.message for finding in findings)
+
 
 class TestScanRoots:
     def test_publishable_dirs_includes_libraries_and_workbench(self, tmp_path: Path) -> None:
@@ -247,6 +276,38 @@ class TestTemplateShapeFires:
         (tmp_path / "shared" / "util.py").write_text("# from chumicro mono-repo\n")
         findings = CHU006.check(tmp_path)
         assert any("'chumicro mono-repo'" in finding.message for finding in findings)
+
+
+class TestNestedCheckoutPath:
+    """Predicate exemptions key on the repo-relative path, not the absolute one."""
+
+    def test_plans_path_fires_when_repo_nested_under_workbench_checks(
+        self, tmp_path: Path,
+    ) -> None:
+        # Repo checked out under a path whose own segments include
+        # ``workbench/checks`` (a CI workspace, or this repo's own
+        # ``.scratch/``). The scope predicate must consult the
+        # repo-relative path, or every _outside_chumicro_checks-scoped
+        # pattern silently switches off repo-wide.
+        repo_root = tmp_path / "workbench" / "checks" / "userrepo"
+        target = repo_root / "libraries" / "pkg" / "src" / "mod.py"
+        target.parent.mkdir(parents=True)
+        target.write_text("# tracked in plans/next-up.md upstream\n")
+        findings = CHU006.check(repo_root)
+        assert any("plans/...md" in finding.message for finding in findings)
+
+    def test_bare_run_py_fires_when_repo_nested_under_examples(
+        self, tmp_path: Path,
+    ) -> None:
+        # A coincidental ``examples`` segment above the repo root must
+        # not exempt the whole tree from the bare-run.py pattern.
+        repo_root = tmp_path / "examples" / "userrepo"
+        target = repo_root / "libraries" / "pkg" / "src" / "mod.py"
+        target.parent.mkdir(parents=True)
+        body = "# run " + "run.py deploy\n"  # noqa: CHU006  fixture: rule-pattern data
+        target.write_text(body, encoding="utf-8")
+        findings = CHU006.check(repo_root)
+        assert any("bare " + "run.py" in finding.message for finding in findings)  # noqa: CHU006  assertion text matches the rule's own message
 
 
 class TestScopePredicates:
