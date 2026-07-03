@@ -103,11 +103,15 @@ The handler signature is `(Request) -> Response`.
 build_response(200, json={"ok": True})         # application/json
 build_response(200, text="plain text")         # text/plain; charset=utf-8
 build_response(200, html="<h1>hi</h1>")        # text/html; charset=utf-8
-build_response(200, body=b"\x00\x01\x02")      # application/octet-stream (default)
+build_response(200, body=b"\x00\x01\x02")      # raw bytes, no Content-Type set
 build_response(204)                            # no body
 ```
 
-For full control, construct `Response(status_code, headers, body)` directly.
+For full control, construct `Response` directly — its arguments are keyword-only and `reason` is required, and `body` must be `bytes` (a `str` body is rejected as a 500 at send time):
+
+```python
+Response(status_code=200, reason="OK", headers={"X-Trace": "abc"}, body=b"raw")
+```
 
 ## Tick-fairness knobs
 
@@ -201,7 +205,7 @@ The TLS handshake is synchronous inside `wrap_socket(..., server_side=True)` —
 
 ## Memory notes
 
-Connection state is bounded by `max_connections`; each connection holds its receive buffer (`recv_budget_per_tick`-sized chunks), the parsed `Request`, and the encoded `Response` until drained.  Nothing else allocates per-tick steady-state.  The shared `chumicro-requests` HTTP/1.1 wire primitives (case-insensitive header dict, charset parsing) are inlined into `chumicro_http_server._wire` so a server-only board doesn't ship the client library.
+Connection state is bounded by `max_connections`; each connection holds its receive buffer (a scratch chunk capped at 512 B, so a `recv_budget_per_tick` above 512 is satisfied by several `recv_into` calls per tick), the parsed `Request`, and the encoded `Response` until drained.  Nothing else allocates per-tick steady-state.  The shared `chumicro-requests` HTTP/1.1 wire primitives (case-insensitive header dict, charset parsing) are inlined into `chumicro_http_server._wire` so a server-only board doesn't ship the client library.
 
 ## Platform notes
 

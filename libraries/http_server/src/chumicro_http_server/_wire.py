@@ -552,8 +552,12 @@ class RequestParser:
         self._consume(crlf_index + 2)
         try:
             text = str(line, "ascii")
-        # HTTP/1.1 §3.1 forbids non-ASCII; defensive only.
-        except UnicodeDecodeError as decode_error:  # pragma: no cover
+        # HTTP/1.1 §3.1 forbids non-ASCII; defensive only.  Catch
+        # ValueError, not UnicodeDecodeError: MicroPython / CircuitPython
+        # have no UnicodeDecodeError builtin (naming it raises NameError),
+        # and there str(..., "ascii") on a bad byte raises a bare
+        # ValueError; on CPython UnicodeDecodeError subclasses ValueError.
+        except ValueError as decode_error:  # pragma: no cover
             self._fail(ServerProtocolError(
                 f"non-ASCII request line: {bytes(line)!r}",
             ))
@@ -612,8 +616,10 @@ class RequestParser:
         self._consume(crlf_index + 2)
         try:
             text = str(line, "ascii")
-        # HTTP/1.1 §3.2 forbids non-ASCII; defensive only.
-        except UnicodeDecodeError as decode_error:  # pragma: no cover
+        # HTTP/1.1 §3.2 forbids non-ASCII; defensive only.  Catch
+        # ValueError, not UnicodeDecodeError, for the same cross-runtime
+        # reason as the request-line parser above.
+        except ValueError as decode_error:  # pragma: no cover
             self._fail(ServerProtocolError(
                 f"non-ASCII header line: {bytes(line)!r}",
             ))

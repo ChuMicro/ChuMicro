@@ -46,6 +46,25 @@ from chumicro_http_server._wire import (
     split_target,
 )
 
+#: While a connection is in flight its socket is not in the runner's
+#: poll set (only the listener is), so ``next_deadline`` caps the wait
+#: at this interval to keep advancing the connection instead of sleeping
+#: to the far request-timeout deadline.  Small enough for low added
+#: latency, large enough not to busy-spin.
+_CONNECTION_PROGRESS_INTERVAL_MS = 20
+
+#: Pre-encoded, ASCII-only 500 used when a handler's own Response can't
+#: be encoded (a str body, a non-ASCII header / reason).  Literal bytes
+#: so the fallback itself can never fail to encode.
+_ENCODED_500_ERROR = (
+    b"HTTP/1.1 500 Internal Server Error\r\n"
+    b"Content-Type: text/plain; charset=utf-8\r\n"
+    b"Content-Length: 21\r\n"
+    b"Connection: close\r\n"
+    b"\r\n"
+    b"Internal Server Error"
+)
+
 #: Reason phrases for the status codes this server emits.
 _REASONS = {
     200: "OK",
@@ -381,7 +400,15 @@ class _Connection:
         (handler dispatch, oversize-body short-circuit) and the send
         half of the tick.
         """
-        self._response_bytes = encode_response(response)
+        try:
+            self._response_bytes = encode_response(response)
+        except Exception:  # noqa: BLE001 - an unencodable Response is a 500, not a crash
+            # A handler-built Response with a str body, or a non-ASCII
+            # header / reason, makes encode_response raise.  Without this
+            # the exception escapes tick() and handle() every tick, the
+            # connection never advances, and the handler re-runs forever.
+            # Fall back to the canned 500 (pre-encoded, cannot re-fail).
+            self._response_bytes = _ENCODED_500_ERROR
         self._response_view = memoryview(self._response_bytes)
         self._response_offset = 0
         self.state = _ConnState.WANT_SEND_HEADERS
@@ -671,6 +698,11 @@ class HttpServer:
 
         self._listener = None
         self._connections = []
+        #: Count of accept-time errors swallowed as connection-scoped
+        #: (TLS handshake failures, mid-handshake resets) plus the last
+        #: one, for observability without crashing the server loop.
+        self.accept_errors = 0
+        self.last_accept_error = None
 
         # Two-dict router.
         # _explicit_routes: (method, path) -> handler.  No path
@@ -874,7 +906,10 @@ class HttpServer:
         on first tick), else ``None``."""
         if self._listener is None:
             return None
-        return getattr(self._listener, "_sock", self._listener)
+        # chumicro_sockets listener wrappers expose the OS-level socket
+        # on ``.sock`` (not ``._sock``); the runner's poll set needs that
+        # pollable object, not the fileno-less wrapper.
+        return getattr(self._listener, "sock", self._listener)
 
     @property
     def io_wants_read(self):
@@ -882,12 +917,17 @@ class HttpServer:
         arrive at any time."""
         return self._listener is not None
 
-    def next_deadline(self, now_ms):  # noqa: ARG002 - runner contract
-        """Earliest per-connection deadline across in-flight connections.
+    def next_deadline(self, now_ms):
+        """Earliest tick at which ``handle()`` must run.
 
-        Returns ``None`` when no connection is in flight.  Lets
-        ``Runner.wait`` shorten its central poll so the loop wakes for
-        request-timeout enforcement even on a quiet listener.
+        ``None`` when no connection is in flight, so ``Runner.wait``
+        parks on the listener socket until an accept arrives.  While a
+        connection IS in flight, its socket is not in the runner's poll
+        set (the runner registers only the listener), so this caps the
+        wait at a short progress interval — otherwise ``Runner.wait``
+        would sleep to the far request-timeout deadline and the bytes
+        already waiting on the connection socket would stall unread until
+        that deadline killed the connection.
         """
         ticks_diff = self._ticks.ticks_diff
         nearest = None
@@ -895,6 +935,11 @@ class HttpServer:
             candidate = connection._deadline_ticks
             if nearest is None or ticks_diff(candidate, nearest) < 0:
                 nearest = candidate
+        if not self._connections:
+            return nearest
+        progress = self._ticks.ticks_add(now_ms, _CONNECTION_PROGRESS_INTERVAL_MS)
+        if nearest is None or ticks_diff(progress, nearest) < 0:
+            return progress
         return nearest
 
     def handle(self, now_ms):
@@ -920,7 +965,15 @@ class HttpServer:
         except OSError as accept_error:
             if accept_error.errno == errno.EAGAIN:
                 return
-            raise
+            # Any other accept-time error is connection-scoped, not
+            # fatal to the server: a TLS listener runs the handshake
+            # synchronously inside accept(), so one client speaking
+            # plaintext / offering a bad cert / resetting mid-handshake
+            # raises here (SSLError, ECONNABORTED).  Record it and keep
+            # the listener alive rather than tearing down the whole loop.
+            self.accept_errors += 1
+            self.last_accept_error = accept_error
+            return
         if accept_result is None:
             return
         client_socket, peer = accept_result
