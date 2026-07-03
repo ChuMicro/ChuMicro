@@ -113,6 +113,41 @@ def test_run_module_includes_total_duration(capsys) -> None:
     assert re.search(r"time=\d+\.\d{3}s", output)
 
 
+def test_run_module_duration_is_wrap_safe_on_micropython(monkeypatch, capsys) -> None:
+    """A test straddling MicroPython's ~2**30 ms tick wrap reports a positive
+    duration.
+
+    Feeds ``_now`` samples that step from just below the wrap to just past
+    zero and installs the MicroPython ``_elapsed_seconds`` (ticks_diff-based).
+    Raw subtraction would print a large negative duration the host-side
+    result parser cannot match; ticks_diff yields the true 80 ms interval.
+    """
+    period = 1 << 30
+    half = period >> 1
+
+    def ticks_diff(new: int, old: int) -> int:
+        diff = (new - old) & (period - 1)
+        return diff - period if diff >= half else diff
+
+    # run_start, test_start (both just below the wrap), test_end and the
+    # final SUMMARY sample (both just past the wrap to zero).
+    samples = iter([period - 50, period - 50, 30, 60])
+    monkeypatch.setattr(runner_module, "_now", lambda: next(samples))
+    monkeypatch.setattr(
+        runner_module,
+        "_elapsed_seconds",
+        lambda start, end: ticks_diff(end, start) / 1000,
+    )
+
+    run_module(SimpleNamespace(test_ok=lambda: None))
+    output = capsys.readouterr().out
+
+    match = re.search(r"PASS test_ok \((\d+\.\d{3})s\)", output)
+    assert match is not None
+    assert float(match.group(1)) == 0.080  # (period-50) -> 30 spans 80 ms
+    assert "-" not in output  # no negative duration anywhere
+
+
 def test_run_module_duration_excludes_gc_collect_time(
     monkeypatch, capsys,
 ) -> None:
@@ -138,7 +173,7 @@ def test_run_module_duration_excludes_gc_collect_time(
     monkeypatch.setattr(runner_module, "gc", fake_gc)
     monkeypatch.setattr(runner_module, "_MEM_FREE_AVAILABLE", True)
     monkeypatch.setattr(
-        runner_module, "_now_seconds", lambda: fake_time["now"],
+        runner_module, "_now", lambda: fake_time["now"],
     )
 
     def test_quick() -> None:
