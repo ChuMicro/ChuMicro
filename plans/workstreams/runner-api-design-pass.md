@@ -1,10 +1,12 @@
 # Workstream: runner/task API design pass (M49 + M51 + M31 + factory shape)
 
-Status: **verdicts in** (2026-07-03): M49 = both surfaces (decided); M51 = two front doors
-(decided — user confirmed after the full-break tradeoff was clarified as consumer breakage, not
-implementer effort); factory = one contract, local copies (decided); M31 = pending — the user
-questions whether ADR 0089's mqtt paragraph is right and asked for more information; analysis
-appended to section 3 below.  The four escalated design questions from the
+Status: **verdicts in** (2026-07-03): M49 = both surfaces (shipped, runner 0.14.0); M51 =
+**full break** — superseded by Decision 0092 (no pre-publication backwards compat): the
+callable-check shape and the second `next_deadline` convention are deleted outright, all
+consumers migrated in the same commit; `add_periodic` stays on teaching merit (it is sugar,
+not compat).  Factory = one contract, local copies (decided).  M31 = **approved as refined** —
+amend 0089 narrowly, mqtt gains `next_message()` only (analysis in section 3).  M51 execution
+and the mqtt surface batch with the Decision-0092 compat sweep's removal wave.  The four escalated design questions from the
 straggler fan-out, with options and a recommendation each.  All four reshape public surfaces the
 demos teach, so they get decided together, with the user, before any code.
 
