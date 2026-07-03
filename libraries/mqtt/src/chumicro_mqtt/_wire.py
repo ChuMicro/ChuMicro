@@ -106,7 +106,7 @@ def encode_varlen(value):
             return output
 
 
-def decode_varlen(buffer, start_index):
+def decode_varlen(buffer, start_index, limit=None):
     """Decode an MQTT variable-length integer from *buffer*.
 
     Returns ``(value, bytes_consumed)``.  Returns ``(0, 0)`` only when
@@ -114,12 +114,21 @@ def decode_varlen(buffer, start_index):
     (incomplete: pull more bytes and retry).  A varlen still
     continuing past 4 bytes is malformed, not incomplete, so it raises
     :class:`MQTTProtocolError` rather than masquerading as "need more".
+
+    *limit* bounds the readable region to the live write end.  Without
+    it a caller passing a whole preallocated buffer would let the scan
+    read stale bytes past the bytes actually received — a continuation
+    bit left in old data then reads as a fifth varlen byte and raises
+    spuriously.  Defaults to ``len(buffer)`` for callers that pass an
+    exact-length slice.
     """
+    if limit is None:
+        limit = len(buffer)
     value = 0
     shift = 0
     for consumed in range(4):  # MQTT 3.1.1 caps varlen at 4 bytes
         offset = start_index + consumed
-        if offset >= len(buffer):
+        if offset >= limit:
             return 0, 0
         digit = buffer[offset]
         value |= (digit & 0x7F) << shift
@@ -573,7 +582,11 @@ class PacketDecoder:
 
         view = self._buffer_view
         fixed_byte = view[base]
-        message_length, varlen_consumed = decode_varlen(view, base + 1)
+        # Bound the varlen scan to the live write end so it never reads
+        # stale bytes left past _buffer_length by an earlier compaction.
+        message_length, varlen_consumed = decode_varlen(
+            view, base + 1, self._buffer_length,
+        )
         if varlen_consumed == 0:
             return None  # Incomplete varlen: wait for more bytes.
         header_length = 1 + varlen_consumed
@@ -589,7 +602,15 @@ class PacketDecoder:
             )
 
         if live < total_length:
-            return None  # Body still in transit.
+            # Body still in transit.  A packet that fits the buffer but
+            # not the space remaining past the cursor would otherwise
+            # wedge: the buffer is full, fill_capacity() reports 0, and
+            # compaction (which only runs after a complete packet)
+            # never fires, so recv is never called again.  Compact the
+            # live tail to the front here to reopen fill space.
+            if self._buffer_length == self._buffer_size and self._read_offset > 0:
+                self._compact()
+            return None
 
         body_start = base + header_length
         body_end = base + total_length
@@ -606,11 +627,15 @@ class PacketDecoder:
         """
         self._read_offset += count
         if self._read_offset * 2 >= self._buffer_size:
-            live = self._buffer_length - self._read_offset
-            if live > 0:
-                self._buffer_view[:live] = self._buffer_view[self._read_offset:self._buffer_length]
-            self._buffer_length = live
-            self._read_offset = 0
+            self._compact()
+
+    def _compact(self):
+        """Move the unconsumed tail to the buffer head, freeing tail space."""
+        live = self._buffer_length - self._read_offset
+        if live > 0:
+            self._buffer_view[:live] = self._buffer_view[self._read_offset:self._buffer_length]
+        self._buffer_length = live
+        self._read_offset = 0
 
     def _parse_packet(self, fixed_byte, view, body_start, body_end):
         packet_type = fixed_byte & 0xF0

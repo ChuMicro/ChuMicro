@@ -217,7 +217,17 @@ class MQTTClient:
         / ``mqtt.password``.  A *socket* or *connector_factory* override
         bypasses the auto-built factory entirely.  Missing broker keys
         raise :class:`chumicro_config.MissingConfigKey`.
+
+        Raises:
+            ValueError: *config* is not a mapping-like object (a raw
+                ``None`` or a stray value gets a clear error here rather
+                than a downstream ``TypeError`` / ``AttributeError``).
         """
+        if not hasattr(config, "get"):
+            raise ValueError(
+                "from_config requires a mapping-like config "
+                f"(RuntimeConfig or dict), got {type(config).__name__}",
+            )
         if socket is None and connector_factory is None:
             # Lazy import so users who pass their own socket / connector_factory
             # don't pull chumicro_sockets into the deploy graph.  See
@@ -433,11 +443,13 @@ class MQTTClient:
         # already-subscribed filters).
         self._subscriptions = {}
         # 64-slot headroom above the user cap so the QoS-1 retry path
-        # and PINGREQ (neither of which checks for overrun) can't
-        # silently lose protocol packets when the queue is at the user
-        # cap.  ``_enqueue_user_tx`` enforces the cap.  Everything else
-        # goes through ``append`` / ``appendleft`` directly.
-        self._tx_queue = _new_tx_queue(max_tx_queue_size + 64)
+        # and PINGREQ can't silently lose protocol packets when the
+        # queue is at the user cap.  ``_enqueue_user_tx`` enforces the
+        # user cap; ``_enqueue_internal_tx`` checks this structural
+        # bound explicitly so a flood never relies on the deque's
+        # overflow (which raises on MP/CP and silently evicts on CPython).
+        self._tx_queue_hard_cap = max_tx_queue_size + 64
+        self._tx_queue = _new_tx_queue(self._tx_queue_hard_cap)
         self._partial_send = None  # (bytes, offset) when last send was short.
         # Deadline-tick value while a packet has been queued without any
         # send progress.  ``None`` when the queue is empty or the last
@@ -447,6 +459,10 @@ class MQTTClient:
         self._send_deadline_ticks = None
 
         self._next_ping_due_ticks = 0
+        # keep_alive_seconds == 0 means "keepalive disabled" (MQTT
+        # 3.1.1 §3.1.2.10): no PINGREQ traffic at all.  A non-zero value
+        # pings at half the interval, floored at 1 s.
+        self._keepalive_enabled = keep_alive_seconds > 0
         self._ping_interval_ms = max(1000, keep_alive_seconds * 1000 // 2)
 
         # Callbacks default to no-ops so handlers can call without branching.
@@ -504,7 +520,7 @@ class MQTTClient:
         if self._socket is None:
             try:
                 self._connector = self._connector_factory()
-            except OSError as factory_error:
+            except Exception as factory_error:  # noqa: BLE001 - documented: all factory errors -> FAILED
                 self.last_error = MQTTError(
                     f"connector factory failed: {factory_error}",
                 )
@@ -575,9 +591,30 @@ class MQTTClient:
                 self._socket.close()
         except Exception:  # noqa: BLE001 - disconnect is best-effort  # pragma: no cover - defensive
             pass
+        # Null the socket and drop socket-bound state so a later
+        # connect() routes through the connector factory instead of
+        # re-arming CONNECT against the closed fd (which faulted every
+        # reconnect), and so no stale queued packet or half-read inbound
+        # packet survives the disconnect.
+        self._socket = None
+        self._reset_transient_state()
         self.state = ProtocolState.DISCONNECTED
         self._user_wants_connected = False
         self.on_disconnect()
+
+    def _reset_transient_state(self):
+        """Drop socket-bound tx / rx state so a fresh transport starts clean.
+
+        A fresh tx queue (MicroPython / CircuitPython deque has no
+        ``clear()``), no partial send, no armed send deadline, no
+        pending responses, and a fresh decoder that discards any
+        half-read inbound packet left on the old socket.
+        """
+        self._tx_queue = _new_tx_queue(self._tx_queue_hard_cap)
+        self._partial_send = None
+        self._send_deadline_ticks = None
+        self._pending_responses.clear()
+        self._decoder = PacketDecoder(**self._decoder_kwargs)
 
     def set_will(
         self,
@@ -928,7 +965,11 @@ class MQTTClient:
             return self._connector.io_wants_write if self._connector is not None else False
         if self.state in (ProtocolState.DISCONNECTED, ProtocolState.FAILED):
             return False
-        return len(self._tx_queue) > 0
+        # A partial send (an EAGAIN mid-packet) has no queue entry but
+        # still needs writability: without this the runner never
+        # registers POLLOUT, the send never resumes, and the stalled
+        # packet trips the send timeout instead.
+        return len(self._tx_queue) > 0 or self._partial_send is not None
 
     def io_error(self, now_ms, eventmask):  # noqa: ARG002 - runner contract uses now_ms
         """Runner hook: POLLERR / POLLHUP surfaced on the registered socket.
@@ -1090,21 +1131,13 @@ class MQTTClient:
         # in-flight QoS 1 table intact when clean_session=False so a
         # broker that supports session resumption can pick up where we
         # left off.  Clear it on clean_session=True (the safer default).
-        # Reassign rather than calling .clear() because MicroPython's
-        # deque does not implement clear().
-        self._tx_queue = _new_tx_queue(self._max_tx_queue_size + 64)
-        self._partial_send = None
-        self._send_deadline_ticks = None
-        self._pending_responses.clear()
-        # Fresh decoder: discards any partial inbound packet from the
-        # dead socket and resets the degraded-buffer state.
-        self._decoder = PacketDecoder(**self._decoder_kwargs)
+        self._reset_transient_state()
         if self._clean_session:
             self._in_flight = {}
             self._next_packet_id = 1
         try:
             self._connector = self._connector_factory()
-        except OSError as factory_error:
+        except Exception as factory_error:  # noqa: BLE001 - documented: all factory errors -> FAILED
             self.last_error = MQTTError(
                 f"connector factory failed: {factory_error}",
             )
@@ -1297,6 +1330,28 @@ class MQTTClient:
         for item in items:
             self._tx_queue.append(item)
 
+    def _enqueue_internal_tx(self, packet, *, front=False):
+        """Queue a protocol packet (PUBACK, retransmit, PINGREQ) into the
+        headroom above the user cap.
+
+        Returns ``True`` when queued.  The structural bound is checked
+        here rather than left to the deque's overflow, which raises
+        ``IndexError`` on MicroPython / CircuitPython and silently evicts
+        the opposite end (a queued user packet) on CPython.  When the
+        headroom is exhausted the packet is dropped: the broker
+        redelivers an un-PUBACKed QoS-1 message, and a missed PINGREQ
+        surfaces as a keepalive timeout — both recoverable, unlike a
+        crash or a lost user publish.  *front* queues ahead of pending
+        user packets (a PUBACK the broker is waiting on).
+        """
+        if len(self._tx_queue) >= self._tx_queue_hard_cap:
+            return False
+        if front:
+            self._tx_queue.appendleft(packet)
+        else:
+            self._tx_queue.append(packet)
+        return True
+
     # ------------------------------------------------------------------
     # Internal: RX path
     # ------------------------------------------------------------------
@@ -1336,19 +1391,33 @@ class MQTTClient:
                     raise MQTTProtocolError("broker closed connection")
                 self._decoder.advance(got)
 
+        # Collect PUBACKs for this tick's inbound QoS-1 publishes and
+        # flush them once after dispatch, so they reach the wire in
+        # receipt order (MQTT-4.6.0-2) rather than reversed by
+        # per-packet appendleft.
+        pending_pubacks = []
         while True:
             packet = self._decoder.read_next()
             if packet is None:
-                return
+                break
             if isinstance(packet, ParsedPublish):
-                self._handle_inbound_publish(packet)
+                self._handle_inbound_publish(packet, pending_pubacks)
             elif isinstance(packet, _OversizedMessage):
-                self._handle_oversized(packet)
+                self._handle_oversized(packet, pending_pubacks)
             elif isinstance(packet, ParsedAck):
                 self._handle_ack(packet, now_ms)
+            # An inbound callback (on_message, a PUBACK callback) may have
+            # called disconnect(); it clears the tx queue and leaves
+            # CONNECTED, so stop dispatching and don't re-queue anything.
+            if self.state != ProtocolState.CONNECTED:
+                return
+        # appendleft in reverse so the earliest-received PUBACK sits
+        # first on the wire, ahead of pending user packets.
+        for encoded in reversed(pending_pubacks):
+            self._enqueue_internal_tx(encoded, front=True)
 
-    def _handle_inbound_publish(self, packet):
-        """Fire callbacks + (for QoS 1) send PUBACK."""
+    def _handle_inbound_publish(self, packet, pending_pubacks):
+        """Fire callbacks + (for QoS 1) collect a PUBACK to send."""
         # Pattern handlers fire before the global on_message.  Split
         # the topic once and reuse for every registered pattern.
         if self._pattern_handlers:
@@ -1358,9 +1427,9 @@ class MQTTClient:
                     handler(packet.topic, packet.payload)
         self.on_message(packet.topic, packet.payload)
         if packet.qos == 1:
-            self._tx_queue.appendleft(encode_puback(packet_id=packet.packet_id))
+            pending_pubacks.append(encode_puback(packet_id=packet.packet_id))
 
-    def _handle_oversized(self, packet):
+    def _handle_oversized(self, packet, pending_pubacks):
         """Apply the configured WhenOversized policy."""
         if self._when_oversized == WhenOversized.DROP_SILENT:
             pass  # Drop without notification.
@@ -1371,10 +1440,17 @@ class MQTTClient:
                 f"oversized message on topic {packet.topic!r} "
                 f"({packet.reported_length} bytes)",
             )
-        # PUBACK QoS 1 oversized messages even when dropping the payload,
-        # since the broker would otherwise retransmit.
-        if packet.qos == 1 and self._when_oversized != WhenOversized.DISCONNECT:
-            self._tx_queue.appendleft(encode_puback(packet_id=packet.packet_id))
+        # PUBACK a QoS-1 oversize even when dropping the payload, so the
+        # broker doesn't retransmit — but only when the packet_id
+        # survived: an oversize *topic prelude* yields packet_id=None,
+        # which encode_puback cannot pack (struct.error), so skip the
+        # ack and let the broker redeliver rather than crashing.
+        if (
+            packet.qos == 1
+            and packet.packet_id is not None
+            and self._when_oversized != WhenOversized.DISCONNECT
+        ):
+            pending_pubacks.append(encode_puback(packet_id=packet.packet_id))
 
     def _handle_ack(self, packet, now_ms):
         """Match an inbound ack to its pending entry.  PINGRESP is tolerated.
@@ -1393,9 +1469,13 @@ class MQTTClient:
         if packet.packet_type == PACKET_PUBACK:
             in_flight = self._in_flight.pop(packet.packet_id, None)
             if in_flight is None:
-                raise MQTTProtocolError(
-                    f"PUBACK for unknown packet_id {packet.packet_id}",
-                )
+                # No pending entry: the common cause is a duplicate
+                # PUBACK — the broker acking both our original publish
+                # and the DUP retransmit the retry path sent after a
+                # slow (not lost) first ack.  Tolerate it like PINGRESP
+                # rather than tearing down the session the retry exists
+                # to protect.
+                return
             if in_flight.callback is not None:
                 in_flight.callback()
             return
@@ -1482,7 +1562,13 @@ class MQTTClient:
             packet = encode_subscribe(
                 packet_id=packet_id, subscriptions=[(topic, qos)],
             )
-            self._enqueue_user_tx(packet)
+            # Replay is protocol bookkeeping, not a user publish: route
+            # it through the headroom instead of the user cap.  Going
+            # through _enqueue_user_tx would raise MQTTBackpressureError
+            # once the stored subscription count exceeds the cap, which
+            # handle() turns into FAILED -> reconnect -> replay again,
+            # an unbreakable loop that never reconnects.
+            self._enqueue_internal_tx(packet)
             self._pending_responses.append(
                 PendingResponse(
                     awaiting=_AWAIT_SUBACK,
@@ -1538,8 +1624,6 @@ class MQTTClient:
                 )
                 self.state = ProtocolState.FAILED
                 return
-            entry.retry_count += 1
-            entry.deadline_ticks = self._deadline(self._ack_timeout_ms, now_ms=now_ms)
             # The DUP-flagged retransmit (bit 3 of byte 0, MQTT 3.1.1
             # §4.3.2) is identical every retry, so build it once and reuse
             # it instead of re-copying packet_bytes on each expiry.
@@ -1547,7 +1631,15 @@ class MQTTClient:
                 dup_packet = bytearray(entry.packet_bytes)
                 dup_packet[0] |= 0x08
                 entry.dup_packet_bytes = bytes(dup_packet)
-            self._tx_queue.append(entry.dup_packet_bytes)
+            # Bounded enqueue: many overdue in-flight publishes in one
+            # tick can exceed the headroom.  When it's full, leave this
+            # entry's deadline as-is so it retries next tick without
+            # burning a retry attempt, rather than evicting a queued
+            # packet or crashing.
+            if not self._enqueue_internal_tx(entry.dup_packet_bytes):
+                continue
+            entry.retry_count += 1
+            entry.deadline_ticks = self._deadline(self._ack_timeout_ms, now_ms=now_ms)
 
         for pending in self._pending_responses:
             if self._ticks.ticks_diff(pending.deadline_ticks, now_ms) > 0:
@@ -1574,6 +1666,8 @@ class MQTTClient:
 
     def _check_keepalive(self, now_ms):
         """Send a PINGREQ when half the keepalive interval has elapsed."""
+        if not self._keepalive_enabled:
+            return  # keep_alive_seconds == 0: keepalive disabled.
         if self.state != ProtocolState.CONNECTED:
             return
         if self._ticks.ticks_diff(self._next_ping_due_ticks, now_ms) > 0:
@@ -1582,7 +1676,8 @@ class MQTTClient:
         for pending in self._pending_responses:
             if pending.awaiting == _AWAIT_PINGRESP:
                 return
-        self._tx_queue.append(PACKET_PINGREQ)
+        if not self._enqueue_internal_tx(PACKET_PINGREQ):
+            return  # Headroom full; retry the ping next tick.
         self._pending_responses.append(
             PendingResponse(
                 awaiting=_AWAIT_PINGRESP,

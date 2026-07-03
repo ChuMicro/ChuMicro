@@ -11,6 +11,7 @@ from chumicro_mqtt._wire import (
     ParsedAck,
     ParsedPublish,
     _OversizedMessage,
+    decode_varlen,
 )
 from chumicro_mqtt.testing import (
     canned_connack_bytes,
@@ -33,6 +34,51 @@ def _feed(decoder: PacketDecoder, payload: bytes) -> None:
         payload = payload[room:]
         if not payload:
             break
+
+
+class TestDecoderWedgeAndVarlen:
+    def test_decode_varlen_stops_at_live_limit(self) -> None:
+        # With a continuation byte but the live region ending right
+        # after it, the scan must report incomplete instead of reading
+        # stale trailing bytes as continuation.
+        buffer = memoryview(b"\x81\xff\xff\xff")
+        assert decode_varlen(buffer, 0, 1) == (0, 0)
+        # A complete varlen within the limit decodes normally.
+        assert decode_varlen(memoryview(b"\x81\x01"), 0, 2) == (129, 2)
+
+    def test_incomplete_packet_compacts_instead_of_wedging(self) -> None:
+        # rx=256.  Advance the read cursor below the halfway compaction
+        # threshold with small packets, then feed a packet that fits the
+        # buffer but not the space remaining past the cursor.  It must
+        # complete rather than wedge with fill_capacity() stuck at 0.
+        decoder = PacketDecoder(rx_buffer_size=256)
+        small = canned_publish_bytes("t" * 20, b"x", qos=0)
+        for _ in range(4):
+            decoder.fill_buffer()[:len(small)] = small
+            decoder.advance(len(small))
+            assert isinstance(decoder.read_next(), ParsedPublish)
+            assert decoder.read_next() is None
+
+        big_payload = b"y" * 170
+        big = canned_publish_bytes("b", big_payload, qos=0)
+        assert len(big) <= 256  # fits the buffer as a whole
+        parsed = None
+        fed = 0
+        # Bounded loop: a wedge would spin forever, so cap iterations and
+        # assert capacity never sticks at 0 while the packet is partial.
+        for _ in range(20):
+            if fed < len(big):
+                capacity = decoder.fill_capacity()
+                assert capacity > 0, "fill_capacity wedged at 0 mid-packet"
+                chunk = big[fed:fed + capacity]
+                decoder.fill_buffer()[:len(chunk)] = chunk
+                decoder.advance(len(chunk))
+                fed += len(chunk)
+            parsed = decoder.read_next()
+            if parsed is not None:
+                break
+        assert isinstance(parsed, ParsedPublish)
+        assert bytes(parsed.payload) == big_payload
 
 
 class TestParseAcks:

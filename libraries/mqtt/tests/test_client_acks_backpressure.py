@@ -59,17 +59,21 @@ class _CountingSocket(FakeSocket):
 
 
 class TestUnexpectedAcks:
-    def test_unexpected_puback_marks_failed(self) -> None:
+    def test_unmatched_puback_is_tolerated(self) -> None:
+        # A PUBACK with no matching in-flight entry is tolerated (like
+        # PINGRESP), not faulted: the common cause is a duplicate PUBACK
+        # from the broker acking both an original publish and the retry
+        # path's DUP retransmit after a slow-but-not-lost first ack, so
+        # faulting would tear down the session the retry protects.
         sock = FakeSocket()
         sock.enqueue_recv(canned_connack_bytes(return_code=0))
         ticks = FakeTicks()
         client = new_client(sock, ticks)
         client.connect()
         drive(client, ticks, count=2)
-        # PUBACK with no matching in-flight entry.
         sock.enqueue_recv(canned_puback_bytes(packet_id=999))
         drive(client, ticks, count=1)
-        assert client.state == ProtocolState.FAILED
+        assert client.state == ProtocolState.CONNECTED
 
     def test_unexpected_suback_marks_failed(self) -> None:
         sock = FakeSocket()

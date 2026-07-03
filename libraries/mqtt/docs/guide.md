@@ -19,8 +19,11 @@ sock.setblocking(False)                     # MP defaults to blocking — enforc
 client = MQTTClient(sock, client_id="my-thing", keep_alive_seconds=60)
 
 client.on_message = lambda topic, payload: print(topic, payload)
+
+# subscribe() / publish() require the CONNECTED state, so wire them
+# through on_connect, which fires once the broker session is up.
+client.on_connect = lambda: client.subscribe("commands/+")
 client.connect()
-client.subscribe("commands/+")
 
 # Drive from your tick loop — no threads, no async.
 while True:
@@ -29,7 +32,7 @@ while True:
         client.handle(now)
 ```
 
-`connect()` queues the CONNECT packet; the first few `handle()` calls drive it through CONNECTING → CONNECTED.  Subscribe / publish before or after `connect()` — both are queued either way and flushed once the broker session is up.
+`connect()` queues the CONNECT packet; the first few `handle()` calls drive it through CONNECTING → CONNECTED.  `subscribe()` and `publish()` both require `ProtocolState.CONNECTED` and raise `MQTTError` if called earlier — so drive them from `on_connect` (as above) or after polling `client.state == ProtocolState.CONNECTED`, not immediately after `connect()`.
 
 `MQTTClient` actually enforces non-blocking mode on every socket it acquires (force-`setblocking(False)`), so the explicit `sock.setblocking(False)` line above is belt-and-suspenders.  Don't omit it — MP plain TCP defaults to blocking, and a blocking `recv` against a silent peer (broker that's hung mid-handshake, network blackholing returning packets) stalls the tick loop indefinitely on Pi Pico W RP2.  Bench-tested with a stalled TCP listener: recv was still blocked at the 3-minute mark, with no TCP keepalive timeout fired within that window.  Whole-app freeze, not a recoverable hiccup.
 
@@ -40,8 +43,8 @@ while True:
 client.publish("sensors/temp", b"21.5", qos=0)
 
 # QoS 1 — at-least-once with PUBACK round-trip
-def acked(packet_id):
-    print("publish acked, id =", packet_id)
+def acked(topic, payload):
+    print("publish acked:", topic, payload)
 
 client.publish("sensors/temp", b"21.5", qos=1, on_publish=acked)
 
@@ -49,7 +52,7 @@ client.publish("sensors/temp", b"21.5", qos=1, on_publish=acked)
 client.publish("status/online", b"true", retain=True)
 ```
 
-The `on_publish=` callback fires once per QoS-1 publish, after the broker's PUBACK lands.  `chumicro-mqtt` tracks every in-flight QoS-1 packet by `packet_id` so re-deliveries (from `publish_retry_max`-driven retransmits) don't double-fire callbacks.
+The `on_publish=` callback is invoked as `on_publish(topic, payload_bytes)` — the same topic and payload passed to `publish()`.  For QoS 1 it fires once the broker's PUBACK lands; for QoS 0 it fires once the bytes hit the wire.  `chumicro-mqtt` tracks every in-flight QoS-1 packet by `packet_id` so re-deliveries (from `publish_retry_max`-driven retransmits) don't double-fire callbacks.
 
 ## Subscribing and routing
 
@@ -301,7 +304,7 @@ elif client.state == ProtocolState.FAILED:
     log.warning("mqtt failed; reconnecting in 30 s")
 ```
 
-Four states: `DISCONNECTED`, `CONNECTING`, `CONNECTED`, `FAILED`.  `disconnect()` is synchronous (DISCONNECT packet + close), so there is no intermediate "disconnecting" state to observe.
+Five states: `DISCONNECTED`, `AWAITING_TRANSPORT`, `CONNECTING`, `CONNECTED`, `FAILED`.  `AWAITING_TRANSPORT` appears only when a `connector_factory` is driving the transport up (DNS / TCP / TLS) before the MQTT CONNECT goes out; a client built with a ready socket skips straight to `CONNECTING`.  `disconnect()` is synchronous (DISCONNECT packet + close), so there is no intermediate "disconnecting" state to observe.
 
 ## Memory notes
 
