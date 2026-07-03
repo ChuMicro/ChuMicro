@@ -20,9 +20,10 @@ from chumicro_mqtt._wire import (
 
 gc.collect()
 
-from chumicro_mqtt.client import MQTTClient, ProtocolState, WhenOversized  # noqa: E402, I001 - preceded by gc.collect().
+from chumicro_mqtt.client import InboundPublish, MQTTClient, ProtocolState, WhenOversized  # noqa: E402, I001 - preceded by gc.collect().
 
 __all__ = [
+    "InboundPublish",
     "MQTTClient",
     "MQTTBackpressureError",
     "MQTTConnectError",

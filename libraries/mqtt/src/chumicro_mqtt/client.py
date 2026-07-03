@@ -74,6 +74,38 @@ class ProtocolState:
     FAILED = "failed"
 
 
+class InboundPublish:
+    """One inbound PUBLISH returned by :meth:`MQTTClient.next_message`.
+
+    ``topic`` is the full topic string; ``payload`` is the raw
+    ``bytes`` exactly as received (decode at the consumer if the
+    payload is text).
+    """
+
+    def __init__(self, topic, payload):
+        self.topic = topic
+        self.payload = payload
+
+    def __repr__(self):
+        return f"InboundPublish(topic={self.topic!r}, {len(self.payload)} bytes)"
+
+
+class _InboundWait:
+    """Resume-every-tick wait yielded by ``next_message`` while the queue is empty.
+
+    Carries no ``io_socket`` and no ``next_deadline``: the client is
+    registered with the runner in its own right and owns the socket
+    poll; the generator just re-checks the queue each tick.
+    """
+
+    io_socket = None
+    io_wants_read = False
+    io_wants_write = False
+
+
+_INBOUND_WAIT = _InboundWait()
+
+
 # Tags identifying which broker response a pending work-item expects.
 # Module-level so the import allocates 5 small string bindings instead
 # of a class object + its type machinery (~5-7 fewer small heap pins
@@ -301,6 +333,7 @@ class MQTTClient:
         when_oversized: WhenOversized = WhenOversized.DROP_WITH_EVENT,
         recv_budget_per_tick: int = 1024,
         max_tx_queue_size: int = 20,
+        max_inbound_queue_size: int = 16,
         send_timeout_seconds: float | None = None,
         ticks: object | None = None,
     ) -> None:
@@ -496,6 +529,10 @@ class MQTTClient:
         self.on_publish = _no_callback
         self.on_oversized = _no_callback
         self._pattern_handlers = []
+        # next_message() lazily builds the inbound queue and flips data
+        # delivery from the callbacks to it (the receive-stream surface).
+        self._max_inbound_queue_size = max_inbound_queue_size
+        self._inbound_queue = None
         self.last_error = None
         # Self-heal reconnect pacing.  ``_self_heal_attempts`` counts
         # consecutive failed reconnects (reset on a successful CONNACK);
@@ -904,6 +941,71 @@ class MQTTClient:
                 packet_id=packet_id,
                 callback=_wrapped,
             ),
+        )
+
+    def next_message(self):
+        """Suspend until the next inbound PUBLISH; return it, or ``None`` when parked.
+
+        Generator for runner-driven receive loops registered via
+        ``Runner.add_generator`` alongside the client itself::
+
+            runner.add(client)                     # drives I/O each tick
+            runner.add_generator(consume(client))
+
+            def consume(client):
+                while True:
+                    message = yield from client.next_message()
+                    if message is None:
+                        break
+                    handle(message.topic, message.payload)
+
+        The first call switches inbound data delivery from the
+        ``on_message`` / pattern-handler callbacks to a bounded queue
+        this drains; lifecycle callbacks (``on_connect`` /
+        ``on_disconnect`` / ``on_oversized``) keep firing either way.
+        Returns an :class:`InboundPublish` while the queue holds one —
+        draining queued messages even after a disconnect — then
+        ``None`` once the client is parked for good (deliberate
+        ``disconnect()``, or FAILED with no self-heal possible) and the
+        queue is empty.  Transient FAILED states keep the generator
+        suspended: self-heal may resume the stream.
+
+        The queue is bounded by ``max_inbound_queue_size``
+        (drop-oldest when full): a consumer that falls behind silently
+        loses the oldest queued messages rather than growing the heap.
+        This is the receive-stream flavor for single-subscription
+        consumers; multi-topic fan-out stays on the callbacks — pick
+        one surface per client, not both.
+        """
+        if self._inbound_queue is None:
+            # 2-arg deque (no overflow-check flag) drops the oldest item
+            # on append-when-full on every runtime — CPython via maxlen,
+            # MicroPython / CircuitPython via the default flags=0.  (The
+            # TX queue raises instead, for backpressure.)
+            self._inbound_queue = deque((), self._max_inbound_queue_size)
+        while True:
+            if self._inbound_queue:
+                return self._inbound_queue.popleft()
+            if self._inbound_stream_ended():
+                return None
+            yield _INBOUND_WAIT
+
+    def _inbound_stream_ended(self):
+        """Whether the client can never deliver another inbound PUBLISH.
+
+        Mirrors ``next_deadline``'s parked-forever condition: a
+        deliberate disconnect, or FAILED with self-heal impossible
+        (permanent failure, no connector factory, or the user never
+        asked to be connected).
+        """
+        if self.state == ProtocolState.DISCONNECTED:
+            return True
+        if self.state != ProtocolState.FAILED:
+            return False
+        return (
+            self._connector_factory is None
+            or not self._user_wants_connected
+            or self._permanent_failure
         )
 
     def add_pattern_handler(self, pattern, handler):
@@ -1500,14 +1602,20 @@ class MQTTClient:
 
     def _handle_inbound_publish(self, packet, pending_pubacks):
         """Fire callbacks + (for QoS 1) collect a PUBACK to send."""
-        # Pattern handlers fire before the global on_message.  Split
-        # the topic once and reuse for every registered pattern.
-        if self._pattern_handlers:
-            topic_levels = packet.topic.split("/")
-            for pattern_levels, handler in self._pattern_handlers:
-                if _topic_levels_match(topic_levels, pattern_levels):
-                    handler(packet.topic, packet.payload)
-        self.on_message(packet.topic, packet.payload)
+        if self._inbound_queue is not None:
+            # next_message() owns data delivery: queue, don't dispatch.
+            self._inbound_queue.append(
+                InboundPublish(packet.topic, packet.payload),
+            )
+        else:
+            # Pattern handlers fire before the global on_message.  Split
+            # the topic once and reuse for every registered pattern.
+            if self._pattern_handlers:
+                topic_levels = packet.topic.split("/")
+                for pattern_levels, handler in self._pattern_handlers:
+                    if _topic_levels_match(topic_levels, pattern_levels):
+                        handler(packet.topic, packet.payload)
+            self.on_message(packet.topic, packet.payload)
         if packet.qos == 1:
             pending_pubacks.append(encode_puback(packet_id=packet.packet_id))
 
