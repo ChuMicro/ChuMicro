@@ -195,69 +195,15 @@ def test_object_task_with_period() -> None:
     assert svc.handle_count == 1
 
 
-def test_object_task_handler_override() -> None:
-    """Passing handler= with an object should override .handle()."""
-    fake = FakeTicks()
-    svc = _GateTask(should_fire=True)
-    received = []
-
-    runner = Runner(ticks=fake)
-    runner.add(svc, handler=lambda now: received.append(now))
-
-    fake.advance(5)
-    runner.tick()
-
-    # Custom handler was called, not .handle().
-    assert received == [5]
-    assert svc.handle_count == 0
-    assert svc.check_count == 1
-
-
-# -- Runner: callable-based (check_function + handler) --
-
-
-def test_callable_check_gates_handler() -> None:
-    """Callable check_function should gate handler_function."""
-    fake = FakeTicks()
-    received = []
-    gate_open = [True]
-
-    runner = Runner(ticks=fake)
-    runner.add(
-        lambda now: gate_open[0],
-        handler=lambda now: received.append(now),
-    )
-
-    fake.advance(10)
-    runner.tick()
-    assert received == [10]
-
-    # Close the gate.
-    gate_open[0] = False
-    received.clear()
-    fake.advance(10)
-    runner.tick()
-    assert received == []
-
-
-def test_callable_check_with_period() -> None:
-    """Callable check with period should only be checked when due."""
-    fake = FakeTicks()
-    received = []
-
-    runner = Runner(ticks=fake)
-    runner.add(
-        lambda now: True,
-        handler=lambda now: received.append(now),
-        period_ms=100,
-    )
-
-    runner.tick()
-    assert received == []
-
-    fake.advance(100)
-    runner.tick()
-    assert received == [100]
+def test_task_plus_handler_is_rejected() -> None:
+    """The separate check-plus-handler shape was removed: a task object
+    and a handler in one registration is a ValueError, not a silent
+    override."""
+    runner = Runner(ticks=FakeTicks())
+    with raises(ValueError):
+        runner.add(_GateTask(should_fire=True), handler=lambda now: None)
+    with raises(ValueError):
+        runner.add(lambda now: True, handler=lambda now: None)
 
 
 # -- Runner: handler-only (no check) --
@@ -516,10 +462,13 @@ def test_runner_passes_same_timestamp_to_all() -> None:
             timestamps.append(now_ms)
             return False
 
+        def handle(self, now_ms: int) -> None:
+            """Never fires — check always returns False."""
+
     runner = Runner(ticks=fake)
-    runner.add(_Recorder(), handler=lambda now: None)
-    runner.add(_Recorder(), handler=lambda now: None)
-    runner.add(_Recorder(), handler=lambda now: None)
+    runner.add(_Recorder())
+    runner.add(_Recorder())
+    runner.add(_Recorder())
 
     fake.advance(77)
     runner.tick()
@@ -840,7 +789,6 @@ def test_all_patterns_together() -> None:
 
     runner = Runner(ticks=fake)
     runner.add(svc)  # object-based
-    runner.add(lambda now: True, handler=lambda now: results.append("callable"))
     runner.add(handler=lambda now: results.append("handler-only"))
     runner.add_periodic(lambda now: results.append("periodic"), period_ms=100)
 
@@ -848,7 +796,6 @@ def test_all_patterns_together() -> None:
     runner.tick()
 
     assert svc.handle_count == 1
-    assert "callable" in results
     assert "handler-only" in results
     assert "periodic" in results
 
@@ -1614,12 +1561,12 @@ def test_wait_drops_ipoll_iteration_result() -> None:
     assert service.handle_count == 0  # wait does not invoke handle()
 
 
-def test_wait_callable_based_task_has_no_service_to_read() -> None:
-    """A check + handler callable registration sets service=None on the handle
-    so wait does not try to read io_* on a function."""
+def test_wait_handler_only_task_has_no_service_to_read() -> None:
+    """A handler-only registration sets service=None on the handle so
+    wait does not try to read io_* on a function."""
     poller = FakePoller()
     runner = Runner(ticks=FakeTicks(), poller=poller)
-    handle = runner.add(lambda now_ms: True, handler=lambda now_ms: None)
+    handle = runner.add(handler=lambda now_ms: None)
 
     assert handle.service is None
     runner.wait(0)  # must not raise
@@ -1642,13 +1589,13 @@ def test_wait_handler_only_task_has_no_service() -> None:
 # -- Runner.wait: dispatcher branches --
 
 
-def test_wait_io_error_skips_callable_entries() -> None:
-    """A POLLERR dispatch must not crash when callable-based entries
+def test_wait_io_error_skips_handler_only_entries() -> None:
+    """A POLLERR dispatch must not crash when handler-only entries
     (no service) sit alongside the io-service whose socket faulted.
     """
     poller = FakePoller()
     runner = Runner(ticks=FakeTicks(), poller=poller)
-    runner.add(lambda now_ms: True, handler=lambda now_ms: None)
+    runner.add(handler=lambda now_ms: None)
     sock = object()
     service = _IOServiceWithErrorHook(sock=sock, wants_read=True)
     runner.add(service, period_ms=100)

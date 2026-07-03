@@ -31,7 +31,7 @@ A shared `Runner` captures time once per tick, checks each service, and batch-fi
 2. **Handlers** implement `handle(now_ms)` — they react when the service says "go".
 3. **Runner** ties it together: capture time → check all services → batch-fire all due handlers.
 
-Services can be objects with `.check()` and `.handle()` methods, or plain callables (lambdas, functions, bound methods).
+Services are objects with `.check()` and `.handle()` methods, or plain handler callables that fire every tick or on a period — one shape per registration, never both.
 
 ## Getting started
 
@@ -201,23 +201,6 @@ class MotionDetector:
 runner.add(MotionDetector())
 ```
 
-You can override `.handle()` by passing a `handler` argument:
-
-```python
-runner.add(detector, handler=lambda now_ms: send_alert())
-```
-
-### Callable-based
-
-Pass a check function and a handler — both can be lambdas, functions, or bound methods:
-
-```python
-runner.add(
-    lambda now_ms: light_sensor.level() < 20,
-    handler=lambda now_ms: turn_on_lights(),
-)
-```
-
 ### Handler-only
 
 Pass just a handler with no check — it fires every tick (or per period):
@@ -374,10 +357,6 @@ The pattern scales to many services with no extra boilerplate:
 runner = Runner()
 runner.add(motion_detector)
 runner.add(temperature_sensor, period_ms=5000)
-runner.add(
-    lambda now_ms: light_level < 20,
-    handler=lambda now_ms: turn_on_lights(),
-)
 runner.add_periodic(toggle_led, period_ms=500)
 runner.add_periodic(log_status, period_ms=10000)
 

@@ -40,7 +40,10 @@ class _Wait:
         self.io_socket = sock
         self.io_wants_read = want_read
         self.io_wants_write = want_write
-        self.next_deadline = until_ms
+        self._until_ms = until_ms
+
+    def next_deadline(self, now_ms):
+        return self._until_ms
 
 
 # -- Happy path: registration, run-to-completion, auto-removal --
@@ -612,7 +615,8 @@ def test_ready_wait_deadline_elapses_as_timeout_path():
     resumed = []
 
     class _NeverReadyWait:
-        next_deadline = 50
+        def next_deadline(self, now_ms):
+            return 50
 
         def ready(self, now_ms):
             return False

@@ -58,18 +58,19 @@ def test_runner_handler_only_fires_every_tick() -> None:
 
 
 def test_runner_check_gate_controls_firing() -> None:
-    """A handler behind a check gate should only fire when the gate passes."""
+    """An object task's check gate controls when its handle fires."""
     log = []
     should_fire = [False]
 
-    def check(now_ms: int) -> bool:
-        return should_fire[0]
+    class Gated:
+        def check(self, now_ms: int) -> bool:
+            return should_fire[0]
 
-    def handler(now_ms: int) -> None:
-        log.append(now_ms)
+        def handle(self, now_ms: int) -> None:
+            log.append(now_ms)
 
     runner = Runner()
-    runner.add(check, handler=handler)
+    runner.add(Gated())
 
     runner.tick()
     assert len(log) == 0

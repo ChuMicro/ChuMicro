@@ -189,14 +189,13 @@ class _GeneratorWrapper:
     def next_deadline(self, now_ms: int) -> int | None:
         """Absolute tick at which the generator should be re-checked.
 
-        Reads the yielded wait's ``next_deadline``.  Accepts both
-        shapes the protocol allows: an int attribute (what tiny private
-        wait shapes use) and a callable that takes ``now_ms`` and
-        returns an int or None (what ``SocketConnector`` uses,
-        matching the runner's existing service contract).  ``None``
-        means the wait is socket-driven (ipoll wake-up) or unbounded.
-        ``Runner.wait`` mins this against every other entry's
-        deadline to compute its ipoll timeout.
+        Reads the yielded wait's ``next_deadline`` — one convention
+        only: a callable taking ``now_ms`` and returning an absolute
+        tick or ``None`` (the ``SocketConnector`` shape, matching the
+        runner's service contract).  A wait without the attribute, or
+        whose call returns ``None``, is socket-driven (ipoll wake-up)
+        or unbounded.  ``Runner.wait`` mins this against every other
+        entry's deadline to compute its ipoll timeout.
         """
         wait = self._wait
         if wait is None:
@@ -204,9 +203,7 @@ class _GeneratorWrapper:
         deadline = getattr(wait, "next_deadline", None)
         if deadline is None:
             return None
-        if callable(deadline):
-            return deadline(now_ms)
-        return deadline
+        return deadline(now_ms)
 
     def _advance(self, value: object) -> None:
         try:

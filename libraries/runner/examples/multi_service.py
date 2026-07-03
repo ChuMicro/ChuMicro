@@ -120,14 +120,16 @@ runner.add_periodic(
 # 2. Object-based motion detector, checked every tick.
 runner.add(MotionDetector())
 
-# 3. Callable check + handler (light sensor).
+# 3. Handler-only with the gate inside (light sensor).
 light = LightSensor()
-runner.add(
-    lambda now_ms: light.read_level() < 20,
-    handler=lambda now_ms: print(
-        f"  [{now_ms} ms] lights ON (level={light.read_level()})"
-    ),
-)
+
+
+def lights_on_when_dark(now_ms):
+    if light.read_level() < 20:
+        print(f"  [{now_ms} ms] lights ON (level={light.read_level()})")
+
+
+runner.add(handler=lights_on_when_dark)
 
 # 4. Periodic data logger.
 runner.add_periodic(
