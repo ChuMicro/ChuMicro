@@ -230,7 +230,7 @@ class TestConnectorFactorySelfHeal:
         assert client.state == ProtocolState.FAILED
 
     def test_factory_raise_keeps_client_failed(self) -> None:
-        """Factory raises while wifi is down.  Client stays FAILED and retries next tick."""
+        """Factory raises while wifi is down.  Client stays FAILED and retries after backoff."""
         ticks = FakeTicks()
         initial_sock = FakeSocket()
         initial_sock.enqueue_recv(canned_connack_bytes(return_code=0))
@@ -262,13 +262,19 @@ class TestConnectorFactorySelfHeal:
         assert client.state == ProtocolState.CONNECTED
 
         client.state = ProtocolState.FAILED
-        # Factory raises on the next 3 attempts.  Client stays FAILED.
-        drive(client, ticks, count=3)
+        # The first self-heal after a fresh failure fires immediately; the
+        # factory raises, so the client stays FAILED.
+        drive(client, ticks, count=1)
         assert client.state == ProtocolState.FAILED
         assert "wifi still down" in str(client.last_error)
 
-        # 4th attempt: factory returns the recovery connector, self-heal succeeds.
-        drive(client, ticks, count=3)
+        # Later attempts are paced by exponential backoff.  Advance the
+        # clock past each interval so the next retry fires; the factory
+        # raises on its 2nd and 3rd calls, then hands back the recovery
+        # connector on its 4th and self-heal succeeds.
+        for _ in range(3):
+            ticks.advance(60000)
+            drive(client, ticks, count=3)
         assert client.state == ProtocolState.CONNECTED
 
     def test_explicit_disconnect_disables_self_heal(self) -> None:
