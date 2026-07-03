@@ -1256,6 +1256,26 @@ def test_wait_registers_service_socket() -> None:
     assert poller.ipoll_calls == [100]
 
 
+def test_wait_ors_masks_when_two_services_share_one_socket() -> None:
+    """A reader and a writer on the same socket register the OR of their
+    interests, so neither service's wake direction is lost."""
+    poller = FakePoller()
+    runner = Runner(ticks=FakeTicks(), poller=poller)
+    sock = object()
+    reader = _IOService(sock=sock, wants_read=True)
+    writer = _IOService(sock=sock, wants_write=True)
+    runner.add(reader, period_ms=100)
+    runner.add(writer, period_ms=100)
+
+    runner.wait(0)
+
+    combined = select.POLLIN | select.POLLOUT
+    registered = poller.register_calls + poller.modify_calls
+    assert (sock, combined) in registered
+    # The socket is registered once (id-keyed), not fought over.
+    assert sum(1 for entry in poller.register_calls if entry[0] is sock) == 1
+
+
 def test_wait_combines_read_and_write_into_one_eventmask() -> None:
     """A service wanting both read and write registers with POLLIN | POLLOUT."""
     poller = FakePoller()
@@ -1806,6 +1826,33 @@ def test_wait_returns_when_no_sockets_and_no_deadline() -> None:
     runner.wait(0)
 
     assert poller.ipoll_calls == []
+
+
+def test_run_until_returns_true_when_predicate_becomes_truthy() -> None:
+    """run_until ticks until the predicate is satisfied, driving handlers
+    each tick, then returns True."""
+    ticks = FakeTicks()
+    runner = Runner(ticks=ticks)
+    fired = []
+    runner.add(handler=lambda now_ms: fired.append(now_ms))
+
+    result = runner.run_until(lambda: len(fired) >= 3)
+
+    assert result is True
+    assert len(fired) == 3
+
+
+def test_run_until_returns_false_on_timeout() -> None:
+    """A predicate that never fires returns False once the timeout budget
+    elapses (a periodic task supplies the deadline that bounds wait())."""
+    ticks = FakeTicks()
+    runner = Runner(ticks=ticks)
+    # A periodic task both advances work and gives wait() a deadline.
+    runner.add_periodic(lambda now_ms: None, period_ms=10)
+
+    result = runner.run_until(lambda: False, timeout_ms=50)
+
+    assert result is False
 
 
 def test_wait_socketless_advances_fake_clock_via_injected_sleep_ms() -> None:

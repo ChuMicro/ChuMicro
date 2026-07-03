@@ -43,6 +43,13 @@ while True:
 
 `tick()` fires every due handler.  `wait()` then idles the CPU until the next deadline (or until a registered socket is ready, for networked services — see [Idling between ticks](#idling-between-ticks)).  Together they give every service a fair share of every tick without burning the loop.
 
+For a bounded run, `runner.run_until(predicate, timeout_ms=...)` is the one-call form of that `while` loop — it ticks and idles until `predicate()` is truthy (returns `True`) or the timeout elapses (returns `False`):
+
+```python
+handle = runner.add_generator(echo_run(host, port, radio=wifi.adapter.radio))
+runner.run_until(lambda: handle.done)
+```
+
 That's all you need for simple tasks. For services with conditional logic (only do something when a condition is met), implement `check()` and `handle()`:
 
 ```python

@@ -585,6 +585,45 @@ class Runner:
                 return
             self._sleep_ms(timeout_ms)
 
+    def run_until(self, predicate=None, *, timeout_ms=None) -> bool:
+        """Drive ``tick()`` + ``wait()`` until *predicate* is truthy.
+
+        The one-call form of the standard ``while ...: tick(); wait()``
+        loop that every demo would otherwise hand-roll::
+
+            handle = runner.add_generator(echo_run(...))
+            runner.run_until(lambda: handle.done)
+
+        Ticks once, then loops: checks *predicate*, checks the timeout,
+        then idles in ``wait()`` until the next event or deadline.
+
+        Args:
+            predicate: Called with no arguments after each tick; the loop
+                returns ``True`` once it is truthy.  ``None`` never
+                completes on its own (pair with *timeout_ms*, or drive a
+                run that removes its own tasks).
+            timeout_ms: Optional budget, checked between ticks against the
+                tick source.  Best-effort: if the loop is parked in
+                ``wait()`` on a socket with no deadline, the timeout is
+                only re-checked when an event wakes it, so give the runner
+                a deadline source (a periodic task, a connector) when a
+                hard bound matters.
+
+        Returns:
+            ``True`` when *predicate* became truthy, ``False`` on timeout.
+        """
+        ticks = self._ticks
+        deadline = None
+        if timeout_ms is not None:
+            deadline = ticks.ticks_add(ticks.ticks_ms(), timeout_ms)
+        while True:
+            now_ms = self.tick()
+            if predicate is not None and predicate():
+                return True
+            if deadline is not None and ticks.ticks_diff(now_ms, deadline) >= 0:
+                return False
+            self.wait(now_ms)
+
     def _dispatch_io_error(self, obj: object, eventmask: int, now_ms: int) -> None:
         """Find the registered service whose ``io_socket`` is *obj* and
         call its optional ``io_error(now_ms, eventmask)`` hook.
@@ -640,8 +679,13 @@ class Runner:
         # IDs of sockets wanted this loop.  Second pass below diffs
         # against the registered set to unregister anything that has
         # gone away.
-        wanted_now = []
         poller = self._poller
+        # First accumulate the wanted interest per socket, OR-ing the
+        # eventmasks of every service that shares a socket — otherwise
+        # a second service's mask would clobber the first's and lose one
+        # service's wake direction (a reader and a writer on the same
+        # socket).  Keyed by id(sock) -> (sock, or-of-eventmasks).
+        wanted = {}
         for entry in self._entries:
             service = entry.service
             if service is None:
@@ -657,7 +701,15 @@ class Runner:
             if eventmask == 0:
                 continue
             sock_id = id(sock)
-            wanted_now.append(sock_id)
+            existing = wanted.get(sock_id)
+            wanted[sock_id] = (
+                sock,
+                eventmask if existing is None else existing[1] | eventmask,
+            )
+
+        # Register newly wanted sockets, modify on changed interest.
+        for sock_id, entry_value in wanted.items():
+            sock, eventmask = entry_value
             previous = registered.get(sock_id)
             if previous is None:
                 registered[sock_id] = (sock, eventmask)
@@ -669,8 +721,8 @@ class Runner:
                     poller.modify(sock, eventmask)
 
         # Drop sockets no service wants any more.
-        if len(registered) > len(wanted_now):
-            stale = [sid for sid in registered if sid not in wanted_now]
+        if len(registered) > len(wanted):
+            stale = [sid for sid in registered if sid not in wanted]
             for sid in stale:
                 sock, _ = registered.pop(sid)
                 if poller is not None:
