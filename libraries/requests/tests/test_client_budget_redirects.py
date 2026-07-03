@@ -366,3 +366,28 @@ class TestHttpClientRedirects:
         drive_until_done(client, handle, ticks)
         assert isinstance(handle.error, HttpError)
         assert "factory failed" in str(handle.error)
+
+    def test_redirect_factory_unexpected_error_does_not_wedge(self):
+        """A non-OSError / non-HttpError from the factory during a
+        redirect hop resolves the handle with an error instead of
+        escaping and leaving it wedged (done=False, error=None)."""
+        sockets = [FakeSocket()]
+        sockets[0].enqueue_recv(canned_redirect(
+            status=301, location="/dest",
+        ))
+        cursor = {"index": 0}
+
+        def factory(host, port, use_tls):  # noqa: ARG001
+            if cursor["index"] >= len(sockets):
+                raise ValueError("unexpected boom on redirect")
+            socket = sockets[cursor["index"]]
+            cursor["index"] += 1
+            return FakeSocketConnector(actions=["dns_ok", "tcp_ok"], socket=socket)
+
+        ticks = FakeTicks()
+        client = HttpClient(connector_factory=factory, ticks=ticks)
+        handle = client.get("http://example.test/orig")
+        drive_until_done(client, handle, ticks)
+        assert isinstance(handle.error, HttpError)
+        assert "redirect hop failed" in str(handle.error)
+        assert client.busy is False

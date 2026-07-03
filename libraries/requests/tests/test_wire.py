@@ -294,6 +294,28 @@ class TestEncodeRequest:
         with raises(HttpURLError, match="control character"):
             encode_request("GET", "h", "/", headers={"X-\x00": "v"})
 
+    def test_non_ascii_in_header_value_rejected(self):
+        # A non-ASCII header value would encode as UnicodeEncodeError on
+        # CPython but as silent UTF-8 bytes on MicroPython; reject it so
+        # the failure is one catchable HttpURLError on every runtime.
+        with raises(HttpURLError, match="non-ASCII"):
+            encode_request("GET", "h", "/", headers={"X-Note": "café"})
+
+    def test_non_ascii_in_path_rejected(self):
+        with raises(HttpURLError, match="non-ASCII"):
+            encode_request("GET", "h", "/naïve")
+
+    def test_non_ascii_in_header_name_rejected(self):
+        with raises(HttpURLError, match="non-ASCII"):
+            encode_request("GET", "h", "/", headers={"X-Ünë": "v"})
+
+    def test_ascii_header_value_still_encodes(self):
+        # Plain ASCII passes the guard and reaches the wire unchanged.
+        request_bytes = encode_request(
+            "GET", "h", "/", headers={"X-Note": "plain-value"},
+        )
+        assert b"X-Note: plain-value\r\n" in request_bytes
+
 
 # ---------------------------------------------------------------------------
 # Response parser — streaming state machine

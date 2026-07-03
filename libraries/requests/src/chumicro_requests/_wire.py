@@ -419,10 +419,22 @@ class CaseInsensitiveDict:
 # ---------------------------------------------------------------------------
 
 
-def _reject_control_chars(label: str, value: str) -> None:
-    """Raise if *value* holds CR, LF, or NUL — HTTP request-splitting guards."""
-    if "\r" in value or "\n" in value or "\x00" in value:
-        raise HttpURLError(f"{label} contains a control character")
+def _reject_unsafe_chars(label: str, value: str) -> None:
+    """Raise :class:`HttpURLError` if *value* can't go on the ASCII wire.
+
+    Rejects CR, LF, and NUL (a caller-controlled value carrying them
+    could splice extra headers or a second request onto the wire) and
+    any character above ``0x7E``.  Non-ASCII diverges by runtime: the
+    encoder's ``str.encode("ascii")`` raises ``UnicodeEncodeError`` on
+    CPython but MicroPython silently emits UTF-8 bytes, so the header a
+    caller sets would reach the server as different bytes.  Rejecting
+    here makes the outcome one catchable error on every runtime.
+    """
+    for character in value:
+        if character in ("\r", "\n", "\x00") or ord(character) > 0x7E:
+            raise HttpURLError(
+                f"{label} contains a non-ASCII or control character",
+            )
 
 
 def encode_request(
@@ -451,6 +463,12 @@ def encode_request(
 
     Returns:
         Encoded request as ``bytes``.
+
+    Raises:
+        HttpURLError: A method, path, header name, or header value holds
+            CR / LF / NUL or a non-ASCII character.  The request line and
+            headers are ASCII-only on the wire, so non-ASCII is refused
+            here rather than encoded differently on each runtime.
     """
     merged = CaseInsensitiveDict()
     merged["Host"] = host
@@ -475,15 +493,16 @@ def encode_request(
         for name, value in iterable:
             merged[name] = value
 
-    # CR / LF / NUL in any request-line or header component would let a
-    # caller-controlled value (path, header value) splice extra headers
-    # or a second request onto the wire.  Reject before encoding.
-    _reject_control_chars("method", method)
-    _reject_control_chars("path", path)
+    # Reject request-splitting bytes (CR / LF / NUL) and any non-ASCII
+    # in a request-line or header component before encoding — the
+    # encoder below is ASCII-only, and non-ASCII input encodes
+    # differently on CPython vs MicroPython.
+    _reject_unsafe_chars("method", method)
+    _reject_unsafe_chars("path", path)
     parts = [f"{method} {path} HTTP/1.1\r\n".encode("ascii")]
     for name, value in merged.items():
-        _reject_control_chars("header name", str(name))
-        _reject_control_chars("header value", str(value))
+        _reject_unsafe_chars("header name", str(name))
+        _reject_unsafe_chars("header value", str(value))
         parts.append(f"{name}: {value}\r\n".encode("ascii"))
     parts.append(CRLF)
     if body is not None:

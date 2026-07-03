@@ -161,6 +161,20 @@ class TestFakeHttpClient:
         with raises(ValueError, match="not both"):
             fake.post("http://api.example.test/", body=b"x", json={"k": "v"})
 
+    def test_put_body_and_json_mutually_exclusive(self):
+        from chumicro_requests.testing import FakeHttpClient
+
+        fake = FakeHttpClient()
+        with raises(ValueError, match="not both"):
+            fake.put("http://api.example.test/", body=b"x", json={"k": "v"})
+
+    def test_patch_body_and_json_mutually_exclusive(self):
+        from chumicro_requests.testing import FakeHttpClient
+
+        fake = FakeHttpClient()
+        with raises(ValueError, match="not both"):
+            fake.patch("http://api.example.test/", body=b"x", json={"k": "v"})
+
     def test_put_records_method(self):
         from chumicro_requests.testing import FakeHttpClient
 

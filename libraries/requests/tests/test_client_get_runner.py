@@ -6,6 +6,7 @@ import select
 from chumicro_requests import (
     CaseInsensitiveDict,
     HttpClient,
+    HttpError,
     Response,
 )
 from chumicro_requests.testing import (
@@ -460,3 +461,68 @@ class TestOnDoneCallback:
         handle = client.get("http://example.test/")
         drive_until_done(client, handle, ticks)
         assert handle.done is True  # poll path unaffected
+
+    def test_callback_exception_propagates_not_swallowed(self):
+        # A callback raising HttpError must surface to the driving loop,
+        # not be caught by handle()'s HttpError handler and dropped.
+        socket = FakeSocket()
+        socket.enqueue_recv(canned_response(body=b"hi"))
+        client, ticks, _ = make_client(socket_or_factory=socket)
+
+        def on_done(_handle):
+            raise HttpError("callback boom")
+
+        handle = client.get("http://example.test/", on_done=on_done)
+        raised = None
+        for _ in range(50):
+            try:
+                client.handle(ticks.ticks_ms())
+            except HttpError as boom:
+                raised = boom
+                break
+            ticks.advance(1)
+
+        assert raised is not None
+        assert "callback boom" in str(raised)
+        assert handle.result.body == b"hi"  # request itself succeeded
+
+    def test_callback_raise_spares_follow_up_request(self):
+        # A callback that issues a follow-up request and then raises must
+        # not have its exception destroy that follow-up: the new request
+        # survives and can still be driven to completion.
+        first = FakeSocket()
+        first.enqueue_recv(canned_response(body=b"one"))
+        second = FakeSocket()
+        second.enqueue_recv(canned_response(body=b"two"))
+        sockets = iter((first, second))
+        ticks = FakeTicks()
+        client = HttpClient(
+            connector_factory=make_factory(lambda: next(sockets)),
+            ticks=ticks,
+        )
+
+        follow_up = []
+
+        def on_first_done(_handle):
+            follow_up.append(client.get("http://example.test/again"))
+            raise HttpError("callback boom")
+
+        first_handle = client.get(
+            "http://example.test/", on_done=on_first_done,
+        )
+        raised = None
+        for _ in range(50):
+            try:
+                client.handle(ticks.ticks_ms())
+            except HttpError as boom:
+                raised = boom
+                break
+            ticks.advance(1)
+
+        assert raised is not None
+        assert first_handle.result.body == b"one"
+        assert len(follow_up) == 1
+        follow_up_handle = follow_up[0]
+        assert follow_up_handle.error is None
+        drive_until_done(client, follow_up_handle, ticks)
+        assert follow_up_handle.result.body == b"two"
