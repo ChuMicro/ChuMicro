@@ -350,7 +350,7 @@ class WebSocketClient(_BaseSession):
             return None
         if self.state == WebSocketState.CLOSED:
             return None
-        return getattr(self._socket, "_sock", self._socket)
+        return getattr(self._socket, "sock", self._socket)
 
     def next_deadline(self, now_ms: int) -> int | None:
         """Earliest tick at which ``handle()`` must run on a quiet socket.
