@@ -118,21 +118,25 @@ def test_micropython_diff_deploy_round_trip(
 def test_micropython_diff_deploy_preserves_out_of_scope(
     micropython_device: DeviceEntry,
 ) -> None:
-    """User-managed files outside scope (e.g. /user_data.txt) survive a diff-deploy.
+    """Out-of-scope files (e.g. /user_data.txt) survive a ``clean=False`` diff-deploy.
 
-    Plants a real out-of-scope file via the deploy's entrypoint
-    itself, runs a second ``deploy_diff`` whose entrypoint reads the
-    file back, and confirms the contents survived.  Uses the
-    deployer's own transport for both halves so we don't hit the
-    "port not yet released" race when re-opening immediately after
-    a deploy.
+    Under the clean-slate default everything outside the keep set is
+    reconciled away, so preservation-by-scope is the
+    ``clean=False`` (``--no-wipe``) path's contract: the diff scope is
+    only the entrypoint/state files plus ``/lib/**``, and a user file
+    outside it survives.  Plants a real out-of-scope file via the
+    deploy's entrypoint itself, runs a second ``deploy_diff`` whose
+    entrypoint reads the file back, and confirms the contents
+    survived.  Uses the deployer's own transport for both halves so we
+    don't hit the "port not yet released" race when re-opening
+    immediately after a deploy.
     """
     device = _build_device(micropython_device, deploy_mode="flash")
     deployer = Deployer(device)
 
-    # First deploy plants /user_data.txt and exits.  The path is
-    # outside the deploy's managed scope so the next diff-deploy
-    # won't touch it.
+    # First deploy plants /user_data.txt and exits.  The file is
+    # created at runtime, after staging, so this first deploy's
+    # clean-slate pass never sees it.
     plant = deployer.deploy_diff(
         FileMapSource(
             {
@@ -148,10 +152,10 @@ def test_micropython_diff_deploy_preserves_out_of_scope(
     assert plant.success, plant.execute_output
     time.sleep(_BACK_TO_BACK_SETTLE_SECONDS)
 
-    # Second diff-deploy with a different entrypoint that reads back
-    # the user file.  Survives means the diff routine respected
-    # scope.  Cleans up the user file at the end so subsequent runs
-    # start fresh.
+    # Second diff-deploy — clean=False, the preservation path — with
+    # a different entrypoint that reads back the user file.  Survives
+    # means the diff routine respected scope.  Cleans up the user
+    # file at the end so subsequent runs start fresh.
     check = deployer.deploy_diff(
         FileMapSource(
             {
@@ -164,6 +168,7 @@ def test_micropython_diff_deploy_preserves_out_of_scope(
             },
             entrypoint="/main.py",
         ),
+        clean=False,
     )
     assert check.success, check.execute_output
     assert "USER_FILE_CONTENT:user-managed-content" in check.execute_output
