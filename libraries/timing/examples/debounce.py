@@ -12,11 +12,10 @@ Example output::
 
     Debounce demo (20 ms quiet period)...
 
-      [  120 ms] raw=True  -> PRESS accepted
-      [  125 ms] raw=True     (ignored, 5 ms < 20 ms)
-      [  130 ms] raw=False    (ignored, 10 ms < 20 ms)
-      [  135 ms] raw=True     (ignored, 15 ms < 20 ms)
-      [  200 ms] raw=False -> RELEASE accepted
+      [ 1121 ms] raw=True  -> PRESS accepted
+      [ 1128 ms] raw=False    (ignored, 7 ms < 20 ms)
+      [ 1202 ms] raw=False -> RELEASE accepted
+      [ 1209 ms] raw=True     (ignored, 7 ms < 20 ms)
       ...
 
 Runs on CPython, MicroPython, and CircuitPython.
