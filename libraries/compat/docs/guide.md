@@ -81,12 +81,20 @@ The public attributes match CPython's `functools.partial`:
 ```python
 from chumicro_compat.functools import partial
 
-p = partial(int, "ff", base=16)
-print(p.func)       # <class 'int'>
-print(p.args)        # ('ff',)
-print(p.keywords)    # {'base': 16}
-print(p())           # 255
+def connect(host, port, *, tls=False):
+    return f"{host}:{port} tls={tls}"
+
+p = partial(connect, "broker.local", tls=True)
+print(p.func)       # <function connect ...>
+print(p.args)        # ('broker.local',)
+print(p.keywords)    # {'tls': True}
+print(p(1883))       # broker.local:1883 tls=True
 ```
+
+> The example uses a pure-Python function so it runs identically on
+> every runtime.  Passing a keyword to a C builtin like `int(x, base=16)`
+> works on CPython but raises `TypeError` on MicroPython / CircuitPython,
+> whose builtins take those arguments positionally only.
 
 ## Platform notes
 

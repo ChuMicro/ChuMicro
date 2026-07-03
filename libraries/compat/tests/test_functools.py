@@ -109,3 +109,28 @@ def test_partial_returns_function_result() -> None:
     """The return value of the wrapped function should be passed through."""
     wrapped = partial(str.upper)
     assert wrapped("hello") == "HELLO"
+
+
+def test_partial_flattens_nested_partial() -> None:
+    """A partial wrapping a partial flattens to a single level, matching
+    CPython: .func is the innermost callable and .args / .keywords merge."""
+    inner = partial(sorted, key=abs)
+    outer = partial(inner, reverse=True)
+    assert outer.func is sorted
+    assert outer.keywords == {"key": abs, "reverse": True}
+    assert outer([-3, 1, -2]) == [-3, -2, 1]
+
+
+def test_partial_flatten_outer_keyword_overrides_inner() -> None:
+    inner = partial(dict, a=1)
+    outer = partial(inner, a=2)
+    assert outer.func is dict
+    assert outer.keywords == {"a": 2}
+    assert outer() == {"a": 2}
+
+
+def test_partial_call_without_kwargs_does_not_mutate_frozen_keywords() -> None:
+    frozen = partial(dict, a=1)
+    frozen()  # no call-time kwargs; must not disturb the frozen dict
+    frozen(b=2)
+    assert frozen.keywords == {"a": 1}
