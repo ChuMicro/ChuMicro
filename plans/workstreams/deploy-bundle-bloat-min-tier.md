@@ -1,6 +1,6 @@
 # Workstream: deploy-bundle bloat overflows the minimum-tier flash
 
-Status: **step 1 (docstring/comment strip) shipped 2026-06-13; step 2 (demo harness-core reduction) shipped host-side 2026-06-14, real-board bake pending; step 3 reframed and blocked on a data-file runtime-marking decision.** Surfaced during the generator-networking-apis real-board bake.
+Status: **steps 1+2 complete; step 3 folds into ship-channel-manifest-unification.**  Step 2's closing bake landed 2026-07-03: the Pico W CP demo deploy ran exit-0 through the reduced-closure path and the board's `/lib/chumicro_test_harness` holds exactly the bootstrap closure (`network.py` / `patching.py` absent).  Step 3 (CP deploys drop the MP-only CA `.der`) is a target-runtime policy cell of the ship-channel resolver — tracked in [ship-channel-manifest-unification](ship-channel-manifest-unification.md).
 
 ## Problem
 

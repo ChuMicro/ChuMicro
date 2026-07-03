@@ -35,9 +35,12 @@ def generate_self_signed_cert(
     """Write a self-signed cert + key into *workdir*; return `(cert_path, key_path)`.
 
     The cert covers `common_name` as a DNS SAN and 127.0.0.1 as an IP
-    SAN. Validity window: -5 minutes (clock-skew tolerance) to +1 day —
-    long enough for any demo run, short enough that a stale cert from a
-    prior session won't escape notice.
+    SAN. Validity window: 2000-01-01 to +1 day — the notBefore sits at
+    the MicroPython epoch because a board with an unset RTC boots
+    there, and mbedTLS rejects a cert whose validity "starts in the
+    future" (found on a real Pico W bake; a -5min skew window only
+    covered host-side clocks). The short notAfter keeps a stale cert
+    from a prior session from escaping notice on the host side.
     """
     from datetime import UTC, datetime, timedelta  # noqa: PLC0415
     from ipaddress import IPv4Address  # noqa: PLC0415
@@ -55,7 +58,7 @@ def generate_self_signed_cert(
         .issuer_name(subject)
         .public_key(private_key.public_key())
         .serial_number(x509.random_serial_number())
-        .not_valid_before(datetime.now(UTC) - timedelta(minutes=5))
+        .not_valid_before(datetime(2000, 1, 1, tzinfo=UTC))
         .not_valid_after(datetime.now(UTC) + timedelta(days=1))
         .add_extension(
             x509.SubjectAlternativeName([
@@ -109,6 +112,10 @@ def start_tls_echo_server(
                 raw, _peer = listener.accept()
             except (TimeoutError, OSError):
                 continue
+            # The accepted socket inherits the listener's 0.25 s accept
+            # timeout — enough to drop a connection 250 ms after its
+            # last byte.  Give the echo conversation its own budget.
+            raw.settimeout(5.0)
             try:
                 tls_sock = context.wrap_socket(raw, server_side=True)
             except (ssl.SSLError, OSError):

@@ -95,11 +95,16 @@ class _MpSocketWrapper:
         stdlib contract) and ``None`` when a non-blocking read would
         block.
 
-        MP-specific contract divergence: plain TCP and mbedTLS
+        MP-specific contract divergences: plain TCP and mbedTLS
         ``SSLSocket`` non-blocking ``readinto`` with no data available
         both return ``None`` — the stream layer folds ``EAGAIN`` /
         mbedTLS ``WANT_READ`` into a ``None`` result rather than
-        raising.  We **raise** ``OSError(errno.EAGAIN)`` on ``None`` so
+        raising.  And a BLOCKING mbedTLS read on real silicon (rp2)
+        fills the full requested size before returning (the unix port
+        returns per-record), so "up to *nbytes*" only holds
+        non-blocking — blocking TLS consumers must read exact sizes
+        (found on a real Pico W bake: a 256-byte read of a 19-byte
+        reply blocked until the peer closed).  We **raise** ``OSError(errno.EAGAIN)`` on ``None`` so
         the protocol contract — "EAGAIN on no data, 0 on clean peer
         close" — holds across plain TCP and TLS uniformly.  Without
         it, a length-known read cannot tell "no data this tick" apart
@@ -462,10 +467,11 @@ def ssl_context_with_ca(ca_pem):  # pragma: no cover - device only
         # CPython's default ``strict_mode=False`` behaves the same), so no
         # whitespace strip or per-cert intermediate list is needed.  Slices
         # go through a ``memoryview`` to skip per-region copies before
-        # decoding.  ``cadata`` stays a ``bytearray`` — mbedTLS /
-        # stdlib ssl accept any buffer-protocol object and copy
-        # internally, so a ``bytes()`` wrap would only allocate a
-        # same-size copy that's immediately discarded.
+        # decoding.  ``cadata`` accumulates as a ``bytearray`` but MUST
+        # be wrapped in ``bytes()`` at the load call: rp2 silicon's
+        # ``load_verify_locations`` rejects a bytearray with
+        # ``TypeError: can't convert 'bytearray' object to str`` (found
+        # on a real Pico W bake; the unix port is more permissive).
         begin_marker = b"-----BEGIN CERTIFICATE-----"
         end_marker = b"-----END CERTIFICATE-----"
         source = memoryview(ca_pem)
@@ -491,7 +497,7 @@ def ssl_context_with_ca(ca_pem):  # pragma: no cover - device only
         )
 
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-    context.load_verify_locations(cadata=cadata)
+    context.load_verify_locations(cadata=bytes(cadata))
     context.verify_mode = ssl.CERT_REQUIRED
     # mbedTLS has copied the DER into its internal chain; the local
     # buffers (~16 KB for the shipped bundle) are dead weight from

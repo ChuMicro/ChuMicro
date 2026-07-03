@@ -62,10 +62,14 @@ marker("CONNECTED")
 sock.send(_PROBE_PAYLOAD)
 marker("SENT", bytes=len(_PROBE_PAYLOAD))
 
-buffer = bytearray(_RECV_BUFFER_SIZE)
+# One byte per read: rp2's mbedTLS blocks a bulk read until the FULL
+# requested size arrives (or EOF), so a 256-byte read on a 19-byte
+# reply stalls forever.  Delimiter-framed blocking TLS reads on
+# MicroPython silicon must read exact sizes — here, one byte at a time.
+buffer = bytearray(1)
 received = bytearray()
 while b"\n" not in received:
-    number_of_bytes = sock.recv_into(buffer, _RECV_BUFFER_SIZE)
+    number_of_bytes = sock.recv_into(buffer, 1)
     if number_of_bytes == 0:
         break
     received.extend(buffer[:number_of_bytes])
