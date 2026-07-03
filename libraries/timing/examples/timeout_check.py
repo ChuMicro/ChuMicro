@@ -75,14 +75,18 @@ def wait_for_sensor(timeout_ms: int) -> int:
     start = ticks_ms()
     deadline = ticks_add(start, timeout_ms)
     polls = 0
-    now = start
 
-    # Loop until we pass the deadline.  ticks_diff handles
-    # wraparound so this works even if the tick counter wraps.
-    while ticks_diff(now, deadline) < 0:
+    # Read the clock fresh at the top of every iteration and test the
+    # deadline on that value.  ticks_diff handles wraparound.  Checking a
+    # timestamp captured at the end of the previous iteration (before the
+    # poll + sleep) could report success after the deadline had already
+    # passed.
+    while True:
         now = ticks_ms()
-        elapsed = ticks_diff(now, start)
+        if ticks_diff(now, deadline) >= 0:
+            return -1  # timed out
 
+        elapsed = ticks_diff(now, start)
         if poll_sensor(polls):
             return elapsed
 
@@ -92,8 +96,6 @@ def wait_for_sensor(timeout_ms: int) -> int:
         # Brief pause between polls.  On a real board you would
         # yield to the main loop or scheduler here instead.
         time.sleep(0.1)
-
-    return -1
 
 
 print("Running timeout checks...\n")

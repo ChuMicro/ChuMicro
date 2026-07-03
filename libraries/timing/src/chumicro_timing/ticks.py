@@ -9,8 +9,12 @@ except ImportError:
         return value
 
 
-# The 2**29 ms period (~6.2 days) matches MicroPython's ``time.ticks_ms`` wrap and keeps
-# add/diff results under 2**30, so boards without big-int support never heap-allocate a long.
+# The 2**29 ms period (~6.2 days) matches CircuitPython's
+# ``supervisor.ticks_ms`` wrap (the adafruit_ticks reference); this
+# library normalizes to it on every runtime.  MicroPython's
+# ``time.ticks_ms`` wraps at a larger, port-dependent period, so the
+# normalization masks that difference and keeps add/diff results under
+# 2**30 — boards without big-int support never heap-allocate a long.
 TICKS_PERIOD = const(1 << 29)
 TICKS_MAX = const(TICKS_PERIOD - 1)
 TICKS_HALFPERIOD = const(TICKS_PERIOD // 2)

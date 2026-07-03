@@ -14,7 +14,8 @@ Example output::
       ...
 
 Setup:
-1. Install ``chumicro_timing`` (``mpremote mip install chumicro-timing``
+1. Install ``chumicro_timing``
+   (``mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_timing``
    or copy the package to the board).
 2. Wire a momentary button between **GPIO0** and **GND**.
    The internal pull-up is enabled, so no external resistor is needed.

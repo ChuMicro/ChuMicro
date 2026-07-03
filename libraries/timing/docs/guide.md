@@ -64,7 +64,7 @@ heartbeat.reset(now)
 
 When the loop runs late, `Heartbeat.poll(now)` fires once and re-anchors the next deadline to `now` — missed intervals are dropped, not caught up. For most loops this is what you want: a heartbeat that lost a cycle resumes from where the code actually got to, not from where it should have been.
 
-For workloads where the period really has to mean what it says ("10 messages per minute", "sample the sensor every 200 ms regardless of jitter"), use the deadline-carrier pattern instead — see [`examples/phase_locked_tick.py`](../examples/phase_locked_tick.py).
+For workloads where the period really has to mean what it says ("10 messages per minute", "sample the sensor every 200 ms regardless of jitter"), use the deadline-carrier pattern instead — see [`examples/phase_locked_tick.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/timing/examples/phase_locked_tick.py).
 
 ## Using ticks directly
 
@@ -128,7 +128,7 @@ For applications with many components, [`chumicro-runner`](https://chumicro.gith
 
 ## Examples
 
-The [examples](../examples/) directory contains complete runnable scripts:
+The [examples](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/timing/examples) directory contains complete runnable scripts:
 
 | Example | What it shows |
 |---|---|

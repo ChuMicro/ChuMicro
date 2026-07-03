@@ -6,7 +6,8 @@ console (or a sweep harness) can verify the loop without watching
 the LED itself.
 
 Setup:
-1. Install ``chumicro_timing`` (``mpremote mip install chumicro-timing``
+1. Install ``chumicro_timing``
+   (``mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_timing``
    or copy the package to the board).
 2. No extra wiring — uses pin 2, the built-in LED on most ESP32
    dev boards.  Change ``Pin(2)`` to match your board.

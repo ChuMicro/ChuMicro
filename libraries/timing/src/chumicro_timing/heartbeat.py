@@ -33,6 +33,10 @@ class Heartbeat:
 
         self.period_ms = period_ms
         self._ticks = ticks if ticks is not None else _DEFAULT_TICKS
+        # Bind ticks_diff once: poll() runs every tick, so caching the
+        # method avoids the two-level ``self._ticks.ticks_diff`` attribute
+        # walk on the hot path.
+        self._ticks_diff = self._ticks.ticks_diff
         self._last_beat_ms = self._ticks.ticks_ms()
 
     def reset(self, now_ms: int) -> None:
@@ -41,7 +45,7 @@ class Heartbeat:
 
     def poll(self, now_ms: int) -> bool:
         """Returns ``True`` when ``period_ms`` has passed since the last fire, re-anchoring to ``now_ms``."""
-        if self._ticks.ticks_diff(now_ms, self._last_beat_ms) < self.period_ms:
+        if self._ticks_diff(now_ms, self._last_beat_ms) < self.period_ms:
             return False
         self._last_beat_ms = now_ms
         return True
