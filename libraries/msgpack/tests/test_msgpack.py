@@ -468,14 +468,14 @@ def test_float64_decode_raises() -> None:
     """Decoding float64 (0xcb) should raise ValueError naming float64."""
     # 0xcb + 8 bytes of IEEE 754 binary64 for 1.0
     encoded = b"\xcb\x3f\xf0\x00\x00\x00\x00\x00\x00"
-    with raises(ValueError):
+    with raises(ValueError, match="float64"):
         _pure_unpackb(encoded)
 
 
 def test_uint64_decode_raises() -> None:
     """Decoding uint64 (0xcf) should raise ValueError naming uint64."""
     encoded = b"\xcf\x00\x00\x00\x01\x00\x00\x00\x00"  # 2**32
-    with raises(ValueError):
+    with raises(ValueError, match="uint64"):
         _pure_unpackb(encoded)
 
 
