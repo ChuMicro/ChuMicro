@@ -2,7 +2,7 @@
 
 ## Overview
 
-`chumicro-sockets` provides a single TCP + TLS client API that works the same way on CircuitPython, MicroPython, and CPython.  The runtimes diverge in ways the library can't paper over — CircuitPython has no `socket` module, only `socketpool(radio)`; MicroPython has stdlib socket + mbedTLS-backed ssl on current builds; CPython has the full stdlib stack — so the library exposes one [`TCPClientSocket`](api.md#chumicro_sockets.TCPClientSocket) protocol and routes [`tcp_client_socket`](api.md#chumicro_sockets.tcp_client_socket) / [`tls_client_socket`](api.md#chumicro_sockets.tls_client_socket) to a runtime-appropriate adapter.
+`chumicro-sockets` provides a single TCP + TLS client API that works the same way on CircuitPython, MicroPython, and CPython.  The runtimes diverge in ways the library can't paper over — CircuitPython has no `socket` module, only `socketpool(radio)`; MicroPython has stdlib socket + mbedTLS-backed ssl on current builds; CPython has the full stdlib stack — so the library exposes one duck-typed TCP socket surface (`send` / `recv_into` / `close` / `setblocking`) and routes [`tcp_client_socket`](api.md#chumicro_sockets.tcp_client_socket) / [`tls_client_socket`](api.md#chumicro_sockets.tls_client_socket) to a runtime-appropriate adapter.
 
 `chumicro-mqtt`, `chumicro-requests`, `chumicro-http-server`, and `chumicro-websockets` all build on this library; none of them import `socketpool`, `socket`, or `ssl` directly.
 

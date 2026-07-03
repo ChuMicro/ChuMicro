@@ -197,6 +197,7 @@ def ssl_context_with_cert_and_key(cert_pem, key_pem):
     `load_cert_chain` accepts file paths only (not in-memory bytes),
     so we write them to a temporary file and load from there.
     """
+    import os  # noqa: PLC0415 - runtime-gated
     import ssl  # noqa: PLC0415 - runtime-gated
     import tempfile  # noqa: PLC0415 - runtime-gated
 
@@ -209,6 +210,8 @@ def ssl_context_with_cert_and_key(cert_pem, key_pem):
     else:
         key_pem_text = key_pem
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    cert_path = None
+    key_path = None
     with tempfile.NamedTemporaryFile(
         mode="w", suffix=".cert.pem", delete=False,
     ) as cert_handle:
@@ -219,7 +222,20 @@ def ssl_context_with_cert_and_key(cert_pem, key_pem):
     ) as key_handle:
         key_handle.write(key_pem_text)
         key_path = key_handle.name
-    context.load_cert_chain(certfile=cert_path, keyfile=key_path)
+    try:
+        context.load_cert_chain(certfile=cert_path, keyfile=key_path)
+    finally:
+        # ``load_cert_chain`` reads the PEM material into the context, so
+        # the temp files are no longer needed.  Remove them whether it
+        # succeeded or raised — ``delete=False`` above means they'd
+        # otherwise accumulate in the temp dir forever (private keys
+        # included).
+        for path in (cert_path, key_path):
+            if path is not None:
+                try:
+                    os.unlink(path)
+                except OSError:
+                    pass
     return context
 
 

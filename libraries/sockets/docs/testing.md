@@ -1,6 +1,6 @@
 # Testing Helpers
 
-`chumicro_sockets.testing` ships `FakeSocket` — an in-memory test double satisfying the [`TCPClientSocket`](api.md#chumicro_sockets.TCPClientSocket) protocol so downstream libraries (`chumicro-mqtt`, future `chumicro-requests`) and your own MQTT-talking apps can reach high coverage without spinning up a network.
+`chumicro_sockets.testing` ships `FakeSocket` — an in-memory test double satisfying the duck-typed TCP socket surface (`send` / `recv_into` / `close` / `setblocking`) so downstream libraries (`chumicro-mqtt`, `chumicro-requests`) and your own network apps can reach high coverage without spinning up a network.
 
 ## Usage
 

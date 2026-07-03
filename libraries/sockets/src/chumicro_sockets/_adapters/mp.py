@@ -48,6 +48,14 @@ def _no_op(*_args, **_kwargs):
     return None
 
 
+def _close_quietly(sock):  # pragma: no cover - device only
+    """Best-effort close of an in-flight socket, ignoring teardown errors."""
+    try:
+        sock.close()
+    except Exception:  # noqa: BLE001 - best-effort teardown
+        pass
+
+
 class _MpSocketWrapper:
     """Adapts an MP stdlib socket to the chumicro_sockets protocol.
 
@@ -98,7 +106,10 @@ class _MpSocketWrapper:
         "no data this tick" apart from "peer closed mid-response"
         the moment a recv races ahead of the peer's send.
         """
-        size = nbytes if nbytes > 0 else len(buffer)
+        # Clamp to the buffer's capacity: recv() must never return more
+        # bytes than fit, or the ``buffer[:copied] = data`` slice-assign
+        # below silently grows a bytearray (or corrupts a memoryview).
+        size = min(nbytes, len(buffer)) if nbytes > 0 else len(buffer)
         data = self.sock.recv(size)
         if data is None:
             # MP TLS WANT_READ surfaces as recv() returning None; raise
@@ -120,7 +131,14 @@ def connect_tcp(host, port, **_kwargs):  # pragma: no cover - device only
     """
     address_info = socket.getaddrinfo(host, port)[0]
     sock = socket.socket(address_info[0], address_info[1])
-    sock.connect(address_info[-1])
+    try:
+        sock.connect(address_info[-1])
+    except Exception:
+        # Close the in-flight lwIP socket before re-raising: MP's socket
+        # slots are scarce, so a reconnect loop that abandons failed
+        # sockets to GC accumulates PCBs and eventually returns ENOMEM.
+        _close_quietly(sock)
+        raise
     return _MpSocketWrapper(sock)
 
 
@@ -151,9 +169,19 @@ def connect_tls(host, port, *, context=None, **_kwargs):  # pragma: no cover - d
     """
     address_info = socket.getaddrinfo(host, port)[0]
     sock = socket.socket(address_info[0], address_info[1])
-    sock.connect(address_info[-1])
+    try:
+        sock.connect(address_info[-1])
+    except Exception:
+        _close_quietly(sock)
+        raise
     context = _resolve_default_context(context)
-    wrapped = context.wrap_socket(sock, server_hostname=host)
+    try:
+        wrapped = context.wrap_socket(sock, server_hostname=host)
+    except Exception:
+        # A handshake failure after a successful TCP connect leaks the
+        # connected socket (holding an lwIP PCB) unless we close it.
+        _close_quietly(sock)
+        raise
     return _MpSocketWrapper(wrapped)
 
 
@@ -369,6 +397,13 @@ class _MpTLSListenerWrapper:  # pragma: no cover - device only
         except Exception:
             underlying.close()
             raise
+        # Revert to non-blocking after the handshake so the returned
+        # client matches the CPython TLS listener and the tick-driven
+        # recv/send data path sees EAGAIN, not a blocking read.
+        try:
+            tls_sock.setblocking(False)
+        except (OSError, AttributeError):
+            pass
         return _MpSocketWrapper(tls_sock), address
 
     def close(self):
@@ -586,14 +621,21 @@ class _MpConnector(SocketConnector):  # pragma: no cover - device only
                     self._tcp_poll.register(self.socket, select.POLLOUT)
                     return
                 # POLLOUT firing means the kernel has resolved the
-                # connect (success or failure).  POLLERR / POLLHUP would
-                # surface as events too; the subsequent first ``send``
-                # raises the actual errno.  ``getsockopt(SO_ERROR)`` is
-                # not exposed reliably on rp2 plain sockets, so we rely
-                # on POLLOUT + first-send-fails.
-                if not self._tcp_poll.poll(0):  # 0 ms — non-blocking probe
+                # connect.  A refused / reset connect surfaces POLLERR /
+                # POLLHUP in the same poll; check the mask and fail here
+                # rather than reporting ready and letting the consumer's
+                # first send raise a confusing errno on a dead socket.
+                # (``getsockopt(SO_ERROR)`` is not exposed reliably on
+                # rp2 plain sockets, so the event mask is the signal.)
+                events = self._tcp_poll.poll(0)  # 0 ms — non-blocking probe
+                if not events:
                     return
                 self._tcp_poll = None
+                if events[0][1] & (select.POLLERR | select.POLLHUP):
+                    raise OSError(
+                        errno.ECONNREFUSED,
+                        "TCP connect failed (POLLERR/POLLHUP)",
+                    )
                 if self._tls:
                     # ``ssl.SSLContext.wrap_socket`` blocks until the TLS
                     # handshake completes — substrate limit documented on

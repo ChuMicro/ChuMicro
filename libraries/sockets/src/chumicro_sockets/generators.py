@@ -221,12 +221,16 @@ def recv_until(sock: object, separator: object, *, max_bytes: int) -> bytes:
             raise
         if nbytes == 0:
             raise OSError("peer closed before separator")
-        if len(accumulator) + nbytes > max_bytes:
-            raise OSError("recv_until exceeded max_bytes")
         accumulator.extend(chunk_view[:nbytes])
+        # Search before enforcing the cap: a chunk that pushes the
+        # accumulator past max_bytes may still contain the separator
+        # within the cap (the trailing bytes are just discarded), which
+        # the old pre-extend check rejected as too-long.
         sep_index = accumulator.find(separator)
-        if sep_index != -1:
+        if sep_index != -1 and sep_index + sep_length <= max_bytes:
             return bytes(accumulator[: sep_index + sep_length])
+        if len(accumulator) >= max_bytes:
+            raise OSError("recv_until exceeded max_bytes")
 
 
 def recv_exact(sock: object, byte_count: int) -> bytes:
