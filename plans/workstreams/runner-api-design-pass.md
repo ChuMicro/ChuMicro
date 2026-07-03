@@ -4,9 +4,9 @@ Status: **verdicts in** (2026-07-03): M49 = both surfaces (shipped, runner 0.14.
 **full break** — superseded by Decision 0092 (no pre-publication backwards compat): the
 callable-check shape and the second `next_deadline` convention are deleted outright, all
 consumers migrated in the same commit; `add_periodic` stays on teaching merit (it is sugar,
-not compat).  Factory = one contract, local copies (decided).  M31 = **approved as refined** —
-amend 0089 narrowly, mqtt gains `next_message()` only (analysis in section 3).  M51 execution
-and the mqtt surface batch with the Decision-0092 compat sweep's removal wave.  The four escalated design questions from the
+not compat).  Factory = one contract, local copies (decided).  M31 = **shipped** (mqtt 0.20.0
+`next_message()` + 0089 amended in place, 2026-07-03).  M51 shipped with the 0092 removal
+wave.  Remaining: section 4's factory contract ADR + ntp alignment.  The four escalated design questions from the
 straggler fan-out, with options and a recommendation each.  All four reshape public surfaces the
 demos teach, so they get decided together, with the user, before any code.
 

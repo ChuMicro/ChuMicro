@@ -81,6 +81,25 @@ client.subscribe("commands/+")             # one wire-level subscribe covers bot
 
 Pattern handlers honor MQTT wildcard semantics (`+` for one segment, `#` for the trailing tail).
 
+### Receive stream (`next_message`)
+
+For a single-subscription consumer, `next_message()` reads inbound messages as a linear generator loop instead of a callback — register the client (it does the I/O each tick) and the consumer generator side by side:
+
+```python
+runner.add(client)
+
+def consume(client):
+    while True:
+        message = yield from client.next_message()   # InboundPublish
+        if message is None:
+            break                                    # client parked for good
+        act_on(message.topic, message.payload)
+
+runner.add_generator(consume(client))
+```
+
+The first `next_message()` call switches inbound data delivery from `on_message` / pattern handlers to a bounded queue the generator drains (`max_inbound_queue_size`, drop-oldest — a slow consumer loses the oldest messages rather than growing the heap).  Lifecycle callbacks (`on_connect`, `on_disconnect`, `on_oversized`) keep firing either way.  Pick one inbound surface per client: the stream for a linear single-topic consumer, the callbacks for multi-topic fan-out.  See `examples/receive_stream.py`.
+
 ## Last-will
 
 Configured at construction time; the broker publishes the will when the connection is uncleanly dropped (network loss, device hard-reset, etc.):
