@@ -2323,3 +2323,198 @@ class TestUnitOnDeviceSweep:
 
         assert result == 0
         assert "No circuitpython device configured" in capsys.readouterr().out
+
+
+class TestSweepDevices:
+    """The bench-board sweep iterates devices.yml serially: demo smoke
+    layer per board, optional functional layer routed through the
+    runtime-specific device override.
+    """
+
+    @staticmethod
+    def _entry(identifier: str, runtime: str):
+        from chumicro_deploy.config.default import DeviceEntry
+
+        return DeviceEntry(
+            identifier=identifier, runtime=runtime, address="/dev/fake",
+        )
+
+    def _patch_registry(self, monkeypatch, entries) -> None:
+        import chumicro_deploy.config.default as device_config
+
+        monkeypatch.setattr(
+            device_config, "load_device_registry",
+            lambda **_kwargs: (entries, None),
+        )
+
+    def test_dispatch_forwards_flags(self, monkeypatch) -> None:
+        """sweep-devices should forward every CLI flag to sweep_devices()."""
+        calls, fake_sweep = _make_fake_command(return_value=71)
+        monkeypatch.setattr(run, "sweep_devices", fake_sweep)
+
+        result = run.main([
+            "run.py", "sweep-devices",
+            "--device", "board-a", "--device", "board-b",
+            "--demo", "mqtt_pub_sub",
+            "--skip-demo", "--functional",
+            "--library", "sockets", "--deploy-mode", "ram",
+        ])
+
+        assert result == 71
+        assert calls == [
+            ((), {
+                "device_ids": ["board-a", "board-b"],
+                "demo": "mqtt_pub_sub",
+                "skip_demo": True,
+                "functional": True,
+                "library": "sockets",
+                "deploy_mode": "ram",
+            }),
+        ]
+
+    def test_runs_demo_per_registered_device_in_order(
+        self, monkeypatch, capsys,
+    ) -> None:
+        """Default sweep runs the demo driver once per device, registry order."""
+        self._patch_registry(monkeypatch, [
+            self._entry("mp-board", "micropython"),
+            self._entry("cp-board", "circuitpython"),
+        ])
+        commands: list[list[str]] = []
+        monkeypatch.setattr(
+            run, "run_command",
+            lambda command, environment=None: commands.append(command) or 0,
+        )
+
+        result = run.sweep_devices()
+
+        assert result == 0
+        assert [command[-1] for command in commands] == ["mp-board", "cp-board"]
+        assert all(command[-2] == "--device" for command in commands)
+        assert all("sockets_runner_connector" in command[1] for command in commands)
+        output = capsys.readouterr().out
+        assert "== sweep summary ==" in output
+        assert output.count("PASS") == 2
+
+    def test_failing_demo_yields_exit_1_and_fail_row(
+        self, monkeypatch, capsys,
+    ) -> None:
+        """One failing board fails the sweep but the rest still run."""
+        self._patch_registry(monkeypatch, [
+            self._entry("mp-board", "micropython"),
+            self._entry("cp-board", "circuitpython"),
+        ])
+        monkeypatch.setattr(
+            run, "run_command",
+            lambda command, environment=None: 1 if "mp-board" in command else 0,
+        )
+
+        result = run.sweep_devices()
+
+        assert result == 1
+        output = capsys.readouterr().out
+        assert "FAIL" in output
+        assert output.count("PASS") == 1
+
+    def test_functional_layer_routes_runtime_specific_device_kwarg(
+        self, monkeypatch,
+    ) -> None:
+        """--functional runs the suite per board with the matching override."""
+        self._patch_registry(monkeypatch, [
+            self._entry("mp-board", "micropython"),
+            self._entry("cp-board", "circuitpython"),
+        ])
+        calls, fake_functional = _make_fake_command(return_value=0)
+        monkeypatch.setattr(run, "test_libraries_functional", fake_functional)
+
+        result = run.sweep_devices(
+            skip_demo=True, functional=True, library="sockets",
+        )
+
+        assert result == 0
+        assert calls == [
+            ((), {
+                "runtime": "micropython",
+                "library": "sockets",
+                "deploy_mode": None,
+                "micropython_device": "mp-board",
+            }),
+            ((), {
+                "runtime": "circuitpython",
+                "library": "sockets",
+                "deploy_mode": None,
+                "circuitpython_device": "cp-board",
+            }),
+        ]
+
+    def test_device_filter_selects_and_orders_the_sweep(
+        self, monkeypatch,
+    ) -> None:
+        """--device narrows the sweep and fixes its order."""
+        self._patch_registry(monkeypatch, [
+            self._entry("mp-board", "micropython"),
+            self._entry("cp-board", "circuitpython"),
+        ])
+        commands: list[list[str]] = []
+        monkeypatch.setattr(
+            run, "run_command",
+            lambda command, environment=None: commands.append(command) or 0,
+        )
+
+        result = run.sweep_devices(device_ids=["cp-board"])
+
+        assert result == 0
+        assert [command[-1] for command in commands] == ["cp-board"]
+
+    def test_unknown_device_id_is_a_config_error(
+        self, monkeypatch, capsys,
+    ) -> None:
+        """An unregistered --device id fails fast with the registry listed."""
+        self._patch_registry(monkeypatch, [
+            self._entry("mp-board", "micropython"),
+        ])
+
+        result = run.sweep_devices(device_ids=["nope"])
+
+        assert result == 2
+        output = capsys.readouterr().out
+        assert "unknown device id" in output
+        assert "mp-board" in output
+
+    def test_skip_demo_without_functional_is_a_config_error(self, capsys) -> None:
+        """--skip-demo alone leaves nothing to run."""
+        result = run.sweep_devices(skip_demo=True)
+
+        assert result == 2
+        assert "leaves nothing to run" in capsys.readouterr().out
+
+    def test_unknown_demo_is_a_config_error(self, monkeypatch, capsys) -> None:
+        """A demo without a driver.py fails fast, listing the real demos."""
+        self._patch_registry(monkeypatch, [
+            self._entry("mp-board", "micropython"),
+        ])
+
+        result = run.sweep_devices(demo="not_a_demo")
+
+        assert result == 2
+        output = capsys.readouterr().out
+        assert "no demo named 'not_a_demo'" in output
+        assert "sockets_runner_connector" in output
+
+    def test_registry_load_failure_is_a_config_error(
+        self, monkeypatch, capsys,
+    ) -> None:
+        """A malformed devices.yml surfaces as exit 2, not a traceback."""
+        import chumicro_deploy.config.default as device_config
+
+        def raise_config_error(**_kwargs):
+            raise device_config.DeviceConfigError("boom")
+
+        monkeypatch.setattr(
+            device_config, "load_device_registry", raise_config_error,
+        )
+
+        result = run.sweep_devices()
+
+        assert result == 2
+        assert "boom" in capsys.readouterr().out
