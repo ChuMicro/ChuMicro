@@ -24,6 +24,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from chumicro_workspace.atomic_write import atomic_write_text
+
 
 def _block_regex(key: str, marker: str) -> re.Pattern[str]:
     """Match a top-level ``key:`` block plus its indented children.
@@ -90,5 +92,5 @@ def sync_managed_block(
         new_text = prefix + new_block
 
     workspace_yaml.parent.mkdir(parents=True, exist_ok=True)
-    workspace_yaml.write_text(new_text, encoding="utf-8")
+    atomic_write_text(workspace_yaml, new_text)
     return True

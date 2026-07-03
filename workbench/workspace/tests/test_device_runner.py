@@ -148,6 +148,26 @@ class TestDeviceBootstrapRunnerShutdown:
         runner.shutdown()
         runner.shutdown()  # second call is a no-op
 
+    def test_timed_out_shutdown_keeps_handle_for_later_reap(self) -> None:
+        # The deploy_api teardown sequence: a shutdown that gives up on
+        # a still-running bootstrap must not discard the thread handle —
+        # once the blocker clears (a closed transport failing the read
+        # fast), a follow-up shutdown reaps the thread instead of
+        # leaving it stale holding the dead transport.
+        release = threading.Event()
+        transport = _SlowFakeTransport(release_event=release)
+        runner = DeviceBootstrapRunner(transport, "boot")
+        runner.start()
+
+        runner.shutdown(timeout_s=0.05)  # times out; bootstrap still blocked
+        # Reaching into _thread: this test observes the concurrency
+        # primitive's internal handle, same rationale as _SlowFakeTransport.
+        assert runner._thread is not None and runner._thread.is_alive()
+
+        release.set()  # stands in for disconnect() failing the read fast
+        runner.shutdown(timeout_s=2.0)
+        assert runner._thread is None
+
     def test_shutdown_with_timeout_returns_when_thread_still_alive(self) -> None:
         """``shutdown(timeout_s=...)`` bounds the join so the driver
         cleanup path doesn't block on a wedged bg thread."""

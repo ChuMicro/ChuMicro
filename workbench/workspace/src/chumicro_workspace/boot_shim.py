@@ -126,6 +126,39 @@ def project_app_exports_async_run(project_dir: Path) -> bool:
     return isinstance(_top_level_run_node(project_dir), ast.AsyncFunctionDef)
 
 
+#: Modules whose ``reset()`` reboots the board: ``microcontroller`` on
+#: CircuitPython, ``machine`` on MicroPython.
+_HARD_RESET_MODULES: frozenset[str] = frozenset({"microcontroller", "machine"})
+
+
+def _hard_reset_local_names(tree: ast.Module) -> tuple[set[str], set[str]]:
+    """Resolve the local names that reach a board-reset call in *tree*.
+
+    Returns two sets: names for which ``<name>.reset()`` reboots the
+    board, and names for which a bare ``<name>()`` reboots the board.
+    The first is seeded with the module names ``microcontroller`` /
+    ``machine`` and extended with each ``import ... as`` alias, so
+    ``import machine as m`` adds ``m``.  The second collects
+    ``from <module> import reset [as ...]`` bindings, so
+    ``from microcontroller import reset as r`` adds ``r``.
+    """
+    module_names: set[str] = set(_HARD_RESET_MODULES)
+    reset_names: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name in _HARD_RESET_MODULES:
+                    module_names.add(alias.asname or alias.name)
+        elif (
+            isinstance(node, ast.ImportFrom)
+            and node.module in _HARD_RESET_MODULES
+        ):
+            for alias in node.names:
+                if alias.name == "reset":
+                    reset_names.add(alias.asname or "reset")
+    return module_names, reset_names
+
+
 def module_calls_hard_reset(path: Path) -> int | None:
     """Return the line of a ``microcontroller.reset()`` / ``machine.reset()`` call in *path*, or ``None``.
 
@@ -133,10 +166,11 @@ def module_calls_hard_reset(path: Path) -> int | None:
     the board runs on every boot, a reset reboots the board, which
     re-runs the entrypoint and resets again — a crash loop that bricks
     the deploy cycle until the board is wiped.  Returns the first such
-    call's line so the deploy path can refuse it.  Matches the dotted
-    form (``microcontroller.reset()`` / ``machine.reset()``); a reset
-    reached only through ``from microcontroller import reset`` is not
-    detected.  A file that can't be read or parsed returns ``None``.
+    call's line so the deploy path can refuse it.  Import aliases are
+    resolved first, so ``import machine as m; m.reset()`` and
+    ``from microcontroller import reset as r; r()`` are caught alongside
+    the plain ``microcontroller.reset()`` / ``machine.reset()`` forms.
+    A file that can't be read or parsed returns ``None``.
     """
     try:
         source = path.read_text(encoding="utf-8")
@@ -146,14 +180,19 @@ def module_calls_hard_reset(path: Path) -> int | None:
         tree = ast.parse(source)
     except SyntaxError:
         return None
+    module_names, reset_names = _hard_reset_local_names(tree)
     for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        callee = node.func
         if (
-            isinstance(node, ast.Call)
-            and isinstance(node.func, ast.Attribute)
-            and node.func.attr == "reset"
-            and isinstance(node.func.value, ast.Name)
-            and node.func.value.id in ("microcontroller", "machine")
+            isinstance(callee, ast.Attribute)
+            and callee.attr == "reset"
+            and isinstance(callee.value, ast.Name)
+            and callee.value.id in module_names
         ):
+            return node.lineno
+        if isinstance(callee, ast.Name) and callee.id in reset_names:
             return node.lineno
     return None
 

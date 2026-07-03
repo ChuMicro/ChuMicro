@@ -225,6 +225,28 @@ class TestExtractLibrary:
         assert caught.value.kind is LibraryFetchFailureKind.BAD_ARCHIVE
 
 
+class TestSafeMemberPath:
+    """Extraction containment is path-boundary, not string-prefix."""
+
+    def test_rejects_sibling_directory_escape(self, tmp_path: Path):
+        from chumicro_workspace import library_channel  # noqa: PLC0415
+
+        into = tmp_path / "foo"
+        into.mkdir()
+        # `foo-evil` shares the `foo` string prefix but is a sibling of
+        # `foo`, not a child; a str.startswith guard would admit it.
+        with pytest.raises(LibraryFetchError) as caught:
+            library_channel._safe_member_path(into, "../foo-evil/payload")
+        assert caught.value.kind is LibraryFetchFailureKind.BAD_ARCHIVE
+
+    def test_accepts_nested_member(self, tmp_path: Path):
+        from chumicro_workspace import library_channel  # noqa: PLC0415
+
+        into = tmp_path / "foo"
+        resolved = library_channel._safe_member_path(into, "src/mod.py")
+        assert resolved == (into / "src" / "mod.py").resolve()
+
+
 class TestFetchSnapshotTarball:
     def test_fetches_tarball_url_once(self):
         repo = "ChuMicro/ChuMicro-Libraries"

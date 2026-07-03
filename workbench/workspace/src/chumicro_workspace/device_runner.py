@@ -29,7 +29,7 @@ from types import TracebackType
 
 from chumicro_deploy import ExtendedTransportProtocol, TransportProtocol
 
-from .markers import Marker, MarkerQueue, parse_marker
+from .markers import Marker, MarkerQueue
 
 
 class RunnerNotStartedError(RuntimeError):
@@ -105,8 +105,10 @@ class DeviceBootstrapRunner:
         """Block until a marker named *name* arrives on the device's stdout.
 
         Forwards to :meth:`MarkerQueue.wait_for`.  Non-matching markers
-        that arrive while waiting are dropped; on timeout, raises
-        :class:`MarkerTimeoutError` from the marker module.
+        that arrive while waiting are retained for later waits; on
+        timeout, raises :class:`MarkerTimeoutError` whose message names
+        what did arrive (including marker-shaped lines that failed to
+        parse).
 
         It is fine to call this before :meth:`start` (the queue is
         already constructed; the bg thread will start pushing as soon
@@ -163,14 +165,18 @@ class DeviceBootstrapRunner:
                 cleanup path after a host-side abort where the bg
                 thread is still mid-execute and would otherwise block
                 until the board's own deadline expires.  A timed-out
-                join leaves the thread running; daemon-thread cleanup
-                takes it down at interpreter exit.
+                join keeps the thread handle so a later call can reap
+                it (e.g. after the transport is closed and the blocked
+                read fails fast); an unreaped daemon thread dies at
+                interpreter exit.
         """
         thread = self._thread
         if thread is None:
             return
         if thread.is_alive():
             thread.join(timeout=timeout_s)
+            if thread.is_alive():
+                return
         self._thread = None
 
     def __enter__(self) -> DeviceBootstrapRunner:
@@ -189,9 +195,7 @@ class DeviceBootstrapRunner:
         dispatcher wired to on_line, captures stdout and any error."""
 
         def on_line(line: str) -> None:
-            marker = parse_marker(line)
-            if marker is not None:
-                self._marker_queue.push(marker)
+            self._marker_queue.offer_line(line)
 
         try:
             if isinstance(self._bootstrap, list):

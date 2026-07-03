@@ -24,6 +24,7 @@ from typing import Any
 import tomlkit
 from ruamel.yaml import YAML
 
+from chumicro_workspace.atomic_write import atomic_write_text
 from chumicro_workspace.template_drift import (
     _resolve_template_text,
     collect_missing_template_paths,
@@ -67,7 +68,7 @@ def additive_reapply(workspace_root: Path) -> dict[str, list[str]]:
             new_text = _append_missing_toml(user_text, template_text, missing)
         else:
             new_text = _append_missing_yaml(user_text, template_text, missing)
-        user_path.write_text(new_text, encoding="utf-8")
+        atomic_write_text(user_path, new_text)
         appended[filename] = missing
     return appended
 

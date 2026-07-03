@@ -493,6 +493,41 @@ class TestModuleCallsHardReset:
         app.write_text("import machine\nmachine.reset()\n")
         assert module_calls_hard_reset(app) == 2
 
+    def test_detects_aliased_machine_reset(self, tmp_path: Path) -> None:
+        # `import machine as m; m.reset()` reboots the board through the
+        # alias; the guard resolves the alias back to `machine`.
+        app = tmp_path / "app.py"
+        app.write_text("import machine as m\nm.reset()\n")
+        assert module_calls_hard_reset(app) == 2
+
+    def test_detects_aliased_microcontroller_reset(
+        self, tmp_path: Path,
+    ) -> None:
+        app = tmp_path / "app.py"
+        app.write_text(
+            "import microcontroller as mc\ndef run():\n    mc.reset()\n",
+        )
+        assert module_calls_hard_reset(app) == 3
+
+    def test_detects_from_import_reset(self, tmp_path: Path) -> None:
+        # `from machine import reset; reset()` hard-resets via a bare call.
+        app = tmp_path / "app.py"
+        app.write_text("from machine import reset\nreset()\n")
+        assert module_calls_hard_reset(app) == 2
+
+    def test_detects_from_import_reset_aliased(self, tmp_path: Path) -> None:
+        app = tmp_path / "app.py"
+        app.write_text("from microcontroller import reset as r\nr()\n")
+        assert module_calls_hard_reset(app) == 2
+
+    def test_bare_reset_from_unrelated_module_ignored(
+        self, tmp_path: Path,
+    ) -> None:
+        # A `reset` imported from some other module is not a board reset.
+        app = tmp_path / "app.py"
+        app.write_text("from widget import reset\nreset()\n")
+        assert module_calls_hard_reset(app) is None
+
     def test_clean_module_returns_none(self, tmp_path: Path) -> None:
         app = tmp_path / "app.py"
         app.write_text("def run():\n    print('ok')\n")
