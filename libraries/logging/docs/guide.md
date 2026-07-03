@@ -14,7 +14,7 @@ of handlers) and `StreamHandler` (synchronous text output to a
 writable stream).  `BufferedHandler` is a runner-shaped front-end that
 batches records and flushes them on `handle(now_ms)`.
 
-No other ChuMicro library imports this one — apps wire logging in by passing a logger callable to the optional `logger=` parameter on libraries that accept one.
+No other ChuMicro library imports this one.  An app builds a `Logger`, registers handlers on it, and calls its `debug` / `info` / … methods directly from its own code (or hands the logger to its own modules); no ChuMicro library currently accepts a `logger=` parameter.
 
 ## Getting started
 
@@ -64,7 +64,9 @@ logger = Logger("sensor", level=DEBUG, handlers=[buffered])
 for index in range(100):
     logger.info(f"sample {index}")
 
-# Runner tick — drains the buffer.
+# Runner tick — drains the buffer.  now_ms comes from your tick source
+# (ticks_ms(), or the value the runner passes into handle()).
+now_ms = 0
 if buffered.check(now_ms):
     buffered.handle(now_ms)
 ```

@@ -383,6 +383,19 @@ def test_buffered_handler_handle_drains_buffer_to_downstream() -> None:
     assert downstream.records == [(INFO, "x", "a"), (INFO, "x", "b")]
 
 
+def test_buffered_handler_handle_swallows_downstream_failures() -> None:
+    # A downstream that raises (a read-only filesystem, full flash) must
+    # not escape handle() into the runner tick; the fault is counted and
+    # the drain continues, honoring the crash-safety contract.
+    handler = BufferedHandler(downstream=FailingHandler(), capacity=4)
+    handler.emit(INFO, "x", "a")
+    handler.emit(INFO, "x", "b")
+    flushed = handler.handle(now_ms=0)  # must not raise
+    assert flushed == 2
+    assert handler.buffered == 0
+    assert handler.handler_errors == 2
+
+
 def test_buffered_handler_drops_oldest_when_full() -> None:
     downstream = RecordingHandler()
     handler = BufferedHandler(downstream=downstream, capacity=2)
