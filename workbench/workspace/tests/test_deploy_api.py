@@ -188,6 +188,53 @@ class TestDeployProjectHappyPath:
         finally:
             monkeypatch.undo()
 
+    def test_ram_device_with_requires_flash_closure_promotes_to_flash(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A RAM device deploying a requires_flash closure is promoted to flash.
+
+        A programmatic deploy that defers to devices.yml (``deploy_mode``
+        unset) applies the same flash-promotion the CLI does, so a
+        flash-only library in the source closure is not deployed into RAM
+        where it would OOM on import.
+        """
+        root = _make_workspace(tmp_path)
+        project = _make_project(root)
+        entry = _fake_entry(deploy_mode="ram")
+        # A library in the closure declares requires_flash.
+        lib_source = root / "libraries" / "foo" / "src"
+        lib_source.mkdir(parents=True)
+        (root / "libraries" / "foo" / "pyproject.toml").write_text(
+            '[project]\nname = "chumicro-foo"\n'
+            "[tool.chumicro]\nrequires_flash = true\n",
+        )
+        captured: dict = {}
+        fake = FakeTransport(mode="flash")
+
+        def fake_load(*, workspace_root=None):  # noqa: ARG001
+            from chumicro_deploy.config.default import DeviceDefaults
+            return [entry], DeviceDefaults(circuitpython=None, micropython=None)
+
+        def fake_build(device_entry, deploy_mode=None):  # noqa: ARG001
+            captured["deploy_mode"] = deploy_mode
+            return fake
+
+        monkeypatch.setattr(deploy_api, "load_device_registry", fake_load)
+        monkeypatch.setattr(deploy_api, "build_transport_for_entry", fake_build)
+        monkeypatch.setattr(
+            deploy_api, "resolve_library_source_dirs",
+            lambda project_dir, *, libraries_root, test_files: [lib_source],  # noqa: ARG005
+        )
+
+        session = deploy_api.deploy_project(
+            project_dir=project, device_id=entry.identifier,
+            workspace_root=root,
+        )
+        try:
+            assert captured["deploy_mode"] == "flash"
+        finally:
+            session.shutdown()
+
 
 class TestDeployProjectErrors:
     """deploy_project fails fast on misconfiguration."""

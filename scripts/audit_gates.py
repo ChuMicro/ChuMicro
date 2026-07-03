@@ -133,60 +133,6 @@ def _scenario(label: str, ok: bool, evidence: str) -> Result:
 
 
 # ---------------------------------------------------------------------------
-# check_names: CHU001 (single-letter / abbreviation)
-# ---------------------------------------------------------------------------
-
-
-def audit_check_names_single_letter() -> Result:
-    with _tmp_dir("names1") as workdir:
-        bad = workdir / "bad.py"
-        bad.write_text("def setup() -> int:\n    x = 1\n    return x\n")
-        result = _python(str(SCRIPTS_DIR / "check_names.py"), str(bad))
-    output = result.stdout + result.stderr
-    fired = result.returncode != 0 and "CHU001" in output
-    return _scenario("check_names CHU001 (single-letter)", fired, output.strip())
-
-
-def audit_check_names_abbreviation() -> Result:
-    with _tmp_dir("names2") as workdir:
-        bad = workdir / "bad.py"
-        bad.write_text(
-            "def setup() -> bytearray:\n"
-            "    buf = bytearray(8)\n"
-            "    return buf\n"
-        )
-        result = _python(str(SCRIPTS_DIR / "check_names.py"), str(bad))
-    output = result.stdout + result.stderr
-    fired = result.returncode != 0 and "CHU001" in output and "buf" in output
-    return _scenario("check_names CHU001 (abbreviation)", fired, output.strip())
-
-
-# ---------------------------------------------------------------------------
-# check_whitespace: CHU002 / CHU004
-# ---------------------------------------------------------------------------
-
-
-def audit_check_whitespace_no_trailing_newline() -> Result:
-    with _tmp_dir("ws1") as workdir:
-        bad = workdir / "bad.py"
-        bad.write_text("value = 1")  # no trailing newline at all
-        result = _python(str(SCRIPTS_DIR / "check_whitespace.py"), str(bad))
-    output = result.stdout + result.stderr
-    fired = result.returncode != 0 and "CHU002" in output
-    return _scenario("check_whitespace CHU002 (no final newline)", fired, output.strip())
-
-
-def audit_check_whitespace_trailing_space() -> Result:
-    with _tmp_dir("ws2") as workdir:
-        bad = workdir / "bad.py"
-        bad.write_text("value = 1  \n")  # trailing whitespace
-        result = _python(str(SCRIPTS_DIR / "check_whitespace.py"), str(bad))
-    output = result.stdout + result.stderr
-    fired = result.returncode != 0 and "CHU004" in output
-    return _scenario("check_whitespace CHU004 (trailing whitespace)", fired, output.strip())
-
-
-# ---------------------------------------------------------------------------
 # ruff lint: F401 unused import
 # ---------------------------------------------------------------------------
 
@@ -545,10 +491,6 @@ covers the libraries/* + support/test_harness/ absolute-imports rule."""
 
 
 SCENARIOS: list = [
-    audit_check_names_single_letter,
-    audit_check_names_abbreviation,
-    audit_check_whitespace_no_trailing_newline,
-    audit_check_whitespace_trailing_space,
     audit_ruff_unused_import,
     audit_ruff_clean_passes,
     audit_ruff_tid252_libraries_src_fails,

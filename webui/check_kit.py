@@ -7,7 +7,7 @@ Run: `python3 -m webui.check_kit`  (exit 0 = green). Covers:
      client only when `live=True`;
   3. `content_key` is stable for identical content and differs for different content;
   4. a full session round-trip — an SSE client connects, a `/push` reload reaches it, a
-     `/submit` writes the sink, and `/canvas` serves the current page.
+     `/selection` post writes the sink, and `/canvas` serves the current page.
 """
 from __future__ import annotations
 
@@ -106,18 +106,10 @@ def _session():
             reader.join(6)
             _check("session/reload-received", res["hit"], f"err={res['err']} lines={res['lines']}")
 
-            # /submit writes the sink (latest wins)
-            req = urllib.request.Request(f"{base}/submit", data=b'{"verdict":"keep"}',
+            # the picker posts /selection to the canvas sink (latest wins)
+            req = urllib.request.Request(f"{base}/selection", data=b"picked-x",
                                          headers={"Content-Type": "application/json"}, method="POST")
             with urllib.request.urlopen(req, timeout=5) as resp:
-                _check("session/submit-ok", resp.status == 200)
-            with open(server.sink) as handle:
-                _check("session/sink-written", handle.read() == '{"verdict":"keep"}')
-
-            # the canvas hosts ANY surface — the picker posts /selection, the review viewer /answers
-            req2 = urllib.request.Request(f"{base}/selection", data=b"picked-x",
-                                          headers={"Content-Type": "application/json"}, method="POST")
-            with urllib.request.urlopen(req2, timeout=5) as resp:
                 _check("session/selection-ok", resp.status == 200)
             with open(server.sink) as handle:
                 _check("session/selection-sink", handle.read() == "picked-x")

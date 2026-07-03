@@ -137,10 +137,6 @@ def main(argv: list[str] | None = None) -> int:
         "--tag", default=os.environ.get("TAG", ""),
         help="Experimental tag (default: $TAG environment variable).",
     )
-    parser.add_argument(
-        "--skip-release-check", action="store_true",
-        help="Skip the gh-release source-archive check (for tests).",
-    )
     args = parser.parse_args(argv)
 
     if not args.tag:
@@ -150,8 +146,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         parsed = _parse_tag(args.tag)
         located = _locate_package(parsed["library_name"])
-        if not args.skip_release_check:
-            _check_preconditions(args.tag, parsed)
+        _check_preconditions(args.tag, parsed)
     except PromoteValidationError as error:
         print(f"::error::{error}", file=sys.stderr)
         return 1

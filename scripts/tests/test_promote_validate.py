@@ -181,10 +181,16 @@ class TestMain:
         """A valid tag + present package emits all expected key=value lines."""
         (fake_root / "libraries" / "timing").mkdir()
         monkeypatch.delenv("GITHUB_OUTPUT", raising=False)
+        monkeypatch.setattr(
+            promote_validate, "_tag_exists",
+            lambda tag: tag.endswith("-experimental"),
+        )
+        monkeypatch.setattr(
+            promote_validate, "_release_has_source_archive", lambda *_a: True,
+        )
 
         result = promote_validate.main([
             "--tag", "chumicro-timing-v1.0.0-experimental",
-            "--skip-release-check",
         ])
 
         assert result == 0
@@ -209,10 +215,16 @@ class TestMain:
 
         github_output = tmp_path / "github_output.txt"
         monkeypatch.setenv("GITHUB_OUTPUT", str(github_output))
+        monkeypatch.setattr(
+            promote_validate, "_tag_exists",
+            lambda tag: tag.endswith("-experimental"),
+        )
+        monkeypatch.setattr(
+            promote_validate, "_release_has_source_archive", lambda *_a: True,
+        )
 
         result = promote_validate.main([
             "--tag", "chumicro-timing-v1.0.0-experimental",
-            "--skip-release-check",
         ])
 
         assert result == 0
@@ -228,7 +240,6 @@ class TestMain:
 
         result = promote_validate.main([
             "--tag", "chumicro-timing-v1.0.0",
-            "--skip-release-check",
         ])
 
         assert result == 1
@@ -245,7 +256,6 @@ class TestMain:
 
         result = promote_validate.main([
             "--tag", "chumicro-nonexistent-v1.0.0-experimental",
-            "--skip-release-check",
         ])
 
         assert result == 1
@@ -261,8 +271,15 @@ class TestMain:
         (fake_root / "libraries" / "timing").mkdir()
         monkeypatch.delenv("GITHUB_OUTPUT", raising=False)
         monkeypatch.setenv("TAG", "chumicro-timing-v2.0.0-experimental")
+        monkeypatch.setattr(
+            promote_validate, "_tag_exists",
+            lambda tag: tag.endswith("-experimental"),
+        )
+        monkeypatch.setattr(
+            promote_validate, "_release_has_source_archive", lambda *_a: True,
+        )
 
-        result = promote_validate.main(["--skip-release-check"])
+        result = promote_validate.main([])
 
         assert result == 0
         assert "version=2.0.0" in capsys.readouterr().out

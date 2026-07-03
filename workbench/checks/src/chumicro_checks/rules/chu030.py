@@ -28,8 +28,6 @@ Forbidden imports:
 - ``chumicro_workspace.import_graph``
 - ``chumicro_workspace.device_orchestration``
 - ``chumicro_workspace.device_runner``
-- ``chumicro_pytest_device.test_runner`` (now retired; previous home)
-- ``chumicro_pytest_device.concurrent_runner`` (now retired; previous home)
 
 Allowed imports (in addition to the stdlib):
 
@@ -76,10 +74,6 @@ _FORBIDDEN_PREFIXES: tuple[tuple[str, str], ...] = (
     ("chumicro_workspace.device_runner",
      "chumicro_workspace.deploy_api.deploy_project "
      "(DeployedProject wraps DeviceBootstrapRunner)"),
-    ("chumicro_pytest_device.test_runner",
-     "chumicro_workspace.deploy_api.deploy_project"),
-    ("chumicro_pytest_device.concurrent_runner",
-     "chumicro_workspace.deploy_api.deploy_project"),
 )
 
 

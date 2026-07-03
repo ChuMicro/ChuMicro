@@ -409,6 +409,7 @@ class TestBuildCircupZips:
         package_dir.mkdir(parents=True)
         (package_dir / "__init__.py").write_text("# init")
         (package_dir / "core.py").write_text("# core")
+        _write_bundle_manifest(package_dir, ["__init__.py", "core.py"])
 
         # circuitpython-10.x-mpy/: CircuitPython .mpy bytecode.
         cp_mpy_dir = bundle_dir / CP_MPY_FOLDER / "chumicro_example"
@@ -435,6 +436,7 @@ class TestBuildCircupZips:
         package_dir = bundle_dir / "chumicro_example"
         package_dir.mkdir(parents=True)
         (package_dir / "__init__.py").write_text("# init")
+        _write_bundle_manifest(package_dir, ["__init__.py"])
 
         cp_mpy_dir = bundle_dir / CP_MPY_FOLDER / "chumicro_example"
         cp_mpy_dir.mkdir(parents=True)
@@ -459,6 +461,8 @@ class TestBuildCircupZips:
         package_dir = bundle_dir / "chumicro_example"
         package_dir.mkdir(parents=True)
         (package_dir / "__init__.py").write_text("# init")
+        (package_dir / "core.py").write_text("# core")
+        _write_bundle_manifest(package_dir, ["__init__.py", "core.py"])
 
         cp_mpy_dir = bundle_dir / CP_MPY_FOLDER / "chumicro_example"
         cp_mpy_dir.mkdir(parents=True)
@@ -484,6 +488,7 @@ class TestBuildCircupZips:
         package_dir = bundle_dir / "chumicro_example"
         package_dir.mkdir(parents=True)
         (package_dir / "__init__.py").write_text("# init")
+        _write_bundle_manifest(package_dir, ["__init__.py"])
 
         # Only MicroPython mpy6/ present — no circuitpython-10.x-mpy/ folder.
         mp_mpy_dir = bundle_dir / "mpy6" / "chumicro_example"
@@ -512,6 +517,10 @@ class TestBuildCircupZips:
             '__chumicro_data_files__ = ("_ca_bundle.der",)\n',
         )
         (package_dir / "_ca_bundle.der").write_bytes(b"\x30\x82der")
+        _write_bundle_manifest(
+            package_dir, ["__init__.py", "_ca_bundle.py"],
+            data_relpaths=["_ca_bundle.der"],
+        )
 
         build_circup_zips(
             bundle_dir, output_dir, "ChuMicro-Bundle", date_tag="20260101",
@@ -532,6 +541,10 @@ class TestBuildCircupZips:
         package_dir = bundle_dir / "chumicro_example"
         package_dir.mkdir(parents=True)
         (package_dir / "__init__.py").write_text("# init")
+        (package_dir / "_ca_bundle.der").write_bytes(b"\x30\x82der")
+        _write_bundle_manifest(
+            package_dir, ["__init__.py"], data_relpaths=["_ca_bundle.der"],
+        )
 
         cp_mpy_dir = bundle_dir / CP_MPY_FOLDER / "chumicro_example"
         cp_mpy_dir.mkdir(parents=True)

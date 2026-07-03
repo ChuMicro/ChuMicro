@@ -62,17 +62,6 @@ class TestForbiddenImports:
         assert "chumicro_deploy" in findings[0].message
         assert "chumicro_workspace.deploy_api" in findings[0].message
 
-    def test_pytest_device_test_runner_flagged(self, tmp_path: Path) -> None:
-        source = (
-            "from chumicro_pytest_device.test_runner import "
-            "build_transport_for_entry\n"
-            + _CLEAN_DRIVER
-        )
-        _stage_demo(tmp_path, "bad_demo", source)
-        findings = CHU030.check(tmp_path)
-        assert len(findings) == 1
-        assert "chumicro_pytest_device.test_runner" in findings[0].message
-
     def test_workspace_pipeline_flagged(self, tmp_path: Path) -> None:
         source = (
             "from chumicro_workspace.pipeline import compose_runtime_config\n"

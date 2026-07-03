@@ -12,10 +12,10 @@ hits `/push` each turn — cross-process via `push_to(port, event)`). The channe
 (Server-Sent Events): re-serve is push-only, SSE is exactly that, it is trivial over the
 stdlib server (hold the response open, write `data:` frames), auto-reconnects, and adds no
 dependency. Websockets are reserved for the day a surface needs the browser to stream signal
-*up* mid-page; SSE-down + POST-up (`/submit`, `/push`) covers everything turn-based until then.
+*up* mid-page; SSE-down + POST-up (`/selection`, `/push`) covers everything turn-based until then.
 
 Routes: GET /canvas (the current page) · GET /events (the SSE stream) · POST /push (the agent
-control endpoint → fans an event to every open tab) · POST /submit (write the sink, latest
+control endpoint → fans an event to every open tab) · POST /selection (write the sink, latest
 wins, + a confirm toast) · POST /shutdown (end the session). Pure stdlib.
 """
 from __future__ import annotations
@@ -99,8 +99,8 @@ class SessionServer:
                     except ValueError:
                         event = {}
                     return self._json({"ok": True, "clients": server.push(event)})
-                if path in ("/submit", "/selection", "/answers"):   # host ANY surface: picker
-                    with open(server.sink, "w") as handle:           # posts /selection, the review /answers
+                if path == "/selection":
+                    with open(server.sink, "w") as handle:
                         handle.write(raw)
                     server.submissions.append(raw)
                     server.push({"type": "toast", "text": "submitted", "kind": "good"})

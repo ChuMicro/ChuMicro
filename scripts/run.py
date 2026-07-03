@@ -1855,7 +1855,7 @@ def preflight(
             skipped_phases.append(label)
             continue
         parallel_phases.append(
-            (label, _preflight_phase_subprocess_factory(label, args)),
+            (label, _subcommand_phase_factory(label, args)),
         )
 
     # Print skip notices up-front so the user sees them before the
@@ -2318,10 +2318,6 @@ def _subcommand_phase_factory(
         return exit_code
 
     return run_phase
-
-
-# Backward-compatible alias kept for tests that monkeypatch this seam.
-_preflight_phase_subprocess_factory = _subcommand_phase_factory
 
 
 _PYTEST_RESULT_LINE = re.compile(

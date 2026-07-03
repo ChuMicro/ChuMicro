@@ -1835,7 +1835,7 @@ class TestPreflightParallelDispatch:
             return lambda sink: 0
 
         monkeypatch.setattr(
-            run, "_preflight_phase_subprocess_factory", capturing_factory,
+            run, "_subcommand_phase_factory", capturing_factory,
         )
         monkeypatch.setattr(
             run, "_preflight_run_parallel_phases",
@@ -1862,7 +1862,7 @@ class TestPreflightParallelDispatch:
             return lambda sink: 0
 
         monkeypatch.setattr(
-            run, "_preflight_phase_subprocess_factory", capturing_factory,
+            run, "_subcommand_phase_factory", capturing_factory,
         )
         monkeypatch.setattr(
             run, "_preflight_run_parallel_phases",

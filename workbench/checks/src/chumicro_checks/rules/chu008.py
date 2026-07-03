@@ -57,7 +57,6 @@ _TEMPLATE_ROOT_FILES: tuple[str, ...] = (
     "workspace.yml",
     "devices.yml",
     "chumicro-dev.toml",
-    "chumicro-dev-config.toml",
 )
 
 
