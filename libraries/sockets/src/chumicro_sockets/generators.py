@@ -20,9 +20,9 @@ The helpers operate on **duck-typed** inputs:
 
 * ``connect`` takes any object exposing the ``SocketConnector``
   surface (``state`` / ``socket`` / ``last_error`` / ``io_socket`` /
-  ``io_wants_read`` / ``io_wants_write`` / ``tick`` / ``cancel``) and
+  ``io_interest`` / ``tick`` / ``cancel``) and
   yields it directly, so the driving scheduler reads the connector's
-  own ``io_*`` progression through DNS / TCP / TLS / ready.
+  own interest progression through DNS / TCP / TLS / ready.
 * ``send_all`` / ``recv_until`` / ``recv_exact`` take any non-blocking
   socket exposing ``send`` / ``recv_into`` that raises
   ``OSError(EAGAIN)`` when it would block.  They yield small private
@@ -36,29 +36,38 @@ requested size.  Both reject non-positive sizes up front.
 
 import errno
 
+# Poll-interest bits for ``io_interest``; mirror ``chumicro_runner.IO_READ``
+# / ``IO_WRITE`` by value.  Held as literals rather than imported so the
+# sockets generator helpers stay runner-free (the wait protocol is
+# duck-typed, so it names no runner symbol).
+_IO_READ = 1
+_IO_WRITE = 2
+
 
 class _ReadWait:
-    """Private read-wait shape — ``io_socket`` + ``io_wants_read=True``."""
-
-    io_wants_read = True
+    """Private read-wait shape — ``io_socket`` + ``io_interest() == IO_READ``."""
 
     def __init__(self, sock: object) -> None:
         # Store the socket-ish object as-is; the runner unwraps any
         # ``.sock`` adapter wrapper to the registrable pollable at the
         # poller before handing it to select.poll.
         self.io_socket = sock
+
+    def io_interest(self, now_ms: int) -> int:  # noqa: ARG002 (wait protocol)
+        return _IO_READ
 
 
 class _WriteWait:
-    """Private write-wait shape — ``io_socket`` + ``io_wants_write=True``."""
-
-    io_wants_write = True
+    """Private write-wait shape — ``io_socket`` + ``io_interest() == IO_WRITE``."""
 
     def __init__(self, sock: object) -> None:
         # Store the socket-ish object as-is; the runner unwraps any
         # ``.sock`` adapter wrapper to the registrable pollable at the
         # poller before handing it to select.poll.
         self.io_socket = sock
+
+    def io_interest(self, now_ms: int) -> int:  # noqa: ARG002 (wait protocol)
+        return _IO_WRITE
 
 
 def connect(
@@ -70,8 +79,8 @@ def connect(
     """Drive *connector* across runner ticks; return its connected socket.
 
     Yields the connector itself on every tick so the wrapper reads
-    ``connector.io_socket`` / ``io_wants_read`` / ``io_wants_write``
-    directly — the connector's own attribute progression through
+    ``connector.io_socket`` / ``io_interest(now_ms)``
+    directly — the connector's own interest progression through
     DNS -> TCP -> (TLS) -> ready is what gates the ipoll
     registration.  Returns the connected, non-blocking socket via
     PEP 380 — call as ``sock = yield from connect(connector)``.
@@ -95,7 +104,7 @@ def connect(
     Args:
         connector: Any object exposing the ``SocketConnector``
             surface — ``state``, ``socket``, ``last_error``,
-            ``io_socket``, ``io_wants_read``, ``io_wants_write``,
+            ``io_socket``, ``io_interest(now_ms)``,
             ``tick(now_ms)``, ``cancel()``.  The real
             ``tcp_client_connector`` / ``tls_client_connector`` return
             such objects; ``FakeSocketConnector`` in

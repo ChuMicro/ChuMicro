@@ -41,6 +41,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 from chumicro_mqtt import MQTTClient, ProtocolState
+from chumicro_runner import IO_WRITE
 from chumicro_sockets import tcp_client_socket
 from chumicro_timing import ticks_ms
 
@@ -294,10 +295,10 @@ class TestRetainedMessages:
             retain=True,
         )
         # Drive until the QoS-0 PUBLISH has left the tx queue, then
-        # disconnect.  io_wants_write drops to False once handle()
-        # flushes the queued packet to the socket — far faster than a
-        # fixed wall-clock pad, and it actually confirms the write left.
-        assert _drive_until(publisher, lambda: not publisher.io_wants_write)
+        # disconnect.  Write interest drops once handle() flushes the
+        # queued packet to the socket — far faster than a fixed
+        # wall-clock pad, and it actually confirms the write left.
+        assert _drive_until(publisher, lambda: not (publisher.io_interest(ticks_ms()) & IO_WRITE))
         publisher.disconnect()
 
         # Fresh subscriber.
@@ -319,6 +320,6 @@ class TestRetainedMessages:
         cleaner.publish("chumicro-mqtt-test/retain", b"", qos=0, retain=True)
         # Flush the retained-clear PUBLISH the same way: wait for the tx
         # queue to drain rather than padding a fixed half second.
-        assert _drive_until(cleaner, lambda: not cleaner.io_wants_write)
+        assert _drive_until(cleaner, lambda: not (cleaner.io_interest(ticks_ms()) & IO_WRITE))
         cleaner.disconnect()
         subscriber.disconnect()

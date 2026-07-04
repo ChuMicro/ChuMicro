@@ -49,6 +49,12 @@ from chumicro_websockets._wire import (
 
 __all__ = ["WebSocketClient"]
 
+# Poll-interest bits for ``io_interest``; mirror ``chumicro_runner.IO_READ``
+# / ``IO_WRITE`` by value.  Held as literals rather than imported so the
+# stack takes no dependency edge on the runner (bring-your-own-scheduler).
+_IO_READ = 1
+_IO_WRITE = 2
+
 
 # ---------------------------------------------------------------------------
 # Connecting sub-states
@@ -79,7 +85,7 @@ class WebSocketClient(_BaseSession):
     non-blocking connect state machine.  The connector is a duck-typed
     object exposing ``state`` / ``socket`` / ``last_error`` attributes,
     ``tick(now_ms)`` / ``cancel()`` methods, and the runner-poll
-    surface ``io_socket`` / ``io_wants_read`` / ``io_wants_write`` /
+    surface ``io_socket`` / ``io_interest(now_ms)`` /
     ``next_deadline(now_ms)``.  Once the connector reports ``ready``,
     the promoted socket must expose the four-method TCP contract
     (``recv_into`` / ``send`` / ``close`` / ``setblocking``; full shape
@@ -316,22 +322,26 @@ class WebSocketClient(_BaseSession):
         """
         return self._connect_called and self.state != WebSocketState.CLOSED
 
-    def _connecting_wants_read(self) -> bool:
+    def _connecting_wants_read(self, now_ms) -> bool:
         """The client reads during the second handshake leg (waiting on
         the server's HTTP 101 response) and during AWAITING_TRANSPORT
         forwards the connector's read interest (TLS handshake rounds
         that consume inbound bytes)."""
         if self._connecting_phase == ConnectingPhase.AWAITING_TRANSPORT:
-            return self._connector.io_wants_read if self._connector is not None else False
+            if self._connector is None:
+                return False
+            return bool(self._connector.io_interest(now_ms) & _IO_READ)
         return self._connecting_phase == ConnectingPhase.RECEIVING_HANDSHAKE
 
-    def _connecting_wants_write(self) -> bool:
+    def _connecting_wants_write(self, now_ms) -> bool:
         """The client writes during the first handshake leg (sending the
         upgrade request bytes) and during AWAITING_TRANSPORT forwards
         the connector's write interest (TCP-connect / TLS-handshake
         phases that need writability)."""
         if self._connecting_phase == ConnectingPhase.AWAITING_TRANSPORT:
-            return self._connector.io_wants_write if self._connector is not None else False
+            if self._connector is None:
+                return False
+            return bool(self._connector.io_interest(now_ms) & _IO_WRITE)
         return self._connecting_phase == ConnectingPhase.SENDING_HANDSHAKE
 
     @property

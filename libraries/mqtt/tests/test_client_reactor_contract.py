@@ -1,4 +1,4 @@
-"""mqtt client: Runner reactor contract (io_socket / io_wants_* / next_deadline)."""
+"""mqtt client: Runner reactor contract (io_socket / io_interest / next_deadline)."""
 
 import select
 
@@ -10,16 +10,16 @@ from chumicro_mqtt.testing import (
     drive,
     new_client,
 )
-from chumicro_runner import Runner
+from chumicro_runner import IO_READ, IO_WRITE, Runner
 from chumicro_runner.testing import FakePoller
 from chumicro_sockets.testing import FakeSocket
 from chumicro_timing.testing import FakeTicks
 
 
 class TestRunnerReactorContract:
-    """``io_socket`` / ``io_wants_read`` / ``io_wants_write`` /
-    ``next_deadline`` let ``Runner.wait`` register the broker socket
-    and idle the loop until readiness or the next deadline fires."""
+    """``io_socket`` / ``io_interest`` / ``next_deadline`` let
+    ``Runner.wait`` register the broker socket and idle the loop until
+    readiness or the next deadline fires."""
 
     def test_io_socket_none_when_disconnected(self) -> None:
         sock = FakeSocket()
@@ -49,33 +49,35 @@ class TestRunnerReactorContract:
 
         assert client.io_socket is None
 
-    def test_io_wants_read_only_while_live(self) -> None:
+    def test_io_interest_read_only_while_live(self) -> None:
         sock = FakeSocket()
         sock.enqueue_recv(canned_connack_bytes(return_code=0))
         ticks = FakeTicks()
         client = new_client(sock, ticks)
-        assert client.io_wants_read is False  # DISCONNECTED
+        assert client.io_interest(ticks.ticks_ms()) == 0  # DISCONNECTED
 
         client.connect()
-        assert client.io_wants_read is True  # CONNECTING
+        # CONNECTING wants read; the queued CONNECT also wants write.
+        assert client.io_interest(ticks.ticks_ms()) == IO_READ | IO_WRITE
         drive(client, ticks, count=2)
-        assert client.io_wants_read is True  # CONNECTED
+        # CONNECTED, tx drained -> read only.
+        assert client.io_interest(ticks.ticks_ms()) == IO_READ
 
-    def test_io_wants_write_tracks_tx_queue(self) -> None:
+    def test_io_interest_write_tracks_tx_queue(self) -> None:
         sock = FakeSocket()
         ticks = FakeTicks()
         client = new_client(sock, ticks)
-        # DISCONNECTED + empty tx -> no.
-        assert client.io_wants_write is False
+        # DISCONNECTED + empty tx -> no interest at all.
+        assert client.io_interest(ticks.ticks_ms()) == 0
 
         # connect() queues a CONNECT packet but does not drain yet.
         client.connect()
-        assert client.io_wants_write is True
+        assert client.io_interest(ticks.ticks_ms()) & IO_WRITE
 
         # Drain the CONNECT, receive CONNACK -> tx queue empty.
         sock.enqueue_recv(canned_connack_bytes(return_code=0))
         drive(client, ticks, count=2)
-        assert client.io_wants_write is False
+        assert not (client.io_interest(ticks.ticks_ms()) & IO_WRITE)
 
     def test_next_deadline_none_when_disconnected(self) -> None:
         sock = FakeSocket()
@@ -128,7 +130,7 @@ class TestRunnerReactorContract:
         runner.add(client)
         client.connect()
 
-        # First wait observes io_wants_write True (CONNECT queued), so
+        # First wait observes write interest (CONNECT queued), so
         # the poll set should request POLLIN|POLLOUT initially.
         runner.wait(ticks.ticks_ms())
         first_marks = poller.register_calls + poller.modify_calls
@@ -143,7 +145,7 @@ class TestRunnerReactorContract:
             runner.wait(now_ms)
             ticks.advance(1)
         assert client.state == ProtocolState.CONNECTED
-        assert client.io_wants_write is False  # tx queue drained
+        assert not (client.io_interest(ticks.ticks_ms()) & IO_WRITE)  # tx queue drained
 
         # CONNECTED + empty tx queue: only POLLIN remains.
         last_event = (

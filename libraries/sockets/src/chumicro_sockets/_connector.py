@@ -24,8 +24,8 @@ and skips the ``awaiting_tls`` phase entirely.  Each per-runtime
 adapter implements its own :meth:`tick` to encode that flow.
 
 This base class owns the runner-contract surface
-(``check`` / ``handle`` / ``io_socket`` / ``io_wants_read`` /
-``io_wants_write`` / ``next_deadline`` / ``cancel``) plus the
+(``check`` / ``handle`` / ``io_socket`` / ``io_interest`` /
+``next_deadline`` / ``cancel``) plus the
 terminal-state bookkeeping (``_fail`` close-on-failure, ``cancel``
 close-on-abort).
 """
@@ -38,6 +38,14 @@ STATE_READY = "ready"
 STATE_FAILED = "failed"
 
 _TERMINAL = (STATE_READY, STATE_FAILED)
+
+# Poll-interest bits for ``io_interest``; mirror ``chumicro_runner.IO_READ``
+# / ``IO_WRITE`` by value.  Held as literals rather than imported so the
+# sockets stack takes no dependency edge on the runner — a connector is
+# driven by a runner but must never import one (bring-your-own-scheduler / duck
+# typing).
+_IO_READ = 1
+_IO_WRITE = 2
 
 
 class SocketConnector:
@@ -88,15 +96,20 @@ class SocketConnector:
             return None
         return self.socket
 
-    @property
-    def io_wants_read(self):
-        """``True`` while a TLS handshake step might consume inbound bytes."""
-        return self.state == STATE_AWAITING_TLS
+    def io_interest(self, now_ms):  # noqa: ARG002 (runner contract)
+        """Poll-interest bitmask (``IO_READ`` / ``IO_WRITE``) for ``Runner.wait``.
 
-    @property
-    def io_wants_write(self):
-        """``True`` while a TCP-connect / TLS-handshake step needs writability."""
-        return self.state in (STATE_AWAITING_TCP, STATE_AWAITING_TLS)
+        Replaces the paired ``io_wants_read`` / ``io_wants_write`` bools.
+        A TLS-handshake step both may consume inbound bytes (read) and
+        needs writability (write); a bare TCP-connect step needs only
+        write; every other phase (DNS resolution, terminal) registers
+        nothing.
+        """
+        if self.state == STATE_AWAITING_TLS:
+            return _IO_READ | _IO_WRITE
+        if self.state == STATE_AWAITING_TCP:
+            return _IO_WRITE
+        return 0
 
     def check(self, now_ms):  # noqa: ARG002 (runner contract)
         """``True`` while the connector wants a ``handle()`` this tick.

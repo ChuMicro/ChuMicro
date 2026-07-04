@@ -20,6 +20,7 @@ from chumicro_requests.generators import (
     fetch,
 )
 from chumicro_requests.testing import canned_response, make_factory
+from chumicro_runner import IO_READ
 from chumicro_sockets.testing import FakeSocket, FakeSocketConnector
 from chumicro_test_harness import raises
 from chumicro_timing.testing import FakeTicks
@@ -134,5 +135,5 @@ def test_read_deadline_wait_exposes_socket_and_deadline():
     sock = FakeSocket()
     wait = _ReadDeadlineWait(sock, 1234)
     assert wait.io_socket is sock
-    assert wait.io_wants_read is True
+    assert wait.io_interest(0) == IO_READ
     assert wait.next_deadline(0) == 1234

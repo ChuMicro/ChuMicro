@@ -275,7 +275,7 @@ while True:
 
 Each call to `wait`:
 
-1. **Syncs the poll set** from each service's optional `io_socket` / `io_wants_read` / `io_wants_write` attributes (register newly wanted sockets, modify changed interest, unregister sockets that have gone away).
+1. **Syncs the poll set** from each service's optional `io_socket` and `io_interest(now_ms)` bitmask (register newly wanted sockets, modify changed interest, unregister sockets that have gone away).
 2. **Computes the timeout** as the minimum across every entry's `next_due_ms` and every service's optional `next_deadline(now_ms)`, minus `now_ms`.
 3. **Blocks** in `ipoll(timeout_ms)` over the registered sockets when any are registered; otherwise sleeps the timeout via `time.sleep_ms`.  Returns immediately if the nearest deadline has already passed or no deadline applies.
 
@@ -288,12 +288,11 @@ A service that owns a socket exposes the duck-typed attributes the runner reads 
 | Attribute | Type | Purpose |
 |---|---|---|
 | `io_socket` | pollable object or `None` | The socket whose readiness should wake the loop |
-| `io_wants_read` | `bool` | Register `POLLIN` interest |
-| `io_wants_write` | `bool` | Register `POLLOUT` interest |
+| `io_interest(now_ms)` | `int` | Bitmask OR-ing `IO_READ` (register `POLLIN`) and/or `IO_WRITE` (register `POLLOUT`); `0` registers nothing.  Import the bits from `chumicro_runner`. |
 | `next_deadline(now_ms)` | `int` or `None` | The next tick the service must run even if no I/O arrives (timeouts, keepalives) |
 | `io_error(now_ms, eventmask)` | callable | Notified when the registered socket reports `POLLERR` or `POLLHUP` |
 
-The runner re-reads these every `wait()`, so a service can flip `io_wants_read` ↔ `io_wants_write` (or set `io_socket = None`) between ticks and the poll set follows on the next call.  Reads are attribute lookups on already-allocated state — no per-loop allocation.
+The runner re-reads these every `wait()`, so a service can flip its `io_interest` between read and write (or set `io_socket = None`) between ticks and the poll set follows on the next call.  The one `io_interest` call replaces the earlier paired `io_wants_read` / `io_wants_write` booleans; the runner caches the bound method at `add`, so the sync stays allocation-free.
 
 Every networked library in ChuMicro (`wifi`, `sockets`, `requests`, `http_server`, `mqtt`, `websockets`) implements this protocol, which is why their handlers share fairly with the rest of your loop.
 

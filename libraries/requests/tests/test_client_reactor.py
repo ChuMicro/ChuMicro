@@ -1,5 +1,5 @@
-"""requests client: runner reactor contract — io_socket / io_wants_read /
-io_wants_write / next_deadline let Runner.wait register and sleep.
+"""requests client: runner reactor contract — io_socket / io_interest /
+next_deadline let Runner.wait register and sleep.
 """
 
 import select
@@ -11,16 +11,16 @@ from chumicro_requests.testing import (
     make_client,
     make_factory,
 )
-from chumicro_runner import Runner
+from chumicro_runner import IO_READ, IO_WRITE, Runner
 from chumicro_runner.testing import FakePoller
 from chumicro_sockets.testing import FakeSocket
 from chumicro_timing.testing import FakeTicks
 
 
 class TestRunnerReactorContract:
-    """``io_socket`` / ``io_wants_read`` / ``io_wants_write`` /
-    ``next_deadline`` let ``Runner.wait`` register the in-flight socket
-    and sleep until its readiness or the request timeout."""
+    """``io_socket`` / ``io_interest`` / ``next_deadline`` let
+    ``Runner.wait`` register the in-flight socket and sleep until its
+    readiness or the request timeout."""
 
     def test_io_socket_none_when_idle(self):
         client, _ticks, _ = make_client()
@@ -40,20 +40,19 @@ class TestRunnerReactorContract:
         # the property unwraps it for the poller.
         assert client.io_socket is socket
 
-    def test_io_wants_write_only_during_send(self):
+    def test_io_interest_write_only_during_send(self):
         socket = FakeSocket()
         # Stall the send so the request stays in SENDING.
         socket.enqueue_eagain_for_send(99)
         client, ticks, _ = make_client(socket_or_factory=socket)
-        assert client.io_wants_write is False
+        assert client.io_interest(ticks.ticks_ms()) == 0
 
         client.get("http://example.test/")
         client.handle(ticks.ticks_ms())  # drive into SENDING
 
-        assert client.io_wants_write is True
-        assert client.io_wants_read is False
+        assert client.io_interest(ticks.ticks_ms()) == IO_WRITE
 
-    def test_io_wants_read_only_during_receive(self):
+    def test_io_interest_read_only_during_receive(self):
         socket = FakeSocket()
         # Stall the recv so the request stays in RECEIVING.  An empty
         # recv queue with no queued eagains would be a clean peer close
@@ -66,8 +65,7 @@ class TestRunnerReactorContract:
         client.handle(ticks.ticks_ms())
         client.handle(ticks.ticks_ms())
 
-        assert client.io_wants_read is True
-        assert client.io_wants_write is False
+        assert client.io_interest(ticks.ticks_ms()) == IO_READ
 
     def test_next_deadline_none_when_idle(self):
         client, ticks, _ = make_client()
@@ -113,8 +111,7 @@ class TestRunnerReactorContract:
         drive_until_done(client, handle, ticks)
 
         assert client.io_socket is None
-        assert client.io_wants_read is False
-        assert client.io_wants_write is False
+        assert client.io_interest(ticks.ticks_ms()) == 0
         assert client.next_deadline(ticks.ticks_ms()) is None
 
     def test_runner_wait_registers_socket_for_writing_then_reading(self):

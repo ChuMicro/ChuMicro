@@ -48,6 +48,12 @@ from chumicro_websockets._wire import (
 #: sender that makes byte progress.
 _MAX_EMPTY_FRAGMENT_RUN = 64
 
+# Poll-interest bits for ``io_interest``; mirror ``chumicro_runner.IO_READ``
+# / ``IO_WRITE`` by value.  Held as literals rather than imported so the
+# stack takes no dependency edge on the runner (bring-your-own-scheduler).
+_IO_READ = 1
+_IO_WRITE = 2
+
 
 # ---------------------------------------------------------------------------
 # WhenOversized policy
@@ -286,43 +292,39 @@ class _BaseSession:
             return None
         return self._socket
 
-    @property
-    def io_wants_read(self):
-        """``True`` while ``handle()`` would drain inbound bytes.
+    def io_interest(self, now_ms):
+        """Poll-interest bitmask OR-ing ``_IO_READ`` / ``_IO_WRITE`` for
+        the runner to register with ``select.poll``.
 
-        OPEN and CLOSING always read (the peer may send a data frame,
-        a CLOSE, or a PING at any time).  CONNECTING delegates to
-        :meth:`_connecting_wants_read` because client and server
-        differ on which handshake leg is the read phase.
+        OPEN and CLOSING always read (the peer may send a data frame, a
+        CLOSE, or a PING at any time) and add write interest iff the tx
+        queue or the partial-send carryover is non-empty.  CONNECTING
+        delegates to :meth:`_connecting_wants_read` /
+        :meth:`_connecting_wants_write` because client and server differ
+        on which handshake leg is the read/write phase.  Any other state
+        (CLOSED) reports no interest (``0``).
         """
         if self.state in (WebSocketState.OPEN, WebSocketState.CLOSING):
-            return True
+            interest = _IO_READ
+            if bool(self._tx_queue) or self._tx_partial is not None:
+                interest |= _IO_WRITE
+            return interest
         if self.state == WebSocketState.CONNECTING:
-            return self._connecting_wants_read()
-        return False
+            interest = 0
+            if self._connecting_wants_read(now_ms):
+                interest |= _IO_READ
+            if self._connecting_wants_write(now_ms):
+                interest |= _IO_WRITE
+            return interest
+        return 0
 
-    @property
-    def io_wants_write(self):
-        """``True`` when there are outbound bytes to send.
-
-        OPEN / CLOSING want write iff the tx queue or the partial-send
-        carryover is non-empty.  CONNECTING delegates to
-        :meth:`_connecting_wants_write` because client and server
-        differ on which handshake leg is the write phase.
-        """
-        if self.state in (WebSocketState.OPEN, WebSocketState.CLOSING):
-            return bool(self._tx_queue) or self._tx_partial is not None
-        if self.state == WebSocketState.CONNECTING:
-            return self._connecting_wants_write()
-        return False
-
-    def _connecting_wants_read(self) -> bool:
+    def _connecting_wants_read(self, now_ms) -> bool:  # noqa: ARG002 - runner contract
         """Subclass hook: ``True`` if the CONNECTING phase reads from
         the peer right now.  Default ``False`` (the base does not know
         which side opens)."""
         return False
 
-    def _connecting_wants_write(self) -> bool:
+    def _connecting_wants_write(self, now_ms) -> bool:  # noqa: ARG002 - runner contract
         """Subclass hook: ``True`` if the CONNECTING phase writes to
         the peer right now.  Default ``False``."""
         return False

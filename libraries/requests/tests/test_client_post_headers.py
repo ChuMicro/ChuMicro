@@ -9,6 +9,7 @@ from chumicro_requests.testing import (
     drive_until_done,
     make_client,
 )
+from chumicro_runner import IO_READ
 from chumicro_sockets.testing import FakeSocket
 from chumicro_test_harness.assertions import raises
 
@@ -162,7 +163,7 @@ class TestRequestBodyRam:
         for _ in range(10):
             client.handle(ticks.ticks_ms())
             ticks.advance(1)
-        assert client.io_wants_read is True  # noqa: SLF001 - in RECEIVING
+        assert client.io_interest(ticks.ticks_ms()) == IO_READ  # in RECEIVING
         assert client._tx_buffer == b""  # noqa: SLF001 - released at send end
         assert client._tx_offset == 0  # noqa: SLF001
 

@@ -9,7 +9,7 @@ reach for the generator demo first.
 
 `EchoService` here writes it all out — a short state machine (`idle` →
 `connecting` → `sending` → `receiving` → `done`) plus the runner-ABI
-properties (`io_socket` / `io_wants_read` / `io_wants_write`) that
+surface (`io_socket` / `io_interest(now_ms)`) that
 let the runner sleep on socket-ready events instead of polling.  Only
 the wire-format logic in `_handle_sending` / `_handle_receiving`
 changes for a real custom protocol.
@@ -25,13 +25,13 @@ changes for a real custom protocol.
   `connector.tick(now_ms)` during `connecting` and inspects the
   connector's state inline.  Single runner entry, deterministic
   ordering, no sibling state polling between two entries.  The
-  service's `io_*` properties delegate to the connector during the
-  connect phase, then own the socket once `ready`.
+  service's `io_socket` / `io_interest` delegate to the connector during
+  the connect phase, then own the socket once `ready`.
 - **Service owns the socket after `ready`.**  `_handle_connecting`
   grabs `self._socket = self.connector.socket`; from then on the
-  service's own `io_socket` / `io_wants_read` / `io_wants_write`
+  service's own `io_socket` / `io_interest(now_ms)`
   describe the send and receive phases.  The connector goes inert
-  (terminal state, both want-bits False) and the runner ignores it.
+  (terminal state, `io_interest` returns `0`) and the runner ignores it.
 - **Real send loop, not a one-shot.**  `_handle_sending` loops on
   `send()` and tracks `_send_offset` so a short return — including
   `EAGAIN` — resumes from the right byte on the next wake.  The

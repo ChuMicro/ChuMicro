@@ -41,6 +41,13 @@ from chumicro_mqtt._wire import (
     encode_unsubscribe,
 )
 
+# Poll-interest bits for ``io_interest``; mirror ``chumicro_runner.IO_READ``
+# / ``IO_WRITE`` by value.  Held as literals rather than imported so the
+# MQTT client takes no dependency edge on the runner — a client runs
+# without a runner (bring-your-own-scheduler / duck typing).
+_IO_READ = 1
+_IO_WRITE = 2
+
 # ---------------------------------------------------------------------------
 # Connection state + pending-work tracking
 # ---------------------------------------------------------------------------
@@ -99,8 +106,6 @@ class _InboundWait:
     """
 
     io_socket = None
-    io_wants_read = False
-    io_wants_write = False
 
 
 _INBOUND_WAIT = _InboundWait()
@@ -1092,33 +1097,37 @@ class MQTTClient:
             return None
         return self._socket
 
-    @property
-    def io_wants_read(self):
-        """``True`` while ``handle()`` would consume inbound bytes.
+    def io_interest(self, now_ms):
+        """Poll-interest bitmask (``_IO_READ`` / ``_IO_WRITE``) for ``Runner.wait``.
+
+        The read bit is set while ``handle()`` would consume inbound
+        bytes; the write bit while outbound bytes are queued (or a
+        connect phase needs writability).
 
         Live MQTT connections (``CONNECTING`` / ``CONNECTED``) always
         want read — brokers send CONNACK / SUBACK / PUBACK / PINGRESP /
-        inbound PUBLISH at any time.  ``AWAITING_TRANSPORT`` forwards
-        to the connector (only the TLS-handshake phase consumes
-        inbound bytes).
+        inbound PUBLISH at any time.  ``AWAITING_TRANSPORT`` forwards to
+        the connector (only its TLS-handshake phase wants read; its
+        TCP-connect phase wants write).
+
+        A partial send (an EAGAIN mid-packet) has no queue entry but
+        still needs writability: without this the runner never registers
+        POLLOUT, the send never resumes, and the stalled packet trips
+        the send timeout instead.
         """
         if self.state == ProtocolState.AWAITING_TRANSPORT:
-            return self._connector.io_wants_read if self._connector is not None else False
-        return self.state in (ProtocolState.CONNECTING, ProtocolState.CONNECTED)
-
-    @property
-    def io_wants_write(self):
-        """``True`` when outbound bytes are queued (or a connect phase
-        needs writability)."""
-        if self.state == ProtocolState.AWAITING_TRANSPORT:
-            return self._connector.io_wants_write if self._connector is not None else False
-        if self.state in (ProtocolState.DISCONNECTED, ProtocolState.FAILED):
-            return False
-        # A partial send (an EAGAIN mid-packet) has no queue entry but
-        # still needs writability: without this the runner never
-        # registers POLLOUT, the send never resumes, and the stalled
-        # packet trips the send timeout instead.
-        return len(self._tx_queue) > 0 or self._partial_send is not None
+            if self._connector is None:
+                return 0
+            connector_interest = self._connector.io_interest(now_ms)
+            return (connector_interest & _IO_READ) | (connector_interest & _IO_WRITE)
+        interest = 0
+        if self.state in (ProtocolState.CONNECTING, ProtocolState.CONNECTED):
+            interest |= _IO_READ
+        if self.state not in (ProtocolState.DISCONNECTED, ProtocolState.FAILED) and (
+            len(self._tx_queue) > 0 or self._partial_send is not None
+        ):
+            interest |= _IO_WRITE
+        return interest
 
     def io_error(self, now_ms, eventmask):  # noqa: ARG002 - runner contract uses now_ms
         """Runner hook: POLLERR / POLLHUP surfaced on the registered socket.

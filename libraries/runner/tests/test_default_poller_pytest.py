@@ -21,7 +21,7 @@ import os
 import select
 
 import pytest
-from chumicro_runner import Runner
+from chumicro_runner import IO_READ, IO_WRITE, Runner
 from chumicro_runner.core import _SelectPollAdapter
 from chumicro_runner.testing import FakePoller
 from chumicro_timing.testing import FakeTicks
@@ -33,8 +33,16 @@ class _PipeService:
 
     def __init__(self, read_fd: int) -> None:
         self.io_socket = read_fd
-        self.io_wants_read = True
-        self.io_wants_write = False
+        self.wants_read = True
+        self.wants_write = False
+
+    def io_interest(self, now_ms: int) -> int:
+        interest = 0
+        if self.wants_read:
+            interest |= IO_READ
+        if self.wants_write:
+            interest |= IO_WRITE
+        return interest
 
     def check(self, now_ms: int) -> bool:
         return False
@@ -83,7 +91,7 @@ def test_wait_default_adapter_register_modify_unregister_cycle(pipe_fds) -> None
 
     runner.wait(0)  # register
 
-    service.io_wants_write = True
+    service.wants_write = True
     runner.wait(0)  # modify (POLLIN | POLLOUT)
 
     service.io_socket = None

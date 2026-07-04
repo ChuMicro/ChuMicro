@@ -10,7 +10,7 @@ from chumicro_http_server import (
     parse_charset,
 )
 from chumicro_http_server.testing import FakeListener
-from chumicro_runner import Runner
+from chumicro_runner import IO_READ, IO_WRITE, Runner
 from chumicro_runner.testing import FakePoller
 from chumicro_sockets.testing import FakeSocket
 from chumicro_timing.testing import FakeTicks
@@ -170,11 +170,11 @@ class TestParseCharset:
 
 
 class TestRunnerReactorContract:
-    """``io_socket`` / ``io_wants_read`` / ``io_wants_write`` /
-    ``next_deadline`` let ``Runner.wait`` register the listener socket
-    and idle the loop until accept readiness or the earliest in-flight
-    connection deadline.  In-flight per-connection I/O is driven on the
-    periodic ``handle()`` tick, not via per-socket poll registration."""
+    """``io_socket`` / ``io_interest`` / ``next_deadline`` let
+    ``Runner.wait`` register the listener socket and idle the loop until
+    accept readiness or the earliest in-flight connection deadline.
+    In-flight per-connection I/O is driven on the periodic ``handle()``
+    tick, not via per-socket poll registration."""
 
     def test_io_socket_none_before_first_tick(self):
         """Listener is lazy-opened in handle()."""
@@ -189,17 +189,17 @@ class TestRunnerReactorContract:
         # property unwraps to that pollable OS-level socket.
         assert server.io_socket is server._listener
 
-    def test_io_wants_read_after_listener_open(self):
+    def test_io_interest_read_after_listener_open(self):
         server, ticks, _ = _make_server(sockets=[])
-        assert server.io_wants_read is False  # listener still None
+        assert server.io_interest(ticks.ticks_ms()) == 0  # listener still None
         server.handle(ticks.ticks_ms())
-        assert server.io_wants_read is True
+        assert server.io_interest(ticks.ticks_ms()) == IO_READ
 
-    def test_io_wants_write_is_always_false(self):
+    def test_io_interest_never_wants_write(self):
         """The listener is not a write target."""
         server, ticks, _ = _make_server(sockets=[])
         server.handle(ticks.ticks_ms())
-        assert server.io_wants_write is False
+        assert server.io_interest(ticks.ticks_ms()) & IO_WRITE == 0
 
     def test_next_deadline_none_with_no_in_flight_connections(self):
         server, ticks, _ = _make_server(sockets=[])

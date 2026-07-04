@@ -24,19 +24,27 @@ import gc
 import select
 import tracemalloc
 
-from chumicro_runner import Runner
+from chumicro_runner import IO_READ, IO_WRITE, Runner
 from chumicro_runner.testing import FakePoller
 from chumicro_timing.testing import FakeTicks
 
 
 class _StableService:
-    """Service with frozen ``io_*`` interest.  Mimics a connected client
+    """Service with frozen ``io_interest``.  Mimics a connected client
     that keeps wanting read for a long stretch."""
 
     def __init__(self, sock):
         self.io_socket = sock
-        self.io_wants_read = True
-        self.io_wants_write = False
+        self.wants_read = True
+        self.wants_write = False
+
+    def io_interest(self, now_ms):
+        interest = 0
+        if self.wants_read:
+            interest |= IO_READ
+        if self.wants_write:
+            interest |= IO_WRITE
+        return interest
 
     def check(self, now_ms):
         return False
@@ -46,7 +54,7 @@ class _StableService:
 
 
 class _FlappingService:
-    """Service whose ``io_wants_*`` flips every ``handle()`` call.
+    """Service whose ``io_interest`` flips read<->write every ``handle()``.
 
     Exercises the register / modify / unregister diff path so a leak in
     the registered-set dict or the ``_sync_poll_set`` housekeeping
@@ -55,17 +63,25 @@ class _FlappingService:
 
     def __init__(self, sock):
         self.io_socket = sock
-        self.io_wants_read = True
-        self.io_wants_write = False
+        self.wants_read = True
+        self.wants_write = False
         self._toggle = False
+
+    def io_interest(self, now_ms):
+        interest = 0
+        if self.wants_read:
+            interest |= IO_READ
+        if self.wants_write:
+            interest |= IO_WRITE
+        return interest
 
     def check(self, now_ms):
         return True
 
     def handle(self, now_ms):
         self._toggle = not self._toggle
-        self.io_wants_read = not self._toggle
-        self.io_wants_write = self._toggle
+        self.wants_read = not self._toggle
+        self.wants_write = self._toggle
 
 
 def _reset_poller_bookkeeping(poller):
@@ -132,7 +148,7 @@ class TestRunnerWaitNoLeakStable:
 
 
 class TestRunnerWaitNoLeakFlapping:
-    """A service flipping ``io_wants_read`` <-> ``io_wants_write`` every
+    """A service flipping its ``io_interest`` between read and write every
     tick exercises the register / modify path.  The sync should call
     ``poller.modify`` repeatedly but accumulate nothing."""
 
@@ -204,9 +220,9 @@ class TestPollSetRegistrationStaysBounded:
 
 
 class TestFakePollerObservedMaskMatchesService:
-    """Sanity check: when ``io_wants_read=True`` and
-    ``io_wants_write=False``, the FakePoller is asked to register the
-    socket with the POLLIN flag and nothing else."""
+    """Sanity check: when ``io_interest`` returns ``IO_READ`` only, the
+    FakePoller is asked to register the socket with the POLLIN flag and
+    nothing else."""
 
     def test_read_only_service_registers_pollin_only(self):
         ticks = FakeTicks()

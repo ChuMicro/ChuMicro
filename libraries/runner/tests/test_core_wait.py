@@ -49,7 +49,7 @@ def test_wait_default_poller_stays_unbuilt_when_no_socket() -> None:
 
 
 def test_wait_registers_service_socket() -> None:
-    """A service exposing io_socket + io_wants_read registers with POLLIN."""
+    """A service exposing io_socket + io_interest==IO_READ registers with POLLIN."""
     poller = FakePoller()
     runner = Runner(ticks=FakeTicks(), poller=poller)
     sock = object()
@@ -164,7 +164,7 @@ def test_wait_modifies_when_interest_changes() -> None:
     runner.wait(0)
     poller.register_calls.clear()
 
-    service.io_wants_write = True
+    service.wants_write = True
     runner.wait(0)
 
     expected = select.POLLIN | select.POLLOUT
@@ -229,7 +229,7 @@ def test_wait_swallows_valueerror_unregistering_closed_socket() -> None:
 
 
 def test_wait_unregisters_when_service_drops_to_no_interest() -> None:
-    """io_wants_read=False and io_wants_write=False unregisters even when io_socket is still set."""
+    """io_interest dropping to 0 unregisters even when io_socket is still set."""
     poller = FakePoller()
     runner = Runner(ticks=FakeTicks(), poller=poller)
     sock = object()
@@ -237,7 +237,7 @@ def test_wait_unregisters_when_service_drops_to_no_interest() -> None:
     runner.add(service, period_ms=100)
     runner.wait(0)
 
-    service.io_wants_read = False
+    service.wants_read = False
     runner.wait(0)
 
     assert sock in poller.unregister_calls

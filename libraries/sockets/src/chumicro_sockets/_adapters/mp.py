@@ -263,7 +263,11 @@ class _MpUDPWrapper:  # pragma: no cover - device only
         self.close = sock.close
         self.setblocking = sock.setblocking
         self.settimeout = sock.settimeout
-        self.getsockname = sock.getsockname
+        # Bare-metal MicroPython ports (rp2, esp32) have no
+        # getsockname (the unix build does, which is why the lanes
+        # can't catch its absence) — forward it only when present.
+        if hasattr(sock, "getsockname"):
+            self.getsockname = sock.getsockname
 
     def sendto(self, data, host, port):
         # MP's UDP ``sendto`` does not auto-resolve hostnames — passing

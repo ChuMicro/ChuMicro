@@ -9,6 +9,7 @@ adapters must satisfy — the observable surface is identical regardless
 of substrate.
 """
 
+from chumicro_runner import IO_READ, IO_WRITE
 from chumicro_sockets._connector import (
     STATE_AWAITING_DNS,
     STATE_AWAITING_TCP,
@@ -105,20 +106,18 @@ class TestFakeRunnerSurface:
         connector.tick(0)
         assert connector.check(0) is False
 
-    def test_io_wants_write_during_tcp_phase(self) -> None:
+    def test_io_interest_write_during_tcp_phase(self) -> None:
         connector = FakeSocketConnector(actions=["dns_ok"])
         connector.tick(0)
-        assert connector.io_wants_write is True
-        assert connector.io_wants_read is False
+        assert connector.io_interest(0) == IO_WRITE
 
-    def test_io_wants_read_and_write_during_tls_phase(self) -> None:
+    def test_io_interest_read_and_write_during_tls_phase(self) -> None:
         connector = FakeSocketConnector(
             tls=True, actions=["dns_ok", "tcp_ok"],
         )
         for _ in range(2):
             connector.tick(0)
-        assert connector.io_wants_read is True
-        assert connector.io_wants_write is True
+        assert connector.io_interest(0) == IO_READ | IO_WRITE
 
     def test_io_socket_is_live_socket_in_ready(self) -> None:
         # At ``ready`` the connector keeps its socket live, so the

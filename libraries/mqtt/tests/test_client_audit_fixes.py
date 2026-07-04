@@ -18,6 +18,7 @@ from chumicro_mqtt.testing import (
     drive,
     new_client,
 )
+from chumicro_runner import IO_READ, IO_WRITE
 from chumicro_sockets.testing import FakeSocket, FakeSocketConnector
 from chumicro_test_harness.assertions import raises
 from chumicro_timing.testing import FakeTicks
@@ -123,7 +124,7 @@ class TestReplayAndOverflow:
 
 
 class TestWritabilityAndCallbacks:
-    def test_io_wants_write_true_during_partial_send(self):
+    def test_io_interest_write_true_during_partial_send(self):
         sock = FakeSocket()
         ticks = FakeTicks()
         client = _connected_client(sock, ticks)
@@ -131,7 +132,8 @@ class TestWritabilityAndCallbacks:
         # Even with an empty queue, a partial send needs writability.
         while client._tx_queue:
             client._tx_queue.popleft()
-        assert client.io_wants_write is True
+        # CONNECTED always wants read; the partial send adds write.
+        assert client.io_interest(ticks.ticks_ms()) == IO_READ | IO_WRITE
 
     def test_disconnect_from_on_message_lands_disconnected(self):
         sock = FakeSocket()
