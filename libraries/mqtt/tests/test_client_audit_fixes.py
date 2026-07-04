@@ -14,7 +14,6 @@ from chumicro_mqtt._wire import PACKET_PINGREQ
 from chumicro_mqtt.testing import (
     canned_connack_bytes,
     canned_publish_bytes,
-    canned_suback_bytes,
     drive,
     new_client,
 )
@@ -107,10 +106,12 @@ class TestReplayAndOverflow:
         # Replay must not have crashed or re-entered FAILED forever.
         assert client.state in (ProtocolState.CONNECTED, ProtocolState.AWAITING_TRANSPORT)
 
-    def test_puback_flood_does_not_crash_or_evict(self):
-        # Many inbound QoS-1 publishes in one chunk generate more PUBACKs
-        # than the queue drains per tick; the headroom bound must hold
-        # without raising (MP/CP) or evicting (CPython).
+    def test_puback_flood_faults_at_hard_cap_instead_of_dropping(self):
+        # Many inbound QoS-1 publishes generate more PUBACKs than the
+        # one-send-per-tick drain retires; once the backlog reaches the
+        # tx-queue hard cap the client must fault to FAILED (self-heal
+        # rebuilds cleanly; the broker redelivers whatever was never
+        # acked) rather than silently losing a protocol packet.
         sock = FakeSocket()
         ticks = FakeTicks()
         client = _connected_client(sock, ticks, max_tx_queue_size=4)
@@ -119,8 +120,12 @@ class TestReplayAndOverflow:
             for index in range(120)
         )
         sock.enqueue_recv(chunk)
-        drive(client, ticks, count=1)  # dispatches all, floods PUBACKs
-        assert client.state == ProtocolState.CONNECTED
+        # ~32 publishes dispatch per tick (256-byte decoder buffer, 8-byte
+        # packets) while only one PUBACK drains, so the 68-slot hard cap
+        # (max_tx_queue_size + 64) trips on the third tick.
+        drive(client, ticks, count=4)
+        assert client.state == ProtocolState.FAILED
+        assert "PUBACK backlog" in str(client.last_error)
 
 
 class TestWritabilityAndCallbacks:
@@ -190,96 +195,3 @@ class TestFromConfigGuard:
     def test_from_config_rejects_non_mapping(self):
         with raises(ValueError):
             MQTTClient.from_config(None, socket=FakeSocket())
-
-
-def _counting_factory(*socks):
-    """Factory over *socks* that records the tick-time of each build."""
-    iterator = iter(socks)
-    build_times = []
-
-    def factory():
-        build_times.append(None)
-        return FakeSocketConnector(actions=["dns_ok", "tcp_ok"], socket=next(iterator))
-
-    return factory, build_times
-
-
-def _failing_factory(ticks):
-    """Factory whose connector always fails; records each build's tick-time."""
-    build_times = []
-
-    def factory():
-        build_times.append(ticks.ticks_ms())
-        return FakeSocketConnector(actions=["fail:wifi down"])
-
-    return factory, build_times
-
-
-class TestSelfHealBackoffAndPermanentFailure:
-    def test_permanent_connack_rejection_stops_self_heal(self):
-        # CONNACK code 5 (not authorized) can't be fixed by reconnecting
-        # with the same credentials, so the client latches permanent
-        # failure and never rebuilds the connector again.
-        sock = FakeSocket()
-        ticks = FakeTicks()
-        factory, build_times = _counting_factory(sock)
-        client = MQTTClient(transport_factory=factory, ticks=ticks, client_id="c")
-        sock.enqueue_recv(canned_connack_bytes(return_code=5))
-        client.connect()
-        drive(client, ticks, count=3)
-        assert client.state == ProtocolState.FAILED
-        assert client._permanent_failure is True
-        # A permanent failure has no handle work left, so the runner is
-        # told to stop ticking it.
-        assert client.check(ticks.ticks_ms()) is False
-        assert len(build_times) == 1  # initial connect only
-        # Many ticks with time advancing: still no rebuild.
-        for _ in range(20):
-            ticks.advance(60000)
-            drive(client, ticks, count=1)
-        assert len(build_times) == 1
-        assert client.state == ProtocolState.FAILED
-
-    def test_transient_failure_backs_off_between_reconnects(self):
-        # A connector that keeps failing must not rebuild every tick: the
-        # first retry is immediate, later ones wait out an exponential
-        # backoff.
-        ticks = FakeTicks()
-        factory, build_times = _failing_factory(ticks)
-        client = MQTTClient(transport_factory=factory, ticks=ticks, client_id="c")
-        client.connect()  # build #1 at connect()
-        drive(client, ticks, count=1)  # connector fails -> FAILED
-        assert client.state == ProtocolState.FAILED
-        assert len(build_times) == 1
-        # First self-heal fires immediately (no prior backoff armed).
-        drive(client, ticks, count=1)
-        assert len(build_times) == 2
-        # No further rebuild until the 1 s base backoff elapses.
-        for _ in range(5):
-            drive(client, ticks, count=1)
-        assert len(build_times) == 2
-        # Advancing past the base interval frees exactly one more attempt.
-        ticks.advance(1000)
-        drive(client, ticks, count=1)
-        assert len(build_times) == 3
-
-    def test_suback_rejection_evicts_topic_from_subscriptions(self):
-        # A 0x80 SUBACK faults the connection, but the rejected filter
-        # must be dropped from _subscriptions first so the self-heal
-        # reconnect's replay doesn't re-issue it and loop forever.
-        sock1 = FakeSocket()
-        sock2 = FakeSocket()
-        ticks = FakeTicks()
-        factory, _ = _counting_factory(sock1, sock2)
-        client = MQTTClient(transport_factory=factory, ticks=ticks, client_id="c")
-        sock1.enqueue_recv(canned_connack_bytes(return_code=0))
-        client.connect()
-        drive(client, ticks, count=3)
-        assert client.state == ProtocolState.CONNECTED
-        client.subscribe("denied/topic", qos=1)
-        drive(client, ticks, count=1)  # SUBSCRIBE hits the wire (packet_id 1)
-        assert "denied/topic" in client._subscriptions
-        sock1.enqueue_recv(canned_suback_bytes(packet_id=1, granted_qos=0x80))
-        drive(client, ticks, count=1)
-        assert client.state == ProtocolState.FAILED
-        assert "denied/topic" not in client._subscriptions

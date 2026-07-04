@@ -199,13 +199,18 @@ class TestMultiTickConnectYield:
         client.handle(ticks.ticks_ms())
         assert client.io_socket is sock
         assert client.io_interest(ticks.ticks_ms()) == IO_WRITE
-        assert client.next_deadline(0) is None
+        # The connector reports no deadline of its own; the client's
+        # transport-attempt deadline (ack_timeout_seconds after
+        # connect(), armed at tick 0 here) flows through so the runner
+        # parks with a bound instead of forever.
+        assert client.next_deadline(0) == 5000
 
     def test_next_deadline_clamps_to_now_while_awaiting_dns(self) -> None:
         """Before the connector builds a socket (awaiting_dns, io_socket
         None), next_deadline returns now_ms so Runner.wait ticks the
         connector forward instead of sleeping; once dns_ok produces a
-        pollable, the connector's deadline (None here) flows through."""
+        pollable, the transport-attempt deadline flows through (the
+        connector itself reports none)."""
         sock = FakeSocket()
         ticks = FakeTicks()
 
@@ -225,7 +230,7 @@ class TestMultiTickConnectYield:
         assert client.io_socket is None
         assert client.next_deadline(777) == 777
         # One tick drives dns_ok; the connector now exposes its socket
-        # and the clamp lifts (the connector reports no deadline of its own).
+        # and the clamp lifts to the transport-attempt deadline.
         client.handle(ticks.ticks_ms())
         assert client.io_socket is sock
-        assert client.next_deadline(777) is None
+        assert client.next_deadline(777) == 5000
