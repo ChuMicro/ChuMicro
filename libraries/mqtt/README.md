@@ -58,8 +58,8 @@ QoS 0 + QoS 1 are implemented; QoS 2 raises `UnsupportedQoSError`.  Last-will, r
 |---|---|
 | `MQTTClient(socket, *, client_id, ...)` | Main client.  Runner-shaped (`check(now_ms)`/`handle(now_ms)`).  Topics go on the wire exactly as written. |
 | `client.publish(topic, payload, *, qos=0, retain=False, on_publish=None)` | QoS 0 or 1.  Before CONNECTED, the `when_disconnected` policy applies (queue / raise). |
-| `client.subscribe(topic, qos=0, *, on_subscribe=None)` | Single-topic subscribe (requires CONNECTED). |
-| `client.unsubscribe(topic, *, on_unsubscribe=None)` | Mirror of `subscribe`. |
+| `client.subscribe(topic, qos=0, *, on_subscribe=None)` | Single-topic subscribe. A declaration valid in any state — call it before `connect()` and the first CONNACK sends it (self-heal reconnects replay it); `on_subscribe` fires once on the granting SUBACK. |
+| `client.unsubscribe(topic, *, on_unsubscribe=None)` | Mirror of `subscribe`: retracts the declaration in any state, sends UNSUBSCRIBE when CONNECTED. |
 | `client.on_message` + `topic_matches(topic, pattern)` | Inbound routing: the catch-all callback plus the public wildcard matcher (`+` one segment, `#` trailing tail). |
 | `client.connect() / .disconnect()` | Lifecycle. |
 | `MQTTClient(..., when_disconnected="queue", pre_connect_queue_size=8)` | Pre-connect publish policy (`"queue"` / `"raise"`) and the queue bound. |
