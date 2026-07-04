@@ -1,16 +1,21 @@
 """Check for API breaking changes and cross-reference with VERSION bumps.
 
 Uses ``griffe check`` to compare the current public API of each changed
-publishable package against its last release tag.  Fails when breakages
-are detected but the VERSION bump level is insufficient (Decision 0020).
-Covers both ``libraries/`` and ``workbench/`` (Decision 0032: same
-release lifecycle, same pre-merge gate).
+publishable package against its last release tag.  When breakages are
+detected but the VERSION bump level is insufficient (Decision 0020), the
+outcome depends on ``PUBLISHED``: pre-publication it prints a WARNING and
+passes (Decision 0092: breaking changes are free until first
+publication); once published it FAILs.  Covers both ``libraries/`` and
+``workbench/`` (Decision 0032: same release lifecycle, same pre-merge
+gate).
 
 Usage::
 
     python scripts/check_api.py [--base BASE_REF]
 
-Exits 0 when all changed packages pass.  Exits 1 on enforcement failure.
+Exits 0 when all changed packages pass — pre-publication an under-bumped
+break warns but still passes.  Exits 1 on enforcement failure once
+``PUBLISHED`` is set.
 """
 
 from __future__ import annotations
@@ -34,6 +39,16 @@ from repo_layout import (
 #: ``scripts/run.py``'s ``--package-workers`` for the same fan-out
 #: shape).
 _DEFAULT_GRIFFE_PARALLEL_WORKERS = 4
+
+#: Whether this workspace has made its first external publication.  Until it
+#: has, the SemVer breakage-vs-bump gate below is *warn-only* (Decision 0092:
+#: no backwards compatibility before publication — a breaking change is free
+#: because every consumer is migrated in the same commit).  griffe still runs
+#: and reports every breakage; only the FAIL-vs-WARNING reporting turns on
+#: this flag.  Flip to ``True`` at first publication to restore the hard gate
+#: — Decision 0020's original compatibility contract, which Decision 0092
+#: self-retires into at that point.
+PUBLISHED = False
 
 
 def _parse_version(version: str) -> tuple[int, int, int] | None:
@@ -79,8 +94,9 @@ def _check_one_package(
     Pure-function shape so the caller can fan out across a thread
     pool without worrying about shared state — every parameter
     derived from the args, every output collected into the returned
-    list.  ``ok`` is ``False`` when breakages exist and the VERSION
-    bump level is insufficient.
+    list.  ``ok`` is ``False`` only when breakages exist, the VERSION
+    bump level is insufficient, *and* ``PUBLISHED`` is set; before
+    publication such a case warns and returns ``True`` (Decision 0092).
 
     Args:
         parent_dir: ``"libraries"`` or ``"workbench"``.
@@ -180,20 +196,39 @@ def _check_one_package(
             output_lines.append(f"     {griffe_output}")
         return True, output_lines
 
-    # Insufficient bump.
+    # Insufficient bump for the detected breakages.  The griffe detection
+    # above is untouched; only the *reporting* forks on PUBLISHED.
     bump_label = bump or "unchanged"
+    required = (
+        "at least a minor bump (0.x package)"
+        if is_pre_1
+        else "a major bump (1.x+ package)"
+    )
+
+    if PUBLISHED:
+        # Published: the SemVer gate is a hard compatibility contract.
+        output_lines.append(
+            f"FAIL: {package_label} — API breakages detected but VERSION "
+            f"bump is only '{bump_label}'.",
+        )
+        if griffe_output:
+            for line in griffe_output.splitlines():
+                output_lines.append(f"     {line}")
+        output_lines.append(f"     Requires {required}.")
+        return False, output_lines
+
+    # Pre-publication (Decision 0092): breaking changes are free — break and
+    # migrate every consumer in the same commit.  Name the break and the bump
+    # it *would* require at publication, but do not block.
     output_lines.append(
-        f"FAIL: {package_label} — API breakages detected but VERSION "
-        f"bump is only '{bump_label}'.",
+        f"WARNING: {package_label} — API breakages detected but VERSION "
+        f"bump is only '{bump_label}'; at publication this would require "
+        f"{required} (Decision 0092: warn-only until first publication).",
     )
     if griffe_output:
         for line in griffe_output.splitlines():
             output_lines.append(f"     {line}")
-    if is_pre_1:
-        output_lines.append("     Requires at least a minor bump (0.x package).")
-    else:
-        output_lines.append("     Requires a major bump (1.x+ package).")
-    return False, output_lines
+    return True, output_lines
 
 
 def _check(base_reference: str, *, max_workers: int) -> int:

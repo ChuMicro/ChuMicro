@@ -2,8 +2,8 @@
 
 Status: `accepted`
 Date: `2026-04-05`
-Summary: `griffe check` runs per-library in CI; breakage + patch bump fails; breakage + minor bump passes on 0.x libraries (SemVer 0.x semantics) and fails on 1.x+.
-Related: Decision 0002 (per-library version files)
+Summary: `griffe check` detects per-library API breakages in CI; pre-publication an under-bumped break is warn-only (Decision 0092), becoming a hard fail at first publication.
+Related: Decision 0002 (per-library version files), Decision 0092 (no backwards compat before publication)
 
 ## Context
 
@@ -23,16 +23,22 @@ A new script `scripts/check_api.py` runs for each library with release-relevant 
 
 1. Finds the latest git tag matching `<lib_name>-v*` for the library.
 2. Runs `griffe check` comparing current source against that tag.
-3. Cross-references the result with the VERSION bump level:
-   - **Breakages detected + patch bump** → FAIL (needs minor or major bump).
-   - **Breakages detected + minor bump** → PASS for `0.x` libraries (SemVer `0.x` semantics: minor = breaking). FAIL for `1.x+` libraries (needs major bump).
+3. Classifies the result against the VERSION bump level:
    - **Breakages detected + major bump** → PASS (breakage acknowledged).
+   - **Breakages detected + minor bump** → PASS for `0.x` libraries (SemVer `0.x` semantics: minor = breaking); insufficient for `1.x+` libraries (needs major).
+   - **Breakages detected + insufficient bump** (patch on any library, or minor on a `1.x+` library) → the publication-gated outcome below.
    - **No breakages** → any bump level is fine.
    - **No previous tag** → skip (first release, nothing to compare against).
 
+### Warn-only until first publication
+
+Nothing in this workspace has been published, and Decision 0092 makes breaking changes free before first publication (break and migrate every consumer in one commit). So an under-bumped breakage is *reported, not blocked*: `check_api.py` prints a WARNING naming the break and the bump it would require at publication, then exits 0. The griffe detection is untouched — this is a reporting-level demotion, not a weakened detector.
+
+A single module-level `PUBLISHED` flag in `check_api.py` gates this. While `False`, the insufficient-bump case warns and passes. Flipping it to `True` at first publication restores the hard failure: an insufficient bump for a detected breakage exits non-zero and reddens the required CI check. Decision 0092 self-retires at that point, and a real SemVer/deprecation policy takes over.
+
 ### SemVer 0.x semantics
 
-Before `1.0.0`, SemVer allows breaking changes in minor releases. The check enforces this: for `0.x` libraries, a minor bump is sufficient to acknowledge breakages. Once a library reaches `1.0.0`, major bumps are required for breaking changes.
+Before `1.0.0`, SemVer allows breaking changes in minor releases. The thresholds reflect this: for `0.x` libraries a minor bump acknowledges breakages and a patch bump does not; once a library reaches `1.0.0`, major bumps are required for breaking changes. Pre-publication these thresholds are reported as warnings rather than enforced (see above); they become enforcing once `PUBLISHED` is set.
 
 ### CI integration
 
@@ -49,6 +55,6 @@ The check is also available locally via `python scripts/run.py check-api`.
 ## Consequences
 
 - Contributors get early feedback on whether their VERSION bump matches their changes.
-- Reduces the risk of accidentally publishing breaking changes as patch releases.
+- Reduces the risk of accidentally publishing breaking changes as patch releases (once `PUBLISHED` re-arms the gate at first publication).
 - `griffe` becomes an explicit dev dependency (added to `requirements-dev.txt`).
-- The check is advisory for `0.x` libraries in the sense that a minor bump satisfies it.
+- Pre-publication the check is advisory throughout — warn-only per Decision 0092 — so no breakage can redden CI; at publication it becomes enforcing, and even then a minor bump satisfies it for `0.x` libraries.

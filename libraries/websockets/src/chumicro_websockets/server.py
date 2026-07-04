@@ -215,6 +215,7 @@ class Connection(_BaseSession):
         self._handshake_send_buffer = encode_server_handshake_response(
             self._handshake_request_parser.client_key,
         )
+        self._handshake_send_view = memoryview(self._handshake_send_buffer)
         self._handshake_send_offset = 0
         self.request_path = self._handshake_request_parser.path
         self.request_headers = self._handshake_request_parser.headers
@@ -228,6 +229,7 @@ class Connection(_BaseSession):
     def _enter_open(self, now_ms: int) -> None:
         """Transition from sending-response to OPEN; fire user callback."""
         self._handshake_request_parser = None
+        self._handshake_send_view = None
         self._handshake_send_buffer = None
         self._handshake_phase = None
         self._handshake_deadline_ticks = None

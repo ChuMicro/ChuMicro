@@ -843,7 +843,16 @@ class FrameParser:
     ):
         self._max_payload_bytes = max_payload_bytes
         self.state = FrameParseState.READING_HEADER
-        self._buffer = bytearray()
+        # Fixed 8-byte scratch for the header / len16 / len64 / mask
+        # fields (8 is the largest, the 64-bit length).  ``_header_len``
+        # is the write cursor tracking how much of the current field has
+        # arrived across feeds; each field slice-assigns from offset 0
+        # and reads back only its own width.  Replaces a per-field
+        # ``self._buffer = bytearray()`` reallocation — mirrors the
+        # steady ``_payload_buffer`` treatment below.
+        self._header_scratch = bytearray(8)
+        self._header_view = memoryview(self._header_scratch)
+        self._header_len = 0
         self.fin = False
         self.rsv = 0
         self.opcode = 0
@@ -898,7 +907,7 @@ class FrameParser:
         unreferenced and GC-eligible.  Clears tier-3 drain state.
         """
         self.state = FrameParseState.READING_HEADER
-        self._buffer = bytearray()
+        self._header_len = 0
         self.fin = False
         self.rsv = 0
         self.opcode = 0
@@ -1000,37 +1009,43 @@ class FrameParser:
                 field_size = 8
             else:  # READING_MASK
                 field_size = 4
-            need = field_size - len(self._buffer)
+            header_len = self._header_len
+            need = field_size - header_len
             take = need if need <= remaining else remaining
-            self._buffer.extend(chunk_view[cursor : cursor + take])
+            self._header_scratch[header_len : header_len + take] = (
+                chunk_view[cursor : cursor + take]
+            )
+            header_len += take
+            self._header_len = header_len
             consumed += take
-            # Completion compares the buffer against the field's total
-            # size, not the bytes-still-missing at loop entry: when a
-            # field trickles in across feeds (mask split 2/1/1, a 64-bit
-            # length split 4/2), ``need`` shrinks each pass, so testing
-            # against it would accept a short field and desync the stream.
-            if len(self._buffer) < field_size:
+            # Completion compares the accumulated length against the
+            # field's total size, not the bytes-still-missing at loop
+            # entry: when a field trickles in across feeds (mask split
+            # 2/1/1, a 64-bit length split 4/2), ``need`` shrinks each
+            # pass, so testing against it would accept a short field and
+            # desync the stream.
+            if header_len < field_size:
                 continue
 
             if state == FrameParseState.READING_HEADER:
                 self._dispatch_header()
             elif state == FrameParseState.READING_LEN16:
-                self.reported_length = struct.unpack("!H", self._buffer)[0]
-                self._buffer = bytearray()
+                self.reported_length = struct.unpack("!H", self._header_view[:2])[0]
+                self._header_len = 0
                 self._after_length()
             elif state == FrameParseState.READING_LEN64:
-                self.reported_length = struct.unpack("!Q", self._buffer)[0]
-                self._buffer = bytearray()
+                self.reported_length = struct.unpack("!Q", self._header_view)[0]
+                self._header_len = 0
                 self._after_length()
             else:  # READING_MASK
-                self._mask_key = bytes(self._buffer)
-                self._buffer = bytearray()
+                self._mask_key = bytes(self._header_view[:4])
+                self._header_len = 0
                 self._after_mask()
         return consumed
 
     def _dispatch_header(self) -> None:
-        first_byte = self._buffer[0]
-        second_byte = self._buffer[1]
+        first_byte = self._header_scratch[0]
+        second_byte = self._header_scratch[1]
         self.fin = bool(first_byte & 0x80)
         self.rsv = (first_byte >> 4) & 0x07
         self.opcode = first_byte & 0x0F
@@ -1049,7 +1064,7 @@ class FrameParser:
         elif self.opcode not in DATA_OPCODES:
             raise self._fail(f"reserved opcode 0x{self.opcode:x}")
 
-        self._buffer = bytearray()
+        self._header_len = 0
         if length_marker < 126:
             self.reported_length = length_marker
             self._after_length()
@@ -1195,8 +1210,13 @@ def encode_frame(
         parts.extend(mask)
         payload_offset = len(parts)
         parts.extend(payload)
-        for index in range(payload_length):
+        # Hand-indexed: range(payload_length) would allocate an iterator
+        # on every outbound client-masked frame — the outbound twin of
+        # the WS-1 inbound unmask loop.
+        index = 0
+        while index < payload_length:
             parts[payload_offset + index] ^= mask[index & 3]
+            index += 1
     else:
         parts.extend(payload)
     return parts

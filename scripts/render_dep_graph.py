@@ -86,7 +86,6 @@ NODES: dict[str, tuple[int, int]] = {
     # Standalone cluster (top-left of foundation row, no edges).
     "compat":      (40,   640),
     "logging":     (220,  640),
-    "events":      (400,  640),
 }
 
 # Workbench layout: composers on top, primitives below, lint-only
@@ -211,7 +210,7 @@ def render_svg(
     strict: dict[str, list[str]],
     di: dict[str, list[str]],
     nodes: dict[str, tuple[int, int]] = NODES,
-    standalone: set[str] = frozenset({"compat", "logging", "events"}),
+    standalone: set[str] = frozenset({"compat", "logging"}),
     node_w: int = NODE_W,
     node_h: int = NODE_H,
     canvas_w: int = CANVAS_W,

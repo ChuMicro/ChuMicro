@@ -78,13 +78,25 @@ def log_transition(old_state, new_state):
 wifi.on_state_change(log_transition)
 ```
 
-A common pattern is to wire this into `chumicro-events`' bus so other services can react:
+Fan-out needs no bus: every registered callback fires on each transition, so each interested component registers its own `on_state_change` handler directly.
 
 ```python
-from chumicro_events import EventBus
+wifi.on_state_change(status_led.on_wifi_state)
+wifi.on_state_change(telemetry.on_wifi_state)
+```
 
-bus = EventBus()
-wifi.on_state_change(bus.publisher("wifi.state"))
+To let a generator task *block* on a one-time transition — the first time the link comes up, say — bridge the callback to a `Signal` and `yield from wait_for(...)` (both in `chumicro_runner.generators`; see the `chumicro-runner` guide) rather than polling `wifi.state`:
+
+```python
+from chumicro_runner.generators import Signal, wait_for
+
+link_up = Signal()
+wifi.on_state_change(lambda old, new: link_up.set(new))
+
+
+def main_run():
+    yield from wait_for(link_up)   # suspend until the next wifi transition
+    ...
 ```
 
 ## Configuration

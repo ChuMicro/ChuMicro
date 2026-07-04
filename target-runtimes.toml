@@ -50,6 +50,11 @@ circuitpython = "120K"
 msgpack = { circuitpython = "136K" }
 wifi = { circuitpython = "136K" }
 sockets = { circuitpython = "160K" }
+# runner's measured CP min was exactly the 120K default (zero margin,
+# co-set by test_generator.py); it ran green at default for several
+# preflights, then flickered into a 320-byte load OOM on 2026-07-04 —
+# the non-monotonic boundary behavior above, not growth.  min+16K.
+runner = { circuitpython = "136K" }
 http_server = { micropython = "208K", circuitpython = "192K" }
 requests = { micropython = "224K", circuitpython = "224K" }
 mqtt = { micropython = "256K", circuitpython = "256K" }

@@ -293,6 +293,7 @@ class WebSocketClient(_BaseSession):
             client_key,
             extra_headers=self._pending_handshake_extra_headers,
         )
+        self._handshake_send_view = memoryview(self._handshake_send_buffer)
         self._handshake_send_offset = 0
         self._handshake_response_parser = HandshakeResponseParser(
             derive_accept_key(client_key),
@@ -511,6 +512,7 @@ class WebSocketClient(_BaseSession):
             return
         if self._handshake_response_parser.state == HandshakeParseState.DONE:
             self._post_handshake_carry = self._handshake_response_parser.leftover
+            self._handshake_send_view = None
             self._handshake_send_buffer = None
             self._handshake_response_parser = None
             self._connecting_phase = None

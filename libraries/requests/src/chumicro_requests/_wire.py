@@ -581,8 +581,8 @@ class ResponseParser:
                 the steady-state body buffer.  When provided (typically
                 by ``HttpClient`` so the buffer survives across requests),
                 the parser writes into it for any response that fits
-                and rebinds to an exact-size replacement when a write
-                would overflow.  When ``None``, the parser starts with
+                and rebinds to a geometrically-grown replacement when a
+                write would overflow.  When ``None``, the parser starts with
                 an empty bytearray and grows on demand — fine for
                 one-shot users, but per-request churn for long-lived
                 clients.
@@ -608,7 +608,7 @@ class ResponseParser:
         # (standalone use).  Either way ``_body`` is the active
         # buffer and ``_body_view`` the cached memoryview.  When a
         # write would exceed current capacity, _absorb_body_chunk
-        # rebinds ``_body`` to an exact-size one-shot replacement
+        # rebinds ``_body`` to a geometrically-grown replacement
         # that gets freed when the parser is dereferenced.
         if body_buffer is not None:
             if body_buffer_view is None:
@@ -618,7 +618,7 @@ class ResponseParser:
             self._body_capacity = len(body_buffer)
         else:
             # No external buffer: start empty and let the absorb path
-            # grow the body on demand (exact-size replacement per
+            # grow the body on demand (geometric growth in
             # _absorb_body_chunk).  Long-lived consumers pass
             # body_buffer instead so the steady-state buffer is
             # reused across requests instead of reallocated per-parser.
@@ -921,11 +921,11 @@ class ResponseParser:
             # Pre-allocate the full body once when it won't fit the
             # steady-state buffer.  content_length is already capped at
             # max_body_bytes above, so this allocation is bounded — and
-            # it replaces the quadratic path where _absorb_body_chunk
-            # rebinds an exact-size buffer per recv chunk (a 64 KiB body
-            # fed in 512 B chunks was 126 reallocations and ~4 MiB of
-            # copying).  A response that fits the caller's body_buffer
-            # still completes with no per-request allocation.
+            # it spares this known-length path even the amortized copies
+            # the chunked / length-unknown grow path pays (which doubles
+            # capacity, O(log n) reallocations, O(n) total copy).  A
+            # response that fits the caller's body_buffer still completes
+            # with no per-request allocation.
             if content_length > self._body_capacity:
                 self._body = bytearray(content_length)
                 self._body_view = memoryview(self._body)
@@ -1099,11 +1099,12 @@ class ResponseParser:
 
         Slice-assign when the write fits inside the current body
         capacity (the steady-state path when an external buffer was
-        supplied), or one-shot replace with an exact-size bytearray
-        when it doesn't (chunked / length-unknown grow path).
-        Never uses ``bytearray.extend`` — that's "alloc bigger +
-        memcpy old + memcpy new + free old" on CP / MP, three
-        allocations per logical write.
+        supplied), or grow the buffer geometrically and copy into the
+        replacement when it doesn't (chunked / length-unknown grow
+        path, where no total is known to pre-size against).  Never uses
+        ``bytearray.extend`` — that's "alloc bigger + memcpy old +
+        memcpy new + free old" on CP / MP, three allocations per
+        logical write.
         """
         chunk_len = len(chunk)
         write_offset = self._body_write_offset
@@ -1112,23 +1113,32 @@ class ResponseParser:
             # Fits inside current capacity — in-place slice-assign.
             self._body[write_offset:end_offset] = chunk
         else:
-            # Grow path: allocate exact-size replacement, copy existing
-            # data, write the new chunk.  Skips the extend reallocation
-            # cost; the caller's external buffer (if any) is left
-            # untouched because we rebind ``_body`` to the one-shot.
-            new_body = bytearray(end_offset)
+            # Grow path (chunked / length-unknown framing — no total is
+            # known up front, so the Content-Length pre-alloc can't
+            # apply).  Grow capacity geometrically: double the current
+            # buffer, floored at what this write needs and capped at
+            # ``max_body_bytes``.  Exact-size regrowth per overflow
+            # re-copied the whole body-so-far on every chunk (O(n^2)
+            # over a streamed body); doubling amortizes total copying to
+            # O(n).  Capacity past ``_body_write_offset`` is never read
+            # (``body`` slices to the write offset), so the bytes handed
+            # back are byte-for-byte unchanged.  The caller's external
+            # buffer (if any) is left untouched — ``_body`` rebinds to
+            # the replacement.
+            new_capacity = len(self._body_view) * 2
+            if new_capacity < end_offset:
+                new_capacity = end_offset
+            if new_capacity > self._max_body_bytes:
+                # Callers cap end_offset at max_body_bytes before we run,
+                # so clamping here only trims the doubling's overshoot; it
+                # never drops below what this write needs.
+                new_capacity = self._max_body_bytes
+            new_body = bytearray(new_capacity)
             new_body[:write_offset] = self._body_view[:write_offset]
             new_body[write_offset:end_offset] = chunk
             self._body = new_body
             self._body_view = memoryview(new_body)
-            if self._body_capacity == 0:
-                # Track the grown size so the next grow check works.
-                self._body_capacity = end_offset
-            else:
-                # External buffer was overflowed — replaced for this
-                # request only; the caller's ``body_buffer`` reference
-                # is unchanged and gets used again next request.
-                self._body_capacity = end_offset
+            self._body_capacity = new_capacity
         self._body_write_offset = end_offset
 
     def _fail(self, error):
