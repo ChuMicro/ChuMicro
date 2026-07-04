@@ -32,17 +32,25 @@ circuitpython = "120K"
 # production claims: the unix lane runs UNSTRIPPED sources while
 # real-board deploys strip docstrings/comments (Decision 0090), and
 # every library's bare production import measures <= 44 KB at the
-# default budget.  Slimming these suites back under the defaults is
-# tracked follow-up work.
+# default budget.  The 2026-07-03 slimming pass split the oversized
+# suites and re-measured every entry; what remains is floor, not fat.
 # CP budgets are whole-file (CircuitPython's production default is
 # flash mode, which execs whole files; the CP unix build also FATALs
 # on long chunk sequences — revisit at the next CP toolchain bump), so
 # they carry the whole-file compile transient MP's chunked lane avoids.
+# Override convention: measured suite minimum + one 16K step of
+# margin (heap layout flickers non-monotonically across 16K
+# boundaries — observed on mqtt 2026-07-03).  runner carries no
+# override: post-split it fits both defaults exactly (CP min == the
+# 120K default, zero margin — deliberate; growth should trip the
+# gate).  Irreducible floors, measured 2026-07-03: mqtt/requests
+# import chains alone need 192K/144K, and single tests legitimately
+# hold big buffers (mqtt bounded-recv 16K+8K, requests 7-hop
+# redirect chain) — those floors cannot be split away.
 msgpack = { circuitpython = "136K" }
 wifi = { circuitpython = "136K" }
 sockets = { circuitpython = "160K" }
-runner = { micropython = "320K", circuitpython = "320K" }
 http_server = { micropython = "208K", circuitpython = "192K" }
-requests = { micropython = "256K", circuitpython = "224K" }
-mqtt = { micropython = "320K", circuitpython = "256K" }
-websockets = { micropython = "320K", circuitpython = "224K" }
+requests = { micropython = "224K", circuitpython = "224K" }
+mqtt = { micropython = "256K", circuitpython = "256K" }
+websockets = { micropython = "240K", circuitpython = "208K" }

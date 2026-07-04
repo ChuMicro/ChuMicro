@@ -34,9 +34,14 @@ flash — the "RAM-only dev loop" gap (H37).  Measured reference: a real Pico W 
 
 - Import-time and test-time OOM against board-shaped heaps now fails preflight instead of the
   first flash deploy.
-- The override table doubles as a debt register: runner (320K — `test_core.py` alone),
-  mqtt (320K/256K), websockets (320K/224K), requests (256K/224K) carry suites too heavy for the
-  boards they target; slimming them back toward the defaults is tracked follow-up work.
+- The override table doubles as a debt register.  The 2026-07-03 slimming pass paid the
+  file-shaped debt down: runner's override is gone entirely (its 1971-line `test_core.py`,
+  split six ways, now fits both defaults), mqtt dropped to 256K/256K, websockets to
+  240K/208K, requests to 224K/224K.  The remaining entries are measured floors, not fat —
+  import chains alone need 192K (mqtt) / 144K (requests), and single tests legitimately
+  hold large buffers (mqtt's bounded-recv drain, requests' 7-hop redirect chain).  Override
+  convention: measured suite minimum plus one 16K step (heap layout flickers
+  non-monotonically across 16K boundaries).
 - Rejected: keeping the host heap and relying on real-board sweeps (opt-in, hardware-gated —
   exactly how H37 stayed invisible), and a single flat budget for both runtimes (CP frees 37%
   less than MP on identical hardware; one number would be wrong for both).
