@@ -328,7 +328,9 @@ class FakeSocketConnector:
     * ``"tcp_ok"`` — ``awaiting_tcp`` → ``awaiting_tls`` (if ``tls``)
       or ``ready``.
     * ``"tls_pending"`` — stay in ``awaiting_tls`` (simulates a
-      handshake round that wants more data).
+      handshake round that wants more data; narrows ``io_interest``
+      to read-only, matching the real connector after a
+      ``SSLWantReadError`` step).
     * ``"tls_ok"`` — ``awaiting_tls`` → ``ready``.
     * ``"fail:<message>"`` — transition to ``failed`` with the given
       message as ``last_error``.
@@ -362,6 +364,10 @@ class FakeSocketConnector:
         self.state = "awaiting_dns"
         self.socket: FakeSocket | None = None
         self.last_error: Exception | None = None
+        # Mirrors the real connector: read+write until the first
+        # handshake step names a direction ("tls_pending" narrows to
+        # read, the direction a real WantRead step records).
+        self._tls_interest = _IO_READ | _IO_WRITE
 
     @property
     def io_socket(self) -> object | None:
@@ -378,10 +384,11 @@ class FakeSocketConnector:
 
     def io_interest(self, now_ms: int) -> int:  # noqa: ARG002 (runner contract)
         """Poll-interest bitmask matching the real ``SocketConnector``:
-        TLS handshake wants read+write, TCP-connect wants write, other
-        phases register nothing."""
+        TLS handshake wants the direction the last step named
+        (read+write before the first step), TCP-connect wants write,
+        other phases register nothing."""
         if self.state == "awaiting_tls":
-            return _IO_READ | _IO_WRITE
+            return self._tls_interest
         if self.state == "awaiting_tcp":
             return _IO_WRITE
         return 0
@@ -422,6 +429,7 @@ class FakeSocketConnector:
                 self.state = "ready"
             return
         if action == "tls_pending" and self.state == "awaiting_tls":
+            self._tls_interest = _IO_READ
             return
         if action == "tls_ok" and self.state == "awaiting_tls":
             self.state = "ready"

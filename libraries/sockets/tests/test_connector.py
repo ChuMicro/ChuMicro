@@ -111,13 +111,28 @@ class TestFakeRunnerSurface:
         connector.tick(0)
         assert connector.io_interest(0) == IO_WRITE
 
-    def test_io_interest_read_and_write_during_tls_phase(self) -> None:
+    def test_io_interest_read_and_write_at_tls_phase_entry(self) -> None:
+        # Before the first handshake step names a direction, the
+        # connector doesn't know which way the handshake will block.
         connector = FakeSocketConnector(
             tls=True, actions=["dns_ok", "tcp_ok"],
         )
         for _ in range(2):
             connector.tick(0)
         assert connector.io_interest(0) == IO_READ | IO_WRITE
+
+    def test_io_interest_narrows_to_read_after_tls_pending(self) -> None:
+        # A pending handshake step (real connector: SSLWantReadError)
+        # drops WRITE interest — an always-writable connected socket
+        # would otherwise wake the poller every tick until the peer's
+        # handshake flight arrives.
+        connector = FakeSocketConnector(
+            tls=True, actions=["dns_ok", "tcp_ok", "tls_pending"],
+        )
+        for _ in range(3):
+            connector.tick(0)
+        assert connector.state == STATE_AWAITING_TLS
+        assert connector.io_interest(0) == IO_READ
 
     def test_io_socket_is_live_socket_in_ready(self) -> None:
         # At ``ready`` the connector keeps its socket live, so the

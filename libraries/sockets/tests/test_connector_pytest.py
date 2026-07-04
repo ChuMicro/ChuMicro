@@ -13,6 +13,7 @@ __chumicro_runtimes__ = ("cpython",)
 
 import select
 import socket
+import ssl
 
 import pytest
 from chumicro_runner import IO_READ, IO_WRITE
@@ -20,6 +21,7 @@ from chumicro_sockets import connector as make_connector
 from chumicro_sockets._connector import (
     STATE_AWAITING_DNS,
     STATE_AWAITING_TCP,
+    STATE_AWAITING_TLS,
     STATE_FAILED,
     STATE_READY,
 )
@@ -190,3 +192,51 @@ class TestCPythonTLSConnector:
         host, port = listener
         connector = make_connector(host, port, tls=True)
         assert connector.state == STATE_AWAITING_DNS
+
+    def test_handshake_want_signals_narrow_io_interest(self) -> None:
+        # Each SSLWant* names the one direction the handshake is
+        # blocked on; io_interest must track it so the poller parks
+        # instead of busy-waking on an always-writable socket.  Driven
+        # against a scripted handshake so the WantWrite leg — rare on a
+        # real loopback — is exercised deterministically.
+        from chumicro_sockets._adapters.cpython import _CPythonConnector
+
+        connector = _CPythonConnector("host.example", 443, tls=True, context=None)
+        connector.socket = _ScriptedHandshakeSocket(
+            [ssl.SSLWantReadError(), ssl.SSLWantWriteError()],
+        )
+        connector.state = STATE_AWAITING_TLS
+        assert connector.io_interest(0) == IO_READ | IO_WRITE
+        connector.tick(0)  # WantRead — narrow to read.
+        assert connector.state == STATE_AWAITING_TLS
+        assert connector.io_interest(0) == IO_READ
+        connector.tick(0)  # WantWrite — flip to write.
+        assert connector.state == STATE_AWAITING_TLS
+        assert connector.io_interest(0) == IO_WRITE
+        connector.tick(0)  # Handshake completes.
+        assert connector.state == STATE_READY
+
+
+class _ScriptedHandshakeSocket:
+    """do_handshake raises the next scripted signal, then succeeds.
+
+    Carries the no-op socket surface ``_CPythonTLSSocketWrapper``
+    binds at ready-promotion (``close`` / ``setblocking`` /
+    ``settimeout``).
+    """
+
+    def __init__(self, signals) -> None:
+        self._signals = list(signals)
+
+    def do_handshake(self) -> None:
+        if self._signals:
+            raise self._signals.pop(0)
+
+    def close(self) -> None:
+        pass
+
+    def setblocking(self, flag) -> None:
+        pass
+
+    def settimeout(self, seconds) -> None:
+        pass
