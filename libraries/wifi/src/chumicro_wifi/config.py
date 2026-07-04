@@ -29,9 +29,21 @@ class WifiConfig:
             defaults to 1 s.
         reconnect_backoff_max_ms: Cap on the exponential
             reconnect backoff.  Optional, defaults to 60 s.
-        reconnect_max: Maximum number of reconnect attempts before
-            entering ``FAILED``.  ``None`` (default) means
-            unlimited.
+        reconnect_max: Maximum number of consecutive failed attempts —
+            counting the initial connect plus every reconnect since the
+            last successful link — before the service enters the
+            terminal ``FAILED`` state.  ``None`` (default) means
+            unlimited: the service retries forever with capped backoff
+            and never gives up, which is what lets an unattended device
+            ride out an outage and re-establish the link with no board
+            restart.  Set a finite cap only when a caller wants
+            exhaustion to escalate (e.g. to a hardware watchdog reset or
+            deep-sleep) — ``FAILED`` is terminal, so nothing in the
+            service leaves it, and recovery then needs a board restart or
+            a fresh ``WifiService``.  Because the count includes the
+            initial connect, a low cap can fail permanently in the
+            power-restore race where the board boots faster than the AP.
+            Leave it ``None`` for always-on devices.
         power_save: Whether to leave the radio's power-save mode
             enabled.  ``False`` (default) disables power-save on
             backends that support it (Pi Pico W CYW43), and is

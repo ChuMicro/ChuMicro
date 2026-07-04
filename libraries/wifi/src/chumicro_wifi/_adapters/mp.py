@@ -240,7 +240,21 @@ class MpWifiAdapter(WifiAdapter):
         self._wlan.disconnect()
 
     def is_linked(self):
-        """``True`` while ``isconnected()`` reports an active association."""
+        """``True`` while ``isconnected()`` reports an active association.
+
+        Link-loss detection here is laggy, not instant, on both stacks.
+        ESP-IDF's ``isconnected()`` follows the STA connection status,
+        which only flips on the driver's
+        ``WIFI_EVENT_STA_DISCONNECTED`` — raised after a beacon-miss /
+        inactivity timeout (seconds) or a failed TX, not the instant an
+        AP disappears.  CYW43 is the same shape: ``isconnected()`` tracks
+        the cyw43 link-status callback, which is likewise beacon-loss
+        driven.  So a silently-dropped AP can keep reading ``True`` here
+        for seconds; a dependent's socket EIO / timeout is often the
+        earlier signal.  ``WifiService`` polls this every ``check()``
+        while CONNECTED, catching the drop as soon as the driver reports
+        it.
+        """
         return bool(self._wlan.isconnected())
 
     def ip(self):

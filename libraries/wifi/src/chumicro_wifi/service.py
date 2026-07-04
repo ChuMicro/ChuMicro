@@ -210,14 +210,28 @@ class WifiService:
     # --- internals ---------------------------------------------------
 
     def _attempt_connect(self, now_ms):
+        raised = False
         try:
             ok = self.adapter.connect(self._config)
         except Exception as error:  # noqa: BLE001 - adapter errors flow through last_error
             self.last_error = error
             ok = False
+            raised = True
 
         if ok:
             self._mark_connected()
+            return
+
+        if raised:
+            # connect() raised, so no join was dispatched — count a
+            # settled failure and back off, even on a non-blocking
+            # substrate.  Arming the in-flight poll here would wait out
+            # the whole connect_timeout_ms window on a link that never
+            # started coming up (e.g. ESP-IDF's transient
+            # ``OSError("Wifi Internal Error")`` thrown from
+            # ``wlan.connect()`` mid-reconnect), stalling the retry loop
+            # for that window instead of backing off promptly.
+            self._register_failed_attempt()
             return
 
         if not self.adapter.connect_blocks:

@@ -111,7 +111,7 @@ def main_run():
 | `connect_timeout_ms` | | `15_000` | Per-attempt connect deadline — a blocking wait on CircuitPython, the in-flight association poll window on MicroPython. |
 | `reconnect_backoff_start_ms` | | `1_000` | Initial reconnect delay. |
 | `reconnect_backoff_max_ms` | | `60_000` | Exponential-backoff cap. |
-| `reconnect_max` | | `None` (unlimited) | Attempts before entering `FAILED`. |
+| `reconnect_max` | | `None` (unlimited) | Consecutive failed attempts (initial connect + reconnects) before the terminal `FAILED` state. Leave `None` for always-on devices — see below. |
 | `power_save` | | `False` | Leave radio power-save on.  `False` disables it on Pi Pico W (CYW43); ignored on adapters without the knob. |
 
 ```toml
@@ -124,6 +124,10 @@ power_save = false                  # default; eliminates ~30-100 ms tick spikes
 ```
 
 The `power_save = false` default matters on Pi Pico W: the CYW43 chip's idle power-save mode introduces 30–100 ms tick stalls, which visibly stutter LED-blink rhythms and can break sub-second control loops.
+
+### `reconnect_max` and the never-restart guarantee
+
+Leaving `reconnect_max` at its `None` default is what lets an unattended device ride out an outage without a reboot: the supervisor retries forever with backoff capped at `reconnect_backoff_max_ms`, so a link that comes back after minutes, hours, or a whole-house power blip is re-established on its own. `FAILED` is a **terminal** state — nothing in the service leaves it — so set a finite `reconnect_max` only when a caller *wants* exhaustion to escalate (e.g. to a hardware watchdog reset or deep-sleep), and remember the count includes the initial connect: a low cap can fail permanently in the power-restore race where the board boots faster than the router. For always-on devices, keep it `None`.
 
 ## Runner integration
 
