@@ -13,7 +13,7 @@ from real silicon).  Residuals closed 2026-07-04: the FSKit
 recovery landed and the full four-board closing matrix went green; the io_interest
 TLS-handshake refinement shipped in sockets 0.17.1 (the connector narrows its
 ``awaiting_tls`` interest to the direction the last ``SSLWant*`` signal named); the
-watched question below stands for a re-pose now that the waves landed.  Eight-report adversarial
+watched question below was re-posed and closed 2026-07-04 — verdict KEEP.  Eight-report adversarial
 design campaign: API fitness (mqtt, rudiments), hot-path buffer audit, ADR drift audit,
 consumer angle (sister repo), DI cost measurement, and two independent design seats
 (greenfield + consumer-driven synthesis).  Every claim below is evidenced in
@@ -42,11 +42,17 @@ deadline wheel (pays allocations to speed an allocation-free ~30-op scan), 64-bi
 monotonic (defeats the no-bigint design), RTC/calendar in timing (ntp's job), custom
 codec over msgpack (RAM regression on CP-native builds).
 
-Watched question, deliberately not flipped now: the drift audit argues the generator
-substrate should have been the base service contract instead of `check`/`handle`
-(0051/0014 lock); the greenfield seat kept `check`/`handle` on evidence.  Resolution
-path: waves 1–2 shrink the two-shape overhead 0087 admits to; re-pose the question
-after they land, with fresh field data.
+Watched question — RESOLVED 2026-07-04.  The re-pose ran with post-wave field data and
+returned **KEEP** (check/handle stays the base contract; generators stay the convenience
+layer), with five explicit reopening criteria so the question is *closed*, not watched —
+see [`../reviews/2026-07-04-check-handle-generators-repose.md`](../reviews/2026-07-04-check-handle-generators-repose.md).
+Headline evidence: 43 sister-repo check/handle registrations vs zero app-code generator
+tasks (including the from-scratch Wave-4 template rewrite); the generator lane is a
+278-line client of the base contract, not a peer (a check/handle object *is* a valid
+wait token); per-task RAM at parity (544 vs 448 B on the MP unix port).  Future design
+passes cite the report instead of re-litigating.  Census by-catch: the six private wait
+shapes are Decision 0095's dropped second half (queued in next-up); the runner README's
+removed callable-registration section was fixed on closure.
 
 ## Waves (~42 pts total, dependency-ordered — consumer-synthesis §4)
 
@@ -77,3 +83,4 @@ contract, `Runner.run_until`, CHU029/031/032.  Numbering gap at 0050 (leave it).
 - [`2026-07-03-di-cost-measurement.md`](../reviews/2026-07-03-di-cost-measurement.md)
 - [`2026-07-03-greenfield-core-redesign.md`](../reviews/2026-07-03-greenfield-core-redesign.md)
 - [`2026-07-03-consumer-driven-design-synthesis.md`](../reviews/2026-07-03-consumer-driven-design-synthesis.md)
+- [`2026-07-04-check-handle-generators-repose.md`](../reviews/2026-07-04-check-handle-generators-repose.md)

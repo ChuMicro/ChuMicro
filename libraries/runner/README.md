@@ -193,17 +193,6 @@ class MotionDetector:
 runner.add(MotionDetector())
 ```
 
-### Callable-based (check function + handler)
-
-Pass a callable check function and a handler.  Both can be lambdas, bound methods, or regular functions:
-
-```python
-runner.add(
-    lambda now_ms: sensor.ready(),
-    handler=lambda now_ms: process(sensor.read()),
-)
-```
-
 ### Handler-only (no check, fires every tick)
 
 Pass just a handler with no service check:

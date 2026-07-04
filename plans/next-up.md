@@ -4,10 +4,11 @@
 
 ## Now
 
-- [ ] **check/handle-vs-generators re-pose — the last open thread of the realignment campaign.**  Field-data census + three-way verdict (flip / keep / reshape) in flight 2026-07-04; report lands in `plans/reviews/`.  Campaign record: [workstreams/core-design-realignment.md](workstreams/core-design-realignment.md) — everything else shipped (ADRs 0095–0099 accepted; sockets 0.17.1 closed the TLS-handshake `io_interest` residual 2026-07-04).
 - [ ] **Bench: swap the s2-cp board's USB cable before the next session** — four wedges in two days (2026-07-03/04) across three distinct failure modes while its three bench-mates logged zero; if a fifth wedge shows on the new cable, swap the board itself.
 
 ## Next
+
+- [ ] **Finish Decision 0095's second half: public homes for the read/write wait markers.**  0095 deferred `ReadWait`/`WriteWait` to 0098's wave, which never picked them up — the duck-typed wait protocol still lives as six private docstring-pinned copies across five files (`runner/_generator.py`, `runner/generators.py`, `sockets/generators.py` ×2, `requests/generators.py`, plus the two trivial `_InboundWait`s that can stay local).  ~1 KB hygiene pass; kills the last protocol-drift class the greenfield study flagged.  Surfaced by the 2026-07-04 re-pose census ([reviews/2026-07-04-check-handle-generators-repose.md](reviews/2026-07-04-check-handle-generators-repose.md) §4a.3).
 
 - [ ] **Wire `Runner(on_handler_error=...)` fault reporting into the demo apps + sister-repo flagship.**  Death *recording* shipped long ago (runner 0.14.0, `407700b7`: `handle.error` set on a raised body, re-raised by `run_until`; fire-and-forget deaths also count into `handler_errors` and reach the hook) — but no demo or template app wires the hook, which is why the 2026-07-03 websockets bake could still lose a generator death to a marker timeout.  One print-the-fault callback per app turns that into a one-line diagnosis.  Re-bake demos after.
 - [ ] **mqtt bloat review (direct read, no skill).**  Post-0099 measurement 2026-07-04: `client.py` 2008 + `_wire.py` 825 = 2833 lines vs the ~1043-line reference impl — still ~2.7× even after the pattern router + intact tier deletions.  Capability-paid-for size includes the two-tier decoder, multi-pending-response, backpressure-as-error, pre-connect queue, and self-heal; candidates to weigh: `from_config` plumbing, the `WhenOversized` policy shape, docstring weight.  Separate capability from fat before publication.
