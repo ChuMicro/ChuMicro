@@ -98,23 +98,16 @@ class TestNotConnectedGuards:
         with raises(MQTTBackpressureError):
             client.publish("c", b"3", qos=0)
 
-    def test_publish_drop_oldest_evicts_when_full(self) -> None:
-        """``drop_oldest`` evicts the oldest queued publish instead of raising."""
+    def test_unknown_when_disconnected_policy_rejected(self) -> None:
+        """Only the two-policy set (queue / raise) constructs."""
         sock = FakeSocket()
-        sock.enqueue_recv(canned_connack_bytes(return_code=0))
         ticks = FakeTicks()
-        client = new_client(
-            sock, ticks, pre_connect_queue_size=2, when_disconnected="drop_oldest",
-        )
-        client.publish("keep-a", b"1", qos=0)
-        client.publish("keep-b", b"2", qos=0)
-        client.publish("keep-c", b"3", qos=0)  # evicts keep-a, no raise
-        client.connect()
-        drive(client, ticks, count=3)
-        wire = bytes(sock.sent)
-        assert b"keep-a" not in wire  # oldest dropped
-        assert b"keep-b" in wire
-        assert b"keep-c" in wire
+        try:
+            new_client(sock, ticks, when_disconnected="drop_oldest")
+        except ValueError as error:
+            assert "when_disconnected" in str(error)
+        else:
+            raise AssertionError("expected ValueError for a retired policy")
 
     def test_subscribe_before_connect_raises(self) -> None:
         sock = FakeSocket()

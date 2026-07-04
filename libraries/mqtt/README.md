@@ -56,13 +56,13 @@ QoS 0 + QoS 1 are implemented; QoS 2 raises `UnsupportedQoSError`.  Last-will, r
 
 | Symbol | Purpose |
 |---|---|
-| `MQTTClient(socket, *, client_id, root_topic=None, ...)` | Main client.  Runner-shaped (`check(now_ms)`/`handle(now_ms)`).  Set `root_topic` to enable automatic per-device prefixing. |
-| `client.publish(topic, payload, *, qos=0, retain=False, on_publish=None, prefixed=True)` | QoS 0 or 1.  Topic resolves through `root_topic`/`client_id` prefix scheme.  Pass `prefixed=False` to publish verbatim.  Before CONNECTED, the `when_disconnected` policy applies (queue / drop-oldest / raise). |
-| `client.subscribe(topic, qos=0, *, on_subscribe=None, prefixed=True)` | Single-topic subscribe (requires CONNECTED).  Same `prefixed` opt-out. |
-| `client.unsubscribe(topic, *, on_unsubscribe=None, prefixed=True)` | Same `prefixed` opt-out. |
+| `MQTTClient(socket, *, client_id, ...)` | Main client.  Runner-shaped (`check(now_ms)`/`handle(now_ms)`).  Topics go on the wire exactly as written. |
+| `client.publish(topic, payload, *, qos=0, retain=False, on_publish=None)` | QoS 0 or 1.  Before CONNECTED, the `when_disconnected` policy applies (queue / raise). |
+| `client.subscribe(topic, qos=0, *, on_subscribe=None)` | Single-topic subscribe (requires CONNECTED). |
+| `client.unsubscribe(topic, *, on_unsubscribe=None)` | Mirror of `subscribe`. |
 | `client.on_message` + `topic_matches(topic, pattern)` | Inbound routing: the catch-all callback plus the public wildcard matcher (`+` one segment, `#` trailing tail). |
 | `client.connect() / .disconnect()` | Lifecycle. |
-| `MQTTClient(..., when_disconnected="queue", pre_connect_queue_size=8)` | Pre-connect publish policy (`"queue"` / `"drop_oldest"` / `"raise"`) and the queue bound. |
+| `MQTTClient(..., when_disconnected="queue", pre_connect_queue_size=8)` | Pre-connect publish policy (`"queue"` / `"raise"`) and the queue bound. |
 | `WhenOversized.{DROP_SILENT,DROP_WITH_EVENT,DISCONNECT}` | Policy for inbound PUBLISHes larger than `rx_buffer_size`. |
 | `ProtocolState.{DISCONNECTED,AWAITING_TRANSPORT,CONNECTING,CONNECTED,FAILED}` | Lifecycle states.  `AWAITING_TRANSPORT` appears while a `transport_factory` drives the transport up. |
 | `MQTTBackpressureError` | Raised when an outbound publish overflows `max_tx_queue_size` (or the pre-connect queue under `"queue"`) — caller's signal to drain via `handle()` and retry. |

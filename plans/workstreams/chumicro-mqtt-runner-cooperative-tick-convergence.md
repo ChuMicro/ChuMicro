@@ -1,13 +1,20 @@
 # Workstream: chumicro_mqtt + chumicro_runner cooperative-tick convergence
 
-Status: **mostly landed** (fix-sequencing steps 1–8 shipped and negative-bake-validated
+Status: **landed** (fix-sequencing steps 1–8 shipped and negative-bake-validated
 2026-05-23 — see the per-step commits below).  2026-07-04: self-heal cost sandboxing
 (step 6's deferred half) landed in mqtt 0.23.0 — connector-driven connect path with an
 attempt deadline and backoff-paced retries, see the step-6 entry — and the PUBACK-backlog
 interim guard shipped (fault-to-FAILED at the tx hard cap, see the last stray below).
 Both bake-validated the same day — see the
-2026-07-04 rows in the validation table.  The remaining open residual is the
-recv-N-vs-send-1 rate convergence itself (the guard's real fix).  Several divergence
+2026-07-04 rows in the validation table.  The last open residual — recv-N-vs-send-1
+rate convergence, the guard's real fix — **shipped in mqtt 0.24.0** (2026-07-04): each
+tick's inbound-QoS-1 PUBACKs coalesce into ONE front-of-queue batch the drain flushes
+outside the per-tick packet budget (ack rate tracks dispatch rate; PINGREQ and user
+publishes keep the send slot), and the recv is suppressed while a batch is still
+unsent, so an unwritable socket throttles the broker through the TCP window instead of
+growing our backlog.  The hard-cap guard is demoted to a last-resort backstop
+(reachable only when retransmits/replays have exhausted the whole protocol headroom).
+Pending hardware bake: a QoS-1 flood scenario.  Several divergence
 rows reference surfaces Decision 0099 has since deleted (three-tier decoder → two-tier,
 pattern-handler router removed) — those rows are annotated in place.  Surfaced 2026-05-23
 during the Pi Pico W CP TLS bake investigation; divergence inventory expanded 2026-05-23
@@ -39,6 +46,8 @@ Chumicro `runner/core.py:386-387`: `for _ in self._poller.ipoll(timeout_ms): pas
 Reference `mqtt_client.py:651-672` and `607-626`: `_read_socket` reads once into the 256-byte buffer and returns; `_send_from_queue` pops one packet, sends one packet, returns.  One recv per tick, one packet send per tick.
 
 Chumicro `client.py:1043-1063` (`_read_inbound`): `while consumed < budget:` — loops up to 1024 bytes per tick, recv'ing repeatedly.  Chumicro `client.py:977-994` (`_drain_tx_queue`): `while self._tx_queue:` — pops and sends until queue empty or block.  Both can hold the runner on one service for many ms while LED / button / LCD / other services starve.  The `recv_budget_per_tick` is a partial mitigation but the *shape* is still "drain until you can't" rather than "one per tick."
+
+*RESOLVED in two steps.*  Step 5 (commit `599a9615`, 2026-05-23) landed one recv + one send per tick.  mqtt 0.24.0 (2026-07-04) closed the residual dispatch-rate gap: the one recv can still surface N complete packets, so the N PUBACKs they owe now coalesce into ONE front-of-queue batch the drain flushes as one extra send outside the per-tick packet budget (at most two sends per tick), and the recv is suppressed while a batch is unsent — inbound dispatch can no longer outrun the ack drain, and `recv_budget_per_tick` becomes the single inbound pacing lever (bytes per tick, hence packets dispatched per tick, hence batch size).
 
 ## Concrete defects (severity-tagged)
 
@@ -94,7 +103,7 @@ These came up during the read but are not yet diagnosed as defects vs design cho
 - **`on_publish` callback signature.**  Both reference (`mqtt_client.py:266`) and chumicro (`client.py:609-612`) use `on_publish(topic, payload_bytes)` — same signature.  The handoff's "dead ends" notes the bake author initially assumed `(packet_id)` — that was the bake harness author's mistake, not a chumicro defect.  Listed here only so future-me doesn't waste time on a non-issue.
 
 - **PUBACK ordering vs PING injection.**  Reference increments `_packet_count_that_must_send` when queuing a PUBACK reply for an inbound QoS-1 (`mqtt_client.py:810`).  This prevents `loop()` from queueing a PINGREQ between the PUBACK enqueue and its send.  Chumicro `appendleft`s the PUBACK (`client.py:1087, 1103`) and `_check_keepalive` would `append` a PINGREQ — so PUBACK still goes first by virtue of left/right placement.  Same on-wire behaviour, different mechanism.  Confirm before refactoring either side.
-- **PUBACK backlog can drop protocol packets at the deque cap (deep-review MQTT-2, folded in 2026-06-13).**  `_handle_inbound_publish` / `_handle_oversized` `appendleft` a PUBACK per inbound QoS-1, but the TX drain sends one packet per tick.  A broker pushing many small QoS-1 PUBLISHes faster than that drain grows the PUBACK backlog against the bounded `_tx_queue` (`maxlen = max_tx_queue_size + 64`); at `maxlen`, `appendleft` silently drops the far-end entry — losing a queued PINGREQ, DUP retransmit, or PUBACK.  The real fix lands with this workstream's recv-N-vs-send-1 convergence (bound inbound dispatch toward the drain rate).  **Interim guard SHIPPED 2026-07-04 (mqtt 0.23.0):** the PUBACK flush in `_read_inbound` detects the queue at the hard cap before the protocol `appendleft` and faults to FAILED with a "PUBACK backlog overflowed the tx queue hard cap" `last_error` instead of dropping — self-heal rebuilds cleanly and the broker redelivers whatever was never acked, so QoS-1 correctness survives the fault.  Covers both the steady and oversized inbound paths (regression tests in `test_client_puback_guard.py` / `test_client_audit_fixes.py`).  The rate-convergence redesign still owns the real fix.
+- **PUBACK backlog can drop protocol packets at the deque cap (deep-review MQTT-2, folded in 2026-06-13).**  `_handle_inbound_publish` / `_handle_oversized` `appendleft` a PUBACK per inbound QoS-1, but the TX drain sends one packet per tick.  A broker pushing many small QoS-1 PUBLISHes faster than that drain grows the PUBACK backlog against the bounded `_tx_queue` (`maxlen = max_tx_queue_size + 64`); at `maxlen`, `appendleft` silently drops the far-end entry — losing a queued PINGREQ, DUP retransmit, or PUBACK.  **Interim guard SHIPPED 2026-07-04 (mqtt 0.23.0):** the PUBACK flush in `_read_inbound` detects the queue at the hard cap before the protocol `appendleft` and faults to FAILED with a "PUBACK backlog overflowed the tx queue hard cap" `last_error` instead of dropping — self-heal rebuilds cleanly and the broker redelivers whatever was never acked, so QoS-1 correctness survives the fault.  **REAL FIX SHIPPED 2026-07-04 (mqtt 0.24.0):** the tick's PUBACKs coalesce into ONE front-of-queue batch (receipt order preserved inside the batch, one queue entry per tick regardless of inbound rate); `_drain_tx_queue` flushes the batch without consuming its one-packet-per-tick budget, so acks leave in the tick they were incurred and PINGREQ / user publishes never starve behind them; and `_read_inbound` skips its recv while a batch (or a partial send) is still unsent — unread bytes stay in the kernel buffer, the TCP window closes, and the broker throttles at its end (which also structurally pins cross-tick PUBACK receipt order: a second batch can't queue in front of an unsent first).  The guard stays as a last-resort backstop, now reachable only when DUP retransmits / subscription replays have already consumed the entire 64-slot protocol headroom.  Regression tests: `test_client_puback_pacing.py` (flood cycles CONNECTED, batch shape, suppression, PINGREQ under flood), `test_client_puback_guard.py` (backstop still faults at the cap), `test_client_audit_fixes.py` (flood-survives + receipt order).
 
 ## Bake validation history
 

@@ -51,7 +51,7 @@ def _connected_subscribed(session_present):
     )
     client.connect()
     drive(client, ticks, count=3)
-    client.subscribe("sensors/+", qos=1, prefixed=False)
+    client.subscribe("sensors/+", qos=1)
     drive(client, ticks, count=1)
     sock_one.enqueue_recv(canned_suback_bytes(packet_id=1, granted_qos=1))
     drive(client, ticks, count=1)

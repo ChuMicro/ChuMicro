@@ -171,33 +171,20 @@ class TestSetWill:
         sock = FakeSocket()
         sock.enqueue_recv(canned_connack_bytes(return_code=0))
         ticks = FakeTicks()
-        client = new_client(sock, ticks, root_topic="devices")
-        client.set_will("status", b"offline", retain=True)
+        client = new_client(sock, ticks)
+        client.set_will("devices/status", b"offline", retain=True)
         client.connect()
         drive(client, ticks, count=1)
-        # Prefix scheme applied: devices/<client_id>/status.
-        assert b"devices/test-client/status" in bytes(sock.sent)
+        # The will topic goes on the wire exactly as written.
+        assert b"devices/status" in bytes(sock.sent)
         assert b"offline" in bytes(sock.sent)
 
     def test_set_will_none_topic_disables_will(self) -> None:
         """set_will(topic=None) clears the will entirely."""
         ticks = FakeTicks()
         sock = FakeSocket()
-        client = new_client(sock, ticks, root_topic="devices")
+        client = new_client(sock, ticks)
         client.set_will("status", b"offline")
         client.set_will(None)
         # Internal state is back to no-will.
         assert client._will_topic is None
-
-    def test_set_will_unprefixed_bypasses_root_topic(self) -> None:
-        """set_will(prefixed=False) sends the topic verbatim."""
-        sock = FakeSocket()
-        sock.enqueue_recv(canned_connack_bytes(return_code=0))
-        ticks = FakeTicks()
-        client = new_client(sock, ticks, root_topic="devices")
-        client.set_will("$SYS/bridge/dead", b"x", prefixed=False)
-        client.connect()
-        drive(client, ticks, count=1)
-        # Verbatim topic on the wire.
-        assert b"$SYS/bridge/dead" in bytes(sock.sent)
-        assert b"devices/" not in bytes(sock.sent)

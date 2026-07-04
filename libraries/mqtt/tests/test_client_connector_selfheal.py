@@ -249,7 +249,7 @@ class TestSelfHealReconnectReplay:
         drive(client, ticks, count=3)
         assert client.state == ProtocolState.CONNECTED
 
-        client.subscribe("sensors/+", qos=1, prefixed=False)
+        client.subscribe("sensors/+", qos=1)
         drive(client, ticks, count=1)
         sock_one.enqueue_recv(canned_suback_bytes(packet_id=1, granted_qos=1))
         drive(client, ticks, count=1)
@@ -281,11 +281,11 @@ class TestSelfHealReconnectReplay:
         )
         client.connect()
         drive(client, ticks, count=3)
-        client.subscribe("sensors/+", qos=1, prefixed=False)
+        client.subscribe("sensors/+", qos=1)
         drive(client, ticks, count=1)
         sock_one.enqueue_recv(canned_suback_bytes(packet_id=1, granted_qos=1))
         drive(client, ticks, count=1)
-        client.unsubscribe("sensors/+", prefixed=False)
+        client.unsubscribe("sensors/+")
         drive(client, ticks, count=1)
         sock_one.enqueue_recv(canned_unsuback_bytes(packet_id=2))
         drive(client, ticks, count=1)

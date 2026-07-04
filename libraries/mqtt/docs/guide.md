@@ -40,7 +40,7 @@ while True:
         client.handle(now)
 ```
 
-`connect()` queues the CONNECT packet; the first few `handle()` calls drive it through CONNECTING → CONNECTED.  `publish()` called before then buffers into a bounded pre-connect queue and flushes on CONNACK — the default `when_disconnected="queue"` policy (`"raise"` restores the raise-if-not-connected behavior; `"drop_oldest"` sheds the oldest queued publish on overflow instead of raising).  `subscribe()` and `unsubscribe()` still require `ProtocolState.CONNECTED`, so drive them from `on_connect` (as above) or after polling `client.state == ProtocolState.CONNECTED`.
+`connect()` queues the CONNECT packet; the first few `handle()` calls drive it through CONNECTING → CONNECTED.  `publish()` called before then buffers into a bounded pre-connect queue and flushes on CONNACK — the default `when_disconnected="queue"` policy (`"raise"` restores the raise-if-not-connected behavior).  `subscribe()` and `unsubscribe()` still require `ProtocolState.CONNECTED`, so drive them from `on_connect` (as above) or after polling `client.state == ProtocolState.CONNECTED`.
 
 `MQTTClient` actually enforces non-blocking mode on every socket it acquires (force-`setblocking(False)`), so the explicit `sock.setblocking(False)` line above is belt-and-suspenders.  Don't omit it — MP plain TCP defaults to blocking, and a blocking `recv` against a silent peer (broker that's hung mid-handshake, network blackholing returning packets) stalls the tick loop indefinitely on Pi Pico W RP2.  Bench-tested with a stalled TCP listener: recv was still blocked at the 3-minute mark, with no TCP keepalive timeout fired within that window.  Whole-app freeze, not a recoverable hiccup.
 
@@ -69,7 +69,6 @@ Connect is asynchronous, so `publish()` can be called while the client is still 
 | `when_disconnected` | Before CONNECTED |
 |---|---|
 | `"queue"` (default) | Buffer in a bounded pre-connect queue (`pre_connect_queue_size`, default 8), drained on CONNACK in receipt order ahead of any publish `on_connect` issues.  A full queue raises `MQTTBackpressureError` — the same signal a full tx queue gives. |
-| `"drop_oldest"` | Same buffering, but a full queue evicts the oldest queued publish instead of raising. |
 | `"raise"` | Raise `MQTTError` immediately — the strict "must be connected" behavior. |
 
 Queued publishes preserve their `qos` / `retain` and fire their `on_publish` callback when they eventually reach the wire.  `subscribe()` / `unsubscribe()` are not queued — drive them from `on_connect`.
@@ -118,7 +117,7 @@ def consume(client):
 runner.add_generator(consume(client))
 ```
 
-The first `next_message()` call switches inbound data delivery from the `on_message` callback to a bounded queue the generator drains (`max_inbound_queue_size`, drop-oldest — a slow consumer loses the oldest messages rather than growing the heap).  Lifecycle callbacks (`on_connect`, `on_disconnect`, `on_oversized`) keep firing either way.  Pick one inbound surface per client: the stream for a linear single-topic consumer, `on_message` for multi-topic fan-out.  See `examples/receive_stream.py`.
+The first `next_message()` call switches inbound data delivery from the `on_message` callback to a bounded queue the generator drains (16 messages, drop-oldest — a slow consumer loses the oldest messages rather than growing the heap).  Lifecycle callbacks (`on_connect`, `on_disconnect`, `on_oversized`) keep firing either way.  Pick one inbound surface per client: the stream for a linear single-topic consumer, `on_message` for multi-topic fan-out.  See `examples/receive_stream.py`.
 
 ## Last-will
 
@@ -144,7 +143,7 @@ client.set_will("status/online", b"offline", qos=1, retain=True)
 # Next CONNECT (or self-heal reconnect) carries the new will.
 ```
 
-`set_will(topic=None)` disables the will entirely.  Pass `prefixed=False` to opt out of the `root_topic` / `client_id` prefix scheme.  The change applies to the next CONNECT packet — the broker already has the will from the in-flight session and can't be modified mid-connection.
+`set_will(topic=None)` disables the will entirely.  The change applies to the next CONNECT packet — the broker already has the will from the in-flight session and can't be modified mid-connection.
 
 ## TLS connections
 
@@ -234,11 +233,11 @@ For the full single-library adoption recipe — your transport, your `ticks=`, t
 
 ## Tuning for tick-latency vs throughput
 
-`handle()` does exactly one `recv_into` and one `send` per tick, so each call yields back to the runner after one socket syscall.  Three constructor knobs let you tune the trade-off:
+`handle()` does exactly one `recv_into` and one packet `send` per tick, so each call yields back to the runner after a bounded slice of socket work.  (On ticks that dispatched inbound QoS-1 publishes there is one extra send: the tick's PUBACKs coalesce into a single batch flushed ahead of — and without consuming — the packet budget, so the ack rate always keeps up with the inbound rate.  If the socket can't take the batch, the client stops reading until it lands; the unread bytes throttle the broker through the TCP window.)  Three constructor knobs let you tune the trade-off:
 
 | Knob | Default | What it bounds |
 |---|---|---|
-| `recv_budget_per_tick` | `1024` (bytes) | Cap on the single per-tick `recv_into` call.  An intact-tier read of a multi-KB inbound PUBLISH arrives across several ticks instead of monopolizing one tick on a single syscall.  Raise for faster big-payload ingestion at the cost of per-syscall latency. |
+| `recv_budget_per_tick` | `1024` (bytes) | Cap on the single per-tick `recv_into` call — the inbound pacing lever.  It bounds tick latency on a multi-KB inbound PUBLISH (the payload arrives across several ticks instead of monopolizing one), how many packets one tick can dispatch, and the size of the per-tick PUBACK batch.  Raise for faster ingestion at the cost of per-tick latency. |
 | `max_tx_queue_size` | `20` packets | Hard cap on pending outbound packets.  Sized for the runner-shaped sensor profile (publish every N seconds; queue stays near zero).  Appending past the cap raises `MQTTBackpressureError`; protocol-internal traffic (PUBACK responses, retransmits, PINGREQ) bypasses the cap so QoS-1 / keepalive contracts hold.  Failed QoS-1 publishes roll back the `packet_id` allocation cleanly so the id pool isn't leaked on backpressure.  Raise for bursty publishers; each slot pins ~8 bytes long-lived on MP / CP. |
 | `send_timeout_seconds` | inherits `ack_timeout_seconds` (5 s) | Maximum time the socket can stay non-writable with a packet queued before the client transitions to `FAILED` and self-heal fires.  Re-arms on every successful send -- a steady drip never trips it, only a stalled socket does.  Catches NAT-style silent-drops on the outbound path that would otherwise let the queue grow until `MQTTBackpressureError`. |
 
@@ -288,36 +287,6 @@ Three policies:
 
 No payload bytes survive the oversized tier — the bytes drain through the RX buffer without any payload-sized allocation.  Diagnostic information (`reported_length` + `topic`) is enough for application-side reaction; if you need the actual bytes, raise `rx_buffer_size` so the message parses inline in the steady tier instead.
 
-## Per-device topic prefixing
-
-Set `root_topic` to enable automatic per-device prefixing — `publish` / `subscribe` / `unsubscribe` will prepend `<root_topic>/<client_id>/` to every topic:
-
-```python
-client = MQTTClient(
-    sock,
-    client_id="mainLightSwitch",
-    root_topic="livingRoom",
-)
-client.connect()
-
-client.publish("switchState", b"on")
-# → publishes to "livingRoom/mainLightSwitch/switchState"
-
-client.subscribe("commands/+")
-# → subscribes to "livingRoom/mainLightSwitch/commands/+"
-```
-
-Pass `prefixed=False` to publish, subscribe, or unsubscribe a verbatim topic — system topics, bridge topics, anything outside the per-device hierarchy:
-
-```python
-client.publish("$SYS/broker/dead", b"true", prefixed=False)
-# → publishes verbatim to "$SYS/broker/dead", no prefix
-```
-
-The last-will follows the same shape: `will_topic="online"` is prefixed by default; pass `will_prefixed=False` to set a verbatim will topic.
-
-Inbound topics delivered to `on_message` are **not** prefix-stripped — what the broker put on the wire is what your callback gets.  A `topic_matches` pattern is likewise matched verbatim; pass the prefixed pattern if you want per-device-only routing.
-
 ## Backpressure
 
 When `max_tx_queue_size` is reached, user-initiated publish/subscribe calls raise `MQTTBackpressureError`:
@@ -355,7 +324,7 @@ The client actively manages its memory footprint with four caps tunable at const
 |---|---|---|
 | `recv_budget_per_tick` | `1024` bytes | Per-tick read ceiling — see [Tuning](#tuning-for-tick-latency-vs-throughput). |
 | `rx_buffer_size` | `256` bytes | Pre-allocated steady-state RX buffer, and the steady/oversized boundary.  Inbound PUBLISHes at or below this size parse inline and deliver intact with no further allocation; above it, the [`WhenOversized` policy](#oversized-message-policy) applies and the payload drains without a payload-sized allocation. |
-| `pre_connect_queue_size` | `8` packets | Bound on the pre-connect publish queue (the `when_disconnected="queue"` / `"drop_oldest"` buffer) — see [Publishing](#publishing). |
+| `pre_connect_queue_size` | `8` packets | Bound on the pre-connect publish queue (the `when_disconnected="queue"` buffer) — see [Publishing](#publishing). |
 | `max_tx_queue_size` | `20` packets | Outbound packet queue cap — see [Backpressure](#backpressure). |
 
 The QoS-1 in-flight table (keyed by `packet_id`, one entry per outstanding QoS-1 PUBLISH waiting for PUBACK) grows with your usage — it has no hard cap.  On memory-tight boards, keep `rx_buffer_size` at your actual largest expected broker payload — anything bigger routes through the oversized tier where it can't blow the heap.
@@ -374,7 +343,7 @@ The decoder sees the whole MQTT packet, not just the payload — `1` (fixed byte
 | HomeAssistant discovery (`homeassistant/.../config` + ~300 B JSON) | ~350 B | steady at `rx_buffer_size=512` |
 | AWS IoT Core shadow `update/accepted` (~250–600 B JSON) | ~300–700 B | steady at `rx_buffer_size=1024` |
 
-So **plain sensor data, small-to-medium JSON readings (payload ≤ ~200 B on a ≤ 40 B topic), and chumicro-`root_topic`-prefixed status messages all parse inline at the 256 B default with zero per-message allocation.**  Structured-config workloads — HomeAssistant discovery descriptors, AWS IoT shadow documents, MQTT-SN gateway state — deliver intact once `rx_buffer_size` is sized to cover them: the buffer is allocated once at construction, not per message.  If your typical PUBLISH is consistently above ~250 B, bump `rx_buffer_size` (e.g. `512` or `1024`) so it stays in the steady tier; anything above the buffer routes through the oversized tier and its payload is dropped.
+So **plain sensor data, small-to-medium JSON readings (payload ≤ ~200 B on a ≤ 40 B topic), and device-prefixed status messages all parse inline at the 256 B default with zero per-message allocation.**  Structured-config workloads — HomeAssistant discovery descriptors, AWS IoT shadow documents, MQTT-SN gateway state — deliver intact once `rx_buffer_size` is sized to cover them: the buffer is allocated once at construction, not per message.  If your typical PUBLISH is consistently above ~250 B, bump `rx_buffer_size` (e.g. `512` or `1024`) so it stays in the steady tier; anything above the buffer routes through the oversized tier and its payload is dropped.
 
 ## Platform notes
 

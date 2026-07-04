@@ -54,7 +54,7 @@ mqtt = MQTTClient.from_config(config, radio=wifi.adapter.radio)
 # Presence via Last Will: the broker publishes a retained "offline" if
 # this board drops without a clean DISCONNECT.  on_connect publishes the
 # matching retained "online".
-mqtt.set_will(state_topic, b"offline", qos=1, retain=True, prefixed=False)
+mqtt.set_will(state_topic, b"offline", qos=1, retain=True)
 
 # Demo progress at module scope so the callbacks can read and write
 # without ceremony.  Small enough that a class would add noise.
@@ -66,9 +66,9 @@ start_ms = ticks_ms()
 def on_connect():
     """Connect-time setup, fired once: publish presence, subscribe to commands."""
     marker("MQTT_CONNECTED", broker=broker, client_id=client_id)
-    mqtt.publish(state_topic, b"online", qos=1, retain=True, prefixed=False)
+    mqtt.publish(state_topic, b"online", qos=1, retain=True)
     marker("RETAINED_STATE_SENT", topic=state_topic)
-    mqtt.subscribe(command_topic, qos=1, prefixed=False)
+    mqtt.subscribe(command_topic, qos=1)
 
 
 def on_subscribe(topic, granted_qos):
@@ -114,7 +114,7 @@ def publish_telemetry(now_ms):
         "value": 20 + telemetry_sent,
         "uptime_ms": ticks_diff(now_ms, start_ms),
     }).encode()
-    mqtt.publish(telemetry_topic, payload, qos=1, prefixed=False)
+    mqtt.publish(telemetry_topic, payload, qos=1)
     marker("TELEMETRY_SENT", seq=telemetry_sent)
 
 
