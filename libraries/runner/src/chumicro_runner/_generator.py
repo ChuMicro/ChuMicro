@@ -51,9 +51,12 @@ from chumicro_timing.ticks import ticks_diff
 
 
 class _NextTickWait:
-    """Wait stored for a bare ``yield``: no socket, no deadline, no
-    ready predicate, so the wrapper resumes the generator on the next
-    tick.  One module-level instance serves every generator."""
+    """Bare-``yield`` wait: carries no wait hooks, so the wrapper resumes next tick."""
+
+    # Omitting every hook of the duck-typed wait protocol (io_socket /
+    # io_interest / next_deadline / ready), which chumicro_sockets.waits
+    # describes in full, is what pins this to a plain next-tick resume.
+    # One module-level instance serves every generator.
 
 
 _NEXT_TICK_WAIT = _NextTickWait()

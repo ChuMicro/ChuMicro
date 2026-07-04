@@ -2,7 +2,7 @@
 
 Status: `accepted`
 Date: `2026-07-03`
-Summary: `chumicro_timing` grows `Deadline`, `earliest()`, and `Rate`, and becomes the home of `Signal` and the read/write wait markers; consumers stop hand-rolling deadline arithmetic.
+Summary: `chumicro_timing` grows `Deadline`, `earliest()`, and `Rate` and hosts `Signal`; the read/write wait markers land in `chumicro_sockets.waits`; consumers stop hand-rolling deadline arithmetic.
 Related: 0088 (scheduler phase math), 0091 (Signal — partially superseded on acceptance), 0092, campaign reports `plans/reviews/2026-07-03-{rudiment-api-fitness,greenfield-core-redesign,consumer-driven-design-synthesis}.md`
 
 ## Context
@@ -23,8 +23,10 @@ shipped demo/bake apps.  Two independent design seats converged on the same fix 
    runner consumes them (dependency direction: runner → timing, already true) and keeps
    `sleep_until` (the runner owns waiting).  `wait_for` travels with `Signal` because
    leaving it behind would re-export `Signal` from runner (banned) and invert the test
-   dependency floor.  The read/write wait markers turned out to live in
-   `chumicro_sockets`, not runner — their fate belongs to Decision 0098's wave.
+   dependency floor.  The read/write I/O wait markers (`ReadWait` / `WriteWait`) land in
+   `chumicro_sockets.waits`, not timing: they carry a socket, and `chumicro-sockets` takes
+   no runtime dependency (bring-your-own-scheduler), so placing them in timing or runner
+   would force a socket to import a scheduler it must never import.
    Decision 0091's Signal-home clause is edited in place.
 3. The free functions remain the substrate; the value objects become the documented
    default surface.  Consumers migrate in the same wave (Decision 0092: break + migrate

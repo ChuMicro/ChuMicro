@@ -134,17 +134,15 @@ class InboundMessage:
 
 
 class _InboundWait:
-    """Resume-every-tick wait yielded by ``next_message`` while the queue is empty.
+    """Resume-every-tick wait yielded by ``next_message`` while the queue is empty."""
 
-    Carries no ``io_socket`` and no ``next_deadline``, so the runner
-    resumes the generator each tick to re-check the queue but registers
-    nothing for it.  The session that fills the queue is itself
-    registered with the runner and owns the socket poll (read while OPEN,
-    write while connecting); registering the same socket here too would
-    collide with the session's connect-phase write interest, since the
-    poll-set keeps one interest per socket.  A single shared instance is
-    enough — the wait is stateless.
-    """
+    # Of the duck-typed wait protocol chumicro_sockets.waits describes, this
+    # carries only io_socket, pinned to None: the session that fills the
+    # queue is itself registered with the runner and owns the socket poll
+    # (read while OPEN, write while connecting).  Registering the same socket
+    # here too would collide with the session's connect-phase write interest,
+    # since the poll-set keeps one interest per socket.  A single shared
+    # stateless instance serves every wait.
 
     io_socket = None
 

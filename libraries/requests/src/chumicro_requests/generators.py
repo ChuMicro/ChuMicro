@@ -44,33 +44,7 @@ from chumicro_requests._wire import (
 )
 from chumicro_requests.client import Response, _encode_body, _merge_default_header
 
-# Poll-interest bit for ``io_interest``; mirrors ``chumicro_runner.IO_READ``
-# by value.  Held as a literal rather than imported so a runner-driven
-# fetch runs without importing the runner (bring-your-own-scheduler).
-_IO_READ = 1
-
 _RECV_CHUNK_SIZE = 512
-
-
-class _ReadDeadlineWait:
-    """Read-wait with a timeout: ``io_socket`` + ``io_interest`` + ``next_deadline``.
-
-    The runner wrapper resumes a socket-driven wait every tick so the
-    recv loop re-tries on each wake, while ``next_deadline`` only
-    shortens ``Runner.wait``'s ipoll sleep — so the loop also wakes at
-    the deadline when the peer goes silent, letting the recv loop's own
-    deadline check fire.
-    """
-
-    def __init__(self, sock, deadline_ms):
-        self.io_socket = sock
-        self._deadline_ms = deadline_ms
-
-    def io_interest(self, now_ms):  # noqa: ARG002 (runner wait protocol)
-        return _IO_READ
-
-    def next_deadline(self, now_ms):
-        return self._deadline_ms
 
 
 def fetch(
@@ -140,6 +114,7 @@ def fetch(
     # Opt-in substrate: imported here, not at module top, so importing
     # chumicro_requests does not pull chumicro_sockets for BYO-socket users.
     from chumicro_sockets.generators import connect, send_all  # noqa: PLC0415
+    from chumicro_sockets.waits import ReadWait  # noqa: PLC0415
 
     encoded_body = _encode_body(body, json)
     current_method = method
@@ -191,7 +166,7 @@ def fetch(
         try:
             yield from send_all(sock, request_bytes)
             parser = ResponseParser(max_body_bytes=max_body_bytes)
-            read_wait = _ReadDeadlineWait(sock, deadline_ms)
+            read_wait = ReadWait(sock, deadline_ms=deadline_ms)
             while parser.state not in (ParseState.DONE, ParseState.ERROR):
                 if ticks.ticks_diff(deadline_ms, ticks.ticks_ms()) <= 0:
                     raise HttpTimeoutError(
