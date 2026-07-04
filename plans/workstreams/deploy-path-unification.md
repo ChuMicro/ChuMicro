@@ -501,10 +501,94 @@ the parallel-root problem is gone. Residual, standalone: decide
 behavior) and `shared/` fate, and fix the
 `packages/README.md`-vs-`cli/library.py` contradiction.
 
-**Phase 5 — Mechanize (Decision 0074).** A `chumicro-checks` rule that
-fails if a new device-staging path appears outside the one pipeline,
-or if a context grows its own delete/exclude policy. This is the
-regression guard that makes the invariant durable.
+*Investigation (2026-07-04) — evidence gathered, recommendation KEEP,
+one user-nod from decided; not decided unilaterally.*
+
+**Where the roots live.** `packages/` and `shared/` are workspace roots
+— they exist only in the user-workspace layout, present in
+`ChuMicro-Workspace-Template` (`packages/{README.md,.gitignore}`,
+`shared/README.md`), absent from this mono-repo. All three roots are
+defined on `chumicro_workspace.WorkspaceLayout`
+(`workspace.py:shared_dir/libraries_dir/packages_dir`).
+
+**Who consumes them (grep, both repos).** All three are live payload
+inputs, not dead scaffold: `import_graph.build_search_paths`
+(`import_graph.py:130,133-137,138`) appends each to the import-resolution
+search path in a documented precedence order — `library_sources`
+override → `shared/` → each `libraries/<name>/src/` → `packages/` →
+caller tail — feeding one `ImportGraphSource` and thus one
+`Deployer.deploy_diff()`. So the three roots are three *payload* sources
+behind the single staging path, not three staging paths. The CHU rule
+root-lists (`chu001/006/008/012` `_SCOPED_ROOTS`) also enumerate all
+three as known workspace roots.
+
+**The named contradiction is already resolved.** The current
+`packages/README.md` scopes `packages/` to **third-party / vendored**
+trees (gitignored by default via `packages/.gitignore` — everything bar
+`README.md`/`.gitignore`), *not* curated chumicro libraries;
+`shared/README.md` carries an explicit "When to use shared/ (vs
+libraries/)" table; `cli/library.py` puts curated libs in `libraries/`.
+The three roots partition the space cleanly (third-party → `packages/`;
+flat user helpers → `shared/`; curated/publishable → `libraries/`). The
+`packages/README.md`-says-curated / `cli/library.py`-says-`libraries/`
+clash the meta-finding named was closed by template commit `2f8a24c`
+(rewrote both READMEs, dropped the stale empty `libraries/` scaffold,
+gave `packages/` its README). A mono-repo grep finds no live doc
+telling users curated libs go in `packages/` — the only surviving
+instance is this workstream's own meta-finding line. No fix outstanding.
+
+**Recommendation — KEEP all three; collapse nothing.** Each root does
+work the others cannot: `packages/` uniquely gives **gitignore-by-default**
+for big/license-varied third-party trees (collapsing it into `libraries/`
+forces either committing those trees or making `libraries/` gitignored,
+which breaks Collapse-B's committed-curated-root invariant); `shared/`
+uniquely gives a **zero-ceremony flat-module** root (collapsing it
+imposes `pyproject`/`src/`/`tests/`/`VERSION` on a single helper file —
+the ceremony it exists to avoid); `libraries/` is the curated root.
+This is the same shape Phase 3 blessed for sources: legitimate *payload*
+variance behind one staging path, which 0077 permits (variance in
+*payload*, never in stage/delete/keep/transport). The disease the
+meta-finding diagnosed was the parallel *acquisition mechanism*
+(`install-libraries` vs `library`), closed by Collapse B — not the root
+count. Collapse cost is high (rewrite `build_search_paths`, the
+`WorkspaceLayout` properties, three READMEs, four CHU root-lists) to
+delete a distinction that is load-bearing; no evidence of drift or user
+confusion from the three-root taxonomy in its post-`2f8a24c` form. **The
+one open decision is this KEEP itself** — genuinely unrecorded in any
+ADR (no ADR decides it; `next-up.md` lists it as pending; `open-questions.md`
+has no entry). Awaiting a user nod to close; not decided here.
+
+**Phase 5 — Mechanize (Decision 0074). DONE 2026-07-04 — `CHU034`.** A
+`chumicro-checks` rule that fails if a new device-staging path appears
+outside the one pipeline. Shipped as `CHU034`: outside the
+`chumicro_deploy` package (the `workbench/deploy/` tree that owns and
+orchestrates the primitives), no `.py` under `libraries/` / `support/`
+/ `workbench/` may call the reserved transport primitives
+`deploy_files` / `delete_files` / `list_files_in_scope` — the write-
+and-execute + diff-reconcile trio `Deployer.deploy_diff()` exclusively
+owns. A direct call elsewhere is a second staging path or a context
+growing its own delete scope (the "grows its own delete/exclude policy"
+half of the spec — `delete_files`/`list_files_in_scope` are the delete-
+policy primitives). AST match by method name, `# noqa: CHU034`
+escapable, syntax errors surface as findings. Zero violations on the
+current tree on first run (the three primitives had zero external
+callers post-Phase-3 — the convergence already removed them). The
+sanctioned second-axis primitives are deliberately *not* reserved:
+`stage` (harness-over-REPL staging — pytest-device + the demo runner),
+`clear_entrypoints` (per-session entrypoint clear), and
+`wipe_filesystem` (standalone destructive erase — `reset-board`);
+reserving them would fire on legitimate mode-axis code. This is the
+narrowest rule that catches the drift class Phases 0-3 eliminated
+(commands re-implementing the write path — `repl`'s deploy, `deploy-
+example`'s `Deployer.deploy()`); the "context grows its own *exclude*
+constant" sub-class (the deleted `FUNCTIONAL_TEST_EXTRA_EXCLUDES`) is
+not separately linted — it collapsed into `flash_drive.DEVICE_KEEP_SET`
+and any re-divergent staging that would consult a rogue exclude set
+must still call one of the three reserved primitives to land bytes, so
+`CHU034` catches it at the call site. Registered in
+`rules/__init__.py`; README rule table + range; AGENTS.md
+one-staging-path non-negotiable cross-references it; `chu034` tests in
+`workbench/checks/tests/test_chu034.py`.
 
 ## Discovered this session, routed (nothing dropped)
 
@@ -590,8 +674,16 @@ wrong-from-the-start; 0078 rewritten in place → declarative
 snapshot channel into committed `libraries/`, edit-preserving; engine
 rewired (`library_channel.py` + `library.py`), `install-libraries`
 subsystem deleted; browser front-end + promote-pipeline channel
-remain). Phase 4 root-convergence largely subsumed; Phase 5 CHU
-mechanization pending. Companion *completed* work this session
+remain). **Phase 5 done 2026-07-04 — `CHU034`** (device-staging
+primitives reserved to `chumicro_deploy`; zero violations on first run;
+tests + README + AGENTS.md cross-ref shipped). **Phase 4 investigated
+2026-07-04 — recommendation KEEP all three roots, one user-nod from
+decided** (the named `packages/README.md`↔`cli/library.py` contradiction
+was already closed by template commit `2f8a24c`; `packages/` /
+`shared/` / `libraries/` are three documented *payload* roots behind
+one `Deployer.deploy_diff()`, each load-bearing — evidence + costs in
+the Phase 4 section above; not decided unilaterally). Companion
+*completed* work this session
 (`run.py` bootstrap self-heal, `init` retirement / Decision 0075,
 template `--device`/ruamel fixes) shipped on `main` of both repos
 (see `git log` around the deploy-path-unification surfacing for the
