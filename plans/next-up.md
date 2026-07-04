@@ -5,7 +5,7 @@
 ## Now
 
 - [ ] **Bench: swap the s2-cp board's USB cable** — four wedges in two days (2026-07-03/04) across three distinct failure modes while its three bench-mates logged zero; if a fifth wedge shows on the new cable, swap the board itself.  Tolerated for now (user call 2026-07-04) — sweeps proceed, expect s2-cp flakiness.
-- [ ] **regen-comments / voice tooling extraction.**  [workstreams/regen-voice-extraction.md](workstreams/regen-voice-extraction.md) — user call 2026-07-04: that line of work leaves the monorepo; its six queued items are parked there, not here.
+- [ ] **regen-comments / voice tooling — EXTRACTED 2026-07-04** to `/Users/chuxor/circuitpython/regen-voice-tools` (4 commits, carved at `391c349d`).  [workstreams/regen-voice-extraction.md](workstreams/regen-voice-extraction.md) carries the full move/copy record.  Remaining user actions: attach a GitHub remote to the new repo, and retire `origin/voice-writers-validation` (both unique commits verified absorbed by main's own refactors; captured as reference patches in the new repo).
 
 ## Next
 

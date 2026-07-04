@@ -1,11 +1,14 @@
 # Workstream: regen-comments / voice tooling — extraction from the monorepo
 
-Status: **parked for extraction** (user call 2026-07-04: "the regen comments work and
-voice … is kind of its own work stream and not really related to chumicro anymore,
-thats going to get pulled out").  This file is the holding pen: the queued items below
-left `plans/next-up.md` on that call and move out with the tooling when the extraction
-happens.  Until then the underlying workstream / handoff files stay in place untouched,
-so nothing here needs re-discovery.
+Status: **EXTRACTED 2026-07-04.** Destination: sibling repo
+`/Users/chuxor/circuitpython/regen-voice-tools` (branch `main`, carved at monorepo commit
+`391c349d`). The regen-comments skill + parked items below now live there; this file stays
+in the monorepo as the record of the move. See "Extraction executed" at the bottom.
+
+Original holding-pen note (user call 2026-07-04: "the regen comments work and voice … is
+kind of its own work stream and not really related to chumicro anymore, thats going to get
+pulled out"). The queued items below left `plans/next-up.md` on that call and moved out
+with the tooling.
 
 ## Items parked (formerly next-up entries, verbatim state as of 2026-07-04)
 
@@ -45,9 +48,44 @@ tooling that isn't voice/comment-generation (`audit-code`/`audit-branch` pipelin
 continuity, the `/audit-library` retrofit, the usage-path lens) — those remain in
 `plans/next-up.md`.
 
-## Extraction TODO (when the pull-out happens)
+## Extraction executed (2026-07-04)
 
-- Decide the destination repo and move the skills (`regen-comments`, voice writers,
-  their webui) + the workstream/handoff files listed above.
-- Resolve the `voice-writers-validation` branch as part of the move.
-- Sweep `plans/` for remaining pointers into the moved files.
+Destination: `/Users/chuxor/circuitpython/regen-voice-tools` (git `main`, carved at monorepo
+commit `391c349d`).
+
+**Moved** (copied to the new repo, deleted from the monorepo working tree):
+- `.github/skills/regen-comments/` **and** its `.claude/skills/regen-comments/` mirror (the
+  two mirrors were byte-identical) → new repo `skills/regen-comments/` (single copy).
+- `plans/workstreams/regen-report-voiced-speaker.md`,
+  `plans/workstreams/regen-comments-variance-bench.md`.
+- The regen/voice handoffs: `2026-05-30-comment-generation-round18…/round19…/round20…/round21…`,
+  `2026-05-31-voice-register-theme-test.md`,
+  `2026-06-07-regen-comments-writer-quality-next-phase.md`,
+  `2026-06-10-regen-bench35-in-flight.md`.
+- The syn3 checkpoint handoff (`2026-06-14-voice-writer-syn3-checkpoint.md`), recovered from
+  the `voice-writers-validation` branch (it existed only there).
+
+**Copied and left in the monorepo** (a staying skill also consumes each — split evidence in
+the extraction report):
+- Voice registry `.github/skills/_shared/voices/` — consumed by `audit-code` (`voices.py`)
+  and `audit-branch` (`branch_phase1.py`).
+- `.github/skills/_shared/speak_wf.js` — consumed by `audit-skill`.
+- `.github/skills/_shared/run_trigger_evals.py` — consumed by `audit-branch`, `audit-skill`,
+  `new-skill`.
+- Top-level `webui/` kit → vendored into the new repo as an intentional fork frozen at
+  `391c349d` (the monorepo kit keeps serving in-repo skills; the two may diverge).
+- `plans/workstreams/deferred-clean-room-benches.md` (mixed regen + audit benches): copied;
+  the monorepo original carries a top note that the regen round-35 item now lives in the
+  extraction repo.
+
+**Branch `voice-writers-validation`:** NOT merged, NOT deleted. Its two unique commits
+(`b61f6df2` shared theming, `52934e58` render_compare collapse) are exported as patch files
+in the new repo's `reference/branch-patches/`. Both are already independently re-landed on
+main (theming → `webui/theme.py`; the collapse → `render_compare.py` is the 176-line
+spec-builder), so neither was applied — the branch is ready for the user to **retire after
+review**. The branch's voices revert (`0385432a`) is obsolete (who-form retained, 2026-06-20).
+
+**Remaining TODO:** the user attaches a GitHub remote to `regen-voice-tools` (none set yet).
+The orchestrator should also decide the fate of the monorepo's regen-only strip helper —
+`scripts/run.py` `strip-comments` subcommand + its backing `scripts/strip_comments.py`
+(help text: "used by /regen-comments") — now that the skill has left.

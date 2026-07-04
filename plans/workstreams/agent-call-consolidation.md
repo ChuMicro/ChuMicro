@@ -1,5 +1,10 @@
 # Workstream: clean-room agent-call consolidation — cut per-pipeline `claude -p` / agent dispatches
 
+> **Note (2026-07-04):** the `regen-report-voiced-speaker.md` workstream referenced below moved to
+> the extraction repo `regen-voice-tools` (`plans/workstreams/`); the regen-comments Phase-1 mentions
+> here point there now. The audit-skill Phase-2 gate stays in this monorepo. See
+> `regen-voice-extraction.md`.
+
 Status: **parked.**  Inventory complete 2026-06-12: no live agent pair merges safely. Every blind
 reader (summarizer, lenses, selector, validator) encodes a clean-room independence invariant, and the
 writer/patcher pair already runs concurrently in one phase. The only safe moves are two
