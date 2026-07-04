@@ -501,8 +501,8 @@ the parallel-root problem is gone. Residual, standalone: decide
 behavior) and `shared/` fate, and fix the
 `packages/README.md`-vs-`cli/library.py` contradiction.
 
-*Investigation (2026-07-04) — evidence gathered, recommendation KEEP,
-one user-nod from decided; not decided unilaterally.*
+*Investigation (2026-07-04) — evidence gathered, recommendation KEEP;
+**decided KEEP by user nod the same day.***
 
 **Where the roots live.** `packages/` and `shared/` are workspace roots
 — they exist only in the user-workspace layout, present in
@@ -553,10 +553,11 @@ meta-finding diagnosed was the parallel *acquisition mechanism*
 count. Collapse cost is high (rewrite `build_search_paths`, the
 `WorkspaceLayout` properties, three READMEs, four CHU root-lists) to
 delete a distinction that is load-bearing; no evidence of drift or user
-confusion from the three-root taxonomy in its post-`2f8a24c` form. **The
-one open decision is this KEEP itself** — genuinely unrecorded in any
-ADR (no ADR decides it; `next-up.md` lists it as pending; `open-questions.md`
-has no entry). Awaiting a user nod to close; not decided here.
+confusion from the three-root taxonomy in its post-`2f8a24c` form.
+**Decided: KEEP** (user nod 2026-07-04) — the three-root taxonomy
+stands; `packages/` / `shared/` / `libraries/` remain three documented
+payload roots behind the one `Deployer.deploy_diff()` staging path.
+With this, every phase of the workstream is closed.
 
 **Phase 5 — Mechanize (Decision 0074). DONE 2026-07-04 — `CHU034`.** A
 `chumicro-checks` rule that fails if a new device-staging path appears
@@ -676,9 +677,9 @@ rewired (`library_channel.py` + `library.py`), `install-libraries`
 subsystem deleted; browser front-end + promote-pipeline channel
 remain). **Phase 5 done 2026-07-04 — `CHU034`** (device-staging
 primitives reserved to `chumicro_deploy`; zero violations on first run;
-tests + README + AGENTS.md cross-ref shipped). **Phase 4 investigated
-2026-07-04 — recommendation KEEP all three roots, one user-nod from
-decided** (the named `packages/README.md`↔`cli/library.py` contradiction
+tests + README + AGENTS.md cross-ref shipped). **Phase 4 decided
+2026-07-04 — KEEP all three roots (user nod), workstream fully
+closed** (the named `packages/README.md`↔`cli/library.py` contradiction
 was already closed by template commit `2f8a24c`; `packages/` /
 `shared/` / `libraries/` are three documented *payload* roots behind
 one `Deployer.deploy_diff()`, each load-bearing — evidence + costs in
