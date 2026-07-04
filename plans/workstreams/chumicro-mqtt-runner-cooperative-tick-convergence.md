@@ -1,6 +1,16 @@
 # Workstream: chumicro_mqtt + chumicro_runner cooperative-tick convergence
 
-Status: **proposed.**  Surfaced 2026-05-23 during the Pi Pico W CP TLS bake investigation; divergence inventory expanded 2026-05-23 from an end-to-end read of the reference impl against `chumicro_mqtt.client`, `_wire.py`, and `chumicro_runner.core`.
+Status: **mostly landed** (fix-sequencing steps 1–8 shipped and negative-bake-validated
+2026-05-23 — see the per-step commits below).  Open residuals as of the 2026-07-04 audit:
+self-heal cost sandboxing (step 6's deferred half — `_attempt_self_heal` still runs DNS /
+connect synchronously inside `handle()`, though Decision 0098's tick-driven connector now
+provides the machine to spread it across ticks), and the recv-N-vs-send-1 rate
+convergence with its PUBACK-backlog guard (the last stray below).  Several divergence
+rows reference surfaces Decision 0099 has since deleted (three-tier decoder → two-tier,
+pattern-handler router removed) — those rows are annotated in place.  Surfaced 2026-05-23
+during the Pi Pico W CP TLS bake investigation; divergence inventory expanded 2026-05-23
+from an end-to-end read of the reference impl against `chumicro_mqtt.client`, `_wire.py`,
+and `chumicro_runner.core`.
 
 ## Problem
 
@@ -49,7 +59,7 @@ Each row is a concrete code-level defect with reference behaviour, chumicro beha
 | Send suppression while busy: `_send_from_queue` only fires when `not _waiting_state and not _partial_state and _rx_buffer_length == 0` (`mqtt_client.py:537-541`).  Ensures the inbound packet is fully processed before new outbound bytes go on the wire. | No equivalent.  Chumicro sends whenever `_tx_queue` is non-empty; an arriving inbound publish doesn't suppress outbound sends mid-tick. | (architecture — no single line) |
 | `_packet_count_that_must_send` discipline: when a packet partial-sends, increment a counter; while > 0, suppress PINGREQ injection (`mqtt_client.py:510, 615-617, 646-648`).  Preserves wire-ordering invariant that the remainder of a partial packet lands before the next discretionary packet. | `_partial_send = (packet, offset)` is stored (`client.py:407`) and resumed in `_drain_tx_queue` (`client.py:967-975`) but the path is `pragma: no cover` — never exercised in tests.  No PING-suppression discipline.  Wire ordering relies on `_drain_tx_queue` running the partial-resume *before* anything else `_check_keepalive` appended — which it does today, but the invariant isn't named or tested. | `client.py:967-975, 1253-1270` |
 | `clean_disconnect`: poll-waits up to 150 ms for POLLOUT, sends DISCONNECT, then closes.  `disconnect` (no DISCONNECT, just close) is a separate method.  `mqtt_client.py:308-338`. | Single `disconnect()` method tries best-effort `_send_raw(PACKET_DISCONNECT)` then closes; if socket isn't writable, the DISCONNECT is silently dropped.  No way for the caller to ask for "graceful only" vs "close now." | `client.py:489-505` |
-| Single 256-byte RX buffer + partial-state machine for >256-byte messages.  Predictable RAM footprint.  `mqtt_client.py:69-72, 856-912`. | Three-tier decoder (steady / intact-with-allocation / oversized-rolling-discard) with read-cursor + lazy compaction.  More sophisticated, but the tier-2 intact path *allocates* `bytearray(payload_length)` per oversized inbound — a 7 KB inbound on a fragmented heap can fail allocation where the reference's partial-state would have survived. | `_wire.py:457-887` |
+| Single 256-byte RX buffer + partial-state machine for >256-byte messages.  Predictable RAM footprint.  `mqtt_client.py:69-72, 856-912`. | RESOLVED by Decision 0099 (2026-07-03): the tier-2 intact path — whose per-message `bytearray(payload_length)` allocation was the concern here — is deleted; the decoder is now two-tier (steady / oversized-rolling-discard) with no per-message allocation. | `_wire.py` (two-tier) |
 
 ### LOW — chumicro improvements worth keeping (no defect, listed so future work doesn't regress them)
 
@@ -57,7 +67,7 @@ Each row is a concrete code-level defect with reference behaviour, chumicro beha
 |---|---|---|
 | Multiple concurrent pending responses (SUBSCRIBE + PUBLISH + PING can coexist). | One `_waiting_state` slot only.  `mqtt_client.py:222-225`. | `_pending_responses` list with per-entry deadlines.  `client.py:400, 480-485, 825-832`. |
 | Packet-id collision check on allocation. | `_get_unique_id` is a module-level counter wrapping at 6550 with no collision check.  `mqtt_client.py:102-109`. | `_allocate_packet_id` skips ids already in `_in_flight`, raises `OverflowError` if all 65535 slots are taken.  `client.py:937-953`. |
-| Pattern-handler split optimization. | Splits both topic and pattern on every inbound match.  `mqtt_client.py:1014-1043`. | Patterns pre-split at `add_pattern_handler` (`client.py:737`); inbound only splits the topic once (`client.py:1081`). |
+| Pattern-handler split optimization. | (Row obsolete: Decision 0099 deleted the pattern-handler router entirely — `on_message` + `next_message()` + public `topic_matches()` cover its use.) | — |
 | Backpressure as explicit exception, not silent drop. | TX queue uses `deque([], DEQUE_MAX_SIZE, 1)` — silently drops oldest on overflow.  `mqtt_client.py:243`. | `_enqueue_user_tx` raises `MQTTBackpressureError` at the user cap; protocol packets bypass.  `client.py:1005-1021`. |
 | Topic-too-long handled gracefully. | Treated as programming error: `_disconnect_and_raise("RX buffer full, Programming Error!")`.  `mqtt_client.py:657-660`. | Tier-3 drain with `topic=None`, emits `_OversizedMessage` event.  `_wire.py:745-760`. |
 
@@ -65,7 +75,7 @@ Each row is a concrete code-level defect with reference behaviour, chumicro beha
 
 These came up during the read but are not yet diagnosed as defects vs design choices.  Worth a second look when the workstream is picked up for code.
 
-- **`io_wants_*` poll-mask sync timing.**  Runner's `_sync_poll_set` reads `io_wants_read` / `io_wants_write` at the start of `wait` (`runner/core.py:391-444`), which fires after `tick`.  So the mask reflects the state *after* the service drained its queue this tick.  Reference flips the mask twice per loop iteration (before and after I/O, lines 516-518 + 548-551).  Functionally close but the timing differs by one tick — worth tracing whether that costs any spurious POLLOUT wakeups on a steady publisher.
+- **Poll-mask sync timing** (the paired `io_wants_*` bools became the `io_interest(now_ms)` bitmask in Decision 0097; the timing question survives the rename).  Runner's `_sync_poll_set` reads the interest at the start of `wait`, which fires after `tick`.  So the mask reflects the state *after* the service drained its queue this tick.  Reference flips the mask twice per loop iteration (before and after I/O, lines 516-518 + 548-551).  Functionally close but the timing differs by one tick — worth tracing whether that costs any spurious POLLOUT wakeups on a steady publisher.
 
 - **`Runner.wait` returns immediately when no deadlines + no sockets** (`runner/core.py:375-376`).  Tight loop with no sleep.  In practice every chumicro_mqtt client registers a socket while connected, but a `FAILED` client returns `None` from `io_socket` (`client.py:783-792`) and from `next_deadline` (`client.py:819`), so the runner spins until the next tick's `_attempt_self_heal` (which is itself rate-limited only by however fast the loop spins).  Should `wait` enforce a minimum sleep, or should chumicro_mqtt expose a self-heal-retry deadline?
 
@@ -131,9 +141,9 @@ The defects don't all need to land together.  Suggested order to maximize signal
 ## Pointers
 
 - Reference: a previous-generation MQTT client (1043-line monolithic `loop()`).
-- Current `chumicro_mqtt.client`: `libraries/mqtt/src/chumicro_mqtt/client.py` (1283 lines).
-- Current `chumicro_mqtt._wire`: `libraries/mqtt/src/chumicro_mqtt/_wire.py` (889 lines).
-- Current `chumicro_runner.core`: `libraries/runner/src/chumicro_runner/core.py` (488 lines).
+- Current `chumicro_mqtt.client`: `libraries/mqtt/src/chumicro_mqtt/client.py` (2008 lines, 2026-07-04).
+- Current `chumicro_mqtt._wire`: `libraries/mqtt/src/chumicro_mqtt/_wire.py` (825 lines, 2026-07-04).
+- Current `chumicro_runner.core`: `libraries/runner/src/chumicro_runner/core.py` (923 lines, 2026-07-04).
 - Bake harness: `projects/mqtt_bake_diag*/` in the sibling workspace-template checkout.
 - ADR for the runner contract: [`plans/decisions/0080-runner-reactor.md`](../decisions/0080-runner-reactor.md).
 - ADR for the runner pattern (constraints on services): [`plans/decisions/0014-runner-pattern.md`](../decisions/0014-runner-pattern.md).
