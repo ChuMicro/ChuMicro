@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "chumicro-timing"
 dynamic = ["version"]
-description = "Wraparound-safe millisecond tick helpers and heartbeat scheduling for CircuitPython, MicroPython, and CPython."
+description = "Wraparound-safe millisecond tick helpers plus wait value objects (deadlines, rates, signals) for CircuitPython, MicroPython, and CPython."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
@@ -14,7 +14,7 @@ authors = [
 ]
 keywords = [
     "circuitpython", "micropython", "microcontroller", "embedded",
-    "esp32", "rp2040", "timing", "ticks", "heartbeat",
+    "esp32", "rp2040", "timing", "ticks", "deadline", "rate",
 ]
 classifiers = [
     "Development Status :: 2 - Pre-Alpha",

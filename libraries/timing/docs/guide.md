@@ -5,70 +5,106 @@
 `chumicro-timing` provides two things:
 
 1. **Tick helpers** — `ticks_ms()`, `ticks_diff()`, and `ticks_add()` that handle counter wraparound correctly across all three Python runtimes.
-2. **Heartbeat** — a periodic timer that tells you when a time interval has elapsed, without blocking.
+2. **Value objects** built on those helpers:
+    - `Deadline` — a single armed timeout: check `expired(now)` / `remaining(now)`, `reset(now)` to re-arm.
+    - `Rate` — a drift-free periodic cadence (the replacement for the old `Heartbeat`): `due(now)` returns `True` at most once per period.
+    - `earliest` — fold several `Deadline`s into one "how long can I wait?" budget.
 
-These are the building blocks for non-blocking timing on microcontrollers. Instead of calling `time.sleep()` (which blocks everything), you capture a timestamp once per loop and check `heartbeat.poll(now)` for each component.
+These are the building blocks for non-blocking timing on microcontrollers. Instead of calling `time.sleep()` (which blocks everything), you capture a timestamp once per loop and hand it to each timer.
+
+For generator-based flows that suspend until a completion event, the opt-in `chumicro_timing.waits` submodule adds `Signal` and `wait_for` — the completion-wait vocabulary. Import it explicitly: `from chumicro_timing.waits import Signal, wait_for`.
 
 ## Getting started
 
-### Basic heartbeat
+### Basic periodic cadence
 
 The most common pattern is a periodic action in a main loop:
 
 ```python
-from chumicro_timing import Heartbeat, ticks_ms
+from chumicro_timing import Rate, ticks_ms
 
-led_heartbeat = Heartbeat(period_ms=500)
+led_rate = Rate(500, ticks_ms())
 
 while True:
     now = ticks_ms()
-    if led_heartbeat.poll(now):
+    if led_rate.due(now):
         # This runs twice per second
         toggle_led()
 ```
 
-`poll(now_ms)` returns `True` once per elapsed period and advances the internal timer. Calling it again with the same timestamp returns `False` until the next period elapses.
+`Rate(period_ms, now_ms)` takes the current time at construction so it can phase-align its schedule. `due(now_ms)` returns `True` at most once per elapsed period and advances the internal schedule. Calling it again with the same timestamp returns `False` until the next period elapses.
 
 ### Shared timestamps
 
 **Always capture `ticks_ms()` once per loop iteration** and pass the same value to every component. This prevents drift between independent clock reads:
 
 ```python
-from chumicro_timing import Heartbeat, ticks_ms
+from chumicro_timing import Rate, ticks_ms
 
-fast = Heartbeat(period_ms=100)   # 10 Hz
-slow = Heartbeat(period_ms=5000)  # every 5 seconds
+now = ticks_ms()
+fast = Rate(100, now)   # 10 Hz
+slow = Rate(5000, now)  # every 5 seconds
 
 while True:
     now = ticks_ms()  # ONE reading per iteration
-    if fast.poll(now):
+    if fast.due(now):
         read_sensor()
-    if slow.poll(now):
+    if slow.due(now):
         send_report()
 ```
 
-On a slow microcontroller, calling `ticks_ms()` separately for each component would return slightly different values. A heartbeat that should fire at the same moment as another might not. Sharing the timestamp eliminates this class of bug.
+On a slow microcontroller, calling `ticks_ms()` separately for each component would return slightly different values. A timer that should fire at the same moment as another might not. Sharing the timestamp eliminates this class of bug.
 
 ### Resetting
 
-`reset(now_ms)` restarts the timer from the given timestamp:
+`reset(now_ms)` restarts the cadence from the given timestamp:
 
 ```python
 now = ticks_ms()
-heartbeat.reset(now)
-# The next beat is now period_ms from this moment,
-# regardless of when the last beat was.
+led_rate.reset(now)
+# The next fire is now period_ms from this moment,
+# regardless of when the last fire was.
 ```
 
 ### Behavior under late polls
 
-When the loop runs late, `Heartbeat.poll(now)` fires once and re-anchors the next deadline to `now` — missed intervals are dropped, not caught up. For most loops this is what you want: a heartbeat that lost a cycle resumes from where the code actually got to, not from where it should have been.
+`Rate` is **drift-free / phase-aligned**. When the loop runs late, `due(now)` fires and advances the *scheduled* tick by whole periods — it does not re-anchor to `now`. A 200 ms cadence keeps landing on 200, 400, 600 … even when individual polls arrive a few milliseconds late, and that jitter never accumulates. If the loop stalls for longer than one period, the missed fires are skipped rather than replayed back-to-back: `due(now)` returns `True` once and the schedule jumps forward to the next period boundary after `now`.
 
-For workloads where the period really has to mean what it says ("10 messages per minute", "sample the sensor every 200 ms regardless of jitter"), use the deadline-carrier pattern instead — see [`examples/phase_locked_tick.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/timing/examples/phase_locked_tick.py).
+This is the opposite of the old `Heartbeat`, which re-anchored the next deadline to `now` on every fire and so drifted forward by each loop's late-arrival cost. `Rate` gives you the phase-locked behavior by default. If you want to see those mechanics spelled out by hand, [`examples/phase_locked_tick.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/timing/examples/phase_locked_tick.py) carries the deadline manually — that is exactly what `Rate` does for you internally.
+
+## Deadlines
+
+A `Deadline` is a single armed timeout. Arm it with the current time, then poll it:
+
+```python
+from chumicro_timing import Deadline, ticks_ms
+
+deadline = Deadline(500, ticks_ms())  # due 500 ms from now
+
+while not deadline.expired(ticks_ms()):
+    if sensor_ready():
+        break
+    do_other_work()
+
+left = deadline.remaining(ticks_ms())  # ms until due, clamped at 0
+```
+
+`expired(now)` reports whether the deadline has passed; `remaining(now)` returns the milliseconds left (clamped at `0`). `reset(now)` re-arms the same period from a new moment.
+
+When you are waiting on several deadlines at once, `earliest` folds them into a single wait budget — the smallest `remaining` across them all:
+
+```python
+from chumicro_timing import Deadline, earliest, ticks_ms
+
+now = ticks_ms()
+timeouts = [Deadline(1000, now), Deadline(250, now), Deadline(5000, now)]
+
+budget = earliest(now, *timeouts)  # 250 (the nearest), or None if empty
+```
 
 ## Using ticks directly
 
-For custom timing logic that doesn't fit the heartbeat pattern, use the tick functions directly:
+For custom timing logic, you can use the tick functions directly:
 
 ```python
 from chumicro_timing import ticks_ms, ticks_diff, ticks_add
@@ -85,7 +121,9 @@ elapsed = ticks_diff(ticks_ms(), start)
 deadline = ticks_add(start, 3000)  # 3 seconds from start
 ```
 
-**Important**: Do not use plain subtraction (`end - start`) on tick values. The counter wraps every ~6.2 days, and plain subtraction gives wrong results near the boundary. Always use `ticks_diff()`.
+**Important**: Do not use plain subtraction (`end - start`) on tick values, and never compute a deadline as `now + delta`. The counter wraps every ~6.2 days, and plain arithmetic gives wrong results near the boundary. Use `ticks_diff()` to measure elapsed time and `ticks_add()` to offset a timestamp.
+
+The safe default is to reach for `Deadline` rather than arm a timeout by hand. `Deadline(timeout_ms, ticks_ms())` arms via `ticks_add` internally, so the `now + delta` footgun is simply unrepresentable — you never write the wrapping arithmetic yourself. Keep `ticks_add` / `ticks_diff` for the cases where you genuinely need the raw tick values.
 
 ## Wraparound details
 
@@ -110,17 +148,17 @@ All sources are masked to the 2²⁹ period, so behavior is identical regardless
 
 ## Using with chumicro-runner
 
-`Heartbeat` is designed to be polled from a main loop or tick-based scheduler — it never blocks. A typical pattern:
+`Rate` is designed to be polled from a main loop or tick-based scheduler — it never blocks. A typical pattern:
 
 ```python
-from chumicro_timing import Heartbeat, ticks_ms
+from chumicro_timing import Rate, ticks_ms
 
-heartbeat = Heartbeat(period_ms=1000)
+rate = Rate(1000, ticks_ms())
 
 def on_tick() -> None:
     """Called once per scheduler tick."""
     now = ticks_ms()
-    if heartbeat.poll(now):
+    if rate.due(now):
         do_periodic_work()
 ```
 
@@ -132,12 +170,12 @@ The [examples](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/timing/e
 
 | Example | What it shows |
 |---|---|
-| `heartbeat_blink.py` | Basic heartbeat in a main loop (the embedded hello world) |
-| `multiple_heartbeats.py` | Several heartbeats at different rates sharing one timestamp |
+| `heartbeat_blink.py` | Basic periodic Rate in a main loop (the embedded hello world) |
+| `multiple_heartbeats.py` | Several Rate timers at different rates sharing one timestamp |
 | `timeout_check.py` | Using `ticks_diff()` for deadline-based timeout detection |
 | `debounce.py` | Button debounce using `ticks_ms()` and `ticks_diff()` |
-| `periodic_tick.py` | Manual periodic action — the same logic `Heartbeat` wraps |
-| `phase_locked_tick.py` | Drift-free deadline carrier — same period across late loops |
+| `periodic_tick.py` | Manual periodic action — the same logic `Rate` wraps |
+| `phase_locked_tick.py` | Drift-free deadline carrier by hand — the phase-locked schedule `Rate` provides built-in |
 | `circuitpython_blink.py` | LED blink on CircuitPython hardware |
 | `circuitpython_debounce.py` | Button debounce on CircuitPython hardware |
 | `micropython_blink.py` | LED blink on MicroPython hardware |

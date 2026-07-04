@@ -1,8 +1,8 @@
 """Timeout check using tick functions directly.
 
 Shows how to use ``ticks_ms`` / ``ticks_diff`` / ``ticks_add`` for
-deadline enforcement, the kind of custom timing logic that doesn't
-fit the ``Heartbeat`` pattern.
+deadline enforcement, the kind of one-shot timing logic that doesn't
+fit the periodic ``Rate`` pattern.
 
 A ``wait_for_sensor()`` helper polls until a sensor is ready or a
 deadline expires.  On a real board, ``poll_sensor()`` would be a fast

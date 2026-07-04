@@ -18,7 +18,7 @@ None / False:
 * ``ready(now_ms) -> bool``: optional event predicate.  A wait
   exposing it (and no socket) suspends the generator until ``ready``
   returns True or ``next_deadline`` elapses (the timeout path) — the
-  shape ``chumicro_runner.generators.Signal`` implements for
+  shape ``chumicro_timing.waits.Signal`` implements for
   completions that originate in callback-style services.
 
 A bare ``yield`` (sending ``None``) suspends for exactly one tick:
@@ -31,7 +31,8 @@ these attributes natively, so a generator that wraps it can simply
 build small private wait objects for the other cases: the socket
 helpers in ``chumicro_sockets.generators`` for a bare socket,
 ``sleep_until`` in ``chumicro_runner.generators`` for a deadline,
-``Signal`` / ``wait_for`` there for a callback-completed event.
+``Signal`` / ``wait_for`` in ``chumicro_timing.waits`` for a
+callback-completed event.
 
 Sequential I/O state machines that would otherwise need an explicit
 per-state ``check`` / ``handle`` object collapse to a top-to-bottom

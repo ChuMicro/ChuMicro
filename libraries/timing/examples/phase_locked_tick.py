@@ -4,11 +4,13 @@ Shows the manual deadline-carrier pattern: each fire schedules the next
 one by adding the period to the *last deadline*, not to *now*.  This
 keeps the schedule phase-locked even when the loop runs late.
 
-Contrast with ``Heartbeat`` (and ``periodic_tick.py``), which both
-anchor the next deadline to *now*.  Those patterns drift forward by
-the loop's late-arrival cost on every cycle.  When the period must
-mean what it says (telemetry "10 messages per minute", a sensor read
-every 200 ms), reach for this pattern instead.
+This is exactly what ``Rate`` does internally — ``Rate`` is the built-in
+drift-free cadence, and reaching for it is usually simpler than carrying
+the deadline by hand.  Contrast with ``periodic_tick.py``, which
+re-anchors the next deadline to *now* and so drifts forward by the loop's
+late-arrival cost on every cycle.  When the period must mean what it says
+(telemetry "10 messages per minute", a sensor read every 200 ms), stay
+phase-locked — reach for ``Rate`` or spell it out with this pattern.
 
 Example output::
 

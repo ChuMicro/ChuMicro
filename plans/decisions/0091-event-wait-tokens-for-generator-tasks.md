@@ -2,7 +2,7 @@
 
 Status: `accepted`
 Date: `2026-07-02`
-Summary: Generator waits gain a `ready(now_ms)` predicate plus a `Signal` token in `chumicro_runner.generators`; bare `yield` resumes next tick; `Runner.wait` parks on sockets when no deadline exists.
+Summary: Generator waits gain a `ready(now_ms)` predicate plus a `Signal` token (home: `chumicro_timing.waits` per 0095); bare `yield` resumes next tick; `Runner.wait` parks when no deadline exists.
 Related: 0087 (generator substrate), 0089 (generator surfaces on networking libraries), 0080 (runner reactor)
 
 ## Context
@@ -19,7 +19,9 @@ A yielded wait with no socket may expose `ready(now_ms)`. The wrapper resumes th
 
 `yield` with no value suspends for exactly one tick. Internally the wrapper maps the `None` send-result to a module-level next-tick wait; a cleared wait slot strictly means the generator finished.
 
-### 3. `Signal` and `wait_for` live in `chumicro_runner.generators`
+### 3. `Signal` and `wait_for` live in `chumicro_timing.waits`
+
+Originally landed in `chumicro_runner.generators`; [Decision 0095](0095-timing-wait-vocabulary.md) moved both into `chumicro_timing.waits` (runner consumes them; `sleep_until` stayed in runner).
 
 `Signal` is a one-slot completion token: `set(value)` / `clear()` / `is_set` / `value` / `ready(now_ms)`. Setters are plain callables, so any callback-style service can complete one. `wait_for(signal, deadline_ms=...)` suspends until the signal is set and returns its value, raising `OSError(ETIMEDOUT)` past the optional deadline. Tokens are reusable across waits; a suspended wait allocates nothing per tick.
 
@@ -41,6 +43,6 @@ With sockets registered and no deadline anywhere, `wait` blocks in the poller in
 
 - **`result(now_ms)` send-value protocol** (0087's original sketch). A second dispatch per resume, and a per-wait value plumbed through the wrapper, to save one attribute read (`signal.value`) after resuming. The wrapper keeps sending `now_ms` — generators doing deadline math need it, and it allocates nothing.
 - **Named `ReadReady` / `WriteReady` / `Sleep` token classes.** The shipped duck-typed attributes already cover sockets and deadlines; adding named classes for the same semantics is API surface without capability.
-- **`Signal` in runner core.** Keeping it in the opt-in `generators` module means plain check/handle consumers load none of it.
+- **`Signal` in runner core.** Keeping it out of core (first the opt-in `generators` module, now `chumicro_timing.waits` per Decision 0095) means plain check/handle consumers load none of it.
 - **Predicate-polling waits** (`yield until(lambda: ...)`). Resuming to evaluate arbitrary predicates every tick is a busy-poll with extra steps; a set-once token makes the completer explicit and allocation-free.
 - **Per-library `connected()`-style verbs built on `Signal`.** Decision 0089 already rejected these for MQTT; the token is substrate, and whether any library earns a verb remains a 0089-invariant question decided per library.

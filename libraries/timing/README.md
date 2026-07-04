@@ -5,7 +5,7 @@ align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
 **Timers that don't block. Your loop keeps ticking.**
 
-Capture `ticks_ms()` once per loop pass, hand it to a `Heartbeat`, and you've got clean periodic timing on CircuitPython, MicroPython, or CPython. Tick-source detection is automatic, wraparound is handled, and there are no dependencies on anything else in ChuMicro — it's where every other library starts.
+Capture `ticks_ms()` once per loop pass, hand it to a `Rate` or a `Deadline`, and you've got clean drift-free timing on CircuitPython, MicroPython, or CPython. Tick-source detection is automatic, wraparound is handled, and there are no dependencies on anything else in ChuMicro — it's where every other library starts.
 
 <br clear="left">
 
@@ -29,13 +29,13 @@ For bundle setup, pre-compiled `.mpy` bundles, the experimental channel, and det
 ## Quick example
 
 ```python
-from chumicro_timing import Heartbeat, ticks_ms
+from chumicro_timing import Rate, ticks_ms
 
-heartbeat = Heartbeat(period_ms=1000)
+rate = Rate(1000, ticks_ms())
 
 while True:
     now = ticks_ms()
-    if heartbeat.poll(now):
+    if rate.due(now):
         print("one second elapsed")
     # ... do other work ...
 ```
@@ -50,14 +50,22 @@ while True:
 | `ticks_diff(end, start)` | Time elapsed between two tick values (handles wraparound correctly) |
 | `ticks_add(ticks, delta)` | Add milliseconds to a tick value (handles wraparound correctly) |
 
-### Heartbeat
+### Value objects
 
 | Symbol | Description |
 |---|---|
-| `Heartbeat(period_ms, ticks=None)` | Periodic timer that fires once per elapsed period |
-| `Heartbeat.poll(now_ms)` | Returns `True` once per period and advances the timer |
-| `Heartbeat.reset(now_ms)` | Restart the timer from the given timestamp |
-| `Heartbeat.period_ms` | The configured period |
+| `Deadline(period_ms, now_ms)` | A single armed timeout — `expired(now)` / `remaining(now)` / `reset(now)` |
+| `Rate(period_ms, now_ms)` | Drift-free periodic cadence; `due(now)` fires at most once per period |
+| `earliest(now_ms, *deadlines)` | Smallest `remaining` across several `Deadline`s — one wait budget |
+
+### Wait vocabulary (`chumicro_timing.waits`)
+
+Opt-in completion-wait vocabulary for generator flows — import explicitly.
+
+| Symbol | Description |
+|---|---|
+| `Signal()` | A completion flag — `set(value)` / `clear()` / `ready(now)` |
+| `wait_for(signal, deadline_ms=None)` | Generator suspension helper: `yield from wait_for(signal)` |
 
 ### Testing
 
@@ -95,29 +103,27 @@ All sources are masked to a 2²⁹ ms period (~6.2 days). `ticks_diff` and `tick
 The `chumicro_timing.testing` module provides `FakeTicks` for deterministic host-side tests — no wall-clock waits:
 
 ```python
-from chumicro_timing import Heartbeat
+from chumicro_timing import Rate
 from chumicro_timing.testing import FakeTicks
 
 fake = FakeTicks()
-heartbeat = Heartbeat(period_ms=100, ticks=fake)
+rate = Rate(100, fake.ticks_ms())
 
-now = fake.ticks_ms()
-assert heartbeat.poll(now) is False
+assert rate.due(fake.ticks_ms()) is False
 
 fake.advance(100)
-now = fake.ticks_ms()
-assert heartbeat.poll(now) is True
+assert rate.due(fake.ticks_ms()) is True
 ```
 
 ## Examples
 
 | Example | What it shows |
 |---|---|
-| `heartbeat_blink.py` | Basic periodic timer loop |
-| `multiple_heartbeats.py` | Multiple heartbeats at different rates |
+| `heartbeat_blink.py` | Basic periodic `Rate` loop |
+| `multiple_heartbeats.py` | Multiple `Rate` timers at different rates |
 | `timeout_check.py` | One-shot deadline check using `ticks_diff` |
 | `debounce.py` | Simulated button debounce |
-| `periodic_tick.py` | Manual periodic loop (the same logic `Heartbeat` wraps internally) |
+| `periodic_tick.py` | Manual periodic loop (the same logic `Rate` wraps internally) |
 | `phase_locked_tick.py` | Drift-free deadline carrier — same period across late loops |
 | `circuitpython_blink.py` | LED blink on CircuitPython hardware |
 | `circuitpython_debounce.py` | GPIO button debounce on CircuitPython |

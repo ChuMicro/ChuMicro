@@ -20,8 +20,8 @@ from chumicro_config import load_runtime_config
 from chumicro_requests.generators import get
 from chumicro_requests.sockets_factory import chumicro_sockets_connector_factory
 from chumicro_runner import Runner
-from chumicro_runner.generators import Signal, wait_for
 from chumicro_test_harness.markers import marker
+from chumicro_timing.waits import Signal, wait_for
 from chumicro_wifi import WifiConfig, WifiService, WifiState
 
 
