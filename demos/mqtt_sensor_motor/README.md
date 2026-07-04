@@ -55,9 +55,12 @@ The board code is short because it reimplements none of this:
   guard. Samples produced before the broker session is up buffer in the
   client's bounded pre-connect queue and flush on CONNACK (the default
   `when_disconnected="queue"` policy) — the cadence never state-checks.
-- **Subscribe-in-`on_connect` replay.** The `motor/set` subscription
-  and the retained `online` are (re)issued from `on_connect`, so a
-  self-heal reconnect replays them for free — no reconnect bookkeeping.
+- **Declarative subscribe.** The `motor/set` subscription is declared
+  once at startup with `subscribe()`, before `connect()` — not inside
+  `on_connect`. The client records it in its desired set, sends it on
+  the first CONNACK, and replays it on every self-heal reconnect, so
+  there is no reconnect bookkeeping. (`on_connect` keeps only the
+  retained `online` publish, which is genuinely connect-time.)
 - **Availability via Last Will.** A retained `offline` will the broker
   publishes if the board drops uncleanly, paired with a retained
   `online` on connect. A clean shutdown suppresses the will, so the

@@ -514,15 +514,21 @@ class MQTTClient:
         self._in_flight = {}
         self._next_packet_id = 1
         self._pending_responses = []
-        # Topics the user has subscribed to (post-prefixing) →
-        # requested QoS.  Eagerly maintained by :meth:`subscribe` /
-        # :meth:`unsubscribe` so the set always reflects "what the
-        # user wants subscribed right now".  Replayed on every CONNACK
-        # that lands in CONNECTED so self-heal-driven reconnects
-        # restore the inbound stream — broker with clean_session=True
-        # forgets subscriptions across reconnects; with
-        # clean_session=False the replay is harmless (broker re-acks
-        # already-subscribed filters).
+        # The desired subscription set: topic (post-prefixing) →
+        # ``[requested_qos, pending_on_subscribe]``.  A two-item list
+        # (not a class — allocation-light) whose second slot holds a
+        # one-shot ``on_subscribe`` callback that fires on the FIRST
+        # SUBACK granting the topic, then clears to ``None``.  Eagerly
+        # maintained by :meth:`subscribe` / :meth:`unsubscribe` so it
+        # always reflects "what the user wants subscribed right now" —
+        # a :meth:`subscribe` call is a DECLARATION valid in any state,
+        # not just CONNECTED.  Replayed on every CONNACK that lands in
+        # CONNECTED (:meth:`_replay_subscriptions`) so a pre-connect
+        # declaration reaches the wire on the first connect and a
+        # self-heal reconnect restores the inbound stream — a broker
+        # with clean_session=True forgets subscriptions across
+        # reconnects, and with clean_session=False the session-present
+        # gate skips the (then-redundant) replay.
         self._subscriptions = {}
         # 64-slot headroom above the user cap so the QoS-1 retry path
         # and PINGREQ can't silently lose protocol packets when the
@@ -931,53 +937,72 @@ class MQTTClient:
         *,
         on_subscribe: object | None = None,
     ) -> None:
-        """Queue a SUBSCRIBE for *topic*.
+        """Declare a subscription for *topic* — valid in any state.
+
+        A declaration, not a wire command: it records *topic* in the
+        desired subscription set.  When already ``CONNECTED`` the
+        SUBSCRIBE also goes on the wire now (unchanged behavior); in any
+        other state (pre-connect, self-heal outage, or after
+        ``disconnect()``) no traffic happens now and the first CONNACK's
+        replay path (:meth:`_replay_subscriptions`) sends it.  So a
+        device can declare its subscriptions once at startup instead of
+        threading them through ``on_connect``.  No state is rejected: a
+        later :meth:`connect` always resets a ``FAILED`` / ``DISCONNECTED``
+        client, so any declaration can eventually reach the wire.
 
         Args:
-            topic: Topic filter (may include ``+`` / ``#`` wildcards),
-                sent on the wire as written.
+            topic: Topic filter (``+`` / ``#`` wildcards ok), on the
+                wire as written.
             qos: 0 or 1.
-            on_subscribe: Callback ``(topic, granted_qos)`` fired on SUBACK.
+            on_subscribe: One-shot ``(topic, granted_qos)`` fired on the
+                FIRST SUBACK granting *topic* — direct send or replay —
+                then cleared, so self-heal replays stay silent.
 
         Raises:
-            MQTTError: Client not in CONNECTED state.
+            MQTTBackpressureError: already CONNECTED and the tx queue is
+                full (only the direct-send path touches the tx queue).
         """
-        if self.state != ProtocolState.CONNECTED:
-            raise MQTTError(
-                f"subscribe() requires CONNECTED state, was {self.state}",
-            )
-        packet_id = self._allocate_packet_id()  # Reuse the id pool.
-        packet = encode_subscribe(
-            packet_id=packet_id, subscriptions=[(topic, qos)],
-        )
-        self._enqueue_user_tx(packet)
-        self._subscriptions[topic] = qos
-
         def _wrapped(granted_qos):
             if on_subscribe is not None:
                 on_subscribe(topic, granted_qos)
             self.on_subscribe(topic, granted_qos)
 
-        self._pending_responses.append(
-            PendingResponse(
-                awaiting=_AWAIT_SUBACK,
-                deadline_ticks=self._deadline(self._ack_timeout_ms),
-                packet_id=packet_id,
-                callback=_wrapped,
-                topic=topic,
-            ),
-        )
+        # CONNECTED: send now, before recording the entry, so a full-queue
+        # backpressure error leaves the desired-set untouched (byte-for-byte
+        # the pre-declarative CONNECTED path).  The SUBACK callback lives
+        # with the entry (its second slot), not the PendingResponse, so the
+        # direct send and a replay share one firing path (the SUBACK branch
+        # of _handle_ack fires and clears it).
+        if self.state == ProtocolState.CONNECTED:
+            packet_id = self._allocate_packet_id()  # Reuse the id pool.
+            packet = encode_subscribe(
+                packet_id=packet_id, subscriptions=[(topic, qos)],
+            )
+            self._enqueue_user_tx(packet)
+            self._pending_responses.append(
+                PendingResponse(
+                    awaiting=_AWAIT_SUBACK,
+                    deadline_ticks=self._deadline(self._ack_timeout_ms),
+                    packet_id=packet_id,
+                    callback=None,
+                    topic=topic,
+                ),
+            )
+        self._subscriptions[topic] = [qos, _wrapped]
 
     def unsubscribe(self, topic, *, on_unsubscribe=None):
-        """Queue an UNSUBSCRIBE for *topic*.
+        """Retract a subscription for *topic* — valid in any state.
 
         Mirror of :meth:`subscribe`: *topic* goes on the wire as
-        written.
+        written.  Always drops *topic* from the desired set so a replay
+        never re-issues it.  When ``CONNECTED`` also sends the
+        UNSUBSCRIBE and fires *on_unsubscribe* on the UNSUBACK; otherwise
+        it just retracts the declaration (nothing is on the wire yet).
         """
         if self.state != ProtocolState.CONNECTED:
-            raise MQTTError(
-                f"unsubscribe() requires CONNECTED state, was {self.state}",
-            )
+            # Not on the wire: retract the declaration, no traffic.
+            self._subscriptions.pop(topic, None)
+            return
         packet_id = self._allocate_packet_id()
         packet = encode_unsubscribe(packet_id=packet_id, topics=[topic])
         self._enqueue_user_tx(packet)
@@ -1840,14 +1865,23 @@ class MQTTClient:
                     "one or more subscription filters"
                 )
             matched = self._discard_pending(
-                _AWAIT_SUBACK,
-                packet_id=packet.packet_id,
-                callback_arg=packet.granted_qos,
+                _AWAIT_SUBACK, packet_id=packet.packet_id,
             )
-            if not matched:
+            if matched is None:
                 raise MQTTProtocolError(
                     f"SUBACK for unknown packet_id {packet.packet_id}",
                 )
+            # The SUBACK carries only the id; the matched pending entry
+            # supplies the topic, which keys the desired-set entry whose
+            # second slot holds the one-shot on_subscribe.  Fire and clear
+            # it on the FIRST grant (direct send or replay); a no-op when
+            # the topic was unsubscribed meanwhile or the one-shot already
+            # fired, so self-heal replays stay callback-silent.
+            entry = self._subscriptions.get(matched.topic)
+            if entry is not None and entry[1] is not None:
+                callback = entry[1]
+                entry[1] = None
+                callback(packet.granted_qos)
             return
         if packet.packet_type == PACKET_UNSUBACK:
             matched = self._discard_pending(
@@ -1913,21 +1947,26 @@ class MQTTClient:
         self.on_connect()
 
     def _replay_subscriptions(self):
-        """Re-issue SUBSCRIBE for every entry in ``_subscriptions``.
+        """Re-issue SUBSCRIBE for every entry in the desired subscription set.
 
-        Runs as the last step of every successful CONNACK.  On the
-        first connect the set is empty and this is a no-op; on a
-        self-heal-driven reconnect it restores the inbound stream
-        the broker forgot (clean_session=True) or harmlessly
-        re-confirms the surviving subscriptions (clean_session=False).
-        The replay does not fire the per-topic ``on_subscribe``
-        callback: ``on_connect`` (called right after this) is the
-        signal that the client is back on the wire, and a spurious
-        per-topic notify on every reconnect would be noise.
+        Runs as the last step of every successful CONNACK (gated by the
+        session-present check in :meth:`_handle_connack`).  This one
+        path serves two jobs: it puts a pre-connect *declaration* on the
+        wire for the first time, and on a self-heal-driven reconnect it
+        restores the inbound stream the broker forgot (clean_session=True).
+
+        The replay fires the per-topic ``on_subscribe`` only through the
+        one-shot stored in each entry's second slot (the SUBACK branch of
+        :meth:`_handle_ack` fires and clears it): a pre-connect
+        declaration's first SUBACK arrives via this replay and fires its
+        callback once, while an already-fired subscription (a prior direct
+        send or an earlier replay) has a cleared one-shot and stays silent
+        — so a self-heal reconnect does not re-notify per topic.
         """
         if not self._subscriptions:
             return
-        for topic, qos in self._subscriptions.items():
+        for topic, entry in self._subscriptions.items():
+            qos = entry[0]
             packet_id = self._allocate_packet_id()
             packet = encode_subscribe(
                 packet_id=packet_id, subscriptions=[(topic, qos)],
@@ -1966,9 +2005,12 @@ class MQTTClient:
     def _discard_pending(self, awaiting, *, packet_id, callback_arg=None):
         """Find and remove the matching :class:`PendingResponse`, then fire its callback.
 
-        Returns ``True`` when a match was found and removed.  Returns
-        ``False`` when no matching pending entry exists (caller decides
-        whether that's a protocol fault or a tolerated late arrival).
+        Returns the removed :class:`PendingResponse` when a match was
+        found (a truthy object, so ``if not matched`` / ``if matched is
+        None`` both read cleanly), letting the SUBACK caller recover the
+        entry's ``topic``.  Returns ``None`` when no matching pending
+        entry exists (caller decides whether that's a protocol fault or
+        a tolerated late arrival).
         """
         for index, pending in enumerate(self._pending_responses):
             if pending.awaiting != awaiting:
@@ -1981,8 +2023,8 @@ class MQTTClient:
                     pending.callback(callback_arg)
                 else:
                     pending.callback()
-            return True
-        return False
+            return pending
+        return None
 
     # ------------------------------------------------------------------
     # Internal: deadlines + keepalive

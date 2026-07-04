@@ -23,9 +23,16 @@ parsed then ignored, so `clean_session=False` silently does not do what it says.
    `when_disconnected=` (queue / raise — a third `drop_oldest` policy shipped with this
    wave but was cut as zero-consumer by the 2026-07-04 bloat review), defaulting to
    queue; a full queue under "queue" raises the same backpressure error as the tx queue.
-   The universal caller guard is deleted everywhere.  `subscribe()` stays CONNECTED-only — consumers
-   subscribe in `on_connect`, which keeps the session-resume replay logic free of
-   pre-connect interactions.
+   The universal caller guard is deleted everywhere.  `subscribe()` is a declaration valid
+   in any state: it records the topic in the eagerly-maintained desired-set (already replayed
+   on CONNACK), sends the SUBSCRIBE immediately when CONNECTED, and otherwise leaves the first
+   CONNACK's existing replay path to put it on the wire.  A pre-connect declaration is exactly
+   a replay-set entry, and the session-present gate already skips replay when the broker
+   resumed the session — so the resumed-session case needs no special handling and the
+   pre-connect-interaction worry dissolves.  `on_subscribe` becomes a one-shot stored with the
+   entry, firing on the first SUBACK that grants the topic (direct send or replay) then
+   clearing, so self-heal replays stay callback-silent.  Consumers may still subscribe in
+   `on_connect`; it is now one valid placement among equals, not a requirement.
 2. **Decoder**: drop the intact-drain tier; keep steady + oversized-discard.  With two
    tiers the steady→oversized boundary is `rx_buffer_size` itself, so `max_message_bytes`
    goes with the tier (a dead knob otherwise).  Measured payoff: both unix lanes drop

@@ -109,19 +109,26 @@ class TestNotConnectedGuards:
         else:
             raise AssertionError("expected ValueError for a retired policy")
 
-    def test_subscribe_before_connect_raises(self) -> None:
+    def test_subscribe_before_connect_declares_without_raising(self) -> None:
+        """subscribe() pre-connect is a declaration: no raise, no wire traffic yet."""
         sock = FakeSocket()
         ticks = FakeTicks()
         client = new_client(sock, ticks)
-        with raises(Exception):  # noqa: B017
-            client.subscribe("x")
+        client.subscribe("x", qos=1)  # accepted while DISCONNECTED
+        assert client.state == ProtocolState.DISCONNECTED
+        assert bytes(sock.sent) == b""  # nothing on the wire yet
+        assert "x" in client._subscriptions  # recorded in the desired-set
 
-    def test_unsubscribe_before_connect_raises(self) -> None:
+    def test_unsubscribe_before_connect_retracts_without_raising(self) -> None:
+        """unsubscribe() pre-connect retracts a declaration: no raise, no wire traffic."""
         sock = FakeSocket()
         ticks = FakeTicks()
         client = new_client(sock, ticks)
-        with raises(Exception):  # noqa: B017
-            client.unsubscribe("x")
+        client.subscribe("x", qos=1)
+        client.unsubscribe("x")  # accepted while DISCONNECTED
+        assert client.state == ProtocolState.DISCONNECTED
+        assert bytes(sock.sent) == b""
+        assert "x" not in client._subscriptions
 
 
 class TestDecoderEdgeCases:

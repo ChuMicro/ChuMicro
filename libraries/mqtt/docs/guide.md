@@ -23,9 +23,11 @@ client = MQTTClient.from_config(
 
 client.on_message = lambda topic, payload: print(topic, payload)
 
-# subscribe() requires the CONNECTED state, so wire it through
-# on_connect, which fires once the broker session is up.
-client.on_connect = lambda: client.subscribe("commands/+")
+# subscribe() is a declaration — call it before connect().  The client
+# records the topic and sends the SUBSCRIBE on the first CONNACK, and
+# replays it after any self-heal reconnect.  Declaring in on_connect is
+# equally valid, just no longer required.
+client.subscribe("commands/+")
 client.connect()
 
 # publish() can be called straight away: before CONNECTED it buffers in
@@ -40,7 +42,7 @@ while True:
         client.handle(now)
 ```
 
-`connect()` queues the CONNECT packet; the first few `handle()` calls drive it through CONNECTING → CONNECTED.  `publish()` called before then buffers into a bounded pre-connect queue and flushes on CONNACK — the default `when_disconnected="queue"` policy (`"raise"` restores the raise-if-not-connected behavior).  `subscribe()` and `unsubscribe()` still require `ProtocolState.CONNECTED`, so drive them from `on_connect` (as above) or after polling `client.state == ProtocolState.CONNECTED`.
+`connect()` queues the CONNECT packet; the first few `handle()` calls drive it through CONNECTING → CONNECTED.  `publish()` called before then buffers into a bounded pre-connect queue and flushes on CONNACK — the default `when_disconnected="queue"` policy (`"raise"` restores the raise-if-not-connected behavior).  `subscribe()` and `unsubscribe()` are declarations valid in any state: call them before `connect()` and the first CONNACK puts them on the wire (a self-heal reconnect replays them). Calling `subscribe()` while already CONNECTED still sends immediately, and placing it in `on_connect` is equally valid — just no longer required.
 
 `MQTTClient` actually enforces non-blocking mode on every socket it acquires (force-`setblocking(False)`), so the explicit `sock.setblocking(False)` line above is belt-and-suspenders.  Don't omit it — MP plain TCP defaults to blocking, and a blocking `recv` against a silent peer (broker that's hung mid-handshake, network blackholing returning packets) stalls the tick loop indefinitely on Pi Pico W RP2.  Bench-tested with a stalled TCP listener: recv was still blocked at the 3-minute mark, with no TCP keepalive timeout fired within that window.  Whole-app freeze, not a recoverable hiccup.
 
@@ -71,7 +73,7 @@ Connect is asynchronous, so `publish()` can be called while the client is still 
 | `"queue"` (default) | Buffer in a bounded pre-connect queue (`pre_connect_queue_size`, default 8), drained on CONNACK in receipt order ahead of any publish `on_connect` issues.  A full queue raises `MQTTBackpressureError` — the same signal a full tx queue gives. |
 | `"raise"` | Raise `MQTTError` immediately — the strict "must be connected" behavior. |
 
-Queued publishes preserve their `qos` / `retain` and fire their `on_publish` callback when they eventually reach the wire.  `subscribe()` / `unsubscribe()` are not queued — drive them from `on_connect`.
+Queued publishes preserve their `qos` / `retain` and fire their `on_publish` callback when they eventually reach the wire.  `subscribe()` / `unsubscribe()` don't use this queue — they are declarations recorded in the subscription set and (re)sent on CONNACK (see [Subscribing and routing](#subscribing-and-routing)).
 
 ## Subscribing and routing
 
@@ -82,6 +84,8 @@ client.on_message = lambda topic, payload: print(topic, "=>", payload)
 client.subscribe("commands/+")             # MQTT wildcard
 client.subscribe("status/#", qos=1)        # multi-level wildcard
 ```
+
+`subscribe()` is a declaration valid in any state — call it before `connect()`, inside `on_connect`, or any time while CONNECTED. It records the topic in the client's subscription set; the SUBSCRIBE goes on the wire immediately when already CONNECTED, otherwise on the first CONNACK. Either way the `on_subscribe(topic, granted_qos)` callback fires once, on the SUBACK that grants the topic. A self-heal reconnect replays the set to restore the inbound stream, without re-firing `on_subscribe`. `unsubscribe()` mirrors this: it retracts the declaration in any state and sends the UNSUBSCRIBE when CONNECTED.
 
 For structured routing, branch inside `on_message` with the public `topic_matches(topic, pattern)` matcher — `+` matches one segment, `#` matches the trailing tail:
 

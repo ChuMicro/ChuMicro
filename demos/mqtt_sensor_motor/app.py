@@ -16,9 +16,11 @@ reimplementing it:
   up buffers in the client's bounded pre-connect queue and flushes on
   CONNACK (the default ``when_disconnected="queue"`` policy), so the
   telemetry cadence never has to state-check the client.
-* **Subscribe-in-on_connect.**  The command subscription is (re)issued
-  from ``on_connect``, so a self-heal reconnect replays it for free —
-  no reconnect bookkeeping in the app.
+* **Declarative subscribe.**  The command subscription is declared once
+  at startup with ``subscribe()`` — before ``connect()`` — not inside
+  ``on_connect``.  The client records it in its desired set, puts it on
+  the wire on the first CONNACK, and replays it on every self-heal
+  reconnect, so the app carries no reconnect bookkeeping.
 * **Availability via Last Will.**  A retained ``"offline"`` will the
   broker publishes if the board drops uncleanly, paired with a retained
   ``"online"`` sent on connect.  A clean shutdown suppresses the will,
@@ -194,6 +196,12 @@ mqtt = MQTTClient.from_config(config, radio=wifi.adapter.radio)
 # publishes the matching retained "online".
 mqtt.set_will(availability_topic, b"offline", qos=1, retain=True)
 
+# Declarative subscription: subscribe() before connect() records the
+# command topic in the client's desired set.  The first CONNACK puts it
+# on the wire, and every self-heal reconnect replays it — so the app
+# declares its inbound shape once here, with no on_connect bookkeeping.
+mqtt.subscribe(command_topic, qos=1)
+
 # Progress state at module scope so the callbacks read and write it
 # without ceremony — small enough that a class would only add noise.
 telemetry_sent = 0
@@ -204,12 +212,13 @@ current_speed = 0
 def on_connect():
     """Connect-time setup, fired once the broker session is up.
 
-    Announces presence and subscribes to commands here (not at startup)
-    so a self-heal reconnect replays both for free.
+    Announces presence with a retained "online" — a genuinely
+    connect-time publish (it pairs with the Last Will).  The command
+    subscription is declared once at startup, not here; the client
+    replays it on every reconnect on its own.
     """
     marker("MQTT_CONNECTED", broker=broker, client_id=client_id)
     mqtt.publish(availability_topic, b"online", qos=1, retain=True)
-    mqtt.subscribe(command_topic, qos=1)
 
 
 def on_motor_command(topic, payload):
