@@ -5,7 +5,7 @@ align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
 **A non-blocking HTTP/1.1 client — your LED keeps blinking through a TLS handshake.**
 
-A `requests`-flavored surface that advances one chunk per runner tick — connect, send, recv, parse — so your control loop never stalls waiting for a peer.  Plain HTTP, HTTPS (live-verified on real boards), POST / PUT / PATCH / DELETE, JSON helper, redirect handling, and `Transfer-Encoding: chunked` decode.
+A `requests`-flavored surface that advances one chunk per runner tick — connect, send, recv, parse — so your control loop never stalls waiting for a peer.  Plain HTTP, HTTPS (live-verified on real boards), POST / PUT / PATCH / DELETE, JSON helper, redirect handling, `Transfer-Encoding: chunked` decode, and `stream=True` for bodies bigger than RAM — read a firmware image into a 512-byte buffer, chunk by chunk.
 
 <br clear="left">
 
@@ -52,9 +52,10 @@ print(response.json())            # parsed JSON when Content-Type is application
 
 | Symbol | Purpose |
 |---|---|
-| `HttpClient` | Runner-shaped HTTP/1.1 client; `check(now_ms)` / `handle(now_ms)`. |
-| `RequestHandle` | Per-request handle: `.done`, `.result`, `.error`. |
-| `Response` | Status code, reason, headers, raw body, URL; `.text`, `.json()`, `.encoding`. |
+| `HttpClient` | Runner-shaped HTTP/1.1 client; `check(now_ms)` / `handle(now_ms)`; per-verb methods plus generic `request(...)`; `stream=True` for incremental bodies; `cancel()` aborts in flight. |
+| `RequestHandle` | Per-request handle: `.done`, `.result`, `.error`; `.read_body_into(buffer)` drains a streamed body. |
+| `Response` | Status code, reason, headers, raw body, URL; `.text`, `.json()`, `.encoding`; `.streamed` on streamed exchanges. |
+| `chumicro_requests.generators` | Opt-in submodule: `yield from`-shaped `fetch` / `get` / `post` / ... one-shots and `stream` + `BodyReader` for chunked body reads under `Runner.add_generator`. |
 | `CaseInsensitiveDict` | Header dict with case-insensitive lookups. |
 | `WhenOversized` | Policy enum for responses past `max_body_bytes`. |
 | `chumicro_requests.sockets_factory.chumicro_sockets_connector_factory(...)` | Opt-in submodule: convenience connection-factory wired to chumicro-sockets. |
