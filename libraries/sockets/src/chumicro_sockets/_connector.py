@@ -72,6 +72,13 @@ class SocketConnector:
         self._context = context
 
         self.state = STATE_AWAITING_DNS
+        # Poll interest reported during ``awaiting_tls``.  Starts as
+        # read+write (direction unknown before the first handshake
+        # step); adapters that step the handshake per tick narrow it to
+        # the direction the last ``SSLWant*`` signal named.  Without
+        # the narrowing a connected socket — always writable — would
+        # wake the poller every tick for the whole handshake round-trip.
+        self._tls_interest = _IO_READ | _IO_WRITE
         #: The current socket.  Set during ``awaiting_tcp`` once the
         #: raw socket is built, replaced with the TLS-wrapped or
         #: protocol-wrapped reference at ``awaiting_tls`` / ``ready``,
@@ -101,13 +108,13 @@ class SocketConnector:
         """Poll-interest bitmask (``IO_READ`` / ``IO_WRITE``) for ``Runner.wait``.
 
         Replaces the paired ``io_wants_read`` / ``io_wants_write`` bools.
-        A TLS-handshake step both may consume inbound bytes (read) and
-        needs writability (write); a bare TCP-connect step needs only
-        write; every other phase (DNS resolution, terminal) registers
-        nothing.
+        A TLS-handshake step reports the direction the last handshake
+        signal named (read+write before the first step — see
+        ``_tls_interest``); a bare TCP-connect step needs only write;
+        every other phase (DNS resolution, terminal) registers nothing.
         """
         if self.state == STATE_AWAITING_TLS:
-            return _IO_READ | _IO_WRITE
+            return self._tls_interest
         if self.state == STATE_AWAITING_TCP:
             return _IO_WRITE
         return 0

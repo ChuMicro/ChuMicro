@@ -21,6 +21,8 @@ import socket
 import ssl
 
 from chumicro_sockets._connector import (
+    _IO_READ,
+    _IO_WRITE,
     _TERMINAL,
     STATE_AWAITING_DNS,
     STATE_AWAITING_TCP,
@@ -177,9 +179,19 @@ class _CPythonConnector(SocketConnector):
         )
 
     def _tls_ready(self, sock):
+        # Each ``SSLWant*`` names the one direction the handshake is
+        # blocked on; recording it lets ``io_interest`` drop the other
+        # bit.  Almost the whole handshake is spent in WantRead
+        # (awaiting the server's flight) on an always-writable socket,
+        # so keeping WRITE registered would busy-wake the poller until
+        # the peer responds.
         try:
             sock.do_handshake()
-        except (ssl.SSLWantReadError, ssl.SSLWantWriteError):
+        except ssl.SSLWantReadError:
+            self._tls_interest = _IO_READ
+            return False
+        except ssl.SSLWantWriteError:
+            self._tls_interest = _IO_WRITE
             return False
         return True
 

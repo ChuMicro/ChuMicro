@@ -9,10 +9,11 @@ sockets 0.17.0 connect collapse + transport_factory= across five libraries (0098
 five ADR-premise corrections recorded); Wave 2 mqtt 0.22.0 surface corrections (0099,
 lanes dropped to 240K); Wave 3 the standalone-integration recipe; Wave 4 the template
 rebased to current main (flagship 174→61 lines, baked end-to-end to a public broker
-from real silicon).  Open residuals: the pi-pico-w-cp bench cells await its FSKit-wedge
-recovery (physical action); the io_interest TLS-handshake refinement (drop WRITE after
-the first SSLWantRead — recorded in 0098's execution trail) is unscheduled; the watched
-question below stands for a re-pose now that the waves landed.  Eight-report adversarial
+from real silicon).  Residuals closed 2026-07-04: the FSKit
+recovery landed and the full four-board closing matrix went green; the io_interest
+TLS-handshake refinement shipped in sockets 0.17.1 (the connector narrows its
+``awaiting_tls`` interest to the direction the last ``SSLWant*`` signal named); the
+watched question below stands for a re-pose now that the waves landed.  Eight-report adversarial
 design campaign: API fitness (mqtt, rudiments), hot-path buffer audit, ADR drift audit,
 consumer angle (sister repo), DI cost measurement, and two independent design seats
 (greenfield + consumer-driven synthesis).  Every claim below is evidenced in

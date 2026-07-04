@@ -42,14 +42,15 @@ def _connect_tls(host: str, port: int, context: object | None = None) -> object:
     """Drive ``connector(tls=True)`` to terminal; return the ready socket.
 
     Between ticks, ``select.select`` parks briefly on the connector's
-    ``io_socket`` so the kernel (and the threaded echo server) can
-    complete the in-flight connect / handshake.  During
-    ``awaiting_tls`` the wait is read-only: the connector's declared
-    interest is read+write, but a connected socket is *always*
-    writable, so waiting on writability would spin the loop through
-    its iteration budget in microseconds — handshake progress arrives
-    as inbound bytes.  Raises the connector's ``last_error`` on
-    failure so callers see the same exception the handshake produced.
+    declared ``io_interest`` — the same wait shape ``Runner.wait``
+    uses in production.  This makes the helper a live busy-poll
+    regression check: mid-handshake the connector narrows its interest
+    to the direction the last ``SSLWant*`` signal named, and a
+    connector that kept advertising write interest on the
+    always-writable socket would spin through the 200-tick budget in
+    microseconds and trip the stuck-state assert below.  Raises the
+    connector's ``last_error`` on failure so callers see the same
+    exception the handshake produced.
     """
     tls_connector = connector(host, port, tls=True, context=context)
     for _ in range(200):
@@ -57,13 +58,10 @@ def _connect_tls(host: str, port: int, context: object | None = None) -> object:
             break
         io_sock = tls_connector.io_socket
         if io_sock is not None:
-            if tls_connector.state == "awaiting_tls":
-                select.select([io_sock], [], [], 0.05)
-            else:
-                interest = tls_connector.io_interest(0)
-                read_list = [io_sock] if interest & 1 else []
-                write_list = [io_sock] if interest & 2 else []
-                select.select(read_list, write_list, [], 0.05)
+            interest = tls_connector.io_interest(0)
+            read_list = [io_sock] if interest & 1 else []
+            write_list = [io_sock] if interest & 2 else []
+            select.select(read_list, write_list, [], 0.05)
         tls_connector.tick(0)
     if tls_connector.state == "failed":
         raise tls_connector.last_error
