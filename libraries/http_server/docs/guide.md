@@ -126,12 +126,80 @@ The constructor exposes per-connection budgets so you can tune for your workload
 | `max_request_body_bytes` | `16 KB` | Cap on a single buffered request body.  Requests declaring a larger `Content-Length` get a `413 Payload Too Large` response — no body bytes are allocated.  Within the cap, the body buffer is sized-to-fit at headers-complete time (one `bytearray(content_length)` allocation per request), freed when the response drains. |
 | `max_request_line_bytes` | `1 KB` | Cap on the request-line length (method + target + version).  A request line that reaches the cap without a CRLF gets a `414 URI Too Long` response, so a no-CRLF dribble can't grow the parse buffer past the cap before the request times out. |
 | `max_headers_bytes` | `4 KB` | Cap on the total header-section bytes (every header line plus its CRLF).  Headers exceeding the cap get a `431 Request Header Fields Too Large` response. |
+| `stream_buffer_size` | `1 KB` | Staging-window size for a streaming response (see [Streaming large response bodies](#streaming-large-response-bodies)).  Allocated lazily — only a connection that streams pays it — and reused for the whole transfer, so it is the entire per-stream RAM cost regardless of body size. |
 
 Defaults are conservative; the per-tick budgets keep an LED blink visible even with a chatty client and a big POST body.
 
 ## Connection lifetime
 
 Each request is served on a fresh accepted socket; every response includes `Connection: close` and the socket is closed once the response drains.  HTTP/1.1 keep-alive and connection pooling are not supported.  Chunked request bodies are not supported either — use `Content-Length`.
+
+## Streaming large response bodies
+
+A normal `Response` holds its whole body in RAM.  When the body is bigger than the heap — a sensor-log dump, a file off storage, a long CSV export — return a **streaming response** instead: the server pulls the body from a callable one small window at a time and drains it to the client across ticks, so a 264 KB board can serve a body of any size at a fixed RAM cost.
+
+Streaming lives in an opt-in submodule (like `chumicro_requests.generators`) — import it explicitly.  A server that never streams never loads its code:
+
+```python
+from chumicro_http_server.streaming import build_streaming_response, SOURCE_EOF
+```
+
+### The byte source
+
+You supply a **source** — a fill-a-buffer callable `source(buffer) -> int`.  Each tick the server hands it the staging buffer; the source writes body bytes into it and returns what it did:
+
+| Return | Meaning |
+|---|---|
+| `n > 0` | Wrote `n` body bytes into `buffer[:n]` (`1 <= n <= len(buffer)`). |
+| `0` | No bytes ready this tick, but the body is **not** finished — the server retries on a later tick.  Use this only for a source that can genuinely be empty for a tick (a sensor sampled asynchronously). |
+| `SOURCE_EOF` (`-1`) | End of body.  The server finalizes the framing and closes. |
+
+The `0`-vs-`SOURCE_EOF` split is the whole contract: `0` means "ask again", `-1` means "done".  A source over a log or file that always has bytes until it runs out never returns `0` — it returns positive counts and then `SOURCE_EOF`.  A five-line generator that emits a list of records, chunking each to the buffer:
+
+```python
+def make_source(records):
+    pending = bytearray()
+    iterator = iter(records)
+    def source(buffer):
+        while not pending:
+            try:
+                pending.extend(next(iterator))   # bytes per record
+            except StopIteration:
+                return SOURCE_EOF                 # no more records
+        take = min(len(buffer), len(pending))
+        buffer[:take] = pending[:take]
+        del pending[:take]
+        return take
+    return source
+
+@server.route("/log")
+def log_dump(request):
+    return build_streaming_response(200, source=make_source(read_log_records()))
+```
+
+### Framing: Content-Length vs chunked
+
+The server picks the framing from whether you know the total length:
+
+* **Known total** — pass `content_length=`.  The server sends a `Content-Length` header and frames the body raw.  Your source must then produce exactly that many bytes before `SOURCE_EOF`; a mismatch breaks framing and closes the connection.
+* **Unknown total** — leave `content_length` unset (the default).  The server uses `Transfer-Encoding: chunked`, so you don't need to know the size up front.  Chunk framing is written into the staging buffer in place — no per-chunk allocation.
+
+```python
+build_streaming_response(200, source=src, content_length=file_size)  # Content-Length
+build_streaming_response(200, source=src)                            # chunked
+```
+
+Do not set `Content-Length` / `Transfer-Encoding` / `Connection` in `headers=` yourself — the server owns framing.  Other headers (e.g. `Content-Type`) are yours to set.
+
+### RAM, fairness, and timeouts
+
+* **Fixed staging window.**  Each streaming connection allocates one `stream_buffer_size`-byte buffer (default 1 KB, constructor knob), reused for the whole transfer — the entire per-stream RAM cost, independent of body size.  It is minted lazily, so a buffered response never allocates one.  A stalled client never grows it: the source is polled for the next fill only after the current one has fully drained to the socket.
+* **Per-tick fairness.**  A streamed send is bounded by the same `send_budget_per_tick` a buffered response uses, so one large download can't starve other connections — every connection gets at most one budget slice per `handle()` tick.
+* **Timeout.**  `request_timeout_ms` bounds the whole streamed send, and a client that stops reading (sends keep returning EAGAIN) is closed when the deadline fires.  Size `request_timeout_ms` for your largest streamed response, the same way `chumicro_requests`' streamed reads size their `timeout_ms` for the download.
+
+### Handler failures mid-stream
+
+Once the first body byte is on the wire the response is committed — an error page can no longer be spliced in.  So if your source raises mid-stream, or under-/over-runs a declared `Content-Length`, the connection is closed (the client sees a truncated body) and the failure goes through the server's normal fail-and-close path.  Do all the work that can fail — opening the file, the first query — before you return the `StreamingResponse`, where it can still become a clean `500`.
 
 ## Bring your own transport
 
@@ -209,7 +277,7 @@ The TLS handshake is synchronous inside `wrap_socket(..., server_side=True)` —
 
 ## Memory notes
 
-Connection state is bounded by `max_connections`; each connection holds its receive buffer (a scratch chunk capped at 512 B, so a `recv_budget_per_tick` above 512 is satisfied by several `recv_into` calls per tick), the parsed `Request`, and the encoded `Response` until drained.  Nothing else allocates per-tick steady-state.  The shared `chumicro-requests` HTTP/1.1 wire primitives (case-insensitive header dict, charset parsing) are inlined into `chumicro_http_server._wire` so a server-only board doesn't ship the client library.
+Connection state is bounded by `max_connections`; each connection holds its receive buffer (a scratch chunk capped at 512 B, so a `recv_budget_per_tick` above 512 is satisfied by several `recv_into` calls per tick), the parsed `Request`, and the encoded `Response` until drained.  Nothing else allocates per-tick steady-state.  A streaming response adds one `stream_buffer_size` window (default 1 KB) per streaming connection, minted lazily and reused for the transfer — a body of any size costs that fixed window, never the whole body.  The shared `chumicro-requests` HTTP/1.1 wire primitives (case-insensitive header dict, charset parsing) are inlined into `chumicro_http_server._wire` so a server-only board doesn't ship the client library.  The streamed-body framing code lives in the opt-in `chumicro_http_server.streaming` submodule, loaded only when a handler actually streams, so a buffered-only server never pays its footprint.
 
 ## Platform notes
 

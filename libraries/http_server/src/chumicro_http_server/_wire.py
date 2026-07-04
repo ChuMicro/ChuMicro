@@ -58,6 +58,18 @@ DEFAULT_REQUEST_TIMEOUT_MS = const(10000)
 #: Default in-flight connection cap.
 DEFAULT_MAX_CONNECTIONS = const(4)
 
+#: Streamed-response staging-window default and end-of-body sentinel.
+#: Defined here (not in the ``streaming`` submodule) so the
+#: always-imported path carries only the two constants, and the
+#: ``chumicro_http_server.streaming`` framing bytecode stays a lazy import
+#: a server that never streams never pays.  See
+#: :func:`chumicro_http_server.streaming.build_streaming_response`.
+DEFAULT_STREAM_BUFFER_SIZE = const(1024)
+
+#: The streamed-body source's end-of-body sentinel (``-1``): "no more
+#: body bytes ever", distinct from a ``0`` return ("none ready this tick").
+SOURCE_EOF = const(-1)
+
 #: HTTP/1.1 line terminator.
 CRLF = b"\r\n"
 
@@ -782,6 +794,8 @@ __all__ = [
     "DEFAULT_RECV_BUDGET_PER_TICK",
     "DEFAULT_REQUEST_TIMEOUT_MS",
     "DEFAULT_SEND_BUDGET_PER_TICK",
+    "DEFAULT_STREAM_BUFFER_SIZE",
+    "SOURCE_EOF",
     "CaseInsensitiveDict",
     "RequestParseState",
     "RequestParser",
