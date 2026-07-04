@@ -97,12 +97,12 @@ class InboundPublish:
 
 
 class _InboundWait:
-    """Resume-every-tick wait yielded by ``next_message`` while the queue is empty.
+    """Resume-every-tick wait yielded by ``next_message`` while the queue is empty."""
 
-    Carries no ``io_socket`` and no ``next_deadline``: the client is
-    registered with the runner in its own right and owns the socket
-    poll; the generator just re-checks the queue each tick.
-    """
+    # Of the duck-typed wait protocol chumicro_sockets.waits describes, this
+    # carries only io_socket, pinned to None: the client is registered with
+    # the runner in its own right and owns the socket poll, so the generator
+    # just re-checks the queue each tick.
 
     io_socket = None
 
@@ -384,6 +384,8 @@ class MQTTClient:
                 half this interval client-side.
             ack_timeout_seconds: Per-PUBACK / SUBACK / etc. deadline.
                 Triggers a retry (PUBLISH) or fault (everything else).
+                Also bounds each connector-driven transport attempt
+                (DNS + TCP + TLS bring-up) — see :meth:`connect`.
             publish_retry_max: Max QoS 1 PUBLISH retries before giving
                 up + transitioning to FAILED.
             username: Optional auth username (paired with *password*).
@@ -459,6 +461,15 @@ class MQTTClient:
         self._socket = socket
         self._transport_factory = transport_factory
         self._connector = None
+        # Overall deadline for the in-flight transport attempt.
+        # Connectors never time out on their own (their ``next_deadline``
+        # is ``None`` by design — the consumer owns the deadline), so a
+        # black-holed TCP connect or stalled TLS handshake would park in
+        # ``AWAITING_TRANSPORT`` forever without this.  Armed whenever a
+        # connector is built (``connect()`` / self-heal) with the
+        # ``ack_timeout_seconds`` window; cleared when the connector
+        # reaches a terminal state or is cancelled.
+        self._transport_deadline_ticks = None
         if self._socket is not None:
             _force_non_blocking(self._socket)
         self._user_wants_connected = False
@@ -614,6 +625,11 @@ class MQTTClient:
         the runner contract holds.  Self-heal retries on subsequent
         ticks.
 
+        Each transport attempt is bounded by ``ack_timeout_seconds``
+        (connectors carry no deadline of their own); a timed-out
+        attempt is cancelled and faults to ``FAILED``, where self-heal
+        schedules the next attempt.
+
         Callers loop ``while client.state not in
         {CONNECTED, DISCONNECTED, FAILED}: handle()`` or run under a
         Runner.
@@ -640,6 +656,7 @@ class MQTTClient:
                 )
                 self.state = ProtocolState.FAILED
                 return
+            self._transport_deadline_ticks = self._deadline(self._ack_timeout_ms)
             self.state = ProtocolState.AWAITING_TRANSPORT
             return
         self._enqueue_connect_packet()
@@ -732,6 +749,7 @@ class MQTTClient:
         self._tx_queue = _new_tx_queue(self._tx_queue_hard_cap)
         self._partial_send = None
         self._send_deadline_ticks = None
+        self._transport_deadline_ticks = None
         self._pending_responses.clear()
         self._decoder = PacketDecoder(**self._decoder_kwargs)
 
@@ -1203,6 +1221,7 @@ class MQTTClient:
         if self.state == ProtocolState.AWAITING_TRANSPORT and self._connector is not None:
             self._connector.cancel()
             self._connector = None
+            self._transport_deadline_ticks = None
         self.last_error = MQTTError(
             f"socket error from runner.wait (poll eventmask 0x{eventmask:x})",
         )
@@ -1223,23 +1242,36 @@ class MQTTClient:
         ``Runner.wait`` has nothing to park on), this returns *now_ms* —
         an immediate deadline that keeps the loop ticking the
         tick-driven connector forward.  Once a pollable exists
-        (TCP-connect onward) the connector's own deadline flows through
-        (currently ``None``; consumers wrap with an outer deadline).
+        (TCP-connect onward) the runner parks on handshake progress,
+        bounded by the transport-attempt deadline (connectors carry no
+        deadline of their own — the client owns the attempt window).
         """
         if self.state == ProtocolState.AWAITING_TRANSPORT:
             if self._connector is None:
                 return None
             if self.io_socket is None:
                 return now_ms
-            return self._connector.next_deadline(now_ms)
+            nearest = self._connector.next_deadline(now_ms)
+            attempt_deadline = self._transport_deadline_ticks
+            if attempt_deadline is not None and (
+                nearest is None
+                or self._ticks.ticks_diff(attempt_deadline, nearest) < 0
+            ):
+                nearest = attempt_deadline
+            return nearest
         if self.state == ProtocolState.FAILED:
             # A self-heal-eligible FAILED client wakes at its next backoff
-            # retry; a permanent failure (or no factory) parks forever.
+            # retry — or immediately when no backoff is armed yet (the
+            # first attempt after a fresh failure), so the runner ticks
+            # self-heal instead of parking on some other service's
+            # socket.  A permanent failure (or no factory) parks forever.
             if (
                 self._transport_factory is not None
                 and self._user_wants_connected
                 and not self._permanent_failure
             ):
+                if self._self_heal_retry_at_ticks is None:
+                    return now_ms
                 return self._self_heal_retry_at_ticks
             return None
         if self.state == ProtocolState.DISCONNECTED:
@@ -1282,12 +1314,14 @@ class MQTTClient:
         the same path the initial :meth:`connect` takes.  Without a
         factory the client stays in ``FAILED``.
 
-        ``AWAITING_TRANSPORT`` ticks call ``connector.tick(now_ms)``;
-        when the connector reaches ``ready`` the socket is promoted,
-        CONNECT is queued, and the state moves to ``CONNECTING``.
-        When the connector fails the state moves to ``FAILED`` with
-        ``last_error`` carrying the connector's error — self-heal
-        kicks in on the next tick.
+        ``AWAITING_TRANSPORT`` ticks check the transport-attempt
+        deadline first (deadlines before I/O), then call
+        ``connector.tick(now_ms)``; when the connector reaches
+        ``ready`` the socket is promoted, CONNECT is queued, and the
+        state moves to ``CONNECTING``.  When the connector fails — or
+        the attempt outlives its ``ack_timeout_seconds`` window — the
+        state moves to ``FAILED`` with ``last_error`` carrying the
+        cause, and self-heal schedules the next attempt.
 
         *now_ms* is the per-tick timestamp the runner captured once
         and passes to every registered service so they all see the
@@ -1312,12 +1346,17 @@ class MQTTClient:
             ):
                 return  # Backoff interval not elapsed yet; wait for a later tick.
             self._arm_self_heal_backoff(now_ms)
-            if not self._attempt_self_heal():
+            if not self._attempt_self_heal(now_ms):
                 return
             # Self-heal succeeded — state is AWAITING_TRANSPORT.  Fall
             # through to the connector-advance branch this same tick so
             # the connector gets one tick of progress immediately.
         if self.state == ProtocolState.AWAITING_TRANSPORT:
+            # Deadline before I/O, same as the connected-path ordering:
+            # a stalled attempt faults here without giving the connector
+            # another tick.
+            if self._check_transport_deadline(now_ms):
+                return
             if not self._advance_connector(now_ms):
                 return
             # Connector reached ready — state is CONNECTING with the
@@ -1363,14 +1402,15 @@ class MQTTClient:
             self._self_heal_attempts += 1
         self._self_heal_retry_at_ticks = self._deadline(delay_ms, now_ms=now_ms)
 
-    def _attempt_self_heal(self):
+    def _attempt_self_heal(self, now_ms):
         """Reset transient state, build a fresh connector, enter AWAITING_TRANSPORT.
 
         Best-effort: if ``transport_factory()`` itself raises (typically
         because wifi is still down) the client stays in ``FAILED`` and
         the next handle tick retries.  The actual DNS / TCP / TLS work
         happens across subsequent ticks in :meth:`_advance_connector`,
-        so this method does not block.
+        bounded by the transport-attempt deadline armed here, so this
+        method does not block.
 
         Returns ``True`` when self-heal succeeded and the client is in
         ``AWAITING_TRANSPORT``.  Returns ``False`` when building the
@@ -1399,8 +1439,38 @@ class MQTTClient:
                 f"connector factory failed: {factory_error}",
             )
             return False
+        self._transport_deadline_ticks = self._deadline(
+            self._ack_timeout_ms, now_ms=now_ms,
+        )
         self.state = ProtocolState.AWAITING_TRANSPORT
         self.last_error = None
+        return True
+
+    def _check_transport_deadline(self, now_ms):
+        """Fault a transport attempt that outlived its overall window.
+
+        Connectors never time out on their own (their ``next_deadline``
+        is ``None`` by design — the consumer owns the deadline), so a
+        black-holed TCP connect or stalled TLS handshake would park
+        forever without this.  Returns ``True`` when it fired: the
+        connector is cancelled, ``last_error`` names the dead phase,
+        and the client is ``FAILED`` for the next tick's self-heal.
+        """
+        if self._transport_deadline_ticks is None:
+            return False
+        if self._ticks.ticks_diff(self._transport_deadline_ticks, now_ms) > 0:
+            return False
+        connector = self._connector
+        phase = connector.state if connector is not None else "unknown"
+        if connector is not None:
+            connector.cancel()
+            self._connector = None
+        self._transport_deadline_ticks = None
+        self.last_error = MQTTError(
+            f"transport connect attempt timed out after "
+            f"{self._ack_timeout_ms} ms (connector phase: {phase})",
+        )
+        self.state = ProtocolState.FAILED
         return True
 
     def _advance_connector(self, now_ms):
@@ -1419,6 +1489,7 @@ class MQTTClient:
         if connector.state == "ready":
             self._socket = connector.socket
             self._connector = None
+            self._transport_deadline_ticks = None
             _force_non_blocking(self._socket)
             self._enqueue_connect_packet()
             self.state = ProtocolState.CONNECTING
@@ -1428,6 +1499,7 @@ class MQTTClient:
                 f"connector failed: {connector.last_error}",
             )
             self._connector = None
+            self._transport_deadline_ticks = None
             self.state = ProtocolState.FAILED
             return False
         return False
@@ -1598,12 +1670,13 @@ class MQTTClient:
         Returns ``True`` when queued.  The structural bound is checked
         here rather than left to the deque's overflow, which raises
         ``IndexError`` on MicroPython / CircuitPython and silently evicts
-        the opposite end (a queued user packet) on CPython.  When the
-        headroom is exhausted the packet is dropped: the broker
-        redelivers an un-PUBACKed QoS-1 message, and a missed PINGREQ
-        surfaces as a keepalive timeout — both recoverable, unlike a
-        crash or a lost user publish.  *front* queues ahead of pending
-        user packets (a PUBACK the broker is waiting on).
+        the opposite end (a queued user packet) on CPython.  At the cap
+        the packet is NOT queued and the caller decides: retransmit and
+        PINGREQ skip-and-retry next tick (both recoverable), while the
+        PUBACK flush in ``_read_inbound`` escalates ``False`` to a
+        FAILED fault rather than losing a protocol packet.  *front*
+        queues ahead of pending user packets (a PUBACK the broker is
+        waiting on).
         """
         if len(self._tx_queue) >= self._tx_queue_hard_cap:
             return False
@@ -1677,9 +1750,21 @@ class MQTTClient:
             if self.state != ProtocolState.CONNECTED:
                 return
         # appendleft in reverse so the earliest-received PUBACK sits
-        # first on the wire, ahead of pending user packets.
+        # first on the wire, ahead of pending user packets.  A queue
+        # already at the hard cap faults instead of dropping: a lost
+        # PUBACK (or a packet evicted to make room for one) silently
+        # corrupts the wire stream, while a FAILED transition lets
+        # self-heal rebuild cleanly — the broker redelivers whatever
+        # was never acked.  Interim guard until inbound dispatch is
+        # rate-converged with the one-send-per-tick drain.
         for encoded in reversed(pending_pubacks):
-            self._enqueue_internal_tx(encoded, front=True)
+            if not self._enqueue_internal_tx(encoded, front=True):
+                raise MQTTError(
+                    f"PUBACK backlog overflowed the tx queue hard cap "
+                    f"({self._tx_queue_hard_cap}): inbound QoS-1 rate "
+                    "exceeds the per-tick send drain; reconnecting "
+                    "rather than dropping protocol packets",
+                )
         # Drop the just-enqueued references promptly; the next tick's
         # clear covers the early-return path.
         pending_pubacks.clear()
