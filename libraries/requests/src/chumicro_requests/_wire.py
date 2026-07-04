@@ -13,7 +13,9 @@ here — the client drives the socket and feeds bytes in.
 v1 scope:
 
 * HTTP and HTTPS via :mod:`chumicro_sockets` TLS.
-* Body is buffered in full (capped by ``max_body_bytes``).
+* Body is buffered in full (capped by ``max_body_bytes``) by default,
+  or staged incrementally through a fixed window when the parser is
+  built with ``stream_body=True``.
 * ``Content-Length``-framed responses, read-until-close, and
   chunked transfer-encoding decode.
 * No header folding (RFC 7230 deprecates it); multi-value headers
@@ -102,6 +104,13 @@ DEFAULT_RECV_BUDGET_PER_TICK = const(1024)
 #: bigger than this fall back to a one-shot ``bytearray(content_length)``
 #: released when the parser is dereferenced.
 DEFAULT_BODY_BUFFER_SIZE = const(1024)
+
+#: Default staging capacity for a streamed response body
+#: (``stream=True`` requests).  The parser holds at most this many
+#: decoded-but-unread body bytes; the socket recv pauses while the
+#: window is full, so this constant — not the body size — is the
+#: response's RAM cost.
+DEFAULT_STREAM_BUFFER_SIZE = const(1024)
 
 #: Default per-request timeout in ms.
 DEFAULT_TIMEOUT_MS = const(10000)
@@ -558,6 +567,12 @@ class ResponseParser:
     The ``max_body_bytes`` cap is enforced incrementally — once total
     body bytes pass the cap the parser raises (or drops, depending on
     *when_oversized*) on the first :meth:`feed` past the threshold.
+
+    With ``stream_body=True`` the body is not accumulated at all:
+    decoded bytes wait in a fixed staging window the consumer drains
+    via :meth:`read_body_into`, the feeder bounds each :meth:`feed` by
+    :meth:`body_free`, and ``max_body_bytes`` does not apply (the
+    window is the RAM bound).
     """
 
     def __init__(
@@ -567,12 +582,14 @@ class ResponseParser:
         max_header_bytes: int = DEFAULT_MAX_HEADER_BYTES,
         body_buffer: bytearray | None = None,
         body_buffer_view: memoryview | None = None,
+        stream_body: bool = False,
     ) -> None:
         """Construct a one-shot parser.
 
         Args:
             max_body_bytes: Hard cap on body size — bigger triggers the
-                ``WhenOversized`` policy.
+                ``WhenOversized`` policy.  Not applied when
+                *stream_body* is set: the staging window is the bound.
             max_header_bytes: Hard cap on the accumulated status-line +
                 header (and chunk-frame) bytes staged before the body;
                 exceeding it fails with :class:`HttpProtocolError` so a
@@ -589,9 +606,20 @@ class ResponseParser:
             body_buffer_view: Pre-cached ``memoryview(body_buffer)``
                 supplied by the caller to avoid the parser constructing
                 one.  Required when ``body_buffer`` is provided.
+            stream_body: When ``True``, the body buffer becomes a
+                fixed-capacity staging window instead of a whole-body
+                accumulator: decoded body bytes wait in it until the
+                consumer copies them out via :meth:`read_body_into`,
+                and the feeder must bound each :meth:`feed` by
+                :meth:`body_free` (overflowing the window latches an
+                :class:`HttpError`).  A ``None`` *body_buffer* gets a
+                fresh ``DEFAULT_STREAM_BUFFER_SIZE`` window.
         """
         self._max_body_bytes = max_body_bytes
         self._max_header_bytes = max_header_bytes
+        self._stream_body = stream_body
+        if stream_body and body_buffer is None:
+            body_buffer = bytearray(DEFAULT_STREAM_BUFFER_SIZE)
         self._buffer = bytearray()
         # Read cursor into ``_buffer``.  Each ``_consume(n)`` advances
         # the cursor and only compacts the bytearray when at least
@@ -626,6 +654,16 @@ class ResponseParser:
             self._body_view = memoryview(self._body)
             self._body_capacity = 0
         self._body_write_offset = 0
+        # Streamed-body read cursor into the staging window.  Body
+        # bytes between the read and write cursors are decoded but not
+        # yet handed to the consumer; both reset to 0 on a full drain.
+        # Unused (always 0) in whole-body mode.
+        self._body_read_offset = 0
+        #: ``True`` once the final (non-1xx) response's header block
+        #: has been fully parsed — status line, headers, and body
+        #: framing decided.  Stays ``False`` across discarded 1xx
+        #: interim responses.
+        self.headers_complete = False
         # -1 = unknown (read until close).  Set to a non-negative
         # value when Content-Length parses successfully.
         self._body_remaining = -1
@@ -683,9 +721,56 @@ class ResponseParser:
         Reads through the cached ``_body_view`` (zero-copy memoryview
         slice) and snapshots one ``bytes`` copy for the caller —
         ``Response.text`` calls ``.decode()`` on the result, which
-        memoryview lacks.
+        memoryview lacks.  In streamed-body mode this is only the
+        staged, not-yet-consumed window, not the whole body.
         """
-        return bytes(self._body_view[:self._body_write_offset])
+        return bytes(self._body_view[self._body_read_offset:self._body_write_offset])
+
+    def body_free(self):
+        """Writable staging space in the streamed-body window, in bytes.
+
+        The feeder must keep each :meth:`feed` at or under this value
+        (decoded body bytes never exceed the wire bytes fed, for any
+        of the three framings), so the window can never overflow.
+        Meaningful in streamed-body mode; whole-body mode grows on
+        demand instead.
+        """
+        return self._body_capacity - self._body_write_offset
+
+    def read_body_into(self, buffer):
+        """Copy staged body bytes into caller-owned *buffer*; return the count.
+
+        Copies up to ``len(buffer)`` bytes from the staging window via
+        slice-assign (no allocation) and advances the read cursor.
+        Returns ``0`` when nothing is staged.  A full drain resets both
+        cursors so the whole window is writable again — the producer
+        stalls (``body_free() == 0``) until the consumer drains, rather
+        than paying a compaction copy.
+        """
+        available = self._body_write_offset - self._body_read_offset
+        if available <= 0:
+            return 0
+        count = len(buffer)
+        if count > available:
+            count = available
+        start = self._body_read_offset
+        end = start + count
+        buffer[:count] = self._body_view[start:end]
+        if end == self._body_write_offset:
+            self._body_read_offset = 0
+            self._body_write_offset = 0
+        else:
+            self._body_read_offset = end
+        return count
+
+    def discard_body(self):
+        """Drop every staged body byte and reset both cursors.
+
+        Used for response bodies that are decoded but never delivered —
+        a redirect hop's body in streamed mode.
+        """
+        self._body_read_offset = 0
+        self._body_write_offset = 0
 
     # ------------------------------------------------------------------
     # Driving the parser
@@ -870,6 +955,7 @@ class ResponseParser:
             self.headers = CaseInsensitiveDict()
             self.state = ParseState.STATUS
             return
+        self.headers_complete = True
         if self.status_code in NO_BODY_STATUS_CODES:
             self.state = ParseState.DONE
             return
@@ -905,7 +991,7 @@ class ResponseParser:
                     f"negative Content-Length: {content_length}",
                 ))
                 return
-            if content_length > self._max_body_bytes:
+            if content_length > self._max_body_bytes and not self._stream_body:
                 self._fail(HttpOversizedError(
                     f"Content-Length {content_length} exceeds cap "
                     f"{self._max_body_bytes}",
@@ -925,8 +1011,11 @@ class ResponseParser:
             # the chunked / length-unknown grow path pays (which doubles
             # capacity, O(log n) reallocations, O(n) total copy).  A
             # response that fits the caller's body_buffer still completes
-            # with no per-request allocation.
-            if content_length > self._body_capacity:
+            # with no per-request allocation.  Streamed mode never
+            # pre-allocates: the fixed staging window plus consumer
+            # drains is the whole point of that mode, so a peer-sized
+            # allocation here would defeat it.
+            if content_length > self._body_capacity and not self._stream_body:
                 self._body = bytearray(content_length)
                 self._body_view = memoryview(self._body)
                 self._body_capacity = content_length
@@ -990,7 +1079,9 @@ class ResponseParser:
             return True
         # Enforce the max-body cap as the chunk sizes accumulate so a
         # malicious server can't trickle in 64K + 1B before we notice.
-        if self._body_write_offset + chunk_size > self._max_body_bytes:
+        # Streamed mode has no body cap (the staging window bounds RAM,
+        # and the write offset is a cursor there, not a running total).
+        if not self._stream_body and self._body_write_offset + chunk_size > self._max_body_bytes:
             self._fail(HttpOversizedError(
                 f"chunked body would exceed cap {self._max_body_bytes}",
                 reported_length=self._body_write_offset + chunk_size,
@@ -1084,9 +1175,10 @@ class ResponseParser:
             if self._body_remaining == 0:
                 self.state = ParseState.DONE
             return
-        # Length-unknown: enforce the max-body cap as we go.
+        # Length-unknown: enforce the max-body cap as we go (whole-body
+        # mode only — streamed mode's bound is the staging window).
         chunk_len = len(chunk)
-        if self._body_write_offset + chunk_len > self._max_body_bytes:
+        if not self._stream_body and self._body_write_offset + chunk_len > self._max_body_bytes:
             self._fail(HttpOversizedError(
                 f"response body exceeded cap {self._max_body_bytes}",
                 reported_length=self._body_write_offset + chunk_len,
@@ -1101,10 +1193,11 @@ class ResponseParser:
         capacity (the steady-state path when an external buffer was
         supplied), or grow the buffer geometrically and copy into the
         replacement when it doesn't (chunked / length-unknown grow
-        path, where no total is known to pre-size against).  Never uses
-        ``bytearray.extend`` — that's "alloc bigger + memcpy old +
-        memcpy new + free old" on CP / MP, three allocations per
-        logical write.
+        path, where no total is known to pre-size against).  In
+        streamed-body mode the buffer never grows — an overflow latches
+        an :class:`HttpError` instead.  Never uses ``bytearray.extend``
+        — that's "alloc bigger + memcpy old + memcpy new + free old" on
+        CP / MP, three allocations per logical write.
         """
         chunk_len = len(chunk)
         write_offset = self._body_write_offset
@@ -1112,6 +1205,17 @@ class ResponseParser:
         if end_offset <= len(self._body_view):
             # Fits inside current capacity — in-place slice-assign.
             self._body[write_offset:end_offset] = chunk
+        elif self._stream_body:
+            # The staging window is a hard bound: the feeder is required
+            # to keep each feed at or under body_free(), so this branch
+            # only fires on a mis-driven standalone parser.  Latch loudly
+            # rather than grow — growth would silently unbound the RAM
+            # cost streaming exists to fix.
+            self._fail(HttpError(
+                "streamed-body staging overflow: drain read_body_into "
+                "and bound each feed by body_free()",
+            ))
+            return
         else:
             # Grow path (chunked / length-unknown framing — no total is
             # known up front, so the Content-Length pre-alloc can't

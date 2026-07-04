@@ -1,16 +1,17 @@
-"""One-shot fetch generator — error paths + read-wait shape.
+"""One-shot fetch generator — error paths + wait-token shape.
 
 Cross-runtime: runs on CPython (via pytest), MicroPython and CircuitPython
 (via chumicro_test_harness).  Drives ``fetch`` directly with
 ``gen.send`` against a scripted ``FakeSocket`` so assertions hit the
-generator's own logic; the runner integration of the deadline-carrying
-read-wait is covered in the runner suite.
+generator's own logic; the runner integration of the client-as-wait-token
+is covered in the runner suite.
 """
 
 import errno
 
 from _generator_helpers import _drive
 from chumicro_requests._wire import (
+    HttpError,
     HttpOversizedError,
     HttpProtocolError,
     HttpTimeoutError,
@@ -19,7 +20,6 @@ from chumicro_requests.generators import fetch
 from chumicro_requests.testing import canned_response, make_factory
 from chumicro_runner import IO_READ
 from chumicro_sockets.testing import FakeSocket, FakeSocketConnector
-from chumicro_sockets.waits import ReadWait
 from chumicro_test_harness import raises
 from chumicro_timing.testing import FakeTicks
 
@@ -49,9 +49,8 @@ def test_fetch_times_out_on_silent_peer():
 
 def test_fetch_times_out_when_connect_never_completes():
     # Connector stalls at awaiting_tcp (dns_ok only, no tcp_ok), so the
-    # connect phase never reaches ready; the overall deadline trips and
-    # fetch surfaces it as HttpTimeoutError (the connect generator raises
-    # OSError(ETIMEDOUT), which fetch translates).
+    # connect phase never reaches ready; the client's per-request
+    # deadline trips and fetch surfaces it as HttpTimeoutError.
     def factory(host, port, use_tls):  # noqa: ARG001 - fake ignores args
         return FakeSocketConnector(actions=["dns_ok"])
 
@@ -73,7 +72,11 @@ def test_fetch_raises_on_peer_close_before_response():
         _drive(fetch(make_factory(sock), "GET", "http://example.test/", ticks=ticks), ticks)
 
 
-def test_fetch_propagates_non_eagain_recv_error():
+def test_fetch_wraps_non_eagain_recv_error_in_http_error():
+    """A non-retryable socket error (ECONNRESET) fails the request with
+    HttpError — the documented failure type — and the message names the
+    underlying OSError so the cause stays visible."""
+
     class _ResetSock:
         def __init__(self):
             self.sent = bytearray()
@@ -82,7 +85,7 @@ def test_fetch_propagates_non_eagain_recv_error():
             self.sent.extend(bytes(data))
             return len(data)
 
-        def recv_into(self, buffer):  # noqa: ARG002
+        def recv_into(self, buffer, nbytes=0):  # noqa: ARG002
             raise OSError(errno.ECONNRESET, "connection reset")
 
         def close(self):
@@ -92,7 +95,7 @@ def test_fetch_propagates_non_eagain_recv_error():
         return FakeSocketConnector(actions=["dns_ok", "tcp_ok"], socket=_ResetSock())
 
     ticks = FakeTicks()
-    with raises(OSError):
+    with raises(HttpError):
         _drive(fetch(factory, "GET", "http://example.test/", ticks=ticks), ticks)
 
 
@@ -112,7 +115,10 @@ def test_fetch_rejects_body_and_json_together():
 def test_fetch_uses_default_ticks_when_none():
     # No ticks= injected: fetch falls back to chumicro_timing.ticks (the
     # on-device path).  Data is immediate so the real-clock deadline never
-    # fires; drive without advancing any fake clock.
+    # fires; drive with real tick readings so the client's deadline math
+    # sees a coherent clock.
+    from chumicro_timing import ticks as real_ticks
+
     sock = FakeSocket()
     sock.enqueue_recv(canned_response(body=b"ok"))
     gen = fetch(make_factory(sock), "GET", "http://example.test/")
@@ -124,17 +130,28 @@ def test_fetch_uses_default_ticks_when_none():
         except StopIteration as stop:
             response = stop.value
             break
-        value = 0
+        value = real_ticks.ticks_ms()
     assert response is not None
     assert response.status_code == 200
 
 
-def test_read_wait_carries_socket_and_request_deadline():
-    # fetch builds its recv wait as ReadWait(sock, deadline_ms=<absolute
-    # request deadline>): it carries the socket, reports read interest, and
-    # hands the deadline back so Runner.wait shortens its poll sleep.
-    sock = FakeSocket()
-    wait = ReadWait(sock, deadline_ms=1234)
+def test_fetch_yields_the_client_as_its_wait_token():
+    """fetch parks the scheduler on the request's own HttpClient: the
+    yielded wait exposes io_socket / io_interest / next_deadline, and
+    once the connector promotes, it reports read interest on the
+    FakeSocket with the absolute request deadline."""
+    sock = FakeSocket()  # nothing enqueued -> stalls in RECEIVING
+    ticks = FakeTicks()
+    gen = fetch(
+        make_factory(sock), "GET", "http://example.test/",
+        ticks=ticks, timeout_ms=500,
+    )
+    wait = gen.send(None)
+    # Drive until the request is mid-receive; the same client token is
+    # re-yielded every resume.
+    for _ in range(5):
+        wait = gen.send(ticks.ticks_ms())
     assert wait.io_socket is sock
-    assert wait.io_interest(0) == IO_READ
-    assert wait.next_deadline(0) == 1234
+    assert wait.io_interest(ticks.ticks_ms()) == IO_READ
+    assert wait.next_deadline(ticks.ticks_ms()) == 500
+    gen.close()

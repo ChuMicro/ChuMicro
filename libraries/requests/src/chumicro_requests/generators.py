@@ -1,8 +1,8 @@
-"""One-shot HTTP fetch as a generator for runner-driven sequential I/O.
+"""One-shot HTTP fetch and streamed-body reads as generators.
 
 Opt-in submodule — import explicitly::
 
-    from chumicro_requests.generators import fetch, get, post
+    from chumicro_requests.generators import fetch, get, post, stream
 
 A fetch is one request/response written top-to-bottom; the caller
 delegates to it and receives the :class:`~chumicro_requests.client.Response`::
@@ -13,38 +13,134 @@ delegates to it and receives the :class:`~chumicro_requests.client.Response`::
 
     handle = runner.add_generator(app(transport_factory))
 
-The generator builds a connector per hop via the injected
-``transport_factory(host, port, use_tls)`` (the same contract
-``HttpClient`` takes), drives it to a connected socket with
-``chumicro_sockets.generators.connect``, sends the encoded request, and
-feeds the streaming ``ResponseParser`` until the response completes —
-following redirects and enforcing ``timeout_ms`` and ``max_body_bytes``
-along the way.
+:func:`stream` is the same lifecycle for a body too large to buffer —
+it returns a :class:`BodyReader` once the response headers are in, and
+the caller pulls the body chunk by chunk into its own buffer::
 
-Unlike the long-lived ``HttpClient`` this allocates the response body
-per call; it is for one-shot fetches, not a hot request loop.  Use
-``HttpClient`` when you issue many requests from one client and want the
-body buffer reused.
+    def download(transport_factory, url, sink):
+        reader = yield from stream(transport_factory, "GET", url,
+                                   timeout_ms=120_000)
+        buffer = bytearray(512)
+        view = memoryview(buffer)
+        while True:
+            count = yield from reader.read_into(view)
+            if count == 0:
+                break
+            sink(view[:count])
+
+Both surfaces are thin adapters over :class:`HttpClient`: each call
+builds a client for the injected ``transport_factory``, issues the
+request, and yields the client itself as the scheduler wait token — an
+``HttpClient`` already exposes the duck-typed wait surface
+(``io_socket`` / ``io_interest(now_ms)`` / ``next_deadline(now_ms)``),
+so the runner parks on the request's socket and wakes for its deadline
+exactly as it would for the client registered as a service.  Every
+resume threads the runner's ``now_ms`` into ``client.handle(now_ms)``.
+
+Unlike a long-lived ``HttpClient`` these allocate their buffers per
+call; they are for one-shot work, not a hot request loop.  Use
+``HttpClient`` directly when you issue many requests from one client
+and want the body buffer reused.
 """
-
-import errno
 
 from chumicro_requests._wire import (
     DEFAULT_MAX_BODY_BYTES,
-    DEFAULT_MAX_REDIRECTS,
+    DEFAULT_STREAM_BUFFER_SIZE,
     DEFAULT_TIMEOUT_MS,
-    METHOD_PRESERVING_REDIRECT_STATUS_CODES,
-    REDIRECT_STATUS_CODES,
-    HttpTimeoutError,
-    ParseState,
-    ResponseParser,
-    encode_request,
-    parse_url,
-    resolve_redirect_url,
 )
-from chumicro_requests.client import Response, _encode_body, _merge_default_header
+from chumicro_requests.client import HttpClient, WhenOversized
 
-_RECV_CHUNK_SIZE = 512
+
+def _issue(
+    transport_factory, method, url, *,
+    headers, body, json, max_redirects, timeout_ms, user_agent, ticks,
+    stream=False, max_body_bytes=DEFAULT_MAX_BODY_BYTES,
+    stream_buffer_size=DEFAULT_STREAM_BUFFER_SIZE,
+):
+    """Build a per-call :class:`HttpClient` and start the request.
+
+    Returns ``(client, handle, now_ms)`` — *now_ms* is the tick the
+    request started at, the value the caller drives the first
+    ``client.handle`` with before its first yield.  Oversize policy is
+    pinned to ``DISCONNECT`` so a too-big buffered body raises
+    :class:`HttpOversizedError` instead of completing empty (a
+    generator caller has no oversize event hook to observe a drop).
+    """
+    if ticks is None:
+        from chumicro_timing import ticks  # noqa: PLC0415 - DI fallback, like HttpClient
+    client = HttpClient(
+        transport_factory=transport_factory,
+        max_body_bytes=max_body_bytes,
+        when_oversized=WhenOversized.DISCONNECT,
+        default_timeout_ms=timeout_ms,
+        stream_buffer_size=stream_buffer_size,
+        user_agent=user_agent,
+        ticks=ticks,
+    )
+    handle = client.request(
+        method, url,
+        headers=headers, body=body, json=json,
+        max_redirects=max_redirects, stream=stream,
+    )
+    return client, handle, ticks.ticks_ms()
+
+
+class BodyReader:
+    """Streamed-body pull surface returned by :func:`stream`.
+
+    ``response`` carries the final hop's status / headers (a
+    ``streamed=True`` :class:`~chumicro_requests.client.Response` with
+    an empty ``body``); :meth:`read_into` pulls the body itself.  A
+    caller that stops early calls :meth:`cancel` so the socket closes
+    now instead of at the request timeout.
+    """
+
+    def __init__(self, client, handle):
+        self._client = client
+        self._handle = handle
+        #: Final response — status, reason, headers — published before
+        #: the body finished arriving.
+        self.response = handle.response
+
+    def read_into(self, buffer):
+        """Fill caller-owned *buffer* with body bytes; return the count.
+
+        Call as ``count = yield from reader.read_into(view)``.  Copies
+        at most ``len(buffer)`` bytes and returns as soon as at least
+        one is available, yielding the underlying client (parking the
+        scheduler on the socket / request deadline) while none are.
+        Returns ``0`` exactly once the body is complete.
+
+        Raises:
+            HttpError: The request failed mid-body — timeout, protocol
+                error, socket error, or cancellation.  Raised before
+                any bytes staged after the failure are handed out.
+        """
+        handle = self._handle
+        client = self._client
+        try:
+            while True:
+                if handle.error is not None:
+                    raise handle.error
+                count = handle.read_body_into(buffer)
+                if count:
+                    return count
+                if handle.done:
+                    return 0
+                now_ms = yield client
+                client.handle(now_ms)
+        except BaseException:  # noqa: BLE001 - close the socket on GeneratorExit / thrown poll errors, then re-raise
+            if not handle.done:
+                client.cancel()
+            raise
+
+    def cancel(self):
+        """Abort the transfer: close the socket, fail the handle.
+
+        No-op once the request already finished.  A later
+        :meth:`read_into` raises the cancellation ``HttpError``.
+        """
+        self._client.cancel()
 
 
 def fetch(
@@ -79,8 +175,8 @@ def fetch(
             application/json`` unless *headers* overrides it.
         max_redirects: Hops to follow before returning the redirect
             response as-is (default ``DEFAULT_MAX_REDIRECTS``).
-        max_body_bytes: Hard cap on the response body; over it the
-            parser raises ``HttpOversizedError``.
+        max_body_bytes: Hard cap on the response body; over it
+            ``HttpOversizedError`` is raised.
         timeout_ms: Deadline for the whole request — the TCP connect,
             the TLS handshake, the request send, and the response read,
             summed across all redirect hops.  On expiry
@@ -105,110 +201,89 @@ def fetch(
         HttpProtocolError: Response was not valid HTTP/1.1 or the peer
             closed mid-response.
         HttpURLError: *url* or a redirect ``Location`` did not parse.
+        HttpError: The transport failed — connector failure or a
+            non-retryable socket error.
         ValueError: Both *body* and *json* were given.
     """
-    if body is not None and json is not None:
-        raise ValueError("pass body= or json= but not both")
-    if ticks is None:
-        from chumicro_timing import ticks  # noqa: PLC0415 - DI fallback, like HttpClient
-    # Opt-in substrate: imported here, not at module top, so importing
-    # chumicro_requests does not pull chumicro_sockets for BYO-socket users.
-    from chumicro_sockets.generators import connect, send_all  # noqa: PLC0415
-    from chumicro_sockets.waits import ReadWait  # noqa: PLC0415
-
-    encoded_body = _encode_body(body, json)
-    current_method = method
-    current_body = encoded_body
-    json_default_content_type = json is not None
-    redirects_remaining = (
-        max_redirects if max_redirects is not None else DEFAULT_MAX_REDIRECTS
+    client, handle, now_ms = _issue(
+        transport_factory, method, url,
+        headers=headers, body=body, json=json,
+        max_redirects=max_redirects, timeout_ms=timeout_ms,
+        user_agent=user_agent, ticks=ticks,
+        max_body_bytes=max_body_bytes,
     )
-    deadline_ms = ticks.ticks_add(ticks.ticks_ms(), timeout_ms)
-    current_url = url
+    try:
+        while not handle.done:
+            client.handle(now_ms)
+            if handle.done:
+                break
+            now_ms = yield client
+    finally:
+        # Only an abnormal exit (GeneratorExit from a cancelled task, a
+        # thrown poll error) leaves the request in flight; close its
+        # socket now instead of leaking it until the timeout.
+        if not handle.done:
+            client.cancel()
+    return handle.result
 
-    scratch = bytearray(_RECV_CHUNK_SIZE)
-    scratch_view = memoryview(scratch)
 
-    while True:
-        merged_headers = headers
-        if json_default_content_type:
-            merged_headers = _merge_default_header(
-                headers, "Content-Type", "application/json",
-            )
-        scheme, host, port, path = parse_url(current_url)
-        use_tls = scheme == "https"
-        default_port = 443 if use_tls else 80
-        host_header = host if port == default_port else f"{host}:{port}"
-        request_bytes = encode_request(
-            current_method,
-            host_header,
-            path,
-            headers=merged_headers,
-            body=current_body,
-            user_agent=user_agent,
-        )
-        connector = transport_factory(host, port, use_tls)
-        connect_budget_ms = ticks.ticks_diff(deadline_ms, ticks.ticks_ms())
-        if connect_budget_ms <= 0:
-            raise HttpTimeoutError(
-                f"request to {current_url!r} exceeded {timeout_ms} ms",
-            )
-        try:
-            sock = yield from connect(
-                connector, timeout_ms=connect_budget_ms, ticks=ticks,
-            )
-        except OSError as connect_error:
-            if connect_error.args and connect_error.args[0] == errno.ETIMEDOUT:
-                raise HttpTimeoutError(
-                    f"request to {current_url!r} exceeded {timeout_ms} ms",
-                ) from connect_error
-            raise
-        try:
-            yield from send_all(sock, request_bytes)
-            parser = ResponseParser(max_body_bytes=max_body_bytes)
-            read_wait = ReadWait(sock, deadline_ms=deadline_ms)
-            while parser.state not in (ParseState.DONE, ParseState.ERROR):
-                if ticks.ticks_diff(deadline_ms, ticks.ticks_ms()) <= 0:
-                    raise HttpTimeoutError(
-                        f"request to {current_url!r} exceeded {timeout_ms} ms",
-                    )
-                try:
-                    received = sock.recv_into(scratch_view)
-                except OSError as socket_error:
-                    if socket_error.args[0] == errno.EAGAIN:
-                        yield read_wait
-                        continue
-                    raise
-                if received == 0:
-                    parser.feed_eof()
-                    break
-                parser.feed(scratch_view[:received])
-            if parser.state == ParseState.ERROR:
-                raise parser.error
-        finally:
-            sock.close()
+def stream(
+    transport_factory,
+    method,
+    url,
+    *,
+    headers=None,
+    body=None,
+    json=None,
+    max_redirects=None,
+    timeout_ms=DEFAULT_TIMEOUT_MS,
+    stream_buffer_size=DEFAULT_STREAM_BUFFER_SIZE,
+    user_agent=None,
+    ticks=None,
+):
+    """Issue one request and return a :class:`BodyReader` for its body.
 
-        status_code = parser.status_code
-        if redirects_remaining > 0 and status_code in REDIRECT_STATUS_CODES:
-            location = parser.headers.get("Location")
-            if location is not None:
-                current_url = resolve_redirect_url(current_url, location)
-                if status_code not in METHOD_PRESERVING_REDIRECT_STATUS_CODES:
-                    # 301 / 302 / 303 — drop body, switch to GET.
-                    current_method = "GET"
-                    current_body = None
-                    json_default_content_type = False
-                redirects_remaining -= 1
-                continue
+    Call as ``reader = yield from stream(transport_factory, "GET", url)``.
+    Returns once the final hop's headers are parsed — check
+    ``reader.response.status_code`` before pulling the body with
+    ``yield from reader.read_into(buffer)``.  Argument semantics match
+    :func:`fetch` except there is no *max_body_bytes*: a streamed body
+    may be any size, RAM-bounded by *stream_buffer_size* (the staging
+    window between socket and caller, default 1024) plus the caller's
+    own buffer.  *timeout_ms* bounds the whole transfer, consumption
+    included — size it for the download, not for the round-trip.
 
-        return Response(
-            status_code=status_code,
-            reason=parser.reason,
-            http_version=parser.http_version,
-            headers=parser.headers,
-            body=parser.body,
-            url=current_url,
-        )
+    Raises:
+        HttpTimeoutError: *timeout_ms* elapsed before headers arrived.
+        HttpProtocolError: The response was not valid HTTP/1.1.
+        HttpURLError: *url* or a redirect ``Location`` did not parse.
+        HttpError: The transport failed before headers arrived.
+        ValueError: Both *body* and *json* were given.
+    """
+    client, handle, now_ms = _issue(
+        transport_factory, method, url,
+        headers=headers, body=body, json=json,
+        max_redirects=max_redirects, timeout_ms=timeout_ms,
+        user_agent=user_agent, ticks=ticks,
+        stream=True, stream_buffer_size=stream_buffer_size,
+    )
+    try:
+        while handle.response is None and not handle.done:
+            client.handle(now_ms)
+            if handle.response is not None or handle.done:
+                break
+            now_ms = yield client
+    finally:
+        # Only an abnormal exit (GeneratorExit from a cancelled task, a
+        # thrown poll error) leaves the request headerless-in-flight;
+        # close its socket now instead of leaking it until the timeout.
+        # After a normal exit the caller owns the transfer through the
+        # BodyReader.
+        if handle.response is None and not handle.done:
+            client.cancel()
+    if handle.error is not None:
+        raise handle.error
+    return BodyReader(client, handle)
 
 
 def get(transport_factory, url, **kwargs):

@@ -59,13 +59,14 @@ class _ScriptedCall:
     """One call recorded by :class:`FakeHttpClient`.
 
     Captures the request shape the downstream code under test produced
-    — method, URL, headers, body / json payload, per-call timeout and
-    max-redirects — so the test can assert on it after the fact.
+    — method, URL, headers, body / json payload, per-call timeout,
+    max-redirects, and the stream flag — so the test can assert on it
+    after the fact.
     """
 
     def __init__(
         self, *, method, url, headers, body, json_body,
-        timeout_ms, max_redirects,
+        timeout_ms, max_redirects, stream=False,
     ):
         self.method = method
         self.url = url
@@ -74,6 +75,33 @@ class _ScriptedCall:
         self.json = json_body
         self.timeout_ms = timeout_ms
         self.max_redirects = max_redirects
+        self.stream = stream
+
+
+class _ScriptedBodySource:
+    """Serves a scripted body through ``read_body_into`` for streamed fakes.
+
+    Stands in for the response parser's staging window: each
+    ``read_body_into(buffer)`` copies the next slice of the scripted
+    body into the caller's buffer and returns the count, ``0`` once
+    exhausted.
+    """
+
+    def __init__(self, body):
+        self._view = memoryview(bytes(body))
+        self._offset = 0
+
+    def read_body_into(self, buffer):
+        remaining = len(self._view) - self._offset
+        if remaining == 0:
+            return 0
+        count = len(buffer)
+        if count > remaining:
+            count = remaining
+        start = self._offset
+        buffer[:count] = self._view[start:start + count]
+        self._offset = start + count
+        return count
 
 
 class FakeHttpClient:
@@ -154,6 +182,26 @@ class FakeHttpClient:
         """``True`` while a request is in flight (between request method and handle)."""
         return self._handle is not None
 
+    def request(
+        self,
+        method: str,
+        url: str,
+        *,
+        body: bytes | str | None = None,
+        json: object | None = None,
+        headers: CaseInsensitiveDict | dict | list | tuple | None = None,
+        timeout_ms: int | None = None,
+        max_redirects: int | None = None,
+        on_done: object | None = None,
+        stream: bool = False,
+    ) -> RequestHandle:
+        """Mirror :meth:`HttpClient.request` against the scripted queue."""
+        return self._start_request(
+            method, url, headers=headers, body=body, json_body=json,
+            timeout_ms=timeout_ms, max_redirects=max_redirects,
+            on_done=on_done, stream=stream,
+        )
+
     def get(
         self,
         url: str,
@@ -162,11 +210,13 @@ class FakeHttpClient:
         timeout_ms: int | None = None,
         max_redirects: int | None = None,
         on_done: object | None = None,
+        stream: bool = False,
     ) -> RequestHandle:
         """Mirror :meth:`HttpClient.get` against the scripted queue."""
         return self._start_request(
             "GET", url, headers=headers, body=None, json_body=None,
-            timeout_ms=timeout_ms, max_redirects=max_redirects, on_done=on_done,
+            timeout_ms=timeout_ms, max_redirects=max_redirects,
+            on_done=on_done, stream=stream,
         )
 
     def post(
@@ -179,6 +229,7 @@ class FakeHttpClient:
         timeout_ms: int | None = None,
         max_redirects: int | None = None,
         on_done: object | None = None,
+        stream: bool = False,
     ) -> RequestHandle:
         """Mirror :meth:`HttpClient.post` against the scripted queue.
 
@@ -187,7 +238,8 @@ class FakeHttpClient:
         """
         return self._start_request(
             "POST", url, headers=headers, body=body, json_body=json,
-            timeout_ms=timeout_ms, max_redirects=max_redirects, on_done=on_done,
+            timeout_ms=timeout_ms, max_redirects=max_redirects,
+            on_done=on_done, stream=stream,
         )
 
     def put(
@@ -200,11 +252,13 @@ class FakeHttpClient:
         timeout_ms: int | None = None,
         max_redirects: int | None = None,
         on_done: object | None = None,
+        stream: bool = False,
     ) -> RequestHandle:
         """Mirror :meth:`HttpClient.put` against the scripted queue."""
         return self._start_request(
             "PUT", url, headers=headers, body=body, json_body=json,
-            timeout_ms=timeout_ms, max_redirects=max_redirects, on_done=on_done,
+            timeout_ms=timeout_ms, max_redirects=max_redirects,
+            on_done=on_done, stream=stream,
         )
 
     def patch(
@@ -217,11 +271,13 @@ class FakeHttpClient:
         timeout_ms: int | None = None,
         max_redirects: int | None = None,
         on_done: object | None = None,
+        stream: bool = False,
     ) -> RequestHandle:
         """Mirror :meth:`HttpClient.patch` against the scripted queue."""
         return self._start_request(
             "PATCH", url, headers=headers, body=body, json_body=json,
-            timeout_ms=timeout_ms, max_redirects=max_redirects, on_done=on_done,
+            timeout_ms=timeout_ms, max_redirects=max_redirects,
+            on_done=on_done, stream=stream,
         )
 
     def delete(
@@ -232,6 +288,7 @@ class FakeHttpClient:
         timeout_ms: int | None = None,
         max_redirects: int | None = None,
         on_done: object | None = None,
+        stream: bool = False,
     ) -> RequestHandle:
         """Mirror :meth:`HttpClient.delete` against the scripted queue.
 
@@ -239,7 +296,8 @@ class FakeHttpClient:
         """
         return self._start_request(
             "DELETE", url, headers=headers, body=None, json_body=None,
-            timeout_ms=timeout_ms, max_redirects=max_redirects, on_done=on_done,
+            timeout_ms=timeout_ms, max_redirects=max_redirects,
+            on_done=on_done, stream=stream,
         )
 
     def check(self, now_ms: int) -> bool:  # noqa: ARG002 - runner contract
@@ -251,13 +309,25 @@ class FakeHttpClient:
 
         Fires the handle's ``on_done`` callback (if registered) after
         the fake has returned to idle, matching the production client's
-        post-completion behavior.
+        post-completion behavior.  A streamed request's scripted body
+        is installed as the handle's body source, so the code under
+        test drains it via ``read_body_into`` after this tick (the
+        production client publishes headers earlier, mid-body; the fake
+        compresses the whole exchange into one tick, which preserves
+        the caller's loop contract — reads return the body, then ``0``).
         """
         if self._handle is None:
             return
         outcome = self._pending_outcome
         finished_handle = self._handle
-        if isinstance(outcome, Response):
+        if isinstance(outcome, tuple):
+            # Streamed success: (streamed Response, scripted body bytes).
+            response, body_bytes = outcome
+            finished_handle._publish_stream(  # noqa: SLF001 - internal handoff
+                response, _ScriptedBodySource(body_bytes),
+            )
+            finished_handle._set_response(response)  # noqa: SLF001 - internal handoff
+        elif isinstance(outcome, Response):
             finished_handle._set_response(outcome)  # noqa: SLF001 - internal handoff
         else:
             finished_handle._set_error(outcome)  # noqa: SLF001 - internal handoff
@@ -266,13 +336,32 @@ class FakeHttpClient:
         self._pending_outcome = None
         finished_handle._invoke_done()  # noqa: SLF001 - internal handoff
 
+    def cancel(self) -> None:
+        """Mirror :meth:`HttpClient.cancel`: fail the in-flight request.
+
+        No-op when idle.  The handle finishes with
+        ``HttpError("request ... cancelled")`` and its ``on_done``
+        fires, matching the production client.
+        """
+        if self._handle is None:
+            return
+        finished_handle = self._handle
+        cancelled_url = self._url
+        self._handle = None
+        self._url = None
+        self._pending_outcome = None
+        finished_handle._set_error(  # noqa: SLF001 - internal handoff
+            HttpError(f"request to {cancelled_url!r} cancelled"),
+        )
+        finished_handle._invoke_done()  # noqa: SLF001 - internal handoff
+
     # ------------------------------------------------------------------
     # Internal
     # ------------------------------------------------------------------
 
     def _start_request(
         self, method, url, *, headers, body, json_body,
-        timeout_ms, max_redirects, on_done,
+        timeout_ms, max_redirects, on_done, stream=False,
     ):
         """Record the call, pop the scripted outcome, return a handle."""
         if body is not None and json_body is not None:
@@ -291,13 +380,25 @@ class FakeHttpClient:
             method=method, url=url, headers=headers,
             body=body, json_body=json_body,
             timeout_ms=timeout_ms, max_redirects=max_redirects,
+            stream=stream,
         ))
         kind, payload = self._scripted.pop(0)
         if kind == "response":
-            self._pending_outcome = Response(url=url, **payload)
+            if stream:
+                # Streamed: the Response carries no body; the scripted
+                # bytes drain through read_body_into instead.
+                streamed_payload = dict(payload)
+                scripted_body = streamed_payload["body"]
+                streamed_payload["body"] = b""
+                self._pending_outcome = (
+                    Response(url=url, streamed=True, **streamed_payload),
+                    scripted_body,
+                )
+            else:
+                self._pending_outcome = Response(url=url, **payload)
         else:
             self._pending_outcome = payload  # HttpError instance
-        self._handle = RequestHandle(url=url, on_done=on_done)
+        self._handle = RequestHandle(url=url, on_done=on_done, stream=stream)
         self._url = url
         return self._handle
 

@@ -99,6 +99,77 @@ Other `Transfer-Encoding` values (`gzip`, `deflate`, `identity`
 stacked with chunked, etc.) are rejected with `HttpProtocolError`
 in v1 — the caller would otherwise silently get garbled bytes.
 
+## Streaming large bodies
+
+By default the whole body is buffered in RAM, capped at
+`max_body_bytes` (64 KB).  Pass `stream=True` — on any verb, or on the
+generic `client.request(method, url, ...)` — to consume the body
+incrementally instead: firmware images, log pulls, and any payload
+bigger than the heap become readable at a fixed RAM cost (the
+`stream_buffer_size` staging window, default 1024 bytes, plus your own
+buffer).
+
+```python
+handle = client.get("http://host/firmware.bin", stream=True,
+                    timeout_ms=120_000)
+buffer = bytearray(512)
+view = memoryview(buffer)
+
+# Inside your service's handle(now_ms) — one slice per tick:
+if handle.done and handle.error is not None:
+    report(handle.error)                    # failed mid-transfer
+elif handle.response is not None:           # headers are in
+    count = handle.read_body_into(view)
+    if count:
+        flash.write(view[:count])
+    elif handle.done:
+        finish()                             # 0 after done == end of body
+```
+
+The contract:
+
+- `handle.response` is set as soon as the final hop's headers arrive —
+  before `handle.done` — so you can branch on `status_code` /
+  `headers` first.  Its `body` is `b""` and `streamed` is `True`;
+  `.text` / `.json()` raise `HttpError`.
+- `handle.read_body_into(buffer)` copies decoded body bytes into your
+  buffer and returns the count.  `0` means "nothing this tick"; once
+  `handle.done` is `True` (with no `error`), `0` means end of body.
+- Backpressure is automatic: when the staging window is full the
+  client stops reading the socket (and reports no poll interest, so a
+  runner parks instead of spinning) until you drain it.
+- `max_body_bytes` and `WhenOversized` do not apply to streamed
+  bodies — the staging window is the RAM bound.  To enforce your own
+  ceiling, count what you read and call `client.cancel()`.
+- `timeout_ms` covers the whole transfer, your reads included — size
+  it for the download, not the round-trip.
+- `client.cancel()` aborts the request immediately (the handle fails
+  with `HttpError`), for early exits that shouldn't wait out the
+  timeout.
+
+The generator form wraps the same machinery, one chunk per
+`yield from`:
+
+```python
+from chumicro_requests.generators import stream
+
+def download(transport_factory, url, sink):
+    reader = yield from stream(transport_factory, "GET", url,
+                               timeout_ms=120_000)
+    if reader.response.status_code != 200:
+        reader.cancel()
+        return
+    buffer = bytearray(512)
+    view = memoryview(buffer)
+    while True:
+        count = yield from reader.read_into(view)
+        if count == 0:
+            break
+        sink(view[:count])
+
+runner.add_generator(download(transport_factory, url, flash.write))
+```
+
 ## Body decoding
 
 `Response.body` is always raw `bytes`.  `Response.text` decodes those
@@ -174,6 +245,10 @@ supported board class (256 KB MCU RAM). Bump it for larger boards if needed; the
 buffer grows up to that cap. The default 1024-byte `recv_budget_per_tick`
 matches `chumicro-mqtt`'s — bytes drained per tick are bounded so concurrent
 runner tasks (LED blink, control loop) keep getting CPU time even mid-large-body.
+For bodies that shouldn't (or can't) sit in RAM at all, use
+`stream=True` — see [Streaming large bodies](#streaming-large-bodies):
+the per-request cost drops to the `stream_buffer_size` staging window
+(default 1024 bytes) regardless of body size.
 
 ## Platform notes
 

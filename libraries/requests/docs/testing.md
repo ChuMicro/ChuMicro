@@ -26,6 +26,29 @@ assert weather.last_temperature == 72
 assert fake.calls[0].url == "http://api.example.test/weather"
 ```
 
+## Streamed requests
+
+A `stream=True` request against the fake compresses the real client's
+contract into one tick: `handle()` completes the request, and the
+scripted body drains through `read_body_into` — bytes first, then `0`
+for end of body.
+
+```python
+fake = FakeHttpClient()
+fake.enqueue_response(status=200, body=b"blob-bytes")
+
+handle = fake.get("http://example.test/blob", stream=True)
+fake.handle(now_ms=0)
+
+buffer = bytearray(4)
+assert handle.read_body_into(buffer) == 4      # b"blob"
+assert handle.result.streamed is True
+assert fake.calls[0].stream is True
+```
+
+`fake.cancel()` mirrors `HttpClient.cancel()`: the in-flight handle
+finishes with an `HttpError` and its `on_done` callback fires.
+
 ## `enqueue_error` example
 
 ```python
