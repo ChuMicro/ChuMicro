@@ -11,10 +11,11 @@ proving the scheduler wrapper and the socket helpers compose.
 import errno
 
 from chumicro_runner import Runner
-from chumicro_runner.generators import Signal, sleep_until, wait_for
+from chumicro_runner.generators import sleep_until
 from chumicro_sockets.generators import connect, recv_until, send_all
 from chumicro_sockets.testing import FakeSocket, FakeSocketConnector
 from chumicro_timing.testing import FakeTicks
+from chumicro_timing.waits import Signal, wait_for
 
 # -- sleep_until -----------------------------------------------------
 
@@ -212,27 +213,6 @@ def test_signal_wait_for_deadline_raises_etimedout_inside_generator():
     assert caught == [errno.ETIMEDOUT]
     assert handle.done
     assert never.next_deadline(0) is None
-
-
-def test_signal_reuse_after_clear():
-    # One Signal serves sequential waits: set/return, clear, wait
-    # again — is_set and value fully re-arm.
-    runner = Runner(ticks=FakeTicks())
-    outcomes = []
-    signal = Signal()
-
-    def waiter():
-        outcomes.append((yield from wait_for(signal)))
-        signal.clear()
-        outcomes.append((yield from wait_for(signal)))
-
-    runner.add_generator(waiter())
-    signal.set("first")
-    runner.tick()
-    assert outcomes == ["first"]
-    signal.set("second")
-    runner.tick()
-    assert outcomes == ["first", "second"]
 
 
 def test_signal_wait_contributes_no_wake_timeout():

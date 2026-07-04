@@ -16,7 +16,7 @@ import time
 
 from chumicro_config import load_runtime_config
 from chumicro_http_server import HttpServer, build_response
-from chumicro_timing import ticks_diff, ticks_ms
+from chumicro_timing import Deadline, ticks_diff, ticks_ms
 from chumicro_wifi import WifiConfig, WifiService
 
 _DEMO_DEADLINE_MS = 60_000
@@ -56,11 +56,11 @@ def _echo(request):
 
 
 ready_printed = False
-deadline_ms = ticks_ms() + _DEMO_DEADLINE_MS
+deadline = Deadline(_DEMO_DEADLINE_MS, ticks_ms())
 
 while len(hit_routes) < len(_DEMO_ROUTES):
     now_ms = ticks_ms()
-    if ticks_diff(deadline_ms, now_ms) <= 0:
+    if deadline.expired(now_ms):
         print(
             f"DEMO_TIMEOUT hit={len(hit_routes)} "
             f"expected={len(_DEMO_ROUTES)}",

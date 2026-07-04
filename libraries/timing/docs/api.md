@@ -4,9 +4,17 @@
 
 ::: chumicro_timing.ticks
 
-## Heartbeat
+## Value Objects
 
-::: chumicro_timing.heartbeat
+`Deadline` (a single armed timeout), `earliest` (fold several deadlines into one wait budget), and `Rate` (a drift-free periodic cadence).
+
+::: chumicro_timing.deadline
+
+## Wait vocabulary
+
+`Signal` and `wait_for` — the opt-in completion-wait vocabulary for generator flows. Import explicitly from `chumicro_timing.waits`.
+
+::: chumicro_timing.waits
 
 ---
 

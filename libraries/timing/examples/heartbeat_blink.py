@@ -1,12 +1,13 @@
-"""Heartbeat blink — the embedded hello world.
+"""Periodic blink — the embedded hello world.
 
-Prints a message once per second using a non-blocking heartbeat timer.
-On a real board, replace the ``print`` with an LED toggle
-(``led.value = not led.value``).
+Prints a message once per second using a non-blocking ``Rate`` timer.
+``Rate`` is drift-free: it fires on a phase-aligned cadence rather than
+re-anchoring to the moment you happened to poll.  On a real board,
+replace the ``print`` with an LED toggle (``led.value = not led.value``).
 
 Example output::
 
-    Running heartbeat blink...
+    Running periodic blink...
 
       beat!
       beat!
@@ -18,12 +19,13 @@ Runs on CPython, MicroPython, and CircuitPython.
 
 import time
 
-from chumicro_timing import Heartbeat, ticks_ms
+from chumicro_timing import Rate, ticks_ms
 
-# Create a heartbeat that fires once per second.
-heartbeat = Heartbeat(period_ms=1000)
+# Create a drift-free cadence that fires once per second.  Rate needs
+# the current time at construction so it can phase-align its schedule.
+beat = Rate(1000, ticks_ms())
 
-print("Running heartbeat blink...\n")
+print("Running periodic blink...\n")
 
 while True:
     # Capture the current time once per loop.  Passing the same now
@@ -31,9 +33,9 @@ while True:
     # with no drift between back-to-back calls.
     now = ticks_ms()
 
-    # poll() returns True once per period and advances the timer.
-    # It returns False on every other call.
-    if heartbeat.poll(now):
+    # due() returns True at most once per period and advances the
+    # schedule by whole periods.  It returns False on every other call.
+    if beat.due(now):
         # On a real board: led.value = not led.value
         print("  beat!")
 

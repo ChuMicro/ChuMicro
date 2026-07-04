@@ -1,9 +1,9 @@
-"""Heartbeat LED blink — CircuitPython.
+"""Periodic LED blink — CircuitPython.
 
 Toggles the onboard LED once per second using a non-blocking
-``Heartbeat`` timer.  Prints a line on each toggle so a serial
-console (or a sweep harness) can verify the loop without watching
-the LED itself.
+``Rate`` timer (drift-free, phase-aligned cadence).  Prints a line
+on each toggle so a serial console (or a sweep harness) can verify
+the loop without watching the LED itself.
 
 Setup:
 1. Install ``chumicro_timing`` (``circup install chumicro-timing``
@@ -14,7 +14,7 @@ Setup:
 
 Example output::
 
-    Running LED blink (heartbeat 1 Hz)...
+    Running LED blink (1 Hz)...
 
       blink!
       blink!
@@ -29,21 +29,21 @@ __chumicro_runtimes__ = ("circuitpython",)
 
 import board
 import digitalio
-from chumicro_timing import Heartbeat, ticks_ms
+from chumicro_timing import Rate, ticks_ms
 
 # Set up the onboard LED as a digital output.
 led = digitalio.DigitalInOut(board.LED)
 led.direction = digitalio.Direction.OUTPUT
 
-# Create a heartbeat that fires once per second.
-heartbeat = Heartbeat(period_ms=1000)
+# Create a drift-free cadence that fires once per second.
+beat = Rate(1000, ticks_ms())
 
-print("Running LED blink (heartbeat 1 Hz)...\n")
+print("Running LED blink (1 Hz)...\n")
 
 while True:
     now = ticks_ms()
 
-    # poll() returns True once per period, then resets.
-    if heartbeat.poll(now):
+    # due() returns True at most once per period, staying phase-aligned.
+    if beat.due(now):
         led.value = not led.value
         print("  blink!")

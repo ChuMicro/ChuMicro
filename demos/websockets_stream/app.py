@@ -19,8 +19,8 @@ Marker lines (``WIFI_OK``, ``WS_OPEN``, ``MESSAGE``, ``STREAM_CLOSED``,
 
 from chumicro_config import load_runtime_config
 from chumicro_runner import Runner
-from chumicro_runner.generators import Signal, wait_for
 from chumicro_test_harness.markers import marker
+from chumicro_timing.waits import Signal, wait_for
 from chumicro_websockets import WebSocketClient
 from chumicro_wifi import WifiConfig, WifiService, WifiState
 

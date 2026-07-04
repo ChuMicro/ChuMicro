@@ -2,31 +2,47 @@
 
 `chumicro_timing.testing` provides deterministic fakes for host-side tests.
 
-## Usage with Heartbeat
+## Usage with Rate and Deadline
 
-Pass a `FakeTicks` instance as the `ticks` parameter to `Heartbeat`. Then use `FakeTicks.ticks_ms()` to get timestamps for `poll()` and `FakeTicks.advance()` to move time forward:
+The value objects take the current time as an explicit `now_ms` argument, so there is nothing to inject — hand them `FakeTicks.ticks_ms()` at construction and on each poll, and use `FakeTicks.advance()` to move time forward:
 
 ```python
-from chumicro_timing import Heartbeat
+from chumicro_timing import Rate
 from chumicro_timing.testing import FakeTicks
 
-def test_heartbeat_fires_after_period() -> None:
-    """Heartbeat fires exactly when the period elapses."""
+def test_rate_fires_after_period() -> None:
+    """Rate fires exactly when the period elapses."""
     fake = FakeTicks()
-    heartbeat = Heartbeat(period_ms=100, ticks=fake)
+    rate = Rate(100, fake.ticks_ms())
 
-    now = fake.ticks_ms()
-    assert heartbeat.poll(now) is False
+    assert rate.due(fake.ticks_ms()) is False
 
     fake.advance(99)
-    now = fake.ticks_ms()
-    assert heartbeat.poll(now) is False
+    assert rate.due(fake.ticks_ms()) is False
 
     fake.advance(1)
-    now = fake.ticks_ms()
-    assert heartbeat.poll(now) is True
-    # Timer has been reset — next poll returns False
-    assert heartbeat.poll(now) is False
+    assert rate.due(fake.ticks_ms()) is True
+    # The schedule has advanced — polling again at the same time returns False
+    assert rate.due(fake.ticks_ms()) is False
+```
+
+A `Deadline` is driven the same way:
+
+```python
+from chumicro_timing import Deadline
+from chumicro_timing.testing import FakeTicks
+
+def test_deadline_expires() -> None:
+    """Deadline expires once the timeout elapses."""
+    fake = FakeTicks()
+    deadline = Deadline(100, fake.ticks_ms())
+
+    assert deadline.expired(fake.ticks_ms()) is False
+    assert deadline.remaining(fake.ticks_ms()) == 100
+
+    fake.advance(100)
+    assert deadline.expired(fake.ticks_ms()) is True
+    assert deadline.remaining(fake.ticks_ms()) == 0
 ```
 
 ## Usage from other libraries

@@ -7,16 +7,18 @@ All timing is non-blocking — nothing in this library calls `time.sleep()`.
 ## Quick example
 
 ```python
-from chumicro_timing import Heartbeat, ticks_ms
+from chumicro_timing import Rate, ticks_ms
 
-heartbeat = Heartbeat(period_ms=1000)
+rate = Rate(1000, ticks_ms())
 
 while True:
     now = ticks_ms()
-    if heartbeat.poll(now):
+    if rate.due(now):
         print("one second elapsed")
     # ... do other work ...
 ```
+
+The value objects — `Deadline` (a single armed timeout), `Rate` (drift-free periodic cadence), and `earliest` (fold several deadlines into one wait budget) — build on the wrap-safe tick helpers.
 
 ## Documentation
 

@@ -1,9 +1,11 @@
 """Periodic action using tick functions directly.
 
-Shows the manual version of what ``Heartbeat`` does internally:
+Shows the manual version of what ``Rate`` does internally:
 running an action every N milliseconds using ``ticks_ms`` and
 ``ticks_diff``.  This is the simplest tick-based timing loop and
-a good starting point before reaching for ``Heartbeat``.
+a good starting point before reaching for ``Rate``.  (Note this
+version re-anchors to *now* each fire, so it drifts slightly; see
+``phase_locked_tick.py`` for the drift-free carrier ``Rate`` uses.)
 
 Example output::
 

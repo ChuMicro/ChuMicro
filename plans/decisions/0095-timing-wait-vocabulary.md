@@ -1,6 +1,6 @@
 # Decision 0095: timing owns the fleet's wait vocabulary
 
-Status: `proposed`
+Status: `accepted`
 Date: `2026-07-03`
 Summary: `chumicro_timing` grows `Deadline`, `earliest()`, and `Rate`, and becomes the home of `Signal` and the read/write wait markers; consumers stop hand-rolling deadline arithmetic.
 Related: 0088 (scheduler phase math), 0091 (Signal — partially superseded on acceptance), 0092, campaign reports `plans/reviews/2026-07-03-{rudiment-api-fitness,greenfield-core-redesign,consumer-driven-design-synthesis}.md`
@@ -19,9 +19,13 @@ shipped demo/bake apps.  Two independent design seats converged on the same fix 
 1. `chumicro_timing` gains value objects that capture the arithmetic once:
    `Deadline(period_ms)` with `expired(now_ms)`, `remaining(now_ms)`, `reset(now_ms)`;
    `earliest(*deadlines)`; `Rate` (absorbing `Heartbeat` and Decision 0088's phase math).
-2. `Signal` and the read/write wait markers move from `chumicro_runner` into
-   `chumicro_timing`; runner consumes them (dependency direction: runner → timing,
-   already true).  Decision 0091's Signal-home clause is edited in place on acceptance.
+2. `Signal` and `wait_for` move from `chumicro_runner` into `chumicro_timing.waits`;
+   runner consumes them (dependency direction: runner → timing, already true) and keeps
+   `sleep_until` (the runner owns waiting).  `wait_for` travels with `Signal` because
+   leaving it behind would re-export `Signal` from runner (banned) and invert the test
+   dependency floor.  The read/write wait markers turned out to live in
+   `chumicro_sockets`, not runner — their fate belongs to Decision 0098's wave.
+   Decision 0091's Signal-home clause is edited in place.
 3. The free functions remain the substrate; the value objects become the documented
    default surface.  Consumers migrate in the same wave (Decision 0092: break + migrate
    in one commit per library).
@@ -31,8 +35,16 @@ shipped demo/bake apps.  Two independent design seats converged on the same fix 
 
 ## Consequences
 
-Seven private wait shapes across six files are deleted; the earliest-of reduction has
-one owner; the raw-`+` footgun class becomes unwritable in code that adopts `Deadline`.
-timing's dependency weight stays zero (pure arithmetic + small classes).  Migration
-rides Wave 1 of `plans/workstreams/core-design-realignment.md`, gated on the
-`sweep-devices` bake matrix.
+The vocabulary's audience is app/demo/project code and library cold paths — exactly
+where both shipped raw-`+` footguns actually fired.  The library-internal per-tick
+deadline scans (runner, mqtt, websockets, http_server) deliberately stay hand-rolled
+int arithmetic behind their injected `ticks` seams: `earliest(*deadlines)` allocates a
+varargs tuple per call and the AGENTS zero-allocation rubric protects those paths (the
+greenfield study defended the same scans from objectification), and a concrete
+`Deadline` import would bypass the constructor-injection seam the DI measurement showed
+earning its keep.  So `earliest()` ships as the sanctioned reducer for
+Deadline-holding cold paths, not a replacement for the hot scans.  The raw-`+` footgun
+class becomes unwritable in code that adopts `Deadline`; timing's dependency weight
+stays zero.  `Heartbeat` is deleted in favor of `Rate`.  Migration rode Wave 1 of
+`plans/workstreams/core-design-realignment.md`, gated on the `sweep-devices` bake
+matrix.

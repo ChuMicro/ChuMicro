@@ -19,10 +19,10 @@ Marker lines (``WIFI_OK``, ``CONNECTING``, ``CONNECTED``, ``SENT``,
 
 from chumicro_config import load_runtime_config
 from chumicro_runner import Runner
-from chumicro_runner.generators import Signal, wait_for
 from chumicro_sockets import tcp_client_connector
 from chumicro_sockets.generators import connect, recv_until, send_all
 from chumicro_test_harness.markers import marker
+from chumicro_timing.waits import Signal, wait_for
 from chumicro_wifi import WifiConfig, WifiService, WifiState
 
 PROBE_PAYLOAD = b"hello chumicro\n"
