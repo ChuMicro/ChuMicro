@@ -1,6 +1,6 @@
 # Decision 0099: mqtt surface corrections
 
-Status: `proposed`
+Status: `accepted`
 Date: `2026-07-03`
 Summary: mqtt gains a bounded pre-connect publish queue, drops the intact decoder tier and the pattern-handler router, and makes session resumption honest.
 Related: 0089 (inbound surfaces — amended in place on acceptance), 0064 (its §5 is already stale and gets the same edit), campaign report `plans/reviews/2026-07-03-mqtt-api-fitness.md`
@@ -19,13 +19,22 @@ parsed then ignored, so `clean_session=False` silently does not do what it says.
 ## Decision
 
 1. **Pre-connect queue**: `publish()` before CONNECTED enqueues into a small bounded
-   queue drained on CONNACK, governed by a `when_disconnected=` policy (queue / raise /
-   drop-oldest), defaulting to queue.  The universal caller guard is deleted everywhere.
-2. **Decoder**: drop the intact-drain tier; keep steady + oversized-discard.
+   queue (`pre_connect_queue_size=8`) drained on CONNACK before `on_connect`, governed by
+   `when_disconnected=` (queue / raise / drop_oldest), defaulting to queue; a full queue
+   under "queue" raises the same backpressure error as the tx queue.  The universal
+   caller guard is deleted everywhere.  `subscribe()` stays CONNECTED-only — consumers
+   subscribe in `on_connect`, which keeps the session-resume replay logic free of
+   pre-connect interactions.
+2. **Decoder**: drop the intact-drain tier; keep steady + oversized-discard.  With two
+   tiers the steady→oversized boundary is `rx_buffer_size` itself, so `max_message_bytes`
+   goes with the tier (a dead knob otherwise).  Measured payoff: both unix lanes drop
+   256K→240K.
 3. **Router**: delete the pattern-handler surface; `on_message` + `next_message()` (0089)
    plus the public `topic_matches()` cover its one use.
-4. **Session honesty**: honor session-present (skip subscription replay when the broker
-   resumed) or refuse `clean_session=False` loudly — no silent middle.
+4. **Session honesty**: session-present is honored (replay skipped when the broker
+   resumed) rather than refusing `clean_session=False` — the client already preserved
+   the QoS-1 in-flight table across self-heal reconnects, so gating the replay was the
+   last missing piece, not a half-wire.
 
 ## Consequences
 

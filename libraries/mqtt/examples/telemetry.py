@@ -61,7 +61,7 @@ import json
 import math
 import time
 
-from chumicro_mqtt import MQTTClient, ProtocolState
+from chumicro_mqtt import MQTTClient
 from helpers import runtime_config, ticks_add, ticks_diff, ticks_ms, wifi_up
 
 WIFI_SSID = "your-wifi-ssid"  # noqa: S105 - replace before deploying
@@ -100,29 +100,22 @@ def on_message(topic, payload):
     print(f"[rx]  {topic} <- {payload!r}")
 
 
+def on_connect():
+    # Connect-time setup, fired once the broker session is up: subscribe
+    # to the command topic.  (subscribe() requires CONNECTED — publish()
+    # instead buffers pre-connect, so the loop below can publish without
+    # waiting.)
+    print(f"MQTT_CONNECTED broker={config['mqtt.broker.host']}:{config['mqtt.broker.port']}")
+    mqtt.subscribe(command_topic, qos=1)
+    print(f"Subscribed to {command_topic}")
+
+
 mqtt.on_message = on_message
+mqtt.on_connect = on_connect
 mqtt.connect()
-
-
-def _drive_until(predicate, deadline_ms):
-    deadline = ticks_add(ticks_ms(), deadline_ms)
-    while not predicate():
-        if ticks_diff(deadline, ticks_ms()) <= 0:
-            return False
-        if mqtt.check(ticks_ms()):
-            mqtt.handle(ticks_ms())
-        time.sleep(0.02)
-    return True
-
-
-if not _drive_until(lambda: mqtt.state == ProtocolState.CONNECTED, 15_000):
-    print("STATUS: FAIL_MQTT_CONNECT")
-    raise SystemExit(1)
-
-print(f"MQTT_CONNECTED broker={config['mqtt.broker.host']}:{config['mqtt.broker.port']}")
-
-mqtt.subscribe(command_topic, qos=1)
-print(f"Subscribed to {command_topic}")
+# No drive-until-connected gate: the first publish below buffers in the
+# client's pre-connect queue (when_disconnected="queue", the default)
+# and the publish loop drives the connection up and flushes it.
 
 
 def _synthetic_reading(elapsed_seconds: float) -> float:

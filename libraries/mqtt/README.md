@@ -5,7 +5,7 @@ align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
 **A non-blocking MQTT 3.1.1 client (QoS 0 + 1) that fits inside your runner tick.**
 
-QoS 0 + QoS 1, last-will, retain, pattern-routed handlers, automatic per-device topic prefixing, and a three-tier inbound size model that keeps heap usage bounded on memory-tight boards — runner-shaped, no threads, no async.  A configurable per-tick recv budget keeps a large inbound blob from monopolising the loop, and failed QoS-1 publishes roll back the packet-id allocation cleanly on backpressure.  Built on [`chumicro-sockets`](../sockets/) (TCP + TLS) and [`chumicro-timing`](../timing/) (ticks).
+QoS 0 + QoS 1, last-will, retain, wildcard topic matching, automatic per-device topic prefixing, a bounded pre-connect publish queue, and a two-tier inbound size model that keeps heap usage bounded on memory-tight boards — runner-shaped, no threads, no async.  A configurable per-tick recv budget keeps a large inbound blob from monopolising the loop, and failed QoS-1 publishes roll back the packet-id allocation cleanly on backpressure.  Built on [`chumicro-sockets`](../sockets/) (TCP + TLS) and [`chumicro-timing`](../timing/) (ticks).
 
 <br clear="left">
 
@@ -50,23 +50,24 @@ while True:
         client.handle(now)
 ```
 
-QoS 0 + QoS 1 are implemented; QoS 2 raises `UnsupportedQoSError`.  Last-will, retained messages, pattern-routed handlers, and a structured oversized-message policy are all built in.
+QoS 0 + QoS 1 are implemented; QoS 2 raises `UnsupportedQoSError`.  Last-will, retained messages, wildcard topic matching (`topic_matches`), and a structured oversized-message policy are all built in.
 
 ## What's included
 
 | Symbol | Purpose |
 |---|---|
 | `MQTTClient(socket, *, client_id, root_topic=None, ...)` | Main client.  Runner-shaped (`check(now_ms)`/`handle(now_ms)`).  Set `root_topic` to enable automatic per-device prefixing. |
-| `client.publish(topic, payload, *, qos=0, retain=False, on_publish=None, prefixed=True)` | QoS 0 or 1.  Topic resolves through `root_topic`/`client_id` prefix scheme.  Pass `prefixed=False` to publish verbatim. |
-| `client.subscribe(topic, qos=0, *, on_subscribe=None, prefixed=True)` | Single-topic subscribe.  Same `prefixed` opt-out. |
+| `client.publish(topic, payload, *, qos=0, retain=False, on_publish=None, prefixed=True)` | QoS 0 or 1.  Topic resolves through `root_topic`/`client_id` prefix scheme.  Pass `prefixed=False` to publish verbatim.  Before CONNECTED, the `when_disconnected` policy applies (queue / drop-oldest / raise). |
+| `client.subscribe(topic, qos=0, *, on_subscribe=None, prefixed=True)` | Single-topic subscribe (requires CONNECTED).  Same `prefixed` opt-out. |
 | `client.unsubscribe(topic, *, on_unsubscribe=None, prefixed=True)` | Same `prefixed` opt-out. |
-| `client.add_pattern_handler(pattern, handler)` / `client.remove_pattern_handler(handler, pattern=None)` | Route inbound messages by topic pattern. |
+| `client.on_message` + `topic_matches(topic, pattern)` | Inbound routing: the catch-all callback plus the public wildcard matcher (`+` one segment, `#` trailing tail). |
 | `client.connect() / .disconnect()` | Lifecycle. |
-| `WhenOversized.{DROP_SILENT,DROP_WITH_EVENT,DISCONNECT}` | Policy for inbound payloads above `max_message_bytes`. |
+| `MQTTClient(..., when_disconnected="queue", pre_connect_queue_size=8)` | Pre-connect publish policy (`"queue"` / `"drop_oldest"` / `"raise"`) and the queue bound. |
+| `WhenOversized.{DROP_SILENT,DROP_WITH_EVENT,DISCONNECT}` | Policy for inbound PUBLISHes larger than `rx_buffer_size`. |
 | `ProtocolState.{DISCONNECTED,AWAITING_TRANSPORT,CONNECTING,CONNECTED,FAILED}` | Lifecycle states.  `AWAITING_TRANSPORT` appears while a `transport_factory` drives the transport up. |
-| `MQTTBackpressureError` | Raised when an outbound publish/subscribe overflows `max_tx_queue_size` — caller's signal to drain via `handle()` and retry. |
+| `MQTTBackpressureError` | Raised when an outbound publish overflows `max_tx_queue_size` (or the pre-connect queue under `"queue"`) — caller's signal to drain via `handle()` and retry. |
 | `MQTTError` / `MQTTConnectError` / `MQTTProtocolError` / `UnsupportedQoSError` | Exceptions. |
-| Encoder + decoder primitives (`encode_publish`, `encode_varlen`, `decode_varlen`, `encode_string`, `topic_matches`) | Internal to `chumicro_mqtt._wire`; not part of the public package surface. |
+| `topic_matches(topic, pattern)` | Public wildcard matcher.  Encoder + decoder primitives (`encode_publish`, `encode_varlen`, `decode_varlen`, `encode_string`) stay internal to `chumicro_mqtt._wire`. |
 
 ### Tuning for tick-latency vs throughput
 
@@ -74,7 +75,7 @@ QoS 0 + QoS 1 are implemented; QoS 2 raises `UnsupportedQoSError`.  Last-will, r
 
 | Knob | Default | What it bounds |
 |---|---|---|
-| `recv_budget_per_tick` | `1024` (bytes) | Cap on the single per-tick `recv_into` call.  Without it, an intact-tier read of a multi-KB inbound PUBLISH would draw the whole payload in one syscall; the cap means the payload arrives across several ticks instead, keeping each tick short.  Raise for fast big-blob ingestion at the cost of per-syscall latency. |
+| `recv_budget_per_tick` | `1024` (bytes) | Cap on the single per-tick `recv_into` call.  Without it, an oversized-tier rolling drain of a multi-KB inbound PUBLISH would draw the whole payload in one syscall; the cap means it arrives across several ticks instead, keeping each tick short.  Raise for fast big-blob ingestion at the cost of per-syscall latency. |
 | `max_tx_queue_size` | `20` packets | Hard cap on pending outbound packets.  Sized for the runner-shaped sensor profile (publish every N seconds; queue stays near zero).  Appending past the cap raises `MQTTBackpressureError`; protocol-internal traffic (PUBACK responses, retransmits, PINGREQ) bypasses the cap so QoS-1 / keepalive contracts hold.  Failed QoS-1 publishes roll back the `packet_id` allocation cleanly so the id pool isn't leaked on backpressure.  Raise for bursty publishers; each slot pins ~8 bytes long-lived on MP / CP. |
 | `send_timeout_seconds` | inherits `ack_timeout_seconds` (5 s) | Maximum time the socket can stay non-writable with a packet queued before the client transitions to `FAILED`.  Re-arms on every successful send -- a steady drip of small sends never trips it, only a stalled socket does.  Catches NAT-style silent-drops on the outbound path that would otherwise let the queue grow until `MQTTBackpressureError`. |
 
@@ -91,7 +92,7 @@ Works on CPython, MicroPython, and CircuitPython.
 | Example | What it shows |
 |---|---|
 | [`telemetry.py`](examples/telemetry.py) | Periodic QoS-1 publish on a real CP/MP board.  Brings wifi up, connects to a broker, subscribes to a command topic, publishes a synthetic reading every N seconds while an LED-blink counter verifies the publish never blocks waiting for PUBACK.  Reads wifi + broker config from `runtime_config.msgpack` (chumicro-workspace) with constants fallback.  Broker host/port must be set explicitly — the library refuses to silently dial a third-party broker.  Cross-runtime (CP + MP). |
-| [`bench.py`](examples/bench.py) | Self-driving validation bench.  Deploy + watch serial — the device runs 8 scenarios end-to-end (tier-1 steady, tier-2 intact, tier-3 oversize, oversize-topic, QoS-1 round-trip, sustained burst, keepalive) against a real broker and prints a pass/fail summary table.  Used to confirm the library's heap-bounded oversize handling and the three-tier inbound model behave as advertised on a 256 KB-RAM-class board.  Optional companion [`bench_host.py`](examples/bench_host.py) (host-side, needs `pip install paho-mqtt`) captures the verdict from the broker and can publish a 64 KB hostile payload for extra tier-3 stress. |
+| [`bench.py`](examples/bench.py) | Self-driving validation bench.  Deploy + watch serial — the device runs the scenarios end-to-end (steady inline, oversized drain, oversize-topic, QoS-1 round-trip, sustained burst, keepalive) against a real broker and prints a pass/fail summary table.  Used to confirm the library's heap-bounded oversize handling and the two-tier inbound model behave as advertised on a 256 KB-RAM-class board.  Optional companion [`bench_host.py`](examples/bench_host.py) (host-side, needs `pip install paho-mqtt`) captures the verdict from the broker and can publish a 64 KB hostile payload for extra oversized-tier stress. |
 
 ## Wiring wifi + broker config for examples and functional tests
 

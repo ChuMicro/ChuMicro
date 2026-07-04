@@ -58,11 +58,18 @@ radio, ip = wifi_up(WIFI_SSID, WIFI_PASSWORD)
 print(f"WIFI_OK ip={ip}")
 
 mqtt = MQTTClient.from_config(config, radio=radio)
-mqtt.on_connect = lambda: print("[mqtt] connected")
-mqtt.connect()
-
 command_topic = config.get("mqtt.command_topic", "chumicro-demo/cmd")
-mqtt.subscribe(command_topic, qos=1)
+
+
+def on_connect():
+    # subscribe() requires the CONNECTED state, so wire it through
+    # on_connect (it fires once the broker session is up).
+    print("[mqtt] connected")
+    mqtt.subscribe(command_topic, qos=1)
+
+
+mqtt.on_connect = on_connect
+mqtt.connect()
 
 
 def consume_commands():

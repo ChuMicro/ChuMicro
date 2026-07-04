@@ -1,7 +1,8 @@
-"""mqtt client: oversize/intact tiers, not-connected guards, error
+"""mqtt client: oversize tier, when_disconnected policy, error
 paths, decoder edge cases, suback rejection."""
 
 from chumicro_mqtt import (
+    MQTTBackpressureError,
     ProtocolState,
     WhenOversized,
 )
@@ -24,8 +25,7 @@ class TestWhenOversized:
         ticks = FakeTicks()
         client = new_client(
             sock, ticks,
-            rx_buffer_size=64,
-            max_message_bytes=100,  # tier 3: 200-byte payload exceeds cap
+            rx_buffer_size=64,  # 200-byte payload overflows the steady buffer
             when_oversized=WhenOversized.DROP_WITH_EVENT,
         )
         client.connect()
@@ -52,8 +52,7 @@ class TestWhenOversized:
         ticks = FakeTicks()
         client = new_client(
             sock, ticks,
-            rx_buffer_size=64,
-            max_message_bytes=100,  # tier 3 forces the policy to apply
+            rx_buffer_size=64,  # 200-byte payload overflows the steady buffer
             when_oversized=WhenOversized.DISCONNECT,
         )
         client.connect()
@@ -64,66 +63,58 @@ class TestWhenOversized:
         assert client.state == ProtocolState.FAILED
 
 
-class TestIntactTier:
-    """Tier 2: PUBLISH > rx_buffer_size but ≤ max_message_bytes."""
-
-    def test_intact_publish_delivers_full_payload(self) -> None:
-        """A 1 KB payload on a 64 B rx buffer + 8 KB max routes through tier 2."""
-        sock = FakeSocket()
-        sock.enqueue_recv(canned_connack_bytes(return_code=0))
-        ticks = FakeTicks()
-        client = new_client(
-            sock, ticks,
-            rx_buffer_size=64,        # forces tier-1 boundary low
-            max_message_bytes=8192,   # tier-2 ceiling well above payload size
-        )
-        client.connect()
-        drive(client, ticks, count=2)
-
-        received: list[tuple[str, bytes]] = []
-
-        def _on_message(topic: str, payload: bytes) -> None:
-            received.append((topic, payload))
-
-        client.on_message = _on_message
-        big_payload = b"x" * 1024
-        sock.enqueue_recv(canned_publish_bytes("data", big_payload, qos=0))
-        drive(client, ticks, count=30)  # several ticks to drain across rx_buffer fills
-
-        assert len(received) == 1
-        assert received[0][0] == "data"
-        assert received[0][1] == big_payload
-        assert client.state == ProtocolState.CONNECTED
-
-    def test_intact_qos1_sends_puback(self) -> None:
-        sock = FakeSocket()
-        sock.enqueue_recv(canned_connack_bytes(return_code=0))
-        ticks = FakeTicks()
-        client = new_client(
-            sock, ticks,
-            rx_buffer_size=64,
-            max_message_bytes=8192,
-        )
-        client.connect()
-        drive(client, ticks, count=2)
-        sock.sent = bytearray()  # reset to observe just the PUBACK
-
-        big_payload = b"y" * 512
-        sock.enqueue_recv(
-            canned_publish_bytes("data", big_payload, qos=1, packet_id=4242),
-        )
-        drive(client, ticks, count=20)
-        # PUBACK = 0x40 0x02 packet_id_hi packet_id_lo.  4242 = 0x1092.
-        assert b"\x40\x02\x10\x92" in bytes(sock.sent)
-
-
 class TestNotConnectedGuards:
-    def test_publish_before_connect_raises(self) -> None:
+    def test_publish_before_connect_raises_under_raise_policy(self) -> None:
+        """``when_disconnected="raise"`` keeps the pre-queue publish guard."""
         sock = FakeSocket()
         ticks = FakeTicks()
-        client = new_client(sock, ticks)
+        client = new_client(sock, ticks, when_disconnected="raise")
         with raises(Exception):  # noqa: B017
             client.publish("x", b"y")
+
+    def test_publish_before_connect_queues_and_drains_on_connack(self) -> None:
+        """Default ``when_disconnected="queue"`` buffers, then flushes on CONNACK."""
+        sock = FakeSocket()
+        sock.enqueue_recv(canned_connack_bytes(return_code=0))
+        ticks = FakeTicks()
+        client = new_client(sock, ticks)  # default policy: queue
+        # Queued while DISCONNECTED — no raise, nothing on the wire yet.
+        client.publish("early", b"payload", qos=0)
+        assert client.state == ProtocolState.DISCONNECTED
+        assert b"early" not in bytes(sock.sent)
+        # Connect: the CONNACK drain flushes the queued publish.
+        client.connect()
+        drive(client, ticks, count=2)
+        assert client.state == ProtocolState.CONNECTED
+        assert b"early" in bytes(sock.sent)
+
+    def test_publish_queue_full_raises_backpressure(self) -> None:
+        """A full pre-connect queue under "queue" raises the backpressure error."""
+        sock = FakeSocket()
+        ticks = FakeTicks()
+        client = new_client(sock, ticks, pre_connect_queue_size=2)
+        client.publish("a", b"1", qos=0)
+        client.publish("b", b"2", qos=0)
+        with raises(MQTTBackpressureError):
+            client.publish("c", b"3", qos=0)
+
+    def test_publish_drop_oldest_evicts_when_full(self) -> None:
+        """``drop_oldest`` evicts the oldest queued publish instead of raising."""
+        sock = FakeSocket()
+        sock.enqueue_recv(canned_connack_bytes(return_code=0))
+        ticks = FakeTicks()
+        client = new_client(
+            sock, ticks, pre_connect_queue_size=2, when_disconnected="drop_oldest",
+        )
+        client.publish("keep-a", b"1", qos=0)
+        client.publish("keep-b", b"2", qos=0)
+        client.publish("keep-c", b"3", qos=0)  # evicts keep-a, no raise
+        client.connect()
+        drive(client, ticks, count=3)
+        wire = bytes(sock.sent)
+        assert b"keep-a" not in wire  # oldest dropped
+        assert b"keep-b" in wire
+        assert b"keep-c" in wire
 
     def test_subscribe_before_connect_raises(self) -> None:
         sock = FakeSocket()
@@ -147,8 +138,7 @@ class TestDecoderEdgeCases:
         ticks = FakeTicks()
         client = new_client(
             sock, ticks,
-            rx_buffer_size=64,
-            max_message_bytes=100,  # tier 3 forces DISCONNECT
+            rx_buffer_size=64,  # 200-byte payload overflows the steady buffer
             when_oversized=WhenOversized.DISCONNECT,
         )
         client.connect()
@@ -163,8 +153,7 @@ class TestDecoderEdgeCases:
         ticks = FakeTicks()
         client = new_client(
             sock, ticks,
-            rx_buffer_size=64,
-            max_message_bytes=100,  # tier 3 forces the silent-drop path
+            rx_buffer_size=64,  # 200-byte payload overflows the steady buffer
             when_oversized=WhenOversized.DROP_SILENT,
         )
         client.connect()
@@ -185,12 +174,11 @@ class TestDecoderEdgeCases:
         sock = FakeSocket()
         sock.enqueue_recv(canned_connack_bytes(return_code=0))
         ticks = FakeTicks()
-        # Tiny rx buffer so a normal-length topic blows the prelude.
-        # max_message_bytes low so the rest also routes through tier 3.
+        # Tiny rx buffer so a normal-length topic blows the prelude and
+        # routes through the oversized tier.
         client = new_client(
             sock, ticks,
             rx_buffer_size=16,
-            max_message_bytes=32,
             when_oversized=WhenOversized.DROP_WITH_EVENT,
         )
         client.connect()

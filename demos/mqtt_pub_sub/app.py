@@ -5,11 +5,14 @@ one ``chumicro_runner.Runner`` and drives them with
 ``while True: now = runner.tick(); runner.wait(now)``.
 
 Reads like a mainstream MQTT quickstart (paho / Adafruit MiniMQTT): set
-a Last Will, set the callbacks once, connect, let the loop run.  All
-the connect-time setup happens in ``on_connect`` — publish presence,
-subscribe to commands — fire-and-forget, with no callback chain and no
-waiting on QoS 1 acks (the client tracks PUBACK / SUBACK internally;
-the app never needs to).
+a Last Will, set the callbacks once, connect, let the loop run.  The
+periodic publisher just calls ``publish`` — a publish issued before the
+broker session is up buffers in the client's pre-connect queue and
+flushes on CONNACK (``when_disconnected="queue"``, the default), so no
+state guard is needed.  Connect-time setup — publish presence, subscribe
+to commands — happens in ``on_connect``, fire-and-forget, with no
+callback chain and no waiting on QoS 1 acks (the client tracks PUBACK /
+SUBACK internally; the app never needs to).
 
 Presence pair: a retained ``"offline"`` Last Will the broker publishes
 if this board drops uncleanly, plus the retained ``"online"`` published
@@ -18,14 +21,14 @@ on connect.  Then the demo publishes three QoS 1 telemetry samples on a
 the host's one command has arrived.
 
 Marker lines (``WIFI_OK``, ``MQTT_CONNECTED``, ``RETAINED_STATE_SENT``,
-``SUBSCRIBED``, ``TELEMETRY_SENT``, ``CMD_RECEIVED``, ``PATTERN_HIT``,
+``SUBSCRIBED``, ``TELEMETRY_SENT``, ``CMD_RECEIVED``,
 ``DEMO_COMPLETE``) drive the host driver via stdout markers.
 """
 
 import json
 
 from chumicro_config import load_runtime_config
-from chumicro_mqtt import MQTTClient, ProtocolState
+from chumicro_mqtt import MQTTClient
 from chumicro_runner import Runner
 from chumicro_test_harness.markers import marker
 from chumicro_timing import ticks_diff, ticks_ms
@@ -90,10 +93,6 @@ def on_command_message(topic, payload):
     print(f"  text: {text}")
 
 
-def on_command_pattern(topic, _payload):
-    marker("PATTERN_HIT", topic=topic)
-
-
 def on_wifi_state(_old, new):
     if new == WifiState.CONNECTED:
         marker("WIFI_OK", ip=wifi.ip)
@@ -101,9 +100,13 @@ def on_wifi_state(_old, new):
 
 
 def publish_telemetry(now_ms):
-    """Publish one QoS 1 telemetry sample per call until the quota is met."""
+    """Publish one QoS 1 telemetry sample per call until the quota is met.
+
+    No CONNECTED guard: a sample produced before the broker session is
+    up buffers in the client's pre-connect queue and flushes on CONNACK.
+    """
     global telemetry_sent
-    if mqtt.state != ProtocolState.CONNECTED or telemetry_sent >= _TELEMETRY_COUNT:
+    if telemetry_sent >= _TELEMETRY_COUNT:
         return
     telemetry_sent += 1
     payload = json.dumps({
@@ -118,7 +121,6 @@ def publish_telemetry(now_ms):
 mqtt.on_connect = on_connect
 mqtt.on_subscribe = on_subscribe
 mqtt.on_message = on_command_message
-mqtt.add_pattern_handler("demo/+/cmd", on_command_pattern)
 wifi.on_state_change(on_wifi_state)
 
 runner = Runner()

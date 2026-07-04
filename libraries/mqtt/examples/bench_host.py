@@ -11,7 +11,7 @@ What this script adds (when you want it):
   ``<client_id>/bench-summary`` and prints the device's verdict line.
   Useful in headless / CI setups where you don't want to babysit a
   serial console.
-* **Truly hostile tier-3 payloads.**  Optionally publishes a much
+* **Truly hostile oversized payloads.**  Optionally publishes a much
   larger payload than the device could comfortably build on its own
   (e.g. 64 KB) so you can verify the on-device oversize-drain path
   stays heap-bounded even against a hostile sender.  Use ``--hostile``.
@@ -70,7 +70,7 @@ def main():
     )
     parser.add_argument(
         "--hostile", action="store_true",
-        help="Publish a 64 KB payload before listening — extra tier-3 stress.",
+        help="Publish a 64 KB payload before listening — extra oversized-tier stress.",
     )
     parser.add_argument(
         "--hostile-bytes", type=int, default=65536,

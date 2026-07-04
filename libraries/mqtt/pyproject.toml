@@ -92,5 +92,6 @@ optional_keys = [
     "mqtt.keep_alive_seconds",
     "mqtt.username",
     "mqtt.password",
+    "mqtt.when_disconnected",
 ]
 

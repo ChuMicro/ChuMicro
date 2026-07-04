@@ -1,26 +1,26 @@
 """Self-driving on-device bench for :mod:`chumicro_mqtt`.
 
-Walks every inbound-handling tier (steady / intact / oversized) plus
-QoS-1 round-trip, keepalive, and a sustained burst, all against a
-real broker, all from the device alone.  Subscribes to a private
-topic and publishes-to-itself for every inbound test, so no host
-script is required.  Watch the serial output for the per-scenario
-progress lines and the final summary table.
+Walks both inbound-handling tiers (steady / oversized) plus QoS-1
+round-trip, keepalive, and a sustained burst, all against a real
+broker, all from the device alone.  Subscribes to a private topic and
+publishes-to-itself for every inbound test, so no host script is
+required.  Watch the serial output for the per-scenario progress lines
+and the final summary table.
 
-The library's design promises three things this bench verifies live:
+The library's design promises two things this bench verifies live:
 
-* a steady-state inbound PUBLISH ≤ ``rx_buffer_size`` parses inline
-  with no heap allocation,
-* a PUBLISH between ``rx_buffer_size + 1`` and ``max_message_bytes``
-  allocates a one-shot buffer for the full payload and frees it after
-  delivery,
-* a PUBLISH above ``max_message_bytes`` (and a topic above
+* an inbound PUBLISH whose total wire size is ≤ ``rx_buffer_size``
+  parses inline and is delivered intact with no per-message heap
+  allocation — so a consumer that needs a larger payload intact sizes
+  ``rx_buffer_size`` up to cover it,
+* a PUBLISH above ``rx_buffer_size`` (and a topic above
   ``rx_buffer_size``) drain via rolling discard, with no payload-sized
   allocation regardless of how big the inbound message is.
 
-This bench tunes ``max_message_bytes`` down to 2 KB so a 4 KB inbound
-payload trips the oversized tier without needing a 16 KB allocation
-on either side of the wire.
+This bench keeps ``rx_buffer_size`` at the 256 B default so a small
+payload delivers intact from the steady buffer, while a 4 KB inbound
+payload (and a 300-char topic) trip the oversized tier without needing
+a payload-sized allocation on either side of the wire.
 
 Configuration
 =============
@@ -70,12 +70,10 @@ BROKER_HOST = ""                       # e.g. "10.0.0.5" or "test.mosquitto.org"
 BROKER_PORT = 1883
 
 # Bench knobs, kept small so a 256 KB-RAM minimum-tier board still has
-# headroom.  rx_buffer_size=256 + max_message_bytes=2048 means:
-#   tier 1: ≤ 256 B (steady inline parse)
-#   tier 2: 257 B – 2 KB (one-shot intact alloc)
-#   tier 3: > 2 KB (rolling discard, no payload-sized alloc)
+# headroom.  rx_buffer_size=256 means:
+#   steady:    ≤ 256 B (inline parse, delivered intact, no per-msg alloc)
+#   oversized: > 256 B (rolling discard, no payload-sized alloc)
 RX_BUFFER_SIZE = 256
-MAX_MESSAGE_BYTES = 2048
 CLIENT_ID = "chumicro-mqtt-bench"
 
 
@@ -114,7 +112,6 @@ mqtt = MQTTClient(
     client_id=CLIENT_ID,
     keep_alive_seconds=30,
     rx_buffer_size=RX_BUFFER_SIZE,
-    max_message_bytes=MAX_MESSAGE_BYTES,
     when_oversized=WhenOversized.DROP_WITH_EVENT,
 )
 
@@ -223,8 +220,8 @@ def _reset_inbound():
 
 
 def scenario_tier1():
-    banner("TIER 1 — steady inline parse (32-byte payload)")
-    scenario = Scenario("tier1_32b")
+    banner("STEADY (small) — inline parse (32-byte payload)")
+    scenario = Scenario("steady_32b")
     _reset_inbound()
     payload = b"x" * 32
     mqtt.publish(INBOUND_TOPIC, payload, qos=0)
@@ -238,26 +235,9 @@ def scenario_tier1():
     results.append(scenario.finish() + (ok,))
 
 
-def scenario_tier2(label, payload_size):
-    banner(f"TIER 2 — intact one-shot delivery ({payload_size}-byte payload)")
-    scenario = Scenario(label)
-    _reset_inbound()
-    payload = b"y" * payload_size
-    mqtt.publish(INBOUND_TOPIC, payload, qos=0)
-    deadline = ticks_add(ticks_ms(), 10_000)
-    while inbound_topic_count == 0 and ticks_diff(deadline, ticks_ms()) > 0:
-        scenario.tick()
-        time.sleep(0.005)
-    ok = inbound_topic_count == 1 and inbound_last_size == payload_size
-    verdict = "OK" if ok else "FAIL"
-    line(f"received={inbound_topic_count} size={inbound_last_size} "
-         f"expect={payload_size} -> {verdict}")
-    results.append(scenario.finish() + (ok,))
-
-
 def scenario_tier3():
-    banner(f"TIER 3 — oversize drain (4096 B above {MAX_MESSAGE_BYTES} cap)")
-    scenario = Scenario("tier3_4kb")
+    banner(f"OVERSIZED — rolling drain (4096 B above {RX_BUFFER_SIZE} B rx buffer)")
+    scenario = Scenario("oversize_4kb")
     seen = len(oversize_events)
     payload = b"z" * 4096
     mqtt.publish(INBOUND_TOPIC, payload, qos=0)
@@ -279,7 +259,7 @@ def scenario_tier3():
 
 
 def scenario_oversize_topic():
-    banner("OVERSIZE TOPIC — 300-char topic blows the 256 B rx buffer")
+    banner(f"OVERSIZE TOPIC — 300-char topic blows the {RX_BUFFER_SIZE} B rx buffer")
     scenario = Scenario("oversize_topic")
     seen = len(oversize_events)
     long_topic = INBOUND_TOPIC + "/" + ("a" * 300)
@@ -367,8 +347,6 @@ def scenario_stress():
 # ---------------------------------------------------------------------------
 
 scenario_tier1()
-scenario_tier2("tier2_1kb", 1024)
-scenario_tier2("tier2_2kb", MAX_MESSAGE_BYTES - 100)  # near the cap
 scenario_tier3()
 scenario_oversize_topic()
 scenario_qos1()

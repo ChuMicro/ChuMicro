@@ -16,6 +16,7 @@ from chumicro_mqtt._wire import (
     MQTTError,
     MQTTProtocolError,
     UnsupportedQoSError,
+    topic_matches,
 )
 
 gc.collect()
@@ -32,6 +33,7 @@ __all__ = [
     "ProtocolState",
     "UnsupportedQoSError",
     "WhenOversized",
+    "topic_matches",
 ]
 
 gc.collect()
