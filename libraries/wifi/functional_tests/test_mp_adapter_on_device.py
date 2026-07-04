@@ -14,12 +14,12 @@ relevant board.
 
 These tests do **not** attempt to associate with a real AP.  They
 target the adapter's contract with the substrate (configure /
-connect / is_linked / disconnect / ip / per-stack knobs), using a
-deliberate non-existent SSID so the connect call returns ``False``
-without needing live wifi credentials.
+connect / is_linked / ip / per-stack knobs), using a deliberate
+non-existent SSID so the connect call returns ``False`` without
+needing live wifi credentials.
 
-Each test calls ``disconnect`` cleanup at the end so the next test
-starts fresh.
+Each test drops the station link at the end (``_disconnect_quietly``,
+reaching the WLAN substrate directly) so the next test starts fresh.
 """
 
 __chumicro_runtimes__ = ("micropython",)
@@ -105,16 +105,6 @@ def test_connect_to_nonexistent_ssid_returns_false_without_link() -> None:
     assert result is False
     assert adapter.is_linked() is False
     _disconnect_quietly()
-
-
-def test_disconnect_after_configure_is_safe() -> None:
-    """Disconnect must succeed even when no association is live."""
-    _disconnect_quietly()
-    adapter = MpWifiAdapter()
-    adapter.configure(WifiConfig(ssid="x", password="y"))
-    # Should not raise even though there's nothing to disconnect.
-    adapter.disconnect()
-    assert adapter.is_linked() is False
 
 
 def test_pm_constant_value_matches_cyw43_disable_magic() -> None:

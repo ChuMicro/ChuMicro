@@ -23,9 +23,8 @@ class CpWifiAdapter(WifiAdapter):
             under CircuitPython.  Tests inject a fake whose shape
             matches the subset of ``wifi.radio`` we touch:
             ``hostname`` (settable str), ``connect(ssid, password,
-            timeout=...)`` (blocking, may raise), ``stop_station()``,
-            ``connected`` (bool), ``ipv4_address`` (stringifiable
-            or ``None``).
+            timeout=...)`` (blocking, may raise), ``connected``
+            (bool), ``ipv4_address`` (stringifiable or ``None``).
     """
 
     name = "cp"
@@ -90,10 +89,6 @@ class CpWifiAdapter(WifiAdapter):
         except OSError:
             return False
         return self.radio.connected
-
-    def disconnect(self):
-        """Tear down the active station association."""
-        self.radio.stop_station()
 
     def is_linked(self):
         """``True`` when ``wifi.radio.connected`` reports an active association.

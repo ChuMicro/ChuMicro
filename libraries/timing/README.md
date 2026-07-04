@@ -56,7 +56,6 @@ while True:
 |---|---|
 | `Deadline(period_ms, now_ms)` | A single armed timeout — `expired(now)` / `remaining(now)` / `reset(now)` |
 | `Rate(period_ms, now_ms)` | Drift-free periodic cadence; `due(now)` fires at most once per period |
-| `earliest(now_ms, *deadlines)` | Smallest `remaining` across several `Deadline`s — one wait budget |
 
 ### Wait vocabulary (`chumicro_timing.waits`)
 

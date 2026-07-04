@@ -4,14 +4,13 @@ Adapters wrap the runtime's wifi stack (`wifi.radio` on CP,
 `network.WLAN` on MP).  ``WifiService`` drives them.  Users never
 touch them directly.
 
-Six members cover the substrate's lifecycle:
+Five members cover the substrate's lifecycle:
 
 * :meth:`configure`: apply hostname / power-save / static-IP
   settings (called once at construction, before the first connect).
 * :meth:`connect`: non-blocking attempt to associate.  Adapters
   whose substrate's connect call is blocking budget the call against
   ``connect_timeout_ms`` and return when done.
-* :meth:`disconnect`: drop the association if any.
 * :meth:`is_linked`: return ``True`` while the substrate reports
   an active association.
 * :meth:`ip`: return the assigned IPv4 string, or ``None`` when
@@ -72,10 +71,6 @@ class WifiAdapter:
             Exception: Adapter-specific failures propagate.  The
                 service catches and stores them as ``last_error``.
         """
-        raise NotImplementedError
-
-    def disconnect(self):
-        """Drop any active association."""
         raise NotImplementedError
 
     def is_linked(self):

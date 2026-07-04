@@ -8,11 +8,12 @@ so users who pass their own UDP socket never pull
 from chumicro_sockets import udp_socket
 
 
-def chumicro_sockets_factory(*, radio=None, broadcast: bool = False) -> object:
+def chumicro_sockets_factory(*, radio=None) -> object:
     """Return a bound UDP socket on an ephemeral port.
 
-    Wires :func:`chumicro_sockets.udp_socket`.  *broadcast=True* sets
-    ``SO_BROADCAST`` for "discover any server on the LAN" patterns;
-    NTP itself doesn't need it.
+    Wires :func:`chumicro_sockets.udp_socket`.  Apps that need
+    ``SO_BROADCAST`` (e.g. LAN server discovery, which NTP itself
+    doesn't need) call :func:`chumicro_sockets.udp_socket` with
+    ``broadcast=True`` directly.
     """
-    return udp_socket(radio=radio, broadcast=broadcast)
+    return udp_socket(radio=radio)

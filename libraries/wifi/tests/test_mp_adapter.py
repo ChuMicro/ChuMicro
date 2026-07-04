@@ -9,7 +9,7 @@ on both wifi stacks the adapter supports:
 
 The fake mirrors the subset of the WLAN shape the adapter touches:
 ``active(state=None)`` (getter / setter), ``connect(ssid, password)``
-(non-blocking), ``disconnect()``, ``isconnected()``, ``ifconfig()``,
+(non-blocking), ``isconnected()``, ``ifconfig()``,
 ``config(**kwargs)``, which the adapter uses to disable the
 firmware auto-reconnect supervisor on ESP-IDF, set the CYW43
 PM-disable knob on CYW43, and apply ``dhcp_hostname`` on both.
@@ -66,10 +66,6 @@ class _FakeWlan:
     def set_deferred_link(self, *, link_after):
         """Model a non-blocking join that links after *link_after* isconnected() polls."""
         self._link_after = link_after
-
-    def disconnect(self):
-        self.calls.append(("disconnect",))
-        self._connected = False
 
     def isconnected(self):
         if self._link_after is not None and self._pending_polls > 0:
@@ -408,17 +404,8 @@ def test_connect_propagates_unexpected_exceptions() -> None:
 
 
 # ---------------------------------------------------------------------------
-# disconnect / is_linked / ip: same shape on both stacks
+# is_linked / ip: same shape on both stacks
 # ---------------------------------------------------------------------------
-
-
-def test_disconnect_calls_wlan_disconnect() -> None:
-    wlan = _FakeWlan()
-    wlan._connected = True  # noqa: SLF001 - direct fake state setup
-    adapter = MpWifiAdapter(wlan=wlan, stack="cyw43")
-    adapter.disconnect()
-    assert wlan.calls[-1] == ("disconnect",)
-    assert wlan.isconnected() is False
 
 
 def test_is_linked_reflects_isconnected() -> None:

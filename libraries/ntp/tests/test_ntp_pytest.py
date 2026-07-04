@@ -1,16 +1,15 @@
 """CPython-only tests for chumicro_ntp.sockets_factory.
 
 These cases exercise the ``_CPythonUDPWrapper`` returned by
-``chumicro_sockets_factory()`` on CPython — including its underlying
-``sock`` attribute and ``getsockopt`` round-trips against the stdlib
-``socket`` module.  They have no cross-runtime equivalent at the unit
-level:
+``chumicro_sockets_factory()`` on CPython — binding a real UDP socket
+on the host and asserting its ephemeral bound port plus the ``sendto``
+/ ``recvfrom_into`` surface.  They have no cross-runtime equivalent at
+the unit level:
 
 * CircuitPython's ``chumicro_sockets_factory()`` requires a
   ``radio=`` argument (typically ``wifi.radio``), which doesn't
   exist on the CP unix-port.
-* MicroPython's stdlib socket exposes a different surface for
-  ``getsockopt`` and there's no ``sock`` attribute on the wrapper.
+* MicroPython's wrapper exposes a different socket surface.
 
 The cross-runtime contract — "factory returns a working UDP socket
 bound to an ephemeral port, with ``sendto`` / ``recvfrom_into`` /
@@ -20,8 +19,6 @@ bound to an ephemeral port, with ``sendto`` / ``recvfrom_into`` /
 
 #: CPython-only lane (pytest fixtures / host stdlib); not cross-runtime.
 __chumicro_runtimes__ = ("cpython",)
-
-import socket as stdlib_socket
 
 from chumicro_ntp.sockets_factory import chumicro_sockets_factory
 
@@ -37,20 +34,5 @@ def test_sockets_factory_returns_chumicro_sockets_udp_socket() -> None:
         # Has the UDP protocol surface — sendto + recvfrom_into present.
         assert callable(sock.sendto)
         assert callable(sock.recvfrom_into)
-    finally:
-        sock.close()
-
-
-def test_sockets_factory_passes_through_broadcast_flag() -> None:
-    sock = chumicro_sockets_factory(broadcast=True)
-    try:
-        # CPython exposes the wrapped socket directly on the
-        # _CPythonUDPWrapper; test the SO_BROADCAST round-trip via
-        # the underlying stdlib socket.
-        value = sock.sock.getsockopt(
-            stdlib_socket.SOL_SOCKET,
-            stdlib_socket.SO_BROADCAST,
-        )
-        assert value != 0
     finally:
         sock.close()

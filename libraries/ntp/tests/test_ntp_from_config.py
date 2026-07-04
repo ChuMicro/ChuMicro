@@ -120,9 +120,8 @@ class TestFromConfig:
         captured: dict = {}
         sock = FakeUDPSocket()
 
-        def fake_chumicro_sockets_factory(*, radio=None, broadcast=False):
+        def fake_chumicro_sockets_factory(*, radio=None):
             captured["radio"] = radio
-            captured["broadcast"] = broadcast
             return sock
 
         import chumicro_ntp.sockets_factory as sf  # noqa: PLC0415
@@ -136,7 +135,7 @@ class TestFromConfig:
         finally:
             sf.chumicro_sockets_factory = original
 
-        assert captured == {"radio": "fake-radio", "broadcast": False}
+        assert captured == {"radio": "fake-radio"}
         assert client.socket is sock
         # Non-blocking was applied — FakeUDPSocket records setblocking calls.
         assert sock.blocking is False
@@ -150,7 +149,7 @@ class TestFromConfig:
         """
         sock = FakeUDPSocket()
 
-        def fake_chumicro_sockets_factory(*, radio=None, broadcast=False):
+        def fake_chumicro_sockets_factory(*, radio=None):
             return sock
 
         import chumicro_ntp.sockets_factory as sf  # noqa: PLC0415

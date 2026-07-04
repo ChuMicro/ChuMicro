@@ -56,7 +56,7 @@ print("unix seconds:", request.unix_seconds)
 | `NTPClient.cancel()` | Abort an in-flight query. |
 | `NTPResult` | Per-query handle.  `done`, `unix_seconds`, `error`. |
 | `NTPError` | OSError subclass raised on protocol-level failures (short/malformed response, kiss-of-death, timeout, cancel). |
-| `chumicro_ntp.sockets_factory.chumicro_sockets_factory(radio=None, broadcast=False)` | One-line default UDP socket wired through `chumicro-sockets`.  Importable separately so the deploy graph doesn't pull `chumicro-sockets` for apps with a custom transport. |
+| `chumicro_ntp.sockets_factory.chumicro_sockets_factory(radio=None)` | One-line default UDP socket wired through `chumicro-sockets`.  Importable separately so the deploy graph doesn't pull `chumicro-sockets` for apps with a custom transport. |
 
 ## Where this fits
 

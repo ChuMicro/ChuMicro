@@ -1,4 +1,4 @@
-"""Value objects over the ticks substrate: ``Deadline``, ``earliest``, ``Rate``.
+"""Value objects over the ticks substrate: ``Deadline`` and ``Rate``.
 
 These capture the arm / expire / remaining / reduce / re-phase arithmetic
 that consumers otherwise hand-assemble from the free ``ticks_add`` /
@@ -51,23 +51,6 @@ class Deadline:
     def reset(self, now_ms: int) -> None:
         """Re-arm the same ``period_ms`` from ``now_ms``."""
         self._due_ms = ticks_add(now_ms, self.period_ms)
-
-
-def earliest(now_ms: int, *deadlines: Deadline) -> int | None:
-    """Return the smallest ``remaining(now_ms)`` across ``deadlines``.
-
-    ``None`` when no deadlines are given.  This is the wait-timeout
-    reducer: fold several ``Deadline`` objects into the single sleep
-    budget a wait loop parks on.  ``*deadlines`` allocates a tuple, so
-    keep it off per-tick hot paths — reduce raw absolute ticks with
-    ``ticks_diff`` there instead.
-    """
-    nearest = None
-    for deadline in deadlines:
-        left = deadline.remaining(now_ms)
-        if nearest is None or left < nearest:
-            nearest = left
-    return nearest
 
 
 class Rate:

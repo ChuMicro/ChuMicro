@@ -30,9 +30,11 @@ The helpers operate on **duck-typed** inputs:
   carrying the socket so the scheduler registers it for the right poll
   direction.
 
-Heap-DoS protection: ``recv_until`` requires ``max_bytes`` and refuses
-peer input above it; ``recv_exact`` allocates a fixed buffer of the
-requested size.  Both reject non-positive sizes up front.
+Heap-DoS protection: ``recv_until`` and ``recv_exact`` both require
+``max_bytes`` and refuse to allocate above it — ``recv_until`` caps the
+accumulator it grows, ``recv_exact`` caps the fixed buffer it pre-allocates
+so a peer-controlled ``byte_count`` can't force an unbounded allocation.
+Both reject non-positive sizes up front.
 """
 
 import errno
@@ -240,7 +242,7 @@ def recv_until(sock: object, separator: object, *, max_bytes: int) -> bytes:
             raise OSError("recv_until exceeded max_bytes")
 
 
-def recv_exact(sock: object, byte_count: int) -> bytes:
+def recv_exact(sock: object, byte_count: int, *, max_bytes: int) -> bytes:
     """Read exactly *byte_count* bytes; return them as ``bytes``.
 
     Loops on ``sock.recv_into`` into a pre-allocated *byte_count*-byte
@@ -251,6 +253,13 @@ def recv_exact(sock: object, byte_count: int) -> bytes:
     Args:
         sock: Non-blocking TCP socket.
         byte_count: Number of bytes to read.  Must be positive.
+        max_bytes: Hard cap on the buffer this helper will allocate.
+            *byte_count* above it is refused before the ``bytearray`` is
+            built — required because a caller wiring a peer-controlled
+            length (Content-Length, remaining-length) into *byte_count*
+            would otherwise trigger an unbounded allocation, the same
+            heap-DoS surface ``recv_until`` bounds with its own
+            *max_bytes*.
 
     Yields:
         A ``ReadWait`` on each EAGAIN.
@@ -261,10 +270,15 @@ def recv_exact(sock: object, byte_count: int) -> bytes:
     Raises:
         OSError: Peer closed before *byte_count* bytes arrived, or the
             socket reported a non-EAGAIN error.
-        ValueError: *byte_count* is not positive.
+        ValueError: *byte_count* is not positive, *max_bytes* is not
+            positive, or *byte_count* exceeds *max_bytes*.
     """
     if byte_count <= 0:
         raise ValueError("byte_count must be positive")
+    if max_bytes <= 0:
+        raise ValueError("max_bytes must be positive")
+    if byte_count > max_bytes:
+        raise ValueError("byte_count exceeds max_bytes")
 
     buffer = bytearray(byte_count)
     view = memoryview(buffer)

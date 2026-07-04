@@ -37,7 +37,7 @@ The hooks below live on `FakeWifiAdapter` and are forwarded to `FakeWifi` for er
 | `set_connect_outcome(OSError)` | Next `connect()` raises the named exception class. |
 | `set_connect_outcomes([True, False, True])` | Queue a one-shot sequence of outcomes; the default takes over after the queue drains. |
 | `drop_link()` | Simulates a link-down event — the next `is_linked()` returns `False`, triggering the service's reconnect path. |
-| `calls` | List of recorded adapter calls (`("configure", config)`, `("connect", config)`, `("disconnect",)`).  Assert on this to verify call ordering. |
+| `calls` | List of recorded adapter calls (`("configure", config)`, `("connect", config)`).  Assert on this to verify call ordering. |
 
 ## Simulating a reconnect
 

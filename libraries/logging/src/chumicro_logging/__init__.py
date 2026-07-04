@@ -22,6 +22,8 @@ Public API
 - ``level_name(level)`` — integer to human name
 """
 
+import gc
+
 from chumicro_logging.core import (
     CRITICAL,
     DEBUG,
@@ -47,3 +49,5 @@ __all__ = [
     "default_formatter",
     "level_name",
 ]
+
+gc.collect()

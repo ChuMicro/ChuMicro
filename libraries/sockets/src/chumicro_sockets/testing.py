@@ -195,7 +195,7 @@ class FakeUDPSocket:
 
         sock = FakeUDPSocket()
         sock.enqueue_recv(b"reply", host="10.0.0.5", port=123)
-        client = NTPClient(sock=sock)
+        client = NTPClient(socket=sock)
         client.send_request("10.0.0.5")
 
         assert sock.sent[0] == (b"<48-byte NTP request>", "10.0.0.5", 123)

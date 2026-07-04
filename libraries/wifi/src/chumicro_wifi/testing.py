@@ -1,7 +1,7 @@
 """Test helpers for libraries that depend on ``chumicro-wifi``.
 
-Downstream consumers import ``FakeWifi`` rather than inventing
-ad-hoc mocks.
+``FakeWifi`` is here for downstream libraries to test against
+instead of hand-rolling a wifi mock.
 
 Example::
 
@@ -49,9 +49,8 @@ class FakeWifiAdapter(WifiAdapter):
       only after a few :meth:`is_linked` polls, so tests can exercise
       the service's in-flight poll window through the real
       ``check()`` / ``handle()`` cycle.
-    * ``self.calls``: every adapter call (``configure``, ``connect``,
-      ``disconnect``) appends a tuple so tests can assert call
-      ordering and arguments.
+    * ``self.calls``: every adapter call (``configure``, ``connect``)
+      appends a tuple so tests can assert call ordering and arguments.
 
     ``connect_blocks`` defaults to ``True`` (a blocking substrate: a
     ``connect() == False`` is a settled failure).  Flip it via
@@ -99,10 +98,6 @@ class FakeWifiAdapter(WifiAdapter):
             return False
         # Anything else is treated as an exception class.
         raise outcome("simulated connect failure")
-
-    def disconnect(self):
-        self.calls.append(("disconnect",))
-        self._linked = False
 
     def is_linked(self):
         if self._link_after is not None and self._pending_polls > 0:
