@@ -2356,7 +2356,7 @@ class TestSweepDevices:
             "run.py", "sweep-devices",
             "--device", "board-a", "--device", "board-b",
             "--demo", "mqtt_pub_sub",
-            "--skip-demo", "--functional",
+            "--skip-demo", "--functional", "--skip-workbench",
             "--library", "sockets", "--deploy-mode", "ram",
         ])
 
@@ -2367,6 +2367,7 @@ class TestSweepDevices:
                 "demo": "mqtt_pub_sub",
                 "skip_demo": True,
                 "functional": True,
+                "skip_workbench": True,
                 "library": "sockets",
                 "deploy_mode": "ram",
             }),
@@ -2385,6 +2386,7 @@ class TestSweepDevices:
             run, "run_command",
             lambda command, environment=None: commands.append(command) or 0,
         )
+        monkeypatch.setattr(run, "test_workbench_functional", lambda *args, **kwargs: 0)
 
         result = run.sweep_devices()
 
@@ -2394,7 +2396,8 @@ class TestSweepDevices:
         assert all("sockets_runner_connector" in command[1] for command in commands)
         output = capsys.readouterr().out
         assert "== sweep summary ==" in output
-        assert output.count("PASS") == 2
+        # Two board demo rows plus the closing workbench-functional row.
+        assert output.count("PASS") == 3
 
     def test_failing_demo_yields_exit_1_and_fail_row(
         self, monkeypatch, capsys,
@@ -2408,13 +2411,15 @@ class TestSweepDevices:
             run, "run_command",
             lambda command, environment=None: 1 if "mp-board" in command else 0,
         )
+        monkeypatch.setattr(run, "test_workbench_functional", lambda *args, **kwargs: 0)
 
         result = run.sweep_devices()
 
         assert result == 1
         output = capsys.readouterr().out
         assert "FAIL" in output
-        assert output.count("PASS") == 1
+        # cp-board demo PASS plus the closing workbench-functional PASS.
+        assert output.count("PASS") == 2
 
     def test_functional_layer_routes_runtime_specific_device_kwarg(
         self, monkeypatch,
@@ -2426,6 +2431,7 @@ class TestSweepDevices:
         ])
         calls, fake_functional = _make_fake_command(return_value=0)
         monkeypatch.setattr(run, "test_libraries_functional", fake_functional)
+        monkeypatch.setattr(run, "test_workbench_functional", lambda *args, **kwargs: 0)
 
         result = run.sweep_devices(
             skip_demo=True, functional=True, library="sockets",
@@ -2447,6 +2453,80 @@ class TestSweepDevices:
             }),
         ]
 
+    def test_workbench_phase_runs_after_all_boards(
+        self, monkeypatch, capsys,
+    ) -> None:
+        """The workbench suites close the sweep after every board cell."""
+        self._patch_registry(monkeypatch, [
+            self._entry("mp-board", "micropython"),
+            self._entry("cp-board", "circuitpython"),
+        ])
+        events: list[str] = []
+        monkeypatch.setattr(
+            run, "run_command",
+            lambda command, environment=None: events.append(command[-1]) or 0,
+        )
+        workbench_calls: list[tuple[tuple, dict]] = []
+
+        def fake_workbench(*args, **kwargs):
+            events.append("workbench")
+            workbench_calls.append((args, kwargs))
+            return 0
+
+        monkeypatch.setattr(run, "test_workbench_functional", fake_workbench)
+
+        result = run.sweep_devices()
+
+        assert result == 0
+        # Strict serial discipline: both boards, then the workbench phase.
+        assert events == ["mp-board", "cp-board", "workbench"]
+        # Called with no args (its conftests read devices.yml defaults).
+        assert workbench_calls == [((), {})]
+        output = capsys.readouterr().out
+        assert "== sweep workbench-functional (devices.yml defaults) ==" in output
+        assert "workbench-functional" in output
+        assert "defaults" in output
+
+    def test_failing_workbench_yields_exit_1_and_fail_row(
+        self, monkeypatch, capsys,
+    ) -> None:
+        """A workbench failure fails the sweep; board cells stay PASS."""
+        self._patch_registry(monkeypatch, [
+            self._entry("mp-board", "micropython"),
+            self._entry("cp-board", "circuitpython"),
+        ])
+        monkeypatch.setattr(
+            run, "run_command", lambda command, environment=None: 0,
+        )
+        monkeypatch.setattr(run, "test_workbench_functional", lambda *args, **kwargs: 1)
+
+        result = run.sweep_devices()
+
+        assert result == 1
+        output = capsys.readouterr().out
+        # Only the workbench row fails; both board demo cells stay PASS.
+        assert output.count("FAIL") == 1
+        assert output.count("PASS") == 2
+
+    def test_skip_workbench_skips_the_workbench_phase(
+        self, monkeypatch, capsys,
+    ) -> None:
+        """--skip-workbench does not call or report the workbench phase."""
+        self._patch_registry(monkeypatch, [
+            self._entry("mp-board", "micropython"),
+        ])
+        monkeypatch.setattr(
+            run, "run_command", lambda command, environment=None: 0,
+        )
+        calls, fake_workbench = _make_fake_command(return_value=0)
+        monkeypatch.setattr(run, "test_workbench_functional", fake_workbench)
+
+        result = run.sweep_devices(skip_workbench=True)
+
+        assert result == 0
+        assert calls == []
+        assert "workbench-functional" not in capsys.readouterr().out
+
     def test_device_filter_selects_and_orders_the_sweep(
         self, monkeypatch,
     ) -> None:
@@ -2460,6 +2540,7 @@ class TestSweepDevices:
             run, "run_command",
             lambda command, environment=None: commands.append(command) or 0,
         )
+        monkeypatch.setattr(run, "test_workbench_functional", lambda *args, **kwargs: 0)
 
         result = run.sweep_devices(device_ids=["cp-board"])
 
@@ -2481,12 +2562,36 @@ class TestSweepDevices:
         assert "unknown device id" in output
         assert "mp-board" in output
 
-    def test_skip_demo_without_functional_is_a_config_error(self, capsys) -> None:
-        """--skip-demo alone leaves nothing to run."""
-        result = run.sweep_devices(skip_demo=True)
+    def test_skip_demo_skip_workbench_without_functional_is_a_config_error(
+        self, capsys,
+    ) -> None:
+        """--skip-demo + --skip-workbench + no --functional runs nothing."""
+        result = run.sweep_devices(skip_demo=True, skip_workbench=True)
 
         assert result == 2
         assert "leaves nothing to run" in capsys.readouterr().out
+
+    def test_skip_demo_without_functional_runs_workbench_only(
+        self, monkeypatch, capsys,
+    ) -> None:
+        """--skip-demo alone is legitimate: the workbench phase still runs."""
+        self._patch_registry(monkeypatch, [
+            self._entry("mp-board", "micropython"),
+        ])
+        demo_commands: list[list[str]] = []
+        monkeypatch.setattr(
+            run, "run_command",
+            lambda command, environment=None: demo_commands.append(command) or 0,
+        )
+        calls, fake_workbench = _make_fake_command(return_value=0)
+        monkeypatch.setattr(run, "test_workbench_functional", fake_workbench)
+
+        result = run.sweep_devices(skip_demo=True)
+
+        assert result == 0
+        assert demo_commands == []
+        assert calls == [((), {})]
+        assert "workbench-functional" in capsys.readouterr().out
 
     def test_unknown_demo_is_a_config_error(self, monkeypatch, capsys) -> None:
         """A demo without a driver.py fails fast, listing the real demos."""
