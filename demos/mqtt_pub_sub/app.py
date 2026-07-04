@@ -123,7 +123,7 @@ mqtt.on_subscribe = on_subscribe
 mqtt.on_message = on_command_message
 wifi.on_state_change(on_wifi_state)
 
-runner = Runner()
+runner = Runner(on_handler_error=lambda entry, error: print("SERVICE_FAULT", entry.service, repr(error)))
 runner.add(wifi)
 runner.add(mqtt)
 runner.add_periodic(publish_telemetry, period_ms=_TELEMETRY_INTERVAL_MS)

@@ -58,7 +58,10 @@ def _start_stream_server(bind_host: str):
     stop_event = threading.Event()
 
     def run():
-        runner = Runner()
+        def report_fault(entry, error):
+            print(f"driver: SERVICE_FAULT {entry.service!r} {error!r}", file=sys.stderr)
+
+        runner = Runner(on_handler_error=report_fault)
         runner.add(server)
         while not stop_event.is_set():
             runner.tick()

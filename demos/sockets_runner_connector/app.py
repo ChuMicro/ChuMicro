@@ -53,7 +53,7 @@ echo_host = config["sockets.echo.host"]
 echo_port = int(config["sockets.echo.port"])
 
 wifi = WifiService(WifiConfig.from_config(config))
-runner = Runner()
+runner = Runner(on_handler_error=lambda entry, error: print("SERVICE_FAULT", entry.service, repr(error)))
 runner.add(wifi)
 
 link_up = Signal()

@@ -168,7 +168,7 @@ echo_port = int(config["sockets.echo.port"])
 wifi = WifiService(WifiConfig.from_config(config))
 echo = EchoService(echo_host, echo_port, radio=wifi.adapter.radio)
 
-runner = Runner()
+runner = Runner(on_handler_error=lambda entry, error: print("SERVICE_FAULT", entry.service, repr(error)))
 
 
 def on_wifi_state(_old, new):

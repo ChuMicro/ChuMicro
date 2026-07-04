@@ -39,7 +39,7 @@ config = load_runtime_config()
 fetch_url = config["requests.fetch.url"]
 
 wifi = WifiService(WifiConfig.from_config(config))
-runner = Runner()
+runner = Runner(on_handler_error=lambda entry, error: print("SERVICE_FAULT", entry.service, repr(error)))
 runner.add(wifi)
 
 link_up = Signal()
