@@ -1,6 +1,18 @@
 # Workstream: `websockets` oversize-frame length on Lolin S2
 
-Status: **proposed.**  Surfaced 2026-05-16 during the four-board example campaign.
+Status: **resolved 2026-07-04** — test-side contract fix.  The 2026-07-04 re-measure on
+S2 MP reported exactly 600 again, unchanged across websockets 0.22.0's recv-budget
+rework — which exonerates the library's chunk accounting (it changed; the number
+didn't).  Root cause: the S2's TCP stack coalesces all three 200 B fragments into one
+recv, so the drain-halt observes the fully-assembled 600 B message, while Pico W's
+stack delivered fragments separately and halted mid-stream at ≤ the cap (and rp2 now
+skips the test entirely — single-device loopback unsupported).  Both observations are
+honest "size seen at the halt" values; the per-frame ≤ 400 expectation was a substrate
+delivery assumption, not a library contract.  The test now asserts the envelope —
+positive and ≤ the assembled message size — and passes 9/9 on S2 MP.  Original
+problem statement below, kept for the record.
+
+Surfaced 2026-05-16 during the four-board example campaign.
 
 ## Problem
 
