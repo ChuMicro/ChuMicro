@@ -2,7 +2,7 @@
 
 Status: `accepted`
 Date: `2026-04-21`
-Summary: `chumicro-sockets` is a thin protocol + per-runtime adapters; `tcp_client_socket()` and `tls_client_socket()` are sibling factories; `recv_into()` only, no `recv()` (CP idiom).
+Summary: `chumicro-sockets` is a thin protocol + per-runtime adapters behind one `connector()` entry (Decision 0098); `recv_into()` only, no `recv()` (CP idiom).
 Related: Decision 0029 (project workspace), Decision 0042 (library dependency policy), Decision 0043 (UDP), Decision 0040 (requests), Decision 0041 (http_server), Decision 0045 (websockets)
 
 ## Context
@@ -35,18 +35,13 @@ chumicro_sockets/
   testing.py            # FakeSocket for unit tests
 ```
 
-Adapter selection via `sys.implementation.name` + board probe, wrapped in two pairs of sibling factories — one synchronous, one tick-driven (added by [Decision 0081](0081-non-blocking-connect-via-tick-driven-connector.md)):
+Adapter selection via `sys.implementation.name` + board probe, wrapped in one connect entry — non-blocking and tick-driven ([Decision 0081](0081-non-blocking-connect-via-tick-driven-connector.md)); the connect surface itself is [Decision 0098](0098-sockets-connect-collapse.md)'s:
 
 ```python
-# Synchronous factories — returned socket is already connected.
-# For one-shot scripts, REPL, tests, code that owns the loop.
-tcp_client_socket(host, port, *, radio=None) -> TCPClientSocket
-tls_client_socket(host, port, *, context=None, radio=None) -> TCPClientSocket
-
-# Connector factories — non-blocking, returns a tick-driven state machine.
-# For runner-shaped libraries (chumicro-mqtt, chumicro-requests, etc.).
-tcp_client_connector(host, port, *, radio=None) -> SocketConnector
-tls_client_connector(host, port, *, context=None, radio=None) -> SocketConnector
+# The one connect state machine — returns a tick-driven SocketConnector.
+# Runner-shaped libraries register/drive it; one-shot scripts drive it
+# to terminal inline.
+connector(host, port, *, tls=False, context=None, radio=None) -> SocketConnector
 ```
 
 **Protocol surface** (minimum that downstream libs touch):
@@ -58,9 +53,7 @@ tls_client_connector(host, port, *, context=None, radio=None) -> SocketConnector
 - `settimeout(seconds: float | None) -> None`
 - `fileno() -> int` (for `select.poll()` registration)
 
-Synchronous factory behaviour: `connect()` happens inside the factory — the returned socket is already connected.  Callers do not see a disconnected socket or a separate connect step.  Suitable when the caller controls the timing (e.g. `main` before entering the runner loop, or a one-shot script).
-
-Connector behaviour: factory returns immediately with a `SocketConnector` whose `tick(now_ms)` advances DNS → TCP → TLS one phase per tick.  See [Decision 0081](0081-non-blocking-connect-via-tick-driven-connector.md) for the connector contract and the per-runtime substrate caveats (CP blocks per phase; MP+CPython are truly non-blocking).
+Connector behaviour: the entry returns immediately with a `SocketConnector` whose `tick(now_ms)` advances DNS → TCP → TLS one phase per tick.  See [Decision 0081](0081-non-blocking-connect-via-tick-driven-connector.md) for the connector contract, the per-runtime substrate caveats (CP blocks per phase; MP+CPython are truly non-blocking), and the sanctioned one-shot forms.
 
 No `recv()`.  Downstream code allocates its own buffer and uses `recv_into()` — the CP-compatible idiom.  MP + CPython adapters implement `recv_into()` using stdlib `sock.recv_into()` directly.  Older MP ports without `recv_into` fall back to `recv()` + memcpy internally.
 
@@ -68,21 +61,11 @@ No `recv()`.  Downstream code allocates its own buffer and uses `recv_into()` �
 
 **Rejected alternative (c):** "A lower-level byte-stream abstraction that hides 'is this a socket' entirely."  Rejected because MQTT and HTTP care about connect-shutdown-reconnect lifecycle, not just byte streams; hiding the socket boundary hides bugs.
 
-### 3. TLS is a separate entrypoint, not an overloaded flag
+### 3. TLS parameterization
 
-Two sibling factories: `tcp_client_socket()` and `tls_client_socket()`.  Each does one job.  TLS config is a proper injected dependency (`context=<ssl.SSLContext>`) not a dressed-up boolean — consistent with chumicro's constructor-injection policy (Decision 0010).
+Superseded — see [Decision 0098](0098-sockets-connect-collapse.md) §1: TLS is a `tls=` flag plus a separately injected `context=<ssl.SSLContext>` on the single `connector()` entry.  (The shape this section originally rejected — one 3-types-in-1 `ssl=False|True|context` argument — remains rejected; the settled form keeps the boolean and the dependency as two parameters.)
 
-```python
-sock = tcp_client_socket("host", 1883, radio=radio)                  # plain TCP
-sock = tls_client_socket("host", 8883, radio=radio)                  # TLS, runtime default CA
-sock = tls_client_socket("host", 8883, context=ctx, radio=radio)     # TLS, injected context
-```
-
-`tls_client_socket(..., context=None)` uses the runtime's default CA store where the runtime supports a context-shaped call (CPython, MP ESP32, MP Pico W via mbedTLS) and routes through the radio's built-in trust store on CP.  Passing a non-None `context` on a CP radio raises `UnsupportedSSLConfigError` with a clear message directing the user to load the custom CA via their radio's board-level config.
-
-A helper `ssl_context_with_ca(ca_pem: bytes) -> ssl.SSLContext` is provided for the common "custom CA + default everything else" path; on CP-radio runtimes it raises `UnsupportedSSLConfigError` at call time so the failure is early and obvious.
-
-**Rejected:** `connect(host, port, ssl=False|True|context)` overloaded parameter.  Three types (bool false, bool true, SSLContext instance) collapsed into one argument reads as a flag but acts as a dependency.  Violates chumicro DI spirit and is harder to skim at call sites.
+A helper `ssl_context_with_ca(ca_pem: bytes) -> ssl.SSLContext` is provided for the common "custom CA + default everything else" path on every runtime.
 
 **Rejected:** separate post-connect `wrap_socket()` step.  Works on CPython and MP-ESP32, breaks on CP radios and pre-mbedTLS MP builds where TLS must be declared at connect time.  Non-starter.
 

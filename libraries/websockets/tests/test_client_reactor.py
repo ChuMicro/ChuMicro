@@ -152,7 +152,7 @@ class TestRunnerReactorContract:
         poller = FakePoller()
         runner = Runner(ticks=clock, poller=poller)
         factory, _record = _make_factory(socket)
-        client = WebSocketClient(connector_factory=factory, ticks=clock)
+        client = WebSocketClient(transport_factory=factory, ticks=clock)
         runner.add(client)
 
         client.connect("ws://example.com/")

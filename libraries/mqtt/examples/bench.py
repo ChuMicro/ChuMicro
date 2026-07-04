@@ -110,7 +110,7 @@ config["mqtt.client_id"] = CLIENT_ID
 from chumicro_mqtt.sockets_factory import chumicro_sockets_connector_factory  # noqa: E402
 
 mqtt = MQTTClient(
-    connector_factory=chumicro_sockets_connector_factory(config, radio=radio),
+    transport_factory=chumicro_sockets_connector_factory(config, radio=radio),
     client_id=CLIENT_ID,
     keep_alive_seconds=30,
     rx_buffer_size=RX_BUFFER_SIZE,

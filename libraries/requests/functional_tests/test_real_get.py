@@ -57,7 +57,7 @@ def test_real_http_get_completes_runner_shaped() -> None:
     print(f"WIFI_OK ip={ip}")
 
     client = HttpClient(
-        connector_factory=chumicro_sockets_connector_factory(radio=radio),
+        transport_factory=chumicro_sockets_connector_factory(radio=radio),
     )
     request = client.get(_TARGET_URL, timeout_ms=_REQUEST_TIMEOUT_MS)
 

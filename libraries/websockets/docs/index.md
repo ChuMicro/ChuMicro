@@ -13,7 +13,7 @@ from chumicro_timing import ticks_ms
 from chumicro_wifi import wifi
 
 client = WebSocketClient(
-    connector_factory=chumicro_sockets_connector_factory(radio=wifi.adapter.radio),
+    transport_factory=chumicro_sockets_connector_factory(radio=wifi.adapter.radio),
 )
 client.on_text = lambda text: print(text)
 client.connect("ws://api.example.com/stream")

@@ -8,12 +8,12 @@ from chumicro_test_harness.assertions import raises
 
 class TestFromConfig:
     """``MQTTClient.from_config`` reads the manifest's optional keys
-    with sensible defaults.  Non-config args (socket, connector_factory,
+    with sensible defaults.  Non-config args (socket, transport_factory,
     radio) come through kwargs."""
 
     @staticmethod
     def _injected_factory(sock: FakeSocket):
-        """Return a connector_factory that yields *sock* on the second tick."""
+        """Return a transport_factory that yields *sock* on the second tick."""
         return lambda: FakeSocketConnector(
             actions=["dns_ok", "tcp_ok"], socket=sock,
         )
@@ -30,7 +30,7 @@ class TestFromConfig:
             "mqtt.password": "pw",
         }
         client = MQTTClient.from_config(
-            config, connector_factory=self._injected_factory(sock),
+            config, transport_factory=self._injected_factory(sock),
         )
         assert client._client_id == "thing-007"  # noqa: SLF001
         assert client._keep_alive_seconds == 120  # noqa: SLF001
@@ -41,7 +41,7 @@ class TestFromConfig:
         """An empty config dict makes every manifest key fall back to its default."""
         sock = FakeSocket()
         client = MQTTClient.from_config(
-            {}, connector_factory=self._injected_factory(sock),
+            {}, transport_factory=self._injected_factory(sock),
         )
         assert client._client_id == "chumicro-mqtt"  # noqa: SLF001
         assert client._keep_alive_seconds == 60  # noqa: SLF001
@@ -53,7 +53,7 @@ class TestFromConfig:
         sock = FakeSocket()
         client = MQTTClient.from_config(
             {"mqtt.client_id": "halfway"},
-            connector_factory=self._injected_factory(sock),
+            transport_factory=self._injected_factory(sock),
         )
         assert client._client_id == "halfway"  # noqa: SLF001
         assert client._keep_alive_seconds == 60  # noqa: SLF001 - default
@@ -78,23 +78,25 @@ class TestFromConfig:
             "mqtt.keep_alive_seconds": 45,
         })
         client = MQTTClient.from_config(
-            config, connector_factory=self._injected_factory(sock),
+            config, transport_factory=self._injected_factory(sock),
         )
         assert client._client_id == "rc-test"  # noqa: SLF001
         assert client._keep_alive_seconds == 45  # noqa: SLF001
 
     def test_default_factory_uses_config_broker_host_port(self) -> None:
-        """When neither *socket* nor *connector_factory* is passed,
+        """When neither *socket* nor *transport_factory* is passed,
         ``from_config`` builds a factory that reads
         ``mqtt.broker.host`` / ``mqtt.broker.port`` from the config.
         Validates the factory closure without needing a real socket
-        by monkey-patching ``chumicro_sockets.tcp_client_connector``,
+        by monkey-patching ``chumicro_sockets.connector``,
         which the factory closure reaches at call time."""
         captured: dict = {}
 
-        def fake_tcp_client_connector(host, port, *, radio=None):
+        def fake_connector(host, port, *, tls=False, context=None, radio=None):
             captured["host"] = host
             captured["port"] = port
+            captured["tls"] = tls
+            captured["context"] = context
             captured["radio"] = radio
             return FakeSocketConnector(
                 actions=["dns_ok", "tcp_ok"], socket=FakeSocket(),
@@ -102,8 +104,8 @@ class TestFromConfig:
 
         import chumicro_sockets  # noqa: PLC0415
 
-        original = chumicro_sockets.tcp_client_connector
-        chumicro_sockets.tcp_client_connector = fake_tcp_client_connector
+        original = chumicro_sockets.connector
+        chumicro_sockets.connector = fake_connector
         try:
             client = MQTTClient.from_config(
                 {"mqtt.broker.host": "10.0.0.42", "mqtt.broker.port": 8883},
@@ -113,19 +115,26 @@ class TestFromConfig:
             assert captured == {}
             client.connect()
         finally:
-            chumicro_sockets.tcp_client_connector = original
+            chumicro_sockets.connector = original
 
-        assert captured == {"host": "10.0.0.42", "port": 8883, "radio": "fake-radio"}
+        assert captured == {
+            "host": "10.0.0.42",
+            "port": 8883,
+            "tls": False,
+            "context": None,
+            "radio": "fake-radio",
+        }
 
     def test_ssl_context_routes_through_tls_factory(self) -> None:
-        """When ``ssl_context=`` is supplied, the auto-built factory uses
-        :func:`chumicro_sockets.tls_client_connector` and threads the
-        context and radio through."""
+        """When ``ssl_context=`` is supplied, the auto-built factory calls
+        :func:`chumicro_sockets.connector` with ``tls=True`` and threads
+        the context and radio through."""
         captured: dict = {}
 
-        def fake_tls_client_connector(host, port, *, context=None, radio=None):
+        def fake_connector(host, port, *, tls=False, context=None, radio=None):
             captured["host"] = host
             captured["port"] = port
+            captured["tls"] = tls
             captured["context"] = context
             captured["radio"] = radio
             return FakeSocketConnector(
@@ -134,8 +143,8 @@ class TestFromConfig:
 
         import chumicro_sockets  # noqa: PLC0415
 
-        original = chumicro_sockets.tls_client_connector
-        chumicro_sockets.tls_client_connector = fake_tls_client_connector
+        original = chumicro_sockets.connector
+        chumicro_sockets.connector = fake_connector
         try:
             client = MQTTClient.from_config(
                 {"mqtt.broker.host": "broker.example", "mqtt.broker.port": 8883},
@@ -146,24 +155,25 @@ class TestFromConfig:
             assert captured == {}
             client.connect()
         finally:
-            chumicro_sockets.tls_client_connector = original
+            chumicro_sockets.connector = original
 
         assert captured == {
             "host": "broker.example",
             "port": 8883,
+            "tls": True,
             "context": "fake-ctx",
             "radio": "fake-radio",
         }
 
-    def test_ssl_context_ignored_when_connector_factory_passed(self) -> None:
+    def test_ssl_context_ignored_when_transport_factory_passed(self) -> None:
         """``ssl_context=`` is documented as ignored when *socket* or
-        *connector_factory* is supplied.  Caller-owned factories already
+        *transport_factory* is supplied.  Caller-owned factories already
         encode their own TLS choice.  Confirms the dispatch doesn't
         accidentally consult ``ssl_context`` once a factory is in hand."""
         sock = FakeSocket()
         client = MQTTClient.from_config(
             {},
-            connector_factory=self._injected_factory(sock),
+            transport_factory=self._injected_factory(sock),
             ssl_context="should-be-ignored",
         )
         # Construction is side-effect free.  Calling connect() arms the
@@ -219,7 +229,7 @@ class TestFromConfig:
                     {"mqtt.broker.host": "h", "mqtt.broker.port": 1883},
                 )
             except RuntimeError as exception:
-                assert "connector_factory=" in str(exception)
+                assert "transport_factory=" in str(exception)
                 assert "__chumicro_skip_factories__" in str(exception)
             else:
                 raise AssertionError("expected RuntimeError")

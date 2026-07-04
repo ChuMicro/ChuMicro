@@ -30,11 +30,11 @@ For bundle setup, pre-compiled `.mpy` bundles, the experimental channel, and det
 
 ```python
 from chumicro_http_server import HttpServer, build_response
-from chumicro_sockets import tcp_listening_socket
+from chumicro_sockets import listener
 from chumicro_timing import ticks_ms
 
 server = HttpServer(
-    listener_factory=lambda: tcp_listening_socket(host="0.0.0.0", port=8080),
+    transport_factory=lambda: listener(host="0.0.0.0", port=8080),
 )
 
 @server.route("/")
@@ -82,13 +82,13 @@ Works on CPython, MicroPython, and CircuitPython.  Pure Python — no native ext
 `chumicro-http-server` itself is transport-agnostic — pass a TLS-wrapped
 listener from
 [`chumicro_sockets.ssl_context_with_cert_and_key_paths`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/sockets)
-into `listener_factory` and the same `HttpServer` runs HTTPS.  Live
+into `transport_factory` and the same `HttpServer` runs HTTPS.  Live
 verification across the supported board matrix:
 
 | Runtime + board | TLS server status | Notes |
 |---|---|---|
 | CircuitPython on ESP32-S2 (Lolin S2) | ✅ Works | Bench-tested ~5 KB context (RSA-2048); each connection adds tens of KB during handshake — leave headroom. |
-| CircuitPython on rp2 (Pi Pico W / Pi Pico 2 W) | ❌ Refused (`UnsupportedSSLConfigError`) | `chumicro_sockets.tls_listening_socket` raises up-front; the underlying CYW43 TLS path raises `OSError(32)` mid-handshake AND wedges the chip's station-mode state. Use ESP32-family or MicroPython on rp2. |
+| CircuitPython on rp2 (Pi Pico W / Pi Pico 2 W) | ❌ Refused (`UnsupportedSSLConfigError`) | `chumicro_sockets.listener(tls=True)` raises up-front; the underlying CYW43 TLS path raises `OSError(32)` mid-handshake AND wedges the chip's station-mode state. Use ESP32-family or MicroPython on rp2. |
 | MicroPython on ESP32-S2 | ✅ Works | Hardware-accelerated handshake; ~1 KB heap. |
 | MicroPython on rp2 (Pi Pico W) | ✅ Works (RSA-2048 only) | DER-encoded key; ~25 KB handshake heap; ECC keys fail at context build. |
 
@@ -109,7 +109,7 @@ LED-blink-friendly progression.
 
 ## Wiring wifi credentials for examples and functional tests
 
-The hardware-prefixed examples + real-network suites in `functional_tests/test_real_*.py` need wifi credentials.  See [`docs/wiring-wifi-credentials.md`](https://github.com/ChuMicro/ChuMicro/blob/main/docs/wiring-wifi-credentials.md) for the workspace-based and raw single-file paths.  The library itself never reads TOML — it takes a `listener_factory` and goes; config wiring is application-layer.
+The hardware-prefixed examples + real-network suites in `functional_tests/test_real_*.py` need wifi credentials.  See [`docs/wiring-wifi-credentials.md`](https://github.com/ChuMicro/ChuMicro/blob/main/docs/wiring-wifi-credentials.md) for the workspace-based and raw single-file paths.  The library itself never reads TOML — it takes a `transport_factory` and goes; config wiring is application-layer.
 
 ## Contributing
 

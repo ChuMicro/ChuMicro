@@ -5,7 +5,7 @@ align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
 **One TCP / TLS / UDP socket surface across CircuitPython, MicroPython, and CPython.**
 
-One factory per socket shape (`tcp_client_socket`, `tls_client_socket`, `tcp_listening_socket`, `udp_socket`, …) hides the per-runtime adapter selection.  Custom-CA TLS, server-side certs, and an in-memory `FakeSocket` for downstream library tests are all included.
+One entry per socket shape (`connector`, `listener`, `udp_socket`) hides the per-runtime adapter selection; TLS is a `tls=` flag on each.  Custom-CA TLS, server-side certs, and an in-memory `FakeSocket` for downstream library tests are all included.
 
 <br clear="left">
 
@@ -29,23 +29,31 @@ For bundle setup, pre-compiled `.mpy` bundles, the experimental channel, and det
 ## Quick example
 
 ```python
-from chumicro_sockets import tcp_client_socket, tls_client_socket
+from chumicro_sockets import connector
 
-# Plain TCP — runtime picks the right adapter.  On CircuitPython pass
+# One connect state machine per runtime.  Runner-shaped apps register
+# the connector with the runner (it exposes check / handle / io_*);
+# one-shot scripts drive it to terminal inline.  On CircuitPython pass
 # radio=wifi.radio; the kwarg is ignored on MicroPython / CPython.
-sock = tcp_client_socket("broker.example.com", 1883, radio=wifi.radio)
+dial = connector("broker.example.com", 1883, radio=wifi.radio)
+while dial.state not in ("ready", "failed"):
+    dial.tick(0)
+if dial.state == "failed":
+    raise dial.last_error
+sock = dial.socket
 sock.send(b"PING\r\n")
 buffer = bytearray(128)
 nbytes = sock.recv_into(buffer, 128)
 print(bytes(buffer[:nbytes]))
 sock.close()
 
-# TLS — verifies the cert chain on every runtime.  Each runtime gets
-# its trust roots from the right place: CircuitPython's firmware
-# bundle, CPython's OS trust store, MicroPython's library-shipped
-# bundle (override via `set_default_ca_bundle`).  Pass
-# `context=ssl_context_no_verify()` for explicit opt-out.
-sock = tls_client_socket("api.example.com", 443)
+# TLS is a flag — `tls=True` verifies the cert chain on every runtime.
+# Each runtime gets its trust roots from the right place:
+# CircuitPython's firmware bundle, CPython's OS trust store,
+# MicroPython's library-shipped bundle (override via
+# `set_default_ca_bundle`).  Pass `context=ssl_context_no_verify()`
+# for explicit opt-out.
+dial = connector("api.example.com", 443, tls=True)
 ```
 
 > **CircuitPython** always needs an explicit `radio=` — the socketpool is built from it (`socketpool.SocketPool(radio)`).  Pass `wifi.radio`, or whatever radio object your board exposes.  MicroPython and CPython ignore the kwarg.
@@ -59,14 +67,12 @@ without hitting the network.
 
 | Symbol | Purpose |
 |---|---|
-| `tcp_client_socket(host, port, *, radio=None)` | Open a plain TCP connection. |
-| `tls_client_socket(host, port, *, context=None, radio=None)` | Open a TLS connection. |
-| `tcp_listening_socket(host, port, *, backlog=4, radio=None)` | Open a non-blocking TCP listening socket. |
-| `tls_listening_socket(host, port, *, context, backlog=4, radio=None)` | Open a non-blocking TLS listening socket. |
+| `connector(host, port, *, tls=False, context=None, radio=None)` | Non-blocking tick-driven TCP/TLS connect — the one connect state machine.  Register it with a runner or drive `tick()` to terminal inline. |
+| `listener(host, port, *, tls=False, context=None, backlog=4, radio=None)` | Open a non-blocking TCP or TLS listening socket. |
 | `udp_socket(bind_host="0.0.0.0", bind_port=0, *, radio=None, broadcast=False)` | Open a UDP datagram socket; default args bind ephemeral. |
 | `ssl_context_with_ca(ca_pem)` | Build an `ssl.SSLContext` trusting only the supplied CA(s).  Works on every supported runtime. |
 | `ssl_context_no_verify()` | Build an `ssl.SSLContext` that **skips** certificate verification.  Explicit opt-out — named so a reviewer can grep for it. |
-| `set_default_ca_bundle(pem_bytes)` | Replace the CA bundle used by `tls_client_socket(context=None)` on MicroPython.  No-op on CP / CPython.  Pass `None` to revert to the library-shipped bundle. |
+| `set_default_ca_bundle(pem_bytes)` | Replace the CA bundle used by `connector(tls=True, context=None)` on MicroPython.  No-op on CP / CPython.  Pass `None` to revert to the library-shipped bundle. |
 | `ssl_context_with_cert_and_key_paths(cert_path, key_path)` | Server-side `ssl.SSLContext` from PEM file paths.  CP-portable shape. |
 | TCP socket surface (duck-typed) | `send`, `recv_into`, `close`, `setblocking`, `settimeout`.  Any object exposing these works; no named Protocol class is exported. |
 | UDP socket surface (duck-typed) | `sendto(data, host, port)`, `recvfrom_into(buffer, nbytes=0) -> (n, (host, port))`, `close`, `setblocking`.  Any object exposing these works. |

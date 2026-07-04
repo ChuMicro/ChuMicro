@@ -232,11 +232,11 @@ Write the I/O as a generator function and register it with `runner.add_generator
 ```python
 from chumicro_runner import Runner
 from chumicro_sockets.generators import connect, recv_until, send_all
-from chumicro_sockets import tcp_client_connector
+from chumicro_sockets import connector
 
 
 def echo_run(host, port, radio):
-    sock = yield from connect(tcp_client_connector(host, port, radio=radio))
+    sock = yield from connect(connector(host, port, radio=radio))
     try:
         yield from send_all(sock, b"hello\n")
         reply = yield from recv_until(sock, b"\n", max_bytes=4096)
@@ -267,7 +267,7 @@ wifi.on_state_change(lambda old, new: link_up.set(new))
 
 def main_run(wifi):
     yield from wait_for(link_up)          # suspend until wifi's callback fires
-    sock = yield from connect(tcp_client_connector(HOST, PORT, radio=wifi.adapter.radio))
+    sock = yield from connect(connector(HOST, PORT, radio=wifi.adapter.radio))
     ...
 ```
 

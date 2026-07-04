@@ -24,7 +24,8 @@ import sys
 import time
 
 from chumicro_config import config
-from chumicro_sockets import tcp_client_connector, tcp_listening_socket
+from chumicro_sockets import connector
+from chumicro_sockets import listener as make_listener
 from chumicro_test_harness import skip
 from chumicro_timing import ticks_ms as _ticks_ms
 from chumicro_websockets import (
@@ -122,7 +123,7 @@ def test_drop_with_event_drains_oversize_and_stays_open() -> None:
     def on_connection(connection):
         accepted_connections.append(connection)
 
-    listener = tcp_listening_socket(
+    listener = make_listener(
         host="0.0.0.0",
         port=_LISTEN_PORT,
         radio=wifi.adapter.radio,
@@ -141,10 +142,10 @@ def test_drop_with_event_drains_oversize_and_stays_open() -> None:
     client_oversized = []
 
     def make_connector(host, port, use_tls):  # noqa: ARG001 - protocol
-        return tcp_client_connector(host, port, radio=wifi.adapter.radio)
+        return connector(host, port, radio=wifi.adapter.radio)
 
     client = WebSocketClient(
-        connector_factory=make_connector,
+        transport_factory=make_connector,
         max_message_bytes=_MAX_MESSAGE_BYTES,
         when_oversized=WhenOversized.DROP_WITH_EVENT,
     )

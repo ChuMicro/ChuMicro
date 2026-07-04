@@ -33,7 +33,7 @@ from chumicro_requests import HttpClient
 from chumicro_requests.sockets_factory import chumicro_sockets_connector_factory
 from chumicro_timing import ticks_ms
 
-client = HttpClient(connector_factory=chumicro_sockets_connector_factory())
+client = HttpClient(transport_factory=chumicro_sockets_connector_factory())
 handle = client.get("http://api.example.com/now", timeout_ms=5000)
 
 while not handle.done:
@@ -81,7 +81,7 @@ Works on CPython, MicroPython, and CircuitPython.  Pure Python — no native ext
 
 ## Wiring wifi credentials for examples and functional tests
 
-The hardware-prefixed examples + real-network suites in `functional_tests/test_real_*.py` need wifi credentials.  See [`docs/wiring-wifi-credentials.md`](https://github.com/ChuMicro/ChuMicro/blob/main/docs/wiring-wifi-credentials.md) for the workspace-based and raw single-file paths.  The library itself never reads TOML — it takes a `connector_factory` and goes; config wiring is application-layer.
+The hardware-prefixed examples + real-network suites in `functional_tests/test_real_*.py` need wifi credentials.  See [`docs/wiring-wifi-credentials.md`](https://github.com/ChuMicro/ChuMicro/blob/main/docs/wiring-wifi-credentials.md) for the workspace-based and raw single-file paths.  The library itself never reads TOML — it takes a `transport_factory` and goes; config wiring is application-layer.
 
 ## Contributing
 

@@ -187,7 +187,7 @@ class TestClientFromConfig:
         factory = lambda host, port, use_tls: sock  # noqa: ARG005,E731
         client = WebSocketClient.from_config(
             {"websockets.client.max_message_bytes": 4096},
-            connector_factory=factory,
+            transport_factory=factory,
         )
         assert client._max_message_bytes == 4096  # noqa: SLF001
 
@@ -201,7 +201,7 @@ class TestClientFromConfig:
         from chumicro_websockets._wire import DEFAULT_MAX_MESSAGE_BYTES
         sock = FakeSocket()
         factory = lambda host, port, use_tls: sock  # noqa: ARG005,E731
-        client = WebSocketClient.from_config({}, connector_factory=factory)
+        client = WebSocketClient.from_config({}, transport_factory=factory)
         assert client._max_message_bytes == DEFAULT_MAX_MESSAGE_BYTES  # noqa: SLF001
 
     def test_runtime_config_wrapper_works_too(self) -> None:
@@ -212,7 +212,7 @@ class TestClientFromConfig:
         config = RuntimeConfig(
             {"websockets.client.max_message_bytes": 8192},
         )
-        client = WebSocketClient.from_config(config, connector_factory=factory)
+        client = WebSocketClient.from_config(config, transport_factory=factory)
         assert client._max_message_bytes == 8192  # noqa: SLF001
 
     def test_connect_url_not_consumed_by_from_config(self) -> None:
@@ -224,17 +224,17 @@ class TestClientFromConfig:
         # not call connect or otherwise act on it.
         client = WebSocketClient.from_config(
             {"websockets.client.connect_url": "ws://ignored.test/"},
-            connector_factory=factory,
+            transport_factory=factory,
         )
         assert client.url == ""
         assert not client._connect_called  # noqa: SLF001
 
-    def test_explicit_connector_factory_bypasses_auto_factory(self) -> None:
-        """Passing connector_factory= skips the chumicro_sockets wiring."""
+    def test_explicit_transport_factory_bypasses_auto_factory(self) -> None:
+        """Passing transport_factory= skips the chumicro_sockets wiring."""
         sock = FakeSocket()
         factory = lambda host, port, use_tls: sock  # noqa: ARG005,E731
-        client = WebSocketClient.from_config({}, connector_factory=factory)
-        assert client._connector_factory is factory  # noqa: SLF001
+        client = WebSocketClient.from_config({}, transport_factory=factory)
+        assert client._transport_factory is factory  # noqa: SLF001
 
     def test_skipped_factory_module_raises_runtime_error(self) -> None:
         """When ``chumicro_websockets.sockets_factory`` is excluded via
@@ -257,7 +257,7 @@ class TestClientFromConfig:
             try:
                 WebSocketClient.from_config({})
             except RuntimeError as exception:
-                assert "connector_factory=" in str(exception)
+                assert "transport_factory=" in str(exception)
                 assert "__chumicro_skip_factories__" in str(exception)
             else:
                 raise AssertionError("expected RuntimeError")
@@ -268,7 +268,7 @@ class TestClientFromConfig:
                 sys.modules["chumicro_websockets.sockets_factory"] = original
 
     def test_default_factory_threads_radio_and_ssl_context(self) -> None:
-        """When no connector_factory is passed, ``from_config`` builds
+        """When no transport_factory is passed, ``from_config`` builds
         one via ``chumicro_websockets.sockets_factory.chumicro_sockets_connector_factory``
         with the radio + ssl_context kwargs threaded through."""
         import chumicro_websockets.sockets_factory as sf
@@ -291,4 +291,4 @@ class TestClientFromConfig:
             sf.chumicro_sockets_connector_factory = original
 
         assert captured == {"radio": "fake-radio", "ssl_context": "fake-ctx"}
-        assert client._connector_factory is sentinel_factory  # noqa: SLF001
+        assert client._transport_factory is sentinel_factory  # noqa: SLF001

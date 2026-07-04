@@ -320,7 +320,7 @@ def canned_response(*, status=200, reason="OK", body=b"", extra_headers=()):
 
 
 def make_factory(socket_or_factory):
-    """Return a connector_factory that wraps *socket_or_factory* in a
+    """Return a transport_factory that wraps *socket_or_factory* in a
     happy-path :class:`FakeSocketConnector`.
 
     *socket_or_factory* is either a single :class:`FakeSocket` (wrapped
@@ -345,7 +345,7 @@ def make_client(*, socket_or_factory=None, **kwargs):
     ticks = FakeTicks()
     socket = socket_or_factory if socket_or_factory is not None else FakeSocket()
     client = HttpClient(
-        connector_factory=make_factory(socket),
+        transport_factory=make_factory(socket),
         ticks=ticks,
         **kwargs,
     )

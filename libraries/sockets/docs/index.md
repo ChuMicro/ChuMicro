@@ -2,15 +2,20 @@
 
 **Cross-runtime TCP + TLS client sockets for CircuitPython, MicroPython, and CPython.**
 
-One protocol, one factory, runtime-appropriate adapters underneath — CircuitPython's `socketpool`, MicroPython's `socket` + `ssl`, CPython's stdlib.
+One protocol, one connect entry, runtime-appropriate adapters underneath — CircuitPython's `socketpool`, MicroPython's `socket` + `ssl`, CPython's stdlib.
 
 ## Quick example
 
 ```python
-from chumicro_sockets import tcp_client_socket
+from chumicro_sockets import connector
 
 # On CircuitPython pass `radio=wifi.radio` here; MP / CPython ignore the kwarg.
-sock = tcp_client_socket("broker.example.com", 1883, radio=None)
+dial = connector("broker.example.com", 1883, radio=None)
+while dial.state not in ("ready", "failed"):  # or register with a runner
+    dial.tick(0)
+if dial.state == "failed":
+    raise dial.last_error
+sock = dial.socket
 sock.send(b"PING\r\n")
 buffer = bytearray(64)
 nbytes = sock.recv_into(buffer, 64)

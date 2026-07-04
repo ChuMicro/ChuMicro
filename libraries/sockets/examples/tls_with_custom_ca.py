@@ -56,7 +56,9 @@ Substrate quirks observed on real boards:
 #: harness from running this on MP boards.
 __chumicro_runtimes__ = ("circuitpython",)
 
-from chumicro_sockets import ssl_context_with_ca, tls_client_socket
+import time
+
+from chumicro_sockets import connector, ssl_context_with_ca
 from helpers import wifi_up
 
 WIFI_SSID = "your-wifi-ssid"  # noqa: S105 — replace before deploying
@@ -103,7 +105,19 @@ radio, ip = wifi_up(WIFI_SSID, WIFI_PASSWORD)
 print(f"WIFI_OK ip={ip}")
 
 context = ssl_context_with_ca(CA_PEM)
-sock = tls_client_socket("letsencrypt.org", 443, context=context, radio=radio)
+
+# One state machine per runtime: tick it until terminal.  Runner-shaped
+# apps register the connector with the runner instead; a one-shot
+# script drives the same machine inline.
+dial = connector("letsencrypt.org", 443, tls=True, context=context, radio=radio)
+while dial.state not in ("ready", "failed"):
+    dial.tick(0)
+    time.sleep(0.01)
+if dial.state == "failed":
+    raise dial.last_error
+
+sock = dial.socket
+sock.setblocking(True)  # one-shot script: blocking reads are fine here
 try:
     sock.send(b"GET / HTTP/1.0\r\nHost: letsencrypt.org\r\nConnection: close\r\n\r\n")
     print("sent: GET / HTTP/1.0")

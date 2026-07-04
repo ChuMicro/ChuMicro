@@ -2,7 +2,7 @@
 
 ``fetch_run`` expresses the whole lifecycle top-to-bottom: wait for the
 wifi link with ``wait_for``, build the connector factory, then
-``response = yield from get(connector_factory, url)`` driven by
+``response = yield from get(transport_factory, url)`` driven by
 ``Runner.add_generator``.  One request, no polling a handle, no
 ``on_done`` callback; the ``Signal`` set from the wifi state-change
 callback resumes the generator once the link is up.

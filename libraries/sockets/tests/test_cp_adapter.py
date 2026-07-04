@@ -1,9 +1,9 @@
 """Cross-runtime tests for the CircuitPython adapter.
 
 The CP adapter (``chumicro_sockets._adapters.cp``) imports
-``socketpool`` and ``ssl`` lazily — both inside function bodies, not
-at module load time — so we can drive it from any runtime as long as
-we stub those two modules in ``sys.modules`` before the call.
+``socketpool`` at module load time (stubbed here via ``sys.modules``
+before the adapter import) and ``ssl`` lazily inside function bodies,
+so we can drive it from any runtime by stubbing both modules.
 
 Mirrors the shape of ``test_mp_adapter_pytest.py`` (per-test stubbed
 modules, protocol-shape verification) but uses the ``SwapAttribute``
@@ -15,8 +15,9 @@ This is the host-side complement to:
 
 * the on-device functional tests under ``functional_tests/`` (real
   ``socketpool`` against ``wifi.radio`` on actual CP boards), and
-* the dispatcher routing tests in ``test_factories.py`` (verify the
-  factory reaches the cp adapter, not what the cp adapter does).
+* the dispatcher routing tests in ``test_factories_routing.py``
+  (verify the package entry reaches the cp adapter, not what the cp
+  adapter does).
 
 It catches regressions in the call shapes the CP adapter expects
 ``socketpool`` to expose, plus the protocol the wrapper classes
@@ -268,80 +269,6 @@ class TestPoolFor:
 
 
 # ---------------------------------------------------------------------------
-# connect_tcp
-# ---------------------------------------------------------------------------
-
-
-class TestConnectTcp:
-    def test_creates_stream_socket_and_connects(self) -> None:
-        from chumicro_sockets._adapters import cp as cp_adapter
-        _clear_pool_cache()
-        radio = object()
-        pool_swap, fake_pool_module = _install_socketpool_stub()
-        with pool_swap:
-            sock = cp_adapter.connect_tcp("broker.example.com", 1883, radio=radio)
-        # Single socket created from the per-radio pool.
-        pool = fake_pool_module.created_pools[0]
-        assert pool.sockets == [sock]
-        # AF_INET + SOCK_STREAM.
-        assert sock.family == _StubPool.AF_INET
-        assert sock.kind == _StubPool.SOCK_STREAM
-        assert sock.connected_to == ("broker.example.com", 1883)
-
-
-# ---------------------------------------------------------------------------
-# connect_tls
-# ---------------------------------------------------------------------------
-
-
-class TestConnectTls:
-    def test_provided_context_used_directly_no_ssl_import(self) -> None:
-        """``context=`` short-circuits the ssl import + default-context build.
-
-        Important on the CP unix-port: the ``ssl`` shim ImportErrors,
-        so the adapter must not touch ``import ssl`` when the caller
-        already supplied a context.
-        """
-        from chumicro_sockets._adapters import cp as cp_adapter
-        _clear_pool_cache()
-        radio = object()
-        context = _StubContext()
-        pool_swap, _ = _install_socketpool_stub()
-        with pool_swap:
-            wrapped = cp_adapter.connect_tls(
-                "broker.example.com", 8883,
-                context=context, radio=radio,
-            )
-        # Wrap was called against the raw socket from the pool.
-        assert len(context.wrap_calls) == 1
-        wrapped_sock, server_hostname = context.wrap_calls[0]
-        assert wrapped is wrapped_sock
-        assert server_hostname == "broker.example.com"
-        # And the wrapped socket was connected after wrap.
-        assert wrapped.connected_to == ("broker.example.com", 8883)
-
-    def test_default_context_built_via_ssl_module_when_none(self) -> None:
-        """``context=None`` builds via ``ssl.create_default_context()`` then wrap+connect."""
-        from chumicro_sockets._adapters import cp as cp_adapter
-        _clear_pool_cache()
-        radio = object()
-        pool_swap, _ = _install_socketpool_stub()
-        ssl_swap, fake_ssl = _install_ssl_stub()
-        with pool_swap, ssl_swap:
-            wrapped = cp_adapter.connect_tls(
-                "secure.example.com", 443, radio=radio,
-            )
-        # One default context built; one wrap on it.
-        assert len(fake_ssl.contexts_built) == 1
-        context = fake_ssl.contexts_built[0]
-        assert len(context.wrap_calls) == 1
-        wrapped_sock, server_hostname = context.wrap_calls[0]
-        assert wrapped is wrapped_sock
-        assert server_hostname == "secure.example.com"
-        assert wrapped.connected_to == ("secure.example.com", 443)
-
-
-# ---------------------------------------------------------------------------
 # udp_socket + _CPUDPWrapper
 # ---------------------------------------------------------------------------
 
@@ -483,17 +410,17 @@ class TestCpUdpWrapper:
 
 
 # ---------------------------------------------------------------------------
-# listen_tcp
+# listener — plain TCP
 # ---------------------------------------------------------------------------
 
 
-class TestListenTcp:
+class TestListenerTcp:
     def test_binds_listens_and_sets_nonblocking(self) -> None:
         from chumicro_sockets._adapters import cp as cp_adapter
         _clear_pool_cache()
         pool_swap, fake_pool_module = _install_socketpool_stub()
         with pool_swap:
-            listener = cp_adapter.listen_tcp(
+            listener = cp_adapter.listener(
                 "0.0.0.0", 8080, backlog=8, radio=object(),
             )
         sock = fake_pool_module.created_pools[0].sockets[0]
@@ -509,7 +436,7 @@ class TestListenTcp:
         _clear_pool_cache()
         pool_swap, fake_pool_module = _install_socketpool_stub()
         with pool_swap:
-            cp_adapter.listen_tcp("0.0.0.0", 8080, radio=object())
+            cp_adapter.listener("0.0.0.0", 8080, radio=object())
         sock = fake_pool_module.created_pools[0].sockets[0]
         assert sock.listening_backlog == 4
 
@@ -518,7 +445,7 @@ class TestListenTcp:
         _clear_pool_cache()
         pool_swap, fake_pool_module = _install_socketpool_stub()
         with pool_swap:
-            cp_adapter.listen_tcp("0.0.0.0", 8080, radio=object())
+            cp_adapter.listener("0.0.0.0", 8080, radio=object())
         sock = fake_pool_module.created_pools[0].sockets[0]
         assert (
             _StubPool.SOL_SOCKET, _StubPool.SO_REUSEADDR, 1,
@@ -540,7 +467,7 @@ class TestListenTcp:
         with pool_swap, SwapAttribute(
             fake_pool_module.SocketPool, "socket", socket_without_setsockopt,
         ):
-            listener = cp_adapter.listen_tcp("0.0.0.0", 8080, radio=object())
+            listener = cp_adapter.listener("0.0.0.0", 8080, radio=object())
         # Bind / listen / setblocking still happened.
         assert listener.bound_to == ("0.0.0.0", 8080)
         assert listener.listening_backlog == 4
@@ -587,11 +514,11 @@ class TestSslContextWithCertAndKeyPaths:
 
 
 # ---------------------------------------------------------------------------
-# listen_tls
+# listener — TLS
 # ---------------------------------------------------------------------------
 
 
-class TestListenTls:
+class TestListenerTls:
     def test_wraps_then_binds_listens_nonblocking(self) -> None:
         """Listener socket gets ``server_side=True`` wrap before bind/listen."""
         from chumicro_sockets._adapters import cp as cp_adapter
@@ -599,8 +526,8 @@ class TestListenTls:
         pool_swap, fake_pool_module = _install_socketpool_stub()
         context = _StubContext()
         with pool_swap:
-            listener = cp_adapter.listen_tls(
-                "0.0.0.0", 8443, context=context, backlog=8, radio=object(),
+            listener = cp_adapter.listener(
+                "0.0.0.0", 8443, tls=True, context=context, backlog=8, radio=object(),
             )
         raw = fake_pool_module.created_pools[0].sockets[0]
         # Server-side wrap fired against the raw pool socket, then bind /
@@ -617,8 +544,8 @@ class TestListenTls:
         _clear_pool_cache()
         pool_swap, fake_pool_module = _install_socketpool_stub()
         with pool_swap:
-            cp_adapter.listen_tls(
-                "0.0.0.0", 8443, context=_StubContext(), radio=object(),
+            cp_adapter.listener(
+                "0.0.0.0", 8443, tls=True, context=_StubContext(), radio=object(),
             )
         raw = fake_pool_module.created_pools[0].sockets[0]
         assert raw.listening_backlog == 4
@@ -723,7 +650,7 @@ class TestCPConnector:
         radio = object()
         pool_swap, fake_pool_module = _install_socketpool_stub()
         with pool_swap:
-            connector = cp_adapter.tcp_connector(
+            connector = cp_adapter.connector(
                 "broker.example.com", 1883, radio=radio,
             )
             assert connector.state == "awaiting_dns"
@@ -748,9 +675,9 @@ class TestCPConnector:
         context = _StubContext()
         pool_swap, fake_pool_module = _install_socketpool_stub()
         with pool_swap:
-            connector = cp_adapter.tls_connector(
+            connector = cp_adapter.connector(
                 "broker.example.com", 8883,
-                context=context, radio=radio,
+                tls=True, context=context, radio=radio,
             )
             connector.tick(0)  # awaiting_dns -> awaiting_tcp
             assert connector.state == "awaiting_tcp"
@@ -765,16 +692,16 @@ class TestCPConnector:
             assert connector.socket is wrapped_sock
 
     def test_tls_connector_builds_default_context_when_none(self) -> None:
-        # context=None routes through ssl.create_default_context — same
-        # path as connect_tls (sync) but exercised via the connector.
+        # context=None routes through ssl.create_default_context on the
+        # connector's TLS wrap path.
         from chumicro_sockets._adapters import cp as cp_adapter
         _clear_pool_cache()
         radio = object()
         pool_swap, _ = _install_socketpool_stub()
         ssl_swap, fake_ssl = _install_ssl_stub()
         with pool_swap, ssl_swap:
-            connector = cp_adapter.tls_connector(
-                "secure.example.com", 443, radio=radio,
+            connector = cp_adapter.connector(
+                "secure.example.com", 443, tls=True, radio=radio,
             )
             connector.tick(0)
             connector.tick(0)

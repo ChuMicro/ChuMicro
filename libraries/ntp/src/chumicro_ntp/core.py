@@ -213,17 +213,17 @@ class NTPClient:
         *,
         radio: object | None = None,
         socket: object | None = None,
-        socket_factory: object | None = None,
+        transport_factory: object | None = None,
     ) -> "NTPClient":
         """Build an :class:`NTPClient` from runtime config.
 
         Reads optional ``ntp.server`` / ``ntp.port`` / ``ntp.timeout_ms``
         — empty ``config`` is valid input (defaults to ``pool.ntp.org``
-        on port 123).  A *socket* or *socket_factory* override bypasses
+        on port 123).  A *socket* or *transport_factory* override bypasses
         the auto-built UDP factory; the auto path defers the open to
         the first ``query()`` and sets the socket non-blocking.
         """
-        if socket is None and socket_factory is None:
+        if socket is None and transport_factory is None:
             try:
                 from chumicro_ntp.sockets_factory import (  # noqa: PLC0415
                     chumicro_sockets_factory,
@@ -233,10 +233,10 @@ class NTPClient:
                     "chumicro_ntp.sockets_factory not available "
                     "(excluded via __chumicro_skip_factories__ or "
                     "not on the board) — pass socket= or "
-                    "socket_factory= explicitly.",
+                    "transport_factory= explicitly.",
                 ) from exception
 
-            def socket_factory():
+            def transport_factory():
                 # Deferred: the UDP socket opens on the first query(),
                 # not at construction — building a client is free.
                 udp_socket = chumicro_sockets_factory(radio=radio)
@@ -246,7 +246,7 @@ class NTPClient:
 
         return cls(
             socket=socket,
-            socket_factory=socket_factory,
+            transport_factory=transport_factory,
             server=config.get("ntp.server", "pool.ntp.org"),
             port=config.get("ntp.port", 123),
             timeout_ms=config.get("ntp.timeout_ms", 5_000),
@@ -256,7 +256,7 @@ class NTPClient:
         self,
         socket: object | None = None,
         *,
-        socket_factory: object | None = None,
+        transport_factory: object | None = None,
         server: str = "pool.ntp.org",
         port: int = 123,
         timeout_ms: int = 5_000,
@@ -264,13 +264,13 @@ class NTPClient:
     ) -> None:
         if timeout_ms <= 0:
             raise ValueError("timeout_ms must be positive")
-        if (socket is None) == (socket_factory is None):
+        if (socket is None) == (transport_factory is None):
             raise ValueError(
-                "provide exactly one of socket= or socket_factory= "
+                "provide exactly one of socket= or transport_factory= "
                 "(the factory defers the UDP open to the first query)"
             )
         self.socket = socket
-        self._socket_factory = socket_factory
+        self._transport_factory = transport_factory
         self.server = server
         self.port = port
         self.timeout_ms = timeout_ms
@@ -291,7 +291,7 @@ class NTPClient:
         """Issue a single SNTP query.
 
         Opens the UDP socket on first use when the client was built
-        with *socket_factory* (construction is side-effect-free).
+        with *transport_factory* (construction is side-effect-free).
         Sends the 48-byte client request immediately, then arms the
         runner-shaped recv path.  Subsequent ticks of
         ``check`` / ``handle`` drain the response from the socket.
@@ -311,7 +311,7 @@ class NTPClient:
                 "NTP query already in flight; await result before re-querying",
             )
         if self.socket is None:
-            self.socket = self._socket_factory()
+            self.socket = self._transport_factory()
         # Discard any datagrams already buffered from a previous
         # (timed-out or cancelled) exchange before sending.  Without
         # this, a late reply to an old request sits in the socket buffer

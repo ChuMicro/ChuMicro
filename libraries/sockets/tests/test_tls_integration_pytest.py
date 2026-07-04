@@ -1,11 +1,12 @@
 """End-to-end TLS integration test on CPython.
 
 Spins up a TLS echo server on a loopback port using a self-signed
-certificate generated at test time, then exercises
-``tls_client_socket`` + ``ssl_context_with_ca`` against it.  Real
-``ssl.SSLContext.wrap_socket`` handshake, no monkey-patching — the
-test catches regressions where the call shape (server_hostname,
-load_verify_locations cadata) drifts from what stdlib expects.
+certificate generated at test time, then drives
+``connector(tls=True)`` + ``ssl_context_with_ca`` against it to a
+terminal state.  Real ``ssl.SSLContext.wrap_socket`` handshake, no
+monkey-patching — the test catches regressions where the call shape
+(server_hostname, load_verify_locations cadata) drifts from what
+stdlib expects.
 
 The CPython adapter path is the same shape MP-mbedTLS and CP native
 wifi take (``context.wrap_socket(socket, server_hostname=host)``),
@@ -22,6 +23,7 @@ from __future__ import annotations
 __chumicro_runtimes__ = ("cpython",)
 
 import errno
+import select
 import socket
 import ssl
 import threading
@@ -30,10 +32,45 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
-from chumicro_sockets import ssl_context_with_ca, tls_client_socket
+from chumicro_sockets import connector, ssl_context_with_ca
 
 if TYPE_CHECKING:  # pragma: no cover — type-only
     from collections.abc import Iterator
+
+
+def _connect_tls(host: str, port: int, context: object | None = None) -> object:
+    """Drive ``connector(tls=True)`` to terminal; return the ready socket.
+
+    Between ticks, ``select.select`` parks briefly on the connector's
+    ``io_socket`` so the kernel (and the threaded echo server) can
+    complete the in-flight connect / handshake.  During
+    ``awaiting_tls`` the wait is read-only: the connector's declared
+    interest is read+write, but a connected socket is *always*
+    writable, so waiting on writability would spin the loop through
+    its iteration budget in microseconds — handshake progress arrives
+    as inbound bytes.  Raises the connector's ``last_error`` on
+    failure so callers see the same exception the handshake produced.
+    """
+    tls_connector = connector(host, port, tls=True, context=context)
+    for _ in range(200):
+        if tls_connector.state in ("ready", "failed"):
+            break
+        io_sock = tls_connector.io_socket
+        if io_sock is not None:
+            if tls_connector.state == "awaiting_tls":
+                select.select([io_sock], [], [], 0.05)
+            else:
+                interest = tls_connector.io_interest(0)
+                read_list = [io_sock] if interest & 1 else []
+                write_list = [io_sock] if interest & 2 else []
+                select.select(read_list, write_list, [], 0.05)
+        tls_connector.tick(0)
+    if tls_connector.state == "failed":
+        raise tls_connector.last_error
+    assert tls_connector.state == "ready", (
+        f"connector stuck in {tls_connector.state!r}"
+    )
+    return tls_connector.socket
 
 
 # ---------------------------------------------------------------------------
@@ -176,7 +213,7 @@ class TestTLSAgainstSelfSignedServer:
         tls_echo_server: tuple[str, int],
         self_signed_cert: tuple[Path, Path],
     ) -> None:
-        """tls_client_socket(context=ssl_context_with_ca(...)) succeeds.
+        """connector(tls=True, context=ssl_context_with_ca(...)) reaches ready.
 
         Confirms ssl_context_with_ca actually configures the trust
         anchor — without it, TLS would fail with a verify error on a
@@ -185,7 +222,10 @@ class TestTLSAgainstSelfSignedServer:
         host, port = tls_echo_server
         cert_path, _ = self_signed_cert
         context = ssl_context_with_ca(cert_path.read_bytes())
-        sock = tls_client_socket(host, port, context=context)
+        sock = _connect_tls(host, port, context)
+        # The connector hands back a non-blocking socket; this test's
+        # echo round-trip wants blocking reads.
+        sock.setblocking(True)
         try:
             sock.send(b"hello-tls\n")
             buffer = bytearray(64)
@@ -214,7 +254,7 @@ class TestTLSAgainstSelfSignedServer:
         host, port = tls_echo_server
         cert_path, _ = self_signed_cert
         context = ssl_context_with_ca(cert_path.read_bytes())
-        sock = tls_client_socket(host, port, context=context)
+        sock = _connect_tls(host, port, context)
         try:
             # The raw SSLSocket stays reachable on ``.sock`` — the runner
             # registers that pollable, not the wrapper.
@@ -237,7 +277,7 @@ class TestTLSAgainstSelfSignedServer:
         """Without the custom CA, the handshake rejects the self-signed cert."""
         host, port = tls_echo_server
         with pytest.raises((ssl.SSLError, ssl.SSLCertVerificationError)):
-            tls_client_socket(host, port)
+            _connect_tls(host, port)
 
     def test_send_recv_round_trip_multiple_messages(
         self,
@@ -248,7 +288,8 @@ class TestTLSAgainstSelfSignedServer:
         host, port = tls_echo_server
         cert_path, _ = self_signed_cert
         context = ssl_context_with_ca(cert_path.read_bytes())
-        sock = tls_client_socket(host, port, context=context)
+        sock = _connect_tls(host, port, context)
+        sock.setblocking(True)
         try:
             for index in range(3):
                 payload = f"chunk-{index}\n".encode()

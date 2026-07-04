@@ -2,8 +2,8 @@
 
 Status: `accepted`
 Date: `2026-05-23`
-Summary: Library methods that do network I/O don't block; tick-driven connector factories advance DNS → TCP → TLS one phase per tick; synchronous factories remain for non-runner contexts (REPL, scripts).
-Related: Decision 0014 (runner contract), Decision 0031 (chumicro-sockets factories — partially superseded), Decision 0051 (runner-shaped as project policy), Decision 0080 (runner reactor / central wait)
+Summary: Library network I/O never blocks; the tick-driven connector (DNS → TCP → TLS, one phase per tick) is the only connect implementation; non-runner contexts drive it to terminal inline.
+Related: Decision 0014 (runner contract), Decision 0031 (chumicro-sockets factories — partially superseded), Decision 0051 (runner-shaped as project policy), Decision 0080 (runner reactor / central wait), Decision 0098 (connect-path collapse — retired the synchronous carve-out)
 
 ## Context
 
@@ -19,11 +19,24 @@ Bake-validated 2026-05-23 (commit `b7dcad1d`) on Pi Pico W CP custom firmware: t
 
 Generalizing Decision 0051's runner-shaped rule: any library method that performs network I/O — DNS resolution, TCP connect, TLS handshake — yields to the runner between phases.  The convention "callers invoke connect outside the loop" is not a substitute.  The library's contract is "this call returns in bounded time" and bounded means under the runner's tick budget (~5 ms), not "however long the network takes."
 
-### 2. The synchronous factory stays as a carve-out for non-runner contexts
+### 2. One implementation — the connector is also the one-shot form
 
-`tcp_client_socket()` and `tls_client_socket()` remain available for one-shot scripts, REPL exploration, tests that want a fully-connected socket immediately, and code that genuinely owns the loop (a `main` that does setup before entering the runner loop).  Library code that's runner-shaped — anything under `libraries/` that registers with a Runner and exposes `check` / `handle` / `io_*` — uses non-blocking forms exclusively.
+There is no synchronous factory (Decision 0098 deleted `tcp_client_socket()` /
+`tls_client_socket()`; a second connect implementation per runtime was the divergence
+class that produced the SOCK-2 TLS bake bug).  The sanctioned one-shot forms are:
 
-Same shape Decision 0080 took for blocking poll: the leaf rule bans `poll(timeout > 0)`, the central-wait carve-out allows it in `Runner.wait`.
+- **On-device / cross-runtime** — drive the same `connector()` machine to terminal inline
+  (a small `tick()`-until-`ready`/`failed` loop, or `runner.run_until` when a runner is
+  already in hand; `run_until` made the loop ergonomic).  One-shot scripts, REPL
+  exploration, and `main`-before-the-loop pay a trivial while-loop instead of carrying a
+  parallel blocking implementation.
+- **Host-side CPython tooling** (test fixtures, demo drivers) — stdlib `socket` directly;
+  host tooling is not device code and never was the anti-pattern this decision targets.
+
+Library code that's runner-shaped — anything under `libraries/` that registers with a
+Runner and exposes `check` / `handle` / `io_*` — registers the connector or drives it from
+its own state machine, never blocking a tick beyond the documented per-runtime substrate
+compromises.
 
 ## Rejected
 
@@ -34,7 +47,7 @@ Same shape Decision 0080 took for blocking poll: the leaf rule bans `poll(timeou
 
 ## Consequences
 
-- **Decision 0031 §2 is edited in place.**  The promise *"`connect()` happens inside the factory — the returned socket is already connected"* now applies only to the synchronous factories; the new non-blocking forms are non-blocking by contract.  §2 names both forms and which is appropriate when.
-- **Decision 0051's runner-shaped rule list grows by one bullet.**  In addition to `time.sleep(N > 0.005)` and `select.poll(timeout > 0)`, library methods that perform network I/O don't block — including connect.  The carve-out is the synchronous factories under `chumicro_sockets` for non-runner contexts.
+- **Decision 0031 §2 is edited in place.**  The promise *"`connect()` happens inside the factory — the returned socket is already connected"* is retired entirely: the connector is the only connect implementation (Decision 0098) and it is non-blocking by contract.
+- **Decision 0051's runner-shaped rule list grows by one bullet.**  In addition to `time.sleep(N > 0.005)` and `select.poll(timeout > 0)`, library methods that perform network I/O don't block — including connect.  Non-runner contexts drive the connector to terminal inline instead of reaching for a blocking form.
 - **Implementation is tracked separately** in [`plans/workstreams/archive/non-blocking-connect-implementation.md`](../workstreams/archive/non-blocking-connect-implementation.md).  The workstream covered the connector contract, per-runtime substrate handling (CPython EINPROGRESS / MP rp2 / CP socketpool's blocking compromise), `MQTTClient`'s state-machine migration, and the `chumicro-requests` / `chumicro-websockets` migrations.  Phases 1.1, 1.2, 1.3, 2, 4, and 5 shipped; Phase 6 (http-server) was deferred.
 - **The runner-shaped policy clarification cascades.**  Library audits (`/audit-embedded chumicro_mqtt`, `/audit-library chumicro_sockets`) should flag any other library method that does synchronous network I/O.  Likely candidates: chumicro-ntp's `query`, chumicro-wifi's `connect` (separate ADR scope; not in this one).

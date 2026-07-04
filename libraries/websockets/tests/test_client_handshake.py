@@ -61,7 +61,7 @@ class TestConnect:
         clock = FakeTicks()
         factory, record = _make_factory(socket, expected_use_tls=True)
         client = WebSocketClient(
-            connector_factory=factory,
+            transport_factory=factory,
             ticks=clock,
         )
         client.connect("wss://secure.example.com/")
@@ -85,7 +85,7 @@ class TestConnect:
             captured["connector"] = connector
             return connector
 
-        client = WebSocketClient(connector_factory=factory, ticks=clock)
+        client = WebSocketClient(transport_factory=factory, ticks=clock)
         client.connect("ws://example.com/")
         client.handle(clock.ticks_ms())  # AWAITING_TRANSPORT, connector idle
         assert client._connecting_phase == ConnectingPhase.AWAITING_TRANSPORT
@@ -108,7 +108,7 @@ class TestConnect:
             return connector
 
         client = WebSocketClient(
-            connector_factory=factory, ticks=clock, handshake_timeout_ms=1000,
+            transport_factory=factory, ticks=clock, handshake_timeout_ms=1000,
         )
         client.connect("ws://example.com/")
         client.handle(clock.ticks_ms())

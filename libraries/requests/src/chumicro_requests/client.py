@@ -9,7 +9,7 @@ Single-in-flight in v1: :meth:`HttpClient.get` / ``post`` / etc.
 while a request is still running raises :class:`HttpBusyError`.  The
 user pattern::
 
-    client = HttpClient(connector_factory=...)
+    client = HttpClient(transport_factory=...)
     handle = client.get("http://api.example.com/now", timeout_ms=5000)
 
     while not handle.done:
@@ -342,7 +342,7 @@ class _RequestState:
         IDLE -> AWAITING_TRANSPORT -> SENDING -> RECEIVING -> IDLE
 
     ``AWAITING_TRANSPORT`` is the phase during which the connector
-    object returned by *connector_factory* is driving DNS / TCP / TLS
+    object returned by *transport_factory* is driving DNS / TCP / TLS
     across multiple ticks.  On ``ready`` the socket is promoted and the
     state moves to ``SENDING``.  On ``failed`` the handle is set to
     error and the state returns to ``IDLE``.
@@ -357,13 +357,13 @@ class _RequestState:
 class HttpClient:
     """Non-blocking HTTP/1.1 client.
 
-    Construct with a *connector_factory* callable; then issue requests
+    Construct with a *transport_factory* callable; then issue requests
     via :meth:`get` and drive via :meth:`check` / :meth:`handle` from a
     runner tick or hand-rolled loop.
 
     The factory signature is::
 
-        connector_factory(host: str, port: int, use_tls: bool) -> connector
+        transport_factory(host: str, port: int, use_tls: bool) -> connector
 
     The returned *connector* is a structural type: an object with
     ``state`` / ``socket`` / ``last_error`` attributes, ``tick(now_ms)``
@@ -381,7 +381,7 @@ class HttpClient:
             chumicro_sockets_connector_factory,
         )
         client = HttpClient(
-            connector_factory=chumicro_sockets_connector_factory(),
+            transport_factory=chumicro_sockets_connector_factory(),
         )
 
     The connector advances the TCP connect across ticks; the DNS lookup
@@ -401,7 +401,7 @@ class HttpClient:
         *,
         radio: object | None = None,
         ssl_context: object | None = None,
-        connector_factory: object | None = None,
+        transport_factory: object | None = None,
     ) -> "HttpClient":
         """Build an :class:`HttpClient` from runtime config.
 
@@ -418,13 +418,13 @@ class HttpClient:
           :data:`DEFAULT_MAX_BODY_BYTES`.
 
         No key is required; empty ``config`` is valid input.  When
-        *connector_factory* is supplied, the caller owns the
+        *transport_factory* is supplied, the caller owns the
         connection-opening behavior and *radio* / *ssl_context* are
         ignored.  Otherwise an auto-built factory wires through
         :func:`chumicro_sockets_connector_factory` using *radio* /
         *ssl_context*.
         """
-        if connector_factory is None:
+        if transport_factory is None:
             try:
                 from chumicro_requests.sockets_factory import (  # noqa: PLC0415 - lazy
                     chumicro_sockets_connector_factory,
@@ -433,15 +433,15 @@ class HttpClient:
                 raise RuntimeError(
                     "chumicro_requests.sockets_factory not available "
                     "(excluded via __chumicro_skip_factories__ or "
-                    "not on the board) — pass connector_factory= "
+                    "not on the board) — pass transport_factory= "
                     "explicitly.",
                 ) from exception
 
-            connector_factory = chumicro_sockets_connector_factory(
+            transport_factory = chumicro_sockets_connector_factory(
                 radio=radio, ssl_context=ssl_context,
             )
         return cls(
-            connector_factory=connector_factory,
+            transport_factory=transport_factory,
             default_timeout_ms=config.get(
                 "requests.default_timeout_ms", DEFAULT_TIMEOUT_MS,
             ),
@@ -457,7 +457,7 @@ class HttpClient:
     def __init__(
         self,
         *,
-        connector_factory: object,
+        transport_factory: object,
         recv_budget_per_tick: int = DEFAULT_RECV_BUDGET_PER_TICK,
         max_body_bytes: int = DEFAULT_MAX_BODY_BYTES,
         when_oversized: str = WhenOversized.DROP_WITH_EVENT,
@@ -469,7 +469,7 @@ class HttpClient:
         """Wire up the client.
 
         Args:
-            connector_factory: Callable ``(host: str, port: int,
+            transport_factory: Callable ``(host: str, port: int,
                 use_tls: bool) -> connector`` invoked per request hop
                 to bring up the underlying socket without blocking the
                 runner.  The connector is a duck-typed object — see
@@ -525,7 +525,7 @@ class HttpClient:
                 Defaults to that submodule (real clock); tests pass
                 ``FakeTicks`` from ``chumicro_timing.testing``.
         """
-        self._connector_factory = connector_factory
+        self._transport_factory = transport_factory
         self._connector = None
         self._recv_budget_per_tick = recv_budget_per_tick
         # Pre-allocated recv scratch reused on every tick — _drive_recv
@@ -921,7 +921,7 @@ class HttpClient:
             body=encoded_body,
             user_agent=self._user_agent,
         )
-        self._connector = self._connector_factory(host, port, use_tls)
+        self._connector = self._transport_factory(host, port, use_tls)
         self.url = url
         self._tx_buffer = request_bytes
         self._tx_offset = 0

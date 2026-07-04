@@ -75,7 +75,7 @@ class TestHttpClientRedirectEdges:
         ], final_body=b"got-here")
         ticks = FakeTicks()
         client = HttpClient(
-            connector_factory=_factory_for_socket_sequence(sockets),
+            transport_factory=_factory_for_socket_sequence(sockets),
             ticks=ticks,
             default_max_redirects=1,  # default would block the chain
         )
@@ -86,7 +86,7 @@ class TestHttpClientRedirectEdges:
         assert handle.result.body == b"got-here"
 
     def test_redirect_factory_failure_propagates(self):
-        """If the connector_factory raises during a redirect hop the
+        """If the transport_factory raises during a redirect hop the
         request fails cleanly with the wrapped error."""
         sockets = [FakeSocket()]
         sockets[0].enqueue_recv(canned_redirect(
@@ -103,7 +103,7 @@ class TestHttpClientRedirectEdges:
 
         ticks = FakeTicks()
         client = HttpClient(
-            connector_factory=factory,
+            transport_factory=factory,
             ticks=ticks,
         )
         handle = client.get("http://example.test/orig")
@@ -129,7 +129,7 @@ class TestHttpClientRedirectEdges:
             return FakeSocketConnector(actions=["dns_ok", "tcp_ok"], socket=socket)
 
         ticks = FakeTicks()
-        client = HttpClient(connector_factory=factory, ticks=ticks)
+        client = HttpClient(transport_factory=factory, ticks=ticks)
         handle = client.get("http://example.test/orig")
         drive_until_done(client, handle, ticks)
         assert isinstance(handle.error, HttpError)

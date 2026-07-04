@@ -1,6 +1,6 @@
 # sockets_tls_roundtrip — synchronous TLS with custom CA, wifi via runner
 
-End-to-end demo of `chumicro_sockets.tls_client_socket` against a host
+End-to-end demo of `chumicro_sockets.connector(tls=True)` against a host
 TLS echo server with a self-signed cert.  Wifi comes up via
 `chumicro_wifi.WifiService` driven by `chumicro_runner.Runner`; the
 driver generates a fresh cert, runs a TLS echo server, and bakes the
@@ -19,7 +19,7 @@ cert PEM into runtime config so the board's
 - **Cross-runtime TLS handshake on real silicon.**  The handshake runs
   via the on-board `ssl` module (firmware-bundled on CP, mbedTLS on MP)
   against the host's CPython TLS server.  Works on Pi Pico W, ESP32-S2,
-  ESP32-S3 — the same `tls_client_socket` call, the same payload back.
+  ESP32-S3 — the same `connector(tls=True)` dial, the same payload back.
 
 ## Run it
 
@@ -68,11 +68,11 @@ driver: demo completed cleanly.
   TLS *server* sockets on CP-rp2 because `wrap_socket(server_side=True)`
   wedges the CYW43 chip; TLS *client* (this demo's role) works fine
   on every supported board.
-- **Synchronous handshake.**  The board's TLS handshake blocks for
-  100–500 ms during `tls_client_socket(...)`.  For code that can't
-  pause its tick budget, see `sockets_runner_connector` for the
-  non-blocking connector form (TCP only today; TLS-via-connector
-  shares the substrate's blocking handshake limit on MP / CP).
+- **Substrate-blocking handshake.**  The TLS handshake is a single
+  blocking connector tick on MicroPython (mbedTLS exposes no
+  non-blocking handshake) and folds into the one blocking `connect()`
+  on CircuitPython — 100–500 ms on Pi Pico W class boards.  The
+  connector keeps DNS and TCP off the tick budget either way.
 
 ## Related
 

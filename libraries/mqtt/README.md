@@ -29,14 +29,16 @@ For bundle setup, pre-compiled `.mpy` bundles, the experimental channel, and det
 ## Quick example
 
 ```python
-from chumicro_sockets import tcp_client_socket
 from chumicro_timing import ticks_ms
 from chumicro_mqtt import MQTTClient
 
 # On CircuitPython pass radio=wifi.radio; the kwarg is ignored on MP / CPython.
-sock = tcp_client_socket("broker.example.com", 1883, radio=wifi.radio)
-sock.setblocking(False)
-client = MQTTClient(sock, client_id="my-thing", keep_alive_seconds=60)
+# from_config builds the transport factory: the client dials the broker
+# non-blocking (one connect phase per tick) and self-heals after drops.
+client = MQTTClient.from_config(
+    {"mqtt.broker.host": "broker.example.com", "mqtt.broker.port": 1883},
+    radio=wifi.radio,
+)
 
 client.on_message = lambda topic, payload: print(topic, payload)
 client.connect()
@@ -61,7 +63,7 @@ QoS 0 + QoS 1 are implemented; QoS 2 raises `UnsupportedQoSError`.  Last-will, r
 | `client.add_pattern_handler(pattern, handler)` / `client.remove_pattern_handler(handler, pattern=None)` | Route inbound messages by topic pattern. |
 | `client.connect() / .disconnect()` | Lifecycle. |
 | `WhenOversized.{DROP_SILENT,DROP_WITH_EVENT,DISCONNECT}` | Policy for inbound payloads above `max_message_bytes`. |
-| `ProtocolState.{DISCONNECTED,AWAITING_TRANSPORT,CONNECTING,CONNECTED,FAILED}` | Lifecycle states.  `AWAITING_TRANSPORT` appears while a `connector_factory` drives the transport up. |
+| `ProtocolState.{DISCONNECTED,AWAITING_TRANSPORT,CONNECTING,CONNECTED,FAILED}` | Lifecycle states.  `AWAITING_TRANSPORT` appears while a `transport_factory` drives the transport up. |
 | `MQTTBackpressureError` | Raised when an outbound publish/subscribe overflows `max_tx_queue_size` — caller's signal to drain via `handle()` and retry. |
 | `MQTTError` / `MQTTConnectError` / `MQTTProtocolError` / `UnsupportedQoSError` | Exceptions. |
 | Encoder + decoder primitives (`encode_publish`, `encode_varlen`, `decode_varlen`, `encode_string`, `topic_matches`) | Internal to `chumicro_mqtt._wire`; not part of the public package surface. |

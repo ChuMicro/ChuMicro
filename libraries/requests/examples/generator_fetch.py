@@ -55,12 +55,12 @@ radio, ip = wifi_up(WIFI_SSID, WIFI_PASSWORD)
 print(f"WIFI_OK ip={ip}")
 
 target_url = config.get("generator_fetch.url", TARGET_URL)
-connector_factory = chumicro_sockets_connector_factory(radio=radio)
+transport_factory = chumicro_sockets_connector_factory(radio=radio)
 print(f"Fetching {target_url}")
 
 
 def fetch_once():
-    response = yield from get(connector_factory, target_url)
+    response = yield from get(transport_factory, target_url)
     print(f"status={response.status_code} bytes={len(response.body)}")
 
 

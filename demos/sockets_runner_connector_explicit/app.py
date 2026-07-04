@@ -15,7 +15,7 @@ import errno
 
 from chumicro_config import load_runtime_config
 from chumicro_runner import IO_READ, IO_WRITE, Runner
-from chumicro_sockets import tcp_client_connector
+from chumicro_sockets import connector
 from chumicro_test_harness.markers import marker
 from chumicro_wifi import WifiConfig, WifiService, WifiState
 
@@ -54,7 +54,7 @@ class EchoService:
             return
         marker("CONNECTING", host=self._host, port=self._port)
         try:
-            self.connector = tcp_client_connector(
+            self.connector = connector(
                 self._host, self._port, radio=self._radio,
             )
         except Exception as error:  # noqa: BLE001 - surface as marker, not traceback

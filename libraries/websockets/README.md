@@ -35,7 +35,7 @@ from chumicro_websockets import WebSocketClient, WebSocketState
 from chumicro_websockets.sockets_factory import chumicro_sockets_connector_factory
 from chumicro_timing import ticks_ms
 
-client = WebSocketClient(connector_factory=chumicro_sockets_connector_factory())
+client = WebSocketClient(transport_factory=chumicro_sockets_connector_factory())
 client.on_text = lambda text: print(f"got: {text}")
 client.connect("ws://api.example.com/stream")
 
@@ -48,14 +48,14 @@ Server:
 
 ```python
 from chumicro_websockets import WebSocketServer
-from chumicro_sockets import tcp_listening_socket
+from chumicro_sockets import listener
 from chumicro_timing import ticks_ms
 
 def on_connection(connection):
     connection.on_text = lambda text: connection.send_text(f"echo: {text}")
 
 server = WebSocketServer(
-    listener=tcp_listening_socket("0.0.0.0", 8765),
+    listener=listener("0.0.0.0", 8765),
     on_connection=on_connection,
 )
 

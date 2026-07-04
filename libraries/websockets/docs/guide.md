@@ -13,7 +13,7 @@ from chumicro_timing import ticks_ms
 from chumicro_wifi import wifi
 
 client = WebSocketClient(
-    connector_factory=chumicro_sockets_connector_factory(radio=wifi.adapter.radio),
+    transport_factory=chumicro_sockets_connector_factory(radio=wifi.adapter.radio),
 )
 client.on_text = lambda text: print(f"got: {text}")
 client.on_close = lambda code, reason: print(f"closed {code} {reason}")
@@ -32,7 +32,7 @@ while client.state != WebSocketState.CLOSED:
 
 ```python
 from chumicro_websockets import WebSocketServer
-from chumicro_sockets import tcp_listening_socket
+from chumicro_sockets import listener as make_listener
 from chumicro_timing import ticks_ms
 from chumicro_wifi import wifi
 
@@ -40,7 +40,7 @@ def on_connection(connection):
     connection.on_text = lambda text: connection.send_text(f"echo: {text}")
     connection.on_close = lambda code, reason: print(f"client gone: {code}")
 
-listener = tcp_listening_socket("0.0.0.0", 8765, radio=wifi.adapter.radio)
+listener = make_listener("0.0.0.0", 8765, radio=wifi.adapter.radio)
 server = WebSocketServer(
     listener=listener,
     on_connection=on_connection,
@@ -107,7 +107,7 @@ Same shape as the client's callbacks; semantically identical.
 
 ## Bring your own transport
 
-`WebSocketClient` and `WebSocketServer` don't care which library produces their sockets.  The `connector_factory` you pass to the client (and the `listener` you hand to the server) return any object matching the `SocketConnector` contract on the client side or the listener contract on the server side.  The connector advances DNS / TCP / TLS across multiple ticks; once `connector.state == "ready"`, the underlying socket must expose the four-method TCP contract:
+`WebSocketClient` and `WebSocketServer` don't care which library produces their sockets.  The `transport_factory` you pass to the client (and the `listener` you hand to the server) return any object matching the `SocketConnector` contract on the client side or the listener contract on the server side.  The connector advances DNS / TCP / TLS across multiple ticks; once `connector.state == "ready"`, the underlying socket must expose the four-method TCP contract:
 
 | Method | Contract |
 |---|---|
@@ -116,7 +116,7 @@ Same shape as the client's callbacks; semantically identical.
 | `close() -> None` | Releases the connection. |
 | `setblocking(flag) -> None` | Best-effort.  Absence is tolerated. |
 
-`chumicro_sockets.tcp_client_connector` / `tls_client_connector` is one valid producer.  See `chumicro_sockets._connector.SocketConnector` for the connector contract (`tick(now_ms)`, `state`, `socket`, `io_*`, `next_deadline`, `cancel`) — any tick-driven state machine with that surface works as a custom factory.
+`chumicro_sockets.connector` is one valid producer.  See `chumicro_sockets._connector.SocketConnector` for the connector contract (`tick(now_ms)`, `state`, `socket`, `io_*`, `next_deadline`, `cancel`) — any tick-driven state machine with that surface works as a custom factory.
 
 If you supply your own factory and want `chumicro_sockets` dropped from the deploy entirely, add a module-level constant to your entrypoint and the chumicro-workspace deployer will filter the default factory out of the import graph:
 
@@ -176,7 +176,7 @@ MCU RAM, 2 MB physical / ~800 KB usable flash):
 
 ### TLS (`wss://`)
 
-`wss://` client connections reuse `chumicro_sockets.tls_client_socket` + `chumicro_sockets.ssl_context_with_ca`, with the same live-board constraints HTTPS clients have:
+`wss://` client connections reuse `chumicro_sockets.connector(tls=True)` + `chumicro_sockets.ssl_context_with_ca`, with the same live-board constraints HTTPS clients have:
 
 - **Device RTC must be set before `wss://`.**  mbedTLS rejects every cert as "validity starts in the future" if the RTC is at boot default.  Use [`chumicro-ntp`](https://chumicro.github.io/ChuMicro/ntp/stable/) to set the clock first.
 - **CA pinning is required.**  Build the `ssl_context` with `chumicro_sockets.ssl_context_with_ca(pem)` and pass it through `chumicro_sockets_connector_factory(radio=..., ssl_context=ctx)`.

@@ -71,7 +71,7 @@ class TestOnDoneCallback:
         sockets = iter((first, second))
         ticks = FakeTicks()
         client = HttpClient(
-            connector_factory=make_factory(lambda: next(sockets)),
+            transport_factory=make_factory(lambda: next(sockets)),
             ticks=ticks,
         )
 
@@ -134,7 +134,7 @@ class TestOnDoneCallback:
         sockets = iter((first, second))
         ticks = FakeTicks()
         client = HttpClient(
-            connector_factory=make_factory(lambda: next(sockets)),
+            transport_factory=make_factory(lambda: next(sockets)),
             ticks=ticks,
         )
 

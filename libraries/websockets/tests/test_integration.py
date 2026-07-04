@@ -45,7 +45,7 @@ def _pump(client_socket: FakeConnection, server_socket: FakeConnection) -> None:
 def _build_loopback_pair(*, on_connection):
     """Return ``(client, server, client_socket, server_socket, clock)``.
 
-    Both halves share a FakeTicks; the client's connector_factory
+    Both halves share a FakeTicks; the client's transport_factory
     returns the client-side FakeConnection; the server's listener
     will hand out the server-side FakeConnection on accept.
     """
@@ -61,7 +61,7 @@ def _build_loopback_pair(*, on_connection):
         ticks=clock,
     )
     client = WebSocketClient(
-        connector_factory=lambda *_args, **_kwargs: FakeSocketConnector(
+        transport_factory=lambda *_args, **_kwargs: FakeSocketConnector(
             actions=["dns_ok", "tcp_ok"], socket=client_socket,
         ),
         ticks=clock,

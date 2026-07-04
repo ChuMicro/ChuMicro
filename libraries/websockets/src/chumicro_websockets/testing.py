@@ -14,7 +14,7 @@ so consumers don't write their own:
   ``raise_on_recv`` to exercise EAGAIN and socket-error paths.
 
 * :class:`FakeListener`: stand-in for
-  :func:`chumicro_sockets.tcp_listening_socket`.  Tests call
+  :func:`chumicro_sockets.listener`.  Tests call
   :meth:`queue_accept` to enqueue a :class:`FakeConnection` that
   the next :meth:`accept` call returns.  An empty queue surfaces
   EAGAIN exactly like a real non-blocking listener.
@@ -32,7 +32,7 @@ import errno
 class FakeConnection:
     """Bidirectional in-memory pipe modeling a TCP client socket.
 
-    Inject into :class:`WebSocketClient` via ``connector_factory=lambda
+    Inject into :class:`WebSocketClient` via ``transport_factory=lambda
     *_args, **_kwargs: FakeConnection()``, or hand into a
     :class:`Connection` directly.  The two halves of the pipe are
     addressable distinctly:
@@ -143,7 +143,7 @@ class FakeConnection:
 
 
 class FakeListener:
-    """Stand-in for :func:`chumicro_sockets.tcp_listening_socket`.
+    """Stand-in for :func:`chumicro_sockets.listener`.
 
     Tests call :meth:`queue_accept` to enqueue a peer connection
     that the next :meth:`accept` call returns; an empty queue

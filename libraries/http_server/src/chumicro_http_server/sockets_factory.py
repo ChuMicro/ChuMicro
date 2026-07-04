@@ -1,7 +1,7 @@
 """Default :mod:`chumicro_sockets` wiring for :class:`HttpServer`.
 
 Opt-in submodule — the package's ``__init__.py`` does not import it,
-so users who pass their own ``listener_factory`` never pull
+so users who pass their own ``transport_factory`` never pull
 :mod:`chumicro_sockets` into the deploy graph.
 """
 
@@ -38,7 +38,7 @@ def chumicro_sockets_factory(config, *, radio=None, ssl_context=None):
 
     def factory():
         if not use_tls:
-            return chumicro_sockets.tcp_listening_socket(host, port, radio=radio)
+            return chumicro_sockets.listener(host, port, radio=radio)
         context = (
             ssl_context
             if ssl_context is not None
@@ -46,8 +46,8 @@ def chumicro_sockets_factory(config, *, radio=None, ssl_context=None):
                 cert_path=cert_path, key_path=key_path,
             )
         )
-        return chumicro_sockets.tls_listening_socket(
-            host, port, context=context, radio=radio,
+        return chumicro_sockets.listener(
+            host, port, tls=True, context=context, radio=radio,
         )
 
     return factory

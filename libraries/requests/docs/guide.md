@@ -11,7 +11,7 @@ from chumicro_requests import HttpClient
 from chumicro_requests.sockets_factory import chumicro_sockets_connector_factory
 from chumicro_timing import ticks_ms
 
-client = HttpClient(connector_factory=chumicro_sockets_connector_factory(radio=wifi.radio))
+client = HttpClient(transport_factory=chumicro_sockets_connector_factory(radio=wifi.radio))
 handle = client.get("http://api.example.com/now", timeout_ms=5000)
 
 while not handle.done:
@@ -63,7 +63,7 @@ handle = client.get(url, max_redirects=0)
 handle = client.get(url, max_redirects=20)
 
 # Per-client default
-client = HttpClient(connector_factory=..., default_max_redirects=10)
+client = HttpClient(transport_factory=..., default_max_redirects=10)
 ```
 
 Method handling follows long-standing browser + RFC 7231 §6.4 rules:
@@ -115,7 +115,7 @@ print(response.text)
 `Response.json()` decodes via `text` first, then runs `json.loads`,
 so charset overrides apply to JSON responses too.
 
-The `connector_factory` argument is a callable
+The `transport_factory` argument is a callable
 `(host, port, use_tls) -> SocketConnector` — a tick-driven connector,
 not a ready socket (see [Bring your own transport](#bring-your-own-transport)
 below for the connector contract). The bundled
@@ -128,7 +128,7 @@ submodule so users with a custom transport never trigger the
 
 ## Bring your own transport
 
-`HttpClient` does not care which library produces its sockets.  The `connector_factory` you pass is a callable of shape `(host: str, port: int, use_tls: bool) -> SocketConnector`.  The connector advances the TCP connect one tick at a time, but the DNS lookup and, on MicroPython / CircuitPython, the TLS handshake block the reactor for their duration — on a slow or unreachable host that can be seconds, freezing every other runner service, so connect before starting time-critical work.  Once `connector.state == "ready"`, the underlying socket must expose the four-method contract:
+`HttpClient` does not care which library produces its sockets.  The `transport_factory` you pass is a callable of shape `(host: str, port: int, use_tls: bool) -> SocketConnector`.  The connector advances the TCP connect one tick at a time, but the DNS lookup and, on MicroPython / CircuitPython, the TLS handshake block the reactor for their duration — on a slow or unreachable host that can be seconds, freezing every other runner service, so connect before starting time-critical work.  Once `connector.state == "ready"`, the underlying socket must expose the four-method contract:
 
 | Method | Contract |
 |---|---|
@@ -137,7 +137,7 @@ submodule so users with a custom transport never trigger the
 | `close() -> None` | Releases the connection. |
 | `setblocking(flag) -> None` | Best-effort.  Absence is tolerated. |
 
-`chumicro_sockets.tcp_client_connector` / `tls_client_connector` is one producer.  See `chumicro_sockets._connector.SocketConnector` for the connector contract (`tick(now_ms)`, `state`, `socket`, `io_*`, `next_deadline`, `cancel`) — any tick-driven state machine with that surface works as a custom factory.
+`chumicro_sockets.connector` is one producer.  See `chumicro_sockets._connector.SocketConnector` for the connector contract (`tick(now_ms)`, `state`, `socket`, `io_*`, `next_deadline`, `cancel`) — any tick-driven state machine with that surface works as a custom factory.
 
 If you supply your own factory and want `chumicro_sockets` dropped from the deploy, add a module-level constant to your entrypoint and the chumicro-workspace deployer will filter the default factory out of the import graph:
 
@@ -159,7 +159,7 @@ from chumicro_runner import Runner
 from chumicro_requests import HttpClient
 from chumicro_requests.sockets_factory import chumicro_sockets_connector_factory
 
-http_client = HttpClient(connector_factory=chumicro_sockets_connector_factory(radio=radio))
+http_client = HttpClient(transport_factory=chumicro_sockets_connector_factory(radio=radio))
 runner = Runner([http_client, blink_task])
 while True:
     runner.tick(ticks_ms())

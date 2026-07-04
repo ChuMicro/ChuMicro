@@ -25,13 +25,14 @@ combination; the failure documents the gap rather than hiding it.
 
 import time
 
-from chumicro_sockets import tls_client_socket
+from chumicro_sockets import connector
 from chumicro_test_harness.network import runtime_config, wifi_up
-from chumicro_timing import ticks_ms
+from chumicro_timing import ticks_add, ticks_diff, ticks_ms
 
 _TARGET_HOST = "valid-isrgrootx1.letsencrypt.org"
 _TARGET_PORT = 443
 _RECV_DEADLINE_MS = 15_000
+_CONNECT_DEADLINE_MS = 30_000
 
 
 def _sleep_ms(duration_ms: int) -> None:
@@ -40,6 +41,36 @@ def _sleep_ms(duration_ms: int) -> None:
         runtime_sleep_ms(duration_ms)
         return
     time.sleep(duration_ms / 1000)
+
+
+def _connect_tls(
+    host: str,
+    port: int,
+    *,
+    context: object | None = None,
+    radio: object | None = None,
+) -> object:
+    """Drive ``connector(tls=True)`` to terminal inline; return the connected socket.
+
+    The tick-and-sleep loop is the one-shot connect form on-device:
+    the same state machine the runner would drive, without a runner.
+    Raises the connector's ``last_error`` on failure and
+    ``AssertionError`` when the dial exceeds the connect deadline.
+    """
+    dial = connector(host, port, tls=True, context=context, radio=radio)
+    deadline = ticks_add(ticks_ms(), _CONNECT_DEADLINE_MS)
+    while dial.state not in ("ready", "failed"):
+        if ticks_diff(deadline, ticks_ms()) <= 0:
+            dial.cancel()
+            raise AssertionError(
+                f"TLS connect to {host}:{port} exceeded "
+                f"{_CONNECT_DEADLINE_MS} ms (state {dial.state!r})",
+            )
+        dial.tick(ticks_ms())
+        _sleep_ms(10)
+    if dial.state == "failed":
+        raise dial.last_error
+    return dial.socket
 
 
 def _send_all(socket: object, data: bytes) -> None:
@@ -123,7 +154,7 @@ def test_real_tls_handshake_and_recv() -> None:
     # store). Catches the most common regression: a cert / hostname-
     # validation breakage that would otherwise surface as "request
     # failed" three layers up.
-    socket = tls_client_socket(_TARGET_HOST, _TARGET_PORT, radio=radio)
+    socket = _connect_tls(_TARGET_HOST, _TARGET_PORT, radio=radio)
     print(f"TLS_OK host={_TARGET_HOST}:{_TARGET_PORT}")
 
     request = (

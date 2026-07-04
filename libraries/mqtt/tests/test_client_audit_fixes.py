@@ -88,7 +88,7 @@ class TestReplayAndOverflow:
         sock2 = FakeSocket()
         ticks = FakeTicks()
         client = MQTTClient(
-            connector_factory=_factory(sock1, sock2),
+            transport_factory=_factory(sock1, sock2),
             ticks=ticks,
             client_id="test-client",
             max_tx_queue_size=20,
@@ -167,7 +167,7 @@ class TestKeepaliveAndReconnect:
         sock2 = FakeSocket()
         ticks = FakeTicks()
         client = MQTTClient(
-            connector_factory=_factory(sock1, sock2),
+            transport_factory=_factory(sock1, sock2),
             ticks=ticks,
             client_id="test-client",
         )
@@ -223,7 +223,7 @@ class TestSelfHealBackoffAndPermanentFailure:
         sock = FakeSocket()
         ticks = FakeTicks()
         factory, build_times = _counting_factory(sock)
-        client = MQTTClient(connector_factory=factory, ticks=ticks, client_id="c")
+        client = MQTTClient(transport_factory=factory, ticks=ticks, client_id="c")
         sock.enqueue_recv(canned_connack_bytes(return_code=5))
         client.connect()
         drive(client, ticks, count=3)
@@ -246,7 +246,7 @@ class TestSelfHealBackoffAndPermanentFailure:
         # backoff.
         ticks = FakeTicks()
         factory, build_times = _failing_factory(ticks)
-        client = MQTTClient(connector_factory=factory, ticks=ticks, client_id="c")
+        client = MQTTClient(transport_factory=factory, ticks=ticks, client_id="c")
         client.connect()  # build #1 at connect()
         drive(client, ticks, count=1)  # connector fails -> FAILED
         assert client.state == ProtocolState.FAILED
@@ -271,7 +271,7 @@ class TestSelfHealBackoffAndPermanentFailure:
         sock2 = FakeSocket()
         ticks = FakeTicks()
         factory, _ = _counting_factory(sock1, sock2)
-        client = MQTTClient(connector_factory=factory, ticks=ticks, client_id="c")
+        client = MQTTClient(transport_factory=factory, ticks=ticks, client_id="c")
         sock1.enqueue_recv(canned_connack_bytes(return_code=0))
         client.connect()
         drive(client, ticks, count=3)

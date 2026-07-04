@@ -7,14 +7,14 @@ Opt-in submodule — import explicitly::
 A fetch is one request/response written top-to-bottom; the caller
 delegates to it and receives the :class:`~chumicro_requests.client.Response`::
 
-    def app(connector_factory):
-        response = yield from get(connector_factory, "http://example.com/")
+    def app(transport_factory):
+        response = yield from get(transport_factory, "http://example.com/")
         print(response.status_code, response.json())
 
-    handle = runner.add_generator(app(connector_factory))
+    handle = runner.add_generator(app(transport_factory))
 
 The generator builds a connector per hop via the injected
-``connector_factory(host, port, use_tls)`` (the same contract
+``transport_factory(host, port, use_tls)`` (the same contract
 ``HttpClient`` takes), drives it to a connected socket with
 ``chumicro_sockets.generators.connect``, sends the encoded request, and
 feeds the streaming ``ResponseParser`` until the response completes —
@@ -74,7 +74,7 @@ class _ReadDeadlineWait:
 
 
 def fetch(
-    connector_factory,
+    transport_factory,
     method,
     url,
     *,
@@ -89,11 +89,11 @@ def fetch(
 ):
     """Issue one HTTP request and return the :class:`Response`.
 
-    Call as ``response = yield from fetch(connector_factory, "GET", url)``
+    Call as ``response = yield from fetch(transport_factory, "GET", url)``
     from a generator registered with ``Runner.add_generator``.
 
     Args:
-        connector_factory: Callable ``(host, port, use_tls) -> connector``
+        transport_factory: Callable ``(host, port, use_tls) -> connector``
             returning a ``chumicro_sockets.SocketConnector``-shaped object
             (the same contract ``HttpClient`` accepts).
         method: HTTP verb, sent verbatim.
@@ -172,7 +172,7 @@ def fetch(
             body=current_body,
             user_agent=user_agent,
         )
-        connector = connector_factory(host, port, use_tls)
+        connector = transport_factory(host, port, use_tls)
         connect_budget_ms = ticks.ticks_diff(deadline_ms, ticks.ticks_ms())
         if connect_budget_ms <= 0:
             raise HttpTimeoutError(
@@ -236,26 +236,26 @@ def fetch(
         )
 
 
-def get(connector_factory, url, **kwargs):
-    """``yield from get(connector_factory, url)`` — one-shot GET."""
-    return fetch(connector_factory, "GET", url, **kwargs)
+def get(transport_factory, url, **kwargs):
+    """``yield from get(transport_factory, url)`` — one-shot GET."""
+    return fetch(transport_factory, "GET", url, **kwargs)
 
 
-def post(connector_factory, url, **kwargs):
-    """``yield from post(connector_factory, url, json=...)`` — one-shot POST."""
-    return fetch(connector_factory, "POST", url, **kwargs)
+def post(transport_factory, url, **kwargs):
+    """``yield from post(transport_factory, url, json=...)`` — one-shot POST."""
+    return fetch(transport_factory, "POST", url, **kwargs)
 
 
-def put(connector_factory, url, **kwargs):
-    """``yield from put(connector_factory, url, body=...)`` — one-shot PUT."""
-    return fetch(connector_factory, "PUT", url, **kwargs)
+def put(transport_factory, url, **kwargs):
+    """``yield from put(transport_factory, url, body=...)`` — one-shot PUT."""
+    return fetch(transport_factory, "PUT", url, **kwargs)
 
 
-def patch(connector_factory, url, **kwargs):
-    """``yield from patch(connector_factory, url, body=...)`` — one-shot PATCH."""
-    return fetch(connector_factory, "PATCH", url, **kwargs)
+def patch(transport_factory, url, **kwargs):
+    """``yield from patch(transport_factory, url, body=...)`` — one-shot PATCH."""
+    return fetch(transport_factory, "PATCH", url, **kwargs)
 
 
-def delete(connector_factory, url, **kwargs):
-    """``yield from delete(connector_factory, url)`` — one-shot DELETE."""
-    return fetch(connector_factory, "DELETE", url, **kwargs)
+def delete(transport_factory, url, **kwargs):
+    """``yield from delete(transport_factory, url)`` — one-shot DELETE."""
+    return fetch(transport_factory, "DELETE", url, **kwargs)

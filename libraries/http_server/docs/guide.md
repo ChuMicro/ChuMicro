@@ -10,11 +10,11 @@ A minimal, hello-world server with one route:
 
 ```python
 from chumicro_http_server import HttpServer, build_response
-from chumicro_sockets import tcp_listening_socket
+from chumicro_sockets import listener
 from chumicro_timing import ticks_ms
 
 server = HttpServer(
-    listener_factory=lambda: tcp_listening_socket(
+    transport_factory=lambda: listener(
         host="0.0.0.0", port=8080, radio=wifi.radio,
     ),
 )
@@ -29,7 +29,7 @@ while True:
         server.handle(now)
 ```
 
-`listener_factory` is a callable — the listener opens lazily on the first `handle()` call so construction is side-effect-free and unit-testable against a `FakeSocket`.
+`transport_factory` is a callable — the listener opens lazily on the first `handle()` call so construction is side-effect-free and unit-testable against a `FakeSocket`.
 
 ## Runner pattern
 
@@ -135,7 +135,7 @@ Each request is served on a fresh accepted socket; every response includes `Conn
 
 ## Bring your own transport
 
-`HttpServer` doesn't care which library produces its listener.  The `listener_factory` you pass is a zero-arg callable returning any object exposing the three-method contract:
+`HttpServer` doesn't care which library produces its listener.  The `transport_factory` you pass is a zero-arg callable returning any object exposing the three-method contract:
 
 | Method | Contract |
 |---|---|
@@ -145,7 +145,7 @@ Each request is served on a fresh accepted socket; every response includes `Conn
 
 Each accepted socket must in turn expose `recv_into(buffer, nbytes) -> int`, `send(payload) -> int`, `close() -> None`, and best-effort `setblocking(flag)` — the same shape every other chumicro library expects from a TCP-like object.
 
-`chumicro_sockets.tcp_listening_socket` / `tls_listening_socket` is one valid producer.  Stdlib `socket.socket` bound + listening after `setblocking(False)` is another:
+`chumicro_sockets.listener` is one valid producer.  Stdlib `socket.socket` bound + listening after `setblocking(False)` is another:
 
 ```python
 import socket as stdlib_socket
@@ -158,7 +158,7 @@ def make_listener():
     listener.setblocking(False)
     return listener
 
-server = HttpServer(listener_factory=make_listener, handler=...)
+server = HttpServer(transport_factory=make_listener, handler=...)
 ```
 
 If you supply your own listener and want `chumicro_sockets` dropped from the deploy entirely, add a module-level constant to your entrypoint and the chumicro-workspace deployer will filter the default factory out of the import graph:
@@ -172,11 +172,11 @@ Family form (the bare stem) or exact path (`"chumicro_http_server.sockets_factor
 
 ## TLS server (HTTPS)
 
-`HttpServer` is transport-agnostic — its `listener_factory` returns whatever listener you give it.  For HTTPS, build a TLS-wrapped listener via [`chumicro_sockets.ssl_context_with_cert_and_key_paths`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/sockets):
+`HttpServer` is transport-agnostic — its `transport_factory` returns whatever listener you give it.  For HTTPS, build a TLS-wrapped listener via [`chumicro_sockets.ssl_context_with_cert_and_key_paths`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/sockets):
 
 ```python
 from chumicro_sockets import (
-    tcp_listening_socket,
+    listener,
     ssl_context_with_cert_and_key_paths,
 )
 
@@ -186,10 +186,12 @@ ssl_context = ssl_context_with_cert_and_key_paths(
 )
 
 def open_listener():
-    plain = tcp_listening_socket(host="0.0.0.0", port=8443, radio=wifi.radio)
-    return ssl_context.wrap_socket(plain, server_side=True)
+    return listener(
+        host="0.0.0.0", port=8443,
+        tls=True, context=ssl_context, radio=wifi.radio,
+    )
 
-server = HttpServer(listener_factory=open_listener)
+server = HttpServer(transport_factory=open_listener)
 ```
 
 Per-board status from live verification:

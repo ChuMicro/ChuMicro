@@ -7,9 +7,9 @@ Used:
 * as the test substrate for ``FakeSocket`` conformance — passing
   tests here prove the contract every other adapter implements.
 
-``socket.create_connection`` does the dial-and-connect and raises
-:class:`OSError` on failure.  TLS uses ``ssl.SSLContext.wrap_socket``;
-``context=None`` means ``ssl.create_default_context()``.
+``connector`` dials via a genuinely non-blocking per-tick state
+machine.  TLS uses ``ssl.SSLContext.wrap_socket``; ``context=None``
+means ``ssl.create_default_context()``.
 """
 
 #: Source bundle only; never lands on a device.
@@ -28,30 +28,6 @@ from chumicro_sockets._connector import (
     STATE_READY,
     SocketConnector,
 )
-
-
-def connect_tcp(host, port, **_kwargs):
-    """Open a plain TCP connection.
-
-    Returns a real :class:`socket.socket` — its ``send`` /
-    ``recv_into`` / ``close`` / ``setblocking`` / ``settimeout``
-    surface is a superset of what downstream libs require, so no
-    wrapper is needed.
-    """
-    return socket.create_connection((host, port))
-
-
-def connect_tls(host, port, *, context=None, **_kwargs):
-    """Open a TLS connection.
-
-    *context=None* uses :func:`ssl.create_default_context` — system
-    default CA bundle, hostname check enabled, modern cipher defaults.
-    Pass a pre-configured context for custom CAs / mTLS / pinned
-    cipher suites.
-    """
-    raw = socket.create_connection((host, port))
-    wrapped = _resolve_default_context(context).wrap_socket(raw, server_hostname=host)
-    return _CPythonTLSSocketWrapper(wrapped)
 
 
 class _CPythonTLSSocketWrapper:
@@ -106,26 +82,19 @@ def _resolve_default_context(context):
     return context if context is not None else ssl.create_default_context()
 
 
-def tcp_connector(host, port, **_kwargs):
-    """Return a non-blocking TCP :class:`SocketConnector` for CPython.
+def connector(host, port, *, tls=False, context=None, **_kwargs):
+    """Return a non-blocking :class:`SocketConnector` for CPython.
 
     Uses stdlib ``socket.getaddrinfo`` + non-blocking ``socket.connect``
     (``BlockingIOError`` / EINPROGRESS, then ``select.select`` for
     writability + ``SO_ERROR`` for the connect outcome) for a truly
-    per-tick non-blocking dial.
-    """
-    return _CPythonConnector(host, port, tls=False, context=None)
-
-
-def tls_connector(host, port, *, context=None, **_kwargs):
-    """Return a non-blocking TLS :class:`SocketConnector` for CPython.
-
-    Same shape as :func:`tcp_connector` plus a TLS handshake phase
-    driven by ``ssl.SSLContext.wrap_socket(do_handshake_on_connect=False)``
+    per-tick non-blocking dial.  With ``tls=True`` a TLS handshake
+    phase follows, driven by
+    ``ssl.SSLContext.wrap_socket(do_handshake_on_connect=False)``
     + ``sock.do_handshake()`` looped across ticks until done.
     *context=None* uses :func:`ssl.create_default_context`.
     """
-    return _CPythonConnector(host, port, tls=True, context=context)
+    return _CPythonConnector(host, port, tls=tls, context=context)
 
 
 class _CPythonConnector(SocketConnector):
@@ -215,14 +184,18 @@ class _CPythonConnector(SocketConnector):
         return True
 
 
-def listen_tcp(host, port, *, backlog=4, **_kwargs):
-    """Open a non-blocking TCP listening socket.
+def listener(host, port, *, tls=False, context=None, backlog=4, **_kwargs):
+    """Open a non-blocking TCP or TLS listening socket on CPython.
 
-    Returns a real :class:`socket.socket` set to non-blocking mode and
-    bound + listening on (*host*, *port*).  Already satisfies the
-    ``ListeningSocket`` structural protocol — :meth:`socket.accept`
-    returns ``(socket, address)`` and raises ``OSError(EAGAIN)`` when
-    no connection is queued.
+    The plain-TCP form returns a real :class:`socket.socket` set to
+    non-blocking mode and bound + listening on (*host*, *port*).  It
+    already satisfies the ``ListeningSocket`` structural protocol —
+    :meth:`socket.accept` returns ``(socket, address)`` and raises
+    ``OSError(EAGAIN)`` when no connection is queued.
+
+    With ``tls=True`` the raw listener is wrapped so ``accept()``
+    returns a ``(tls_wrapped_client, address)`` tuple — the TLS
+    handshake happens synchronously inside ``accept()``.
 
     ``SO_REUSEADDR`` is set so a quick restart of the server doesn't
     trip ``OSError(EADDRINUSE)`` on the rebind.
@@ -232,6 +205,8 @@ def listen_tcp(host, port, *, backlog=4, **_kwargs):
     sock.bind((host, port))
     sock.listen(backlog)
     sock.setblocking(False)
+    if tls:
+        return _CPythonTLSListenerWrapper(sock, context)
     return sock
 
 
@@ -287,18 +262,6 @@ def ssl_context_with_cert_and_key(cert_pem, key_pem):
                 except OSError:
                     pass
     return context
-
-
-def listen_tls(host, port, *, context, backlog=4, **_kwargs):
-    """Open a non-blocking TLS listening socket on CPython.
-
-    Returns a wrapper whose `accept()` returns a `(tls_wrapped_client,
-    address)` tuple — the TLS handshake happens synchronously inside
-    `accept()`.  Per-runtime contract documented in the public
-    `tls_listening_socket` factory.
-    """
-    raw_listener = listen_tcp(host, port, backlog=backlog)
-    return _CPythonTLSListenerWrapper(raw_listener, context)
 
 
 class _CPythonTLSListenerWrapper:
@@ -423,7 +386,7 @@ def ssl_context_no_verify():
 
     Explicit opt-out for callers that intentionally don't want to
     validate the peer.  Named so code reviewers can grep for it —
-    ``tls_client_socket(host, port, context=ssl_context_no_verify())``
+    ``connector(host, port, tls=True, context=ssl_context_no_verify())``
     shouts what it does.
 
     Inverts both of ``ssl.create_default_context``'s secure defaults:

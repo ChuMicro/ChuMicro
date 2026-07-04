@@ -1,10 +1,10 @@
 """CPython-only tests for chumicro_requests.sockets_factory.chumicro_sockets_connector_factory.
 
 These cases use pytest's ``monkeypatch`` fixture to swap the module-
-level ``chumicro_sockets.tcp_client_connector`` / ``tls_client_connector``
-symbols out for in-test fakes.  ``monkeypatch`` is a pytest concept
-with no portable cross-runtime equivalent, so the cases live here
-under the ``_pytest`` suffix and run on CPython only.
+level ``chumicro_sockets.connector`` symbol out for an in-test fake.
+``monkeypatch`` is a pytest concept with no portable cross-runtime
+equivalent, so the cases live here under the ``_pytest`` suffix and
+run on CPython only.
 
 The factory's runtime-correctness contract — "produces a working
 connector on each board" — is exercised end-to-end on real hardware in
@@ -19,42 +19,48 @@ from chumicro_requests.sockets_factory import chumicro_sockets_connector_factory
 
 
 class TestChumicroSocketsConnectorFactory:
-    """The convenience factory dispatches on ``use_tls``."""
+    """The convenience factory maps ``use_tls`` onto ``connector(tls=)``."""
 
-    def test_plain_tcp_routes_to_tcp_client_connector(self, monkeypatch):
+    def test_plain_tcp_maps_to_tls_false(self, monkeypatch):
         calls = []
 
-        def fake_tcp(host, port, *, radio):
-            calls.append(("tcp", host, port, radio))
+        def fake_connector(host, port, *, tls, context, radio):
+            calls.append((host, port, tls, context, radio))
             return "tcp-connector"
 
-        def fake_tls(host, port, *, context, radio):
-            calls.append(("tls", host, port, context, radio))
-            return "tls-connector"  # pragma: no cover - shouldn't be hit here
-
-        monkeypatch.setattr("chumicro_sockets.tcp_client_connector", fake_tcp)
-        monkeypatch.setattr("chumicro_sockets.tls_client_connector", fake_tls)
+        monkeypatch.setattr("chumicro_sockets.connector", fake_connector)
 
         factory = chumicro_sockets_connector_factory(radio="my-radio")
         result = factory("example.test", 80, False)
         assert result == "tcp-connector"
-        assert calls == [("tcp", "example.test", 80, "my-radio")]
+        assert calls == [("example.test", 80, False, None, "my-radio")]
 
-    def test_tls_routes_to_tls_client_connector(self, monkeypatch):
+    def test_tls_maps_to_tls_true_with_context(self, monkeypatch):
         calls = []
 
-        def fake_tcp(host, port, *, radio):
-            calls.append(("tcp", host, port, radio))
-            return "tcp-connector"  # pragma: no cover
-
-        def fake_tls(host, port, *, context, radio):
-            calls.append(("tls", host, port, context, radio))
+        def fake_connector(host, port, *, tls, context, radio):
+            calls.append((host, port, tls, context, radio))
             return "tls-connector"
 
-        monkeypatch.setattr("chumicro_sockets.tcp_client_connector", fake_tcp)
-        monkeypatch.setattr("chumicro_sockets.tls_client_connector", fake_tls)
+        monkeypatch.setattr("chumicro_sockets.connector", fake_connector)
 
         factory = chumicro_sockets_connector_factory(radio=None, ssl_context="ctx")
         result = factory("example.test", 443, True)
         assert result == "tls-connector"
-        assert calls == [("tls", "example.test", 443, "ctx", None)]
+        assert calls == [("example.test", 443, True, "ctx", None)]
+
+    def test_plain_tcp_ignores_ssl_context(self, monkeypatch):
+        """A supplied *ssl_context* rides only the TLS hop — a plain-TCP
+        hop passes ``context=None`` so the connector never wraps."""
+        calls = []
+
+        def fake_connector(host, port, *, tls, context, radio):
+            calls.append((host, port, tls, context, radio))
+            return "tcp-connector"
+
+        monkeypatch.setattr("chumicro_sockets.connector", fake_connector)
+
+        factory = chumicro_sockets_connector_factory(radio=None, ssl_context="ctx")
+        result = factory("example.test", 80, False)
+        assert result == "tcp-connector"
+        assert calls == [("example.test", 80, False, None, None)]

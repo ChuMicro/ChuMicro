@@ -7,12 +7,12 @@ from chumicro_sockets.testing import FakeSocket, FakeSocketConnector
 class TestFromConfig:
     """``HttpClient.from_config`` reads the manifest's optional keys with
     sensible fall-back defaults.  No key is ever required — host/port
-    live on each request URL, so the auto-built connector_factory
+    live on each request URL, so the auto-built transport_factory
     reads zero config keys."""
 
     @staticmethod
     def _injected_factory():
-        """Return a connector_factory that hands back a scripted
+        """Return a transport_factory that hands back a scripted
         FakeSocketConnector per call — host/port/use_tls captured for
         assertions."""
         captured: list = []
@@ -35,7 +35,7 @@ class TestFromConfig:
             "requests.user_agent": "test-agent/1.0",
             "requests.max_body_bytes": 4096,
         }
-        client = HttpClient.from_config(config, connector_factory=factory)
+        client = HttpClient.from_config(config, transport_factory=factory)
         assert client._default_timeout_ms == 1234  # noqa: SLF001
         assert client._default_max_redirects == 9  # noqa: SLF001
         assert client._user_agent == "test-agent/1.0"  # noqa: SLF001
@@ -44,7 +44,7 @@ class TestFromConfig:
     def test_defaults_apply_when_keys_absent(self):
         """An empty config dict leaves every manifest key at its default.
 
-        The auto-built connector_factory reads zero config keys
+        The auto-built transport_factory reads zero config keys
         (host/port live on each request URL), so an empty config is
         valid input and no ``MissingConfigKey`` is ever raised.
         """
@@ -55,7 +55,7 @@ class TestFromConfig:
         )
 
         factory, _ = self._injected_factory()
-        client = HttpClient.from_config({}, connector_factory=factory)
+        client = HttpClient.from_config({}, transport_factory=factory)
         assert client._default_timeout_ms == DEFAULT_TIMEOUT_MS  # noqa: SLF001
         assert client._default_max_redirects == DEFAULT_MAX_REDIRECTS  # noqa: SLF001
         # user_agent=None falls through to the library default string.
@@ -72,19 +72,19 @@ class TestFromConfig:
         factory, _ = self._injected_factory()
         client = HttpClient.from_config(
             {"requests.user_agent": "halfway/0.1"},
-            connector_factory=factory,
+            transport_factory=factory,
         )
         assert client._user_agent == "halfway/0.1"  # noqa: SLF001
         assert client._default_timeout_ms == DEFAULT_TIMEOUT_MS  # noqa: SLF001 — default
         assert client._default_max_redirects == DEFAULT_MAX_REDIRECTS  # noqa: SLF001 — default
 
-    def test_explicit_connector_factory_bypasses_auto_factory(self):
-        """Passing a connector_factory skips the auto-built one entirely
+    def test_explicit_transport_factory_bypasses_auto_factory(self):
+        """Passing a transport_factory skips the auto-built one entirely
         — caller owns the connection-opening behavior."""
 
         factory, _ = self._injected_factory()
-        client = HttpClient.from_config({}, connector_factory=factory)
-        assert client._connector_factory is factory  # noqa: SLF001
+        client = HttpClient.from_config({}, transport_factory=factory)
+        assert client._transport_factory is factory  # noqa: SLF001
 
     def test_runtime_config_wrapper_works_too(self):
         """Real ``RuntimeConfig`` instance — same flat-key reads as a
@@ -97,12 +97,12 @@ class TestFromConfig:
             "requests.default_timeout_ms": 7777,
             "requests.user_agent": "rc-test/2",
         })
-        client = HttpClient.from_config(config, connector_factory=factory)
+        client = HttpClient.from_config(config, transport_factory=factory)
         assert client._default_timeout_ms == 7777  # noqa: SLF001
         assert client._user_agent == "rc-test/2"  # noqa: SLF001
 
     def test_default_factory_threads_radio_and_ssl_context(self):
-        """When neither *connector_factory* is passed, ``from_config``
+        """When neither *transport_factory* is passed, ``from_config``
         builds one via ``chumicro_sockets_connector_factory(radio=…, ssl_context=…)``.
         Validates the wiring without needing a real socket by replacing
         the symbol on its home module (``chumicro_requests.sockets_factory``);
@@ -129,7 +129,7 @@ class TestFromConfig:
             sockets_factory_mod.chumicro_sockets_connector_factory = original
 
         assert captured == {"radio": "fake-radio", "ssl_context": "fake-ctx"}
-        assert client._connector_factory is sentinel_factory  # noqa: SLF001
+        assert client._transport_factory is sentinel_factory  # noqa: SLF001
 
     def test_default_factory_does_not_raise_on_empty_config(self):
         """The requests default factory reads zero config keys
@@ -153,7 +153,7 @@ class TestFromConfig:
         finally:
             sockets_factory_mod.chumicro_sockets_connector_factory = original
 
-        assert client._connector_factory is sentinel_factory  # noqa: SLF001
+        assert client._transport_factory is sentinel_factory  # noqa: SLF001
 
     def test_skipped_factory_module_raises_runtime_error(self):
         """When ``chumicro_requests.sockets_factory`` is excluded via
@@ -177,7 +177,7 @@ class TestFromConfig:
             try:
                 HttpClient.from_config({})
             except RuntimeError as exception:
-                assert "connector_factory=" in str(exception)
+                assert "transport_factory=" in str(exception)
                 assert "__chumicro_skip_factories__" in str(exception)
             else:
                 raise AssertionError("expected RuntimeError")

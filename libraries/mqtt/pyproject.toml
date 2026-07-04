@@ -77,7 +77,7 @@ requires_flash = true
 # auth keys remain optional (sensible defaults; auth omitted means
 # anonymous CONNECT).
 #
-# Callers passing a pre-built ``socket=`` or custom ``socket_factory=``
+# Callers passing a pre-built ``socket=`` or custom ``transport_factory=``
 # bypass the default factory and don't need ``mqtt.broker.*`` set —
 # but those callers are owning the connection themselves, not asking
 # the library to dial.

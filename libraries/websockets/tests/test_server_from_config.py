@@ -39,7 +39,7 @@ class TestServerFromConfig:
         assert server._max_message_bytes == DEFAULT_MAX_MESSAGE_BYTES  # noqa: SLF001
 
     def test_explicit_listener_bypasses_auto_built(self) -> None:
-        """Passing listener= skips the chumicro_sockets.tcp_listening_socket
+        """Passing listener= skips the chumicro_sockets.listener
         path entirely — caller owns the bind/listen behavior."""
         listener = FakeListener()
         server = WebSocketServer.from_config(
@@ -64,21 +64,21 @@ class TestServerFromConfig:
 
     def test_auto_listener_threads_host_port_and_radio(self) -> None:
         """When no listener is passed, ``from_config`` builds one via
-        ``chumicro_sockets.tcp_listening_socket(host, port, radio=...)``
+        ``chumicro_sockets.listener(host, port, radio=...)``
         using config-supplied host/port (or the library defaults)."""
         import chumicro_sockets as sockets_mod
 
         listener = FakeListener()
         captured: dict = {}
 
-        def fake_tcp_listening_socket(host, port, *, radio=None):
+        def fake_listener(host, port, *, radio=None):
             captured["host"] = host
             captured["port"] = port
             captured["radio"] = radio
             return listener
 
-        original = sockets_mod.tcp_listening_socket
-        sockets_mod.tcp_listening_socket = fake_tcp_listening_socket
+        original = sockets_mod.listener
+        sockets_mod.listener = fake_listener
         try:
             server = WebSocketServer.from_config(
                 {
@@ -89,7 +89,7 @@ class TestServerFromConfig:
                 radio="fake-radio",
             )
         finally:
-            sockets_mod.tcp_listening_socket = original
+            sockets_mod.listener = original
 
         assert captured == {
             "host": "10.0.0.7", "port": 8443, "radio": "fake-radio",
@@ -103,17 +103,17 @@ class TestServerFromConfig:
         listener = FakeListener()
         captured: dict = {}
 
-        def fake_tcp_listening_socket(host, port, *, radio=None):
+        def fake_listener(host, port, *, radio=None):
             captured["host"] = host
             captured["port"] = port
             return listener
 
-        original = sockets_mod.tcp_listening_socket
-        sockets_mod.tcp_listening_socket = fake_tcp_listening_socket
+        original = sockets_mod.listener
+        sockets_mod.listener = fake_listener
         try:
             WebSocketServer.from_config({}, _noop_connection)
         finally:
-            sockets_mod.tcp_listening_socket = original
+            sockets_mod.listener = original
 
         assert captured == {"host": "0.0.0.0", "port": 8765}
 

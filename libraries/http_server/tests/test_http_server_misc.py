@@ -24,12 +24,12 @@ def _make_server(*, sockets, handler=None, **kwargs):
 
     listener_called = {"count": 0}
 
-    def listener_factory():
+    def transport_factory():
         listener_called["count"] += 1
         return FakeListener(sockets)
 
     server = HttpServer(
-        listener_factory=listener_factory,
+        transport_factory=transport_factory,
         handler=handler,
         ticks=ticks,
         **kwargs,
@@ -52,7 +52,7 @@ class TestHttpServerAcceptVariants:
 
         ticks = FakeTicks()
         server = HttpServer(
-            listener_factory=lambda: NoneListener(),
+            transport_factory=lambda: NoneListener(),
             handler=lambda request: build_response(200),
             ticks=ticks,
         )
@@ -100,7 +100,7 @@ class TestAuditFixes:
 
         ticks = FakeTicks()
         server = HttpServer(
-            listener_factory=lambda: BadAcceptListener(),
+            transport_factory=lambda: BadAcceptListener(),
             handler=lambda request: build_response(200),
             ticks=ticks,
         )
@@ -126,7 +126,7 @@ class TestRequestParserBodyStateTransition:
 
         ticks = FakeTicks()
         server = HttpServer(
-            listener_factory=lambda: FakeListener([(sock, ("127.0.0.1", 1))]),
+            transport_factory=lambda: FakeListener([(sock, ("127.0.0.1", 1))]),
             handler=lambda request: build_response(200),
             request_timeout_ms=1_000_000,  # don't time out
             ticks=ticks,

@@ -42,7 +42,6 @@ from typing import TYPE_CHECKING
 import pytest
 from chumicro_mqtt import MQTTClient, ProtocolState
 from chumicro_runner import IO_WRITE
-from chumicro_sockets import tcp_client_socket
 from chumicro_timing import ticks_ms
 
 if TYPE_CHECKING:  # pragma: no cover - type-only
@@ -134,7 +133,8 @@ def mosquitto_broker(tmp_path_factory: pytest.TempPathFactory):
 
 
 def _new_client(broker_port: int, client_id: str) -> MQTTClient:
-    sock = tcp_client_socket("127.0.0.1", broker_port)
+    # Host-side CPython test: stdlib connect is the one-shot form here.
+    sock = socket.create_connection(("127.0.0.1", broker_port))
     sock.setblocking(False)
     return MQTTClient(
         sock,

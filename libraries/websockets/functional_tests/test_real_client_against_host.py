@@ -101,7 +101,7 @@ def test_real_client_round_trip_against_host_echo_server() -> None:
     close_observed = []
 
     client = WebSocketClient(
-        connector_factory=chumicro_sockets_connector_factory(radio=wifi.adapter.radio),
+        transport_factory=chumicro_sockets_connector_factory(radio=wifi.adapter.radio),
         handshake_timeout_ms=_HANDSHAKE_TIMEOUT_MS,
     )
     client.on_open = lambda: open_observed.append(True)

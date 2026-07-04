@@ -20,7 +20,7 @@ def test_client_handshake():
     socket = FakeConnection()
     clock = FakeTicks()
     client = WebSocketClient(
-        connector_factory=lambda *_args, **_kwargs: FakeSocketConnector(
+        transport_factory=lambda *_args, **_kwargs: FakeSocketConnector(
             actions=["dns_ok", "tcp_ok"], socket=socket,
         ),
         ticks=clock,
@@ -56,7 +56,7 @@ socket.close_inbound()
 
 ### `FakeListener`
 
-Stand-in for `chumicro_sockets.tcp_listening_socket`:
+Stand-in for `chumicro_sockets.listener`:
 
 ```python
 from chumicro_timing.testing import FakeTicks
@@ -88,7 +88,7 @@ from chumicro_websockets.testing import FakeConnection
 
 clock = FakeTicks()
 client = WebSocketClient(
-    connector_factory=lambda *_args, **_kwargs: FakeSocketConnector(
+    transport_factory=lambda *_args, **_kwargs: FakeSocketConnector(
         actions=["dns_ok", "tcp_ok"], socket=FakeConnection(),
     ),
     handshake_timeout_ms=1000,

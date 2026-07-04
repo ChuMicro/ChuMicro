@@ -25,12 +25,12 @@ def _make_server(*, sockets, handler=None, **kwargs):
 
     listener_called = {"count": 0}
 
-    def listener_factory():
+    def transport_factory():
         listener_called["count"] += 1
         return FakeListener(sockets)
 
     server = HttpServer(
-        listener_factory=listener_factory,
+        transport_factory=transport_factory,
         handler=handler,
         ticks=ticks,
         **kwargs,
@@ -189,7 +189,7 @@ class TestHttpServerRouting:
     def _route_server(self, sockets, **kwargs):
         ticks = FakeTicks()
         server = HttpServer(
-            listener_factory=lambda: FakeListener(sockets),
+            transport_factory=lambda: FakeListener(sockets),
             ticks=ticks,
             **kwargs,
         )

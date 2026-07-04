@@ -3,7 +3,7 @@
 Category 1 — host-side stdlib HTTP client driver.
 
 Brings wifi up on the device, starts an ``HttpServer`` on a real
-``tcp_listening_socket``, prints ``SERVER_READY ip=<ip> port=<port>``
+``chumicro_sockets.listener``, prints ``SERVER_READY ip=<ip> port=<port>``
 once the listener is accepting, ticks the server cooperatively until
 a route handler fires or the per-test deadline expires, prints
 ``SERVER_REQUEST_OBSERVED route=<path>`` from inside the handler,
@@ -27,7 +27,7 @@ Credentials ship from the host conftest as
 import time
 
 from chumicro_http_server import HttpServer, build_response
-from chumicro_sockets import tcp_listening_socket
+from chumicro_sockets import listener
 from chumicro_test_harness.network import runtime_config, wifi_up
 from chumicro_timing import ticks_diff, ticks_ms
 
@@ -54,7 +54,7 @@ def test_real_serve_responds_to_host_driver() -> None:
     print(f"WIFI_OK ip={ip_address}")
 
     server = HttpServer(
-        listener_factory=lambda: tcp_listening_socket(
+        transport_factory=lambda: listener(
             host="0.0.0.0",
             port=_LISTEN_PORT,
             radio=radio,

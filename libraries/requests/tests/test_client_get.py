@@ -82,7 +82,7 @@ class TestHttpClientGet:
         assert b"User-Agent: custom-agent/9\r\n" in socket.sent
 
     def test_https_url_dispatches_with_use_tls_true(self):
-        """``https://`` URLs route to the connector_factory with
+        """``https://`` URLs route to the transport_factory with
         ``use_tls=True`` and skip the port in the Host header when
         it equals 443 (the scheme default)."""
         socket = FakeSocket()
@@ -95,7 +95,7 @@ class TestHttpClientGet:
 
         ticks = FakeTicks()
         client = HttpClient(
-            connector_factory=factory,
+            transport_factory=factory,
             ticks=ticks,
         )
         handle = client.get("https://example.test/secret")
@@ -116,7 +116,7 @@ class TestHttpClientGet:
 
         ticks = FakeTicks()
         client = HttpClient(
-            connector_factory=factory,
+            transport_factory=factory,
             ticks=ticks,
         )
         handle = client.get("https://example.test:8443/")
