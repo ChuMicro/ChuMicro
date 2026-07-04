@@ -15,13 +15,11 @@ from chumicro_requests._wire import (
     HttpProtocolError,
     HttpTimeoutError,
 )
-from chumicro_requests.generators import (
-    _ReadDeadlineWait,
-    fetch,
-)
+from chumicro_requests.generators import fetch
 from chumicro_requests.testing import canned_response, make_factory
 from chumicro_runner import IO_READ
 from chumicro_sockets.testing import FakeSocket, FakeSocketConnector
+from chumicro_sockets.waits import ReadWait
 from chumicro_test_harness import raises
 from chumicro_timing.testing import FakeTicks
 
@@ -131,9 +129,12 @@ def test_fetch_uses_default_ticks_when_none():
     assert response.status_code == 200
 
 
-def test_read_deadline_wait_exposes_socket_and_deadline():
+def test_read_wait_carries_socket_and_request_deadline():
+    # fetch builds its recv wait as ReadWait(sock, deadline_ms=<absolute
+    # request deadline>): it carries the socket, reports read interest, and
+    # hands the deadline back so Runner.wait shortens its poll sleep.
     sock = FakeSocket()
-    wait = _ReadDeadlineWait(sock, 1234)
+    wait = ReadWait(sock, deadline_ms=1234)
     assert wait.io_socket is sock
     assert wait.io_interest(0) == IO_READ
     assert wait.next_deadline(0) == 1234

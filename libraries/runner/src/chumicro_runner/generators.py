@@ -14,7 +14,11 @@ the completion-wait vocabulary ``Signal`` / ``wait_for`` in
 
 
 class _DeadlineWait:
-    """Private deadline-wait shape carrying one absolute deadline."""
+    """Deadline-only wait carrying one absolute resume tick."""
+
+    # Exposes only next_deadline of the duck-typed wait protocol that
+    # chumicro_sockets.waits describes; no socket and no ready predicate,
+    # so the wrapper suspends until this tick elapses.
 
     def __init__(self, until_ms: int) -> None:
         self._until_ms = until_ms

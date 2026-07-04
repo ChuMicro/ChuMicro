@@ -25,9 +25,10 @@ The helpers operate on **duck-typed** inputs:
   own interest progression through DNS / TCP / TLS / ready.
 * ``send_all`` / ``recv_until`` / ``recv_exact`` take any non-blocking
   socket exposing ``send`` / ``recv_into`` that raises
-  ``OSError(EAGAIN)`` when it would block.  They yield small private
-  wait objects (``_ReadWait`` / ``_WriteWait``) carrying the socket so
-  the scheduler can register it for the right poll direction.
+  ``OSError(EAGAIN)`` when it would block.  They yield the
+  ``ReadWait`` / ``WriteWait`` markers from ``chumicro_sockets.waits``,
+  carrying the socket so the scheduler registers it for the right poll
+  direction.
 
 Heap-DoS protection: ``recv_until`` requires ``max_bytes`` and refuses
 peer input above it; ``recv_exact`` allocates a fixed buffer of the
@@ -36,38 +37,7 @@ requested size.  Both reject non-positive sizes up front.
 
 import errno
 
-# Poll-interest bits for ``io_interest``; mirror ``chumicro_runner.IO_READ``
-# / ``IO_WRITE`` by value.  Held as literals rather than imported so the
-# sockets generator helpers stay runner-free (the wait protocol is
-# duck-typed, so it names no runner symbol).
-_IO_READ = 1
-_IO_WRITE = 2
-
-
-class _ReadWait:
-    """Private read-wait shape — ``io_socket`` + ``io_interest() == IO_READ``."""
-
-    def __init__(self, sock: object) -> None:
-        # Store the socket-ish object as-is; the runner unwraps any
-        # ``.sock`` adapter wrapper to the registrable pollable at the
-        # poller before handing it to select.poll.
-        self.io_socket = sock
-
-    def io_interest(self, now_ms: int) -> int:  # noqa: ARG002 (wait protocol)
-        return _IO_READ
-
-
-class _WriteWait:
-    """Private write-wait shape — ``io_socket`` + ``io_interest() == IO_WRITE``."""
-
-    def __init__(self, sock: object) -> None:
-        # Store the socket-ish object as-is; the runner unwraps any
-        # ``.sock`` adapter wrapper to the registrable pollable at the
-        # poller before handing it to select.poll.
-        self.io_socket = sock
-
-    def io_interest(self, now_ms: int) -> int:  # noqa: ARG002 (wait protocol)
-        return _IO_WRITE
+from chumicro_sockets.waits import ReadWait, WriteWait
 
 
 def connect(
@@ -169,7 +139,7 @@ def send_all(sock: object, data: object) -> object:
     """Send every byte of *data*, yielding on ``EAGAIN``.
 
     Loops on ``sock.send`` until the whole buffer is written.  Each
-    EAGAIN yields a single cached ``_WriteWait(sock)``, and the unsent
+    EAGAIN yields a single cached ``WriteWait(sock)``, and the unsent
     remainder is re-sliced only after a partial send makes progress —
     so an EAGAIN spin reuses both the wait and the slice and allocates
     nothing.
@@ -180,7 +150,7 @@ def send_all(sock: object, data: object) -> object:
         data: Bytes-like object to transmit.
 
     Yields:
-        A private write-wait carrying *sock* on each EAGAIN.
+        A ``WriteWait`` carrying *sock* on each EAGAIN.
 
     Raises:
         OSError: Peer closed mid-send (``send`` returned 0) or the
@@ -189,7 +159,7 @@ def send_all(sock: object, data: object) -> object:
     view = memoryview(data)
     total = len(view)
     offset = 0
-    write_wait = _WriteWait(sock)
+    write_wait = WriteWait(sock)
     chunk = view
     while offset < total:
         try:
@@ -211,7 +181,7 @@ def recv_until(sock: object, separator: object, *, max_bytes: int) -> bytes:
     Loops on ``sock.recv_into`` into a 256-byte scratch buffer,
     extending an accumulator until ``separator in accumulator`` or
     growth would exceed *max_bytes*.  Each EAGAIN yields a single
-    cached private read-wait carrying *sock*.
+    cached ``ReadWait`` carrying *sock*.
 
     Args:
         sock: Non-blocking TCP socket.
@@ -223,7 +193,7 @@ def recv_until(sock: object, separator: object, *, max_bytes: int) -> bytes:
             unbounded sink is heap-DoS surface on a 256 KB device.
 
     Yields:
-        A private read-wait on each EAGAIN.
+        A ``ReadWait`` on each EAGAIN.
 
     Returns:
         ``bytes`` — from the start through the first occurrence of
@@ -245,7 +215,7 @@ def recv_until(sock: object, separator: object, *, max_bytes: int) -> bytes:
     accumulator = bytearray()
     chunk = bytearray(256)
     chunk_view = memoryview(chunk)
-    read_wait = _ReadWait(sock)
+    read_wait = ReadWait(sock)
     sep_length = len(separator)
 
     while True:
@@ -275,7 +245,7 @@ def recv_exact(sock: object, byte_count: int) -> bytes:
 
     Loops on ``sock.recv_into`` into a pre-allocated *byte_count*-byte
     buffer, re-slicing the unfilled tail only after a recv makes
-    progress — so an EAGAIN spin reuses both the cached read-wait and
+    progress — so an EAGAIN spin reuses both the cached ``ReadWait`` and
     the slice and allocates nothing.
 
     Args:
@@ -283,7 +253,7 @@ def recv_exact(sock: object, byte_count: int) -> bytes:
         byte_count: Number of bytes to read.  Must be positive.
 
     Yields:
-        A private read-wait on each EAGAIN.
+        A ``ReadWait`` on each EAGAIN.
 
     Returns:
         ``bytes`` of length exactly *byte_count*.
@@ -299,7 +269,7 @@ def recv_exact(sock: object, byte_count: int) -> bytes:
     buffer = bytearray(byte_count)
     view = memoryview(buffer)
     offset = 0
-    read_wait = _ReadWait(sock)
+    read_wait = ReadWait(sock)
     chunk = view
 
     while offset < byte_count:

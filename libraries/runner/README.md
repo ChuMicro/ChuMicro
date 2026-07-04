@@ -126,13 +126,14 @@ Both loops isolate a handler that raises — the fault is counted in `handler_er
 
 ### Generator helpers (opt-in sub-module)
 
-`chumicro_runner.generators` carries the scheduler-side helpers — a sleep and an event token — while the socket-driven helpers live in `chumicro_sockets.generators`.  Import explicitly so plain-runner consumers stay free of the load:
+`chumicro_runner.generators` carries the scheduler-side sleep; the completion-wait vocabulary lives in `chumicro_timing.waits` and the socket-driven helpers in `chumicro_sockets.generators` (with the raw read/write wait markers in `chumicro_sockets.waits`).  Import explicitly so plain-runner consumers stay free of the load:
 
 | Symbol | Description |
 |---|---|
 | `sleep_until(until_ms)` | Suspend until the absolute tick `until_ms`; pair with `chumicro_timing.ticks_add(ticks_ms(), delay_ms)` |
-| `Signal` | One-slot completion token a callback-style service `set(value)`s; reusable via `clear()` |
-| `wait_for(signal, deadline_ms=...)` | Suspend until *signal* is set; return its value, or raise `OSError(ETIMEDOUT)` past the optional deadline |
+| `Signal` — `chumicro_timing.waits` | One-slot completion token a callback-style service `set(value)`s; reusable via `clear()` |
+| `wait_for(signal, deadline_ms=...)` — `chumicro_timing.waits` | Suspend until *signal* is set; return its value, or raise `OSError(ETIMEDOUT)` past the optional deadline |
+| `ReadWait(sock, deadline_ms=None)` / `WriteWait(sock, deadline_ms=None)` — `chumicro_sockets.waits` | Yieldable poll-interest markers (the canonical wait-protocol home); park until *sock* is readable / writable, with an optional absolute deadline |
 | `connect(connector)` — `chumicro_sockets.generators` | Drive any `SocketConnector`-shaped object to ready across runner ticks; return the connected socket via PEP 380 (`sock = yield from connect(connector)`) |
 | `send_all(sock, data)` — `chumicro_sockets.generators` | Send every byte of *data* with an EAGAIN-yielding inner loop |
 | `recv_until(sock, separator, max_bytes=...)` — `chumicro_sockets.generators` | Read until *separator* appears, capped at *max_bytes* (heap-DoS guard) |
