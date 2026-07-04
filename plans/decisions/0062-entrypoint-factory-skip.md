@@ -14,7 +14,7 @@ Bench-verified 2026-05-12 against `workbench/deploy/src/chumicro_deploy/sources.
 Two test apps reproduced the failure identically:
 
 ```
-app_custom.py     # MQTTClient(socket_factory=mine, ...)
+app_custom.py     # MQTTClient(transport_factory=mine, ...)
 app_default.py    # MQTTClient.from_config({...})
 ```
 
@@ -48,17 +48,16 @@ Matched modules are removed from the discovered-imports queue before resolution.
 Every `from_config` that lazy-imports a factory submodule wraps the import in `try`/`except ImportError` and raises a `RuntimeError` naming the skipped module + the kwarg the user should pass instead.  Example:
 
 ```python
-if socket is None and socket_factory is None:
+if socket is None and transport_factory is None:
     try:
-        from chumicro_mqtt.sockets_factory import chumicro_sockets_factory
+        from chumicro_mqtt.sockets_factory import chumicro_sockets_connector_factory
     except ImportError as exc:
         raise RuntimeError(
-            "MQTTClient.from_config() default wiring needs "
-            "chumicro_mqtt.sockets_factory.  This module was excluded "
-            "via __chumicro_skip_factories__ — pass socket_factory= "
-            "or socket= explicitly.",
+            "chumicro_mqtt.sockets_factory not available (excluded via "
+            "__chumicro_skip_factories__ or not on the board) — pass "
+            "transport_factory= or socket= explicitly.",
         ) from exc
-    socket_factory = chumicro_sockets_factory(config, ...)
+    transport_factory = chumicro_sockets_connector_factory(config, ...)
 ```
 
 ### Walker-side diagnostics
@@ -99,20 +98,20 @@ The implementation punch-list (walker change + per-library `try`/`except` wraps 
 
 ## Bench validation
 
-End-to-end run against the same two fixtures that disproved the original 0042 sub-rule (`mqtt` deploy, search paths over the six infra libraries):
+End-to-end run against the same two fixtures that disproved the original 0042 sub-rule — an `mqtt` deploy through `ImportGraphSource`, with `search_paths` spanning the workspace libraries the mqtt graph reaches (`chumicro_mqtt` + `chumicro_config` + `chumicro_msgpack` + `chumicro_sockets` + `chumicro_timing`) and `target_runtime="circuitpython"` (the `/code.py` deploy shape):
 
-| Fixture | Before walker change | After walker change |
-|---|---|---|
-| `app_default.py` (no constant) | 20 files including all of `chumicro_sockets/*` + `chumicro_mqtt/sockets_factory.py` | 20 files (identical — no opt-out signal) |
-| `app_custom.py` with `__chumicro_skip_factories__ = ("sockets_factory",)` | Same 20 files (opt-out didn't fire) | 12 files — `chumicro_mqtt/{__init__,_wire,client}.py` + transitive `chumicro_config`, `chumicro_msgpack`, `chumicro_timing`; zero `chumicro_sockets/*`, zero `sockets_factory.py` |
+| Fixture | Ships (CircuitPython) |
+|---|---|
+| `app_default.py` (no constant) | 17 files — `/code.py` + `chumicro_mqtt/{__init__,_wire,client,sockets_factory}.py` + the CircuitPython `chumicro_sockets/*` closure (`__init__`, `_connector`, `_adapters/{__init__,cp}`) + `chumicro_config/{__init__,runtime,section}.py` + `chumicro_msgpack/{__init__,_pure}.py` + `chumicro_timing/{__init__,deadline,ticks}.py` |
+| `app_custom.py` with `__chumicro_skip_factories__ = ("sockets_factory",)` | 7 files — `/code.py` + `chumicro_mqtt/{__init__,_wire,client}.py` + `chumicro_timing/{__init__,deadline,ticks}.py`; zero `sockets_factory.py`, zero `chumicro_sockets/*`, `chumicro_config/*`, `chumicro_msgpack/*` |
 
-The post-implementation diff is the eight-file drop (`chumicro_mqtt/sockets_factory.py` + seven `chumicro_sockets/*` files).  Walker behavior under the legacy fixture is unchanged — the mechanism is opt-in via the entrypoint constant, no default behavior shift.
+The one-line marker drops ten files: `chumicro_mqtt/sockets_factory.py` plus its transitive-only closure — four `chumicro_sockets/*` files, three `chumicro_config/*`, and two `chumicro_msgpack/*`.  Config and msgpack fall out because `client.py` reaches them *only* through `sockets_factory.py`'s `from_config` wiring; the DI cleanup that stripped the module-top `chumicro_config` / `chumicro_sockets` / `chumicro_timing` imports from every consumer means nothing else pulls them in.  `chumicro_timing` stays either way: `MQTTClient.__init__` imports its `ticks` submodule as the default tick source regardless of the transport.  Without the marker the walker's behavior is unchanged — the mechanism is opt-in via the entrypoint constant, no default-behavior shift.
 
-### Caveat: silent-skip in the walker masked an incomplete opt-out
+The same rerun on `target_runtime="micropython"` ships 19 files by default — the MicroPython adapter `_adapters/mp.py` plus the `_ca_bundle.py` / `_ca_bundle.der` TLS root bundle replace the single CircuitPython `_adapters/cp.py` — and the identical 7 files with the marker, a twelve-file drop.
 
-The 12-file post-skip count above came partly from `chumicro_deploy.sources._resolve_module → None → silent-skip` (sources.py:367-378): when an imported module can't be resolved against any `search_paths`, the walker drops it from the queue without surfacing the gap.  At the time this ADR landed, every consumer of the skipped factory still had module-top imports of `chumicro_config` / `chumicro_sockets` / `chumicro_timing` for type guards (`is_config_like` / `InvalidConfigType`), the `is_eagain` hot-path helper, and the `_DEFAULT_TICKS` DI fallback.  The deploy walker excluded those packages from the graph; the device-side `client.py` would have ImportError'd at boot.
+### Limits as originally bench-validated
 
-Two follow-ups bring the bench-validation table back into alignment with what actually ships:
+When this ADR first landed (2026-05-12) the post-skip count leaned on a walker bug: `chumicro_deploy.sources._resolve_module` returned `None` for an unresolvable import and the walk silently dropped it.  Every consumer of the skipped factory still had module-top imports of `chumicro_config` / `chumicro_sockets` / `chumicro_timing` then — for type guards (`is_config_like` / `InvalidConfigType`), the `is_eagain` hot-path helper, and the `_DEFAULT_TICKS` DI fallback — so those packages vanished from the graph without complaint and the device-side `client.py` would have `ImportError`'d at boot.  Two corrections have since shipped, so the counts above hold on the merits:
 
-1. The downstream eager imports were stripped from mqtt / requests / ntp / http_server / websockets in the 2026-05-12 DI cleanup (`git log --grep "DI cleanup" --since=2026-05-10`).  Post-cleanup the 12-file count holds for the right reason — the consumers genuinely don't reach for those packages when the factory submodule is skipped.
-2. The walker's silent-skip is itself a deploy-time failure mode that should refuse rather than ship a broken-at-boot file.  Tracked separately as `walker-unresolved-import-failure.md`.
+1. The eager `chumicro_config` / `chumicro_sockets` / `chumicro_timing` imports were stripped from mqtt / requests / ntp / http_server / websockets (the "drop eager … imports" commits).  A skipped factory now genuinely severs those packages from the graph rather than the walker hiding them.
+2. The silent-skip itself became a deploy-time refusal: the walker collects every unresolvable non-builtin import and raises `UnresolvedImportError` instead of shipping a boot-time crash (see `plans/workstreams/walker-unresolved-import-failure.md`).  This rerun therefore cannot under-count via a hidden drop — an unresolved import aborts the bench outright.
