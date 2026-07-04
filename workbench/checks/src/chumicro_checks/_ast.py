@@ -1,7 +1,7 @@
 """Shared AST-parse helper for the rules that walk Python syntax trees.
 
 Every AST-based rule (CHU001, CHU007, CHU009 / CHU010, CHU013, CHU015,
-CHU016, CHU027, CHU030, CHU033) parses each in-scope file with
+CHU016, CHU027, CHU030, CHU033, CHU034) parses each in-scope file with
 ``ast.parse``.  A file that fails to parse must not silently pass the
 rule as clean: :func:`parse_or_syntax_finding` returns a single
 "file skipped: syntax error" finding under the calling rule's code in
