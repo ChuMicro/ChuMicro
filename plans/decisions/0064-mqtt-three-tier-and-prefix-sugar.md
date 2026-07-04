@@ -1,8 +1,8 @@
-# Decision 0064: `chumicro-mqtt` three-tier inbound size handling + topic-prefix sugar + ack-fault policy
+# Decision 0064: `chumicro-mqtt` inbound size handling + topic-prefix sugar + ack-fault policy
 
 Status: `accepted`
 Date: `2026-05-12`
-Summary: MQTT inbound has three tiers (steady ≤ `rx_buffer_size`, intact ≤ `max_message_bytes`, oversized = policy); `root_topic` + `prefixed=` sugar; SUBACK 0x80 faults loudly.
+Summary: MQTT inbound has two tiers (steady ≤ `rx_buffer_size`, oversized = policy; the intact middle tier was removed by 0099); `root_topic` + `prefixed=` sugar; SUBACK 0x80 faults loudly.
 Related: [Decision 0061](0061-whenoversized-cross-library-contract.md) (`WhenOversized` cross-library contract), [Decision 0010](0010-library-testability.md) (constructor injection), [Decision 0014](0014-runner-pattern.md) (tick-based runner).
 
 ## Context
@@ -29,7 +29,7 @@ The decoder dispatches inbound PUBLISH into three tiers by `total_length` (fixed
 | **Intact** | `rx_buffer_size < total_length ≤ max_message_bytes` (default 8 KB) | Allocate `bytearray(message_length)` one-shot, drain payload through the steady-state buffer into it, deliver via `on_message(topic, payload)`. Buffer drops out of scope after delivery; heap returns to the steady-state baseline. |
 | **Oversized** | `total_length > max_message_bytes` | Apply the `WhenOversized` policy — see §2. |
 
-The intact tier is what was missing.  A 4 KB sensor reading or a 2 KB JSON configuration packet is normal MQTT traffic; the user shouldn't have to size `rx_buffer_size` to the largest expected payload to receive it intact.  The default `max_message_bytes` of 8 KB covers typical embedded-board payload sizes (sensor readings, control messages, small JSON blobs) while keeping the heap-burst cap predictable on the 256 KB-RAM minimum-tier board ([Decision 0015](0015-board-architecture-support.md)).
+The intact middle tier this decision added was later measured load-free (its two test pins were the only exercisers) and removed by [Decision 0099](0099-mqtt-surface-corrections.md): the steady→oversized boundary is now `rx_buffer_size` itself, `max_message_bytes` is gone, and a consumer expecting mid-sized payloads intact sizes `rx_buffer_size` accordingly.
 
 ### 2. Oversized-tier policy honors Decision 0061 verbatim
 
@@ -64,7 +64,7 @@ Each `publish` / `subscribe` / `unsubscribe` accepts `prefixed: bool = True` (de
 
 The will message uses the same shape: `will_topic` + `will_prefixed: bool = True` constructor kwargs.  The resolved bytes are computed once in `__init__`.
 
-Pattern handlers (`add_pattern_handler`) and the inbound topic delivered to `on_message` are **not** prefix-aware: patterns are intentional, and inbound topics from the wire are delivered exactly as received.  If the user wants per-device routing on receipt, they pass the prefixed pattern to `add_pattern_handler` directly.
+The inbound topic delivered to `on_message` is **not** prefix-aware: topics from the wire are delivered exactly as received.  (The `add_pattern_handler` router this paragraph once covered was removed by [Decision 0099](0099-mqtt-surface-corrections.md); per-topic routing is `on_message` + the public `topic_matches()`.)
 
 ### 5. No topic-binder wrapper — publish directly on the client
 

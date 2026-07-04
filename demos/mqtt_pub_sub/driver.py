@@ -6,8 +6,8 @@ with broker coords baked into the runtime_config payload, and runs a
 CPython-side :class:`MQTTClient` as the counterparty: subscribes to
 wildcard topics (``demo/+/state``, ``demo/+/telemetry``) to verify the
 board's retained "online" + three QoS 1 telemetry publishes, and
-publishes a QoS 1 command back so the board's inbound path and pattern
-handler both fire in one run.
+publishes a QoS 1 command back so the board's inbound path (its
+``on_message`` callback) fires in one run.
 
 Pinned ``deploy_mode="flash"`` so the demo always runs the
 production-shaped path regardless of any per-device override in
@@ -195,23 +195,6 @@ def main(argv: list[str] | None = None) -> int:
             f"{session.device_entry.address})",
         )
 
-        print(
-            f"driver: waiting for board MQTT_CONNECTED "
-            f"(up to {args.connect_timeout_s}s)...",
-        )
-        connected_marker = session.wait_for(
-            "MQTT_CONNECTED", timeout_s=args.connect_timeout_s,
-        )
-        print(
-            f"driver: board MQTT_CONNECTED "
-            f"client_id={connected_marker.values.get('client_id')} "
-            f"broker={connected_marker.values.get('broker')}",
-        )
-
-        # Wait for the board's retained publish so a fresh wildcard
-        # subscriber sees the retained payload on SUBACK.
-        session.wait_for("RETAINED_STATE_SENT", timeout_s=15.0)
-
         host_client = _new_host_client(broker_host, broker_port)
         host_client.connect()
         if not _drive_host(
@@ -247,6 +230,46 @@ def main(argv: list[str] | None = None) -> int:
 
         host_client.on_message = _on_host_message
 
+        # Subscribe to telemetry BEFORE the board reaches the broker:
+        # the board's first samples drain from its pre-connect publish
+        # queue at CONNACK, and a late subscriber misses them.  The
+        # board is still doing wifi bring-up while this SUBACK lands.
+        telemetry_subscribed = [False]
+        host_client.subscribe(
+            "demo/+/telemetry", qos=1, prefixed=False,
+            on_subscribe=lambda *_: telemetry_subscribed.__setitem__(0, True),
+        )
+        if not _drive_host(
+            host_client, lambda: telemetry_subscribed[0], timeout_s=5.0,
+        ):
+            print(
+                "driver: host SUBACK for demo/+/telemetry didn't arrive.",
+                file=sys.stderr,
+            )
+            return 5
+
+        print(
+            f"driver: waiting for board MQTT_CONNECTED "
+            f"(up to {args.connect_timeout_s}s)...",
+        )
+        connected_marker = _await_marker_while_driving_host(
+            session, host_client, "MQTT_CONNECTED",
+            timeout_s=args.connect_timeout_s,
+        )
+        print(
+            f"driver: board MQTT_CONNECTED "
+            f"client_id={connected_marker.values.get('client_id')} "
+            f"broker={connected_marker.values.get('broker')}",
+        )
+
+        # Wait for the board's retained publish so a fresh wildcard
+        # subscriber sees the retained payload on SUBACK (the state
+        # subscribe below deliberately happens AFTER this marker — it
+        # pins retained-delivery-on-SUBACK semantics).
+        _await_marker_while_driving_host(
+            session, host_client, "RETAINED_STATE_SENT", timeout_s=15.0,
+        )
+
         state_subscribed = [False]
         host_client.subscribe(
             "demo/+/state", qos=1, prefixed=False,
@@ -272,22 +295,10 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 4
 
-        telemetry_subscribed = [False]
-        host_client.subscribe(
-            "demo/+/telemetry", qos=1, prefixed=False,
-            on_subscribe=lambda *_: telemetry_subscribed.__setitem__(0, True),
-        )
-        if not _drive_host(
-            host_client, lambda: telemetry_subscribed[0], timeout_s=5.0,
-        ):
-            print(
-                "driver: host SUBACK for demo/+/telemetry didn't arrive.",
-                file=sys.stderr,
-            )
-            return 5
-
         # Board prints SUBSCRIBED after its own SUBACK lands.
-        session.wait_for("SUBSCRIBED", timeout_s=15.0)
+        _await_marker_while_driving_host(
+            session, host_client, "SUBSCRIBED", timeout_s=15.0,
+        )
 
         command_topic = f"demo/{_BOARD_CLIENT_ID}/cmd"
         command_acked = [False]
@@ -308,14 +319,9 @@ def main(argv: list[str] | None = None) -> int:
             f"driver: host published cmd to {command_topic} (qos=1) — PUBACK in",
         )
 
-        # Board's pattern_handler fires BEFORE on_message, so PATTERN_HIT
-        # prints before CMD_RECEIVED — wait in arrival order so the
-        # marker queue's drop-non-matching semantic doesn't lose one.
+        # The board's on_message fires when the command lands.
         _await_marker_while_driving_host(
-            session, host_client, "PATTERN_HIT", timeout_s=15.0,
-        )
-        _await_marker_while_driving_host(
-            session, host_client, "CMD_RECEIVED", timeout_s=5.0,
+            session, host_client, "CMD_RECEIVED", timeout_s=15.0,
         )
 
         # Drive host until all three telemetry samples have arrived.

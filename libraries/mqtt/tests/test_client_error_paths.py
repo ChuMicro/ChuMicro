@@ -1,5 +1,4 @@
-"""mqtt client: oversize/intact tiers, not-connected guards, error
-paths, decoder edge cases, suback rejection."""
+"""mqtt client: error paths, decoder edge cases, disconnected-state guards."""
 
 from chumicro_mqtt import (
     MQTTError,

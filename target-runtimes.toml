@@ -57,5 +57,5 @@ sockets = { circuitpython = "160K" }
 runner = { circuitpython = "136K" }
 http_server = { micropython = "208K", circuitpython = "192K" }
 requests = { micropython = "224K", circuitpython = "224K" }
-mqtt = { micropython = "256K", circuitpython = "256K" }
+mqtt = { micropython = "240K", circuitpython = "240K" }
 websockets = { micropython = "240K", circuitpython = "208K" }

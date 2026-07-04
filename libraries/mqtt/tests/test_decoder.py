@@ -261,45 +261,12 @@ def _drive_until_done(decoder: PacketDecoder, packet: bytes, chunk_size: int = 3
     return events
 
 
-class TestIntactTier:
-    """Tier 2: a PUBLISH between rx_buffer_size and max_message_bytes
-    delivers as ParsedPublish (intact)."""
-
-    def test_publish_between_steady_and_cap_delivers_intact(self) -> None:
-        """A 200-byte payload on a 64-byte rx + 8192 cap routes through tier 2."""
-        decoder = PacketDecoder(
-            rx_buffer_size=64,
-            max_message_bytes=8192,
-        )
-        big_payload = b"x" * 200
-        packet = canned_publish_bytes("log", big_payload, qos=0)
-        events = _drive_until_done(decoder, packet, chunk_size=32)
-        publishes = [event for event in events if isinstance(event, ParsedPublish)]
-        assert len(publishes) == 1
-        assert publishes[0].topic == "log"
-        assert publishes[0].payload == big_payload
-        # No oversize event for a tier-2 message.
-        assert not any(isinstance(event, _OversizedMessage) for event in events)
-
-    def test_intact_qos1_carries_packet_id(self) -> None:
-        decoder = PacketDecoder(rx_buffer_size=64, max_message_bytes=8192)
-        payload = b"y" * 300
-        packet = canned_publish_bytes("data", payload, qos=1, packet_id=1234)
-        events = _drive_until_done(decoder, packet, chunk_size=24)
-        publishes = [event for event in events if isinstance(event, ParsedPublish)]
-        assert len(publishes) == 1
-        assert publishes[0].qos == 1
-        assert publishes[0].packet_id == 1234
-        assert publishes[0].payload == payload
-
-
 class TestOversizedTier:
-    """Tier 3: a PUBLISH > max_message_bytes delivers as _OversizedMessage (payload dropped)."""
+    """Tier 2: a PUBLISH > rx_buffer_size delivers as _OversizedMessage (payload dropped)."""
 
     def test_publish_above_cap_drains_and_reports_length(self) -> None:
         decoder = PacketDecoder(
-            rx_buffer_size=64,
-            max_message_bytes=100,  # 200-byte payload exceeds this
+            rx_buffer_size=64,  # 200-byte payload overflows the steady buffer
         )
         big_payload = b"x" * 200
         packet = canned_publish_bytes("log", big_payload, qos=0)
@@ -317,7 +284,6 @@ class TestOversizedTier:
         event reports topic=None (the topic can't be parsed)."""
         decoder = PacketDecoder(
             rx_buffer_size=16,        # tiny: even modest topics overflow
-            max_message_bytes=32,
         )
         long_topic = "a" * 50
         packet = canned_publish_bytes(long_topic, b"x", qos=0)

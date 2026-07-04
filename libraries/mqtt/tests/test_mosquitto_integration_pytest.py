@@ -40,7 +40,7 @@ import time
 from typing import TYPE_CHECKING
 
 import pytest
-from chumicro_mqtt import MQTTClient, ProtocolState
+from chumicro_mqtt import MQTTClient, ProtocolState, topic_matches
 from chumicro_runner import IO_WRITE
 from chumicro_timing import ticks_ms
 
@@ -256,17 +256,24 @@ class TestPublishSubscribe:
         client.disconnect()
 
 
-class TestPatternHandlers:
-    def test_pattern_handler_dispatches(self, mosquitto_broker: int) -> None:
+class TestTopicMatching:
+    def test_on_message_with_topic_matches(self, mosquitto_broker: int) -> None:
+        """on_message + public topic_matches() route inbound by pattern.
+
+        Replaces the deleted pattern-handler router: the caller filters
+        in on_message with the public matcher.
+        """
         client = _new_client(mosquitto_broker, "test-pattern")
         client.connect()
         assert _drive_until(client, lambda: client.state == ProtocolState.CONNECTED)
 
         sensors: list[str] = []
-        client.add_pattern_handler(
-            "sensors/+/temperature",
-            lambda topic, payload: sensors.append(topic),
-        )
+
+        def route(topic: str, _payload: bytes) -> None:
+            if topic_matches(topic, "sensors/+/temperature"):
+                sensors.append(topic)
+
+        client.on_message = route
         client.subscribe("sensors/#", qos=0)
         assert _drive_until(client, lambda: client.state == ProtocolState.CONNECTED)
 
@@ -274,8 +281,8 @@ class TestPatternHandlers:
         client.publish("sensors/kitchen/humidity", b"45", qos=0)
         # Driving for ~1s gives both inbound messages time to land.
         assert _drive_until(client, lambda: sensors, timeout_seconds=3.0)
-        # Only the temperature message hit the handler (humidity
-        # didn't match the pattern).
+        # Only the temperature message matched the pattern (humidity
+        # didn't).
         assert sensors == ["sensors/back-porch/temperature"]
         client.disconnect()
 

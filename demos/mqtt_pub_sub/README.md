@@ -3,9 +3,8 @@
 End-to-end demo of `chumicro_mqtt` running on a real board, with a
 local Mosquitto broker bridging it to a CPython-side `chumicro_mqtt`
 counterparty.  Exercises connect, retained messages, wildcard
-subscriptions, QoS 1 publish-with-PUBACK in both directions, and a
-pattern handler — in one command, with no broker setup beyond
-`brew install mosquitto`.
+subscriptions, and QoS 1 publish-with-PUBACK in both directions — in
+one command, with no broker setup beyond `brew install mosquitto`.
 
 The board wires `chumicro_wifi.WifiService` + `chumicro_mqtt.MQTTClient`
 into one `chumicro_runner.Runner` and drives them with

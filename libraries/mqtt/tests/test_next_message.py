@@ -54,24 +54,6 @@ def test_first_use_flips_delivery_from_callbacks_to_queue():
     assert via_callback == []  # the callback surface stayed silent
 
 
-def test_pattern_handlers_stop_firing_once_streaming():
-    sock = FakeSocket()
-    ticks = FakeTicks()
-    client = _connected_client(sock, ticks)
-    via_pattern = []
-    client.add_pattern_handler("demo/+", lambda topic, payload: via_pattern.append(topic))
-
-    gen = client.next_message()
-    gen.send(None)
-    sock.enqueue_recv(canned_publish_bytes("demo/cmd", b"go"))
-    drive(client, ticks)
-    try:
-        gen.send(ticks.ticks_ms())
-    except StopIteration as stop:
-        assert stop.value.topic == "demo/cmd"
-    assert via_pattern == []
-
-
 def test_queue_drops_oldest_when_full():
     sock = FakeSocket()
     ticks = FakeTicks()
