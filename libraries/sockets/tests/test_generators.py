@@ -329,7 +329,7 @@ def test_recv_until_propagates_non_eagain_oserror():
 def test_recv_exact_returns_exactly_n_bytes_when_available():
     sock = FakeSocket()
     sock.enqueue_recv(b"hello world!!!")
-    gen = recv_exact(sock, 5)
+    gen = recv_exact(sock, 5, max_bytes=4096)
     try:
         gen.send(None)
     except StopIteration as stop:
@@ -341,7 +341,7 @@ def test_recv_exact_loops_across_short_recvs():
     sock.enqueue_recv(b"ab")
     sock.enqueue_recv(b"cd")
     sock.enqueue_recv(b"ef")
-    gen = recv_exact(sock, 6)
+    gen = recv_exact(sock, 6, max_bytes=4096)
     try:
         gen.send(None)
     except StopIteration as stop:
@@ -353,7 +353,7 @@ def test_recv_exact_yields_read_wait_on_eagain():
     sock.enqueue_recv(b"ab")
     sock.enqueue_eagain_for_recv(count=1)
     sock.enqueue_recv(b"cd")
-    gen = recv_exact(sock, 4)
+    gen = recv_exact(sock, 4, max_bytes=4096)
 
     first = gen.send(None)
     assert first.io_socket is sock
@@ -369,7 +369,7 @@ def test_recv_exact_raises_when_peer_closes_before_n_bytes():
     sock = FakeSocket()
     sock.enqueue_recv(b"ab")
     sock.simulate_peer_close()
-    gen = recv_exact(sock, 5)
+    gen = recv_exact(sock, 5, max_bytes=4096)
     with raises(OSError):
         gen.send(None)
 
@@ -377,9 +377,33 @@ def test_recv_exact_raises_when_peer_closes_before_n_bytes():
 def test_recv_exact_rejects_non_positive_n():
     sock = FakeSocket()
     with raises(ValueError):
-        recv_exact(sock, 0).send(None)
+        recv_exact(sock, 0, max_bytes=4096).send(None)
     with raises(ValueError):
-        recv_exact(sock, -1).send(None)
+        recv_exact(sock, -1, max_bytes=4096).send(None)
+
+
+def test_recv_exact_rejects_non_positive_max_bytes():
+    sock = FakeSocket()
+    with raises(ValueError):
+        recv_exact(sock, 4, max_bytes=0).send(None)
+    with raises(ValueError):
+        recv_exact(sock, 4, max_bytes=-1).send(None)
+
+
+def test_recv_exact_rejects_byte_count_above_max_bytes():
+    sock = FakeSocket()
+    with raises(ValueError):
+        recv_exact(sock, 5000, max_bytes=4096).send(None)
+
+
+def test_recv_exact_allows_byte_count_equal_to_max_bytes():
+    sock = FakeSocket()
+    sock.enqueue_recv(b"abcd")
+    gen = recv_exact(sock, 4, max_bytes=4)
+    try:
+        gen.send(None)
+    except StopIteration as stop:
+        assert stop.value == b"abcd"
 
 
 def test_recv_exact_propagates_non_eagain_oserror():
@@ -388,4 +412,4 @@ def test_recv_exact_propagates_non_eagain_oserror():
             raise OSError(errno.ECONNRESET, "connection reset")
 
     with raises(OSError):
-        recv_exact(_BrokenSock(), 4).send(None)
+        recv_exact(_BrokenSock(), 4, max_bytes=4096).send(None)

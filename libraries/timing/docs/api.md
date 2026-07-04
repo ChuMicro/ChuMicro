@@ -6,7 +6,7 @@
 
 ## Value Objects
 
-`Deadline` (a single armed timeout), `earliest` (fold several deadlines into one wait budget), and `Rate` (a drift-free periodic cadence).
+`Deadline` (a single armed timeout) and `Rate` (a drift-free periodic cadence).
 
 ::: chumicro_timing.deadline
 

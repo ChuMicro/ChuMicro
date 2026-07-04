@@ -15,7 +15,6 @@ every runtime.
 import sys
 
 from chumicro_config import (
-    DEFAULT_RUNTIME_CONFIG_PATH,
     ConfigError,
     InvalidConfigType,
     MissingConfigKey,
@@ -24,6 +23,7 @@ from chumicro_config import (
     load_section,
     try_load_section,
 )
+from chumicro_config.runtime import DEFAULT_RUNTIME_CONFIG_PATH
 from chumicro_msgpack import packb
 from chumicro_test_harness import raises
 

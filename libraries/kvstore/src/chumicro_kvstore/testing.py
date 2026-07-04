@@ -1,7 +1,7 @@
 """Test helpers for libraries that depend on ``chumicro-kvstore``.
 
-Downstream consumers import ``FakeKVStore`` rather than inventing
-ad-hoc mocks.
+``FakeKVStore`` is here for downstream libraries to test against
+instead of hand-rolling a store mock.
 
 Example::
 

@@ -520,13 +520,13 @@ def test_fake_wifi_accepts_custom_config() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_fake_adapter_disconnect_clears_link() -> None:
-    """Explicit disconnect drops the linked flag."""
+def test_fake_adapter_drop_link_clears_link() -> None:
+    """A simulated link-down drops the linked flag and clears the IP."""
     adapter = FakeWifiAdapter()
     config = WifiConfig(ssid="x", password="y")
     adapter.connect(config)
     assert adapter.is_linked() is True
-    adapter.disconnect()
+    adapter.drop_link()
     assert adapter.is_linked() is False
     assert adapter.ip() is None
 
@@ -546,9 +546,8 @@ def test_fake_adapter_records_every_call() -> None:
     config = WifiConfig(ssid="x", password="y")
     adapter.configure(config)
     adapter.connect(config)
-    adapter.disconnect()
     names = [entry[0] for entry in adapter.calls]
-    assert names == ["configure", "connect", "disconnect"]
+    assert names == ["configure", "connect"]
 
 
 # ---------------------------------------------------------------------------
@@ -565,8 +564,6 @@ def test_base_adapter_methods_raise_notimplementederror() -> None:
         adapter.configure(config)
     with raises(NotImplementedError):
         adapter.connect(config)
-    with raises(NotImplementedError):
-        adapter.disconnect()
     with raises(NotImplementedError):
         adapter.is_linked()
     with raises(NotImplementedError):

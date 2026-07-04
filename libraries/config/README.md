@@ -66,7 +66,6 @@ class WifiConfig:
 | `load_section(cls, config, *, prefix, required=…, optional=…)` | Build `cls(**kwargs)` by reading flat-prefix keys.  Used today by `chumicro-wifi`'s `WifiConfig.from_config`; available to any library whose constructor signature maps 1:1 to its config subkeys |
 | `try_load_section(...)` | Soft variant — returns `None` instead of raising when `config` is `None`, the wrong type, or missing a required key |
 | `MissingConfigKey` / `InvalidConfigType` / `ConfigError` | Targeted exceptions — single-inheritance from `ConfigError` (MicroPython forbids multi-parent layouts) |
-| `DEFAULT_RUNTIME_CONFIG_PATH` | The canonical on-device path (`/runtime_config.msgpack`) |
 
 ## Where this fits
 

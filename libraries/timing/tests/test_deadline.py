@@ -1,4 +1,4 @@
-"""Cross-runtime tests for the wait value objects: Deadline, earliest, Rate.
+"""Cross-runtime tests for the wait value objects: Deadline, Rate.
 
 Plain asserts plus the harness ``raises()`` helper, so they run on
 CPython (via pytest) and on MicroPython/CircuitPython (via the
@@ -6,7 +6,7 @@ lightweight test harness).
 """
 
 from chumicro_test_harness import raises
-from chumicro_timing import Deadline, Rate, earliest
+from chumicro_timing import Deadline, Rate
 from chumicro_timing.ticks import TICKS_HALFPERIOD
 
 # -- Deadline --------------------------------------------------------
@@ -54,30 +54,6 @@ def test_deadline_survives_tick_wraparound() -> None:
     assert deadline.expired((period - 10) & (period - 1)) is False
     # 100 ms in (50 ms past the wrap): due.
     assert deadline.expired(50) is True
-
-
-# -- earliest --------------------------------------------------------
-
-
-def test_earliest_returns_smallest_remaining() -> None:
-    """earliest() folds several Deadlines to the smallest remaining budget."""
-    mid = Deadline(100, 0)
-    soon = Deadline(50, 0)
-    late = Deadline(300, 0)
-    assert earliest(0, mid, soon, late) == 50
-    assert earliest(30, mid, soon, late) == 20
-
-
-def test_earliest_clamps_past_due_to_zero() -> None:
-    """A past-due Deadline contributes 0, so earliest() returns 0."""
-    mid = Deadline(100, 0)
-    soon = Deadline(50, 0)
-    assert earliest(60, mid, soon) == 0
-
-
-def test_earliest_returns_none_when_empty() -> None:
-    """earliest() with no deadlines has no budget to report."""
-    assert earliest(0) is None
 
 
 # -- Rate ------------------------------------------------------------

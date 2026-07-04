@@ -82,9 +82,8 @@ class MpWifiAdapter(WifiAdapter):
             available under MicroPython on a board with a wifi
             chip.  Tests inject a fake matching the WLAN surface
             the adapter touches: ``active(state=None)``,
-            ``connect(ssid, password)``, ``disconnect()``,
-            ``isconnected()``, ``ifconfig()``,
-            ``config(**kwargs)``.
+            ``connect(ssid, password)``, ``isconnected()``,
+            ``ifconfig()``, ``config(**kwargs)``.
         stack: Optional stack identifier: ``"espidf"``,
             ``"cyw43"``, or ``None`` (auto-detect via
             ``import esp32``).  Tests pass this explicitly to
@@ -234,10 +233,6 @@ class MpWifiAdapter(WifiAdapter):
                 # because the library's reconnect supervisor still
                 # works without the firmware-side guarantee.
                 pass
-
-    def disconnect(self):
-        """Drop the active association.  Safe to call when no association is up."""
-        self._wlan.disconnect()
 
     def is_linked(self):
         """``True`` while ``isconnected()`` reports an active association.

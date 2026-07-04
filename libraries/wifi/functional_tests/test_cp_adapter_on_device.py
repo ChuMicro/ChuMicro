@@ -7,9 +7,9 @@ to import the file.
 
 These tests do **not** attempt to associate with a real AP.  They
 target the contract between the adapter and the substrate (configure
-/ connect / is_linked / disconnect / ip), using a deliberate
-non-existent SSID so the connect call returns ``False`` within the
-configured timeout without needing live wifi credentials.
+/ connect / is_linked / ip), using a deliberate non-existent SSID so
+the connect call returns ``False`` within the configured timeout
+without needing live wifi credentials.
 
 Each test resets the radio to a known state at the end so the next
 test starts clean.
@@ -82,12 +82,3 @@ def test_connect_to_nonexistent_ssid_returns_false_within_timeout() -> None:
     assert result is False
     assert adapter.is_linked() is False
     _stop_station_quietly()
-
-
-def test_disconnect_after_failed_connect_is_safe() -> None:
-    """Disconnect must succeed even when no association is live."""
-    _stop_station_quietly()
-    adapter = CpWifiAdapter()
-    # Should not raise even though there's nothing to disconnect.
-    adapter.disconnect()
-    assert adapter.is_linked() is False

@@ -21,8 +21,9 @@ Per-board scenarios:
    adapter reports linked.
 2. **Reconnect after deliberate disconnect**: call
    `service.handle()` until linked, then drop the substrate's
-   association via `adapter.disconnect()`, drive ticks, watch
-   `CONNECTED → RECONNECTING → CONNECTED` cycle.
+   association directly (`wifi.radio.stop_station()` on CP,
+   `wlan.disconnect()` on MP — there is no adapter API for this),
+   drive ticks, watch `CONNECTED → RECONNECTING → CONNECTED` cycle.
 3. **state-change observability**: register an
    `on_state_change` listener, count transitions across the
    connect / drop / reconnect sequence.
@@ -66,6 +67,20 @@ def _drive_until(service, predicate, *, deadline_ms):
         _sleep_ms(50)
 
 
+def _drop_substrate_link(adapter):
+    """Force the real substrate to drop its association.
+
+    The adapter exposes no ``disconnect`` — the reconnect supervisor
+    only reads ``is_linked`` / ``connect`` — so this test reaches the
+    substrate handle directly, the same drop the per-adapter on-device
+    tests use for cleanup.
+    """
+    if adapter.name == "cp":
+        adapter.radio.stop_station()
+    else:  # mp_esp32 / mp_rp2
+        adapter._wlan.disconnect()  # noqa: SLF001 - substrate drop, no adapter API
+
+
 def _make_service(wifi_config):
     """Tighten timeouts on the loaded ``WifiConfig`` and wrap in a ``WifiService``.
 
@@ -107,7 +122,7 @@ def test_connects_to_real_ap() -> None:
 
 
 def test_reconnect_after_deliberate_disconnect() -> None:
-    """Drop the link via ``adapter.disconnect``, watch the reconnect cycle."""
+    """Drop the substrate link directly, watch the reconnect cycle."""
     wifi_cfg = WifiConfig.try_from_config(config)
     if wifi_cfg is None:
         raise AssertionError(
@@ -126,7 +141,7 @@ def test_reconnect_after_deliberate_disconnect() -> None:
 
     # Drop the substrate association directly so the service detects
     # link-down on the next tick.
-    service.adapter.disconnect()
+    _drop_substrate_link(service.adapter)
     print("Substrate link dropped; driving service through reconnect...")
 
     # First detect the drop.

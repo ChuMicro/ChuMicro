@@ -18,7 +18,7 @@ while True:
     # ... do other work ...
 ```
 
-The value objects — `Deadline` (a single armed timeout), `Rate` (drift-free periodic cadence), and `earliest` (fold several deadlines into one wait budget) — build on the wrap-safe tick helpers.
+The value objects — `Deadline` (a single armed timeout) and `Rate` (drift-free periodic cadence) — build on the wrap-safe tick helpers.
 
 ## Documentation
 

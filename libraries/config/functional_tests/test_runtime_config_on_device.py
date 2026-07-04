@@ -19,10 +19,10 @@ __chumicro_runtimes__ = ("micropython",)
 import os
 
 from chumicro_config import (
-    DEFAULT_RUNTIME_CONFIG_PATH,
     InvalidConfigType,
     load_runtime_config,
 )
+from chumicro_config.runtime import DEFAULT_RUNTIME_CONFIG_PATH
 from chumicro_msgpack import packb
 from chumicro_test_harness.assertions import raises
 

@@ -156,7 +156,7 @@ The `MpWifiAdapter` auto-detects ESP-IDF vs CYW43 by matching `sys.implementatio
 * **ESP-IDF**: `config(reconnects=0)` after first link, to disable the firmware-level auto-reconnect supervisor — `chumicro-wifi` owns reconnect logic itself.
 * **CYW43**: `config(pm=0xa11140)` at configure time, to disable idle power-save when `power_save=False`.
 
-The underlying MicroPython `network.WLAN` API (`active`, `connect`, `isconnected`, `ifconfig`, `disconnect`) is identical across both wifi chips, so a single adapter handles both.
+The underlying MicroPython `network.WLAN` API (`active`, `connect`, `isconnected`, `ifconfig`) is identical across both wifi chips, so a single adapter handles both.
 
 ## Platform notes
 

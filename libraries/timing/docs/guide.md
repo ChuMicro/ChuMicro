@@ -8,7 +8,6 @@
 2. **Value objects** built on those helpers:
     - `Deadline` — a single armed timeout: check `expired(now)` / `remaining(now)`, `reset(now)` to re-arm.
     - `Rate` — a drift-free periodic cadence (the replacement for the old `Heartbeat`): `due(now)` returns `True` at most once per period.
-    - `earliest` — fold several `Deadline`s into one "how long can I wait?" budget.
 
 These are the building blocks for non-blocking timing on microcontrollers. Instead of calling `time.sleep()` (which blocks everything), you capture a timestamp once per loop and hand it to each timer.
 
@@ -90,17 +89,6 @@ left = deadline.remaining(ticks_ms())  # ms until due, clamped at 0
 ```
 
 `expired(now)` reports whether the deadline has passed; `remaining(now)` returns the milliseconds left (clamped at `0`). `reset(now)` re-arms the same period from a new moment.
-
-When you are waiting on several deadlines at once, `earliest` folds them into a single wait budget — the smallest `remaining` across them all:
-
-```python
-from chumicro_timing import Deadline, earliest, ticks_ms
-
-now = ticks_ms()
-timeouts = [Deadline(1000, now), Deadline(250, now), Deadline(5000, now)]
-
-budget = earliest(now, *timeouts)  # 250 (the nearest), or None if empty
-```
 
 ## Using ticks directly
 

@@ -4,8 +4,8 @@ Exercises the adapter's contract with ``wifi.radio`` without a
 CircuitPython board.  The fake mirrors the subset of the
 ``wifi.radio`` shape the adapter touches: ``hostname`` (settable
 str), ``connect(ssid, password, timeout=...)`` (blocking, may
-raise), ``stop_station()``, ``connected`` (bool), ``ipv4_address``
-(stringifiable or ``None``).
+raise), ``connected`` (bool), ``ipv4_address`` (stringifiable or
+``None``).
 
 Hardware-side coverage (real ``wifi.radio`` against a real AP)
 lives under ``functional_tests/``.
@@ -40,10 +40,6 @@ class _FakeRadio:
         if self._connect_exception is not None:
             raise self._connect_exception
         self.connected = bool(self._connect_outcome)
-
-    def stop_station(self):
-        self.calls.append(("stop_station",))
-        self.connected = False
 
     def set_outcome(self, *, ok=None, exception=None):
         self._connect_outcome = ok if ok is not None else True
@@ -147,17 +143,8 @@ def test_connect_returns_false_when_radio_says_not_connected_after_call() -> Non
 
 
 # ---------------------------------------------------------------------------
-# disconnect / is_linked / ip
+# is_linked / ip
 # ---------------------------------------------------------------------------
-
-
-def test_disconnect_calls_stop_station() -> None:
-    radio = _FakeRadio()
-    radio.connected = True
-    adapter = CpWifiAdapter(radio=radio)
-    adapter.disconnect()
-    assert radio.calls[-1] == ("stop_station",)
-    assert radio.connected is False
 
 
 def test_is_linked_reflects_radio_connected() -> None:

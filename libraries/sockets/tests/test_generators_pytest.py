@@ -100,7 +100,7 @@ class TestRecvExactEagainLoopStaysFlat:
         def operation():
             sock.enqueue_eagain_for_recv(count=1)
             sock.enqueue_recv(b"abc")
-            gen = recv_exact(sock, 3)
+            gen = recv_exact(sock, 3, max_bytes=4096)
             gen.send(None)
             try:
                 gen.send(0)

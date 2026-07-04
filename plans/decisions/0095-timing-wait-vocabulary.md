@@ -2,7 +2,7 @@
 
 Status: `accepted`
 Date: `2026-07-03`
-Summary: `chumicro_timing` grows `Deadline`, `earliest()`, and `Rate` and hosts `Signal`; the read/write wait markers land in `chumicro_sockets.waits`; consumers stop hand-rolling deadline arithmetic.
+Summary: `chumicro_timing` grows `Deadline`/`Rate`, hosts `Signal`/`wait_for`; read/write waits go in `chumicro_sockets.waits`; `earliest()` removed 2026-07-04 (zero adoption at the fleet audit).
 Related: 0088 (scheduler phase math), 0091 (Signal — partially superseded on acceptance), 0092, campaign reports `plans/reviews/2026-07-03-{rudiment-api-fitness,greenfield-core-redesign,consumer-driven-design-synthesis}.md`
 
 ## Context
@@ -18,7 +18,7 @@ shipped demo/bake apps.  Two independent design seats converged on the same fix 
 
 1. `chumicro_timing` gains value objects that capture the arithmetic once:
    `Deadline(period_ms)` with `expired(now_ms)`, `remaining(now_ms)`, `reset(now_ms)`;
-   `earliest(*deadlines)`; `Rate` (absorbing `Heartbeat` and Decision 0088's phase math).
+   `Rate` (absorbing `Heartbeat` and Decision 0088's phase math).
 2. `Signal` and `wait_for` move from `chumicro_runner` into `chumicro_timing.waits`;
    runner consumes them (dependency direction: runner → timing, already true) and keeps
    `sleep_until` (the runner owns waiting).  `wait_for` travels with `Signal` because
@@ -40,12 +40,15 @@ shipped demo/bake apps.  Two independent design seats converged on the same fix 
 The vocabulary's audience is app/demo/project code and library cold paths — exactly
 where both shipped raw-`+` footguns actually fired.  The library-internal per-tick
 deadline scans (runner, mqtt, websockets, http_server) deliberately stay hand-rolled
-int arithmetic behind their injected `ticks` seams: `earliest(*deadlines)` allocates a
-varargs tuple per call and the AGENTS zero-allocation rubric protects those paths (the
-greenfield study defended the same scans from objectification), and a concrete
-`Deadline` import would bypass the constructor-injection seam the DI measurement showed
-earning its keep.  So `earliest()` ships as the sanctioned reducer for
-Deadline-holding cold paths, not a replacement for the hot scans.  The raw-`+` footgun
+int arithmetic behind their injected `ticks` seams: a varargs reducer like
+`earliest(*deadlines)` allocates a tuple per call and the AGENTS zero-allocation rubric
+protects those paths (the greenfield study defended the same scans from objectification),
+and a concrete `Deadline` import would bypass the constructor-injection seam the DI
+measurement showed earning its keep.  `earliest()` shipped on acceptance as the
+sanctioned reducer for Deadline-holding cold paths — never a replacement for the hot
+scans — but the 2026-07-04 embedded fleet audit found zero consumers in either repo
+(including timing's own examples) and it was removed; the hot scans stay hand-rolled as
+above.  The raw-`+` footgun
 class becomes unwritable in code that adopts `Deadline`; timing's dependency weight
 stays zero.  `Heartbeat` is deleted in favor of `Rate`.  Migration rode Wave 1 of
 `plans/workstreams/core-design-realignment.md`, gated on the `sweep-devices` bake
