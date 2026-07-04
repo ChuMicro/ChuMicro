@@ -96,24 +96,32 @@ with no `-X heapsize`. Heap *budget* regressions stay the test lanes' job; heap 
 
 | Bench | Runtime | heap churn/op | CPU median | throughput |
 |-------|---------|--------------:|-----------:|-----------:|
-| reactor_tick_3svc | MP / CP | 64 B / 64 B | 7.2 µs / 7.3 µs | — |
-| reactor_tick_10svc | MP / CP | 64 B / 64 B | 10.6 µs / 11.0 µs | — |
-| reactor_tick_30svc | MP / CP | 64 B / 64 B | 20.1 µs / 20.6 µs | — |
+| reactor_tick_3svc | MP / CP | 0 B / 0 B | 3.1 µs / 3.5 µs | — |
+| reactor_tick_10svc | MP / CP | 0 B / 0 B | 6.3 µs / 7.3 µs | — |
+| reactor_tick_30svc | MP / CP | 0 B / 0 B | 15.4 µs / 16.5 µs | — |
 | ws_frame_decode_small (64 B) | MP / CP | 448 B / 448 B | 9.2 µs / 9.9 µs | ~6.9 / 6.5 MB/s |
 | ws_frame_decode_medium (1024 B) | MP / CP | 2624 B / 2624 B | 72 µs / 80 µs | ~14 / 13 MB/s |
 
-Sanity: reactor tick+wait at 3 services is **~7 µs** — three orders of magnitude under the 1 ms
+Sanity: reactor tick+wait at 3 services is **~3 µs** — three orders of magnitude under the 1 ms
 laptop expectation and the ≤5 ms discipline. Heap churn is byte-identical across both runtimes,
 confirming the exact-plus-slack gate is well-founded.
 
 ### Finding surfaced by the first run (not fixed here — bench infra only)
 
-The reactor's **`tick()` is zero-churn** (0 B/1000 ticks); the entire **64 B/cycle** comes from
+The reactor's **`tick()` is zero-churn** (0 B/1000 ticks); the entire **64 B/cycle** came from
 **`wait()`** even when no service exposes a socket or a deadline (measured by attribution: tick-only
 0 B, wait-only 64 B/call). Small and per-cycle, but the churn guard in `plans/patterns.md` asserts
-`<= 64 B` per *1000* `tick()` calls — the reactor meets that for `tick()`, and the socket-less
-`wait()` allocation is now a tracked baseline number. Left for the runner owners; flagging it is the
-bench doing its job.
+`<= 64 B` per *1000* `tick()` calls — the reactor met that for `tick()`, and the socket-less
+`wait()` allocation was a tracked baseline number. Flagging it is the bench doing its job.
+
+- **Fixed in place (runner 0.18.2).** Bisected the 64 B to `_sync_poll_set`'s stale-socket-drop
+  tail: the `stale = [sid for sid in registered if registered[sid][3] != generation]` comprehension
+  closes over `registered` / `generation`, and MicroPython boxes those free vars into heap cells at
+  their assignment — *unconditionally, ahead of the `if len(registered) > wanted_count:` guard* — so
+  the cell churned on every call even when nothing was stale (the socket-less steady state). Rewrote
+  it as an explicit `append` loop (no closure, no cells). Reactor heap/op is now **0 B** on both
+  ports at all three service counts, with an incidental ~1.3–2.3× CPU speedup (the cell alloc + its
+  GC was a real slice of the cycle). Baseline re-recorded to 0.
 
 ## Deliberately excluded from the MVP
 
@@ -136,8 +144,9 @@ bench doing its job.
    `run_bench.py`.
 3. **Re-baseline cadence.** Re-record when a runtime pin bumps (`target-runtimes.toml`) or after a
    deliberate hot-path change; the baseline carries its own date.
-4. **Investigate the `wait()` 64 B/cycle** (runner owners) — if it collapses to zero, the bench will
-   catch the improvement (exact-or-better passes) and the baseline can drop to 0.
+4. ~~**Investigate the `wait()` 64 B/cycle**~~ — done (runner 0.18.2): the closure-boxed cell in
+   `_sync_poll_set`'s stale-drop comprehension; rewritten as an explicit loop, baseline dropped to 0.
+   See the finding above.
 
 ## Validation history
 

@@ -860,9 +860,15 @@ class Runner:
                 slot[1] = sweep_mask
 
         # Drop sockets no service wants any more (untouched this sweep).
+        # Explicit append loop, not a comprehension: a comprehension here
+        # closes over ``registered`` / ``generation``, and MP boxes those
+        # free vars into heap cells at their assignment — unconditionally,
+        # ahead of this guard — churning 64 B on every socket-less wait().
         if len(registered) > wanted_count:
-            stale = [sid for sid in registered
-                     if registered[sid][3] != generation]
+            stale = []
+            for sid in registered:
+                if registered[sid][3] != generation:
+                    stale.append(sid)
             for sid in stale:
                 slot = registered.pop(sid)
                 if poller is not None:

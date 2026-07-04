@@ -206,6 +206,29 @@ def test_wait_unregisters_when_service_releases_socket() -> None:
     assert sock in poller.unregister_calls
 
 
+def test_wait_drops_only_the_released_socket_keeping_the_other() -> None:
+    """One service releases its socket while another keeps its own: only the
+    released socket unregisters; the still-wanted one stays in the poll set."""
+    poller = FakePoller()
+    runner = Runner(ticks=FakeTicks(), poller=poller)
+    kept_sock = object()
+    dropped_sock = object()
+    kept = _IOService(sock=kept_sock, wants_read=True)
+    dropped = _IOService(sock=dropped_sock, wants_read=True)
+    runner.add(kept, period_ms=100)
+    runner.add(dropped, period_ms=100)
+    runner.wait(0)  # registers both
+
+    dropped.io_socket = None  # only this one releases
+    poller.unregister_calls.clear()
+    runner.wait(0)
+
+    assert dropped_sock in poller.unregister_calls
+    assert kept_sock not in poller.unregister_calls
+    assert id(kept_sock) in runner._registered_interest
+    assert id(dropped_sock) not in runner._registered_interest
+
+
 def test_wait_swallows_valueerror_unregistering_closed_socket() -> None:
     """CPython select.poll raises ValueError unregistering a closed socket
     (its fileno() is -1).  A service that closed its socket is exactly this
