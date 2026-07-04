@@ -236,7 +236,7 @@ def main(argv: list[str] | None = None) -> int:
         # board is still doing wifi bring-up while this SUBACK lands.
         telemetry_subscribed = [False]
         host_client.subscribe(
-            "demo/+/telemetry", qos=1, prefixed=False,
+            "demo/+/telemetry", qos=1,
             on_subscribe=lambda *_: telemetry_subscribed.__setitem__(0, True),
         )
         if not _drive_host(
@@ -272,7 +272,7 @@ def main(argv: list[str] | None = None) -> int:
 
         state_subscribed = [False]
         host_client.subscribe(
-            "demo/+/state", qos=1, prefixed=False,
+            "demo/+/state", qos=1,
             on_subscribe=lambda *_: state_subscribed.__setitem__(0, True),
         )
         if not _drive_host(
@@ -304,7 +304,7 @@ def main(argv: list[str] | None = None) -> int:
         command_acked = [False]
         host_client.publish(
             command_topic, b"ping",
-            qos=1, prefixed=False,
+            qos=1,
             on_publish=lambda *_: command_acked.__setitem__(0, True),
         )
         if not _drive_host(

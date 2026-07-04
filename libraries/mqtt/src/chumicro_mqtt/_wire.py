@@ -168,18 +168,14 @@ def _append_string(buffer, value):
     buffer.extend(value)
 
 
-def _topic_levels_match(topic_levels, pattern_levels):
-    """Match pre-split topic / pattern level sequences.
+def topic_matches(topic, pattern):
+    """Return ``True`` when *topic* matches the wildcard *pattern*.
 
-    The public :func:`topic_matches` splits both inputs every call.
-    A caller matching N patterns against one inbound topic caches
-    the pattern splits at registration time and the topic split once
-    per inbound message, then matches each stored pattern against
-    the cached topic split through this helper.
-
-    Hand-indexed because this is the per-inbound-message dispatch
-    inner loop; ``enumerate`` allocates an iterator object per call.
+    ``+`` matches one topic level.  ``#`` matches any number of levels
+    and must be the last character of the pattern.
     """
+    topic_levels = topic.split("/")
+    pattern_levels = pattern.split("/")
     pattern_count = len(pattern_levels)
     topic_count = len(topic_levels)
     index = 0
@@ -194,15 +190,6 @@ def _topic_levels_match(topic_levels, pattern_levels):
             return False
         index += 1
     return pattern_count == topic_count
-
-
-def topic_matches(topic, pattern):
-    """Return ``True`` when *topic* matches the wildcard *pattern*.
-
-    ``+`` matches one topic level.  ``#`` matches any number of levels
-    and must be the last character of the pattern.
-    """
-    return _topic_levels_match(topic.split("/"), pattern.split("/"))
 
 
 # ---------------------------------------------------------------------------

@@ -1,8 +1,6 @@
-"""mqtt client: inbound publish, topic-prefix sugar, last-will
-prefix, keepalive."""
+"""mqtt client: inbound publish, verbatim topics, keepalive."""
 
 from chumicro_mqtt import (
-    MQTTClient,
     ProtocolState,
 )
 from chumicro_mqtt.testing import (
@@ -47,143 +45,36 @@ class TestInboundPublish:
         assert b"\x40\x02\x00\x2a" in bytes(sock.sent)
 
 
-class TestTopicPrefixSugar:
-    def test_publish_prefixes_with_root_topic_and_client_id(self) -> None:
+class TestVerbatimTopics:
+    def test_publish_topic_goes_on_wire_as_written(self) -> None:
         sock = FakeSocket()
         sock.enqueue_recv(canned_connack_bytes(return_code=0))
         ticks = FakeTicks()
-        client = new_client(
-            sock, ticks,
-            client_id="mainLightSwitch",
-            root_topic="livingRoom",
-        )
+        client = new_client(sock, ticks)
         client.connect()
         drive(client, ticks, count=2)
         sock.sent = bytearray()
-        client.publish("switchState", b"on", qos=0)
-        drive(client, ticks, count=1)
-        assert b"livingRoom/mainLightSwitch/switchState" in bytes(sock.sent)
-
-    def test_publish_without_root_topic_is_verbatim(self) -> None:
-        sock = FakeSocket()
-        sock.enqueue_recv(canned_connack_bytes(return_code=0))
-        ticks = FakeTicks()
-        client = new_client(sock, ticks)  # default root_topic=None
-        client.connect()
-        drive(client, ticks, count=2)
-        sock.sent = bytearray()
-        client.publish("temp", b"42", qos=0)
-        drive(client, ticks, count=1)
-        wire = bytes(sock.sent)
-        assert b"temp" in wire
-        # No prefix was injected.
-        assert b"test-client/temp" not in wire
-
-    def test_publish_prefixed_false_bypasses_prefix(self) -> None:
-        sock = FakeSocket()
-        sock.enqueue_recv(canned_connack_bytes(return_code=0))
-        ticks = FakeTicks()
-        client = new_client(
-            sock, ticks,
-            client_id="mainLightSwitch",
-            root_topic="livingRoom",
-        )
-        client.connect()
-        drive(client, ticks, count=2)
-        sock.sent = bytearray()
-        client.publish("$SYS/bridge/status", b"online", qos=0, prefixed=False)
+        client.publish("$SYS/bridge/status", b"online", qos=0)
         drive(client, ticks, count=1)
         wire = bytes(sock.sent)
         assert b"$SYS/bridge/status" in wire
-        assert b"livingRoom" not in wire
+        # No per-device prefix is injected — what you publish is what
+        # the broker sees.
+        assert b"test-client/$SYS" not in wire
 
-    def test_subscribe_prefixes_topic(self) -> None:
+    def test_subscribe_topic_goes_on_wire_as_written(self) -> None:
         sock = FakeSocket()
         sock.enqueue_recv(canned_connack_bytes(return_code=0))
         ticks = FakeTicks()
-        client = new_client(
-            sock, ticks,
-            client_id="thing-42",
-            root_topic="myapp",
-        )
+        client = new_client(sock, ticks)
         client.connect()
         drive(client, ticks, count=2)
         sock.sent = bytearray()
         client.subscribe("commands/+")
         drive(client, ticks, count=1)
-        assert b"myapp/thing-42/commands/+" in bytes(sock.sent)
-
-    def test_subscribe_prefixed_false_bypasses_prefix(self) -> None:
-        sock = FakeSocket()
-        sock.enqueue_recv(canned_connack_bytes(return_code=0))
-        ticks = FakeTicks()
-        client = new_client(
-            sock, ticks,
-            client_id="thing-42",
-            root_topic="myapp",
-        )
-        client.connect()
-        drive(client, ticks, count=2)
-        sock.sent = bytearray()
-        client.subscribe("$SYS/broker/uptime", prefixed=False)
-        drive(client, ticks, count=1)
         wire = bytes(sock.sent)
-        assert b"$SYS/broker/uptime" in wire
-        assert b"myapp" not in wire
-
-    def test_unsubscribe_prefixes_topic(self) -> None:
-        sock = FakeSocket()
-        sock.enqueue_recv(canned_connack_bytes(return_code=0))
-        ticks = FakeTicks()
-        client = new_client(
-            sock, ticks,
-            client_id="thing-42",
-            root_topic="myapp",
-        )
-        client.connect()
-        drive(client, ticks, count=2)
-        sock.sent = bytearray()
-        client.unsubscribe("commands/+")
-        drive(client, ticks, count=1)
-        assert b"myapp/thing-42/commands/+" in bytes(sock.sent)
-
-
-class TestLastWillPrefix:
-    def test_will_topic_is_prefixed_in_connect_packet(self) -> None:
-        sock = FakeSocket()
-        ticks = FakeTicks()
-        client = MQTTClient(
-            sock,
-            client_id="mainLightSwitch",
-            root_topic="livingRoom",
-            will_topic="online",
-            will_message=b"false",
-            ticks=ticks,
-        )
-        client.connect()
-        drive(client, ticks, count=1)
-        # CONNECT packet starts with 0x10.  Look for the prefixed will topic.
-        wire = bytes(sock.sent)
-        assert b"livingRoom/mainLightSwitch/online" in wire
-
-    def test_will_prefixed_false_skips_prefix(self) -> None:
-        sock = FakeSocket()
-        ticks = FakeTicks()
-        client = MQTTClient(
-            sock,
-            client_id="mainLightSwitch",
-            root_topic="livingRoom",
-            will_topic="$SYS/bridge/dead",
-            will_prefixed=False,
-            will_message=b"true",
-            ticks=ticks,
-        )
-        client.connect()
-        drive(client, ticks, count=1)
-        wire = bytes(sock.sent)
-        assert b"$SYS/bridge/dead" in wire
-        # Prefix should NOT have been applied.
-        assert b"livingRoom/mainLightSwitch/$SYS" not in wire
+        assert b"commands/+" in wire
+        assert b"test-client/commands" not in wire
 
 
 class TestKeepalive:

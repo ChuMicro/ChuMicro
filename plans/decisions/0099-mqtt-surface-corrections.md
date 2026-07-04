@@ -20,9 +20,10 @@ parsed then ignored, so `clean_session=False` silently does not do what it says.
 
 1. **Pre-connect queue**: `publish()` before CONNECTED enqueues into a small bounded
    queue (`pre_connect_queue_size=8`) drained on CONNACK before `on_connect`, governed by
-   `when_disconnected=` (queue / raise / drop_oldest), defaulting to queue; a full queue
-   under "queue" raises the same backpressure error as the tx queue.  The universal
-   caller guard is deleted everywhere.  `subscribe()` stays CONNECTED-only — consumers
+   `when_disconnected=` (queue / raise — a third `drop_oldest` policy shipped with this
+   wave but was cut as zero-consumer by the 2026-07-04 bloat review), defaulting to
+   queue; a full queue under "queue" raises the same backpressure error as the tx queue.
+   The universal caller guard is deleted everywhere.  `subscribe()` stays CONNECTED-only — consumers
    subscribe in `on_connect`, which keeps the session-resume replay logic free of
    pre-connect interactions.
 2. **Decoder**: drop the intact-drain tier; keep steady + oversized-discard.  With two

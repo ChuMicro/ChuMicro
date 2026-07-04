@@ -106,30 +106,33 @@ class TestReplayAndOverflow:
         # Replay must not have crashed or re-entered FAILED forever.
         assert client.state in (ProtocolState.CONNECTED, ProtocolState.AWAITING_TRANSPORT)
 
-    def test_puback_flood_faults_at_hard_cap_instead_of_dropping(self):
-        # Many inbound QoS-1 publishes generate more PUBACKs than the
-        # one-send-per-tick drain retires; once the backlog reaches the
-        # tx-queue hard cap the client must fault to FAILED (self-heal
-        # rebuilds cleanly; the broker redelivers whatever was never
-        # acked) rather than silently losing a protocol packet.
+    def test_puback_flood_cycles_without_reaching_the_hard_cap(self):
+        # Many inbound QoS-1 publishes per tick used to outrun the
+        # one-PUBACK-per-tick drain and trip the hard-cap guard.  With
+        # the coalesced per-tick PUBACK batch (sent outside the packet
+        # budget) the flood cycles smoothly: every publish is acked,
+        # the client stays CONNECTED, and the guard is never reached.
         sock = FakeSocket()
         ticks = FakeTicks()
         client = _connected_client(sock, ticks, max_tx_queue_size=4)
+        sock.sent = bytearray()  # count only PUBACKs from here on
         chunk = b"".join(
             canned_publish_bytes("t", b"x", qos=1, packet_id=(index % 60) + 1)
             for index in range(120)
         )
         sock.enqueue_recv(chunk)
-        # ~32 publishes dispatch per tick (256-byte decoder buffer, 8-byte
-        # packets) while only one PUBACK drains, so the 68-slot hard cap
-        # (max_tx_queue_size + 64) trips on the third tick.
-        drive(client, ticks, count=4)
-        assert client.state == ProtocolState.FAILED
-        assert "PUBACK backlog" in str(client.last_error)
+        drive(client, ticks, count=8)
+        assert client.state == ProtocolState.CONNECTED
+        sent = bytes(sock.sent)
+        # Nothing but the 120 four-byte PUBACKs went out, one per
+        # inbound publish.
+        assert len(sent) == 120 * 4
+        for packet_id in range(1, 61):
+            assert _puback(packet_id) in sent
 
 
 class TestWritabilityAndCallbacks:
-    def test_io_interest_write_true_during_partial_send(self):
+    def test_io_interest_write_only_during_partial_send(self):
         sock = FakeSocket()
         ticks = FakeTicks()
         client = _connected_client(sock, ticks)
@@ -137,8 +140,13 @@ class TestWritabilityAndCallbacks:
         # Even with an empty queue, a partial send needs writability.
         while client._tx_queue:
             client._tx_queue.popleft()
-        # CONNECTED always wants read; the partial send adds write.
-        assert client.io_interest(ticks.ticks_ms()) == IO_READ | IO_WRITE
+        # The partial send wants write; read interest drops while the
+        # recv is suppressed for outbound backpressure (the socket
+        # isn't taking our bytes, so we stop taking the broker's).
+        assert client.io_interest(ticks.ticks_ms()) == IO_WRITE
+        # Once the partial send lands, read interest returns.
+        client._partial_send = None
+        assert client.io_interest(ticks.ticks_ms()) == IO_READ
 
     def test_disconnect_from_on_message_lands_disconnected(self):
         sock = FakeSocket()

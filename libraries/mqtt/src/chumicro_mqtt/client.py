@@ -137,6 +137,11 @@ _SELF_HEAL_BACKOFF_CAP_MS = 60000
 # retrying with backoff.
 _PERMANENT_CONNACK_CODES = (1, 2, 4, 5)
 
+# Bound on the ``next_message()`` inbound queue (drop-oldest when full).
+# A slow consumer loses the oldest queued messages rather than growing
+# the heap; 16 absorbs a healthy burst while pinning trivial RAM.
+_MAX_INBOUND_QUEUE_SIZE = 16
+
 
 class InFlightPublish:
     """One outstanding QoS 1 PUBLISH awaiting a PUBACK.
@@ -323,7 +328,6 @@ class MQTTClient:
         *,
         transport_factory: object | None = None,
         client_id: str,
-        root_topic: str | None = None,
         keep_alive_seconds: int = 60,
         ack_timeout_seconds: float = 5.0,
         publish_retry_max: int = 3,
@@ -331,7 +335,6 @@ class MQTTClient:
         password: str | None = None,
         clean_session: bool = True,
         will_topic: str | None = None,
-        will_prefixed: bool = True,
         will_message: bytes | None = None,
         will_qos: int = 0,
         will_retain: bool = False,
@@ -341,7 +344,6 @@ class MQTTClient:
         pre_connect_queue_size: int = 8,
         recv_budget_per_tick: int = 1024,
         max_tx_queue_size: int = 20,
-        max_inbound_queue_size: int = 16,
         send_timeout_seconds: float | None = None,
         ticks: object | None = None,
     ) -> None:
@@ -370,16 +372,6 @@ class MQTTClient:
                 only fires from ``connect()`` / self-heal, never from
                 ``__init__``.
             client_id: MQTT client identifier.  Must be unique per broker.
-                Doubles as the per-device segment in the topic-prefix
-                scheme when *root_topic* is set.
-            root_topic: Optional prefix applied automatically by
-                :meth:`publish` / :meth:`subscribe` / :meth:`unsubscribe`.
-                When set, every prefixed topic becomes
-                ``<root_topic>/<client_id>/<topic>``.  ``None`` (default)
-                disables prefixing.  Topics go on the wire as written.
-                Individual :meth:`publish` / :meth:`subscribe` /
-                :meth:`unsubscribe` calls can opt out per-call with
-                ``prefixed=False`` (system topics, bridges, etc.).
             keep_alive_seconds: Broker idle timeout.  PINGREQ runs at
                 half this interval client-side.
             ack_timeout_seconds: Per-PUBACK / SUBACK / etc. deadline.
@@ -395,10 +387,6 @@ class MQTTClient:
             will_topic: Topic for the broker's last-will message.
                 Published on uncleanly-dropped connection.  ``None``
                 disables the will.
-            will_prefixed: When True (default), *will_topic* resolves
-                through the ``root_topic`` / ``client_id`` prefix
-                scheme.  Pass False to set a verbatim will topic
-                (system topics, bridges).
             will_message: Payload for the broker's last-will message.
             will_qos: QoS for the will message (0 or 1).
             will_retain: ``True`` retains the will on the broker.
@@ -416,25 +404,27 @@ class MQTTClient:
             when_disconnected: Policy for :meth:`publish` called before
                 the client reaches ``CONNECTED`` (the async-connect and
                 self-heal windows).  ``"queue"`` (default) buffers the
-                publish in a small bounded queue drained on CONNACK;
-                ``"drop_oldest"`` does the same but evicts the oldest
-                queued publish when the queue is full instead of
-                raising; ``"raise"`` raises :class:`MQTTError`
-                immediately (the pre-queue behavior).  Under ``"queue"``
+                publish in a small bounded queue drained on CONNACK —
                 a full queue raises :class:`MQTTBackpressureError`, the
                 same backpressure signal :meth:`publish` uses when the
-                tx queue is full.
+                tx queue is full.  ``"raise"`` raises :class:`MQTTError`
+                immediately (the pre-queue behavior).
             pre_connect_queue_size: Bound on the pre-connect publish
                 queue (default 8).  The publish-when-connected sensor
                 profile only queues a handful of messages during the
                 connect / self-heal window, so a small bound absorbs a
                 short burst while pinning trivial heap; raise it for a
                 publisher that produces faster than it reconnects.
-            recv_budget_per_tick: Soft cap on bytes drained from the
-                socket in a single :meth:`handle` call (default 1024).
-                Bounds tick latency when a large inbound PUBLISH is
-                mid-flight so concurrent runner tasks keep getting
-                CPU time.
+            recv_budget_per_tick: The inbound pacing lever: cap on the
+                bytes the single per-tick ``recv_into`` pulls off the
+                socket (default 1024).  Bounds three things at once —
+                tick latency while a large inbound PUBLISH is
+                mid-flight (concurrent runner tasks keep getting CPU
+                time), the number of complete packets one tick can
+                dispatch, and therefore the size of the per-tick
+                coalesced PUBACK batch an inbound QoS-1 burst owes.
+                Raise for a higher-throughput subscriber at the cost
+                of per-tick latency.
             max_tx_queue_size: Maximum number of pending outbound
                 packets (default 20).  Appending past the cap raises
                 :class:`MQTTBackpressureError`.  Raise the cap for
@@ -474,36 +464,27 @@ class MQTTClient:
             _force_non_blocking(self._socket)
         self._user_wants_connected = False
         self._client_id = client_id
-        self._root_topic = root_topic
         self._keep_alive_seconds = keep_alive_seconds
         self._ack_timeout_ms = int(ack_timeout_seconds * 1000)
         self._publish_retry_max = publish_retry_max
         self._username = username
         self._password = password
         self._clean_session = clean_session
-        # Resolve the will topic once at construction.  ``will_prefixed``
-        # (default True) runs *will_topic* through the root_topic /
-        # client_id scheme; False sends it verbatim.
-        if will_topic is None:
-            self._will_topic = None
-        elif will_prefixed:
-            self._will_topic = self._prefixed_topic(will_topic)
-        else:
-            self._will_topic = will_topic
+        self._will_topic = will_topic
         self._will_message = will_message
         self._will_qos = will_qos
         self._will_retain = will_retain
         self._when_oversized = when_oversized
-        if when_disconnected not in ("queue", "raise", "drop_oldest"):
+        if when_disconnected not in ("queue", "raise"):
             raise ValueError(
-                "when_disconnected must be 'queue', 'raise', or "
-                f"'drop_oldest', got {when_disconnected!r}",
+                "when_disconnected must be 'queue' or 'raise', "
+                f"got {when_disconnected!r}",
             )
         self._when_disconnected = when_disconnected
         self._pre_connect_queue_size = pre_connect_queue_size
         # Publishes issued before CONNECTED (async-connect + self-heal
-        # windows) buffer here under the "queue" / "drop_oldest" policy,
-        # then drain on CONNACK in receipt order ahead of any publish the
+        # windows) buffer here under the "queue" policy, then drain on
+        # CONNACK in receipt order ahead of any publish the
         # ``on_connect`` callback issues.  A plain deque used FIFO
         # (append / popleft); bounds are enforced explicitly in
         # ``_publish_disconnected`` so overflow never relies on the
@@ -558,6 +539,13 @@ class MQTTClient:
         # collection so a mid-dispatch disconnect that drops collected
         # PUBACKs leaves nothing to re-flush next tick.
         self._pending_pubacks = []
+        # True while a coalesced PUBACK batch (one tick's inbound QoS-1
+        # acks joined into a single tx entry) is still queued unsent.
+        # Gates the next recv: reading faster than we can ack would
+        # grow the ack backlog without bound, while leaving the bytes
+        # in the kernel buffer closes the TCP window and throttles the
+        # broker at its end.  See ``_recv_suppressed``.
+        self._puback_batch_queued = False
         # Deadline-tick value while a packet has been queued without any
         # send progress.  ``None`` when the queue is empty or the last
         # drain made progress (a successful send re-arms; an EAGAIN
@@ -582,7 +570,6 @@ class MQTTClient:
         self.on_oversized = _no_callback
         # next_message() lazily builds the inbound queue and flips data
         # delivery from the callbacks to it (the receive-stream surface).
-        self._max_inbound_queue_size = max_inbound_queue_size
         self._inbound_queue = None
         self.last_error = None
         # Self-heal reconnect pacing.  ``_self_heal_attempts`` counts
@@ -748,6 +735,7 @@ class MQTTClient:
         """
         self._tx_queue = _new_tx_queue(self._tx_queue_hard_cap)
         self._partial_send = None
+        self._puback_batch_queued = False
         self._send_deadline_ticks = None
         self._transport_deadline_ticks = None
         self._pending_responses.clear()
@@ -760,7 +748,6 @@ class MQTTClient:
         *,
         qos: int = 0,
         retain: bool = False,
-        prefixed: bool = True,
     ):
         """Update the Last Will + Testament, taking effect on the next CONNECT.
 
@@ -769,11 +756,6 @@ class MQTTClient:
             message: Will payload (bytes).  ``None`` becomes empty bytes.
             qos: Will QoS (0 or 1).
             retain: ``True`` retains the will on the broker.
-            prefixed: When ``True`` (default), *topic* is resolved
-                through the ``root_topic`` / ``client_id`` prefix scheme
-                the same way :meth:`publish` would.  Pass ``False`` to
-                set the will to a verbatim topic (system topics,
-                bridges).
 
         The change applies to the next CONNECT packet the client
         sends -- either an initial :meth:`connect` or a self-heal
@@ -788,12 +770,7 @@ class MQTTClient:
             raise UnsupportedQoSError(
                 "will_qos must be 0 or 1; QoS 2 is reserved-not-implemented",
             )
-        if topic is None:
-            self._will_topic = None
-        elif prefixed:
-            self._will_topic = self._prefixed_topic(topic)
-        else:
-            self._will_topic = topic
+        self._will_topic = topic
         self._will_message = message
         self._will_qos = qos
         self._will_retain = retain
@@ -801,16 +778,6 @@ class MQTTClient:
     # ------------------------------------------------------------------
     # Public publish / subscribe / unsubscribe
     # ------------------------------------------------------------------
-
-    def _prefixed_topic(self, topic):
-        """Resolve *topic* through the ``root_topic`` / ``client_id`` prefix scheme.
-
-        ``root_topic=None``: return *topic* unchanged.
-        ``root_topic`` set: return ``<root_topic>/<client_id>/<topic>``.
-        """
-        if self._root_topic is None:
-            return topic
-        return f"{self._root_topic}/{self._client_id}/{topic}"
 
     def publish(
         self,
@@ -820,15 +787,8 @@ class MQTTClient:
         qos: int = 0,
         retain: bool = False,
         on_publish: object | None = None,
-        prefixed: bool = True,
     ) -> None:
         """Queue a PUBLISH packet for *topic*.
-
-        With ``prefixed=True`` (default), *topic* is resolved through
-        the ``root_topic`` / ``client_id`` prefix scheme — see
-        :meth:`_prefixed_topic`.  Pass ``prefixed=False`` to publish
-        verbatim (system topics, bridge topics, anything outside the
-        per-device hierarchy).
 
         QoS 0: queued and considered delivered once it reaches the wire
         (the optional *on_publish* fires from the next :meth:`handle`).
@@ -838,21 +798,17 @@ class MQTTClient:
         exactly once.  Retries up to *publish_retry_max* on ack timeout.
 
         Args:
-            topic: Publish topic.  Prefixed when *prefixed* is True.
+            topic: Publish topic, sent on the wire as written.
             payload: ``bytes`` / ``str``.  ``str`` is auto-encoded as UTF-8.
             qos: 0 or 1.  QoS 2 raises :class:`UnsupportedQoSError`.
             retain: True for retained messages.
             on_publish: Callback ``(topic, payload_bytes)`` fired on
                 successful delivery.
-            prefixed: When True (default), *topic* is resolved through
-                the ``root_topic`` / ``client_id`` prefix scheme before
-                going on the wire.
 
         Before ``CONNECTED`` (the async-connect and self-heal windows)
         the ``when_disconnected`` policy applies: ``"queue"`` (default)
         buffers into a bounded pre-connect queue drained on CONNACK,
-        ``"drop_oldest"`` evicts the oldest queued publish when that
-        queue is full, and ``"raise"`` raises :class:`MQTTError`.
+        and ``"raise"`` raises :class:`MQTTError`.
 
         Raises:
             MQTTError: ``when_disconnected="raise"`` and the client is
@@ -860,8 +816,6 @@ class MQTTClient:
             MQTTBackpressureError: the tx queue is full, or the
                 pre-connect queue is full under the ``"queue"`` policy.
         """
-        if prefixed:
-            topic = self._prefixed_topic(topic)
         if qos > 1:
             raise UnsupportedQoSError(
                 "qos must be 0 or 1; QoS 2 is reserved-not-implemented",
@@ -880,11 +834,10 @@ class MQTTClient:
         """Apply the ``when_disconnected`` policy to a pre-CONNECTED publish.
 
         ``"raise"`` reproduces the pre-queue behavior exactly.  ``"queue"``
-        / ``"drop_oldest"`` append the resolved publish (topic already
-        prefixed, payload already bytes) to the bounded pre-connect queue
-        for :meth:`_drain_pre_connect_queue` to replay on CONNACK.  Bounds
-        are enforced explicitly: ``"queue"`` raises the same backpressure
-        error a full tx queue does, ``"drop_oldest"`` evicts the oldest.
+        appends the resolved publish (payload already bytes) to the
+        bounded pre-connect queue for :meth:`_drain_pre_connect_queue`
+        to replay on CONNACK.  The bound is enforced explicitly with
+        the same backpressure error a full tx queue raises.
         """
         if self._when_disconnected == "raise":
             raise MQTTError(
@@ -892,14 +845,12 @@ class MQTTClient:
             )
         queue = self._pre_connect_queue
         if len(queue) >= self._pre_connect_queue_size:
-            if self._when_disconnected == "drop_oldest":
-                queue.popleft()
-            else:  # "queue": bounded means bounded.
-                raise MQTTBackpressureError(
-                    f"pre-connect publish queue full "
-                    f"({self._pre_connect_queue_size}); call handle() to "
-                    "connect and drain, then retry",
-                )
+            # "queue": bounded means bounded.
+            raise MQTTBackpressureError(
+                f"pre-connect publish queue full "
+                f"({self._pre_connect_queue_size}); call handle() to "
+                "connect and drain, then retry",
+            )
         queue.append((topic, payload_bytes, qos, retain, on_publish))
 
     def _drain_pre_connect_queue(self):
@@ -908,8 +859,7 @@ class MQTTClient:
         Runs on a successful CONNACK before ``on_connect`` fires, so
         buffered publishes reach the tx queue ahead of any publish the
         callback issues (receipt order preserved).  Each entry carries
-        its resolved topic / payload / qos / retain / on_publish; the
-        topic is already prefixed, so replay bypasses re-prefixing.
+        its resolved topic / payload / qos / retain / on_publish.
         """
         queue = self._pre_connect_queue
         while queue:
@@ -919,9 +869,8 @@ class MQTTClient:
     def _do_publish(self, topic, payload_bytes, qos, retain, on_publish):
         """Encode and enqueue a resolved PUBLISH (caller is CONNECTED).
 
-        *topic* is already prefix-resolved and *payload_bytes* already
-        encoded.  Shared by the direct :meth:`publish` path and the
-        pre-connect drain.
+        *payload_bytes* is already encoded.  Shared by the direct
+        :meth:`publish` path and the pre-connect drain.
         """
         if qos == 0:
             packet = encode_publish(
@@ -981,29 +930,18 @@ class MQTTClient:
         qos: int = 0,
         *,
         on_subscribe: object | None = None,
-        prefixed: bool = True,
     ) -> None:
         """Queue a SUBSCRIBE for *topic*.
 
-        With ``prefixed=True`` (default), *topic* is resolved through
-        the ``root_topic`` / ``client_id`` prefix scheme before going
-        on the wire.  Pass ``prefixed=False`` for topics outside the
-        per-device hierarchy (system topics, bridges, wildcard
-        pattern subscriptions).
-
         Args:
-            topic: Topic filter (may include ``+`` / ``#`` wildcards).
-                Prefixed when *prefixed* is True.
+            topic: Topic filter (may include ``+`` / ``#`` wildcards),
+                sent on the wire as written.
             qos: 0 or 1.
             on_subscribe: Callback ``(topic, granted_qos)`` fired on SUBACK.
-            prefixed: When True (default), *topic* is resolved through
-                the ``root_topic`` / ``client_id`` prefix scheme.
 
         Raises:
             MQTTError: Client not in CONNECTED state.
         """
-        if prefixed:
-            topic = self._prefixed_topic(topic)
         if self.state != ProtocolState.CONNECTED:
             raise MQTTError(
                 f"subscribe() requires CONNECTED state, was {self.state}",
@@ -1030,16 +968,12 @@ class MQTTClient:
             ),
         )
 
-    def unsubscribe(self, topic, *, on_unsubscribe=None, prefixed=True):
+    def unsubscribe(self, topic, *, on_unsubscribe=None):
         """Queue an UNSUBSCRIBE for *topic*.
 
-        Mirror of :meth:`subscribe`.  With ``prefixed=True`` (default),
-        *topic* is resolved through the ``root_topic`` / ``client_id``
-        prefix scheme.  Pass ``prefixed=False`` to unsubscribe a
-        verbatim topic.
+        Mirror of :meth:`subscribe`: *topic* goes on the wire as
+        written.
         """
-        if prefixed:
-            topic = self._prefixed_topic(topic)
         if self.state != ProtocolState.CONNECTED:
             raise MQTTError(
                 f"unsubscribe() requires CONNECTED state, was {self.state}",
@@ -1090,19 +1024,19 @@ class MQTTClient:
         queue is empty.  Transient FAILED states keep the generator
         suspended: self-heal may resume the stream.
 
-        The queue is bounded by ``max_inbound_queue_size``
-        (drop-oldest when full): a consumer that falls behind silently
-        loses the oldest queued messages rather than growing the heap.
-        This is the receive-stream flavor for single-subscription
-        consumers; multi-topic fan-out stays on the callbacks — pick
-        one surface per client, not both.
+        The queue is bounded at 16 messages (drop-oldest when full): a
+        consumer that falls behind silently loses the oldest queued
+        messages rather than growing the heap.  This is the
+        receive-stream flavor for single-subscription consumers;
+        multi-topic fan-out stays on the callbacks — pick one surface
+        per client, not both.
         """
         if self._inbound_queue is None:
             # 2-arg deque (no overflow-check flag) drops the oldest item
             # on append-when-full on every runtime — CPython via maxlen,
             # MicroPython / CircuitPython via the default flags=0.  (The
             # TX queue raises instead, for backpressure.)
-            self._inbound_queue = deque((), self._max_inbound_queue_size)
+            self._inbound_queue = deque((), _MAX_INBOUND_QUEUE_SIZE)
         while True:
             if self._inbound_queue:
                 return self._inbound_queue.popleft()
@@ -1180,11 +1114,16 @@ class MQTTClient:
         bytes; the write bit while outbound bytes are queued (or a
         connect phase needs writability).
 
-        Live MQTT connections (``CONNECTING`` / ``CONNECTED``) always
-        want read — brokers send CONNACK / SUBACK / PUBACK / PINGRESP /
-        inbound PUBLISH at any time.  ``AWAITING_TRANSPORT`` forwards to
-        the connector (only its TLS-handshake phase wants read; its
-        TCP-connect phase wants write).
+        Live MQTT connections (``CONNECTING`` / ``CONNECTED``) want
+        read — brokers send CONNACK / SUBACK / PUBACK / PINGRESP /
+        inbound PUBLISH at any time — except while the recv is
+        suppressed for outbound backpressure (see
+        :meth:`_recv_suppressed`): a suppressed tick skips its recv,
+        so asking to be woken for readability would just spin the
+        runner against bytes this client refuses to read.
+        ``AWAITING_TRANSPORT`` forwards to the connector (only its
+        TLS-handshake phase wants read; its TCP-connect phase wants
+        write).
 
         A partial send (an EAGAIN mid-packet) has no queue entry but
         still needs writability: without this the runner never registers
@@ -1197,7 +1136,10 @@ class MQTTClient:
             connector_interest = self._connector.io_interest(now_ms)
             return (connector_interest & _IO_READ) | (connector_interest & _IO_WRITE)
         interest = 0
-        if self.state in (ProtocolState.CONNECTING, ProtocolState.CONNECTED):
+        if (
+            self.state in (ProtocolState.CONNECTING, ProtocolState.CONNECTED)
+            and not self._recv_suppressed()
+        ):
             interest |= _IO_READ
         if self.state not in (ProtocolState.DISCONNECTED, ProtocolState.FAILED) and (
             len(self._tx_queue) > 0 or self._partial_send is not None
@@ -1300,10 +1242,11 @@ class MQTTClient:
         Checks ack deadlines + keepalive timer first (so a wedged recv
         can't block timeout detection), then pulls inbound bytes into
         the decoder and processes any complete packets (PUBACKs free
-        in-flight slots and inbound QoS-1 publishes append a PUBACK
-        to the queue), then drains the TX queue (sends the DUP
-        retransmits and PINGREQ queued by the checks above, the PUBACK
-        queued by the read, and any application packets enqueued
+        in-flight slots and inbound QoS-1 publishes coalesce their
+        PUBACKs into one front-of-queue batch), then drains the TX
+        queue (flushes the PUBACK batch outside the per-tick send
+        budget, then sends one packet — a DUP retransmit or PINGREQ
+        queued by the checks above, or an application packet enqueued
         between ticks).
 
         When the client is in ``FAILED`` and a ``transport_factory`` is
@@ -1366,10 +1309,10 @@ class MQTTClient:
         try:
             # Order: timeouts first so a wedged recv can't block deadline
             # detection.  Then read (PUBACKs free in-flight slots and
-            # PUBACK-for-inbound is appended).  Then drain (sends the DUP
-            # retransmits and PINGREQ queued by the checks above, the
-            # PUBACK queued by the read, and any application packets
-            # enqueued between ticks).
+            # the tick's PUBACK-for-inbound batch is queued).  Then drain
+            # (flushes the PUBACK batch budget-free, then sends one
+            # packet: a DUP retransmit or PINGREQ queued by the checks
+            # above, or an application packet enqueued between ticks).
             self._check_deadlines(now_ms)
             self._check_keepalive(now_ms)
             self._read_inbound(now_ms)
@@ -1531,16 +1474,23 @@ class MQTTClient:
     # ------------------------------------------------------------------
 
     def _drain_tx_queue(self):
-        """Send at most one packet (or resume one partial send) this tick.
+        """Send one queue packet this tick, plus any owed PUBACK batch.
 
-        One ``send`` per tick keeps the tick short so other runner-
-        registered services (LED, buttons, LCD) get CPU time between
-        MQTT sends.  QoS-0 callback markers are not I/O and fire
-        immediately as they reach the head of the queue, so a burst
-        of pure-callback markers doesn't waste ticks; the loop returns
-        as soon as it sends one real packet or hits EAGAIN.
+        One user/protocol packet ``send`` per tick keeps the tick short
+        so other runner-registered services (LED, buttons, LCD) get CPU
+        time between MQTT sends.  A coalesced PUBACK batch at the head
+        of the queue (queued by ``_read_inbound``; the only outbound
+        bytes whose first byte is the PUBACK type) is flushed WITHOUT
+        consuming that budget: the acks a tick's reads incurred leave
+        in the same tick, so the ack rate tracks the inbound dispatch
+        rate and a sustained QoS-1 stream can't starve keepalive
+        PINGREQs or user publishes out of the send slot.  At most two
+        sends per tick — the batch, then one packet.  QoS-0 callback
+        markers are not I/O and fire immediately as they reach the
+        head of the queue.
 
-        Each item is either ``bytes`` (a packet) or a
+        Each item is either ``bytes`` (a packet, possibly several
+        PUBACKs concatenated) or a
         ``("__qos0_callback__", callback, topic, payload)`` tuple
         (a deferred QoS 0 on_publish hook).
         """
@@ -1559,37 +1509,44 @@ class MQTTClient:
             self._update_send_deadline(sent)
             return  # One I/O attempt per tick.
 
-        # Drain leading QoS 0 callback markers (no I/O) up to the next
-        # real packet.  These fire on dequeue and don't consume the
-        # one-send-per-tick budget.
-        self._drain_callback_markers()
-
-        # Send at most one real packet.
-        if not self._tx_queue:
-            self._update_send_deadline(0)
-            return
-        packet = self._tx_queue[0]
-        sent = self._send_raw(packet)
-        if sent <= 0:  # pragma: no cover - non-blocking-EAGAIN backpressure path
-            self._update_send_deadline(0)
-            return  # Socket would block, wait for next tick.
-        if sent < len(packet):  # pragma: no cover - rare partial-send path
-            # Cache a memoryview so the resume path slices ``view[offset:]``
-            # zero-copy instead of copying the unsent tail each tick (the
-            # WS-2 cached-view shape).  packet is immutable ``bytes``, so
-            # the view is safe to hold across ticks.
-            self._partial_send = (memoryview(packet), sent)
+        while True:
+            # Drain leading QoS 0 callback markers (no I/O) up to the
+            # next real packet.  These fire on dequeue and don't consume
+            # the per-tick send budget.
+            self._drain_callback_markers()
+            if not self._tx_queue:
+                self._update_send_deadline(0)
+                return
+            packet = self._tx_queue[0]
+            is_puback_batch = packet[0] == PACKET_PUBACK
+            sent = self._send_raw(packet)
+            if sent <= 0:  # pragma: no cover - non-blocking-EAGAIN backpressure path
+                self._update_send_deadline(0)
+                return  # Socket would block, wait for next tick.
+            if sent < len(packet):  # pragma: no cover - rare partial-send path
+                # Cache a memoryview so the resume path slices ``view[offset:]``
+                # zero-copy instead of copying the unsent tail each tick (the
+                # WS-2 cached-view shape).  packet is immutable ``bytes``, so
+                # the view is safe to hold across ticks.
+                self._partial_send = (memoryview(packet), sent)
+                self._tx_queue.popleft()
+                if is_puback_batch:
+                    # The unsent tail still owes acks; ``_partial_send``
+                    # keeps the recv suppressed until it lands.
+                    self._puback_batch_queued = False
+                self._update_send_deadline(sent)
+                return
             self._tx_queue.popleft()
             self._update_send_deadline(sent)
+            if is_puback_batch:
+                self._puback_batch_queued = False
+                continue  # Ack flush done; the packet budget is unspent.
+            # Drain trailing QoS 0 callback markers so the on_publish
+            # hook for the just-sent QoS 0 PUBLISH fires this tick
+            # instead of waiting for the next one.  Wire-ordering
+            # invariant intact: markers carry no I/O.
+            self._drain_callback_markers()
             return
-        self._tx_queue.popleft()
-
-        # Drain trailing QoS 0 callback markers so the on_publish hook
-        # for the just-sent QoS 0 PUBLISH fires this tick instead of
-        # waiting for the next one.  Wire-ordering invariant intact:
-        # markers carry no I/O.
-        self._drain_callback_markers()
-        self._update_send_deadline(sent)
 
     def _update_send_deadline(self, bytes_sent):
         """Maintain ``_send_deadline_ticks`` after a drain step.
@@ -1690,8 +1647,30 @@ class MQTTClient:
     # Internal: RX path
     # ------------------------------------------------------------------
 
+    def _recv_suppressed(self):
+        """Whether this tick's recv is skipped for outbound backpressure.
+
+        True while a coalesced PUBACK batch is still queued unsent, or
+        a partial send is pending — both mean the socket isn't taking
+        our bytes as fast as the broker is producing theirs.  Reading
+        on regardless would grow the ack backlog without bound; leaving
+        the bytes unread in the kernel buffer instead closes the TCP
+        receive window, so the broker throttles at its end and OUR
+        memory stays bounded.  Deadline checks run before the read in
+        ``handle``, so suppression never defers fault detection, and
+        the send timeout bounds how long a wedged socket can hold the
+        suppression.
+        """
+        return self._puback_batch_queued or self._partial_send is not None
+
     def _read_inbound(self, now_ms):
         """Pull at most one chunk off the socket and dispatch buffered packets.
+
+        Skipped entirely while :meth:`_recv_suppressed` — the previous
+        tick's PUBACK batch hasn't reached the wire yet, so inbound
+        dispatch pauses rather than piling up acks (which also keeps
+        cross-tick PUBACKs in receipt order: a second batch can never
+        queue in front of an unsent first).
 
         ONE ``recv_into`` per tick (the syscall is the expensive part
         and the one that needs to yield back to the runner); ALL
@@ -1700,9 +1679,12 @@ class MQTTClient:
         without a wake event the next tick may not fire until the
         keepalive 30 s away, so leaving buffered packets undispatched
         would stall inbound delivery).  The recv is capped at
-        ``recv_budget_per_tick`` so an oversized-tier rolling drain of a
-        multi-KB PUBLISH doesn't draw the whole payload in one syscall.
+        ``recv_budget_per_tick``, which thereby also bounds how many
+        packets one tick can dispatch and how large a PUBACK batch it
+        can owe.
         """
+        if self._recv_suppressed():
+            return
         buffer_view = self._decoder.fill_buffer()
         capacity = self._decoder.fill_capacity()
         if capacity > self._recv_budget_per_tick:
@@ -1726,9 +1708,9 @@ class MQTTClient:
                 self._decoder.advance(got)
 
         # Collect PUBACKs for this tick's inbound QoS-1 publishes and
-        # flush them once after dispatch, so they reach the wire in
-        # receipt order (MQTT-4.6.0-2) rather than reversed by
-        # per-packet appendleft.  Reuse the instance list (cleared here)
+        # flush them once after dispatch as a single coalesced batch,
+        # so they reach the wire in receipt order (MQTT-4.6.0-2).
+        # Reuse the instance list (cleared here)
         # instead of a fresh literal every tick; an early return below
         # (disconnect mid-dispatch) leaves items for the next tick's
         # clear to drop, matching the pre-reuse drop-on-return behavior.
@@ -1749,22 +1731,31 @@ class MQTTClient:
             # CONNECTED, so stop dispatching and don't re-queue anything.
             if self.state != ProtocolState.CONNECTED:
                 return
-        # appendleft in reverse so the earliest-received PUBACK sits
-        # first on the wire, ahead of pending user packets.  A queue
-        # already at the hard cap faults instead of dropping: a lost
-        # PUBACK (or a packet evicted to make room for one) silently
-        # corrupts the wire stream, while a FAILED transition lets
-        # self-heal rebuild cleanly — the broker redelivers whatever
-        # was never acked.  Interim guard until inbound dispatch is
-        # rate-converged with the one-send-per-tick drain.
-        for encoded in reversed(pending_pubacks):
-            if not self._enqueue_internal_tx(encoded, front=True):
+        # Coalesce the tick's PUBACKs (already in receipt order) into
+        # ONE front-of-queue entry: the drain flushes it in a single
+        # send that doesn't consume the tick's packet budget, so the
+        # ack rate tracks the dispatch rate instead of falling behind
+        # it at one PUBACK per tick.  A queue already at the hard cap
+        # still faults instead of dropping — a lost PUBACK (or a packet
+        # evicted to make room for one) silently corrupts the wire
+        # stream, while a FAILED transition lets self-heal rebuild
+        # cleanly and the broker redeliver whatever was never acked.
+        # With batching + recv suppression that backstop is only
+        # reachable when retransmits or replays have already consumed
+        # the whole protocol headroom.
+        if pending_pubacks:
+            if len(pending_pubacks) == 1:
+                batch = pending_pubacks[0]
+            else:
+                batch = b"".join(pending_pubacks)
+            if not self._enqueue_internal_tx(batch, front=True):
                 raise MQTTError(
                     f"PUBACK backlog overflowed the tx queue hard cap "
-                    f"({self._tx_queue_hard_cap}): inbound QoS-1 rate "
-                    "exceeds the per-tick send drain; reconnecting "
-                    "rather than dropping protocol packets",
+                    f"({self._tx_queue_hard_cap}): protocol headroom "
+                    "exhausted; reconnecting rather than dropping "
+                    "protocol packets",
                 )
+            self._puback_batch_queued = True
         # Drop the just-enqueued references promptly; the next tick's
         # clear covers the early-return path.
         pending_pubacks.clear()

@@ -7,6 +7,7 @@ runner would: resume the generator, tick the client to parse + enqueue,
 resume again.
 """
 
+import chumicro_mqtt.client as mqtt_client_module
 from chumicro_mqtt import InboundPublish, ProtocolState
 from chumicro_mqtt.client import _INBOUND_WAIT
 from chumicro_mqtt.testing import (
@@ -57,13 +58,21 @@ def test_first_use_flips_delivery_from_callbacks_to_queue():
 def test_queue_drops_oldest_when_full():
     sock = FakeSocket()
     ticks = FakeTicks()
-    client = _connected_client(sock, ticks, max_inbound_queue_size=2)
+    client = _connected_client(sock, ticks)
 
-    gen = client.next_message()
-    gen.send(None)
-    for sequence in range(3):
-        sock.enqueue_recv(canned_publish_bytes("demo/cmd", bytes((48 + sequence,))))
-        drive(client, ticks)
+    # The inbound-queue bound is a module constant (never consumer-tuned);
+    # shrink it for the test so the drop-oldest behavior is reachable in
+    # three messages, and restore it for the co-resident tests.
+    original_bound = mqtt_client_module._MAX_INBOUND_QUEUE_SIZE
+    mqtt_client_module._MAX_INBOUND_QUEUE_SIZE = 2
+    try:
+        gen = client.next_message()
+        gen.send(None)
+        for sequence in range(3):
+            sock.enqueue_recv(canned_publish_bytes("demo/cmd", bytes((48 + sequence,))))
+            drive(client, ticks)
+    finally:
+        mqtt_client_module._MAX_INBOUND_QUEUE_SIZE = original_bound
 
     received = []
     for _ in range(2):
