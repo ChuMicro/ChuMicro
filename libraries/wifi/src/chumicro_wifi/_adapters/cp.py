@@ -96,7 +96,19 @@ class CpWifiAdapter(WifiAdapter):
         self.radio.stop_station()
 
     def is_linked(self):
-        """``True`` when the substrate reports an active association."""
+        """``True`` when ``wifi.radio.connected`` reports an active association.
+
+        Link-loss detection here is laggy, not instant.  ``connected``
+        tracks the wifi driver's association flag, which flips only when
+        the driver raises its disconnect event — a beacon-miss /
+        inactivity timeout that runs seconds after an AP silently
+        vanishes (powered off, carried out of range).  So a link that
+        just dropped can keep reading ``True`` for a few seconds; a
+        dependent's socket TX failing is frequently the earlier signal.
+        ``WifiService`` polls this every ``check()`` while CONNECTED, so
+        the drop transitions to RECONNECTING as soon as the driver
+        admits it.
+        """
         return bool(self.radio.connected)
 
     def ip(self):
