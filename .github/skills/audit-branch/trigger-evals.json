@@ -3,7 +3,7 @@
   "purpose": "Routing evals for the description + when_to_use frontmatter. Half should route here; half are near-misses that belong to a sibling skill or a built-in. Re-run after any description/when_to_use edit or when a sibling skill's scope moves closer to change-set review.",
   "evals": [
     {
-      "query": "audit my branch before i merge — i changed chumicro_sockets/src/chumicro_sockets/connector.py and i'm worried i broke the callers",
+      "query": "audit my branch before i merge \u2014 i changed chumicro_sockets/src/chumicro_sockets/connector.py and i'm worried i broke the callers",
       "should_trigger": true
     },
     {
@@ -11,7 +11,7 @@
       "should_trigger": true
     },
     {
-      "query": "pressure-test my staged changes — trace the usages of the stuff i touched and check the integration before i commit",
+      "query": "pressure-test my staged changes \u2014 trace the usages of the stuff i touched and check the integration before i commit",
       "should_trigger": true
     },
     {
@@ -40,8 +40,7 @@
     },
     {
       "query": "rewrite the docstrings in the files i just changed, they're stale",
-      "should_trigger": false,
-      "expected_route": "regen-comments"
+      "should_trigger": false
     },
     {
       "query": "security review of everything committed since origin/main before I push",

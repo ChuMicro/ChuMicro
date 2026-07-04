@@ -15,7 +15,7 @@
       "should_trigger": true
     },
     {
-      "query": "pressure-test what I changed since origin/main — find the traps and give me numbered fixes I can apply",
+      "query": "pressure-test what I changed since origin/main \u2014 find the traps and give me numbered fixes I can apply",
       "should_trigger": false,
       "expected_route": "audit-branch"
     },
@@ -31,8 +31,7 @@
     },
     {
       "query": "rewrite heartbeat.py's docstrings from the code, the current ones are stale",
-      "should_trigger": false,
-      "expected_route": "regen-comments"
+      "should_trigger": false
     },
     {
       "query": "how much RAM does chumicro_msgpack pull at import on the pico, audit the footprint",

@@ -1,5 +1,9 @@
 # Workstream: deferred clean-room and audit benches
 
+> **Note (2026-07-04):** the regen-comments round-35 variance item (bench #1 below) now lives in the
+> extraction repo `regen-voice-tools` (`plans/workstreams/regen-comments-variance-bench.md`); see
+> `regen-voice-extraction.md`. Benches #2 and #3 stay here. This file was copied to that repo too.
+
 Status: **parked.**  Three bench runs, each deferred 2026-06-12 on the same gate: token spend, held for
 a session where the user approves the cost. They are distinct validations grouped here only by that
 shared gate — un-defer any one independently when its spend is approved.
@@ -9,7 +13,8 @@ shared gate — un-defer any one independently when its spend is approved.
 ### 1. regen-comments round-35 prompt-package variance
 
 Variance-aware bench of the round-35 prompt package: samples, lean prompts, mode shapes, watcher recall.
-Method and detail live in [`regen-comments-variance-bench.md`](regen-comments-variance-bench.md).
+Method and detail moved to the extraction repo `regen-voice-tools`
+(`plans/workstreams/regen-comments-variance-bench.md`).
 
 ### 2. audit-code + audit-branch register-sample injection (n≥5)
 

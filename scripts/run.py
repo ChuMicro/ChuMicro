@@ -3668,20 +3668,6 @@ def _build_parser() -> argparse.ArgumentParser:
         "--base", default="origin/main",
         help="git ref to diff against (default: origin/main)",
     )
-    strip_comments_parser = subparsers.add_parser(
-        "strip-comments",
-        help="strip docstrings and non-lint comments from Python source (used by /regen-comments)",
-    )
-    strip_comments_parser.add_argument(
-        "src", help="source file or directory tree",
-    )
-    strip_comments_parser.add_argument(
-        "dst", help="output file (when src is a file) or directory",
-    )
-    strip_comments_parser.add_argument(
-        "--quiet", action="store_true",
-        help="suppress per-file progress output",
-    )
     check_api_parser = subparsers.add_parser(
         "check-api", help="check API breakages against last release tag",
     )
@@ -4108,13 +4094,6 @@ def main(argv: list[str]) -> int:
             args.circuitpython_binary,
             update_baseline=args.update_baseline,
         )
-
-    if args.task == "strip-comments":
-        from strip_comments import main as strip_comments_main
-        argv: list[str] = [args.src, args.dst]
-        if args.quiet:
-            argv.append("--quiet")
-        return strip_comments_main(argv)
 
     # --- no-arg tasks ---
     no_arg: dict[str, Callable[[], int]] = {
