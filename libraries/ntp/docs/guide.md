@@ -100,6 +100,8 @@ __chumicro_skip_factories__ = ("sockets_factory",)
 
 Family form (the bare stem) or exact path (`"chumicro_ntp.sockets_factory"`).  An unmatched entry fails the deploy with a typo message rather than silently shipping the default.  Calling `NTPClient.from_config(...)` when `chumicro_ntp.sockets_factory` is missing — either skipped at deploy time or not installed by `circup` / `mip` — raises `RuntimeError` naming the bypass kwargs.
 
+For the full single-library adoption recipe — your transport, your `ticks=`, the runner-less drive loop, and host tests with no board — see [Standalone integration](https://github.com/ChuMicro/ChuMicro/blob/main/docs/contributing/standalone-integration.md).
+
 ## Runner pattern
 
 `NTPClient` already implements the runner contract — register the

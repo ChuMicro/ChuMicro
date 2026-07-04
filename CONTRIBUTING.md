@@ -49,6 +49,7 @@ Browse [open issues](https://github.com/ChuMicro/ChuMicro/issues) and [discussio
 | **Understand the code style** | [Style Guide](docs/contributing/style-guide.md) |
 | **Open a pull request** | [Creating a Pull Request](docs/contributing/pull-requests.md) |
 | **Add a new library** | [Adding a New Library](docs/contributing/new-library.md) |
+| **Adopt one library into an existing codebase** | [Standalone integration](docs/contributing/standalone-integration.md) — bring-your-own transport + ticks, the zero-sibling import closure, host tests with no board |
 | **Slim a deploy / skip a library's default factory submodule** | [Slimming Your Deploy](docs/contributing/slimming-your-deploy.md) — entrypoint factory-skip constant + library-author conventions |
 | **Add a host-only workbench tool** | [Adding a Workbench Package](docs/contributing/workbench.md) |
 | **Understand releases** | [Releases and Promotion](docs/contributing/releases.md) |
