@@ -148,6 +148,8 @@ __chumicro_skip_factories__ = ("sockets_factory",)
 
 The constant accepts a family form (the bare stem, matches every `chumicro_*.sockets_factory`) or an exact dotted path (`chumicro_requests.sockets_factory`).  An unmatched entry fails the deploy with a typo message rather than silently shipping the default.  Calling `HttpClient.from_config(...)` when `chumicro_requests.sockets_factory` is missing — either skipped at deploy time or not installed by `circup` / `mip` — raises `RuntimeError` naming the bypass kwarg.
 
+For the full single-library adoption recipe — your transport, your `ticks=`, the runner-less drive loop, and host tests with no board — see [Standalone integration](https://github.com/ChuMicro/ChuMicro/blob/main/docs/contributing/standalone-integration.md).
+
 ## Runner pattern
 
 `HttpClient.check(now_ms) -> bool` and `handle(now_ms) -> None` satisfy the
