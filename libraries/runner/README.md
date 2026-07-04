@@ -101,6 +101,8 @@ while True:
     runner.wait(now_ms)
 ```
 
+Both loops isolate a handler that raises — the fault is counted in `handler_errors` and the other services keep ticking — but neither says a word when it happens.  A real app should pass `on_handler_error(handle, exception)` to `Runner(...)` (see the API table below) so a fire-and-forget service that dies surfaces a line instead of stalling in silence.
+
 ## What's included
 
 ### Core

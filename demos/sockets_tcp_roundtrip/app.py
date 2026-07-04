@@ -41,7 +41,7 @@ def on_wifi_state(_old, new):
 
 wifi.on_state_change(on_wifi_state)
 
-runner = Runner()
+runner = Runner(on_handler_error=lambda entry, error: print("SERVICE_FAULT", entry.service, repr(error)))
 runner.add(wifi)
 
 # Drive the runner until wifi is up.
