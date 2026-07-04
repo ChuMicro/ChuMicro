@@ -1,7 +1,7 @@
 """Real-network acceptance for chumicro-websockets — single-device loopback.
 
 End-to-end: bring wifi up on the device, start a :class:`WebSocketServer`
-on a real :func:`chumicro_sockets.tcp_listening_socket`, connect a
+on a real :func:`chumicro_sockets.listener`, connect a
 :class:`WebSocketClient` to it via the device's own LAN IP, drive
 both runners through bidirectional traffic and the close handshake.
 
@@ -21,7 +21,7 @@ the frame I/O, and the close handshake all run concurrently
 against each other on one device.
 
 HTTP only (``ws://``) — ``wss://`` server adds the
-:func:`chumicro_sockets.tls_listening_socket` constraints documented
+``chumicro_sockets.listener(tls=True)`` constraints documented
 in :mod:`chumicro_http_server`'s test_real_serve.py and applies the
 same per-board limits.  Cover ``wss://`` server in a follow-up
 slice once the four-board matrix has been re-verified for TLS-server
@@ -39,7 +39,8 @@ import sys
 import time
 
 from chumicro_config import config
-from chumicro_sockets import tcp_client_connector, tcp_listening_socket
+from chumicro_sockets import connector
+from chumicro_sockets import listener as make_listener
 from chumicro_test_harness import skip
 from chumicro_timing import ticks_ms as _ticks_ms
 from chumicro_websockets import WebSocketClient, WebSocketServer, WebSocketState
@@ -85,12 +86,12 @@ def _is_pi_pico_w_rp2() -> bool:
 
     * **MicroPython:** the rp2 lwIP stack doesn't support a chip
       connecting to its own listening socket via the wifi IP — the
-      ``tcp_client_socket`` raises ``OSError(103)`` (ECONNABORTED).
+      a plain connect raises ``OSError(103)`` (ECONNABORTED).
       This is independent of chumicro-websockets; chumicro-http-server's
       single-device loopback hits the same limit.
     * **CircuitPython:** the device tends to wedge USB-side under
       load (related cluster of CP-rp2 issues — the same one
-      `chumicro_sockets.tls_listening_socket` refuses up-front
+      `chumicro_sockets.listener(tls=True)` refuses up-front
       with `UnsupportedSSLConfigError`), which knocks the test
       runner's serial port offline mid-run.
 
@@ -135,7 +136,7 @@ def test_real_websocket_loopback_round_trip() -> None:
             connection.send_text(f"echo: {text}"),
         )
 
-    listener = tcp_listening_socket(
+    listener = make_listener(
         host="0.0.0.0",
         port=_LISTEN_PORT,
         radio=wifi.adapter.radio,
@@ -157,9 +158,9 @@ def test_real_websocket_loopback_round_trip() -> None:
     client_open_ticks = []
 
     def make_connector(host, port, use_tls):  # noqa: ARG001 - protocol
-        return tcp_client_connector(host, port, radio=wifi.adapter.radio)
+        return connector(host, port, radio=wifi.adapter.radio)
 
-    client = WebSocketClient(connector_factory=make_connector)
+    client = WebSocketClient(transport_factory=make_connector)
     client.on_open = lambda: client_open_ticks.append(_ticks_ms())
     client.on_text = lambda text: client_observed_text.append(text)
 

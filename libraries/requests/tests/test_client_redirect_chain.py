@@ -43,7 +43,7 @@ class TestHttpClientRedirectChain:
         ], final_body=b"reached")
         ticks = FakeTicks()
         client = HttpClient(
-            connector_factory=_factory_for_socket_sequence(sockets),
+            transport_factory=_factory_for_socket_sequence(sockets),
             ticks=ticks,
         )
         handle = client.get("http://example.test/orig")  # default budget = 5
@@ -60,7 +60,7 @@ class TestHttpClientRedirectChain:
         ])
         ticks = FakeTicks()
         client = HttpClient(
-            connector_factory=_factory_for_socket_sequence(sockets),
+            transport_factory=_factory_for_socket_sequence(sockets),
             ticks=ticks,
         )
         handle = client.get("http://example.test/orig", max_redirects=5)

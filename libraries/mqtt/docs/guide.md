@@ -9,14 +9,17 @@ QoS 2 raises `UnsupportedQoSError`.  Last-will, retained messages, pattern-route
 ## Getting started
 
 ```python
-from chumicro_sockets import tcp_client_socket
 from chumicro_timing import ticks_ms
 from chumicro_mqtt import MQTTClient
 
-# On CircuitPython pass `radio=wifi.radio` here; on MicroPython / CPython the kwarg is ignored.
-sock = tcp_client_socket("broker.example.com", 1883, radio=None)
-sock.setblocking(False)                     # MP defaults to blocking — enforce non-blocking
-client = MQTTClient(sock, client_id="my-thing", keep_alive_seconds=60)
+# The transport factory dials the broker for you (non-blocking, one
+# connect phase per tick) and rebuilds the socket after a wifi drop.
+# On CircuitPython pass `radio=wifi.radio` to `from_config`; on
+# MicroPython / CPython the kwarg is ignored.
+client = MQTTClient.from_config(
+    {"mqtt.broker.host": "broker.example.com", "mqtt.broker.port": 1883},
+    radio=None,
+)
 
 client.on_message = lambda topic, payload: print(topic, payload)
 
@@ -128,21 +131,20 @@ client.set_will("status/online", b"offline", qos=1, retain=True)
 
 ## TLS connections
 
-Build the socket with `tls_client_socket` instead of `tcp_client_socket`:
+Pass an `ssl_context=` to `from_config` and the auto-built transport
+factory dials with `tls=True`:
 
 ```python
-from chumicro_sockets import tls_client_socket, ssl_context_with_ca
+from chumicro_sockets import ssl_context_with_ca
 
 with open("/ca.pem", "rb") as handle:
     ca_pem = handle.read()
 ssl_context = ssl_context_with_ca(ca_pem)         # CERT_REQUIRED by default
-sock = tls_client_socket(
-    "broker.example.com", 8883,
+client = MQTTClient.from_config(
+    {"mqtt.broker.host": "broker.example.com", "mqtt.broker.port": 8883},
     ssl_context=ssl_context,
     radio=wifi.radio,                              # CP only
 )
-sock.setblocking(False)
-client = MQTTClient(sock, client_id="my-thing")
 ```
 
 A few platform realities:
@@ -154,15 +156,15 @@ A few platform realities:
 
 ## Wifi-drop self-heal
 
-Pass a `connector_factory` callable instead of a bare socket and the client will rebuild its socket automatically after a wifi-drop / socket-death. The TCP-connect phase advances one tick at a time, but DNS and the TLS handshake still block the reactor for their duration (see the TLS-connections platform realities above):
+Pass a `transport_factory` callable instead of a bare socket and the client will rebuild its socket automatically after a wifi-drop / socket-death. The TCP-connect phase advances one tick at a time, but DNS and the TLS handshake still block the reactor for their duration (see the TLS-connections platform realities above):
 
 ```python
-from chumicro_sockets import tcp_client_connector
+from chumicro_sockets import connector
 
 def make_connector():
-    return tcp_client_connector("broker.example.com", 1883, radio=wifi.radio)
+    return connector("broker.example.com", 1883, radio=wifi.radio)
 
-client = MQTTClient(connector_factory=make_connector, client_id="my-thing")
+client = MQTTClient(transport_factory=make_connector, client_id="my-thing")
 client.connect()
 # … socket dies mid-session …
 # Next handle() after FAILED enters AWAITING_TRANSPORT; subsequent ticks
@@ -186,7 +188,7 @@ The factory is also the recommended way to wire up the **initial** connect: the 
 | `close() -> None` | Releases the connection. |
 | `setblocking(flag) -> None` | Best-effort.  Absence is tolerated. |
 
-`chumicro_sockets.tcp_client_socket` (and `tls_client_socket`) is one valid producer.  Stdlib `socket.socket` after `setblocking(False)` is another.  An upstream-library wrapper or a hand-rolled fake works the same way:
+The socket a `chumicro_sockets.connector` leaves on `.socket` at `ready` is one valid producer.  Stdlib `socket.socket` after `setblocking(False)` is another.  An upstream-library wrapper or a hand-rolled fake works the same way:
 
 ```python
 # Example: stdlib socket on CPython for a test or desktop demo.
@@ -198,7 +200,7 @@ sock.setblocking(False)
 client = MQTTClient(sock, client_id="desktop-demo")
 ```
 
-This pre-built-socket form is the right shape for one-shot scripts or tests where the caller already owns the connect.  The runner-shape (no synchronous network I/O from a tick) only matters when the client lives inside a runner — and there the `connector_factory` form above is what you want.
+This pre-built-socket form is the right shape for one-shot scripts or tests where the caller already owns the connect.  The runner-shape (no synchronous network I/O from a tick) only matters when the client lives inside a runner — and there the `transport_factory` form above is what you want.
 
 The library has no `isinstance` checks against `chumicro_sockets` types — the contract is the four methods above.  Runtime errors surface at first call, not at construction time, so a misshaped object fails on the first `recv_into` / `send` rather than silently misbehaving.
 
@@ -325,7 +327,7 @@ elif client.state == ProtocolState.FAILED:
     log.warning("mqtt failed; reconnecting in 30 s")
 ```
 
-Five states: `DISCONNECTED`, `AWAITING_TRANSPORT`, `CONNECTING`, `CONNECTED`, `FAILED`.  `AWAITING_TRANSPORT` appears only when a `connector_factory` is driving the transport up (DNS / TCP / TLS) before the MQTT CONNECT goes out; a client built with a ready socket skips straight to `CONNECTING`.  `disconnect()` is synchronous (DISCONNECT packet + close), so there is no intermediate "disconnecting" state to observe.
+Five states: `DISCONNECTED`, `AWAITING_TRANSPORT`, `CONNECTING`, `CONNECTED`, `FAILED`.  `AWAITING_TRANSPORT` appears only when a `transport_factory` is driving the transport up (DNS / TCP / TLS) before the MQTT CONNECT goes out; a client built with a ready socket skips straight to `CONNECTING`.  `disconnect()` is synchronous (DISCONNECT packet + close), so there is no intermediate "disconnecting" state to observe.
 
 ## Memory notes
 

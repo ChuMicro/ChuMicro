@@ -16,10 +16,7 @@ import socket
 
 import pytest
 from chumicro_runner import IO_READ, IO_WRITE
-from chumicro_sockets import (
-    tcp_client_connector,
-    tls_client_connector,
-)
+from chumicro_sockets import connector as make_connector
 from chumicro_sockets._connector import (
     STATE_AWAITING_DNS,
     STATE_AWAITING_TCP,
@@ -69,7 +66,7 @@ def listener():
 class TestCPythonTCPConnector:
     def test_connects_to_loopback(self, listener) -> None:
         host, port = listener
-        connector = tcp_client_connector(host, port)
+        connector = make_connector(host, port)
         assert connector.state == STATE_AWAITING_DNS
         _drive(connector)
         assert connector.state == STATE_READY
@@ -82,7 +79,7 @@ class TestCPythonTCPConnector:
         # First tick should resolve DNS and land in awaiting_tcp.
         # Subsequent ticks complete the TCP connect.
         host, port = listener
-        connector = tcp_client_connector(host, port)
+        connector = make_connector(host, port)
         connector.tick(0)
         assert connector.state == STATE_AWAITING_TCP
         # io_interest is IO_WRITE only during awaiting_tcp.
@@ -93,7 +90,7 @@ class TestCPythonTCPConnector:
 
     def test_io_socket_tracks_socket_after_ready(self, listener) -> None:
         host, port = listener
-        connector = tcp_client_connector(host, port)
+        connector = make_connector(host, port)
         _drive(connector)
         # io_socket is a thin delegate of self.socket throughout the
         # lifecycle — including after ready — so consumers can keep
@@ -107,7 +104,7 @@ class TestCPythonTCPConnector:
 
     def test_check_returns_false_when_ready(self, listener) -> None:
         host, port = listener
-        connector = tcp_client_connector(host, port)
+        connector = make_connector(host, port)
         _drive(connector)
         assert connector.check(0) is False
         connector.socket.close()
@@ -116,7 +113,7 @@ class TestCPythonTCPConnector:
         # Connector itself does not time out; consumers wrap with
         # an outer deadline.
         host, port = listener
-        connector = tcp_client_connector(host, port)
+        connector = make_connector(host, port)
         assert connector.next_deadline(0) is None
         _drive(connector)
         assert connector.next_deadline(0) is None
@@ -124,21 +121,21 @@ class TestCPythonTCPConnector:
 
     def test_dns_failure_lands_in_failed(self) -> None:
         # RFC2606 invalid TLD; never resolves.
-        connector = tcp_client_connector("no-such-host.invalid", 1)
+        connector = make_connector("no-such-host.invalid", 1)
         _drive(connector)
         assert connector.state == STATE_FAILED
         assert connector.last_error is not None
 
     def test_connect_refused_lands_in_failed(self) -> None:
         # Loopback with no listener — kernel returns ECONNREFUSED.
-        connector = tcp_client_connector("127.0.0.1", 1)
+        connector = make_connector("127.0.0.1", 1)
         _drive(connector)
         assert connector.state == STATE_FAILED
         assert connector.last_error is not None
 
     def test_cancel_transitions_to_failed(self, listener) -> None:
         host, port = listener
-        connector = tcp_client_connector(host, port)
+        connector = make_connector(host, port)
         connector.tick(0)  # awaiting_dns -> awaiting_tcp
         connector.cancel()
         assert connector.state == STATE_FAILED
@@ -153,7 +150,7 @@ class TestCPythonTCPConnector:
         # the early-return branch in _CPythonConnector.tick is otherwise
         # only reachable via the consumer-side wrapper.
         host, port = listener
-        connector = tcp_client_connector(host, port)
+        connector = make_connector(host, port)
         _drive(connector)
         assert connector.state == STATE_READY
         ready_socket = connector.socket
@@ -191,5 +188,5 @@ class TestCPythonTLSConnector:
 
     def test_constructs_in_awaiting_dns(self, listener) -> None:
         host, port = listener
-        connector = tls_client_connector(host, port)
+        connector = make_connector(host, port, tls=True)
         assert connector.state == STATE_AWAITING_DNS

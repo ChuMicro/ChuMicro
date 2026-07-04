@@ -129,7 +129,7 @@ class TestRunnerReactorContract:
         poller = FakePoller()
         runner = Runner(ticks=ticks, poller=poller)
         client = HttpClient(
-            connector_factory=make_factory(socket), ticks=ticks,
+            transport_factory=make_factory(socket), ticks=ticks,
         )
         runner.add(client)
 

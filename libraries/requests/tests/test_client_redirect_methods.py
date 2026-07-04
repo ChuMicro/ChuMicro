@@ -35,7 +35,7 @@ class TestHttpClientRedirectMethods:
         ], final_body=b"widget-list")
         ticks = FakeTicks()
         client = HttpClient(
-            connector_factory=_factory_for_socket_sequence(sockets),
+            transport_factory=_factory_for_socket_sequence(sockets),
             ticks=ticks,
         )
         handle = client.get("http://example.test/v1/widgets")
@@ -50,7 +50,7 @@ class TestHttpClientRedirectMethods:
         sockets = self._make_redirect_chain([(302, "/relocated")])
         ticks = FakeTicks()
         client = HttpClient(
-            connector_factory=_factory_for_socket_sequence(sockets),
+            transport_factory=_factory_for_socket_sequence(sockets),
             ticks=ticks,
         )
         handle = client.get("http://example.test/orig")
@@ -65,7 +65,7 @@ class TestHttpClientRedirectMethods:
         sockets = self._make_redirect_chain([(303, "/result")])
         ticks = FakeTicks()
         client = HttpClient(
-            connector_factory=_factory_for_socket_sequence(sockets),
+            transport_factory=_factory_for_socket_sequence(sockets),
             ticks=ticks,
         )
         handle = client.post("http://example.test/submit", body=b"payload")
@@ -82,7 +82,7 @@ class TestHttpClientRedirectMethods:
         sockets = self._make_redirect_chain([(307, "/replay")])
         ticks = FakeTicks()
         client = HttpClient(
-            connector_factory=_factory_for_socket_sequence(sockets),
+            transport_factory=_factory_for_socket_sequence(sockets),
             ticks=ticks,
         )
         handle = client.post("http://example.test/orig", body=b"replay-me")
@@ -97,7 +97,7 @@ class TestHttpClientRedirectMethods:
         sockets = self._make_redirect_chain([(308, "/permanent")])
         ticks = FakeTicks()
         client = HttpClient(
-            connector_factory=_factory_for_socket_sequence(sockets),
+            transport_factory=_factory_for_socket_sequence(sockets),
             ticks=ticks,
         )
         handle = client.post(

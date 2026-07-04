@@ -31,7 +31,7 @@ class TestMultiTickConnect:
             )
 
         client = MQTTClient(
-            connector_factory=factory,
+            transport_factory=factory,
             client_id="multitick",
             ticks=ticks,
         )
@@ -57,7 +57,7 @@ class TestMultiTickConnect:
             )
 
         client = MQTTClient(
-            connector_factory=factory,
+            transport_factory=factory,
             client_id="multitick",
             ticks=ticks,
         )
@@ -81,7 +81,7 @@ class TestMultiTickConnect:
             )
 
         client = MQTTClient(
-            connector_factory=factory,
+            transport_factory=factory,
             client_id="multitick",
             ticks=ticks,
         )
@@ -101,7 +101,7 @@ class TestMultiTickConnect:
             )
 
         client = MQTTClient(
-            connector_factory=factory,
+            transport_factory=factory,
             client_id="multitick",
             ticks=ticks,
         )
@@ -132,7 +132,7 @@ class TestMultiTickConnectYield:
             )
 
         client = MQTTClient(
-            connector_factory=factory,
+            transport_factory=factory,
             client_id="tls-multitick",
             ticks=ticks,
         )
@@ -163,7 +163,7 @@ class TestMultiTickConnectYield:
             )
 
         client = MQTTClient(
-            connector_factory=factory,
+            transport_factory=factory,
             client_id="cancel-test",
             ticks=ticks,
         )
@@ -189,7 +189,7 @@ class TestMultiTickConnectYield:
             )
 
         client = MQTTClient(
-            connector_factory=factory,
+            transport_factory=factory,
             client_id="io-surface",
             ticks=ticks,
         )
@@ -215,7 +215,7 @@ class TestMultiTickConnectYield:
             )
 
         client = MQTTClient(
-            connector_factory=factory,
+            transport_factory=factory,
             client_id="clamp-test",
             ticks=ticks,
         )

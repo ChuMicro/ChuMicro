@@ -32,15 +32,18 @@ if TYPE_CHECKING:  # pragma: no cover — type-only
 
 @pytest.fixture
 def mp_adapter() -> Iterator[types.ModuleType]:
-    """Stub ``socket`` + ``ssl`` and yield a freshly-reloaded MP adapter.
+    """Stub ``socket`` + ``ssl`` + ``select`` and yield a freshly-reloaded MP adapter.
 
-    Captures sent calls into ``adapter._calls`` (we add the attribute
-    on the stub-side socket module) so individual tests can assert
-    against it.  Restores the original modules on teardown.
+    The ``select`` stub's ``poll`` reports every registered socket as
+    immediately POLLOUT-ready, so the MP connector's TCP phase
+    completes on its next tick without touching a real poller (the
+    stub sockets aren't real file descriptors).  Restores the original
+    modules on teardown.
     """
 
     real_socket = sys.modules.get("socket")
     real_ssl = sys.modules.get("ssl")
+    real_select = sys.modules.get("select")
 
     fake_socket = types.ModuleType("socket")
 
@@ -136,8 +139,28 @@ def mp_adapter() -> Iterator[types.ModuleType]:
     fake_ssl._free_wrap_calls = []  # type: ignore[attr-defined]
     fake_ssl._StubContext = _StubContext  # type: ignore[attr-defined]
 
+    fake_select = types.ModuleType("select")
+
+    class _StubPoll:
+        """Reports every registered object as POLLOUT-ready immediately."""
+
+        def __init__(self) -> None:
+            self._registered: list[object] = []
+
+        def register(self, sock: object, _mask: int) -> None:
+            self._registered.append(sock)
+
+        def poll(self, _timeout_ms: int) -> list[tuple[object, int]]:
+            return [(sock, fake_select.POLLOUT) for sock in self._registered]  # type: ignore[attr-defined]
+
+    fake_select.POLLOUT = 4  # type: ignore[attr-defined]
+    fake_select.POLLERR = 8  # type: ignore[attr-defined]
+    fake_select.POLLHUP = 16  # type: ignore[attr-defined]
+    fake_select.poll = _StubPoll  # type: ignore[attr-defined]
+
     sys.modules["socket"] = fake_socket
     sys.modules["ssl"] = fake_ssl
+    sys.modules["select"] = fake_select
     # Drop a cached mp adapter (if any) so the reload picks up our stubs.
     sys.modules.pop("chumicro_sockets._adapters.mp", None)
     mp_module = importlib.import_module("chumicro_sockets._adapters.mp")
@@ -155,12 +178,43 @@ def mp_adapter() -> Iterator[types.ModuleType]:
         sys.modules["ssl"] = real_ssl
     else:  # pragma: no cover — only matters if the test was run before ssl imported
         sys.modules.pop("ssl", None)
+    if real_select is not None:
+        sys.modules["select"] = real_select
+    else:  # pragma: no cover — only matters if the test was run before select imported
+        sys.modules.pop("select", None)
 
 
-class TestConnectTcp:
+def _connect(
+    mp_adapter: types.ModuleType,
+    host: str,
+    port: int,
+    *,
+    tls: bool = False,
+    context: object | None = None,
+) -> object:
+    """Drive ``mp_adapter.connector`` to ``ready``; return the wrapped socket.
+
+    The stubbed ``select.poll`` reports POLLOUT immediately, so the
+    drive completes in at most four ticks (DNS, dial, poll-ready
+    [+ TLS promote]).  Raises AssertionError if the connector fails —
+    the stub substrate never legitimately fails.
+    """
+    mp_connector = mp_adapter.connector(host, port, tls=tls, context=context)
+    for _ in range(6):
+        if mp_connector.state in ("ready", "failed"):
+            break
+        mp_connector.tick(0)
+    assert mp_connector.state == "ready", (
+        f"stub-driven connector ended {mp_connector.state!r} "
+        f"(last_error={mp_connector.last_error!r})"
+    )
+    return mp_connector.socket
+
+
+class TestConnectorTcp:
     def test_connects_via_getaddrinfo(self, mp_adapter: types.ModuleType) -> None:
-        wrapper = mp_adapter.connect_tcp("broker.example.com", 1883)
-        # The factory returns a _MpSocketWrapper around the raw stub.
+        wrapper = _connect(mp_adapter, "broker.example.com", 1883)
+        # The ready connector holds a _MpSocketWrapper around the raw stub.
         underlying = wrapper.sock
         assert underlying.connected_to == ("broker.example.com", 1883)
         assert underlying.family == 2
@@ -177,7 +231,7 @@ class TestConnectTcp:
         ``readinto(buffer, size)`` — zero-copy, no per-receive ``bytes``.
         This test pins the forward in place on every refactor.
         """
-        wrapper = mp_adapter.connect_tcp("broker.example.com", 1883)
+        wrapper = _connect(mp_adapter, "broker.example.com", 1883)
         underlying = wrapper.sock
         underlying.recv_queue.append(b"hello world")
         buffer = bytearray(32)
@@ -188,7 +242,7 @@ class TestConnectTcp:
     def test_recv_into_default_uses_buffer_length(
         self, mp_adapter: types.ModuleType,
     ) -> None:
-        wrapper = mp_adapter.connect_tcp("broker.example.com", 1883)
+        wrapper = _connect(mp_adapter, "broker.example.com", 1883)
         underlying = wrapper.sock
         underlying.recv_queue.append(b"abc")
         buffer = bytearray(4)
@@ -200,7 +254,7 @@ class TestConnectTcp:
         self, mp_adapter: types.ModuleType,
     ) -> None:
         """Empty queue -> readinto returns 0, signalling a clean peer close."""
-        wrapper = mp_adapter.connect_tcp("broker.example.com", 1883)
+        wrapper = _connect(mp_adapter, "broker.example.com", 1883)
         # No queued data + readinto returns 0 by stub default.
         buffer = bytearray(8)
         nbytes_read = wrapper.recv_into(buffer, 8)
@@ -218,7 +272,7 @@ class TestConnectTcp:
         """
         import pytest  # noqa: PLC0415
 
-        wrapper = mp_adapter.connect_tcp("broker.example.com", 1883)
+        wrapper = _connect(mp_adapter, "broker.example.com", 1883)
         underlying = wrapper.sock
         underlying.readinto = lambda *_args: None  # would-block shape
         buffer = bytearray(8)
@@ -230,7 +284,7 @@ class TestConnectTcp:
         self, mp_adapter: types.ModuleType,
     ) -> None:
         """All other protocol methods are direct attribute forwards."""
-        wrapper = mp_adapter.connect_tcp("broker.example.com", 1883)
+        wrapper = _connect(mp_adapter, "broker.example.com", 1883)
         underlying = wrapper.sock
         wrapper.send(b"ping")
         assert bytes(underlying.sent) == b"ping"
@@ -305,7 +359,7 @@ class TestCaBundleLoader:
         assert len(der) > 4000  # 17-root bundle is ~16 KB
 
 
-class TestConnectTls:
+class TestConnectorTls:
     def test_default_uses_cached_default_context(
         self, mp_adapter: types.ModuleType,
     ) -> None:
@@ -318,7 +372,7 @@ class TestConnectTls:
         ``ssl.wrap_socket`` (which left ``verify_mode = CERT_NONE``)
         is no longer called from this path.
         """
-        wrapper = mp_adapter.connect_tls("broker.example.com", 8883)
+        wrapper = _connect(mp_adapter, "broker.example.com", 8883, tls=True)
         cached = mp_adapter._DEFAULT_CONTEXT_CACHE
         assert cached is not None, "default context should be cached"
         assert len(cached.wrapped) == 1
@@ -335,9 +389,9 @@ class TestConnectTls:
         self, mp_adapter: types.ModuleType,
     ) -> None:
         """Two ``context=None`` connections share the same cached SSLContext."""
-        mp_adapter.connect_tls("a.example.com", 8883)
+        _connect(mp_adapter, "a.example.com", 8883, tls=True)
         first_cached = mp_adapter._DEFAULT_CONTEXT_CACHE
-        mp_adapter.connect_tls("b.example.com", 8883)
+        _connect(mp_adapter, "b.example.com", 8883, tls=True)
         second_cached = mp_adapter._DEFAULT_CONTEXT_CACHE
         assert first_cached is second_cached
         # Both connections recorded on the same context.
@@ -349,8 +403,8 @@ class TestConnectTls:
         """A pre-built SSLContext routes through `context.wrap_socket`."""
         stub_ssl = sys.modules["ssl"]
         context = stub_ssl._StubContext()  # type: ignore[attr-defined]
-        wrapper = mp_adapter.connect_tls(
-            "broker.example.com", 8883, context=context,
+        wrapper = _connect(
+            mp_adapter, "broker.example.com", 8883, tls=True, context=context,
         )
         underlying = wrapper.sock
         assert len(context.wrapped) == 1
@@ -372,7 +426,7 @@ class TestSetDefaultCaBundle:
         rebuilds from the new bundle."""
         # First connection — caches a context built from the shipped
         # DER bundle (_ca_bundle.read_der()).
-        mp_adapter.connect_tls("a.example.com", 8883)
+        _connect(mp_adapter, "a.example.com", 8883, tls=True)
         first_cached = mp_adapter._DEFAULT_CONTEXT_CACHE
         assert first_cached is not None
 
@@ -388,7 +442,7 @@ class TestSetDefaultCaBundle:
         assert mp_adapter._DEFAULT_CONTEXT_CACHE is None
 
         # Next default-context call rebuilds.
-        mp_adapter.connect_tls("b.example.com", 8883)
+        _connect(mp_adapter, "b.example.com", 8883, tls=True)
         second_cached = mp_adapter._DEFAULT_CONTEXT_CACHE
         assert second_cached is not None
         assert second_cached is not first_cached
@@ -409,7 +463,7 @@ class TestSetDefaultCaBundle:
         )
         mp_adapter.set_default_ca_bundle(override_pem)
         # Build cache from override.
-        mp_adapter.connect_tls("a.example.com", 8883)
+        _connect(mp_adapter, "a.example.com", 8883, tls=True)
         override_cached = mp_adapter._DEFAULT_CONTEXT_CACHE
         assert override_cached.cadata == b"\xde\xad\xbe\xef"
 
@@ -419,7 +473,7 @@ class TestSetDefaultCaBundle:
         assert mp_adapter._DEFAULT_CONTEXT_CACHE is None
 
         # Next call rebuilds from the packaged DER bundle.
-        mp_adapter.connect_tls("b.example.com", 8883)
+        _connect(mp_adapter, "b.example.com", 8883, tls=True)
         reverted_cached = mp_adapter._DEFAULT_CONTEXT_CACHE
         assert reverted_cached is not override_cached
         # Packaged bundle's DER differs from the test override.

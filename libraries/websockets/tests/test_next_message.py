@@ -34,7 +34,7 @@ def _make_open_client(clock, *, max_inbound_queue_size=16):
         return FakeSocketConnector(actions=["dns_ok", "tcp_ok"], socket=socket)
 
     client = WebSocketClient(
-        connector_factory=factory,
+        transport_factory=factory,
         ticks=clock,
         max_inbound_queue_size=max_inbound_queue_size,
     )

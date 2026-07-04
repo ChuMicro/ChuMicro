@@ -4,26 +4,38 @@ Public API::
 
     from chumicro_sockets import (
         UnsupportedSSLConfigError, # raised when the requested TLS shape isn't supported
-        tcp_client_socket,         # plain-TCP factory
-        tls_client_socket,         # TLS factory
-        tcp_client_connector,      # non-blocking tick-driven TCP connect
-        tls_client_connector,      # non-blocking tick-driven TLS connect
+        connector,                 # non-blocking tick-driven TCP/TLS connect
+        listener,                  # TCP/TLS listening socket
         udp_socket,                # UDP datagram factory (unicast + broadcast)
         ssl_context_with_ca,       # custom-CA helper
     )
 
     from chumicro_sockets.testing import FakeSocket, FakeUDPSocket
 
-Per-runtime adapters live under ``_adapters/``; sibling factories
-(``tcp_client_socket`` / ``tls_client_socket`` / ``udp_socket``)
-pick the right adapter via ``sys.implementation.name`` so user code
-never sees a runtime check.  TLS is an injected ``ssl.SSLContext``
-(not a flag); the path is identical across runtimes — every supported
-board ships on-board ``ssl``.
+Per-runtime adapters live under ``_adapters/``; the public entries
+(``connector`` / ``listener`` / ``udp_socket``) pick the right adapter
+via ``sys.implementation.name`` so user code never sees a runtime
+check.  TLS is a ``tls=`` flag plus an optionally injected
+``ssl.SSLContext`` — ``context=None`` verifies against the runtime's
+default trust store; the path is identical across runtimes (every
+supported board ships on-board ``ssl``).
+
+There is one connect implementation per runtime: the tick-driven
+``SocketConnector`` state machine that ``connector()`` returns.
+Code that wants a connected socket right now (a one-shot script, REPL
+exploration, ``main`` before the runner loop starts) drives the same
+machine to terminal inline::
+
+    conn = connector("example.com", 80, radio=radio)
+    while conn.state not in ("ready", "failed"):
+        conn.tick(0)
+    if conn.state == "failed":
+        raise conn.last_error
+    sock = conn.socket
 
 Substrate for ``chumicro-mqtt``, ``chumicro-requests``,
-``chumicro-http-server`` (TCP/TLS), and ``chumicro-ntp`` (UDP).
-Returned sockets are duck-typed: TCP exposes
+``chumicro-websockets``, ``chumicro-http-server`` (TCP/TLS), and
+``chumicro-ntp`` (UDP).  Returned sockets are duck-typed: TCP exposes
 ``send`` / ``recv_into`` / ``close`` / ``setblocking`` / ``settimeout``;
 UDP exposes ``sendto`` / ``recvfrom_into`` / ``close`` /
 ``setblocking`` / ``settimeout`` / ``getsockname``.  Downstream libs
@@ -37,7 +49,7 @@ import sys
 class UnsupportedSSLConfigError(RuntimeError):
     """Raised when the requested TLS configuration isn't supported on this runtime.
 
-    Two firing sites today: :func:`tls_listening_socket` on CP-rp2
+    Two firing sites today: ``listener(tls=True)`` on CP-rp2
     (Pi Pico W / Pi Pico 2 W), where ``wrap_socket(server_side=True) +
     accept()`` raises ``OSError(32)`` mid-handshake and wedges the CYW43
     station-mode state until USB power-cycle; and
@@ -51,17 +63,13 @@ class UnsupportedSSLConfigError(RuntimeError):
 
 __all__ = [
     "UnsupportedSSLConfigError",
+    "connector",
+    "listener",
     "set_default_ca_bundle",
     "ssl_context_no_verify",
     "ssl_context_with_ca",
     "ssl_context_with_cert_and_key",
     "ssl_context_with_cert_and_key_paths",
-    "tcp_client_connector",
-    "tcp_client_socket",
-    "tcp_listening_socket",
-    "tls_client_connector",
-    "tls_client_socket",
-    "tls_listening_socket",
     "udp_socket",
 ]
 
@@ -79,7 +87,7 @@ def _get_adapter():
     """Return the resolved per-runtime adapter, importing on first call.
 
     First-call resolution amortizes runtime dispatch across the
-    11 public factories — they each call ``_get_adapter().method(...)``
+    public factories — they each call ``_get_adapter().method(...)``
     instead of carrying their own runtime branch.  The cache is a
     module-level binding tests can swap directly via ``_adapter``.
     """
@@ -97,62 +105,52 @@ def _get_adapter():
     return _adapter
 
 
-def tcp_client_socket(host: str, port: int, *, radio: object | None = None):
-    """Open a plain TCP client connection.
-
-    Routes to the runtime-appropriate adapter:
-
-    * **CircuitPython** — ``socketpool.SocketPool(radio).socket(...).connect``.
-      *radio* is required (typically ``wifi.radio``).
-    * **MicroPython** — stdlib ``socket.socket`` + ``connect``.
-      *radio* is ignored.
-    * **CPython** — stdlib ``socket.create_connection``.  *radio* is ignored.
-
-    Args:
-        host: DNS name or IP literal.
-        port: Remote port.
-        radio: CP-only radio object — pass ``wifi.radio`` on CP boards;
-            ignored on MP and CPython.
-
-    Returns: Already-connected TCP client socket.  Callers do not see a separate ``connect`` step.
-
-    Raises:
-        OSError: Connection refused, DNS failure, etc.  Adapters
-            normalize runtime-specific socket errors into ``OSError``.
-        TypeError: CP runtime invoked with ``radio=None``.
-    """
-    return _get_adapter().connect_tcp(host, port, radio=radio)
-
-
-def tls_client_socket(
+def connector(
     host: str,
     port: int,
     *,
+    tls: bool = False,
     context: object | None = None,
     radio: object | None = None,
-):
-    """Open a TLS client connection.
+) -> object:
+    """Return a non-blocking tick-driven TCP/TLS connector.
 
-    Routes to the runtime-appropriate adapter; *context* is honored
-    on every runtime (every supported board ships on-board ``ssl``):
+    The one connect entry point.  The returned ``SocketConnector``
+    advances DNS → TCP → (optional TLS) across multiple
+    ``tick(now_ms)`` calls; once ``state == "ready"``, the connected
+    socket is available on ``connector.socket``.  See
+    :mod:`chumicro_sockets._connector` for the state diagram.  The
+    connector exposes the runner-contract surface (``check`` /
+    ``handle`` / ``io_socket`` / ``io_interest`` / ``next_deadline`` /
+    ``cancel``), so ``Runner.add(connector(...))`` registers it raw and
+    ``chumicro_sockets.generators.connect`` drives it from a generator.
 
-    * **CircuitPython** — ``context.wrap_socket(socketpool_sock,
-      server_hostname=host)`` then ``connect``.  *radio* is required
-      (typically ``wifi.radio``).
-    * **MicroPython** — same shape via MP's ``ssl.SSLContext``
-      (mbedTLS-backed on RP2 + ESP32 from MP 1.24+).
-    * **CPython** — stdlib ``ssl.SSLContext.wrap_socket``.
+    Per-runtime substrate honesty:
 
-    *context=None* verifies on every runtime:
+    * **CPython** — truly non-blocking TCP (``BlockingIOError`` /
+      EINPROGRESS + ``select`` + ``SO_ERROR``) and TLS
+      (``do_handshake_on_connect=False`` + ``do_handshake()`` looped
+      across ticks).
+    * **MicroPython rp2 / esp32** — truly non-blocking TCP via
+      ``OSError(EINPROGRESS)`` + ``select.poll(POLLOUT)``; the TLS
+      handshake blocks inline in ``ssl.wrap_socket`` (mbedTLS exposes
+      no non-blocking handshake surface) — a single substrate-blocking
+      phase tick.
+    * **CircuitPython** — per-phase blocking: ``socketpool`` exposes no
+      non-blocking connect, and TCP + TLS collapse into one blocking
+      ``wrapped_socket.connect()`` call.  Honest documented compromise.
 
-    * **CircuitPython** — verifies against the firmware-bundled
-      mbedTLS CA store (``x509-crt-bundle``).
-    * **CPython** — ``ssl.create_default_context()``; verifies against
-      the host OS trust store.
-    * **MicroPython** — verifies against the library-shipped CA
-      bundle (17 roots: Let's Encrypt, DigiCert, Amazon, Google,
-      GlobalSign, Sectigo, GoDaddy/Starfield, Entrust, Microsoft —
-      a strict subset of CP's firmware bundle; see
+    The ``awaiting_dns`` phase resolves *host* with a synchronous
+    ``getaddrinfo`` on every runtime, so a cache miss against a slow
+    resolver blocks the runner for the lookup.  Pass an IP literal to
+    skip it when the address is already known.
+
+    ``tls=True, context=None`` verifies on every runtime:
+
+    * **CircuitPython** — the firmware-bundled mbedTLS CA store.
+    * **CPython** — ``ssl.create_default_context()``; the host OS
+      trust store.
+    * **MicroPython** — the library-shipped CA bundle (17 roots; see
       :func:`set_default_ca_bundle` to override).
 
     For explicit no-verification (dev against self-signed brokers,
@@ -160,114 +158,35 @@ def tls_client_socket(
     — named so the opt-out is greppable in code review.
 
     Args:
-        host: DNS name or IP literal.  Used as ``server_hostname``
-            for the TLS handshake (SNI + cert verification).
+        host: DNS name or IP literal.  With ``tls=True`` it is also the
+            ``server_hostname`` for the handshake (SNI + cert
+            verification).
         port: Remote port.
-        context: SSLContext to use.  ``None`` = runtime default.
-            Pre-build via :func:`ssl_context_with_ca` for custom CAs.
+        tls: ``True`` wraps the connection in TLS.
+        context: SSLContext for the ``tls=True`` path.  ``None`` =
+            runtime default trust.  Pre-build via
+            :func:`ssl_context_with_ca` for custom CAs.  Ignored when
+            ``tls=False``.
         radio: CP-only radio object — pass ``wifi.radio`` on CP boards;
             ignored on MP and CPython.
 
-    Returns: Connected, TLS-wrapped TCP client socket.
-
-    Raises:
-        OSError: Connection or handshake failure.
-        TypeError: CP runtime invoked with ``radio=None``.
-    """
-    return _get_adapter().connect_tls(host, port, context=context, radio=radio)
-
-
-def tcp_client_connector(host: str, port: int, *, radio: object | None = None) -> object:
-    """Return a non-blocking TCP connector — the runner-shaped sibling of
-    :func:`tcp_client_socket`.
-
-    Library methods that perform network I/O don't block.  The returned
-    :class:`SocketConnector` advances DNS → TCP across multiple
-    ``tick(now_ms)`` calls; once ``state == "ready"``, the connected
-    socket is available on ``connector.socket``.  See
-    :mod:`chumicro_sockets._connector` for the state diagram.
-
-    Per-runtime substrate honesty (TCP phase):
-
-    * **CPython** — truly non-blocking via ``BlockingIOError``
-      (EINPROGRESS) + ``select.select(POLLOUT)`` + ``SO_ERROR``.
-    * **MicroPython rp2 / esp32** — truly non-blocking via
-      ``OSError(EINPROGRESS)`` + ``select.poll(POLLOUT)``.
-    * **CircuitPython** — per-phase blocking: ``socketpool`` does not
-      expose a non-blocking connect, so the TCP phase blocks for the
-      kernel's handshake duration.  Honest documented compromise.
-
-    The ``awaiting_dns`` phase resolves *host* with a synchronous
-    ``getaddrinfo`` on every runtime, so a cache miss against a slow
-    resolver blocks the runner for the lookup.  Pass an IP literal to
-    skip it when the address is already known.
-
-    Args:
-        host: DNS name or IP literal.
-        port: Remote port.
-        radio: CP-only radio object; ignored on MP and CPython.
-
     Returns:
-        :class:`SocketConnector` in ``"awaiting_dns"`` — call ``tick``
+        ``SocketConnector`` in ``"awaiting_dns"`` — call ``tick``
         until terminal.
     """
-    return _get_adapter().tcp_connector(host, port, radio=radio)
+    return _get_adapter().connector(host, port, tls=tls, context=context, radio=radio)
 
 
-def tls_client_connector(
+def listener(
     host: str,
     port: int,
     *,
+    tls: bool = False,
     context: object | None = None,
-    radio: object | None = None,
-) -> object:
-    """Return a non-blocking TLS connector — the runner-shaped sibling of
-    :func:`tls_client_socket`.
-
-    Same shape as :func:`tcp_client_connector`, plus an
-    ``"awaiting_tls"`` phase that runs the handshake across multiple
-    ticks.  *context=None* uses the runtime's default trust store
-    (same semantics as :func:`tls_client_socket`).
-
-    Per-runtime substrate honesty (TLS phase):
-
-    * **CPython** — truly non-blocking via
-      ``do_handshake_on_connect=False`` + ``do_handshake()`` looped
-      across ticks.
-    * **MicroPython rp2 / esp32** — the TLS handshake blocks inline
-      in ``ssl.wrap_socket``: a single substrate-blocking phase tick.
-      MP's mbedTLS builds do not expose a non-blocking handshake
-      surface.  Documented compromise.
-    * **CircuitPython** — CP collapses TCP + TLS into one
-      ``wrapped_socket.connect()`` call; the connector skips
-      ``awaiting_tls`` and lands ready after the (blocking) TCP phase.
-
-    The ``awaiting_dns`` phase resolves *host* with a synchronous
-    ``getaddrinfo`` on every runtime, so a cache miss against a slow
-    resolver blocks the runner for the lookup.  Pass an IP literal to
-    skip it when the address is already known.
-
-    Args:
-        host: DNS name or IP literal; used as ``server_hostname`` for
-            the TLS handshake (SNI + cert verification).
-        port: Remote port.
-        context: SSLContext to use.  ``None`` = runtime default.
-        radio: CP-only radio object; ignored on MP and CPython.
-
-    Returns:
-        :class:`SocketConnector` in ``"awaiting_dns"``.
-    """
-    return _get_adapter().tls_connector(host, port, context=context, radio=radio)
-
-
-def tcp_listening_socket(
-    host: str,
-    port: int,
-    *,
     backlog: int = 4,
     radio: object | None = None,
 ) -> object:
-    """Open a non-blocking TCP listening socket.
+    """Open a non-blocking TCP or TLS listening socket.
 
     Routes to the runtime-appropriate adapter:
 
@@ -276,20 +195,34 @@ def tcp_listening_socket(
       (older CP firmware / rp2 ports may not expose the option).
       *radio* is required (typically ``wifi.radio``).
     * **MicroPython** — ``socket.socket().bind().listen()``;
-      ``setsockopt(SO_REUSEADDR, 1)`` is best-effort (some ports don't
-      expose the option).  *radio* is ignored.
+      ``SO_REUSEADDR`` best-effort.  *radio* is ignored.
     * **CPython** — stdlib ``socket.socket().bind().listen()`` with
       ``SO_REUSEADDR`` set.  *radio* is ignored.
 
     The returned listener is in non-blocking mode — ``accept()``
     returns ``(client_socket, address)`` when a connection is ready
     or raises ``OSError(EAGAIN)`` when the queue is empty.  Substrate
-    for ``chumicro-http-server``.
+    for ``chumicro-http-server`` and the websockets server.
+
+    With ``tls=True`` a server-side ``ssl.SSLContext`` (built via
+    :func:`ssl_context_with_cert_and_key` /
+    :func:`ssl_context_with_cert_and_key_paths`) is required, and each
+    accepted client is TLS-wrapped before ``accept()`` returns it.
+    The TLS handshake happens **synchronously** inside ``accept()`` —
+    on Pi Pico W class boards this can take 100-500 ms per connection
+    and visibly stall the runner during that window.  Acceptable when
+    ``max_connections=1`` and the handshake budget is bounded; if the
+    LED-blink invariant matters more than TLS, terminate TLS in front
+    of the board with a proxy (Caddy / nginx / Cloudflare Tunnel) and
+    let the board speak plain HTTP on the LAN behind it.
 
     Args:
         host: Address to bind to.  ``"0.0.0.0"`` accepts on every
             interface (typical for boards on a single LAN).
         port: TCP port to bind.
+        tls: ``True`` TLS-wraps every accepted client.
+        context: Server-side ``ssl.SSLContext``.  Required when
+            ``tls=True``; ignored otherwise.
         backlog: SYN-queue depth for incoming connections.  4 is a
             reasonable default for a small-IoT server; raise for
             higher-volume listeners.
@@ -301,54 +234,20 @@ def tcp_listening_socket(
         / ``setblocking()``.
 
     Raises:
+        ValueError: ``tls=True`` without a *context*.
         OSError: Bind / listen failed (port in use, permission denied,
             etc.).
+        UnsupportedSSLConfigError: ``tls=True`` on CP-rp2 boards.
         TypeError: CP runtime invoked with ``radio=None``.
     """
-    return _get_adapter().listen_tcp(host, port, backlog=backlog, radio=radio)
-
-
-def tls_listening_socket(
-    host: str,
-    port: int,
-    *,
-    context: object,
-    backlog: int = 4,
-    radio: object | None = None,
-) -> object:
-    """Open a non-blocking TLS listening socket.
-
-    Same shape as :func:`tcp_listening_socket` but accepts a server-
-    side ``ssl.SSLContext`` and wraps each accepted client in TLS
-    before returning it from ``accept()``.  Build the context via
-    :func:`ssl_context_with_cert_and_key`.
-
-    The TLS handshake happens **synchronously** inside ``accept()`` —
-    on Pi Pico W class boards this can take 100-500 ms per
-    connection and visibly stall the runner during that window.
-    Acceptable when ``max_connections=1`` and the handshake budget
-    is bounded; if the LED-blink invariant matters for your use
-    case more than TLS, terminate TLS in front of the board with a
-    proxy (Caddy / nginx / Cloudflare Tunnel) and let the board
-    speak plain HTTP on the LAN behind it.
-
-    Args:
-        host: Address to bind to.
-        port: TCP port to bind.
-        context: Server-side ``ssl.SSLContext`` from
-            :func:`ssl_context_with_cert_and_key`.
-        backlog: SYN-queue depth.
-        radio: CP-only radio object — pass ``wifi.radio`` on CP boards;
-            ignored on MP and CPython.
-
-    Returns:
-        A listening socket wrapper whose ``accept()`` returns
-        ``(tls_wrapped_socket, address)``.
-
-    Raises:
-        TypeError: CP runtime invoked with ``radio=None``.
-    """
-    return _get_adapter().listen_tls(host, port, context=context, backlog=backlog, radio=radio)
+    if tls and context is None:
+        raise ValueError(
+            "listener(tls=True) requires a server-side context= — build "
+            "one via ssl_context_with_cert_and_key(_paths)",
+        )
+    return _get_adapter().listener(
+        host, port, tls=tls, context=context, backlog=backlog, radio=radio,
+    )
 
 
 def ssl_context_with_cert_and_key(
@@ -396,7 +295,7 @@ def ssl_context_with_cert_and_key_paths(
     CircuitPython it loads via the path directly.
 
     Unsupported on CP-rp2 (Pi Pico W / Pi Pico 2 W) —
-    :func:`tls_listening_socket` refuses up-front there.
+    ``listener(tls=True)`` refuses up-front there.
 
     Args:
         cert_path: On-device filesystem path to the cert PEM file.
@@ -544,12 +443,12 @@ def ssl_context_no_verify() -> object:
 
 
 def set_default_ca_bundle(pem_bytes: bytes | str | None) -> None:
-    """Replace or revert the CA bundle used by ``tls_client_socket(context=None)``.
+    """Replace or revert the CA bundle used by ``connector(tls=True, context=None)``.
 
     On **MicroPython** the library ships a curated 17-root CA bundle
     (Let's Encrypt, DigiCert, Amazon, Google, GlobalSign, Sectigo,
     GoDaddy/Starfield, Entrust, Microsoft) consumed by the
-    default-secure ``connect_tls(context=None)`` path.  Call this to
+    default-secure ``tls=True, context=None`` path.  Call this to
     swap in a project-specific bundle — useful when the
     deployment talks to a server signed by a private internal CA, or
     when a public root not in our shipped set has rotated and the

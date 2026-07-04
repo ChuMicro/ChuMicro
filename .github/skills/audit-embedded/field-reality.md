@@ -145,7 +145,7 @@ A chumicro_mqtt audit took 30 minutes for a side-by-side against a previous-gene
 The fix is six `gc.collect()` calls at strategic placement (`import gc` at module top, `gc.collect()` at each point; see commit `a99221b9` for the historical diff):
 - `chumicro_mqtt/__init__.py` — between `_wire` and `client` imports (defragment _wire's scratch before client.py's persistent state lands) AND at end (defragment before downstream imports of `sockets_factory` and `runner`).  The end-of-init position is **load-bearing**: removing it drops `max_free_sz` by 1117 blocks (~18 KB).
 - `chumicro_mqtt/_wire.py` — before the `PacketDecoder` class body (+5 blocks, marginal but stable).
-- `chumicro_sockets/__init__.py` — at end, mainly to help the runtime-gated lazy `_adapters/mp` import inside `tls_client_socket`.
+- `chumicro_sockets/__init__.py` — at end, mainly to help the runtime-gated lazy `_adapters/mp` import behind the TLS-using entry points.
 - `chumicro_config/__init__.py`, `chumicro_runner/__init__.py`, `chumicro_timing/__init__.py` — at end, no measurable benefit in this particular probe chain but the pattern is the load-bearing one and applies symmetrically.
 
 Measured net win on Pi Pico W MP: post_import `max_free_sz` `4089 -> 6170` blocks (~+33 KB contiguous heap recovered), and the originally-failing `mqtt_tls_probe` TLS_NOVERIFY + TLS_CA legs both succeeded with 10/10 publish-echo cycles at 137 ms connect-to-echo.  Runtime is stable: `max_free_sz` holds across a 20-publish session.

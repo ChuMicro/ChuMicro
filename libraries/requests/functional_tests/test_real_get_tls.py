@@ -151,7 +151,7 @@ def test_real_https_get_completes_runner_shaped() -> None:
 
     ssl_context = ssl_context_with_ca(_CA_PEM)
     client = HttpClient(
-        connector_factory=chumicro_sockets_connector_factory(
+        transport_factory=chumicro_sockets_connector_factory(
             radio=radio,
             ssl_context=ssl_context,
         ),

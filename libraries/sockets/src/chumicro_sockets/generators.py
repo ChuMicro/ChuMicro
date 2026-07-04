@@ -106,9 +106,9 @@ def connect(
             surface — ``state``, ``socket``, ``last_error``,
             ``io_socket``, ``io_interest(now_ms)``,
             ``tick(now_ms)``, ``cancel()``.  The real
-            ``tcp_client_connector`` / ``tls_client_connector`` return
-            such objects; ``FakeSocketConnector`` in
-            ``chumicro_sockets.testing`` is the test stand-in.
+            ``chumicro_sockets.connector()`` returns such objects;
+            ``FakeSocketConnector`` in ``chumicro_sockets.testing``
+            is the test stand-in.
         timeout_ms: Optional deadline in milliseconds for the whole
             connect (DNS attempt + TCP + optional TLS).  ``None``
             (default) waits indefinitely.  On expiry the connector is

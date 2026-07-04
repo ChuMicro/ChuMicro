@@ -2,7 +2,7 @@
 
 When you deploy a project, `chumicro-workspace` copies every chumicro library that anything in your project imports onto the board — including the small helper each library uses to build its default transport (typically a `chumicro_sockets` socket).
 
-Most of the time that's fine.  But if you're passing your own socket into a library — say `MQTTClient(socket_factory=my_factory, ...)` — the default-builder helper is dead code on your board, and so is `chumicro_sockets` underneath it.  The deployer can't tell at deploy time which path your code will take at runtime, so it ships both.
+Most of the time that's fine.  But if you're passing your own socket into a library — say `MQTTClient(transport_factory=my_factory, ...)` — the default-builder helper is dead code on your board, and so is `chumicro_sockets` underneath it.  The deployer can't tell at deploy time which path your code will take at runtime, so it ships both.
 
 [Decision 0062](../../plans/decisions/0062-entrypoint-factory-skip.md) lets you say "skip the default builder; I'm bringing my own."  Add one line to your `app.py` (or `code.py` — whichever your project's entrypoint is):
 
@@ -43,7 +43,7 @@ A silent skip that shipped the unwanted library would be a worse outcome than re
 ```
 RuntimeError: chumicro_mqtt.sockets_factory not available
 (excluded via __chumicro_skip_factories__ or not on the board) —
-pass socket_factory= or socket= explicitly.
+pass transport_factory= or socket= explicitly.
 ```
 
 The five library `from_config` methods that lazy-import a factory submodule — mqtt, requests, websockets, ntp, http_server — all emit this message with their own bypass-kwarg names.  The "not on the board" half of the message covers manual `circup` / `mip` installs that selected the library but omitted its factory submodule — the failure mode is the same loud `RuntimeError` either way.
@@ -78,7 +78,7 @@ The skip mechanism only fires under the `chumicro-workspace` deploy path (`chumi
 You'll feel the difference if and only if:
 
 1. Your project's entrypoint imports a chumicro library that has a `<stem>_factory.py` submodule.
-2. You supply your own version of whatever the factory produces through the constructor (`socket_factory=` / `connection_factory=` / `listener_factory=` / `socket=` on the libraries that take a transport).
+2. You supply your own version of whatever the factory produces through the constructor (`transport_factory=` / `socket=` / `listener=` on the libraries that take a transport).
 3. You deploy via `chumicro-workspace`.
 
 If any of those three is false, the skip constant is a no-op and the dead-skip warning will (correctly) point that out.

@@ -19,7 +19,7 @@ def canned_redirect(*, status=301, location="/", reason="Moved"):
 
 
 def _factory_for_socket_sequence(sockets):
-    """Return a connector_factory that hands out *sockets* FIFO,
+    """Return a transport_factory that hands out *sockets* FIFO,
     wrapped in scripted FakeSocketConnectors."""
     cursor = {"index": 0}
 

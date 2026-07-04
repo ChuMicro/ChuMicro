@@ -80,7 +80,7 @@ class ConnectingPhase:
 class WebSocketClient(_BaseSession):
     """Non-blocking RFC 6455 WebSocket client.
 
-    Construct with a *connector_factory*: a ``(host: str, port: int,
+    Construct with a *transport_factory*: a ``(host: str, port: int,
     use_tls: bool) -> connector`` callable that hands back a tick-driven
     non-blocking connect state machine.  The connector is a duck-typed
     object exposing ``state`` / ``socket`` / ``last_error`` attributes,
@@ -89,7 +89,7 @@ class WebSocketClient(_BaseSession):
     ``next_deadline(now_ms)``.  Once the connector reports ``ready``,
     the promoted socket must expose the four-method TCP contract
     (``recv_into`` / ``send`` / ``close`` / ``setblocking``; full shape
-    documented on the *connector_factory* parameter below).
+    documented on the *transport_factory* parameter below).
     ``chumicro_sockets``-based factories work; so does anything else of
     the same shape.  Configure callbacks, then call :meth:`connect`.
     Drive via :meth:`check` / :meth:`handle` from a runner tick or
@@ -129,19 +129,19 @@ class WebSocketClient(_BaseSession):
         *,
         radio: object | None = None,
         ssl_context: object | None = None,
-        connector_factory: object | None = None,
+        transport_factory: object | None = None,
     ) -> "WebSocketClient":
         """Build a :class:`WebSocketClient` from runtime config.
 
         Reads optional ``websockets.client.max_message_bytes``.  No
         key is required — host / port / use_tls live on each
-        :meth:`connect` URL, not on the client.  A *connector_factory*
+        :meth:`connect` URL, not on the client.  A *transport_factory*
         override bypasses the auto-built factory entirely.
         ``websockets.client.connect_url`` is declared in the manifest
         but consumed by your app on the :meth:`connect` call, not by
         ``from_config``.
         """
-        if connector_factory is None:
+        if transport_factory is None:
             try:
                 from chumicro_websockets.sockets_factory import (  # noqa: PLC0415
                     chumicro_sockets_connector_factory,
@@ -150,14 +150,14 @@ class WebSocketClient(_BaseSession):
                 raise RuntimeError(
                     "chumicro_websockets.sockets_factory not "
                     "available (excluded via __chumicro_skip_factories__ "
-                    "or not on the board) — pass connector_factory= "
+                    "or not on the board) — pass transport_factory= "
                     "explicitly.",
                 ) from exception
-            connector_factory = chumicro_sockets_connector_factory(
+            transport_factory = chumicro_sockets_connector_factory(
                 radio=radio, ssl_context=ssl_context,
             )
         return cls(
-            connector_factory=connector_factory,
+            transport_factory=transport_factory,
             max_message_bytes=config.get(
                 "websockets.client.max_message_bytes",
                 DEFAULT_MAX_MESSAGE_BYTES,
@@ -166,7 +166,7 @@ class WebSocketClient(_BaseSession):
 
     def __init__(
         self,
-        connector_factory,
+        transport_factory,
         *,
         max_message_bytes: int = DEFAULT_MAX_MESSAGE_BYTES,
         recv_budget_per_tick: int = DEFAULT_RECV_BUDGET_PER_TICK,
@@ -197,7 +197,7 @@ class WebSocketClient(_BaseSession):
             ticks=ticks,
         )
 
-        self._connector_factory = connector_factory
+        self._transport_factory = transport_factory
         self._connector = None
         self._ping_interval_ms = ping_interval_ms
 
@@ -261,7 +261,7 @@ class WebSocketClient(_BaseSession):
         scheme, host, port, path = parse_ws_url(url)
         use_tls = scheme == "wss"
 
-        self._connector = self._connector_factory(host, port, use_tls)
+        self._connector = self._transport_factory(host, port, use_tls)
         # Capture the handshake parameters now; the actual encoding
         # happens once the connector hands back a live socket so the
         # send buffer doesn't sit around mutated-but-unsent for the

@@ -28,14 +28,16 @@ edge and another on-flash package to every networking deploy.
    endpoint varies per call take `(host: str, port: int, use_tls: bool) -> connector` (websockets,
    requests).  Endpoint-baked transports whose address is fixed at configuration time take a
    zero-argument callable returning the transport (mqtt's broker connector, ntp's UDP socket,
-   http_server's listener); `from_config` bakes the endpoint into the closure.
+   http_server's listener); `from_config` bakes the endpoint into the closure.  Either shape is
+   injected through the one kwarg name every library spells identically: `transport_factory=`
+   (Decision 0098).
 4. **`from_config` stays a classmethod** on the client, reading flat config keys and never
    opening transports (the L52 relocation ask is resolved by this decision going the other way:
    the classmethod is the contract; the factory closure is what defers the cost).
 
 ## Consequences
 
-- ntp 0.11.0 aligns: `NTPClient(socket=... | socket_factory=...)` (exactly one), the UDP socket
+- ntp aligns: `NTPClient(socket=... | transport_factory=...)` (exactly one), the UDP socket
   opens on the first `query()`, and `from_config` defers the auto-built factory into a closure.
   L52 and L53 close.
 - The third divergent contract (eager-open) ceases to exist; a new networking library copies

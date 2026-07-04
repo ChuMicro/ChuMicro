@@ -1,9 +1,9 @@
 """Tests for chumicro_websockets.sockets_factory.
 
 Verifies the helper wiring: the factory lives in its own submodule,
-``__init__.py`` doesn't re-export it, and the returned factory routes
-TLS / non-TLS to the right :mod:`chumicro_sockets` connector with
-the right arguments.
+``__init__.py`` doesn't re-export it, and the returned factory maps
+``use_tls`` onto :func:`chumicro_sockets.connector` with the right
+arguments.
 
 Cross-runtime: pure-Python.  Module-level symbols are swapped via
 ``SwapAttribute`` from ``chumicro_test_harness.patching`` (instead of
@@ -25,65 +25,47 @@ class TestSocketsFactory:
         factory = chumicro_sockets_connector_factory()
         assert callable(factory)
 
-    def test_plain_tcp_routes_to_tcp_client_connector(self):
-        tcp_calls: list = []
-        tls_calls: list = []
+    def test_plain_tcp_maps_to_tls_false(self):
+        calls: list = []
 
-        def fake_tcp(host, port, *, radio):
-            tcp_calls.append((host, port, radio))
+        def fake_connector(host, port, *, tls, context, radio):
+            calls.append((host, port, tls, context, radio))
             return "tcp-connector"
 
-        def fake_tls(host, port, *, context, radio):
-            tls_calls.append((host, port, context, radio))
-            return "tls-connector"
-
         factory = chumicro_sockets_connector_factory(radio="radio-handle")
-        with SwapAttribute(chumicro_sockets, "tcp_client_connector", fake_tcp), \
-                SwapAttribute(chumicro_sockets, "tls_client_connector", fake_tls):
+        with SwapAttribute(chumicro_sockets, "connector", fake_connector):
             result = factory("example.com", 80, False)
 
         assert result == "tcp-connector"
-        assert tcp_calls == [("example.com", 80, "radio-handle")]
-        assert tls_calls == []
+        assert calls == [("example.com", 80, False, None, "radio-handle")]
 
-    def test_tls_routes_to_tls_client_connector(self):
-        tcp_calls: list = []
-        tls_calls: list = []
+    def test_tls_maps_to_tls_true_with_context(self):
+        calls: list = []
 
-        def fake_tcp(host, port, *, radio):
-            tcp_calls.append((host, port, radio))
-            return "tcp-connector"
-
-        def fake_tls(host, port, *, context, radio):
-            tls_calls.append((host, port, context, radio))
+        def fake_connector(host, port, *, tls, context, radio):
+            calls.append((host, port, tls, context, radio))
             return "tls-connector"
 
         context = object()
         factory = chumicro_sockets_connector_factory(radio="radio", ssl_context=context)
-        with SwapAttribute(chumicro_sockets, "tcp_client_connector", fake_tcp), \
-                SwapAttribute(chumicro_sockets, "tls_client_connector", fake_tls):
+        with SwapAttribute(chumicro_sockets, "connector", fake_connector):
             result = factory("example.com", 443, True)
 
         assert result == "tls-connector"
-        assert tls_calls == [("example.com", 443, context, "radio")]
-        assert tcp_calls == []
+        assert calls == [("example.com", 443, True, context, "radio")]
 
     def test_default_ssl_context_is_none(self):
-        tls_calls: list = []
+        calls: list = []
 
-        def fake_tls(host, port, *, context, radio):
-            tls_calls.append((host, port, context, radio))
+        def fake_connector(host, port, *, tls, context, radio):
+            calls.append((host, port, tls, context, radio))
             return "tls-connector"
 
-        def fake_tcp(host, port, *, radio):
-            return "tcp-connector"
-
         factory = chumicro_sockets_connector_factory()
-        with SwapAttribute(chumicro_sockets, "tls_client_connector", fake_tls), \
-                SwapAttribute(chumicro_sockets, "tcp_client_connector", fake_tcp):
+        with SwapAttribute(chumicro_sockets, "connector", fake_connector):
             factory("h", 443, True)
 
-        assert tls_calls == [("h", 443, None, None)]
+        assert calls == [("h", 443, True, None, None)]
 
     def test_helper_not_re_exported_from_init(self):
         """``__init__.py`` must NOT re-export the helper.
@@ -100,10 +82,10 @@ class TestSocketsFactory:
 
 
 class TestListenerFactory:
-    def test_binds_via_tcp_listening_socket_with_config_host_port(self):
+    def test_binds_via_listener_with_config_host_port(self):
         calls: list = []
 
-        def fake_listen(host, port, *, radio):
+        def fake_listener(host, port, *, radio):
             calls.append((host, port, radio))
             return "listener"
 
@@ -111,7 +93,7 @@ class TestListenerFactory:
             "websockets.server.host": "192.0.2.1",
             "websockets.server.port": 9001,
         }
-        with SwapAttribute(chumicro_sockets, "tcp_listening_socket", fake_listen):
+        with SwapAttribute(chumicro_sockets, "listener", fake_listener):
             result = chumicro_sockets_listener(config, radio="radio-handle")
 
         assert result == "listener"
@@ -120,11 +102,11 @@ class TestListenerFactory:
     def test_defaults_to_all_interfaces_port_8765(self):
         calls: list = []
 
-        def fake_listen(host, port, *, radio):
+        def fake_listener(host, port, *, radio):
             calls.append((host, port, radio))
             return "listener"
 
-        with SwapAttribute(chumicro_sockets, "tcp_listening_socket", fake_listen):
+        with SwapAttribute(chumicro_sockets, "listener", fake_listener):
             chumicro_sockets_listener({})
 
         assert calls == [("0.0.0.0", 8765, None)]
@@ -136,11 +118,11 @@ class TestListenerFactory:
 
         calls: list = []
 
-        def fake_listen(host, port, *, radio):
+        def fake_listener(host, port, *, radio):
             calls.append((host, port))
             return FakeListener()
 
-        with SwapAttribute(chumicro_sockets, "tcp_listening_socket", fake_listen):
+        with SwapAttribute(chumicro_sockets, "listener", fake_listener):
             server = WebSocketServer.from_config(
                 {"websockets.server.port": 7000}, _noop_connection,
             )

@@ -8,11 +8,11 @@ Each connection is a state machine the server advances one chunk per runner tick
 
 ```python
 from chumicro_http_server import HttpServer, build_response
-from chumicro_sockets import tcp_listening_socket
+from chumicro_sockets import listener
 from chumicro_timing import ticks_ms
 
 server = HttpServer(
-    listener_factory=lambda: tcp_listening_socket(
+    transport_factory=lambda: listener(
         host="0.0.0.0", port=8080, radio=wifi.radio,
     ),
 )

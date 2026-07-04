@@ -293,8 +293,7 @@ class WebSocketServer:
     """Runner-shaped WebSocket server owning a TCP/TLS listening socket.
 
     *listener* is typically from
-    :func:`chumicro_sockets.tcp_listening_socket` /
-    :func:`tls_listening_socket`.  *on_connection* (``callable(connection)``)
+    ``chumicro_sockets.listener`` (plain or ``tls=True``).  *on_connection* (``callable(connection)``)
     fires once per inbound connection at handshake completion; it
     wires ``connection.on_text`` / ``on_binary`` / ``on_close`` etc.
     before any frames arrive.  Raising from the callback rejects with
@@ -342,7 +341,7 @@ class WebSocketServer:
         — empty ``config`` produces a server bound to ``0.0.0.0:8765``.
         *on_connection* is required (wires per-connection callbacks
         before frames arrive).  A *listener* override bypasses the
-        auto-built :func:`chumicro_sockets.tcp_listening_socket`.
+        auto-built :func:`chumicro_sockets.listener`.
         *accept_path* + *max_connections* are app-routing knobs not
         in the config manifest.
         """

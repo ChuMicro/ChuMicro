@@ -60,7 +60,7 @@ to Unix-epoch seconds — feed it into `time.gmtime` (CPython) /
 
 ## Bring your own transport
 
-`NTPClient` doesn't care which library produces its UDP socket.  The `socket=` (or `socket_factory=`) you pass returns any object exposing the four-method UDP contract:
+`NTPClient` doesn't care which library produces its UDP socket.  The `socket=` (or `transport_factory=`) you pass returns any object exposing the four-method UDP contract:
 
 | Method | Contract |
 |---|---|

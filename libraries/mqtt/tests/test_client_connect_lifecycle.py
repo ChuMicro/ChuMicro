@@ -49,7 +49,7 @@ class TestSocketBlockingMode:
         ticks = FakeTicks()
         client = MQTTClient(
             first_sock,
-            connector_factory=factory,
+            transport_factory=factory,
             client_id="test-client",
             ack_timeout_seconds=5.0,
             ticks=ticks,

@@ -7,14 +7,15 @@ Built on `chumicro-sockets` and `chumicro-timing` — your LED keeps blinking th
 ## Quick example
 
 ```python
-from chumicro_sockets import tcp_client_socket
 from chumicro_timing import ticks_ms
 from chumicro_mqtt import MQTTClient
 
-# CP auto-detects `wifi.radio`; MP / CPython have no radio.
-sock = tcp_client_socket("broker.example.com", 1883)
-sock.setblocking(False)
-client = MQTTClient(sock, client_id="my-thing", keep_alive_seconds=60)
+# On CircuitPython pass radio=wifi.radio; MP / CPython have no radio.
+# from_config builds the transport factory: the client dials the broker
+# non-blocking (one connect phase per tick) and self-heals after drops.
+client = MQTTClient.from_config(
+    {"mqtt.broker.host": "broker.example.com", "mqtt.broker.port": 1883},
+)
 
 client.on_message = lambda topic, payload: print(topic, payload)
 client.connect()

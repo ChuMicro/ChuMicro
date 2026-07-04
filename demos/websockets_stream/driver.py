@@ -23,7 +23,7 @@ from pathlib import Path
 
 from chumicro_pytest_device.fixtures.lan import detect_lan_ip
 from chumicro_runner import Runner
-from chumicro_sockets import tcp_listening_socket
+from chumicro_sockets import listener as make_listener
 from chumicro_websockets import WebSocketServer
 from chumicro_workspace.deploy_api import (
     DeployApiError,
@@ -46,7 +46,7 @@ def _start_stream_server(bind_host: str):
     plain tick loop on a daemon thread (host-side, so a 10 ms poll is
     fine — the board uses the efficient ``runner.wait`` path).
     """
-    listener = tcp_listening_socket(bind_host, 0)
+    listener = make_listener(bind_host, 0)
     port = listener.getsockname()[1]
 
     def on_connection(connection):

@@ -49,14 +49,6 @@ def _no_op(*_args, **_kwargs):
     return None
 
 
-def _close_quietly(sock):  # pragma: no cover - device only
-    """Best-effort close of an in-flight socket, ignoring teardown errors."""
-    try:
-        sock.close()
-    except Exception:  # noqa: BLE001 - best-effort teardown
-        pass
-
-
 class _MpSocketWrapper:
     """Adapts an MP stdlib socket to the chumicro_sockets protocol.
 
@@ -124,69 +116,6 @@ class _MpSocketWrapper:
             # uniformly.
             raise OSError(errno.EAGAIN, "would block")
         return copied
-
-
-def connect_tcp(host, port, **_kwargs):  # pragma: no cover - device only
-    """Open a plain TCP connection on MicroPython.
-
-    Uses ``socket.getaddrinfo`` + ``socket.socket`` + ``connect`` —
-    MP's ``create_connection`` shim is missing on some builds, so
-    we do the dance explicitly.
-    """
-    address_info = socket.getaddrinfo(host, port)[0]
-    sock = socket.socket(address_info[0], address_info[1])
-    try:
-        sock.connect(address_info[-1])
-    except Exception:
-        # Close the in-flight lwIP socket before re-raising: MP's socket
-        # slots are scarce, so a reconnect loop that abandons failed
-        # sockets to GC accumulates PCBs and eventually returns ENOMEM.
-        _close_quietly(sock)
-        raise
-    return _MpSocketWrapper(sock)
-
-
-def connect_tls(host, port, *, context=None, **_kwargs):  # pragma: no cover - device only
-    """Open a TLS connection on MicroPython.
-
-    *context* is an MP ``ssl.SSLContext`` or ``None``.
-
-    When ``context`` is ``None``, the TLS handshake validates the
-    server cert against the library-shipped CA bundle in
-    :mod:`chumicro_sockets._ca_bundle` — loaded lazily and cached on
-    ``_DEFAULT_CONTEXT_CACHE`` inside :func:`_resolve_default_context`.
-    Override the trust set at runtime with :func:`set_default_ca_bundle`
-    (called transparently by ``chumicro_sockets.set_default_ca_bundle``).
-    For explicit
-    no-verification (dev against self-signed brokers, captive-portal
-    probes), pass ``context=ssl_context_no_verify()`` — opt-out is
-    named so a code reviewer can grep for it.
-
-    Non-blocking note: callers that need a non-blocking TLS socket
-    call ``setblocking(False)`` on the returned wrapper *after* the
-    synchronous handshake completes inside ``wrap_socket``.  Both
-    the MP rp2 and ESP32 mbedTLS SSLSocket honor ``setblocking``
-    post-handshake.  The wrapper's ``recv_into`` polyfill handles
-    the MP-TLS-specific contract divergence where non-blocking
-    ``recv`` returns ``None`` (rather than raising EAGAIN like
-    plain TCP); see :class:`_MpSocketWrapper.recv_into`.
-    """
-    address_info = socket.getaddrinfo(host, port)[0]
-    sock = socket.socket(address_info[0], address_info[1])
-    try:
-        sock.connect(address_info[-1])
-    except Exception:
-        _close_quietly(sock)
-        raise
-    context = _resolve_default_context(context)
-    try:
-        wrapped = context.wrap_socket(sock, server_hostname=host)
-    except Exception:
-        # A handshake failure after a successful TCP connect leaks the
-        # connected socket (holding an lwIP PCB) unless we close it.
-        _close_quietly(sock)
-        raise
-    return _MpSocketWrapper(wrapped)
 
 
 def _resolve_default_context(context):  # pragma: no cover - device only
@@ -298,13 +227,18 @@ class _MpUDPWrapper:  # pragma: no cover - device only
         return copied, address
 
 
-def listen_tcp(host, port, *, backlog=4, **_kwargs):  # pragma: no cover - device only
-    """Open a non-blocking TCP listening socket on MicroPython.
+def listener(host, port, *, tls=False, context=None, backlog=4, **_kwargs):  # pragma: no cover - device only
+    """Open a non-blocking TCP or TLS listening socket on MicroPython.
 
     Wraps the result so ``accept()`` returns a ``(_MpSocketWrapper,
     address)`` tuple — the new connection exposes the cross-runtime
     TCP surface (``send`` / ``recv_into`` / ``close`` /
     ``setblocking`` / ``settimeout``).
+
+    With ``tls=True`` every accepted client is TLS-wrapped before
+    ``accept()`` returns it; the handshake happens synchronously
+    inside ``accept()`` — MP's ``wrap_socket(server_side=True)``
+    blocks until the handshake completes.
 
     ``SO_REUSEADDR`` is set when the platform supports it (rp2 + esp32
     do); failures are swallowed so older ports without the option
@@ -320,7 +254,10 @@ def listen_tcp(host, port, *, backlog=4, **_kwargs):  # pragma: no cover - devic
     sock.bind(address_info[-1])
     sock.listen(backlog)
     sock.setblocking(False)
-    return _MpListeningSocketWrapper(sock)
+    raw_listener = _MpListeningSocketWrapper(sock)
+    if tls:
+        return _MpTLSListenerWrapper(raw_listener, context)
+    return raw_listener
 
 
 class _MpListeningSocketWrapper:  # pragma: no cover - device only
@@ -367,18 +304,6 @@ def ssl_context_with_cert_and_key(cert_pem, key_pem):  # pragma: no cover - devi
     del cert_pem, key_pem
     gc.collect()
     return context
-
-
-def listen_tls(host, port, *, context, backlog=4, **_kwargs):  # pragma: no cover - device only
-    """Open an MP TLS listening socket.
-
-    The TLS handshake happens synchronously inside `accept()` —
-    MP's `wrap_socket(server_side=True)` blocks until the handshake
-    completes.  HttpServer accepts that as the per-tick latency
-    cost.
-    """
-    raw_listener = listen_tcp(host, port, backlog=backlog)
-    return _MpTLSListenerWrapper(raw_listener, context)
 
 
 class _MpTLSListenerWrapper:  # pragma: no cover - device only
@@ -524,7 +449,7 @@ _DEFAULT_CONTEXT_CACHE = None
 
 
 def set_default_ca_bundle(pem_bytes):
-    """Replace or revert the CA bundle used by ``connect_tls(context=None)``.
+    """Replace or revert the CA bundle used by ``connector(tls=True, context=None)``.
 
     Pass ``None`` to revert to the library-shipped bundle in
     :mod:`chumicro_sockets._ca_bundle`.  Pass PEM bytes (or str) to
@@ -533,9 +458,9 @@ def set_default_ca_bundle(pem_bytes):
     root we don't ship has rotated and the user needs to ship faster
     than our release cadence.
 
-    The cached default context is invalidated; the next call to
-    :func:`connect_tls` with ``context=None`` rebuilds it from the new
-    bundle.
+    The cached default context is invalidated; the next
+    ``connector(tls=True, context=None)`` handshake rebuilds it from
+    the new bundle.
     """
     global _OVERRIDE_PEM, _DEFAULT_CONTEXT_CACHE
     _OVERRIDE_PEM = pem_bytes
@@ -548,7 +473,7 @@ def ssl_context_no_verify():  # pragma: no cover - device only
     Explicit opt-out for callers that intentionally don't want to
     validate the peer (dev against self-signed brokers, captive-portal
     probes, smoke tests against expired or untrusted hosts).  Named so
-    code reviewers can grep for it — ``tls_client_socket(host, port,
+    code reviewers can grep for it — ``connector(host, port, tls=True,
     context=ssl_context_no_verify())`` shouts what it does.
 
     MP's :class:`ssl.SSLContext` constructed with
@@ -564,23 +489,16 @@ def ssl_context_no_verify():  # pragma: no cover - device only
     return context
 
 
-def tcp_connector(host, port, **_kwargs):  # pragma: no cover - device only
-    """Return a tick-driven TCP :class:`SocketConnector` for MicroPython.
+def connector(host, port, *, tls=False, context=None, **_kwargs):  # pragma: no cover - device only
+    """Return a tick-driven :class:`SocketConnector` for MicroPython.
 
     Uses non-blocking ``socket.connect`` (raises ``OSError(EINPROGRESS)``
     on rp2 + esp32 ports) + ``select.poll(POLLOUT)`` for completion.
     DNS is synchronous (one phase tick); TCP is truly per-tick
     non-blocking — the connector yields between the dial and the
     POLLOUT-ready check, matching the CPython adapter's shape.
-    """
-    return _MpConnector(host, port, tls=False, context=None)
 
-
-def tls_connector(host, port, *, context=None, **_kwargs):  # pragma: no cover - device only
-    """Return a tick-driven TLS :class:`SocketConnector` for MicroPython.
-
-    Same per-tick shape as :func:`tcp_connector` for the DNS + TCP
-    phases.  The TLS handshake itself happens **inside** MP's
+    With ``tls=True`` the handshake itself happens **inside** MP's
     ``ssl.SSLContext.wrap_socket`` and BLOCKS for the round-trip:
     rp2 / esp32 mbedTLS builds do not expose a non-blocking handshake
     surface (no ``do_handshake_on_connect=False``).  Documented
@@ -588,7 +506,7 @@ def tls_connector(host, port, *, context=None, **_kwargs):  # pragma: no cover -
     tick on this runtime.  Application traffic is non-blocking
     post-handshake.
     """
-    return _MpConnector(host, port, tls=True, context=context)
+    return _MpConnector(host, port, tls=tls, context=context)
 
 
 class _MpConnector(SocketConnector):  # pragma: no cover - device only
@@ -648,9 +566,8 @@ class _MpConnector(SocketConnector):  # pragma: no cover - device only
                 if self._tls:
                     # ``ssl.SSLContext.wrap_socket`` blocks until the TLS
                     # handshake completes — substrate limit documented on
-                    # the public ``tls_client_connector`` factory.  On
-                    # the next tick the ``awaiting_tls`` branch promotes
-                    # to ``ready``.
+                    # the public ``connector`` entry.  On the next tick
+                    # the ``awaiting_tls`` branch promotes to ``ready``.
                     self._context = _resolve_default_context(self._context)
                     # wrap_socket drives the handshake to completion
                     # inline, which needs a blocking socket — a

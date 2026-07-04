@@ -1,8 +1,8 @@
-"""Host-only tests for the runtime-routing factories.
+"""Host-only tests for the runtime-routing entries.
 
 Every test here fakes a runtime identity by swapping
 ``chumicro_sockets._adapter`` to a named per-runtime adapter (or a
-``FakeModule`` stand-in), then asserts which adapter the factory
+``FakeModule`` stand-in), then asserts which adapter the entry
 dispatched to.  That makes each test pass only against the adapter
 module it names — on every other runtime the named module isn't
 staged and the import fails.  Routing is a host-verified concern as a
@@ -22,7 +22,7 @@ runtime-independent public-surface checks (``UnsupportedSSLConfigError``)
 stay in the cross-runtime ``test_factories.py``.
 """
 
-#: Host-only lane: fakes a runtime identity and asserts the factory's
+#: Host-only lane: fakes a runtime identity and asserts the entry's
 #: adapter route, so it runs on every host interpreter (CPython + MP/CP
 #: unix-port) but never on real silicon.
 __chumicro_host_only__ = True
@@ -49,18 +49,15 @@ if sys.implementation.name != "cpython":
 
 import chumicro_sockets  # noqa: E402 — load-order dependency on the stub above
 from chumicro_sockets import (  # noqa: E402
+    connector,
+    listener,
     set_default_ca_bundle,
     ssl_context_no_verify,
     ssl_context_with_ca,
     ssl_context_with_cert_and_key,
     ssl_context_with_cert_and_key_paths,
-    tcp_client_connector,
-    tcp_client_socket,
-    tcp_listening_socket,
-    tls_client_connector,
-    tls_client_socket,
-    tls_listening_socket,
 )
+from chumicro_test_harness import raises  # noqa: E402
 from chumicro_test_harness.patching import (  # noqa: E402
     FakeModule,
     SwapAttribute,
@@ -98,178 +95,151 @@ def _stub_mp_adapter(**attrs):
 
 
 # ---------------------------------------------------------------------------
-# Adapter routing — patch _runtime_name to simulate runtimes
+# connector routing — patch the adapter binding to simulate runtimes
 # ---------------------------------------------------------------------------
 
 
-class TestAdapterRouting:
+class TestConnectorRouting:
+    """``connector`` dispatches to the runtime-appropriate adapter with its kwargs intact."""
+
     def test_cpython_runtime_routes_to_cpython_adapter(self) -> None:
         captured: dict = {}
 
-        def fake_connect(host, port, **_kwargs):
-            captured["routed"] = "cpython"
-            captured["host"] = host
-            captured["port"] = port
-            return "fake-cpython-socket"
+        def fake_connector(host, port, *, tls, context, **_kwargs):
+            captured["called"] = (host, port, tls, context)
+            return "fake-cpython-connector"
 
         from chumicro_sockets._adapters import cpython as cpython_adapter
 
         with _set_runtime("cpython"), \
-                SwapAttribute(cpython_adapter, "connect_tcp", fake_connect):
-            result = tcp_client_socket("h", 1)
+                SwapAttribute(cpython_adapter, "connector", fake_connector):
+            result = connector("h", 1)
 
-        assert result == "fake-cpython-socket"
-        assert captured["routed"] == "cpython"
+        assert result == "fake-cpython-connector"
+        assert captured["called"] == ("h", 1, False, None)
 
     def test_circuitpython_runtime_routes_to_cp_adapter(self) -> None:
         captured: dict = {}
 
         from chumicro_sockets._adapters import cp as cp_adapter
 
-        def fake_connect(host, port, *, radio, **_kwargs):
-            captured["routed"] = "cp"
-            captured["radio"] = radio
-            return "fake-cp-socket"
+        def fake_connector(host, port, *, tls, context, radio, **_kwargs):
+            captured["called"] = (host, port, tls, context, radio)
+            return "fake-cp-connector"
 
         with _set_runtime("circuitpython"), \
-                SwapAttribute(cp_adapter, "connect_tcp", fake_connect):
-            result = tcp_client_socket("h", 1, radio="fake-radio")
+                SwapAttribute(cp_adapter, "connector", fake_connector):
+            result = connector("h", 1, radio="fake-radio")
 
-        assert result == "fake-cp-socket"
-        assert captured["routed"] == "cp"
-        assert captured["radio"] == "fake-radio"
+        assert result == "fake-cp-connector"
+        assert captured["called"] == ("h", 1, False, None, "fake-radio")
 
     def test_micropython_runtime_routes_to_mp_adapter(self) -> None:
         captured: dict = {}
 
-        def fake_connect(host, port, **_kwargs):
-            captured["routed"] = "mp"
-            return "fake-mp-socket"
+        def fake_connector(host, port, *, tls, context, **_kwargs):
+            captured["called"] = (host, port, tls, context)
+            return "fake-mp-connector"
 
         contexts = [_set_runtime("micropython")]
-        contexts.extend(_stub_mp_adapter(connect_tcp=fake_connect))
+        contexts.extend(_stub_mp_adapter(connector=fake_connector))
 
         # Manually enter / exit because we have a variable-length stack.
         for context in contexts:
             context.__enter__()
         try:
-            result = tcp_client_socket("h", 1)
+            result = connector("h", 1, tls=True, context="ctx")
         finally:
             for context in reversed(contexts):
                 context.__exit__(None, None, None)
 
-        assert result == "fake-mp-socket"
-        assert captured["routed"] == "mp"
+        assert result == "fake-mp-connector"
+        assert captured["called"] == ("h", 1, True, "ctx")
 
 
 # ---------------------------------------------------------------------------
-# tcp_listening_socket routing
+# listener routing
 # ---------------------------------------------------------------------------
 
 
 class TestListenerRouting:
-    """``tcp_listening_socket`` dispatches to the runtime-appropriate adapter."""
+    """``listener`` dispatches to the runtime-appropriate adapter."""
 
     def test_circuitpython_runtime_routes_to_cp_adapter(self) -> None:
         captured: dict = {}
 
-        def fake_listen(host, port, *, backlog, radio, **_kwargs):
-            captured["called"] = (host, port, backlog, radio)
+        def fake_listener(host, port, *, tls, context, backlog, radio, **_kwargs):
+            captured["called"] = (host, port, tls, context, backlog, radio)
             return "cp-listener"
 
         from chumicro_sockets._adapters import cp as cp_adapter
 
         with _set_runtime("circuitpython"), \
-                SwapAttribute(cp_adapter, "listen_tcp", fake_listen):
-            result = tcp_listening_socket("0.0.0.0", 8080, radio="fake-radio")
+                SwapAttribute(cp_adapter, "listener", fake_listener):
+            result = listener("0.0.0.0", 8080, radio="fake-radio")
 
         assert result == "cp-listener"
-        assert captured["called"] == ("0.0.0.0", 8080, 4, "fake-radio")
+        assert captured["called"] == ("0.0.0.0", 8080, False, None, 4, "fake-radio")
 
     def test_micropython_runtime_routes_to_mp_adapter(self) -> None:
         captured: dict = {}
 
-        def fake_listen(host, port, *, backlog, **_kwargs):
-            captured["called"] = (host, port, backlog)
+        def fake_listener(host, port, *, tls, context, backlog, **_kwargs):
+            captured["called"] = (host, port, tls, context, backlog)
             return "mp-listener"
 
         contexts = [_set_runtime("micropython")]
-        contexts.extend(_stub_mp_adapter(listen_tcp=fake_listen))
+        contexts.extend(_stub_mp_adapter(listener=fake_listener))
 
         for context in contexts:
             context.__enter__()
         try:
-            result = tcp_listening_socket("0.0.0.0", 8080, backlog=8)
+            result = listener("0.0.0.0", 8080, backlog=8)
         finally:
             for context in reversed(contexts):
                 context.__exit__(None, None, None)
 
         assert result == "mp-listener"
-        assert captured["called"] == ("0.0.0.0", 8080, 8)
+        assert captured["called"] == ("0.0.0.0", 8080, False, None, 8)
 
-
-# ---------------------------------------------------------------------------
-# tls_listening_socket routing
-# ---------------------------------------------------------------------------
-
-
-class TestTLSListenerRouting:
-    """``tls_listening_socket`` dispatches to the runtime-appropriate adapter."""
-
-    def test_cpython_runtime_routes_to_cpython_adapter(self) -> None:
+    def test_cpython_tls_listener_routes_with_context(self) -> None:
         captured: dict = {}
 
-        def fake_listen_tls(host, port, *, context, backlog, **_kwargs):
-            captured["called"] = (host, port, context, backlog)
+        def fake_listener(host, port, *, tls, context, backlog, **_kwargs):
+            captured["called"] = (host, port, tls, context, backlog)
             return "cpython-tls-listener"
 
         from chumicro_sockets._adapters import cpython as cpython_adapter
 
         with _set_runtime("cpython"), \
-                SwapAttribute(cpython_adapter, "listen_tls", fake_listen_tls):
-            result = tls_listening_socket("0.0.0.0", 8443, context="fake-ctx")
+                SwapAttribute(cpython_adapter, "listener", fake_listener):
+            result = listener("0.0.0.0", 8443, tls=True, context="fake-ctx")
 
         assert result == "cpython-tls-listener"
-        assert captured["called"] == ("0.0.0.0", 8443, "fake-ctx", 4)
+        assert captured["called"] == ("0.0.0.0", 8443, True, "fake-ctx", 4)
 
-    def test_circuitpython_runtime_routes_to_cp_adapter(self) -> None:
-        captured: dict = {}
+    def test_tls_without_context_raises_before_dispatch(self) -> None:
+        """``listener(tls=True)`` with no context raises ValueError at the
+        package entry — the adapter is never consulted, so the error is
+        identical on every runtime."""
+        captured: dict = {"dispatched": False}
 
-        def fake_listen_tls(host, port, *, context, backlog, radio, **_kwargs):
-            captured["called"] = (host, port, context, backlog, radio)
-            return "cp-tls-listener"
-
-        from chumicro_sockets._adapters import cp as cp_adapter
-
-        with _set_runtime("circuitpython"), \
-                SwapAttribute(cp_adapter, "listen_tls", fake_listen_tls):
-            result = tls_listening_socket(
-                "0.0.0.0", 8443, context="ctx", radio="radio",
-            )
-
-        assert result == "cp-tls-listener"
-        assert captured["called"] == ("0.0.0.0", 8443, "ctx", 4, "radio")
-
-    def test_micropython_runtime_routes_to_mp_adapter(self) -> None:
-        captured: dict = {}
-
-        def fake_listen_tls(host, port, *, context, backlog, **_kwargs):
-            captured["called"] = (host, port, context, backlog)
-            return "mp-tls-listener"
+        def fake_listener(*_args, **_kwargs):
+            captured["dispatched"] = True
 
         contexts = [_set_runtime("micropython")]
-        contexts.extend(_stub_mp_adapter(listen_tls=fake_listen_tls))
+        contexts.extend(_stub_mp_adapter(listener=fake_listener))
 
         for context in contexts:
             context.__enter__()
         try:
-            result = tls_listening_socket("0.0.0.0", 8443, context="ctx", backlog=8)
+            with raises(ValueError):
+                listener("0.0.0.0", 8443, tls=True)
         finally:
             for context in reversed(contexts):
                 context.__exit__(None, None, None)
 
-        assert result == "mp-tls-listener"
-        assert captured["called"] == ("0.0.0.0", 8443, "ctx", 8)
+        assert captured["dispatched"] is False
 
 
 # ---------------------------------------------------------------------------
@@ -346,81 +316,49 @@ class TestSslContextWithCertAndKeyRouting:
 
 
 # ---------------------------------------------------------------------------
-# CPython TLS — routing test that doesn't need a real ssl module
+# CPython TLS default context — the connector's context=None resolution
 # ---------------------------------------------------------------------------
 
 
-class TestCPythonTLSDefaultContextRouting:
-    """``tls_client_socket(context=None)`` on CPython routes through ``ssl.create_default_context``.
+class TestCPythonDefaultTLSContext:
+    """``_resolve_default_context`` is what the CPython connector's TLS
+    phase calls with the constructor's ``context``; ``None`` must build
+    stdlib's secure default rather than skipping verification."""
 
-    The CPython adapter does ``import socket`` + ``import ssl`` lazily
-    (inside the function body).  We stub both via ``sys.modules`` so
-    the test runs on
-    every runtime — the CP unix-port doesn't ship working stdlib
-    ``ssl`` (the build-flag enable only unlocks ``hashlib.sha1`` /
-    ``hashlib.md5``, not the ``ssl`` shim, which still ImportErrors
-    on ``import tls``).
-    """
-
-    def test_default_context_used_when_none_passed(self) -> None:
+    def test_none_builds_stdlib_default_context(self) -> None:
         from chumicro_sockets._adapters import cpython as cpython_adapter
 
         captured: dict = {}
 
-        class _FakeRawSocket:
-            def close(self) -> None:
-                captured["raw_closed"] = True
-
-            def setblocking(self, flag) -> None:  # noqa: ARG002
-                pass
-
-            def settimeout(self, seconds) -> None:  # noqa: ARG002
-                pass
-
-        def fake_create_connection(address):
-            captured["address"] = address
-            return _FakeRawSocket()
-
-        class _FakeContext:
-            def wrap_socket(self, sock, *, server_hostname):
-                captured["server_hostname"] = server_hostname
-                captured["wrapped"] = True
-                return sock
-
         def fake_default_context():
             captured["used_default_context"] = True
-            return _FakeContext()
-
-        fake_socket = FakeModule()
-        fake_socket.create_connection = fake_create_connection
+            return "default-ctx"
 
         fake_ssl = FakeModule()
         fake_ssl.create_default_context = fake_default_context
 
-        # The cpython adapter imports ``socket`` / ``ssl`` at module
-        # top, so swap the adapter's module-level bindings directly.
-        with _set_runtime("cpython"), \
-                SwapAttribute(cpython_adapter, "socket", fake_socket), \
-                SwapAttribute(cpython_adapter, "ssl", fake_ssl):
-            result = tls_client_socket("example.com", 443)
+        # The cpython adapter imports ``ssl`` at module top, so swap the
+        # adapter's module-level binding directly.
+        with SwapAttribute(cpython_adapter, "ssl", fake_ssl):
+            result = cpython_adapter._resolve_default_context(None)
 
+        assert result == "default-ctx"
         assert captured.get("used_default_context") is True
-        assert captured.get("server_hostname") == "example.com"
-        assert captured.get("wrapped") is True
-        # tls_client_socket wraps the SSLSocket to normalize SSLWant* to
-        # EAGAIN; the raw socket stays reachable on ``.sock``.
-        assert isinstance(result.sock, _FakeRawSocket)
-        result.close()
-        assert captured.get("raw_closed") is True
+
+    def test_explicit_context_passes_through_unchanged(self) -> None:
+        from chumicro_sockets._adapters import cpython as cpython_adapter
+
+        sentinel = object()
+        assert cpython_adapter._resolve_default_context(sentinel) is sentinel
 
 
 # ---------------------------------------------------------------------------
-# CircuitPython TLS — passes contexts through to socketpool.wrap_socket
+# CircuitPython TLS — the CP connector passes contexts through wrap_socket
 # ---------------------------------------------------------------------------
 
 
 class TestCircuitPythonTLSPassthrough:
-    """CP adapter delegates to the supplied context's ``wrap_socket``."""
+    """The CP connector delegates to the supplied context's ``wrap_socket``."""
 
     def test_passes_context_to_wrap_socket(self) -> None:
         captured: dict = {}
@@ -438,6 +376,9 @@ class TestCircuitPythonTLSPassthrough:
             def socket(self, family, kind):
                 return _FakeRawSocket()
 
+            def getaddrinfo(self, host, port, family, kind):
+                return [(family, kind, 0, "", (host, port))]
+
         class _FakeContext:
             def wrap_socket(self, sock, *, server_hostname):
                 captured["wrapped"] = True
@@ -446,18 +387,23 @@ class TestCircuitPythonTLSPassthrough:
 
         with _set_runtime("circuitpython"), \
                 SwapAttribute(cp_adapter, "_pool_for", lambda radio: _FakePool()):
-            tls_client_socket(
+            cp_connector = connector(
                 "broker.example.com", 8883,
+                tls=True,
                 context=_FakeContext(),
                 radio="fake-radio",
             )
+            cp_connector.tick(0)  # awaiting_dns -> awaiting_tcp
+            cp_connector.tick(0)  # wrap + blocking connect -> ready
 
+        assert cp_connector.state == "ready"
         assert captured.get("wrapped") is True
         assert captured.get("server_hostname") == "broker.example.com"
         assert captured.get("connected_to") == ("broker.example.com", 8883)
 
     def test_default_context_on_cp_uses_ssl_create_default_context(self) -> None:
-        """``context=None`` routes through ``ssl.create_default_context()`` on CP."""
+        """``connector(tls=True, context=None)`` on CP routes through
+        ``ssl.create_default_context()`` before wrapping."""
         captured: dict = {}
 
         from chumicro_sockets._adapters import cp as cp_adapter
@@ -473,6 +419,9 @@ class TestCircuitPythonTLSPassthrough:
             def socket(self, family, kind):
                 return _FakeRawSocket()
 
+            def getaddrinfo(self, host, port, family, kind):
+                return [(family, kind, 0, "", (host, port))]
+
         class _FakeContext:
             def wrap_socket(self, sock, *, server_hostname):
                 captured["used_default"] = True
@@ -484,8 +433,11 @@ class TestCircuitPythonTLSPassthrough:
         with _set_runtime("circuitpython"), \
                 SwapItem(sys.modules, "ssl", fake_ssl), \
                 SwapAttribute(cp_adapter, "_pool_for", lambda radio: _FakePool()):
-            tls_client_socket("h", 8883, radio="fake-radio")
+            cp_connector = connector("h", 8883, tls=True, radio="fake-radio")
+            cp_connector.tick(0)
+            cp_connector.tick(0)
 
+        assert cp_connector.state == "ready"
         assert captured.get("used_default") is True
 
     def test_ssl_context_with_ca_works_on_cp(self) -> None:
@@ -693,135 +645,11 @@ class TestSetDefaultCaBundleRouting:
             set_default_ca_bundle(None)  # must not raise
 
 
-# TestCpListenTlsRefusesOnRp2 lives in test_factories_pytest.py — the
+# TestCpListenerTlsRefusesOnRp2 lives in test_factories_pytest.py — the
 # tests need to monkeypatch ``sys.platform``, but on MicroPython /
 # CircuitPython unix-ports ``sys`` is read-only at the C level and
 # ``setattr(sys, "platform", ...)`` raises ``AttributeError``.  No
 # portable way to simulate "running on RP2040" from a non-RP2 host.
-
-
-# ---------------------------------------------------------------------------
-# tls_client_socket — MP routing (CP + CPython already covered above)
-# ---------------------------------------------------------------------------
-
-
-class TestTLSClientSocketMPRouting:
-    """``tls_client_socket`` on micropython routes through the MP adapter."""
-
-    def test_micropython_runtime_routes_to_mp_adapter(self) -> None:
-        captured: dict = {}
-
-        def fake_connect_tls(host, port, *, context, **_kwargs):
-            captured["called"] = (host, port, context)
-            return "mp-tls-socket"
-
-        contexts = [_set_runtime("micropython")]
-        contexts.extend(_stub_mp_adapter(connect_tls=fake_connect_tls))
-
-        for context in contexts:
-            context.__enter__()
-        try:
-            result = tls_client_socket("broker.example", 8883, context="ctx")
-        finally:
-            for context in reversed(contexts):
-                context.__exit__(None, None, None)
-
-        assert result == "mp-tls-socket"
-        assert captured["called"] == ("broker.example", 8883, "ctx")
-
-
-# ---------------------------------------------------------------------------
-# tcp_client_connector routing
-# ---------------------------------------------------------------------------
-
-
-class TestTCPClientConnectorRouting:
-    """``tcp_client_connector`` dispatches to the runtime-appropriate adapter."""
-
-    def test_circuitpython_runtime_routes_to_cp_adapter(self) -> None:
-        captured: dict = {}
-
-        def fake_connector(host, port, *, radio, **_kwargs):
-            captured["called"] = (host, port, radio)
-            return "cp-tcp-connector"
-
-        from chumicro_sockets._adapters import cp as cp_adapter
-
-        with _set_runtime("circuitpython"), \
-                SwapAttribute(cp_adapter, "tcp_connector", fake_connector):
-            result = tcp_client_connector("host", 80, radio="fake-radio")
-
-        assert result == "cp-tcp-connector"
-        assert captured["called"] == ("host", 80, "fake-radio")
-
-    def test_micropython_runtime_routes_to_mp_adapter(self) -> None:
-        captured: dict = {}
-
-        def fake_connector(host, port, **_kwargs):
-            captured["called"] = (host, port)
-            return "mp-tcp-connector"
-
-        contexts = [_set_runtime("micropython")]
-        contexts.extend(_stub_mp_adapter(tcp_connector=fake_connector))
-
-        for context in contexts:
-            context.__enter__()
-        try:
-            result = tcp_client_connector("host", 80)
-        finally:
-            for context in reversed(contexts):
-                context.__exit__(None, None, None)
-
-        assert result == "mp-tcp-connector"
-        assert captured["called"] == ("host", 80)
-
-
-# ---------------------------------------------------------------------------
-# tls_client_connector routing
-# ---------------------------------------------------------------------------
-
-
-class TestTLSClientConnectorRouting:
-    """``tls_client_connector`` dispatches to the runtime-appropriate adapter."""
-
-    def test_circuitpython_runtime_routes_to_cp_adapter(self) -> None:
-        captured: dict = {}
-
-        def fake_connector(host, port, *, context, radio, **_kwargs):
-            captured["called"] = (host, port, context, radio)
-            return "cp-tls-connector"
-
-        from chumicro_sockets._adapters import cp as cp_adapter
-
-        with _set_runtime("circuitpython"), \
-                SwapAttribute(cp_adapter, "tls_connector", fake_connector):
-            result = tls_client_connector(
-                "host", 443, context="ctx", radio="fake-radio",
-            )
-
-        assert result == "cp-tls-connector"
-        assert captured["called"] == ("host", 443, "ctx", "fake-radio")
-
-    def test_micropython_runtime_routes_to_mp_adapter(self) -> None:
-        captured: dict = {}
-
-        def fake_connector(host, port, *, context, **_kwargs):
-            captured["called"] = (host, port, context)
-            return "mp-tls-connector"
-
-        contexts = [_set_runtime("micropython")]
-        contexts.extend(_stub_mp_adapter(tls_connector=fake_connector))
-
-        for context in contexts:
-            context.__enter__()
-        try:
-            result = tls_client_connector("host", 443, context="ctx")
-        finally:
-            for context in reversed(contexts):
-                context.__exit__(None, None, None)
-
-        assert result == "mp-tls-connector"
-        assert captured["called"] == ("host", 443, "ctx")
 
 
 # ---------------------------------------------------------------------------

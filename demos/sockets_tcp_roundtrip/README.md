@@ -1,10 +1,11 @@
-# sockets_tcp_roundtrip — synchronous TCP, wifi via runner
+# sockets_tcp_roundtrip — one-shot TCP via the connector, wifi via runner
 
-End-to-end demo of `chumicro_sockets.tcp_client_socket` against a host
+End-to-end demo of `chumicro_sockets.connector` against a host
 echo server.  Wifi comes up via `chumicro_wifi.WifiService` driven by
-`chumicro_runner.Runner`; once up, the board does a plain
-`tcp_client_socket(host, port, radio=...)` and `send` / `recv_into`
-synchronously.
+`chumicro_runner.Runner`; once up, the board registers a
+`connector(host, port, radio=...)` with the runner, drives it to
+`ready` via `runner.run_until`, then uses the socket with `send` /
+`recv_into` synchronously.
 
 ## What it shows
 
@@ -12,11 +13,12 @@ synchronously.
   `chumicro_config.load_runtime_config()`, added to `chumicro_runner.Runner`,
   driven until `WifiState.CONNECTED`.  No `wifi_up()` shortcut — the
   ecosystem brings the link up.
-- **Entry-level sockets API.**  `tcp_client_socket(host, port, radio=...)`
-  returns an already-connected socket.  The app calls `send` /
-  `recv_into` / `close` synchronously — same shape as the
-  `libraries/sockets/examples/tcp_roundtrip.py` example but with a
-  host echo server so the round-trip data is visible.
+- **Entry-level sockets API.**  `connector(host, port, radio=...)`
+  is a runner service — `runner.add(dial)` + `runner.run_until(...)`
+  drive DNS → TCP to `ready` without blocking a tick.  The app then
+  calls `send` / `recv_into` / `close` synchronously — same shape as
+  the `libraries/sockets/examples/tcp_roundtrip.py` example but with
+  a host echo server so the round-trip data is visible.
 - **Round trip on the wire.**  Board sends `b"hello chumicro\n"`,
   echo server bounces it back, board confirms the payload.
 

@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
@@ -30,7 +31,6 @@ from pathlib import Path
 from chumicro_mqtt import MQTTClient, ProtocolState
 from chumicro_pytest_device.fixtures.lan import detect_lan_ip
 from chumicro_pytest_device.fixtures.mosquitto import start_mosquitto_broker
-from chumicro_sockets import tcp_client_socket
 from chumicro_timing import ticks_ms
 from chumicro_workspace.deploy_api import (
     DeployApiError,
@@ -81,7 +81,8 @@ def _resolve_broker() -> tuple[subprocess.Popen[bytes], Path, str, int]:
 
 
 def _new_host_client(broker_host: str, broker_port: int) -> MQTTClient:
-    sock = tcp_client_socket(broker_host, broker_port)
+    # Host-side CPython driver: stdlib connect is the one-shot form here.
+    sock = socket.create_connection((broker_host, broker_port))
     sock.setblocking(False)
     return MQTTClient(
         sock,

@@ -121,7 +121,7 @@ _AWAIT_PUBACK = "puback"
 _AWAIT_SUBACK = "suback"
 _AWAIT_UNSUBACK = "unsuback"
 
-# Self-heal reconnect backoff.  A FAILED client with a connector_factory
+# Self-heal reconnect backoff.  A FAILED client with a transport_factory
 # rebuilds the transport, but retrying every tick storms the broker and
 # drains battery on a persistent failure (dead wifi, unreachable host).
 # The first retry after a fresh failure is immediate; each subsequent
@@ -266,14 +266,14 @@ class MQTTClient:
         radio: object | None = None,
         ssl_context: object | None = None,
         socket: object | None = None,
-        connector_factory: object | None = None,
+        transport_factory: object | None = None,
     ) -> "MQTTClient":
         """Build an :class:`MQTTClient` from runtime config.
 
         Reads ``mqtt.broker.host`` / ``mqtt.broker.port`` (required when
-        no *socket* / *connector_factory* override), plus optional
+        no *socket* / *transport_factory* override), plus optional
         ``mqtt.client_id`` / ``mqtt.keep_alive_seconds`` / ``mqtt.username``
-        / ``mqtt.password``.  A *socket* or *connector_factory* override
+        / ``mqtt.password``.  A *socket* or *transport_factory* override
         bypasses the auto-built factory entirely.  Missing broker keys
         raise :class:`chumicro_config.MissingConfigKey`.
 
@@ -287,8 +287,8 @@ class MQTTClient:
                 "from_config requires a mapping-like config "
                 f"(RuntimeConfig or dict), got {type(config).__name__}",
             )
-        if socket is None and connector_factory is None:
-            # Lazy import so users who pass their own socket / connector_factory
+        if socket is None and transport_factory is None:
+            # Lazy import so users who pass their own socket / transport_factory
             # don't pull chumicro_sockets into the deploy graph.  See
             # ``chumicro_mqtt.sockets_factory`` for the helper itself.
             try:
@@ -299,16 +299,16 @@ class MQTTClient:
                 raise RuntimeError(
                     "chumicro_mqtt.sockets_factory not available "
                     "(excluded via __chumicro_skip_factories__ or "
-                    "not on the board) — pass connector_factory= or "
+                    "not on the board) — pass transport_factory= or "
                     "socket= explicitly.",
                 ) from exception
 
-            connector_factory = chumicro_sockets_connector_factory(
+            transport_factory = chumicro_sockets_connector_factory(
                 config, radio=radio, ssl_context=ssl_context,
             )
         return cls(
             socket=socket,
-            connector_factory=connector_factory,
+            transport_factory=transport_factory,
             client_id=config.get("mqtt.client_id", "chumicro-mqtt"),
             keep_alive_seconds=config.get("mqtt.keep_alive_seconds", 60),
             username=config.get("mqtt.username"),
@@ -319,7 +319,7 @@ class MQTTClient:
         self,
         socket: object | None = None,
         *,
-        connector_factory: object | None = None,
+        transport_factory: object | None = None,
         client_id: str,
         root_topic: str | None = None,
         keep_alive_seconds: int = 60,
@@ -350,8 +350,8 @@ class MQTTClient:
                 See the user guide's "Bring your own transport" table
                 for the per-method contract.  The client takes
                 ownership.  :meth:`disconnect` closes it.  May be
-                ``None`` when *connector_factory* is provided.
-            connector_factory: Optional zero-arg callable returning a
+                ``None`` when *transport_factory* is provided.
+            transport_factory: Optional zero-arg callable returning a
                 :class:`~chumicro_sockets.SocketConnector` — the
                 non-blocking connect state machine.  Used in two paths:
                 (1) when *socket* is ``None``, :meth:`connect` invokes
@@ -433,14 +433,14 @@ class MQTTClient:
                 Defaults to that submodule (real clock).  Tests pass
                 ``FakeTicks`` from ``chumicro_timing.testing``.
         """
-        if socket is None and connector_factory is None:
+        if socket is None and transport_factory is None:
             raise ValueError(
                 "MQTTClient requires either a connected socket or a "
-                "connector_factory (or both — factory is used for self-heal "
+                "transport_factory (or both — factory is used for self-heal "
                 "after wifi-drop)."
             )
         self._socket = socket
-        self._connector_factory = connector_factory
+        self._transport_factory = transport_factory
         self._connector = None
         if self._socket is not None:
             _force_non_blocking(self._socket)
@@ -568,7 +568,7 @@ class MQTTClient:
         that already owns the connect): the MQTT CONNECT packet is
         queued immediately and the state transitions to ``CONNECTING``.
 
-        With a ``connector_factory=``: the factory is invoked to build
+        With a ``transport_factory=``: the factory is invoked to build
         a :class:`~chumicro_sockets.SocketConnector`, the state
         transitions to ``AWAITING_TRANSPORT``, and subsequent
         :meth:`handle` ticks drive the connect forward: the TCP phase
@@ -580,7 +580,7 @@ class MQTTClient:
         fails, the state transitions to ``FAILED`` with ``last_error``
         carrying the connector's error.
 
-        Factory errors raised synchronously from ``connector_factory()``
+        Factory errors raised synchronously from ``transport_factory()``
         land as ``FAILED`` + ``last_error`` rather than propagating, so
         the runner contract holds.  Self-heal retries on subsequent
         ticks.
@@ -604,7 +604,7 @@ class MQTTClient:
         self._self_heal_retry_at_ticks = None
         if self._socket is None:
             try:
-                self._connector = self._connector_factory()
+                self._connector = self._transport_factory()
             except Exception as factory_error:  # noqa: BLE001 - documented: all factory errors -> FAILED
                 self.last_error = MQTTError(
                     f"connector factory failed: {factory_error}",
@@ -1014,7 +1014,7 @@ class MQTTClient:
         if self.state != ProtocolState.FAILED:
             return False
         return (
-            self._connector_factory is None
+            self._transport_factory is None
             or not self._user_wants_connected
             or self._permanent_failure
         )
@@ -1178,7 +1178,7 @@ class MQTTClient:
             # A self-heal-eligible FAILED client wakes at its next backoff
             # retry; a permanent failure (or no factory) parks forever.
             if (
-                self._connector_factory is not None
+                self._transport_factory is not None
                 and self._user_wants_connected
                 and not self._permanent_failure
             ):
@@ -1216,7 +1216,7 @@ class MQTTClient:
         queued by the read, and any application packets enqueued
         between ticks).
 
-        When the client is in ``FAILED`` and a ``connector_factory`` is
+        When the client is in ``FAILED`` and a ``transport_factory`` is
         configured + the user originally called ``connect()``, this
         tick attempts a self-heal: build a fresh connector and enter
         ``AWAITING_TRANSPORT``.  Subsequent ticks drive the connector
@@ -1243,7 +1243,7 @@ class MQTTClient:
         """
         if self.state == ProtocolState.FAILED:
             if (
-                self._connector_factory is None
+                self._transport_factory is None
                 or not self._user_wants_connected
                 or self._permanent_failure
             ):
@@ -1308,7 +1308,7 @@ class MQTTClient:
     def _attempt_self_heal(self):
         """Reset transient state, build a fresh connector, enter AWAITING_TRANSPORT.
 
-        Best-effort: if ``connector_factory()`` itself raises (typically
+        Best-effort: if ``transport_factory()`` itself raises (typically
         because wifi is still down) the client stays in ``FAILED`` and
         the next handle tick retries.  The actual DNS / TCP / TLS work
         happens across subsequent ticks in :meth:`_advance_connector`,
@@ -1335,7 +1335,7 @@ class MQTTClient:
             self._in_flight = {}
             self._next_packet_id = 1
         try:
-            self._connector = self._connector_factory()
+            self._connector = self._transport_factory()
         except Exception as factory_error:  # noqa: BLE001 - documented: all factory errors -> FAILED
             self.last_error = MQTTError(
                 f"connector factory failed: {factory_error}",

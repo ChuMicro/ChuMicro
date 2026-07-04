@@ -19,7 +19,7 @@ Marker lines (``WIFI_OK``, ``CONNECTING``, ``CONNECTED``, ``SENT``,
 
 from chumicro_config import load_runtime_config
 from chumicro_runner import Runner
-from chumicro_sockets import tcp_client_connector
+from chumicro_sockets import connector
 from chumicro_sockets.generators import connect, recv_until, send_all
 from chumicro_test_harness.markers import marker
 from chumicro_timing.waits import Signal, wait_for
@@ -34,7 +34,7 @@ def echo_run(wifi, link_up, host, port):
     marker("WIFI_OK", ip=wifi.ip)
     marker("CONNECTING", host=host, port=port)
     sock = yield from connect(
-        tcp_client_connector(host, port, radio=wifi.adapter.radio),
+        connector(host, port, radio=wifi.adapter.radio),
     )
     marker("CONNECTED")
     try:

@@ -545,7 +545,7 @@ def _build_method_not_allowed_response(allowed_methods) -> Response:
 class HttpServer:
     """Non-blocking HTTP/1.1 server.
 
-    Construct with a *listener_factory*, then either:
+    Construct with a *transport_factory*, then either:
 
     * Register handlers via the :meth:`route` decorator
       (``@server.route("/path", methods=["GET", "POST"])``), or
@@ -571,7 +571,7 @@ class HttpServer:
         handler: object | None = None,
         radio: object | None = None,
         ssl_context: object | None = None,
-        listener_factory: object | None = None,
+        transport_factory: object | None = None,
     ) -> "HttpServer":
         """Build an :class:`HttpServer` from runtime config.
 
@@ -580,13 +580,13 @@ class HttpServer:
         ``max_request_body_bytes`` / ``max_request_line_bytes`` /
         ``max_headers_bytes`` / ``tls.cert_path`` / ``tls.key_path``)
         from *config*.  All defaults apply when
-        absent; a custom *listener_factory* bypasses the auto-build
+        absent; a custom *transport_factory* bypasses the auto-build
         entirely, *ssl_context* opts into TLS without config paths,
         and exactly one half of the TLS pair raises
         :class:`chumicro_config.MissingConfigKey`.
         """
-        if listener_factory is None:
-            # Lazy import so users who pass their own listener_factory
+        if transport_factory is None:
+            # Lazy import so users who pass their own transport_factory
             # don't pull chumicro_sockets into the deploy graph.  See
             # ``chumicro_http_server.sockets_factory`` for the helper itself.
             try:
@@ -597,15 +597,15 @@ class HttpServer:
                 raise RuntimeError(
                     "chumicro_http_server.sockets_factory not "
                     "available (excluded via __chumicro_skip_factories__ "
-                    "or not on the board) — pass listener_factory= "
+                    "or not on the board) — pass transport_factory= "
                     "explicitly.",
                 ) from exception
 
-            listener_factory = chumicro_sockets_factory(
+            transport_factory = chumicro_sockets_factory(
                 config, radio=radio, ssl_context=ssl_context,
             )
         return cls(
-            listener_factory=listener_factory,
+            transport_factory=transport_factory,
             handler=handler,
             max_connections=config.get(
                 "http_server.max_connections", DEFAULT_MAX_CONNECTIONS,
@@ -631,7 +631,7 @@ class HttpServer:
     def __init__(
         self,
         *,
-        listener_factory: object,
+        transport_factory: object,
         handler: object | None = None,
         max_connections: int = DEFAULT_MAX_CONNECTIONS,
         request_timeout_ms: int = DEFAULT_REQUEST_TIMEOUT_MS,
@@ -645,9 +645,9 @@ class HttpServer:
         """Wire up the server.
 
         Args:
-            listener_factory: Callable ``() -> ListeningSocket`` that
+            transport_factory: Callable ``() -> ListeningSocket`` that
                 opens a non-blocking listener (typically
-                ``lambda: tcp_listening_socket(host, port,
+                ``lambda: listener(host, port,
                 radio=wifi.radio)``).  Invoked once on the first
                 :meth:`handle` call.
             handler: Optional fallback callable
@@ -691,7 +691,7 @@ class HttpServer:
                 Defaults to that submodule (real clock); tests pass
                 ``FakeTicks`` from ``chumicro_timing.testing``.
         """
-        self._listener_factory = listener_factory
+        self._transport_factory = transport_factory
         self._fallback_handler = handler
         self._max_connections = max_connections
         self._request_timeout_ms = request_timeout_ms
@@ -955,7 +955,7 @@ class HttpServer:
     def handle(self, now_ms):
         """One tick of progress: lazy-open listener, accept, advance conns."""
         if self._listener is None:
-            self._listener = self._listener_factory()
+            self._listener = self._transport_factory()
             _force_non_blocking(self._listener)
         # Try to accept up to one new connection per tick.
         if len(self._connections) < self._max_connections:

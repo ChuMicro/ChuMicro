@@ -22,6 +22,7 @@ from __future__ import annotations
 #: CPython-only lane (pytest fixtures / host stdlib); not cross-runtime.
 __chumicro_runtimes__ = ("cpython",)
 
+import select
 import socket
 import ssl
 from datetime import UTC
@@ -29,14 +30,15 @@ from datetime import UTC
 import pytest
 from chumicro_sockets import (
     UnsupportedSSLConfigError,
+    connector,
     ssl_context_with_cert_and_key_paths,
-    tcp_client_socket,
-    tcp_listening_socket,
-    tls_listening_socket,
+)
+from chumicro_sockets import (
+    listener as make_listener,
 )
 
 # ---------------------------------------------------------------------------
-# CPython adapter — real factory call against a loopback echo server
+# CPython adapter — real connect against a loopback echo server
 # ---------------------------------------------------------------------------
 
 
@@ -52,10 +54,34 @@ def echo_server():
     server.close()
 
 
-class TestCPythonTCP:
-    def test_factory_returns_connected_socket(self, echo_server) -> None:
+def _connect_now(host, port):
+    """Drive the public ``connector`` to terminal; return the ready socket.
+
+    Parks briefly on the connector's ``io_socket`` between ticks (the
+    ``Runner.wait`` shape) so the kernel can finish the in-flight
+    connect.  Raises the connector's ``last_error`` on failure.
+    """
+    tcp_connector = connector(host, port)
+    for _ in range(200):
+        if tcp_connector.state in ("ready", "failed"):
+            break
+        io_sock = tcp_connector.io_socket
+        if io_sock is not None:
+            interest = tcp_connector.io_interest(0)
+            read_list = [io_sock] if interest & 1 else []
+            write_list = [io_sock] if interest & 2 else []
+            select.select(read_list, write_list, [], 0.05)
+        tcp_connector.tick(0)
+    if tcp_connector.state == "failed":
+        raise tcp_connector.last_error
+    assert tcp_connector.state == "ready"
+    return tcp_connector.socket
+
+
+class TestCPythonConnect:
+    def test_connector_yields_connected_socket(self, echo_server) -> None:
         host, port = echo_server
-        sock = tcp_client_socket(host, port)
+        sock = _connect_now(host, port)
         try:
             # Real socket has fileno > 0.
             assert sock.fileno() > 0
@@ -63,7 +89,7 @@ class TestCPythonTCP:
             sock.close()
 
     def test_send_returns_byte_count_on_connected_socket(self, echo_server) -> None:
-        """``tcp_client_socket`` returns a socket whose ``send`` reaches the kernel.
+        """The connector's ready socket has a ``send`` that reaches the kernel.
 
         The fixture is a bind-and-listen target, not a real echo
         server (no accept loop is running), so we can't drive a
@@ -74,7 +100,7 @@ class TestCPythonTCP:
         raise, and doesn't silently drop bytes.
         """
         host, port = echo_server
-        sock = tcp_client_socket(host, port)
+        sock = _connect_now(host, port)
         try:
             sent = sock.send(b"hi")
             assert sent == 2
@@ -84,18 +110,19 @@ class TestCPythonTCP:
     def test_unknown_host_raises_oserror(self) -> None:
         # ``no-such-host.invalid`` is reserved by RFC2606 and should
         # never resolve.  Any failure mode (DNS NXDOMAIN, EAI_*,
-        # ConnectionRefused) is wrapped in OSError on stdlib.
+        # ConnectionRefused) surfaces as the connector's OSError-shaped
+        # last_error, re-raised by the drive helper.
         with pytest.raises(OSError):
-            tcp_client_socket("no-such-host.invalid", 1)
+            _connect_now("no-such-host.invalid", 1)
 
 
 class TestCPythonListener:
-    """``tcp_listening_socket`` — non-blocking accept loop on CPython."""
+    """``listener`` — non-blocking accept loop on CPython."""
 
     def test_listener_accepts_loopback_connection(self) -> None:
         import time as time_module
 
-        listener = tcp_listening_socket("127.0.0.1", 0)
+        listener = make_listener("127.0.0.1", 0)
         try:
             host, port = listener.getsockname()
             client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -126,7 +153,7 @@ class TestCPythonListener:
 
     def test_listener_is_non_blocking(self) -> None:
         """``accept()`` raises EAGAIN when no connection is queued."""
-        listener = tcp_listening_socket("127.0.0.1", 0)
+        listener = make_listener("127.0.0.1", 0)
         try:
             with pytest.raises((BlockingIOError, OSError)):
                 listener.accept()
@@ -135,12 +162,12 @@ class TestCPythonListener:
 
     def test_so_reuseaddr_set(self) -> None:
         """Quick rebind on the same port doesn't trip EADDRINUSE."""
-        listener = tcp_listening_socket("127.0.0.1", 0)
+        listener = make_listener("127.0.0.1", 0)
         host, port = listener.getsockname()
         listener.close()
         # Immediate rebind on the same port — would fail without
         # SO_REUSEADDR on most platforms during TIME_WAIT.
-        rebound = tcp_listening_socket("127.0.0.1", port)
+        rebound = make_listener("127.0.0.1", port)
         try:
             assert rebound.getsockname()[1] == port
         finally:
@@ -312,7 +339,7 @@ class TestCPythonTLSListener:
         )
 
         server_context = ssl_context_with_cert_and_key(cert_pem, key_pem)
-        listener = tls_listening_socket("127.0.0.1", 0, context=server_context)
+        listener = make_listener("127.0.0.1", 0, tls=True, context=server_context)
         host, port = listener.sock.getsockname()
 
         # Listener is non-blocking; drive the accept in a background thread.
@@ -363,8 +390,8 @@ class TestCPythonTLSListener:
             listener.close()
 
 
-class TestCpListenTlsRefusesOnRp2:
-    """``cp_adapter.listen_tls`` short-circuits on RP2040 / RP2350 platforms.
+class TestCpListenerTlsRefusesOnRp2:
+    """``cp_adapter.listener(tls=True)`` short-circuits on RP2040 / RP2350 platforms.
 
     Lives here (not in the cross-runtime ``test_factories.py``) because
     the assertions monkeypatch ``sys.platform`` — on MicroPython /
@@ -376,8 +403,8 @@ class TestCpListenTlsRefusesOnRp2:
         from chumicro_sockets._adapters import cp as cp_adapter
         monkeypatch.setattr("sys.platform", "RP2040")
         with pytest.raises(UnsupportedSSLConfigError) as captured:
-            cp_adapter.listen_tls(
-                "0.0.0.0", 8443, context=object(), backlog=4, radio=object(),
+            cp_adapter.listener(
+                "0.0.0.0", 8443, tls=True, context=object(), backlog=4, radio=object(),
             )
         assert "rp2" in str(captured.value).lower()
 
@@ -385,15 +412,15 @@ class TestCpListenTlsRefusesOnRp2:
         from chumicro_sockets._adapters import cp as cp_adapter
         monkeypatch.setattr("sys.platform", "RP2350")
         with pytest.raises(UnsupportedSSLConfigError):
-            cp_adapter.listen_tls(
-                "0.0.0.0", 8443, context=object(), backlog=4, radio=object(),
+            cp_adapter.listener(
+                "0.0.0.0", 8443, tls=True, context=object(), backlog=4, radio=object(),
             )
 
     def test_non_rp2_platform_does_not_short_circuit(self, monkeypatch) -> None:
         from chumicro_sockets._adapters import cp as cp_adapter
         monkeypatch.setattr("sys.platform", "Espressif ESP32-S2")
         with pytest.raises(Exception) as captured:  # noqa: PT011, BLE001
-            cp_adapter.listen_tls(
-                "0.0.0.0", 8443, context=object(), backlog=4, radio=object(),
+            cp_adapter.listener(
+                "0.0.0.0", 8443, tls=True, context=object(), backlog=4, radio=object(),
             )
         assert not isinstance(captured.value, UnsupportedSSLConfigError)

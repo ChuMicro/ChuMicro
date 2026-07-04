@@ -20,9 +20,9 @@ through the harness helper.
 import time
 
 from chumicro_mqtt import MQTTClient
-from chumicro_sockets import tcp_client_socket
+from chumicro_sockets import connector
 from chumicro_test_harness.network import runtime_config, wifi_up
-from chumicro_timing import ticks_ms
+from chumicro_timing import ticks_add, ticks_diff, ticks_ms
 
 _DEADLINE_MS = 30_000
 
@@ -33,6 +33,29 @@ def _sleep_ms(duration_ms: int) -> None:
         runtime_sleep_ms(duration_ms)
         return
     time.sleep(duration_ms / 1000)
+
+
+def _connect(host, port, *, radio=None):
+    """Drive ``connector()`` to terminal inline; return the connected socket.
+
+    The tick-and-sleep loop is the one-shot connect form on-device:
+    the same state machine the runner would drive, without a runner.
+    Raises the connector's ``last_error`` on failure.
+    """
+    dial = connector(host, port, radio=radio)
+    deadline = ticks_add(ticks_ms(), _DEADLINE_MS)
+    while dial.state not in ("ready", "failed"):
+        if ticks_diff(deadline, ticks_ms()) <= 0:
+            dial.cancel()
+            raise AssertionError(
+                f"connect to {host}:{port} exceeded {_DEADLINE_MS} ms "
+                f"(state {dial.state!r})",
+            )
+        dial.tick(ticks_ms())
+        _sleep_ms(10)
+    if dial.state == "failed":
+        raise dial.last_error
+    return dial.socket
 
 
 def _unique_topic_root() -> str:
@@ -62,7 +85,7 @@ def test_real_mqtt_publish_subscribe_round_trip() -> None:
     radio, ip = wifi_up(ssid, password)
     print(f"WIFI_OK ip={ip}")
 
-    sock = tcp_client_socket(broker_host, broker_port, radio=radio)
+    sock = _connect(broker_host, broker_port, radio=radio)
     client = MQTTClient(
         sock,
         client_id=f"chumicro-test-{ticks_ms() % 1_000_000_000}",

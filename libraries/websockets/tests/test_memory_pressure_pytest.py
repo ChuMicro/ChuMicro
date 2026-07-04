@@ -53,7 +53,7 @@ from chumicro_websockets.testing import FakeConnection, FakeListener
 
 def _make_client(socket: FakeConnection, clock: FakeTicks) -> WebSocketClient:
     return WebSocketClient(
-        connector_factory=lambda *_args, **_kwargs: FakeSocketConnector(
+        transport_factory=lambda *_args, **_kwargs: FakeSocketConnector(
             actions=["dns_ok", "tcp_ok"], socket=socket,
         ),
         ticks=clock,

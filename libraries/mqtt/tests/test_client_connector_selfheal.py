@@ -16,7 +16,7 @@ from chumicro_test_harness.assertions import raises
 from chumicro_timing.testing import FakeTicks
 
 
-def _connector_factory(*socks: FakeSocket):
+def _transport_factory(*socks: FakeSocket):
     """Hand back successive scripted ``FakeSocketConnector``s.
 
     Each invocation pops the next socket and wraps it in a connector
@@ -36,7 +36,7 @@ def _connector_factory(*socks: FakeSocket):
 class TestConnectorFactorySelfHeal:
     """The wifi-drop survivability story.
 
-    When ``MQTTClient`` is constructed with a ``connector_factory``, a
+    When ``MQTTClient`` is constructed with a ``transport_factory``, a
     tick in ``FAILED`` state builds a fresh connector via the factory
     and re-enters ``AWAITING_TRANSPORT``; subsequent ticks drive DNS /
     TCP / TLS without blocking the runner.  The caller's run loop sees
@@ -44,7 +44,7 @@ class TestConnectorFactorySelfHeal:
     """
 
     def test_neither_socket_nor_factory_raises(self) -> None:
-        with raises(ValueError, match="socket or a connector_factory"):
+        with raises(ValueError, match="socket or a transport_factory"):
             MQTTClient(client_id="x")
 
     def test_factory_only_constructor_defers_socket_build_to_connect(self) -> None:
@@ -65,7 +65,7 @@ class TestConnectorFactorySelfHeal:
             return FakeSocketConnector(actions=["dns_ok", "tcp_ok"], socket=sock)
 
         client = MQTTClient(
-            connector_factory=factory,
+            transport_factory=factory,
             client_id="x",
             ticks=ticks,
         )
@@ -92,7 +92,7 @@ class TestConnectorFactorySelfHeal:
             raise OSError(103, "ECONNABORTED")
 
         client = MQTTClient(
-            connector_factory=factory,
+            transport_factory=factory,
             client_id="x",
             ticks=ticks,
         )
@@ -113,7 +113,7 @@ class TestConnectorFactorySelfHeal:
         sock_two.enqueue_recv(canned_connack_bytes(return_code=0))
 
         client = MQTTClient(
-            connector_factory=_connector_factory(sock_one, sock_two),
+            transport_factory=_transport_factory(sock_one, sock_two),
             client_id="heal-test",
             ticks=ticks,
         )
@@ -135,7 +135,7 @@ class TestConnectorFactorySelfHeal:
         sock = FakeSocket()
         sock.enqueue_recv(canned_connack_bytes(return_code=0))
         ticks = FakeTicks()
-        client = new_client(sock, ticks)  # no connector_factory
+        client = new_client(sock, ticks)  # no transport_factory
 
         client.connect()
         drive(client, ticks, count=2)
@@ -170,7 +170,7 @@ class TestConnectorFactorySelfHeal:
             )
 
         client = MQTTClient(
-            connector_factory=factory,
+            transport_factory=factory,
             client_id="retry-test",
             ticks=ticks,
         )
@@ -208,7 +208,7 @@ class TestSelfHealReconnectReplay:
             return FakeSocketConnector(actions=["dns_ok", "tcp_ok"], socket=sock)
 
         client = MQTTClient(
-            connector_factory=factory,
+            transport_factory=factory,
             client_id="disconnect-test",
             ticks=ticks,
         )
@@ -241,7 +241,7 @@ class TestSelfHealReconnectReplay:
         sock_two.enqueue_recv(canned_connack_bytes(return_code=0))
 
         client = MQTTClient(
-            connector_factory=_connector_factory(sock_one, sock_two),
+            transport_factory=_transport_factory(sock_one, sock_two),
             client_id="resub-test",
             ticks=ticks,
         )
@@ -275,7 +275,7 @@ class TestSelfHealReconnectReplay:
         sock_two.enqueue_recv(canned_connack_bytes(return_code=0))
 
         client = MQTTClient(
-            connector_factory=_connector_factory(sock_one, sock_two),
+            transport_factory=_transport_factory(sock_one, sock_two),
             client_id="unsub-test",
             ticks=ticks,
         )

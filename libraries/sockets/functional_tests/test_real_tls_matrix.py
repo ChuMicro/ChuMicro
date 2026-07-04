@@ -31,8 +31,11 @@ Skipped at collection time when wifi credentials are missing.
 
 import time
 
-from chumicro_sockets import ssl_context_no_verify, tls_client_socket
+from chumicro_sockets import connector, ssl_context_no_verify
 from chumicro_test_harness.network import runtime_config, wifi_up
+from chumicro_timing import ticks_add, ticks_diff, ticks_ms
+
+_CONNECT_DEADLINE_MS = 30_000
 
 _EXPIRED_HOST = "expired.badssl.com"
 _EXPIRED_PORT = 443
@@ -49,6 +52,36 @@ def _sleep_ms(duration_ms: int) -> None:
         runtime_sleep_ms(duration_ms)
         return
     time.sleep(duration_ms / 1000)
+
+
+def _connect_tls(
+    host: str,
+    port: int,
+    *,
+    context: object | None = None,
+    radio: object | None = None,
+) -> object:
+    """Drive ``connector(tls=True)`` to terminal inline; return the connected socket.
+
+    The tick-and-sleep loop is the one-shot connect form on-device:
+    the same state machine the runner would drive, without a runner.
+    Raises the connector's ``last_error`` on failure and
+    ``AssertionError`` when the dial exceeds the connect deadline.
+    """
+    dial = connector(host, port, tls=True, context=context, radio=radio)
+    deadline = ticks_add(ticks_ms(), _CONNECT_DEADLINE_MS)
+    while dial.state not in ("ready", "failed"):
+        if ticks_diff(deadline, ticks_ms()) <= 0:
+            dial.cancel()
+            raise AssertionError(
+                f"TLS connect to {host}:{port} exceeded "
+                f"{_CONNECT_DEADLINE_MS} ms (state {dial.state!r})",
+            )
+        dial.tick(ticks_ms())
+        _sleep_ms(10)
+    if dial.state == "failed":
+        raise dial.last_error
+    return dial.socket
 
 
 def _seed_rtc(now_utc_tuple: tuple) -> None:
@@ -105,7 +138,7 @@ def test_no_verify_accepts_expired_cert() -> None:
     """Leg 1: `ssl_context_no_verify()` opts out of validation; expired-cert handshake completes."""
     radio = _prepare()
     context = ssl_context_no_verify()
-    socket = tls_client_socket(
+    socket = _connect_tls(
         _EXPIRED_HOST, _EXPIRED_PORT, context=context, radio=radio,
     )
     print(f"NO_VERIFY_OK host={_EXPIRED_HOST}")
@@ -122,7 +155,7 @@ def test_default_context_rejects_expired_cert() -> None:
     rejected: BaseException | None = None
     socket = None
     try:
-        socket = tls_client_socket(_EXPIRED_HOST, _EXPIRED_PORT, radio=radio)
+        socket = _connect_tls(_EXPIRED_HOST, _EXPIRED_PORT, radio=radio)
     except Exception as error:  # noqa: BLE001 — mbedTLS surface varies
         rejected = error
         print(f"REJECTED expected={type(error).__name__} {error!r}")
@@ -147,7 +180,7 @@ def test_default_context_accepts_real_letsencrypt_host() -> None:
     pass).
     """
     radio = _prepare()
-    socket = tls_client_socket(_VALID_LE_HOST, _VALID_LE_PORT, radio=radio)
+    socket = _connect_tls(_VALID_LE_HOST, _VALID_LE_PORT, radio=radio)
     print(f"VALID_OK host={_VALID_LE_HOST}")
     assert socket is not None, (
         "default context should validate the ISRG-Root-X1 chain and "

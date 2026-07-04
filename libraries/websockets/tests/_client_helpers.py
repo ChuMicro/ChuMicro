@@ -82,7 +82,7 @@ def _make_client(
         clock = FakeTicks()
     factory, record = _make_factory(socket)
     client = WebSocketClient(
-        connector_factory=factory,
+        transport_factory=factory,
         ticks=clock,
         **kwargs,
     )

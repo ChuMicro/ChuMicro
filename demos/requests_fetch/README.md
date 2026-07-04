@@ -10,8 +10,8 @@ response — instead of polling a request handle or wiring an `on_done`
 callback:
 
 ```python
-def fetch_run(connector_factory, url):
-    response = yield from get(connector_factory, url)
+def fetch_run(transport_factory, url):
+    response = yield from get(transport_factory, url)
     print(f"FETCHED status={response.status_code} bytes={len(response.body)}")
 
 runner.add_generator(fetch_run(factory, url=fetch_url))

@@ -1,11 +1,12 @@
 """Advance a non-blocking TCP/TLS connect across multiple ``tick(now_ms)`` calls.
 
-The non-blocking counterpart to ``tcp_client_socket`` /
-``tls_client_socket``.  Library methods that perform network I/O do not
-block: a runner-shaped library constructs a connector and advances it
-across ticks instead of calling a synchronous factory.  The synchronous
-factory stays for non-runner contexts (one-shot scripts, REPL, ``main``
-before the runner loop starts).
+The one connect state machine — ``chumicro_sockets.connector()``
+returns a per-runtime subclass of :class:`SocketConnector`.  Library
+methods that perform network I/O do not block: a runner-shaped library
+constructs a connector and advances it across ticks.  Non-runner
+contexts (one-shot scripts, REPL, ``main`` before the runner loop
+starts) drive the same machine to terminal inline with a small
+``while``-loop.
 
 Each call to :meth:`SocketConnector.tick` advances the connector by one
 phase.  Phase boundaries are uniform across runtimes:

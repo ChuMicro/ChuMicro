@@ -28,11 +28,11 @@ class TestFromConfig:
             "http_server.request_timeout_ms": 30_000,
             "http_server.max_request_body_bytes": 64_000,
         }
-        # listener_factory= bypasses the host/port-driven auto-build,
+        # transport_factory= bypasses the host/port-driven auto-build,
         # so we can assert the constructor knobs without touching
         # chumicro_sockets.
         server = HttpServer.from_config(
-            config, listener_factory=lambda: FakeListener([]),
+            config, transport_factory=lambda: FakeListener([]),
         )
         assert server._max_connections == 8  # noqa: SLF001
         assert server._request_timeout_ms == 30_000  # noqa: SLF001
@@ -52,7 +52,7 @@ class TestFromConfig:
         )
 
         server = HttpServer.from_config(
-            {}, listener_factory=lambda: FakeListener([]),
+            {}, transport_factory=lambda: FakeListener([]),
         )
         assert server._max_connections == DEFAULT_MAX_CONNECTIONS  # noqa: SLF001
         assert server._request_timeout_ms == DEFAULT_REQUEST_TIMEOUT_MS  # noqa: SLF001
@@ -64,7 +64,7 @@ class TestFromConfig:
 
         server = HttpServer.from_config(
             {"http_server.max_connections": 16},
-            listener_factory=lambda: FakeListener([]),
+            transport_factory=lambda: FakeListener([]),
         )
         assert server._max_connections == 16  # noqa: SLF001
         assert server._request_timeout_ms == DEFAULT_REQUEST_TIMEOUT_MS  # noqa: SLF001
@@ -74,7 +74,7 @@ class TestFromConfig:
         my_handler = lambda request: build_response(200, text="hi")  # noqa: E731
         server = HttpServer.from_config(
             {}, handler=my_handler,
-            listener_factory=lambda: FakeListener([]),
+            transport_factory=lambda: FakeListener([]),
         )
         assert server._fallback_handler is my_handler  # noqa: SLF001
 
@@ -84,42 +84,42 @@ class TestFromConfig:
 
         config = RuntimeConfig({"http_server.max_connections": 12})
         server = HttpServer.from_config(
-            config, listener_factory=lambda: FakeListener([]),
+            config, transport_factory=lambda: FakeListener([]),
         )
         assert server._max_connections == 12  # noqa: SLF001
 
-    def test_explicit_listener_factory_bypasses_auto_build(self) -> None:
-        """Passing listener_factory= skips the chumicro_sockets path
+    def test_explicit_transport_factory_bypasses_auto_build(self) -> None:
+        """Passing transport_factory= skips the chumicro_sockets path
         — caller owns the bind / TLS behavior."""
         listener = FakeListener([])
         custom_factory = lambda: listener  # noqa: E731
         server = HttpServer.from_config(
             {"http_server.bind_host": "ignored"},
-            listener_factory=custom_factory,
+            transport_factory=custom_factory,
         )
-        assert server._listener_factory is custom_factory  # noqa: SLF001
+        assert server._transport_factory is custom_factory  # noqa: SLF001
 
     def test_default_factory_routes_plain_tcp_when_no_tls_config(self) -> None:
-        """Empty config makes the factory call ``tcp_listening_socket`` with
+        """Empty config makes the factory call ``listener`` with
         the library defaults (``0.0.0.0:8080``)."""
         import chumicro_sockets as sockets_mod
 
         captured: dict = {}
         sentinel_listener = FakeListener([])
 
-        def fake_tcp(host, port, *, radio=None):
+        def fake_tcp(host, port, *, tls=False, context=None, radio=None):
             captured["host"] = host
             captured["port"] = port
             captured["radio"] = radio
             return sentinel_listener
 
-        original = sockets_mod.tcp_listening_socket
-        sockets_mod.tcp_listening_socket = fake_tcp
+        original = sockets_mod.listener
+        sockets_mod.listener = fake_tcp
         try:
             server = HttpServer.from_config({}, radio="fake-radio")
-            server._listener_factory()  # noqa: SLF001 — trigger lazy
+            server._transport_factory()  # noqa: SLF001 — trigger lazy
         finally:
-            sockets_mod.tcp_listening_socket = original
+            sockets_mod.listener = original
 
         assert captured["host"] == "0.0.0.0"
         assert captured["port"] == 8080
@@ -127,7 +127,7 @@ class TestFromConfig:
 
     def test_default_factory_routes_tls_when_both_paths_set(self) -> None:
         """Setting both ``tls.cert_path`` and ``tls.key_path`` makes the
-        factory build an SSLContext and route through tls_listening_socket."""
+        factory build an SSLContext and route through ``listener(tls=True)``."""
         import chumicro_sockets as sockets_mod
 
         captured: dict = {}
@@ -139,7 +139,7 @@ class TestFromConfig:
             captured["key_path"] = key_path
             return sentinel_context
 
-        def fake_tls(host, port, *, context, radio=None):
+        def fake_tls(host, port, *, tls=False, context=None, radio=None):
             captured["host"] = host
             captured["port"] = port
             captured["context"] = context
@@ -147,9 +147,9 @@ class TestFromConfig:
             return sentinel_listener
 
         original_ssl = sockets_mod.ssl_context_with_cert_and_key_paths
-        original_tls = sockets_mod.tls_listening_socket
+        original_tls = sockets_mod.listener
         sockets_mod.ssl_context_with_cert_and_key_paths = fake_ssl_paths
-        sockets_mod.tls_listening_socket = fake_tls
+        sockets_mod.listener = fake_tls
         try:
             server = HttpServer.from_config(
                 {
@@ -158,10 +158,10 @@ class TestFromConfig:
                     "http_server.tls.key_path": "/etc/key.pem",
                 },
             )
-            server._listener_factory()  # noqa: SLF001 — trigger lazy
+            server._transport_factory()  # noqa: SLF001 — trigger lazy
         finally:
             sockets_mod.ssl_context_with_cert_and_key_paths = original_ssl
-            sockets_mod.tls_listening_socket = original_tls
+            sockets_mod.listener = original_tls
 
         assert captured["cert_path"] == "/etc/cert.pem"
         assert captured["key_path"] == "/etc/key.pem"
@@ -177,17 +177,17 @@ class TestFromConfig:
         captured: dict = {}
         sentinel_context = object()
 
-        def fake_tls(host, port, *, context, radio=None):
+        def fake_tls(host, port, *, tls=False, context=None, radio=None):
             captured["context"] = context
             return FakeListener([])
 
-        original_tls = sockets_mod.tls_listening_socket
-        sockets_mod.tls_listening_socket = fake_tls
+        original_tls = sockets_mod.listener
+        sockets_mod.listener = fake_tls
         try:
             server = HttpServer.from_config({}, ssl_context=sentinel_context)
-            server._listener_factory()  # noqa: SLF001
+            server._transport_factory()  # noqa: SLF001
         finally:
-            sockets_mod.tls_listening_socket = original_tls
+            sockets_mod.listener = original_tls
 
         assert captured["context"] is sentinel_context
 
@@ -208,19 +208,19 @@ class TestFromConfig:
 
     def test_does_not_raise_on_empty_config(self) -> None:
         """Documents the asymmetry vs ``MQTTClient.from_config``:
-        empty config + no listener_factory override is valid input.
+        empty config + no transport_factory override is valid input.
         Unlike mqtt, no MissingConfigKey is ever raised when nothing
         is configured (both-or-neither TLS is the only loud check)."""
         import chumicro_sockets as sockets_mod
 
-        original = sockets_mod.tcp_listening_socket
-        sockets_mod.tcp_listening_socket = (
+        original = sockets_mod.listener
+        sockets_mod.listener = (
             lambda host, port, *, radio=None: FakeListener([])
         )
         try:
             server = HttpServer.from_config({})
         finally:
-            sockets_mod.tcp_listening_socket = original
+            sockets_mod.listener = original
         assert server._max_connections > 0  # noqa: SLF001 — sanity
 
     def test_skipped_factory_module_raises_runtime_error(self) -> None:
@@ -244,7 +244,7 @@ class TestFromConfig:
             try:
                 HttpServer.from_config({})
             except RuntimeError as exception:
-                assert "listener_factory=" in str(exception)
+                assert "transport_factory=" in str(exception)
                 assert "__chumicro_skip_factories__" in str(exception)
             else:
                 raise AssertionError("expected RuntimeError")
