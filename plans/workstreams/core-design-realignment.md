@@ -1,11 +1,18 @@
 # Core design realignment (2026-07 design campaign)
 
-Status: **EXECUTING — all menu items approved by the user 2026-07-03 ("wave zero until
-done"); Wave 0 shipped 2026-07-03** (events deleted + swept per 0096-accepted; 0020
-SemVer gate warn-only behind a `PUBLISHED` switch; hot-path D2-D7 fixed with measured
-drops — chunked-body 9.84→2.19 B/body-byte, frame-parser 577→417 B/frame; stale ADRs
-0014/0064/0082 edited in place; the template hotfix was folded into Wave 4, which
-supersedes it).  Waves 1-4 in flight.  Eight-report adversarial
+Status: **ALL WAVES SHIPPED** (approved 2026-07-03 "wave zero until done"; Waves 0-3 +
+the mqtt wave landed on monorepo main 2026-07-03/04, Wave 4 on the template repo
+2026-07-04).  Landed: Wave 0 hygiene (events deleted per 0096; 0020 gate warn-only;
+hot-path D2-D7 with measured drops; stale ADRs trued); Wave 1 core migration — timing
+0.7.0 wait vocabulary (0095), runner 0.18.0 io_interest + one dispatch lane (0097),
+sockets 0.17.0 connect collapse + transport_factory= across five libraries (0098, with
+five ADR-premise corrections recorded); Wave 2 mqtt 0.22.0 surface corrections (0099,
+lanes dropped to 240K); Wave 3 the standalone-integration recipe; Wave 4 the template
+rebased to current main (flagship 174→61 lines, baked end-to-end to a public broker
+from real silicon).  Open residuals: the pi-pico-w-cp bench cells await its FSKit-wedge
+recovery (physical action); the io_interest TLS-handshake refinement (drop WRITE after
+the first SSLWantRead — recorded in 0098's execution trail) is unscheduled; the watched
+question below stands for a re-pose now that the waves landed.  Eight-report adversarial
 design campaign: API fitness (mqtt, rudiments), hot-path buffer audit, ADR drift audit,
 consumer angle (sister repo), DI cost measurement, and two independent design seats
 (greenfield + consumer-driven synthesis).  Every claim below is evidenced in

@@ -4,7 +4,7 @@
 
 ## Now
 
-- [ ] **Core design realignment — decision menu awaiting user verdicts.**  [workstreams/core-design-realignment.md](workstreams/core-design-realignment.md) — the 2026-07-03 eight-report design campaign (API fitness, hot paths, ADR drift, consumer angle, DI cost, two design seats) distilled to an 11-item menu + draft ADRs 0095–0099 (`proposed`); ~42 pts across five waves once directions are picked.  Absorbs the runner M49 bullet's design half (0097 wave) and the mqtt bloat-audit bullet (0099 resolves it).
+- [ ] **Core design realignment — ALL WAVES SHIPPED 2026-07-03/04; two residuals open.**  [workstreams/core-design-realignment.md](workstreams/core-design-realignment.md) — ADRs 0095–0099 all `accepted` and landed (timing 0.7.0, runner 0.18.0, sockets 0.17.0 + `transport_factory=` fleet-wide, mqtt 0.22.0, events deleted, template rebased + baked to a public broker).  Open: (a) pi-pico-w-cp bench cells await its FSKit-wedge recovery (sudo killall recovery or replug), then a full four-board `sweep-devices` closes the book; (b) unscheduled: the `io_interest` TLS-handshake refinement (drop WRITE after first `SSLWantRead`) noted in 0098's trail, and the watched check/handle-vs-generators question is due a re-pose with post-wave field data.
 - [ ] **Comment-generation round 18 (guided vs bare no-guidance control; honest naming; 4 guided voices + 2 bare) — built, awaiting dispatch + analysis** — see [`handoffs/2026-05-30-comment-generation-round18-guided-vs-bare.md`](handoffs/2026-05-30-comment-generation-round18-guided-vs-bare.md).  Status: deferred 2026-06-12 (user call — clean-room spend stays for a user-present session).
 
 ## Next
