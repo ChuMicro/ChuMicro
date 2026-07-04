@@ -50,6 +50,12 @@ from chumicro_requests._wire import (
     resolve_redirect_url,
 )
 
+# Poll-interest bits for ``io_interest``; mirror ``chumicro_runner.IO_READ``
+# / ``IO_WRITE`` by value.  Held as literals rather than imported so the
+# requests client runs without importing the runner (bring-your-own-scheduler).
+_IO_READ = 1
+_IO_WRITE = 2
+
 # EWOULDBLOCK is absent from MicroPython's errno; fall back to EAGAIN
 # (they're the same value on the platforms that define both).
 _EWOULDBLOCK = getattr(errno, "EWOULDBLOCK", errno.EAGAIN)
@@ -362,7 +368,7 @@ class HttpClient:
     The returned *connector* is a structural type: an object with
     ``state`` / ``socket`` / ``last_error`` attributes, ``tick(now_ms)``
     / ``cancel()`` methods, and the runner-poll surface ``io_socket`` /
-    ``io_wants_read`` / ``io_wants_write`` / ``next_deadline(now_ms)``.
+    ``io_interest(now_ms)`` / ``next_deadline(now_ms)``.
     Any object of that shape works — the client never imports a specific
     class.
 
@@ -603,21 +609,23 @@ class HttpClient:
             return self._connector.io_socket if self._connector is not None else None
         return self._socket
 
-    @property
-    def io_wants_read(self):
-        """``True`` while waiting on response bytes from the server (or
-        TLS-handshake inbound during connect)."""
-        if self._state == _RequestState.AWAITING_TRANSPORT:
-            return self._connector.io_wants_read if self._connector is not None else False
-        return self._state == _RequestState.RECEIVING
+    def io_interest(self, now_ms):
+        """Poll-interest bitmask OR-ing ``_IO_READ`` / ``_IO_WRITE``.
 
-    @property
-    def io_wants_write(self):
-        """``True`` while there are request bytes still to send (or a
-        TCP / TLS handshake phase needs writability)."""
+        ``_IO_READ`` while waiting on response bytes from the server,
+        ``_IO_WRITE`` while there are request bytes still to send.
+        During ``AWAITING_TRANSPORT`` the whole connecting-phase
+        interest (including TLS-handshake read/write needs) is the
+        connector's, so forward its mask; ``0`` when idle or with no
+        connector yet.
+        """
         if self._state == _RequestState.AWAITING_TRANSPORT:
-            return self._connector.io_wants_write if self._connector is not None else False
-        return self._state == _RequestState.SENDING
+            return self._connector.io_interest(now_ms) if self._connector is not None else 0
+        if self._state == _RequestState.RECEIVING:
+            return _IO_READ
+        if self._state == _RequestState.SENDING:
+            return _IO_WRITE
+        return 0
 
     def next_deadline(self, now_ms):
         """Return the per-request timeout deadline, or ``None`` when idle.

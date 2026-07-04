@@ -216,8 +216,8 @@ def test_sync_modify_branch_when_default_poller_not_yet_built() -> None:
     slot = runner._registered_interest[id(sock)]
     assert slot[0] is sock and slot[1] == _select_pollin()
 
-    service.io_wants_read = False
-    service.io_wants_write = True
+    service.wants_read = False
+    service.wants_write = True
     runner.wait(200)  # modify branch with poller=None — no-op on poller, dict updates
 
     assert runner._poller is None

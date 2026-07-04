@@ -181,7 +181,11 @@ class _CPUDPWrapper:
         # CP socketpool exposes settimeout on recent firmware; fall
         # back to a no-op so the protocol stays satisfied on older builds.
         self.settimeout = getattr(sock, "settimeout", lambda _seconds: None)
-        self.getsockname = sock.getsockname
+        # Bare-metal CircuitPython socketpool has no getsockname (the
+        # unix build does, which is why the lanes can't catch its
+        # absence) — forward it only when the port provides it.
+        if hasattr(sock, "getsockname"):
+            self.getsockname = sock.getsockname
         # CP's recvfrom_into returns (nbytes, address) — forward.
         self.recvfrom_into = sock.recvfrom_into
 

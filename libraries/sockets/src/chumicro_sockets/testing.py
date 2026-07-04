@@ -44,6 +44,12 @@ from collections import deque
 # library code uses (``patterns.md`` §"FIFO queues use ``deque``").
 _FAKE_SOCKET_QUEUE_MAXLEN = 1024
 
+# Poll-interest bits for ``FakeSocketConnector.io_interest``; mirror
+# ``chumicro_runner.IO_READ`` / ``IO_WRITE`` by value, held as literals so
+# the sockets test support takes no runner dependency edge.
+_IO_READ = 1
+_IO_WRITE = 2
+
 
 class FakeSocket:
     """In-memory TCP client socket for tests.
@@ -370,13 +376,15 @@ class FakeSocketConnector:
             return None
         return self.socket
 
-    @property
-    def io_wants_read(self) -> bool:
-        return self.state == "awaiting_tls"
-
-    @property
-    def io_wants_write(self) -> bool:
-        return self.state in ("awaiting_tcp", "awaiting_tls")
+    def io_interest(self, now_ms: int) -> int:  # noqa: ARG002 (runner contract)
+        """Poll-interest bitmask matching the real ``SocketConnector``:
+        TLS handshake wants read+write, TCP-connect wants write, other
+        phases register nothing."""
+        if self.state == "awaiting_tls":
+            return _IO_READ | _IO_WRITE
+        if self.state == "awaiting_tcp":
+            return _IO_WRITE
+        return 0
 
     def check(self, now_ms: int) -> bool:  # noqa: ARG002 (runner contract)
         return self.state not in ("ready", "failed")

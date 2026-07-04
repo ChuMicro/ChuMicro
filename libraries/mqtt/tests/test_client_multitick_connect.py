@@ -8,6 +8,7 @@ from chumicro_mqtt import (
 from chumicro_mqtt.testing import (
     canned_connack_bytes,
 )
+from chumicro_runner import IO_WRITE
 from chumicro_sockets.testing import FakeSocket, FakeSocketConnector
 from chumicro_timing.testing import FakeTicks
 
@@ -176,7 +177,7 @@ class TestMultiTickConnectYield:
         assert client._connector is None  # noqa: SLF001
 
     def test_connector_io_surface_forwarded_in_awaiting_transport(self) -> None:
-        """``Runner.wait`` reads io_socket / io_wants_* / next_deadline
+        """``Runner.wait`` reads io_socket / io_interest / next_deadline
         off the client — during AWAITING_TRANSPORT they forward to the
         connector so the runner parks on the right pollable."""
         sock = FakeSocket()
@@ -194,11 +195,10 @@ class TestMultiTickConnectYield:
         )
         client.connect()
         # connector starts in awaiting_dns; one tick advances to awaiting_tcp
-        # where io_wants_write is True (TCP connect phase needs POLLOUT).
+        # where io_interest is write-only (TCP connect phase needs POLLOUT).
         client.handle(ticks.ticks_ms())
         assert client.io_socket is sock
-        assert client.io_wants_write is True
-        assert client.io_wants_read is False
+        assert client.io_interest(ticks.ticks_ms()) == IO_WRITE
         assert client.next_deadline(0) is None
 
     def test_next_deadline_clamps_to_now_while_awaiting_dns(self) -> None:

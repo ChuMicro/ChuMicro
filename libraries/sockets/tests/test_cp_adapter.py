@@ -469,6 +469,18 @@ class TestCpUdpWrapper:
         wrapper.close()
         assert sock.closed is True
 
+    def test_getsockname_absent_on_bare_metal_sockets(self) -> None:
+        """Bare-metal socketpool lacks getsockname; the wrapper mirrors that."""
+        from chumicro_sockets._adapters.cp import _CPUDPWrapper
+
+        class _BareMetalSocket:
+            close = staticmethod(lambda: None)
+            setblocking = staticmethod(lambda _flag: None)
+            recvfrom_into = staticmethod(lambda _buffer: (0, ("", 0)))
+
+        wrapper = _CPUDPWrapper(_BareMetalSocket())
+        assert not hasattr(wrapper, "getsockname")
+
 
 # ---------------------------------------------------------------------------
 # listen_tcp

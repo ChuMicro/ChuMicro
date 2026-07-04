@@ -139,12 +139,12 @@ class Connection(_BaseSession):
         """Return ``True`` if there's work to do for this connection."""
         return self.state != WebSocketState.CLOSED
 
-    def _connecting_wants_read(self) -> bool:
+    def _connecting_wants_read(self, now_ms) -> bool:  # noqa: ARG002 - runner contract
         """The server reads during the first handshake leg (waiting on
         the client's upgrade request)."""
         return self._handshake_phase == ServerHandshakePhase.READING_REQUEST
 
-    def _connecting_wants_write(self) -> bool:
+    def _connecting_wants_write(self, now_ms) -> bool:  # noqa: ARG002 - runner contract
         """The server writes during the second handshake leg (sending the
         HTTP 101 response bytes)."""
         return self._handshake_phase == ServerHandshakePhase.SENDING_RESPONSE

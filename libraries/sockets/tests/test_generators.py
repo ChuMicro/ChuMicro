@@ -14,6 +14,7 @@ resume convention.
 
 import errno
 
+from chumicro_runner import IO_READ, IO_WRITE
 from chumicro_sockets.generators import connect, recv_exact, recv_until, send_all
 from chumicro_sockets.testing import FakeSocket, FakeSocketConnector
 from chumicro_test_harness import raises
@@ -40,9 +41,9 @@ def test_connect_returns_socket_when_connector_reaches_ready():
 
 
 def test_connect_yields_the_connector_for_wrapper_inspection():
-    # The wrapper reads io_socket / io_wants_read / io_wants_write off
-    # whatever was yielded; the connector exposes those natively, so
-    # yielding the connector is the duck-typed handoff.
+    # The wrapper reads io_socket / io_interest off whatever was yielded;
+    # the connector exposes those natively, so yielding the connector is
+    # the duck-typed handoff.
     sock = FakeSocket()
     connector = FakeSocketConnector(actions=["dns_ok", "tcp_ok"], socket=sock)
     gen = connect(connector)
@@ -52,7 +53,7 @@ def test_connect_yields_the_connector_for_wrapper_inspection():
     # reads its io_* attributes for poll registration.
     assert first is connector
     assert hasattr(first, "io_socket")
-    assert hasattr(first, "io_wants_write")
+    assert hasattr(first, "io_interest")
 
 
 def test_connect_raises_when_connector_fails():
@@ -143,16 +144,15 @@ def test_send_all_yields_write_wait_on_eagain_then_retries():
     sock.enqueue_eagain_for_send(count=2)  # first two send calls raise EAGAIN
     gen = send_all(sock, b"abc")
 
-    # First yield: EAGAIN -> a wait with io_socket=sock, io_wants_write=True.
+    # First yield: EAGAIN -> a wait with io_socket=sock, io_interest == IO_WRITE.
     first = gen.send(None)
     assert first.io_socket is sock
-    assert first.io_wants_write is True
-    assert getattr(first, "io_wants_read", False) is False
+    assert first.io_interest(0) == IO_WRITE
 
     # Second yield: still EAGAIN, same wait shape.
     second = gen.send(0)
     assert second.io_socket is sock
-    assert second.io_wants_write is True
+    assert second.io_interest(0) == IO_WRITE
 
     # Third resume: send succeeds, gen returns.
     try:
@@ -225,11 +225,11 @@ def test_recv_until_yields_read_wait_on_eagain():
 
     first = gen.send(None)
     assert first.io_socket is sock
-    assert first.io_wants_read is True
+    assert first.io_interest(0) == IO_READ
 
     second = gen.send(0)
     assert second.io_socket is sock
-    assert second.io_wants_read is True
+    assert second.io_interest(0) == IO_READ
 
     try:
         gen.send(0)
@@ -357,7 +357,7 @@ def test_recv_exact_yields_read_wait_on_eagain():
 
     first = gen.send(None)
     assert first.io_socket is sock
-    assert first.io_wants_read is True
+    assert first.io_interest(0) == IO_READ
 
     try:
         gen.send(0)

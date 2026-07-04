@@ -45,6 +45,12 @@ from chumicro_http_server._wire import (
     split_target,
 )
 
+# Poll-interest bit for ``io_interest``; mirrors ``chumicro_runner.IO_READ``
+# by value.  Held as a literal rather than imported so the stack takes no
+# dependency edge on the runner (bring-your-own-scheduler).  Only the read bit is
+# used here — the listener never wants write.
+_IO_READ = 1
+
 #: While a connection is in flight its socket is not in the runner's
 #: poll set (only the listener is), so ``next_deadline`` caps the wait
 #: at this interval to keep advancing the connection instead of sleeping
@@ -557,12 +563,6 @@ class HttpServer:
     from ``runtime_config.msgpack``.
     """
 
-    #: The listener is not a write target — in-flight connection sends
-    #: drain during the per-tick advance rather than via poll readiness.
-    #: Runner reads this via ``getattr(service, "io_wants_write", False)``,
-    #: so a class attribute beats a property returning the same constant.
-    io_wants_write = False
-
     @classmethod
     def from_config(
         cls,
@@ -921,11 +921,11 @@ class HttpServer:
             return None
         return self._listener
 
-    @property
-    def io_wants_read(self):
-        """``True`` whenever the listener is open: an inbound accept can
-        arrive at any time."""
-        return self._listener is not None
+    def io_interest(self, now_ms):  # noqa: ARG002 (runner contract)
+        """Poll-interest bitmask for ``Runner.wait``: the listener wants read
+        (accept-readiness) whenever open, never write (in-flight connection
+        sends drain on the periodic ``handle()`` tick, not via poll)."""
+        return _IO_READ if self._listener is not None else 0
 
     def next_deadline(self, now_ms):
         """Earliest tick at which ``handle()`` must run.

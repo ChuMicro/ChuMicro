@@ -1,6 +1,7 @@
 """WebSocket server tests (chumicro_websockets.server): constructor,
 accept, handshake, handshake rejection."""
 
+from chumicro_runner import IO_READ, IO_WRITE
 from chumicro_timing.testing import FakeTicks
 from chumicro_websockets import (
     WebSocketServer,
@@ -279,14 +280,13 @@ class TestServerRunnerReactorContract:
         connection = server.connections[0]
         assert connection.io_socket is peer
 
-    def test_io_wants_read_during_reading_request(self):
+    def test_io_interest_read_during_reading_request(self):
         server, _peer, _clock = self._accepted_connection()
         connection = server.connections[0]
         assert connection._handshake_phase == ServerHandshakePhase.READING_REQUEST
-        assert connection.io_wants_read is True
-        assert connection.io_wants_write is False
+        assert connection.io_interest(0) == IO_READ
 
-    def test_io_wants_write_during_sending_response(self):
+    def test_io_interest_write_during_sending_response(self):
         server, peer, clock = self._accepted_connection()
         # Feed the client's upgrade so the connection advances to
         # SENDING_RESPONSE on the next tick.
@@ -294,14 +294,14 @@ class TestServerRunnerReactorContract:
         server.handle(clock.ticks_ms())
         connection = server.connections[0]
         assert connection._handshake_phase == ServerHandshakePhase.SENDING_RESPONSE
-        assert connection.io_wants_write is True
+        assert connection.io_interest(0) == IO_WRITE
 
-    def test_io_wants_read_when_open(self):
+    def test_io_interest_read_when_open(self):
         server, listener, clock = _make_server()
         _drive_server_handshake(server, listener, clock)
         connection = server.connections[0]
         assert connection.state == WebSocketState.OPEN
-        assert connection.io_wants_read is True
+        assert connection.io_interest(0) == IO_READ
 
     def test_next_deadline_returns_handshake_deadline_during_handshake(self):
         server, peer, clock = self._accepted_connection()

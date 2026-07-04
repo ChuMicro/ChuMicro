@@ -1,6 +1,6 @@
 # Decision 0097: runner io-contract slim
 
-Status: `proposed`
+Status: `accepted`
 Date: `2026-07-03`
 Summary: An `io_interest` bitmask replaces the two boolean interest hooks and `io_error` folds into the single dispatch lane; the runner's architecture is otherwise unchanged.
 Related: 0080 (reactor), 0087 (generator tasks), 0051/0014 (service contract — watched question in the campaign workstream), campaign reports `plans/reviews/2026-07-03-{greenfield-core-redesign,consumer-driven-design-synthesis,adr-drift-audit}.md`
@@ -19,8 +19,10 @@ exactly one demo implement `io_*`, so the migration is cheaper than priced.
 
 1. `io_interest(now_ms) -> int` (READ/WRITE bitmask constants) replaces the paired
    boolean hooks.
-2. `io_error` folds into the one dispatch lane; the error path uses the same snapshot
-   iteration as everything else, making the G1/RUN-2 class structurally impossible.
+2. `io_error` stays a distinct callback (its delivery semantics are pinned), but its
+   dispatch folds into the one lane: snapshot iteration plus a single shared
+   `_record_handler_fault` isolation helper for tick and error paths alike, making the
+   G1/RUN-2 class structurally impossible.
 3. `check`/`handle` and the generator substrate are unchanged.  The drift-audit's deeper
    question — should generators be the base contract — is deliberately not decided here;
    it is re-posed after this wave lands (see the campaign workstream's watched question).

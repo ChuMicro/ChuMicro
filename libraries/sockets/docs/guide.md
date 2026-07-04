@@ -59,7 +59,7 @@ sock = tls_client_socket("api.example.com", 443, context=context, radio=None)
 
 ## Runner pattern
 
-`chumicro-sockets` is a passive transport — it doesn't drive its own lifecycle.  Use it through [`chumicro-runner`](../../../runner/), which handles `select.poll` registration, readiness dispatch, and tick budgeting.  The downstream library that owns the connection (e.g. `chumicro-mqtt`, `chumicro-requests`) exposes the runner-service contract — `io_socket`, `io_wants_read`, `io_wants_write`, `next_deadline(now_ms)` — and Runner reads those each tick to decide which sockets to register with `poll`.  User code calls `runner.add(client)` and never touches `poll` directly.
+`chumicro-sockets` is a passive transport — it doesn't drive its own lifecycle.  Use it through [`chumicro-runner`](../../../runner/), which handles `select.poll` registration, readiness dispatch, and tick budgeting.  The downstream library that owns the connection (e.g. `chumicro-mqtt`, `chumicro-requests`) exposes the runner-service contract — `io_socket`, `io_interest(now_ms)`, `next_deadline(now_ms)` — and Runner reads those each tick to decide which sockets to register with `poll`.  User code calls `runner.add(client)` and never touches `poll` directly.
 
 For non-blocking I/O without Runner, use `tcp_client_connector` / `tls_client_connector` for the connect phase and read `connector.socket` once `connector.state == "ready"`.  Drive `connector.tick(now_ms)` from your own loop, then call the connected socket's `recv_into` / `send` as usual.  `OSError(errno.EAGAIN)` is the cross-runtime "would block" signal — re-loop, don't re-raise.
 

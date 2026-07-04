@@ -64,7 +64,12 @@ def test_real_udp_echo_round_trip() -> None:
     print(f"WIFI_OK ip={ip}")
 
     sock = udp_socket(radio=radio)
-    print(f"UDP_OK bound={sock.getsockname()}")
+    # getsockname is absent on bare-metal ports (rp2/esp32/socketpool);
+    # the bound-address diagnostic is host/unix-only.
+    bound = (
+        sock.getsockname() if hasattr(sock, "getsockname") else "unsupported"
+    )
+    print(f"UDP_OK bound={bound}")
 
     try:
         sock.setblocking(False)

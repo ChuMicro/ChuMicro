@@ -109,7 +109,7 @@ while True:
 
 Each call to `wait`:
 
-1. **Syncs the poll set** from each service's optional `io_socket` / `io_wants_read` / `io_wants_write` attributes — register newly wanted sockets, modify changed interest, unregister sockets that have gone away.  Idempotent: a no-change loop touches the poller zero times.
+1. **Syncs the poll set** from each service's optional `io_socket` and `io_interest(now_ms)` bitmask — register newly wanted sockets, modify changed interest, unregister sockets that have gone away.  Idempotent: a no-change loop touches the poller zero times.
 2. **Computes the timeout** as the minimum across every entry's `next_due_ms` and every service's optional `next_deadline(now_ms)`, minus `now_ms`.
 3. **Blocks** in `ipoll(timeout_ms)` over the registered sockets when any are registered; otherwise sleeps the timeout via `time.sleep_ms`.  Returns immediately when the nearest deadline has already passed or no deadline applies.
 
@@ -122,30 +122,35 @@ A socket-owning service exposes the duck-typed attributes the runner reads each 
 | Attribute | Type | Purpose |
 |---|---|---|
 | `io_socket` | socket-ish object or `None` | The socket whose readiness should wake the loop.  Either the pollable itself or an adapter wrapper exposing it on `.sock` — the runner unwraps `.sock` at registration, so producers never need to. |
-| `io_wants_read` | `bool` | Register `POLLIN` interest |
-| `io_wants_write` | `bool` | Register `POLLOUT` interest |
+| `io_interest(now_ms)` | `int` | A bitmask OR-ing `IO_READ` (register `POLLIN`) and/or `IO_WRITE` (register `POLLOUT`); `0` registers nothing.  Import the bits from `chumicro_runner`. |
 | `next_deadline(now_ms)` | `int` or `None` | The next tick the service must run even if no I/O arrives (timeouts, keepalives) |
 | `io_error(now_ms, eventmask)` | callable | Notified when the registered socket reports `POLLERR` or `POLLHUP` |
 
-The runner re-reads these every `wait()`, so a service can flip `io_wants_read` ↔ `io_wants_write` (or set `io_socket = None`) between ticks and the poll set follows on the next call.  Reads are attribute lookups on already-allocated state — no per-loop allocation.
+The runner re-reads these every `wait()`, so a service can flip its interest between read and write (or set `io_socket = None`) between ticks and the poll set follows on the next call.  The single `io_interest` call replaces the earlier paired `io_wants_read` / `io_wants_write` booleans; the runner caches the bound method once at `add`, so the sync stays allocation-free.
 
 A minimal sketch:
 
 ```python
+from chumicro_runner import IO_READ, IO_WRITE
+
+
 class EchoClient:
     """Read bytes from a connected socket, echo them back."""
 
     def __init__(self, sock) -> None:
         self.io_socket = sock
-        self.io_wants_read = True
-        self.io_wants_write = False
+        self._want = IO_READ
         self._outbox = bytearray()
 
+    def io_interest(self, now_ms: int) -> int:
+        return self._want
+
     def check(self, now_ms: int) -> bool:
-        return self.io_wants_read or self.io_wants_write
+        return self._want != 0
 
     def handle(self, now_ms: int) -> None:
-        # Drain whatever is ready; flip interest based on what's left.
+        # Drain whatever is ready; flip interest based on what's left
+        # (self._want = IO_WRITE when there are bytes to send, etc.).
         ...
 
     def io_error(self, now_ms: int, eventmask: int) -> None:
@@ -413,7 +418,7 @@ assert recorder.calls == [100]
 
 ```python
 import select
-from chumicro_runner import Runner
+from chumicro_runner import IO_READ, Runner
 from chumicro_runner.testing import FakePoller
 from chumicro_timing.testing import FakeTicks
 
@@ -423,8 +428,7 @@ runner = Runner(ticks=FakeTicks(), poller=poller)
 class _Service:
     def __init__(self, sock):
         self.io_socket = sock
-        self.io_wants_read = True
-        self.io_wants_write = False
+    def io_interest(self, now_ms): return IO_READ
     def check(self, now_ms): return False
     def handle(self, now_ms): pass
 

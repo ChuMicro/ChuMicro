@@ -10,7 +10,7 @@ proving the scheduler wrapper and the socket helpers compose.
 
 import errno
 
-from chumicro_runner import Runner
+from chumicro_runner import IO_WRITE, Runner
 from chumicro_runner.generators import sleep_until
 from chumicro_sockets.generators import connect, recv_until, send_all
 from chumicro_sockets.testing import FakeSocket, FakeSocketConnector
@@ -86,8 +86,6 @@ def test_connect_threads_runner_now_ms_into_connector_tick():
     sock = FakeSocket()
 
     class _RecordingConnector:
-        io_wants_read = False
-        io_wants_write = True
         io_socket = None
 
         def __init__(self):
@@ -96,6 +94,9 @@ def test_connect_threads_runner_now_ms_into_connector_tick():
             self.last_error = None
             self.ticks_seen = []
             self._steps = ["awaiting_tcp", "ready"]
+
+        def io_interest(self, now_ms):
+            return IO_WRITE
 
         def next_deadline(self, now_ms):
             return None

@@ -44,11 +44,16 @@ from chumicro_requests._wire import (
 )
 from chumicro_requests.client import Response, _encode_body, _merge_default_header
 
+# Poll-interest bit for ``io_interest``; mirrors ``chumicro_runner.IO_READ``
+# by value.  Held as a literal rather than imported so a runner-driven
+# fetch runs without importing the runner (bring-your-own-scheduler).
+_IO_READ = 1
+
 _RECV_CHUNK_SIZE = 512
 
 
 class _ReadDeadlineWait:
-    """Read-wait with a timeout: ``io_socket`` + ``io_wants_read`` + ``next_deadline``.
+    """Read-wait with a timeout: ``io_socket`` + ``io_interest`` + ``next_deadline``.
 
     The runner wrapper resumes a socket-driven wait every tick so the
     recv loop re-tries on each wake, while ``next_deadline`` only
@@ -57,11 +62,12 @@ class _ReadDeadlineWait:
     deadline check fire.
     """
 
-    io_wants_read = True
-
     def __init__(self, sock, deadline_ms):
         self.io_socket = sock
         self._deadline_ms = deadline_ms
+
+    def io_interest(self, now_ms):  # noqa: ARG002 (runner wait protocol)
+        return _IO_READ
 
     def next_deadline(self, now_ms):
         return self._deadline_ms

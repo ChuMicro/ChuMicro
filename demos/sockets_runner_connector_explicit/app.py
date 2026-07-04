@@ -14,7 +14,7 @@ Marker lines (``WIFI_OK``, ``CONNECTING``, ``CONNECTED``, ``SENT``,
 import errno
 
 from chumicro_config import load_runtime_config
-from chumicro_runner import Runner
+from chumicro_runner import IO_READ, IO_WRITE, Runner
 from chumicro_sockets import tcp_client_connector
 from chumicro_test_harness.markers import marker
 from chumicro_wifi import WifiConfig, WifiService, WifiState
@@ -148,17 +148,17 @@ class EchoService:
             return None
         return self._socket
 
-    @property
-    def io_wants_read(self):
+    def io_interest(self, now_ms):  # noqa: ARG002 (runner contract)
+        # One bitmask replaces the paired io_wants_read / io_wants_write
+        # hooks: forward the connector's interest while connecting, then
+        # want read while receiving and write while sending.
         if self.state == "connecting":
-            return self.connector.io_wants_read
-        return self.state == "receiving"
-
-    @property
-    def io_wants_write(self):
-        if self.state == "connecting":
-            return self.connector.io_wants_write
-        return self.state == "sending"
+            return self.connector.io_interest(now_ms)
+        if self.state == "receiving":
+            return IO_READ
+        if self.state == "sending":
+            return IO_WRITE
+        return 0
 
 
 config = load_runtime_config()

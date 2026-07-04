@@ -1,5 +1,5 @@
 """WebSocket client tests (chumicro_websockets.client): the
-Runner/reactor contract — io_socket, io_wants_read/write, next_deadline."""
+Runner/reactor contract — io_socket, io_interest, next_deadline."""
 
 import select
 
@@ -9,7 +9,7 @@ from _client_helpers import (
     _make_client,
     _make_factory,
 )
-from chumicro_runner import Runner
+from chumicro_runner import IO_READ, IO_WRITE, Runner
 from chumicro_runner.testing import FakePoller
 from chumicro_timing.testing import FakeTicks
 from chumicro_websockets import (
@@ -20,9 +20,9 @@ from chumicro_websockets.client import ConnectingPhase
 
 
 class TestRunnerReactorContract:
-    """``io_socket`` / ``io_wants_read`` / ``io_wants_write`` /
-    ``next_deadline`` let ``Runner.wait`` register the websocket socket
-    and idle the loop until readiness or the next deadline fires."""
+    """``io_socket`` / ``io_interest`` / ``next_deadline`` let
+    ``Runner.wait`` register the websocket socket and idle the loop
+    until readiness or the next deadline fires."""
 
     def test_io_socket_none_before_connect(self):
         client, _socket, _clock, _ = _make_client()
@@ -65,7 +65,7 @@ class TestRunnerReactorContract:
         client._socket = wrapper
         assert client.io_socket is wrapper
 
-    def test_io_wants_write_during_sending_handshake(self):
+    def test_io_interest_write_during_sending_handshake(self):
         client, _socket, clock, _ = _make_client()
         client.connect("ws://example.com/")
         # Drive past AWAITING_TRANSPORT (dns_ok + tcp_ok) so the
@@ -73,10 +73,9 @@ class TestRunnerReactorContract:
         client.handle(clock.ticks_ms())
         client.handle(clock.ticks_ms())
         assert client._connecting_phase == ConnectingPhase.SENDING_HANDSHAKE
-        assert client.io_wants_write is True
-        assert client.io_wants_read is False
+        assert client.io_interest(clock.ticks_ms()) == IO_WRITE
 
-    def test_io_wants_read_during_receiving_handshake(self):
+    def test_io_interest_read_during_receiving_handshake(self):
         client, socket, clock, _ = _make_client()
         client.connect("ws://example.com/")
         # Drain the upgrade-request send.
@@ -85,29 +84,28 @@ class TestRunnerReactorContract:
         ):
             client.handle(clock.ticks_ms())
         assert client._connecting_phase == ConnectingPhase.RECEIVING_HANDSHAKE
-        assert client.io_wants_read is True
-        assert client.io_wants_write is False
+        assert client.io_interest(clock.ticks_ms()) == IO_READ
 
-    def test_io_wants_read_when_open(self):
+    def test_io_interest_read_when_open(self):
         client, socket, clock, _ = _make_client()
         client.connect("ws://example.com/")
         _drive_handshake(client, socket, clock)
         assert client.state == WebSocketState.OPEN
-        assert client.io_wants_read is True
+        assert client.io_interest(clock.ticks_ms()) == IO_READ
 
-    def test_io_wants_write_tracks_tx_queue_when_open(self):
+    def test_io_interest_write_tracks_tx_queue_when_open(self):
         client, socket, clock, _ = _make_client()
         client.connect("ws://example.com/")
         _drive_handshake(client, socket, clock)
-        # Empty queue.
-        assert client.io_wants_write is False
+        # Empty queue: read interest only.
+        assert client.io_interest(clock.ticks_ms()) == IO_READ
 
         client.send_text("hello")
-        assert client.io_wants_write is True
+        assert client.io_interest(clock.ticks_ms()) == IO_READ | IO_WRITE
 
         # Drive once to drain.
         client.handle(clock.ticks_ms())
-        assert client.io_wants_write is False
+        assert client.io_interest(clock.ticks_ms()) == IO_READ
 
     def test_next_deadline_clamps_to_now_while_awaiting_dns(self):
         """At connect the connector is in awaiting_dns with no socket,
@@ -158,8 +156,8 @@ class TestRunnerReactorContract:
         runner.add(client)
 
         client.connect("ws://example.com/")
-        # Connector starts in awaiting_dns where io_wants_write is
-        # False; one tick advances to awaiting_tcp where the runner
+        # Connector starts in awaiting_dns where io_interest has no
+        # write bit; one tick advances to awaiting_tcp where the runner
         # parks on POLLOUT.
         runner.tick()
         runner.wait(clock.ticks_ms())

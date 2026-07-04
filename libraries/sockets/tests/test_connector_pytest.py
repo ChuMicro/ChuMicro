@@ -15,6 +15,7 @@ import select
 import socket
 
 import pytest
+from chumicro_runner import IO_READ, IO_WRITE
 from chumicro_sockets import (
     tcp_client_connector,
     tls_client_connector,
@@ -42,8 +43,9 @@ def _drive(connector, *, max_ticks: int = 50, now_ms: int = 0) -> None:
             return
         io_sock = connector.io_socket
         if io_sock is not None:
-            read_list = [io_sock] if connector.io_wants_read else []
-            write_list = [io_sock] if connector.io_wants_write else []
+            interest = connector.io_interest(now_ms)
+            read_list = [io_sock] if interest & IO_READ else []
+            write_list = [io_sock] if interest & IO_WRITE else []
             select.select(read_list, write_list, [], 0.05)
         connector.tick(now_ms)
     raise AssertionError(
@@ -83,9 +85,8 @@ class TestCPythonTCPConnector:
         connector = tcp_client_connector(host, port)
         connector.tick(0)
         assert connector.state == STATE_AWAITING_TCP
-        # io_wants_write is True during awaiting_tcp.
-        assert connector.io_wants_write is True
-        assert connector.io_wants_read is False
+        # io_interest is IO_WRITE only during awaiting_tcp.
+        assert connector.io_interest(0) == IO_WRITE
         _drive(connector)
         assert connector.state == STATE_READY
         connector.socket.close()

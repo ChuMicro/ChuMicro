@@ -30,8 +30,8 @@ import time
 from chumicro_timing import ticks as _DEFAULT_TICKS
 
 # POSIX poll flags resolved once at import time so ``wait`` can translate
-# the duck-typed ``io_wants_read`` / ``io_wants_write`` bools into a
-# poll eventmask without an attribute lookup on every loop.  The
+# a service's ``io_interest(now_ms)`` bitmask into a poll eventmask
+# without importing ``select`` on every loop.  The
 # numeric fallbacks match POSIX (0x001 / 0x004 / 0x008 / 0x010) for
 # runtimes whose ``select`` module is unimportable at runner load time.
 # POLLERR + POLLHUP are surfaced to services via the ``io_error`` hook
@@ -54,6 +54,18 @@ except ImportError:  # pragma: no cover
     _POLLHUP = 0x010
 
 _POLL_ERROR_MASK = _POLLERR | _POLLHUP
+
+# Poll-interest bits a service returns from ``io_interest(now_ms) -> int``.
+# One bitmask replaces the paired ``io_wants_read`` / ``io_wants_write``
+# hooks: ``Runner.wait`` reads it once per socket-bearing service each
+# sweep and maps ``IO_READ`` -> ``POLLIN`` / ``IO_WRITE`` -> ``POLLOUT``
+# with int math.  The values ARE the duck-typed contract — a service
+# builds its mask from these (re-exported at ``chumicro_runner.IO_READ``
+# / ``.IO_WRITE``) and never imports the runner to do it, so the numbers
+# are pinned here and mirrored as literals wherever a service can't take
+# the dependency edge.
+IO_READ = 1
+IO_WRITE = 2
 
 
 class ReentrantTickError(RuntimeError):
@@ -149,7 +161,8 @@ class TaskHandle:
                  run_count: int | None,
                  runner: "Runner",
                  service: object | None = None,
-                 preserve_phase: bool = False) -> None:
+                 preserve_phase: bool = False,
+                 io_interest: object | None = None) -> None:
         self.check_function = check_function
         self.handler_function = handler_function
         self.period_ms = period_ms
@@ -159,10 +172,18 @@ class TaskHandle:
         self.active = True
         self._runner = runner
         # Retained so ``Runner.wait`` can read the service's optional
-        # ``io_socket`` / ``io_wants_read`` / ``io_wants_write`` and
-        # ``next_deadline`` attributes each loop.  ``None`` for
-        # handler-only registrations.
+        # ``io_socket`` (a property, so a live getattr each loop is
+        # allocation-free) and ``next_deadline`` / ``io_error``.  ``None``
+        # for handler-only registrations.
         self.service = service
+        # The service's bound ``io_interest`` method, captured once here
+        # rather than getattr-ed every sweep: ``io_interest`` is a method,
+        # so a per-sweep ``getattr`` would allocate a fresh bound-method
+        # object on the ``_sync_poll_set`` hot path.  Caching it (the same
+        # way ``check_function`` / ``handler_function`` are cached) keeps
+        # that sweep allocation-free.  ``None`` when the service exposes no
+        # poll interest (or for handler-only registrations).
+        self.io_interest = io_interest
 
     def set_period(self, period_ms: int | None) -> None:
         """Add, change, or remove the period for this task.
@@ -309,10 +330,13 @@ class Runner:
                 Requires *period_ms*.
         """
         # ``service`` is the originating task object when registration
-        # was object-based — the shape that may also expose ``io_*`` /
-        # ``next_deadline`` for ``Runner.wait``.  Handler-only
-        # registrations have no service to read.
+        # was object-based — the shape that may also expose ``io_socket`` /
+        # ``io_interest`` / ``io_error`` / ``next_deadline`` for
+        # ``Runner.wait``.  Handler-only registrations have no service to
+        # read.  ``io_interest`` (a method) is captured once here so the
+        # per-sweep poll-set sync never getattr-allocates a bound method.
         service: object | None = None
+        io_interest: object | None = None
         if task is not None and handler is not None:
             raise ValueError(
                 "Pass a task object OR a handler callable, not both "
@@ -324,6 +348,8 @@ class Runner:
             check_function = task.check
             handler_function = task.handle
             service = task
+            # Optional poll surface; bound once (see TaskHandle.io_interest).
+            io_interest = getattr(task, "io_interest", None)
         elif handler is not None:
             check_function = None
             handler_function = handler
@@ -345,6 +371,7 @@ class Runner:
         handle = TaskHandle(
             check_function, handler_function, period_ms, next_due_ms,
             run_count, self, service=service, preserve_phase=preserve_phase,
+            io_interest=io_interest,
         )
         self._entries.append(handle)
         return handle
@@ -360,8 +387,8 @@ class Runner:
         past that yield would have its first wait silently skipped.
 
         The generator suspends by ``yield``-ing a duck-typed wait
-        object — anything exposing ``io_socket`` / ``io_wants_read`` /
-        ``io_wants_write`` / ``next_deadline``.  The runner reads those
+        object — anything exposing ``io_socket`` / ``io_interest(now_ms)``
+        / ``next_deadline``.  The runner reads those
         each ``wait()`` to register the socket with ipoll, and resumes
         the generator via ``.send(now_ms)`` once the socket is ready or
         the deadline elapses.  Sequential I/O state machines that would
@@ -508,7 +535,6 @@ class Runner:
                 else:
                     pending.append(entry)
 
-            on_handler_error = self._on_handler_error
             for entry in pending:
                 try:
                     entry.handler_function(now_ms)
@@ -523,16 +549,11 @@ class Runner:
                     # exception can't kill the reactor or skip the other
                     # handlers gated this tick.  KeyboardInterrupt /
                     # SystemExit / GeneratorExit are not Exception
-                    # subclasses and still propagate.
-                    self.handler_errors += 1
-                    if on_handler_error is not None:
-                        try:
-                            on_handler_error(entry, error)
-                        except Exception:  # noqa: BLE001
-                            # A callback that raises would re-introduce
-                            # the crash isolation just prevented; swallow
-                            # and count it too.
-                            self.handler_errors += 1
+                    # subclasses and still propagate.  ``wait()``'s
+                    # io_error delivery funnels its faults through the
+                    # same helper, so the count/report/swallow policy is
+                    # one lane, not two.
+                    self._record_handler_fault(entry, error)
                 if entry.run_count is not None:
                     entry.run_count -= 1
                     if entry.run_count <= 0:
@@ -558,10 +579,10 @@ class Runner:
 
         On each call ``wait``:
 
-        1. Re-reads each entry's optional ``io_socket`` /
-           ``io_wants_read`` / ``io_wants_write`` attributes and syncs
-           the registered poll set on diff (register new sockets,
-           modify changed interest, unregister stale sockets).
+        1. Re-reads each entry's optional ``io_socket`` and
+           ``io_interest(now_ms)`` bitmask and syncs the registered poll
+           set on diff (register new sockets, modify changed interest,
+           unregister stale sockets).
         2. Computes the wait timeout as the minimum of every entry's
            ``next_due_ms`` and every service's
            ``next_deadline(now_ms)``, minus *now_ms*.
@@ -581,9 +602,14 @@ class Runner:
         (socket error / hangup), looks up the registered service whose
         ``io_socket`` matches the polled object and calls its optional
         ``io_error(now_ms, eventmask)`` hook so the service can transition
-        cleanly to a failure state.  Services without ``io_error``
-        receive no notification; the runner ignores the error event
-        and ``check`` re-gates dispatch on the next ``tick`` as usual.
+        cleanly to a failure state.  That delivery runs on the one
+        snapshot-iterated, ``_record_handler_fault``-isolated lane the
+        tick handlers use, so an ``io_error`` that faults (or a generator
+        service that lets the throw propagate) is counted and contained,
+        never able to escape ``wait()`` or corrupt the entry list it
+        dispatches over.  Services without ``io_error`` receive no
+        notification; the runner ignores the error event and ``check``
+        re-gates dispatch on the next ``tick`` as usual.
 
         POLLIN / POLLOUT events are wake signals only -- ``check`` and
         ``next_deadline`` decide what runs.  Waking the loop and
@@ -593,7 +619,7 @@ class Runner:
             now_ms: Current tick, typically the value returned by the
                 preceding ``tick()`` call.
         """
-        self._sync_poll_set()
+        self._sync_poll_set(now_ms)
         timeout_ms = self._compute_timeout(now_ms)
         if timeout_ms is not None and timeout_ms <= 0:
             return
@@ -686,16 +712,52 @@ class Runner:
                 return False
             self.wait(now_ms)
 
-    def _dispatch_io_error(self, obj: object, eventmask: int, now_ms: int) -> None:
-        """Find the registered service whose ``io_socket`` is *obj* and
-        call its optional ``io_error(now_ms, eventmask)`` hook.
+    def _record_handler_fault(self, entry: "TaskHandle", error: Exception) -> None:
+        """Count and report one isolated handler / ``io_error`` fault.
 
-        No-op when no service matches (a stale poll registration we
-        haven't observed yet) or the matched service doesn't expose
-        ``io_error`` (it opted out of error notifications, the runner
-        leaves it alone).
+        The single place both dispatch lanes — ``tick()``'s handler fire
+        and ``wait()``'s ``io_error`` delivery — funnel a caught
+        ``Exception``: bump ``handler_errors``, hand the fault to the
+        optional ``on_handler_error`` callback, and swallow-and-count a
+        callback that itself raises (so a buggy hook can't re-break the
+        isolation it is reporting).  Folding both lanes onto this one
+        wrapper is what closes the G1 asymmetry (an error lane hardened
+        separately from the tick lane) structurally rather than by
+        maintaining two copies of the policy.
         """
-        for entry in self._entries:
+        self.handler_errors += 1
+        on_error = self._on_handler_error
+        if on_error is not None:
+            try:
+                on_error(entry, error)
+            except Exception:  # noqa: BLE001
+                self.handler_errors += 1
+
+    def _dispatch_io_error(self, obj: object, eventmask: int, now_ms: int) -> None:
+        """Deliver a POLLERR / POLLHUP to the faulted socket's service.
+
+        Finds the registered service whose ``io_socket`` is *obj* (adapter
+        wrappers unwrapped exactly as registration unwraps them; a CPython
+        ``poll`` fileno matched through ``fileno()``) and calls its
+        optional ``io_error(now_ms, eventmask)`` hook, isolated through the
+        shared ``_record_handler_fault`` lane so a faulting hook — or a
+        generator service that lets the thrown ``OSError`` propagate —
+        is counted and contained instead of escaping ``wait()``.
+
+        Iterates a **snapshot** (``tuple(self._entries)``): a generator
+        service's ``io_error`` throws into its body, and an uncaught throw
+        drops that service's entry from ``_entries`` mid-dispatch.
+        Snapshotting makes the mutate-while-iterating class (RUN-2)
+        structurally impossible rather than sidestepped by the single
+        early ``return``.  This is not a steady-state path (it fires only
+        on a socket error), so the snapshot copy is off the per-tick hot
+        path the buffer audit protects.
+
+        No-op when no service matches (a stale poll registration we have
+        not observed yet) or the matched service exposes no ``io_error``
+        (it opted out; the runner leaves it untouched).
+        """
+        for entry in tuple(self._entries):
             service = entry.service
             if service is None:
                 continue
@@ -713,25 +775,14 @@ class Runner:
                     try:
                         handler(now_ms, eventmask)
                     except Exception as error:  # noqa: BLE001
-                        # A generator wrapper throws the POLLERR / POLLHUP
-                        # OSError into its body; a body that doesn't catch
-                        # it re-raises here.  Isolate and count it the way
-                        # tick() isolates a faulting handler, so the fault
-                        # can't escape wait() and kill the reactor loop.
-                        self.handler_errors += 1
-                        if self._on_handler_error is not None:
-                            try:
-                                self._on_handler_error(entry, error)
-                            except Exception:  # noqa: BLE001
-                                self.handler_errors += 1
-                # io_error may remove this entry (a generator wrapper
-                # drops itself on an uncaught error), mutating _entries
-                # mid-scan.  Returning after this single dispatch means
-                # the loop never continues over the mutated list.
+                        self._record_handler_fault(entry, error)
+                # First match wins: the socket faulted once, one service
+                # owns it, and the snapshot already guards the mutation
+                # its io_error may cause.
                 return
 
-    def _sync_poll_set(self) -> None:
-        """Re-read each entry's ``io_*`` attributes and update the poll set.
+    def _sync_poll_set(self, now_ms: int) -> None:
+        """Re-read each entry's ``io_socket`` / ``io_interest`` and update the poll set.
 
         Registers sockets newly wanted, modifies on changed interest,
         unregisters sockets that have gone away or dropped to no
@@ -756,20 +807,28 @@ class Runner:
         # used below to detect stale slots without a second pass.
         wanted_count = 0
         for entry in self._entries:
-            service = entry.service
-            if service is None:
+            interest_fn = entry.io_interest
+            if interest_fn is None:
+                # Handler-only entry, or a service exposing no poll
+                # interest at all — nothing to register.
                 continue
-            sock = getattr(service, "io_socket", None)
+            sock = getattr(entry.service, "io_socket", None)
             if sock is None:
                 continue
-            sock = _pollable_of(sock)
+            # ``interest_fn`` is the service's cached bound ``io_interest``
+            # method (bound once at ``add``), so this call allocates
+            # nothing.  Map the returned bitmask to poll flags with int
+            # math — one ``io_interest`` call replaces the two per-service
+            # ``getattr`` the paired boolean hooks needed.
+            interest = interest_fn(now_ms)
             eventmask = 0
-            if getattr(service, "io_wants_read", False):
+            if interest & IO_READ:
                 eventmask |= _POLLIN
-            if getattr(service, "io_wants_write", False):
+            if interest & IO_WRITE:
                 eventmask |= _POLLOUT
             if eventmask == 0:
                 continue
+            sock = _pollable_of(sock)
             sock_id = id(sock)
             slot = registered.get(sock_id)
             if slot is None:

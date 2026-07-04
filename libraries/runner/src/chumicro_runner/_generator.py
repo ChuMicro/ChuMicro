@@ -10,8 +10,9 @@ None / False:
 
 * ``io_socket``: the underlying pollable the runner should register
   with ipoll, or ``None``.
-* ``io_wants_read`` / ``io_wants_write``: ``True`` to register the
-  socket for that direction.
+* ``io_interest(now_ms) -> int``: bitmask (``chumicro_runner.IO_READ`` /
+  ``IO_WRITE``) of the poll directions to register the socket for; 0 or
+  an absent hook registers nothing.
 * ``next_deadline``: absolute tick at which the wrapper should resume
   the generator; ``None`` means "resume on the next tick after an
   ipoll wake or any other deadline elapses."
@@ -98,8 +99,8 @@ class _GeneratorWrapper:
 
     Constructed by ``Runner.add_generator``; never used directly by
     library callers.  Satisfies the duck-typed contract the runner reads:
-    ``check`` / ``handle`` for tick scheduling, ``io_socket`` /
-    ``io_wants_read`` / ``io_wants_write`` for poll-set membership,
+    ``check`` / ``handle`` for tick scheduling, ``io_socket`` +
+    ``io_interest(now_ms)`` for poll-set membership,
     ``io_error`` for POLLERR / POLLHUP dispatch, and ``next_deadline``
     so a deadline-bearing wait (``sleep_until``) gates the wake timeout
     in ``Runner.wait``.
@@ -167,15 +168,24 @@ class _GeneratorWrapper:
             return None
         return getattr(wait, "io_socket", None)
 
-    @property
-    def io_wants_read(self) -> bool:
-        wait = self._wait
-        return bool(getattr(wait, "io_wants_read", False)) if wait is not None else False
+    def io_interest(self, now_ms: int) -> int:
+        """Poll-interest bitmask of the current wait, or 0 when idle.
 
-    @property
-    def io_wants_write(self) -> bool:
+        Forwards to the yielded wait's own ``io_interest(now_ms)``: a
+        bare socket wait returns ``IO_READ`` / ``IO_WRITE``, a
+        ``SocketConnector`` returns its per-phase mask, a deadline-only
+        or bare-``yield`` wait returns 0.  A wait exposing no
+        ``io_interest`` (a minimal socket token) contributes nothing to
+        the poll set, matching the runner's ``getattr``-with-default
+        reading of an optional hook.
+        """
         wait = self._wait
-        return bool(getattr(wait, "io_wants_write", False)) if wait is not None else False
+        if wait is None:
+            return 0
+        interest = getattr(wait, "io_interest", None)
+        if interest is None:
+            return 0
+        return interest(now_ms)
 
     def io_error(self, now_ms: int, eventmask: int) -> None:
         """POLLERR / POLLHUP on the awaited socket — throw into the generator.
