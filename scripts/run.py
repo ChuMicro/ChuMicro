@@ -2529,6 +2529,7 @@ def sweep_devices(
     demo: str = "sockets_runner_connector",
     skip_demo: bool = False,
     functional: bool = False,
+    skip_workbench: bool = False,
     library: str | None = None,
     deploy_mode: str | None = None,
 ) -> int:
@@ -2542,14 +2543,23 @@ def sweep_devices(
     access deadlocks (Decision 0048).  Adding a board to the sweep is
     a ``devices.yml`` entry, not a code change.
 
+    After every per-board cell completes, unless ``skip_workbench`` is
+    set, the sweep closes with the workbench functional suites
+    (``test_workbench_functional``) against the ``devices.yml`` default
+    boards.  That host-side suite is not per-board and had no routine
+    caller; folding it into the sweep keeps it from rotting.  It runs
+    last so it never contends with the per-board cells for the boards.
+
     Args:
         device_ids: Limit the sweep to these device IDs (registry
             order is replaced by the given order).  ``None`` sweeps
             every registered device.
         demo: Demo directory name under ``demos/`` whose ``driver.py``
             is the smoke layer.
-        skip_demo: Skip the demo layer (requires ``functional``).
+        skip_demo: Skip the demo layer (requires ``functional`` or the
+            workbench phase).
         functional: Also run each board's library functional suite.
+        skip_workbench: Skip the closing workbench functional suites.
         library: Limit the functional layer to one library.
         deploy_mode: Deploy-mode override for the functional layer.
 
@@ -2564,8 +2574,11 @@ def sweep_devices(
     )
 
     run_demo = not skip_demo
-    if not run_demo and not functional:
-        print("sweep-devices: --skip-demo without --functional leaves nothing to run.")
+    if not run_demo and not functional and skip_workbench:
+        print(
+            "sweep-devices: --skip-demo with --skip-workbench and no "
+            "--functional leaves nothing to run."
+        )
         return 2
 
     try:
@@ -2636,6 +2649,27 @@ def sweep_devices(
             functional_cell,
             time.monotonic() - started,
         ))
+
+    if not skip_workbench:
+        # Runs only after every per-board cell above: the workbench
+        # suites drive the same boards, so strict serial discipline
+        # keeps them from contending for the shared serial ports.
+        # flush=True for the same block-buffering reason as the cell
+        # headers above — the header must precede the child output.
+        print(
+            "== sweep workbench-functional (devices.yml defaults) ==",
+            flush=True,
+        )
+        started = time.monotonic()
+        code = test_workbench_functional()
+        rows.append((
+            "workbench-functional",
+            "defaults",
+            "-",
+            "PASS" if code == 0 else "FAIL",
+            time.monotonic() - started,
+        ))
+        failed = failed or code != 0
 
     print("== sweep summary ==")
     width = max(len("device"), *(len(identifier) for identifier, *_ in rows))
@@ -3441,6 +3475,14 @@ def _build_parser() -> argparse.ArgumentParser:
         help="also run each board's library functional suite",
     )
     sweep_devices_parser.add_argument(
+        "--skip-workbench",
+        action="store_true",
+        help=(
+            "skip the workbench functional suites (deploy/repl/workspace) "
+            "that close the sweep"
+        ),
+    )
+    sweep_devices_parser.add_argument(
         "--library",
         help="limit the functional layer to one library",
     )
@@ -3867,6 +3909,7 @@ def main(argv: list[str]) -> int:
             demo=args.demo,
             skip_demo=args.skip_demo,
             functional=args.functional,
+            skip_workbench=args.skip_workbench,
             library=args.library,
             deploy_mode=args.deploy_mode,
         )
