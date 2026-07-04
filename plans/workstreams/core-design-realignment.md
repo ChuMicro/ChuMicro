@@ -1,6 +1,11 @@
 # Core design realignment (2026-07 design campaign)
 
-Status: **decision menu awaiting user verdicts** (2026-07-03).  Eight-report adversarial
+Status: **EXECUTING — all menu items approved by the user 2026-07-03 ("wave zero until
+done"); Wave 0 shipped 2026-07-03** (events deleted + swept per 0096-accepted; 0020
+SemVer gate warn-only behind a `PUBLISHED` switch; hot-path D2-D7 fixed with measured
+drops — chunked-body 9.84→2.19 B/body-byte, frame-parser 577→417 B/frame; stale ADRs
+0014/0064/0082 edited in place; the template hotfix was folded into Wave 4, which
+supersedes it).  Waves 1-4 in flight.  Eight-report adversarial
 design campaign: API fitness (mqtt, rudiments), hot-path buffer audit, ADR drift audit,
 consumer angle (sister repo), DI cost measurement, and two independent design seats
 (greenfield + consumer-driven synthesis).  Every claim below is evidenced in

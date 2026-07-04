@@ -1,5 +1,10 @@
-"""Tests for check_api.py — version parsing and bump-level detection."""
+"""Tests for check_api.py — version parsing, bump detection, and the
+pre-publication warn-only breakage gate (Decision 0092)."""
 
+import types
+from pathlib import Path
+
+import check_api
 from check_api import _bump_level, _parse_version
 
 
@@ -81,3 +86,62 @@ class TestBumpLevel:
     def test_minor_bump_resets_patch(self):
         """Minor bump with lower patch is still minor."""
         assert _bump_level("1.2.9", "1.3.0") == "minor"
+
+
+#: A representative griffe breakage line naming a removed symbol.
+_BREAK = "chumicro_timing.Timer.start: parameter 'period' was removed"
+
+
+def _insufficient_bump_result(monkeypatch, griffe_output=_BREAK):
+    """Run ``_check_one_package`` under a breakage + under-bump scenario.
+
+    Stubs the repo-layout lookups and the ``griffe check`` subprocess so
+    the case is: last stable tag ``0.1.0``, current VERSION ``0.1.1``
+    (a patch bump — insufficient for a break), griffe exits non-zero
+    reporting a removed parameter.  Returns ``(ok, lines)``.
+    """
+    monkeypatch.setattr(
+        check_api, "release_tags",
+        lambda basename, stable_only=False: ["chumicro-timing-v0.1.0"],
+    )
+    monkeypatch.setattr(
+        check_api, "find_package_dir",
+        lambda package_root: Path("chumicro_timing"),
+    )
+    monkeypatch.setattr(
+        check_api, "read_version",
+        lambda package_root: "0.1.1",
+    )
+    monkeypatch.setattr(
+        check_api.subprocess, "run",
+        lambda *args, **kwargs: types.SimpleNamespace(
+            returncode=1, stdout=griffe_output, stderr="",
+        ),
+    )
+    return check_api._check_one_package("libraries", "timing")
+
+
+class TestBreakageGate:
+    """Pins the PUBLISHED-gated breakage-vs-bump reporting (Decisions 0020/0092)."""
+
+    def test_warns_and_passes_before_publication(self, monkeypatch):
+        """Pre-publication: an under-bumped break WARNs but still passes."""
+        assert check_api.PUBLISHED is False
+        ok, lines = _insufficient_bump_result(monkeypatch)
+        text = "\n".join(lines)
+        assert ok is True
+        assert "WARNING:" in text
+        assert "FAIL:" not in text
+        # Names the break and the bump publication would require.
+        assert _BREAK in text
+        assert "minor bump" in text
+
+    def test_hard_fails_when_published(self, monkeypatch):
+        """Flipping PUBLISHED restores Decision 0020's hard fail."""
+        monkeypatch.setattr(check_api, "PUBLISHED", True)
+        ok, lines = _insufficient_bump_result(monkeypatch)
+        text = "\n".join(lines)
+        assert ok is False
+        assert "FAIL:" in text
+        assert "WARNING:" not in text
+        assert _BREAK in text

@@ -505,7 +505,13 @@ class MQTTClient:
         # overflow (which raises on MP/CP and silently evicts on CPython).
         self._tx_queue_hard_cap = max_tx_queue_size + 64
         self._tx_queue = _new_tx_queue(self._tx_queue_hard_cap)
-        self._partial_send = None  # (bytes, offset) when last send was short.
+        self._partial_send = None  # (memoryview, offset) when last send was short.
+        # Reused across recv ticks so the common QoS-0 subscriber (no
+        # PUBACKs to collect) doesn't allocate a fresh list literal on
+        # every ``_read_inbound``.  Emptied at the start of each tick's
+        # collection so a mid-dispatch disconnect that drops collected
+        # PUBACKs leaves nothing to re-flush next tick.
+        self._pending_pubacks = []
         # Deadline-tick value while a packet has been queued without any
         # send progress.  ``None`` when the queue is empty or the last
         # drain made progress (a successful send re-arms; an EAGAIN
@@ -1429,7 +1435,11 @@ class MQTTClient:
             self._update_send_deadline(0)
             return  # Socket would block, wait for next tick.
         if sent < len(packet):  # pragma: no cover - rare partial-send path
-            self._partial_send = (packet, sent)
+            # Cache a memoryview so the resume path slices ``view[offset:]``
+            # zero-copy instead of copying the unsent tail each tick (the
+            # WS-2 cached-view shape).  packet is immutable ``bytes``, so
+            # the view is safe to hold across ticks.
+            self._partial_send = (memoryview(packet), sent)
             self._tx_queue.popleft()
             self._update_send_deadline(sent)
             return
@@ -1578,8 +1588,12 @@ class MQTTClient:
         # Collect PUBACKs for this tick's inbound QoS-1 publishes and
         # flush them once after dispatch, so they reach the wire in
         # receipt order (MQTT-4.6.0-2) rather than reversed by
-        # per-packet appendleft.
-        pending_pubacks = []
+        # per-packet appendleft.  Reuse the instance list (cleared here)
+        # instead of a fresh literal every tick; an early return below
+        # (disconnect mid-dispatch) leaves items for the next tick's
+        # clear to drop, matching the pre-reuse drop-on-return behavior.
+        pending_pubacks = self._pending_pubacks
+        pending_pubacks.clear()
         while True:
             packet = self._decoder.read_next()
             if packet is None:
@@ -1599,6 +1613,9 @@ class MQTTClient:
         # first on the wire, ahead of pending user packets.
         for encoded in reversed(pending_pubacks):
             self._enqueue_internal_tx(encoded, front=True)
+        # Drop the just-enqueued references promptly; the next tick's
+        # clear covers the early-return path.
+        pending_pubacks.clear()
 
     def _handle_inbound_publish(self, packet, pending_pubacks):
         """Fire callbacks + (for QoS 1) collect a PUBACK to send."""

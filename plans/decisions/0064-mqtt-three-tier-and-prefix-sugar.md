@@ -66,18 +66,11 @@ The will message uses the same shape: `will_topic` + `will_prefixed: bool = True
 
 Pattern handlers (`add_pattern_handler`) and the inbound topic delivered to `on_message` are **not** prefix-aware: patterns are intentional, and inbound topics from the wire are delivered exactly as received.  If the user wants per-device routing on receipt, they pass the prefixed pattern to `add_pattern_handler` directly.
 
-### 5. `MQTTPublisher` topic-binder helper
+### 5. No topic-binder wrapper — publish directly on the client
 
-A small `MQTTPublisher` class on top of `MQTTClient.publish` provides ergonomic binding for repeat-publish patterns:
+An earlier revision of this design added an `MQTTPublisher` topic-binder (a `client.publisher(topic, ...)` factory returning an object that held `(client, topic, qos, retain)` and delegated back to `client.publish`).  It was dropped: over a plain `MQTTClient.publish` call it saved only one bound argument per publish while adding a class, a factory method, and a second publish surface to document and test.  Neither `MQTTPublisher` nor `MQTTClient.publisher()` exists in the code.
 
-```python
-publisher = client.publisher("temperature", qos=1, retain=False)
-publisher.publish(b"23.4")
-publisher.publish("23.4")  # str auto-encoded
-publisher.publish(b"23.4", on_publish=callback)
-```
-
-The publisher holds `(client, topic, qos, retain)` and delegates to `client.publish`.  `topic` resolves through `root_topic` because `client.publish` does.  No `publish_bytes` separate method — the single `publish` auto-detects `str` vs `bytes`, matching `MQTTClient.publish` shape.
+The single publish entry point is `MQTTClient.publish(topic, payload, *, qos=0, retain=False, on_publish=None, prefixed=True)`.  One `publish` auto-detects `str` (UTF-8-encoded) vs `bytes` — there is no separate `publish_bytes` — resolves *topic* through the `root_topic` / `client_id` prefix scheme (§4) unless `prefixed=False`, and fires the optional `on_publish(topic, payload_bytes)` callback on successful delivery.  A caller that repeat-publishes to one topic passes the same topic string on each call.
 
 ### 6. Per-ack-type unexpected-packet policy
 
@@ -116,9 +109,7 @@ Additionally, SUBACK with any `granted_qos` byte equal to `0x80` (subscription r
   - `MQTTClient(root_topic=...)` — new optional constructor kwarg.
   - `MQTTClient(will_topic=..., will_prefixed=True)` — semantic change: prefixed by default when `root_topic` is set; pass `will_prefixed=False` to bypass.
   - `MQTTClient.publish / subscribe / unsubscribe` — gain `prefixed: bool = True` kwarg (default preserves prefix-aware behavior; `prefixed=False` is the verbatim opt-out).
-  - `MQTTClient.publisher(topic, qos=0, retain=False) -> MQTTPublisher` — new factory method.
   - `MQTTClient.remove_pattern_handler(handler, pattern=None)` — new method.
-  - `MQTTPublisher` — new class exported from the package.
   - `WhenOversized` enum + `on_oversized(reported_length, topic)` signature unchanged (Decision 0061 contract).
   - `max_message_bytes` now functional with default 8192.  Previously defaulted to 256 KB and was ignored.
 - **Behavior changes that may surprise existing users:**
@@ -127,6 +118,6 @@ Additionally, SUBACK with any `granted_qos` byte equal to `0x80` (subscription r
   - SUBACK with rejection code `0x80` now faults to FAILED instead of silently passing the rejection to the user callback.  Apps that were silently ignoring failed subscriptions will start surfacing them.
 - **No backwards-compatibility shims.**  Pre-1.0 (current VERSION 0.9.0 → 0.10.0, minor).  Edit forward.
 - **Decision 0061 contract preserved.**  `on_oversized(reported_length, topic)` signature unchanged; `WhenOversized.DROP_WITH_EVENT` semantic ("drop the payload, stay connected") matches the shared cross-library contract.
-- **Tests:** `test_decoder.py` gains intact-tier coverage + per-policy oversized-tier coverage + oversize-topic coverage.  `test_client.py` gains coverage for prefix resolution, the `prefixed=False` opt-out, `MQTTPublisher`, `remove_pattern_handler`, SUBACK 0x80 fault, unexpected-PUBACK/SUBACK/UNSUBACK fault, unexpected-PINGRESP toleration.
+- **Tests:** `test_decoder.py` gains intact-tier coverage + per-policy oversized-tier coverage + oversize-topic coverage.  `test_client.py` gains coverage for prefix resolution, the `prefixed=False` opt-out, `remove_pattern_handler`, SUBACK 0x80 fault, unexpected-PUBACK/SUBACK/UNSUBACK fault, unexpected-PINGRESP toleration.
 - **Docs:** README's "What's included" table + `docs/guide.md`'s Oversized-message policy section + Memory-notes section + Tuning section are rewritten for the three-tier model and the new defaults.  The 256 KB number in those docs is wrong everywhere; this pass corrects it.
 - **Version bump:** `chumicro-mqtt` `0.9.0` → `0.10.0`.  Minor bump — three public-method additions, one constructor-kwarg addition (`root_topic`), one will-kwarg rename (`will_topic` semantic change + new `will_topic_raw`), one behavior change in the steady-state-vs-oversized boundary.  All within the pre-1.0 SemVer policy.

@@ -1,6 +1,6 @@
 # Decision 0096: remove the events library
 
-Status: `proposed`
+Status: `accepted`
 Date: `2026-07-03`
 Summary: `chumicro_events` is deleted; direct callbacks and `Signal` are the sanctioned notification patterns; a bus returns only inside a concrete consumer that needs one.
 Related: 0014 (the runner's bus was removed once already), 0091/0095 (Signal), 0092, campaign reports `plans/reviews/2026-07-03-{rudiment-api-fitness,greenfield-core-redesign}.md`

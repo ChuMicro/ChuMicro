@@ -58,13 +58,15 @@ Both produce identical values on every supported runtime.
 
 `Runner(ticks=None)` captures `ticks_ms()` once per `tick()` call and passes the shared timestamp to every service.  It returns `now_ms` so user code can use it for passive checks alongside the dispatch loop.
 
-Three registration patterns:
+Two registration shapes on `add`, plus the periodic convenience:
 
 - **Object-based:** `add(obj)` — obj has `.check(now_ms) -> bool` and `.handle(now_ms)`.  The runner calls `.check()`; if `True`, `.handle()` is queued.
-- **Callable-based:** `add(check_function, handler=function)` — callable check gates callable handler.
+- **Handler-only:** `add(handler=fn)` — `fn(now_ms)` fires on every tick (or once per `period_ms` when that kwarg is set), with no check gate.
 - **Periodic:** `add_periodic(handler, period_ms)` — handler fires on schedule, no check.  Reschedule anchoring (fixed-delay default vs opt-in phase-preserving) is per-registration — see [Decision 0088](0088-periodic-phase-anchoring.md).
 
-All patterns accept an optional `period_ms` to gate by time.
+A task object and a handler callable are mutually exclusive: `add(task, handler=fn)` raises `ValueError`.  The earlier callable-based form — a bare check callable in the first positional argument gating a separate `handler=` callable (`add(check_function, handler=function)`) — was removed; a component that needs a check gate exposes it as its object's `.check()` method, or gates inside the handler body.
+
+Both `add` shapes accept an optional `period_ms` to gate by time.
 
 ### Period ownership on the runner
 
@@ -87,7 +89,7 @@ This guarantees handlers see a consistent view of the world — no handler modif
 
 ## Alternatives considered
 
-- **Event-based pattern (service → event sink → dispatcher):** The initial implementation used an event bus: components emitted `Event` objects into an `EventQueueSink`, and a `SimpleEventDispatcher` routed them to handlers by event type.  This required significant ceremony (create sink, create dispatcher, register event types, pass both to runner) for simple cases where a service just needs to check a condition and fire a callback.  Removed in favor of the simpler gate-based model.  Can be re-added as a separate module when multi-handler routing is needed.
+- **Event-based pattern (service → event sink → dispatcher):** The initial implementation used an event bus: components emitted `Event` objects into an `EventQueueSink`, and a `SimpleEventDispatcher` routed them to handlers by event type.  This required significant ceremony (create sink, create dispatcher, register event types, pass both to runner) for simple cases where a service just needs to check a condition and fire a callback.  Removed in favor of the simpler gate-based model.  A standalone `chumicro_events` bus was later built as that separate module and then deleted too — [Decision 0096](0096-remove-events-library.md) (2026-07-03) is the ecosystem's second bus rejection after this one; direct `on_*` callbacks and `Signal` are the sanctioned notification patterns, and a bus returns only inside a concrete consumer that needs one.
 - **Priority-based dispatch ordering:** Priority constants were defined but never used for dispatch ordering.  Constants without behavior create confusion.  Deferred until the ecosystem actually needs contention management.
 - **Component-owned sink / `next_event()`:** Less centralized, requires per-library queue logic, harder to orchestrate multiple components.  Rejected in favor of the runner-managed pattern.
 - **`ServiceContext` wrapping ticks + sink:** Adds a layer of indirection not needed at current scale.

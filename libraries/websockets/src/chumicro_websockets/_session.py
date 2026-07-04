@@ -243,6 +243,11 @@ class _BaseSession:
         self._inbound_empty_fragment_run = 0
 
         self._handshake_send_buffer = None
+        # Cached memoryview over ``_handshake_send_buffer`` so the per-tick
+        # send slices a zero-copy view instead of copying the tail twice.
+        # Set alongside the buffer in each subclass's handshake setup;
+        # dropped with it so neither pins the other after handshake.
+        self._handshake_send_view = None
         self._handshake_send_offset = 0
 
         self._handshake_deadline_ticks = None
@@ -456,7 +461,7 @@ class _BaseSession:
         each subclass overrides to either advance to receiving (client) or
         transition to OPEN (server).
         """
-        remaining = self._handshake_send_buffer[self._handshake_send_offset:]
+        remaining = self._handshake_send_view[self._handshake_send_offset:]
         if not remaining:
             self._on_handshake_send_complete(now_ms)
             return
