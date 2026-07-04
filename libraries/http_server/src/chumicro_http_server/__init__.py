@@ -15,6 +15,15 @@ helpers, multipart upload, sub-app mounting, async handlers.
 
 import gc
 
+# Streamed response bodies are an opt-in submodule
+# (``chumicro_http_server.streaming`` — ``StreamingResponse`` /
+# ``build_streaming_response`` / ``encode_streaming_headers``), NOT
+# re-exported here: the base ``HttpServer`` recognizes a streaming
+# response by duck type and lazy-loads the framing machine only to drive
+# one, so a server that never streams never pays its bytecode.  The two
+# constants below live in ``_wire`` (always imported) so the streaming
+# submodule and the constructor default share them without pulling the
+# framing code in.
 from chumicro_http_server._wire import (
     DEFAULT_MAX_CONNECTIONS,
     DEFAULT_MAX_HEADERS_BYTES,
@@ -23,6 +32,8 @@ from chumicro_http_server._wire import (
     DEFAULT_RECV_BUDGET_PER_TICK,
     DEFAULT_REQUEST_TIMEOUT_MS,
     DEFAULT_SEND_BUDGET_PER_TICK,
+    DEFAULT_STREAM_BUFFER_SIZE,
+    SOURCE_EOF,
     CaseInsensitiveDict,
     RequestParser,
     RequestParseState,
@@ -52,6 +63,8 @@ __all__ = [
     "DEFAULT_RECV_BUDGET_PER_TICK",
     "DEFAULT_REQUEST_TIMEOUT_MS",
     "DEFAULT_SEND_BUDGET_PER_TICK",
+    "DEFAULT_STREAM_BUFFER_SIZE",
+    "SOURCE_EOF",
     "CaseInsensitiveDict",
     "HttpServer",
     "Request",

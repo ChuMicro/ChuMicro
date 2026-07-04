@@ -63,11 +63,27 @@ while True:
 | `Request` | Per-request value object: `method`, `path`, `query`, `headers`, `body`, `json()`, `text()`. |
 | `Response` | Outbound response: `status_code`, `reason`, `headers`, `body`. |
 | `build_response(status, *, body, json, text, html, headers)` | Convenience builder with sensible Content-Type defaults. |
+| `streaming.build_streaming_response(status, *, source, content_length, headers)` | Opt-in `chumicro_http_server.streaming` submodule — serve a body larger than the heap from a fill-a-buffer `source(buffer) -> int` (Content-Length or chunked framing, fixed staging window). |
 | `RequestParser` | Streaming request parser (request line + headers + Content-Length body). |
 | `parse_query` / `split_target` | URL helpers. |
 | `ServerError` + subclasses | Typed exception hierarchy, independent of `chumicro_requests` so the server can ship without the client library. |
 
 Each request is served on a fresh accepted socket and `Connection: close` is added to every response — HTTP/1.1 keep-alive and connection pooling are not supported.  Chunked request bodies are not supported either; use `Content-Length`.
+
+Need to return a body bigger than the heap — a log dump, a file, a long export?  Return a **streaming response** from the opt-in `chumicro_http_server.streaming` submodule and the server drains it from a fill-a-buffer source one small window at a time, choosing Content-Length or chunked framing for you:
+
+```python
+from chumicro_http_server.streaming import build_streaming_response, SOURCE_EOF
+
+@server.route("/log")
+def log_dump(request):
+    def source(buffer):
+        n = read_next_block_into(buffer)   # your storage read; 0 <= n <= len(buffer)
+        return n if n else SOURCE_EOF      # -1 signals end of body
+    return build_streaming_response(200, source=source)
+```
+
+See the [user guide](https://chumicro.github.io/ChuMicro/http_server/stable/guide/#streaming-large-response-bodies) for the source contract, framing rules, fairness, and staging-window sizing.
 
 ## Where this fits
 

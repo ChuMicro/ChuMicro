@@ -25,6 +25,12 @@ path parameter are all wired up.
 import errno
 import json
 
+# The opt-in ``chumicro_http_server.streaming`` submodule is imported
+# lazily inside the streaming code path (``_Connection._stage_streaming_
+# response`` / ``_drive_stream_body``), not here — a server that only
+# serves buffered responses never loads the streamed-body framing
+# machine's bytecode.  Only the two constants (which the constructor
+# signature and public surface need at import) live in ``_wire``.
 from chumicro_http_server._wire import (
     CRLF,
     DEFAULT_MAX_CONNECTIONS,
@@ -34,6 +40,7 @@ from chumicro_http_server._wire import (
     DEFAULT_RECV_BUDGET_PER_TICK,
     DEFAULT_REQUEST_TIMEOUT_MS,
     DEFAULT_SEND_BUDGET_PER_TICK,
+    DEFAULT_STREAM_BUFFER_SIZE,
     CaseInsensitiveDict,
     RequestParser,
     RequestParseState,
@@ -212,6 +219,14 @@ class Response:
         )
 
 
+# ``StreamingResponse`` + ``build_streaming_response`` live in the opt-in
+# :mod:`chumicro_http_server.streaming` submodule, not here: the base
+# server recognizes a streaming response by duck type (its ``source``
+# attribute — see :meth:`_Connection._dispatch_handler`) and lazy-imports
+# the framing machine only to drive one, so a server that never streams
+# never loads that bytecode.
+
+
 # ---------------------------------------------------------------------------
 # Per-connection state machine
 # ---------------------------------------------------------------------------
@@ -225,6 +240,9 @@ class _ConnState:
     WANT_BODY = "want_body"
     DISPATCHING = "dispatching"
     WANT_SEND_HEADERS = "want_send_headers"
+    #: Streaming responses only: headers are flushed, the handler's byte
+    #: source is being drained + framed to the socket across ticks.
+    WANT_SEND_BODY = "want_send_body"
     DONE = "done"
     ERROR = "error"
 
@@ -271,6 +289,7 @@ class _Connection:
         max_request_body_bytes,
         max_request_line_bytes,
         max_headers_bytes,
+        stream_buffer_size,
     ):
         self._socket = socket
         self._peer = peer
@@ -278,6 +297,7 @@ class _Connection:
         self._deadline_ticks = deadline_ticks
         self._recv_budget = recv_budget
         self._send_budget = send_budget
+        self._stream_buffer_size = stream_buffer_size
         # No per-connection steady-state body buffer: every response
         # emits ``Connection: close``, so each _Connection serves one
         # request before destruction.  A use-once buffer would fragment
@@ -299,6 +319,12 @@ class _Connection:
         self._response_bytes = b""
         self._response_view = memoryview(self._response_bytes)
         self._response_offset = 0
+        # Streaming send state.  Both stay ``None`` for the buffered path
+        # so a non-streaming connection allocates no staging window: the
+        # window is lazily minted only when a handler returns a
+        # :class:`StreamingResponse`.
+        self._stream = None
+        self._stream_buffer = None
         self.state = _ConnState.WANT_REQUEST_LINE
 
     @property
@@ -319,6 +345,8 @@ class _Connection:
                 self._dispatch_handler()
             if self.state == _ConnState.WANT_SEND_HEADERS:
                 self._drive_send()
+            if self.state == _ConnState.WANT_SEND_BODY:
+                self._drive_stream_body()
         except ServerLimitError as limit_error:
             # A sender-controlled allocation hit a documented cap before
             # the offending bytes were buffered or a body was allocated
@@ -401,11 +429,21 @@ class _Connection:
             response = self._handler(request)
         except Exception as handler_error:  # noqa: BLE001 - anything in the handler is a 500
             response = _build_error_response(500, str(handler_error))
-        if not isinstance(response, Response):
-            response = _build_error_response(
-                500,
-                f"handler returned {type(response).__name__}, expected Response",
-            )
+        if isinstance(response, Response):
+            self._stage_response(response)
+            return
+        if getattr(response, "source", None) is not None:
+            # Duck type: a ``StreamingResponse`` (from the opt-in
+            # ``chumicro_http_server.streaming`` submodule) carries a byte
+            # ``source``.  Recognized without importing its class, so a
+            # server that never streams never loads the framing bytecode.
+            # Send the headers, then drain the source across ticks.
+            self._stage_streaming_response(response)
+            return
+        response = _build_error_response(
+            500,
+            f"handler returned {type(response).__name__}, expected Response",
+        )
         self._stage_response(response)
 
     def _stage_response(self, response):
@@ -428,6 +466,18 @@ class _Connection:
         self._response_offset = 0
         self.state = _ConnState.WANT_SEND_HEADERS
 
+    def _stage_streaming_response(self, response):
+        """Encode a streaming response's headers + arm the source drain.
+
+        Thin stub: the framing machine lives in the opt-in
+        :mod:`chumicro_http_server.streaming` submodule and loads lazily
+        here, so only a server that actually streams pays its bytecode.
+        """
+        from chumicro_http_server.streaming import (  # noqa: PLC0415
+            stage_streaming_response,
+        )
+        stage_streaming_response(self, response)
+
     def _drive_send(self):
         total = len(self._response_bytes)
         view = self._response_view
@@ -447,7 +497,25 @@ class _Connection:
             self._response_offset += sent
             consumed += sent
         if self._response_offset >= total:
-            self.state = _ConnState.DONE
+            # A streaming response hands off to the body drain; a buffered
+            # response (``_stream is None``) is complete — byte-identical
+            # to the pre-streaming path.
+            if self._stream is not None:
+                self.state = _ConnState.WANT_SEND_BODY
+            else:
+                self.state = _ConnState.DONE
+
+    def _drive_stream_body(self):
+        """Drain the byte source to the socket for one tick (thin stub).
+
+        The drain loop — per-tick send budget, EAGAIN backpressure, chunk
+        framing, and mid-body failure handling — lives in the opt-in
+        :mod:`chumicro_http_server.streaming` submodule, lazy-loaded here.
+        """
+        from chumicro_http_server.streaming import (  # noqa: PLC0415
+            drive_stream_body,
+        )
+        drive_stream_body(self)
 
     def _fail(self):
         self.state = _ConnState.ERROR
@@ -578,7 +646,8 @@ class HttpServer:
         Reads optional ``http_server.*`` keys (``bind_host`` /
         ``bind_port`` / ``max_connections`` / ``request_timeout_ms`` /
         ``max_request_body_bytes`` / ``max_request_line_bytes`` /
-        ``max_headers_bytes`` / ``tls.cert_path`` / ``tls.key_path``)
+        ``max_headers_bytes`` / ``stream_buffer_size`` /
+        ``tls.cert_path`` / ``tls.key_path``)
         from *config*.  All defaults apply when
         absent; a custom *transport_factory* bypasses the auto-build
         entirely, *ssl_context* opts into TLS without config paths,
@@ -626,6 +695,10 @@ class HttpServer:
                 "http_server.max_headers_bytes",
                 DEFAULT_MAX_HEADERS_BYTES,
             ),
+            stream_buffer_size=config.get(
+                "http_server.stream_buffer_size",
+                DEFAULT_STREAM_BUFFER_SIZE,
+            ),
         )
 
     def __init__(
@@ -640,6 +713,7 @@ class HttpServer:
         max_request_body_bytes: int = DEFAULT_MAX_REQUEST_BODY_BYTES,
         max_request_line_bytes: int = DEFAULT_MAX_REQUEST_LINE_BYTES,
         max_headers_bytes: int = DEFAULT_MAX_HEADERS_BYTES,
+        stream_buffer_size: int = DEFAULT_STREAM_BUFFER_SIZE,
         ticks: object | None = None,
     ) -> None:
         """Wire up the server.
@@ -685,6 +759,13 @@ class HttpServer:
                 Default 4 KB.  Headers exceeding the cap are rejected
                 with 431 Request Header Fields Too Large — bounds the
                 buffer a slow header dribble can grow.
+            stream_buffer_size: Staging-window size, in bytes, for a
+                :class:`StreamingResponse` (default 1 KB).  Minted lazily
+                (only a connection that streams allocates one) and reused,
+                so it is the whole per-stream heap cost regardless of body
+                size or a stalled client.  A larger window amortizes the
+                per-send and chunk-framing overhead at the cost of RAM per
+                concurrent stream.
             ticks: Optional tick source — any object exposing
                 ``ticks_ms``, ``ticks_diff``, ``ticks_add`` (matches
                 the ``chumicro_timing.ticks`` submodule shape).
@@ -700,6 +781,7 @@ class HttpServer:
         self._max_request_body_bytes = max_request_body_bytes
         self._max_request_line_bytes = max_request_line_bytes
         self._max_headers_bytes = max_headers_bytes
+        self._stream_buffer_size = stream_buffer_size
 
         if ticks is None:
             from chumicro_timing import ticks  # noqa: PLC0415 - DI fallback
@@ -1002,6 +1084,7 @@ class HttpServer:
             max_request_body_bytes=self._max_request_body_bytes,
             max_request_line_bytes=self._max_request_line_bytes,
             max_headers_bytes=self._max_headers_bytes,
+            stream_buffer_size=self._stream_buffer_size,
         )
         self._connections.append(connection)
 

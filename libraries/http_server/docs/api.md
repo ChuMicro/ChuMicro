@@ -1,11 +1,15 @@
 # API Reference
 
-<!-- Starts as a single autodoc directive for the whole package. As the
-     library grows multiple modules, split this into per-module sections
-     with `## Heading` + `::: chumicro_http_server.<module>` directives — see
-     libraries/timing/docs/api.md for an example. -->
+## `chumicro_http_server`
 
 ::: chumicro_http_server
+
+## `chumicro_http_server.streaming`
+
+Opt-in submodule for streamed response bodies — import it explicitly.
+A server that never streams never loads it.
+
+::: chumicro_http_server.streaming
 
 ---
 
