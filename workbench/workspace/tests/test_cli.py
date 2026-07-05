@@ -1786,6 +1786,10 @@ class TestDoctor:
         # --fix flag) should surface as an ERROR finding, flip exit to
         # 1, and tell the user about --fix-fskit-wedge.
         from chumicro_workspace import health
+        # The health check gates on sys.platform before consulting the
+        # detector, so fake darwin too — the wedge logic under test is
+        # host-independent (first live CI run failed here on Linux).
+        monkeypatch.setattr(health.sys, "platform", "darwin")
         monkeypatch.setattr(health, "detect_fskit_wedge", lambda: True)
         root = seed_workspace(tmp_path)
         project_dir = seed_project(root, name="back-porch")
