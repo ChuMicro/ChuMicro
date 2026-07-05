@@ -63,6 +63,8 @@ def __getattr__(name):
     import cost on a fresh heap (see the guide).
     """
     if name in ("HttpServer", "Request", "Response", "build_response", "encode_response"):
+        # Sweep before the big compile (see chumicro_mqtt.__getattr__).
+        gc.collect()
         import chumicro_http_server.server as _server  # noqa: PLC0415
 
         return getattr(_server, name)

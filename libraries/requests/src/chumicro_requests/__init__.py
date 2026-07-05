@@ -43,6 +43,8 @@ def __getattr__(name):
     (see the guide).
     """
     if name in ("HttpClient", "RequestHandle", "Response", "WhenOversized"):
+        # Pre-compile sweep; rationale in chumicro_mqtt.__getattr__.
+        gc.collect()
         import chumicro_requests.client as _client  # noqa: PLC0415
 
         return getattr(_client, name)
