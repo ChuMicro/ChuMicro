@@ -95,7 +95,7 @@ jobs:
         # workbench ships to PyPI only, not circup / mip).
         run: |
           python scripts/release_matrix.py \
-            --suffix "${{ steps.channel.outputs.suffix }}" \
+            --suffix="${{ steps.channel.outputs.suffix }}" \
             --libraries "${{ inputs.libraries }}" \
             ${{ inputs.include_tagged && '--include-tagged' || '' }}
 
