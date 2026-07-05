@@ -2524,6 +2524,79 @@ def _format_test_libraries_functional_command(
     return " ".join(parts)
 
 
+#: Console marker a wifi demo prints once its first association lands
+#: (``WIFI_OK ip=...``).  A freshly-erased ESP32-family board runs RF
+#: calibration on its very first wifi association, which can push that
+#: one join past the demo driver's WIFI_OK budget; the radio is warm on
+#: the immediately-following attempt.  The sweep keys its single
+#: first-association retry on a timeout waiting for THIS marker — cold
+#: start is a property of the ESP32 family generally, not of any one
+#: board or vendor, so no board-quirk table is involved.
+_FIRST_ASSOCIATION_MARKER = "WIFI_OK"
+
+
+def _demo_output_shows_first_association_timeout(output: str) -> bool:
+    """True when *output* shows the demo timed out awaiting first association.
+
+    The wifi demo drivers wait on the board's ``WIFI_OK`` marker with a
+    fixed budget; a miss raises ``MarkerTimeoutError`` whose message the
+    driver prints as ``... waiting for marker 'WIFI_OK'``.  That
+    signature is the only cold-start candidate the sweep grants a retry
+    — a *later* marker timing out (e.g. ``DEMO_COMPLETE``) is a genuine
+    failure and is not retried, so the "cold-start grace" the summary
+    reports stays honest.
+    """
+    return f"waiting for marker '{_FIRST_ASSOCIATION_MARKER}'" in output
+
+
+def _run_demo_cell(driver: Path, device_id: str) -> tuple[str, str | None]:
+    """Run one demo driver against *device_id*, granting one cold-start retry.
+
+    Returns ``(cell, note)``.  ``cell`` is ``"PASS"``, ``"FAIL"``, or
+    ``"PASS*"`` (passed only on the cold-start retry); ``note`` is a
+    one-line summary footnote when a retry was granted, else ``None``.
+
+    A first attempt that fails specifically on the first-association
+    marker timeout (see
+    :func:`_demo_output_shows_first_association_timeout`) is retried
+    exactly once — the documented "run the sweep twice" bench remedy for
+    ESP32-family cold-start RF calibration, automated.  Any other
+    failure, and any second failure, is a plain ``FAIL``.  The retry is
+    never silent: it announces itself before re-running and is called
+    out under the summary table (no-silent-caps).
+    """
+    command = [PYTHON, str(driver), "--device", device_id]
+    environment = pythonpath_environment()
+    print(f"+ {' '.join(command)}", flush=True)
+    code, output = stream_subprocess(
+        command,
+        environment=environment,
+        on_line=lambda line: print(line, flush=True),
+    )
+    if code == 0:
+        return "PASS", None
+    if not _demo_output_shows_first_association_timeout(output):
+        return "FAIL", None
+
+    print(
+        f"== sweep {device_id} :: demo first-association grace — "
+        f"{_FIRST_ASSOCIATION_MARKER} marker timed out on a cold start; "
+        f"retrying once against the now-warm radio ==",
+        flush=True,
+    )
+    print(f"+ {' '.join(command)}", flush=True)
+    retry_code, _ = stream_subprocess(
+        command,
+        environment=environment,
+        on_line=lambda line: print(line, flush=True),
+    )
+    if retry_code == 0:
+        return "PASS*", f"{device_id}: demo passed on retry (cold-start grace)"
+    return "FAIL", (
+        f"{device_id}: demo retried once on cold-start grace, still FAIL"
+    )
+
+
 def sweep_devices(
     *,
     device_ids: list[str] | None = None,
@@ -2616,6 +2689,7 @@ def sweep_devices(
 
     failed = False
     rows: list[tuple[str, str, str, str, float]] = []
+    cold_start_notes: list[str] = []
     for entry in devices:
         demo_cell = "-"
         functional_cell = "-"
@@ -2626,12 +2700,10 @@ def sweep_devices(
         # would land *after* the child output it introduces.
         if run_demo:
             print(f"== sweep {entry.identifier} :: demo {demo} ==", flush=True)
-            code = run_command(
-                [PYTHON, str(driver), "--device", entry.identifier],
-                environment=pythonpath_environment(),
-            )
-            demo_cell = "PASS" if code == 0 else "FAIL"
-            failed = failed or code != 0
+            demo_cell, cold_start_note = _run_demo_cell(driver, entry.identifier)
+            failed = failed or demo_cell == "FAIL"
+            if cold_start_note is not None:
+                cold_start_notes.append(cold_start_note)
         if functional:
             print(f"== sweep {entry.identifier} :: functional ==", flush=True)
             device_kwargs = {f"{entry.runtime}_device": entry.identifier}
@@ -2680,6 +2752,11 @@ def sweep_devices(
             f"{identifier:<{width}}  {runtime:<13} {demo_cell:<5} "
             f"{functional_cell:<10} {elapsed:.0f}s"
         )
+    # A ``PASS*`` cell above means the demo timed out on its first
+    # association and passed on the automatic retry; spell that out so
+    # the grace is never a silent cap on the reported result.
+    for note in cold_start_notes:
+        print(f"* {note}")
     return 1 if failed else 0
 
 
