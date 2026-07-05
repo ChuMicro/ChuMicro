@@ -42,6 +42,8 @@ while True:
         client.handle(now)
 ```
 
+Build your client at startup. The first `MQTTClient` reference imports the client module, so let that one-time cost land on a fresh heap.
+
 `connect()` queues the CONNECT packet; the first few `handle()` calls drive it through CONNECTING → CONNECTED.  `publish()` called before then buffers into a bounded pre-connect queue and flushes on CONNACK — the default `when_disconnected="queue"` policy (`"raise"` restores the raise-if-not-connected behavior).  `subscribe()` and `unsubscribe()` are declarations valid in any state: call them before `connect()` and the first CONNACK puts them on the wire (a self-heal reconnect replays them). Calling `subscribe()` while already CONNECTED still sends immediately, and placing it in `on_connect` is equally valid — just no longer required.
 
 `MQTTClient` actually enforces non-blocking mode on every socket it acquires (force-`setblocking(False)`), so the explicit `sock.setblocking(False)` line above is belt-and-suspenders.  Don't omit it — MP plain TCP defaults to blocking, and a blocking `recv` against a silent peer (broker that's hung mid-handshake, network blackholing returning packets) stalls the tick loop indefinitely on Pi Pico W RP2.  Bench-tested with a stalled TCP listener: recv was still blocked at the 3-minute mark, with no TCP keepalive timeout fired within that window.  Whole-app freeze, not a recoverable hiccup.

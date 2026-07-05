@@ -30,14 +30,29 @@ from chumicro_requests._wire import (
 
 gc.collect()
 
-from chumicro_requests.client import (  # noqa: E402, I001 - preceded by gc.collect().
-    HttpClient,
-    RequestHandle,
-    Response,
-    WhenOversized,
-)
+
+def __getattr__(name):
+    """Lazy-load the client half on first access (PEP 562).
+
+    ``client`` is ~25 KB of source.  A board that imports
+    ``chumicro_requests`` for its wire helpers (URL parsing, header dict,
+    request encoding) but never builds an ``HttpClient`` shouldn't pin
+    the client's compiled code objects in RAM, so the module is deferred
+    until the first access to one of its symbols.  Constructing the
+    client at startup keeps that one-time import cost on a fresh heap
+    (see the guide).
+    """
+    if name in ("HttpClient", "RequestHandle", "Response", "WhenOversized"):
+        import chumicro_requests.client as _client  # noqa: PLC0415
+
+        return getattr(_client, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 __all__ = [
+    # pyright: ignore[reportUnsupportedDunderAll] — HttpClient,
+    # RequestHandle, Response, and WhenOversized are PEP-562 lazy via
+    # __getattr__.
     "CaseInsensitiveDict",
     "HttpBusyError",
     "HttpClient",

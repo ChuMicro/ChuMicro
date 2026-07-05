@@ -47,15 +47,32 @@ from chumicro_http_server._wire import (
     parse_query,
     split_target,
 )
-from chumicro_http_server.server import (
-    HttpServer,
-    Request,
-    Response,
-    build_response,
-    encode_response,
-)
+
+gc.collect()
+
+
+def __getattr__(name):
+    """Lazy-load the server half on first access (PEP 562).
+
+    ``server`` is ~22 KB of source.  A board that imports
+    ``chumicro_http_server`` for its wire helpers (request parsing,
+    header dict, query/target splitting) but never builds an
+    ``HttpServer`` shouldn't pin the server's compiled code objects in
+    RAM, so the module is deferred until the first access to one of its
+    symbols.  Constructing the server at startup keeps that one-time
+    import cost on a fresh heap (see the guide).
+    """
+    if name in ("HttpServer", "Request", "Response", "build_response", "encode_response"):
+        import chumicro_http_server.server as _server  # noqa: PLC0415
+
+        return getattr(_server, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 __all__ = [
+    # pyright: ignore[reportUnsupportedDunderAll] — HttpServer, Request,
+    # Response, build_response, and encode_response are PEP-562 lazy via
+    # __getattr__.
     "DEFAULT_MAX_CONNECTIONS",
     "DEFAULT_MAX_HEADERS_BYTES",
     "DEFAULT_MAX_REQUEST_BODY_BYTES",

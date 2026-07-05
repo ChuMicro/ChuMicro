@@ -71,6 +71,18 @@ Bench answer to "does lazy loading help or hurt fragmentation":
 - **Lazy `__getattr__` re-exports (lever 2) are confirmed pure-win when first touch is at boot** (same packing as eager, pay-per-use).  Mid-runtime first touch has two costs: the full floor must be free at that moment, and the ~28 K of immovable objects scatter into existing holes (no compacting GC).  Ship the pattern with one line of doc guidance: *instantiate clients during startup*.
 - **New top-tier lever: split `mqtt/client.py`** (largest file in the fleet by a wide margin) into 3–4 modules along existing class boundaries (MQTTClient / in-flight+pending tracking / ProtocolState+inbound types).  While we ship `.py` source, every boot recompiles on-device and that one file sets a ~95 K floor — half a Pico W's heap.  Splitting drops the floor toward ≤70 K with zero API change.  Next candidates, already near-tolerable: requests/client.py (25.4 K), websockets/_wire.py (27.3 K).
 
+## Phase 1 SHIPPED (2026-07-05 evening) — lazy `__init__` re-exports
+
+mqtt / requests / http_server now defer their heavy client/server module via websockets' PEP-562 `__getattr__` pattern (cheap `_wire` symbols stay eager).  Measured on the MP unix proxy (fresh interpreter, full dep closure; websockets as unchanged control):
+
+| library | package-import heap before | after | delta |
+|---|--:|--:|--:|
+| mqtt | 40,992 B | 15,616 B | **−61.9 %** |
+| requests | 38,592 B | 19,808 B | **−48.7 %** |
+| http_server | 32,800 B | 14,496 B | **−55.8 %** |
+
+Cost: ~+180 B stripped per `__init__` (the `__getattr__` body), within budget margins — no ceilings bumped.  All lanes green (1080 CPython / 2070 MP / 2070 CP); PEP-562 smoke-verified on both pinned unix binaries.  Guides gained one startup-construction line each.  Real Pico W import-heap numbers land at the next bench sweep.  Remaining phases: 0 (ship `.mpy` from the deploy walker), the mqtt `client.py` split (import-floor lever), then the structural diet.
+
 ## Campaign shape (after CI)
 
 Per library, heavy trio first (websockets → requests → mqtt → http_server): an audit-embedded-led cut pass → apply → full preflight + on-device sweep + `check-size` ratchet-down commit.  Bakes re-run on mqtt after its pass (the negative-suite fakes pin behavior).  Fleet-wide passes (exception consolidation, error-string diet) follow as cross-library sweeps.  Success = trio ≈ −40 % stripped/mpy with all features and all tests green, budgets ratcheted to the new floor.
