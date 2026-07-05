@@ -19,6 +19,10 @@ on:
         options:
           - experimental
         default: experimental
+      include_tagged:
+        description: "Re-include packages whose release tag already exists (re-run escape hatch for the 'tag exists but bundle/publish never ran' trap; the publish stays idempotent via skip-existing + release update)"
+        type: boolean
+        default: false
       dry_run:
         description: "Dry run — build but do not publish or tag"
         type: boolean
@@ -92,7 +96,8 @@ jobs:
         run: |
           python scripts/release_matrix.py \
             --suffix "${{ steps.channel.outputs.suffix }}" \
-            --libraries "${{ inputs.libraries }}"
+            --libraries "${{ inputs.libraries }}" \
+            ${{ inputs.include_tagged && '--include-tagged' || '' }}
 
   # Publishing to PyPI is immutable — nothing ships unless the full local
   # gate passes on the exact ref being released.  Self-contained (runs
@@ -159,8 +164,13 @@ jobs:
           python-version: "3.13"
           cache: "pip"
 
-      - name: Install build tooling
-        run: python -m pip install --upgrade pip build
+      - name: Install workspace tooling
+        # bundle_manager (patch-experimental below) imports chumicro_deploy
+        # at module level, so this leg needs the full workspace environment,
+        # not just `build` — requirements-dev carries `build` for the dist
+        # step.  (First-run trap found 2026-07-05: bare `pip install build`
+        # left every matrix leg dying on ModuleNotFoundError.)
+        run: python scripts/run.py setup
 
       - name: Create library source archive
         # Frozen snapshot of the UNPATCHED library source attached to the
@@ -187,20 +197,30 @@ jobs:
         with:
           packages-dir: ${{ matrix.library_dir }}/dist/
           attestations: true
+          # PyPI uploads are immutable — a version can be published once.
+          # If a prior run published this version but died before the tag
+          # was written (below), the re-run would otherwise be rejected
+          # forever.  skip-existing treats an already-present file as
+          # success so the retry can reach the tag write.
+          skip-existing: true
 
-      - name: Create git tag
-        if: inputs.dry_run != true
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag -a "${{ matrix.tag }}" -m "Release ${{ matrix.library_name }} ${{ matrix.version }}"
-          git push origin "${{ matrix.tag }}"
-
-      - name: Create GitHub Release
+      # The GitHub Release is the LAST write of the job, and it creates the
+      # tag.  softprops/action-gh-release creates refs/tags/<tag_name> at
+      # target_commitish when the tag doesn't exist yet, so there is no
+      # separate "git tag && push" step.  Ordering matters: the tag is the
+      # idempotency key release_matrix.py checks, so it must not appear
+      # until PyPI publish + the source archive are both in place.  A run
+      # that fails earlier leaves the tag absent and re-runs cleanly
+      # (publish is skip-existing; this step updates an existing release
+      # rather than failing).
+      - name: Create GitHub Release and tag
         if: inputs.dry_run != true
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ matrix.tag }}
+          # Pin the tag to the exact commit that was built and gated, not a
+          # possibly-newer default-branch HEAD.
+          target_commitish: ${{ github.sha }}
           # Release name matches the tag so it can be copy-pasted directly
           # into promote.yml's experimental_tag input.
           name: ${{ matrix.tag }}
@@ -209,7 +229,10 @@ jobs:
             Release of **chumicro-${{ matrix.library_name }}** version **${{ matrix.version }}**${{ needs.detect.outputs.is_experimental == 'true' && ' (experimental)' || '' }}.
           # Only the source archive is attached — dist artifacts are already
           # on PyPI and the source archive is the only file promote.yml needs.
+          # overwrite_files (default true, set explicitly) makes a re-run
+          # replace the same-named archive instead of erroring.
           files: chumicro-${{ matrix.library_name }}-v${{ matrix.version }}-source.zip
+          overwrite_files: true
           generate_release_notes: true
 
   # ---------------------------------------------------------------------------
@@ -217,17 +240,25 @@ jobs:
   # distribution.
   # Stable pushes to ChuMicro/ChuMicro-Bundle.
   # Experimental pushes to ChuMicro/ChuMicro-Bundle-Experimental.
-  # Prerequisites:
-  #   1. Both bundle repositories must exist (can be empty).
+  # Prerequisites (device bundle + host-side libraries channel):
+  #   1. All four distribution repositories must exist (can be empty),
+  #      default branch main:
+  #        ChuMicro-Bundle / ChuMicro-Bundle-Experimental  (mip/circup)
+  #        ChuMicro-Libraries / ChuMicro-Libraries-Experimental
+  #          (host-side `chumicro-workspace library` source channel — B4)
   #   2. Per-repository SSH deploy keys with write access, stored as secrets:
-  #        BUNDLE_DEPLOY_KEY              → ChuMicro-Bundle (stable)
-  #        EXPERIMENTAL_BUNDLE_DEPLOY_KEY → ChuMicro-Bundle-Experimental
+  #        BUNDLE_DEPLOY_KEY                → ChuMicro-Bundle (stable)
+  #        EXPERIMENTAL_BUNDLE_DEPLOY_KEY   → ChuMicro-Bundle-Experimental
+  #        LIBRARIES_DEPLOY_KEY             → ChuMicro-Libraries (stable)
+  #        EXPERIMENTAL_LIBRARIES_DEPLOY_KEY→ ChuMicro-Libraries-Experimental
   #      Deploy keys are single-repository scoped (least privilege) and can
   #      be added to branch-protection bypass lists.
-  #   3. BUNDLE_TOKEN (PAT) for GitHub API calls (release creation).
+  #   3. BUNDLE_TOKEN (PAT) for GitHub API calls (bundle release creation).
   #      Deploy keys only grant git-level access; API operations still
-  #      need a token.
-  # See Decision 0018 for the bundle repository layout and distribution model.
+  #      need a token.  The libraries channel needs NO token: the consumer
+  #      (chumicro_workspace.library_channel) reads raw index.json + tag
+  #      tarballs (codeload) only, so tags + a main push suffice.
+  # See Decision 0018 (bundle layout) and 0078 (libraries channel).
   # ---------------------------------------------------------------------------
   bundle:
     name: "Publish to ${{ needs.detect.outputs.bundle_repository }}"
@@ -260,6 +291,11 @@ jobs:
       - name: Build mpy-cross compilers
         if: steps.tools-cache.outputs.cache-hit != 'true'
         run: python scripts/run.py prepare-mpy-cross
+
+      - name: Install workspace tooling
+        # bundle_manager imports chumicro_deploy at module level (Decision
+        # 0090 strip reuse) — staging dies without the workspace environment.
+        run: python scripts/run.py setup
 
       - name: Stage bundle artifacts
         # Compiles .py → .mpy and arranges library files into the bundle
@@ -405,4 +441,59 @@ jobs:
           python scripts/run.py validate-mip \
             --bundle-repo "$bundle_repo" \
             --libraries "$libraries"
+
+  # ---------------------------------------------------------------------------
+  # Publish the host-side libraries channel (B4, Decision 0078): a
+  # whole-source-tree snapshot of every publishable library plus a root
+  # index.json, tag-versioned, that `chumicro-workspace library
+  # add/browse/update` reads.  Distinct from the device bundle above —
+  # that ships deploy-flattened .py/.mpy for circup/mip; this ships each
+  # library's curated tree (src/tests/examples/docs) for host-side use.
+  #
+  # The whole channel is re-snapshotted every release (the snapshot model:
+  # every library built together as one self-consistent set), so this job
+  # takes no matrix — only the channel (experimental here) and a fresh
+  # date tag.  The consumer reads raw index.json + tag tarballs via
+  # codeload, so an SSH push of main + a tag is all that is required (no
+  # GitHub release, no BUNDLE_TOKEN).
+  # ---------------------------------------------------------------------------
+  libraries-channel:
+    name: Publish libraries channel
+    needs: [detect, release]
+    if: needs.detect.outputs.has_library_releases == 'true' && inputs.dry_run != true
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Configure SSH for libraries channel repository
+        uses: webfactory/ssh-agent@v0.9.1
+        with:
+          ssh-private-key: ${{ needs.detect.outputs.is_experimental == 'true' && secrets.EXPERIMENTAL_LIBRARIES_DEPLOY_KEY || secrets.LIBRARIES_DEPLOY_KEY }}
+
+      - name: Clone libraries channel repository
+        run: |
+          repository="${{ needs.detect.outputs.is_experimental == 'true' && 'ChuMicro/ChuMicro-Libraries-Experimental' || 'ChuMicro/ChuMicro-Libraries' }}"
+          git clone "git@github.com:${repository}.git" .libraries-repo
+
+      - name: Stage and push libraries channel
+        # A UTC timestamp is the snapshot tag.  It's unique per run without
+        # querying existing tags (no next-date-tag call — that lives in
+        # bundle_manager, which pulls the chumicro_deploy import chain this
+        # deliberately-light job doesn't install).  libraries_channel wipes
+        # + rebuilds the clone's tree (except .git/) from the current
+        # source, writes index.json for the tag, then bundle_push commits +
+        # tags + pushes main.  Every run rewrites index.json with the new
+        # tag, so the pushed commit always self-describes as its own tag.
+        run: |
+          snapshot_tag="$(date -u +%Y%m%d.%H%M%S)"
+          python scripts/libraries_channel.py \
+            --staging-dir .libraries-repo \
+            --tag "$snapshot_tag" \
+            ${{ needs.detect.outputs.is_experimental == 'true' && '--experimental' || '' }} \
+            --push
 

@@ -29,6 +29,12 @@ from pathlib import Path
 
 from repo_layout import ROOT, is_parked
 
+#: Decision 0038 §6 pre-release floor.  A freshly scaffolded package sits
+#: at ``0.0.0`` until its first real version; releasing it on an unrelated
+#: bump would ship an empty/placeholder project.  Mirrors the same floor
+#: enforced by ``scripts/check_version.py`` (``PRE_RELEASE_FLOOR``).
+PRE_RELEASE_FLOOR = "0.0.0"
+
 
 def _read_version(version_file: Path) -> str:
     """Return the trimmed VERSION file contents."""
@@ -49,8 +55,20 @@ def _tag_exists(tag: str) -> bool:
 def _collect_entries(
     suffix: str,
     libraries_filter: list[str] | None,
+    *,
+    include_tagged: bool = False,
 ) -> list[dict[str, str]]:
-    """Return the release-matrix entries for changed packages."""
+    """Return the release-matrix entries for changed packages.
+
+    Args:
+        suffix: Tag suffix (e.g. ``"-experimental"``).
+        libraries_filter: Package basenames to include (``None`` = all).
+        include_tagged: When True, keep packages whose release tag already
+            exists.  Dispatch-only escape hatch for the "tag exists but the
+            bundle/publish leg never ran" trap; ``skip-existing`` on the
+            PyPI publish step and softprops/action-gh-release's
+            release-update behavior make the re-run idempotent.
+    """
     entries: list[dict[str, str]] = []
     parents: list[tuple[Path, str]] = [
         (ROOT / "libraries", "library"),
@@ -76,9 +94,21 @@ def _collect_entries(
                 continue
 
             version = _read_version(version_file)
+
+            # Decision 0038 §6: a package sitting at the 0.0.0 pre-release
+            # floor is never released — otherwise a freshly scaffolded
+            # library would ship on the next unrelated VERSION bump.
+            # Mirrors the floor enforced in check_version.py.
+            if version == PRE_RELEASE_FLOOR:
+                print(
+                    f"Library {library_name} is at the {PRE_RELEASE_FLOOR} "
+                    "pre-release floor — skipping (Decision 0038 §6)."
+                )
+                continue
+
             tag = f"chumicro-{library_name}-v{version}{suffix}"
 
-            if _tag_exists(tag):
+            if _tag_exists(tag) and not include_tagged:
                 print(f"Tag {tag} already exists — skipping {library_name}.")
                 continue
 
@@ -127,13 +157,21 @@ def main(argv: list[str] | None = None) -> int:
         "--libraries", default="",
         help="Comma-separated package basenames to filter (empty = all).",
     )
+    parser.add_argument(
+        "--include-tagged", action="store_true",
+        help="Include packages whose release tag already exists "
+        "(dispatch-only re-run escape hatch; publish is idempotent via "
+        "skip-existing + release update).",
+    )
     args = parser.parse_args(argv)
 
     libraries_filter: list[str] | None = None
     if args.libraries:
         libraries_filter = [name.strip() for name in args.libraries.split(",") if name.strip()]
 
-    entries = _collect_entries(args.suffix, libraries_filter)
+    entries = _collect_entries(
+        args.suffix, libraries_filter, include_tagged=args.include_tagged,
+    )
     payload = _emit_outputs(entries)
 
     github_output = os.environ.get("GITHUB_OUTPUT")

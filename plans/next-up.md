@@ -4,7 +4,8 @@
 
 ## Now
 
-- [ ] **Release-fabric readiness (audited 2026-07-05).**  [workstreams/release-fabric-readiness.md](workstreams/release-fabric-readiness.md) — ci.yml/release.yml surgery pushed (172c64b2); three-agent audit verdict: CI can flip on, publishing cannot — 5 blockers (patch-experimental name bug, experimental deps not rewritten, mid-pipeline tag idempotency traps, libraries-channel producer never wired, sister setup skips `[dev]`), 2 user decisions (experimental-PyPI policy, launch promotion wave), GitHub-side prereq checklist (36 trusted publishers, secrets, bundle repos, stale required-checks list).
+- [ ] **Release-fabric readiness — remediated, gated on docs (2026-07-05).**  [workstreams/release-fabric-readiness.md](workstreams/release-fabric-readiness.md) — all 5 blockers fixed in code, GitHub infra stood up (Actions on, ruleset retargeted, keys minted, Bundle-Experimental seeded); `Release` + `Deploy Documentation` workflows disabled_manually per the docs gate.  Open: docs/guides redo (gates going public), PyPI publishers (verify 8 + register 28, Chrome drive queued), Bundle visibility flip + first-release sequence after docs.
+- [ ] **Docs & guides redo (user call 2026-07-05).**  Gates everything public: re-do docs/guides across monorepo + sister repo, absorbing the channel-inversion fixes (all install defaults point at stable — see release-fabric workstream D1) and the launch promotion-wave story; then re-enable Release/docs-deploy, flip ChuMicro-Bundle public, first release.
 
 ## Next
 

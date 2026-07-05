@@ -762,31 +762,135 @@ def generate_bundle_readme(
     )
 
 
+def _experimental_dependency(dependency: str) -> str:
+    """Append ``-experimental`` to a chumicro dependency's name.
+
+    The version specifier / extras / marker are preserved verbatim so an
+    experimental wheel pins the experimental project:
+    ``"chumicro-deploy>=0.1.0"`` -> ``"chumicro-deploy-experimental>=0.1.0"``.
+
+    Args:
+        dependency: A ``project.dependencies`` entry (e.g.
+            ``"chumicro-deploy>=0.1.0"``).
+    """
+    name = strip_pip_dependency_version(dependency)
+    split_at = dependency.index(name) + len(name)
+    return f"{dependency[:split_at]}-experimental{dependency[split_at:]}"
+
+
+def _project_dependencies_span(content: str) -> tuple[int, int] | None:
+    """Return the ``[start, end)`` char slice of the ``[project].dependencies``
+    array, or ``None`` when the array is absent.
+
+    Each entry sits on its own line (the workspace convention), so the
+    array opens at a ``dependencies = [`` line and closes at the first
+    following line that is a bare ``]``.  Scoping to this block keeps the
+    dependency rewrite from touching an identically-named entry in
+    ``[project.optional-dependencies]``.
+
+    Args:
+        content: Raw pyproject.toml text.
+    """
+    offset = 0
+    open_index: int | None = None
+    for line in content.splitlines(keepends=True):
+        if open_index is None:
+            if line.replace(" ", "").replace("\t", "").startswith("dependencies=["):
+                open_index = offset
+        elif line.strip() == "]":
+            return open_index, offset + len(line)
+        offset += len(line)
+    return None
+
+
+def _rewrite_experimental_dependencies(
+    content: str, dependencies: list[str], pyproject_path: Path,
+) -> str:
+    """Rewrite intra-chumicro ``[project].dependencies`` for experimental.
+
+    Every ``chumicro-*`` entry gets ``-experimental`` appended to its
+    name (Decision-point 1a): an experimental wheel must require the
+    experimental projects, since the stable projects don't exist on the
+    pre-release channel and pip would otherwise fail to resolve them.
+    Non-chumicro deps are left untouched.
+
+    Args:
+        content: Raw pyproject.toml text.
+        dependencies: The parsed ``[project].dependencies`` list.
+        pyproject_path: Source path, for the error message when the array
+            can't be located.
+    """
+    chumicro_dependencies = [
+        dependency
+        for dependency in dependencies
+        if strip_pip_dependency_version(dependency).startswith("chumicro-")
+    ]
+    if not chumicro_dependencies:
+        return content
+
+    span = _project_dependencies_span(content)
+    if span is None:
+        # tomllib parsed chumicro deps but the raw array can't be located
+        # for a scoped rewrite — fail rather than silently ship stable
+        # deps on the experimental wheel (the B2 uninstallable-bootstrap
+        # trap this rewrite exists to close).
+        sys.exit(f"Cannot locate [project].dependencies array in {pyproject_path}")
+
+    open_index, close_index = span
+    block = content[open_index:close_index]
+    for dependency in chumicro_dependencies:
+        experimental = _experimental_dependency(dependency)
+        for quote in ('"', "'"):
+            block = block.replace(
+                f"{quote}{dependency}{quote}",
+                f"{quote}{experimental}{quote}",
+            )
+    return content[:open_index] + block + content[close_index:]
+
+
 def patch_experimental(library_dir: Path) -> None:
     """Patch a library's pyproject.toml for experimental channel release.
 
-    Renames the PyPI package to ``*-experimental``, redirects the Bundle
-    URL to the experimental bundle repo, and switches the Documentation
-    URL from ``/stable/`` to ``/experimental/``.
+    Renames the PyPI package to ``*-experimental`` (read from
+    ``[project].name`` rather than derived from the directory, so a
+    hyphenated name like ``chumicro-http-server`` in ``libraries/http_server/``
+    patches correctly), rewrites intra-chumicro ``[project].dependencies``
+    to their ``-experimental`` counterparts, redirects the Bundle URL to
+    the experimental bundle repo, and switches the Documentation URL from
+    ``/stable/`` to ``/experimental/``.
 
     Args:
         library_dir: Root directory of the library (e.g. ``libraries/timing``).
     """
     pyproject_path = library_dir / "pyproject.toml"
     content = pyproject_path.read_text()
-    library_name = library_dir.name
 
-    # 1. Rename the PyPI package.
-    original_name = f'name = "chumicro-{library_name}"'
-    experimental_name = f'name = "chumicro-{library_name}-experimental"'
+    tomllib = load_tomllib()
+    with pyproject_path.open("rb") as pyproject_file:
+        data = tomllib.load(pyproject_file)
+    project = data.get("project", {})
+    name = project.get("name")
+    if not isinstance(name, str) or not name.strip():
+        sys.exit(f"Cannot find a [project].name in {pyproject_path}")
+
+    # 1. Rename the PyPI package to its experimental counterpart.
+    original_name = f'name = "{name}"'
+    experimental_name = f'name = "{name}-experimental"'
     if original_name not in content:
         sys.exit(f"Cannot find '{original_name}' in {pyproject_path}")
     content = content.replace(original_name, experimental_name)
 
-    # 2. Point Bundle URL to the experimental bundle repository.
+    # 2. Rewrite intra-chumicro dependencies to the experimental channel
+    #    so the wheel requires -experimental deps (which exist) instead of
+    #    stable projects (which don't, on the pre-release channel).
+    content = _rewrite_experimental_dependencies(
+        content, project.get("dependencies", []), pyproject_path,
+    )
+
+    # 3. Point Bundle URL to the experimental bundle repository.
     content = content.replace('ChuMicro-Bundle"', 'ChuMicro-Bundle-Experimental"')
 
-    # 3. Point Documentation URL to the experimental docs channel.
+    # 4. Point Documentation URL to the experimental docs channel.
     content = content.replace('/stable/"', '/experimental/"')
 
     pyproject_path.write_text(content)
@@ -794,7 +898,10 @@ def patch_experimental(library_dir: Path) -> None:
     # Print patched lines for verification.
     print("Patched pyproject.toml:")
     for line in content.splitlines():
+        stripped = line.strip()
         if line.startswith(("name =", "Bundle =", "Documentation =")):
+            print(f"  {line}")
+        elif stripped.startswith(('"chumicro-', "'chumicro-")) and "-experimental" in stripped:
             print(f"  {line}")
 
 

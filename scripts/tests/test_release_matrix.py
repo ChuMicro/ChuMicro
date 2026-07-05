@@ -137,6 +137,59 @@ class TestCollectEntries:
 
         assert entries == []
 
+    def test_skips_pre_release_floor(self, fake_root: Path) -> None:
+        """A package at 0.0.0 is held out of the matrix (Decision 0038 §6)."""
+        _make_package(fake_root / "libraries", "timing", "1.0.0")
+        _make_package(fake_root / "libraries", "fresh", "0.0.0")
+
+        entries = release_matrix._collect_entries(suffix="", libraries_filter=None)
+
+        names = [entry["library_name"] for entry in entries]
+        assert names == ["timing"]
+
+    def test_pre_release_floor_excluded_even_when_named_in_filter(
+        self, fake_root: Path,
+    ) -> None:
+        """The 0.0.0 floor holds even for an explicit --libraries request."""
+        _make_package(fake_root / "libraries", "fresh", "0.0.0")
+
+        entries = release_matrix._collect_entries(
+            suffix="", libraries_filter=["fresh"],
+        )
+
+        assert entries == []
+
+    def test_include_tagged_keeps_existing_tags(
+        self, fake_root: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """--include-tagged re-includes packages whose tag already exists."""
+        _make_package(fake_root / "libraries", "timing", "1.0.0")
+        _make_package(fake_root / "libraries", "wifi", "2.0.0")
+
+        monkeypatch.setattr(
+            release_matrix, "_tag_exists",
+            lambda tag: tag == "chumicro-timing-v1.0.0",
+        )
+
+        entries = release_matrix._collect_entries(
+            suffix="", libraries_filter=None, include_tagged=True,
+        )
+
+        names = sorted(entry["library_name"] for entry in entries)
+        assert names == ["timing", "wifi"]
+
+    def test_include_tagged_still_skips_pre_release_floor(
+        self, fake_root: Path,
+    ) -> None:
+        """--include-tagged does not override the 0.0.0 floor."""
+        _make_package(fake_root / "libraries", "fresh", "0.0.0")
+
+        entries = release_matrix._collect_entries(
+            suffix="", libraries_filter=None, include_tagged=True,
+        )
+
+        assert entries == []
+
 
 class TestEmitOutputs:
     """Tests for _emit_outputs."""
@@ -235,3 +288,20 @@ class TestMain:
         captured = capsys.readouterr()
         assert "chumicro-timing-v1.0.0" in captured.out
         assert "wifi" not in captured.out
+
+    def test_include_tagged_flag(
+        self, fake_root: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture,
+    ) -> None:
+        """--include-tagged reaches _collect_entries so a tagged package stays."""
+        _make_package(fake_root / "libraries", "timing", "1.0.0")
+        monkeypatch.setattr(release_matrix, "_tag_exists", lambda _: True)
+        monkeypatch.delenv("GITHUB_OUTPUT", raising=False)
+
+        result = release_matrix.main(["--include-tagged"])
+
+        assert result == 0
+        captured = capsys.readouterr()
+        assert "has_releases=true" in captured.out
+        assert "chumicro-timing-v1.0.0" in captured.out
