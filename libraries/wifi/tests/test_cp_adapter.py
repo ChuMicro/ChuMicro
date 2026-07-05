@@ -30,11 +30,28 @@ class _FakeRadio:
         self._connect_outcome = True
         self._connect_exception = None
         self._stop_exception = None
+        self._tx_power = None
+        self._tx_power_exception = None
         self.calls = []
 
     @property
     def ipv4_address(self):
         return self._ipv4 if self.connected else None
+
+    @property
+    def tx_power(self):
+        return self._tx_power
+
+    @tx_power.setter
+    def tx_power(self, value):
+        # Record the set into the shared call log so tests can assert
+        # both the value and its ordering relative to stop_station /
+        # connect.  A port lacking the knob is modelled by
+        # ``_tx_power_exception``.
+        self.calls.append(("tx_power", value))
+        if self._tx_power_exception is not None:
+            raise self._tx_power_exception
+        self._tx_power = value
 
     def connect(self, ssid, password, timeout=None):
         self.calls.append(("connect", ssid, password, timeout))
@@ -158,6 +175,65 @@ def test_connect_tolerates_stop_station_oserror() -> None:
     adapter = CpWifiAdapter(radio=radio)
     assert adapter.connect(WifiConfig(ssid="x", password="y")) is True
     assert ("connect", "x", "y", 15.0) in radio.calls
+
+
+def test_connect_applies_tx_power_before_connect_when_set() -> None:
+    """``tx_power_dbm`` is applied after the station-clear and before connect().
+
+    The reduced power must survive the fresh-attempt flow, so it lands
+    between ``stop_station()`` (which would otherwise reset it) and the
+    ``connect()`` that uses it.  The contract is the *ordering* on every
+    fresh attempt.
+    """
+    radio = _FakeRadio()
+    adapter = CpWifiAdapter(radio=radio)
+    config = WifiConfig(ssid="HomeNet", password="secret", tx_power_dbm=15)
+    assert adapter.connect(config) is True
+    assert radio.calls == [
+        ("stop_station",),
+        ("tx_power", 15),
+        ("connect", "HomeNet", "secret", 15.0),
+    ]
+    assert radio.tx_power == 15
+
+
+def test_connect_leaves_tx_power_untouched_when_none() -> None:
+    """The default ``tx_power_dbm=None`` never touches ``wifi.radio.tx_power``."""
+    radio = _FakeRadio()
+    adapter = CpWifiAdapter(radio=radio)
+    assert adapter.connect(WifiConfig(ssid="x", password="y")) is True
+    assert radio.tx_power is None
+    assert not any(call[0] == "tx_power" for call in radio.calls)
+
+
+def test_connect_tolerates_tx_power_unsupported_api() -> None:
+    """A radio without a settable ``tx_power`` doesn't abort the attempt.
+
+    A CP build lacking the knob raises ``AttributeError`` on assignment;
+    the adapter swallows it (leaving the radio at its default power) and
+    proceeds to the connect rather than faulting the service.
+    """
+    radio = _FakeRadio()
+    radio._tx_power_exception = AttributeError("no tx_power on this build")  # noqa: SLF001
+    adapter = CpWifiAdapter(radio=radio)
+    config = WifiConfig(ssid="x", password="y", tx_power_dbm=15)
+    assert adapter.connect(config) is True
+    assert ("connect", "x", "y", 15.0) in radio.calls
+
+
+def test_connect_does_not_set_tx_power_on_already_linked_short_circuit() -> None:
+    """The already-linked short-circuit touches no radio state, TX power included.
+
+    Poking a live station destabilises the ESP32 driver, so when the
+    radio already reports linked the adapter returns without setting
+    power — even though ``tx_power_dbm`` is configured.
+    """
+    radio = _FakeRadio()
+    radio.connected = True
+    adapter = CpWifiAdapter(radio=radio)
+    config = WifiConfig(ssid="x", password="y", tx_power_dbm=15)
+    assert adapter.connect(config) is True
+    assert radio.calls == []  # no stop_station, no tx_power, no connect
 
 
 def test_connect_returns_true_when_radio_links() -> None:
