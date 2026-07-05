@@ -4,8 +4,8 @@ Exercises the adapter's contract with ``wifi.radio`` without a
 CircuitPython board.  The fake mirrors the subset of the
 ``wifi.radio`` shape the adapter touches: ``hostname`` (settable
 str), ``connect(ssid, password, timeout=...)`` (blocking, may
-raise), ``connected`` (bool), ``ipv4_address`` (stringifiable or
-``None``).
+raise), ``stop_station()``, ``connected`` (bool), ``ipv4_address``
+(stringifiable or ``None``).
 
 Hardware-side coverage (real ``wifi.radio`` against a real AP)
 lives under ``functional_tests/``.
@@ -29,6 +29,7 @@ class _FakeRadio:
         self._ipv4 = ipv4
         self._connect_outcome = True
         self._connect_exception = None
+        self._stop_exception = None
         self.calls = []
 
     @property
@@ -40,6 +41,12 @@ class _FakeRadio:
         if self._connect_exception is not None:
             raise self._connect_exception
         self.connected = bool(self._connect_outcome)
+
+    def stop_station(self):
+        self.calls.append(("stop_station",))
+        if self._stop_exception is not None:
+            raise self._stop_exception
+        self.connected = False
 
     def set_outcome(self, *, ok=None, exception=None):
         self._connect_outcome = ok if ok is not None else True
@@ -94,7 +101,63 @@ def test_connect_calls_radio_with_credentials_and_timeout() -> None:
     adapter = CpWifiAdapter(radio=radio)
     config = WifiConfig(ssid="HomeNet", password="secret", connect_timeout_ms=5_000)
     assert adapter.connect(config) is True
-    assert radio.calls[0] == ("connect", "HomeNet", "secret", 5.0)
+    assert radio.calls[-1] == ("connect", "HomeNet", "secret", 5.0)
+
+
+def test_connect_clears_station_before_each_attempt() -> None:
+    """Each fresh attempt calls ``stop_station()`` before ``connect()``.
+
+    On the ESP32-S3 a failed attempt leaves the station half-open; the
+    adapter drops it first so a retry starts clean instead of inheriting
+    the poisoned state that slow-fails as ``ConnectionError 205``.  The
+    contract is the *ordering*: stop precedes the connect on every
+    attempt while the radio is not already linked.
+    """
+    radio = _FakeRadio()
+    radio.set_outcome(ok=False)  # every attempt fails, so we retry
+    adapter = CpWifiAdapter(radio=radio)
+    config = WifiConfig(ssid="HomeNet", password="secret")
+
+    assert adapter.connect(config) is False
+    assert adapter.connect(config) is False
+
+    # Two attempts, each a stop_station immediately followed by a connect.
+    assert radio.calls == [
+        ("stop_station",),
+        ("connect", "HomeNet", "secret", 15.0),
+        ("stop_station",),
+        ("connect", "HomeNet", "secret", 15.0),
+    ]
+
+
+def test_connect_short_circuits_when_already_linked() -> None:
+    """A live association returns ``True`` without re-issuing connect().
+
+    Re-calling ``wifi.radio.connect()`` against an up station
+    destabilises the ESP32 driver (it tears down and re-joins), so when
+    the radio already reports linked the adapter reports the link
+    instead of touching the radio at all.
+    """
+    radio = _FakeRadio()
+    radio.connected = True
+    adapter = CpWifiAdapter(radio=radio)
+    assert adapter.connect(WifiConfig(ssid="x", password="y")) is True
+    assert radio.calls == []  # no stop_station, no connect
+
+
+def test_connect_tolerates_stop_station_oserror() -> None:
+    """A ``stop_station()`` that raises ``OSError`` doesn't abort the attempt.
+
+    Some ports raise when asked to stop an already-stopped station; the
+    adapter swallows that and proceeds to the fresh ``connect()`` rather
+    than failing the attempt on the cleanup step.
+    """
+    radio = _FakeRadio()
+    radio._stop_exception = OSError("nothing to stop")  # noqa: SLF001
+    radio.set_outcome(ok=True)
+    adapter = CpWifiAdapter(radio=radio)
+    assert adapter.connect(WifiConfig(ssid="x", password="y")) is True
+    assert ("connect", "x", "y", 15.0) in radio.calls
 
 
 def test_connect_returns_true_when_radio_links() -> None:

@@ -170,6 +170,8 @@ Three runtimes, three different ways an unreachable AP surfaces:
 
 The supervisor handles all three honestly: each adapter checks `isconnected()` after a connect attempt rather than trusting that a non-raising `connect()` succeeded.
 
+On the ESP32-S3, a failed or timed-out `wifi.radio.connect()` leaves the station half-open; re-issuing `connect()` without clearing it makes the retry slow-fail for the whole `connect_timeout_ms` (surfacing as `ConnectionError: Unknown failure 205`) instead of the ~4 s a clean attempt takes, so a single transient RF glitch cascades past the connect budget.  `CpWifiAdapter.connect` therefore calls `wifi.radio.stop_station()` before each fresh attempt (and short-circuits when the radio already reports linked), keeping every attempt independent.  This is an intermittent, RF-marginal failure mode — the chip connects in seconds when the station is clean.
+
 ## Testing with `FakeWifi`
 
 For downstream libraries' tests, [`chumicro_wifi.testing.FakeWifi`](testing.md) is a drop-in `WifiService` wrapping a `FakeWifiAdapter` with `set_connect_outcome`, `drop_link`, and `calls` hooks.

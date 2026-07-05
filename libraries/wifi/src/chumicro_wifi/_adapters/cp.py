@@ -23,8 +23,9 @@ class CpWifiAdapter(WifiAdapter):
             under CircuitPython.  Tests inject a fake whose shape
             matches the subset of ``wifi.radio`` we touch:
             ``hostname`` (settable str), ``connect(ssid, password,
-            timeout=...)`` (blocking, may raise), ``connected``
-            (bool), ``ipv4_address`` (stringifiable or ``None``).
+            timeout=...)`` (blocking, may raise), ``stop_station()``,
+            ``connected`` (bool), ``ipv4_address`` (stringifiable
+            or ``None``).
     """
 
     name = "cp"
@@ -63,11 +64,32 @@ class CpWifiAdapter(WifiAdapter):
             self.radio.hostname = config.hostname
 
     def connect(self, config):
-        """Block on ``wifi.radio.connect`` budgeted by ``connect_timeout_ms``.
+        """Clear stale station state, then block on ``wifi.radio.connect``.
 
         CP's connect is blocking.  The substrate doesn't expose a
         non-blocking variant.  ``timeout`` is in seconds, converted
         from the config's milliseconds.
+
+        Two ESP32-family guards wrap the raw call, both because
+        re-issuing ``wifi.radio.connect()`` against existing station
+        state destabilises the driver rather than re-joining cleanly:
+
+        * **Already linked** → return ``True`` without touching the
+          radio.  A live association can survive a soft-reload, and the
+          service only reaches ``connect()`` from a ``DISCONNECTED`` /
+          ``RECONNECTING`` state, so a still-up link here means "nothing
+          to do."  Mirrors the MP adapter's ``isconnected()`` guard.
+        * **Reset the station first** on every fresh attempt.  On the
+          ESP32-S3 a failed or timed-out ``connect()`` leaves the
+          station half-open; the next attempt then inherits that state
+          and slow-fails for the full ``connect_timeout_ms`` (surfacing
+          as ``ConnectionError: Unknown failure 205``) instead of the
+          ~4 s a clean attempt takes — so a single transient RF glitch
+          cascades past the connect budget and the service never links.
+          ``stop_station()`` drops that state so each attempt is
+          independent.  It is a safe no-op on an already-stopped
+          station; the ``OSError`` guard tolerates a port that raises
+          when there is nothing to stop.
 
         Catches ``OSError`` (the parent of CircuitPython's
         ``TimeoutError`` / ``ConnectionError`` for the AP-refused
@@ -79,6 +101,12 @@ class CpWifiAdapter(WifiAdapter):
         AttributeError, programmer errors, wrong board) propagates
         to ``WifiService.last_error``.
         """
+        if self.radio.connected:
+            return True
+        try:
+            self.radio.stop_station()
+        except OSError:
+            pass
         timeout_seconds = config.connect_timeout_ms / 1000
         try:
             self.radio.connect(

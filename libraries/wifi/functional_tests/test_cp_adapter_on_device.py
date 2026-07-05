@@ -82,3 +82,27 @@ def test_connect_to_nonexistent_ssid_returns_false_within_timeout() -> None:
     assert result is False
     assert adapter.is_linked() is False
     _stop_station_quietly()
+
+
+def test_repeated_failed_connect_stays_false() -> None:
+    """A retry after a failed connect still resolves to ``False`` on real radio.
+
+    The adapter clears the station (``stop_station``) before each fresh
+    attempt so a failed/half-open attempt doesn't poison the next one —
+    on the ESP32-S3 an uncleared retry slow-fails for the whole timeout
+    (``ConnectionError 205``) instead of resolving.  This drives two
+    back-to-back attempts against a non-existent SSID (no creds needed)
+    to exercise that clear-then-connect path on hardware; both must land
+    on a clean ``False`` without raising.
+    """
+    _stop_station_quietly()
+    adapter = CpWifiAdapter()
+    config = WifiConfig(
+        ssid="chumicro-test-no-such-ap-12345",
+        password="bogus-but-long-enough",
+        connect_timeout_ms=2000,
+    )
+    assert adapter.connect(config) is False
+    assert adapter.connect(config) is False
+    assert adapter.is_linked() is False
+    _stop_station_quietly()
