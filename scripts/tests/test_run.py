@@ -2383,8 +2383,8 @@ class TestSweepDevices:
         ])
         commands: list[list[str]] = []
         monkeypatch.setattr(
-            run, "run_command",
-            lambda command, environment=None: commands.append(command) or 0,
+            run, "stream_subprocess",
+            lambda command, **_kwargs: (commands.append(command) or (0, "")),
         )
         monkeypatch.setattr(run, "test_workbench_functional", lambda *args, **kwargs: 0)
 
@@ -2407,9 +2407,11 @@ class TestSweepDevices:
             self._entry("mp-board", "micropython"),
             self._entry("cp-board", "circuitpython"),
         ])
+        # (1, "") — a non-cold-start failure (empty transcript carries no
+        # WIFI_OK-timeout signature), so it fails without a retry.
         monkeypatch.setattr(
-            run, "run_command",
-            lambda command, environment=None: 1 if "mp-board" in command else 0,
+            run, "stream_subprocess",
+            lambda command, **_kwargs: (1, "") if "mp-board" in command else (0, ""),
         )
         monkeypatch.setattr(run, "test_workbench_functional", lambda *args, **kwargs: 0)
 
@@ -2420,6 +2422,98 @@ class TestSweepDevices:
         assert "FAIL" in output
         # cp-board demo PASS plus the closing workbench-functional PASS.
         assert output.count("PASS") == 2
+
+    def test_cold_start_marker_timeout_retries_once_and_passes(
+        self, monkeypatch, capsys,
+    ) -> None:
+        """A WIFI_OK first-association timeout is retried once; a warm pass counts."""
+        self._patch_registry(monkeypatch, [
+            self._entry("mp-board", "micropython"),
+            self._entry("cp-board", "circuitpython"),
+        ])
+        # cp-board times out on its first association (cold start), then
+        # passes warm on the retry; mp-board passes first try.
+        responses = {
+            "mp-board": [(0, "")],
+            "cp-board": [
+                (3, "driver: Timed out after 45.000s waiting for marker 'WIFI_OK'\n"),
+                (0, ""),
+            ],
+        }
+        calls: list[list[str]] = []
+
+        def fake_stream(command, **_kwargs):
+            calls.append(command)
+            sequence = responses[command[-1]]
+            return sequence.pop(0) if len(sequence) > 1 else sequence[0]
+
+        monkeypatch.setattr(run, "stream_subprocess", fake_stream)
+        monkeypatch.setattr(run, "test_workbench_functional", lambda *args, **kwargs: 0)
+
+        result = run.sweep_devices()
+
+        assert result == 0
+        # cp-board ran twice (cold start + one retry); mp-board once.
+        assert [command[-1] for command in calls] == [
+            "mp-board", "cp-board", "cp-board",
+        ]
+        output = capsys.readouterr().out
+        assert "first-association grace" in output
+        assert "PASS*" in output
+        assert "cp-board: demo passed on retry (cold-start grace)" in output
+
+    def test_cold_start_retry_still_failing_is_a_fail(
+        self, monkeypatch, capsys,
+    ) -> None:
+        """When the warm retry also times out, the cell is a genuine FAIL."""
+        self._patch_registry(monkeypatch, [
+            self._entry("cp-board", "circuitpython"),
+        ])
+        timeout_line = (
+            "driver: Timed out after 45.000s waiting for marker 'WIFI_OK'\n"
+        )
+        calls: list[list[str]] = []
+        monkeypatch.setattr(
+            run, "stream_subprocess",
+            lambda command, **_kwargs: (calls.append(command) or (3, timeout_line)),
+        )
+        monkeypatch.setattr(run, "test_workbench_functional", lambda *args, **kwargs: 0)
+
+        result = run.sweep_devices()
+
+        assert result == 1
+        # Exactly one retry granted (two attempts total), then it stays FAIL.
+        assert len(calls) == 2
+        output = capsys.readouterr().out
+        assert "FAIL" in output
+        assert "still FAIL" in output
+
+    def test_non_first_association_timeout_is_not_retried(
+        self, monkeypatch, capsys,
+    ) -> None:
+        """A later-marker timeout (not WIFI_OK) fails without a cold-start retry."""
+        self._patch_registry(monkeypatch, [
+            self._entry("cp-board", "circuitpython"),
+        ])
+        calls: list[list[str]] = []
+        monkeypatch.setattr(
+            run, "stream_subprocess",
+            lambda command, **_kwargs: (
+                calls.append(command)
+                or (3, "driver: Timed out after 30.000s waiting for marker "
+                       "'DEMO_COMPLETE'\n")
+            ),
+        )
+        monkeypatch.setattr(run, "test_workbench_functional", lambda *args, **kwargs: 0)
+
+        result = run.sweep_devices()
+
+        assert result == 1
+        # No grace for a non-first-association timeout: a single attempt only.
+        assert len(calls) == 1
+        output = capsys.readouterr().out
+        assert "cold-start grace" not in output
+        assert "passed on retry" not in output
 
     def test_functional_layer_routes_runtime_specific_device_kwarg(
         self, monkeypatch,
@@ -2463,8 +2557,8 @@ class TestSweepDevices:
         ])
         events: list[str] = []
         monkeypatch.setattr(
-            run, "run_command",
-            lambda command, environment=None: events.append(command[-1]) or 0,
+            run, "stream_subprocess",
+            lambda command, **_kwargs: (events.append(command[-1]) or (0, "")),
         )
         workbench_calls: list[tuple[tuple, dict]] = []
 
@@ -2496,7 +2590,7 @@ class TestSweepDevices:
             self._entry("cp-board", "circuitpython"),
         ])
         monkeypatch.setattr(
-            run, "run_command", lambda command, environment=None: 0,
+            run, "stream_subprocess", lambda command, **_kwargs: (0, ""),
         )
         monkeypatch.setattr(run, "test_workbench_functional", lambda *args, **kwargs: 1)
 
@@ -2516,7 +2610,7 @@ class TestSweepDevices:
             self._entry("mp-board", "micropython"),
         ])
         monkeypatch.setattr(
-            run, "run_command", lambda command, environment=None: 0,
+            run, "stream_subprocess", lambda command, **_kwargs: (0, ""),
         )
         calls, fake_workbench = _make_fake_command(return_value=0)
         monkeypatch.setattr(run, "test_workbench_functional", fake_workbench)
@@ -2537,8 +2631,8 @@ class TestSweepDevices:
         ])
         commands: list[list[str]] = []
         monkeypatch.setattr(
-            run, "run_command",
-            lambda command, environment=None: commands.append(command) or 0,
+            run, "stream_subprocess",
+            lambda command, **_kwargs: (commands.append(command) or (0, "")),
         )
         monkeypatch.setattr(run, "test_workbench_functional", lambda *args, **kwargs: 0)
 
@@ -2580,8 +2674,8 @@ class TestSweepDevices:
         ])
         demo_commands: list[list[str]] = []
         monkeypatch.setattr(
-            run, "run_command",
-            lambda command, environment=None: demo_commands.append(command) or 0,
+            run, "stream_subprocess",
+            lambda command, **_kwargs: (demo_commands.append(command) or (0, "")),
         )
         calls, fake_workbench = _make_fake_command(return_value=0)
         monkeypatch.setattr(run, "test_workbench_functional", fake_workbench)
@@ -2623,3 +2717,58 @@ class TestSweepDevices:
 
         assert result == 2
         assert "boom" in capsys.readouterr().out
+
+
+class TestFirstAssociationGrace:
+    """First-association (cold-start) retry helpers for the demo sweep.
+
+    A freshly-erased ESP32-family board runs RF calibration on its very
+    first wifi association, which can blow the demo's WIFI_OK budget
+    once; the retry runs against the now-warm radio.  The signal is
+    board-agnostic — a WIFI_OK marker timeout — not any board/vendor id.
+    """
+
+    def test_detector_matches_wifi_ok_timeout(self) -> None:
+        text = "driver: Timed out after 45.000s waiting for marker 'WIFI_OK'\n"
+        assert run._demo_output_shows_first_association_timeout(text)
+
+    def test_detector_ignores_other_marker_timeouts(self) -> None:
+        text = "driver: Timed out after 30.000s waiting for marker 'DEMO_COMPLETE'\n"
+        assert not run._demo_output_shows_first_association_timeout(text)
+
+    def test_detector_ignores_empty_output(self) -> None:
+        assert not run._demo_output_shows_first_association_timeout("")
+
+    def test_cell_passes_first_try_without_retry(self, monkeypatch) -> None:
+        calls: list[list[str]] = []
+        monkeypatch.setattr(
+            run, "stream_subprocess",
+            lambda command, **_kw: (calls.append(command) or (0, "")),
+        )
+        cell, note = run._run_demo_cell(Path("driver.py"), "cp-board")
+        assert (cell, note) == ("PASS", None)
+        assert len(calls) == 1
+
+    def test_cell_non_cold_start_failure_is_not_retried(self, monkeypatch) -> None:
+        calls: list[list[str]] = []
+        monkeypatch.setattr(
+            run, "stream_subprocess",
+            lambda command, **_kw: (calls.append(command) or (2, "boom")),
+        )
+        cell, note = run._run_demo_cell(Path("driver.py"), "cp-board")
+        assert cell == "FAIL"
+        assert note is None
+        assert len(calls) == 1
+
+    def test_cell_cold_start_retry_pass_is_noted(self, monkeypatch) -> None:
+        sequence = [
+            (3, "driver: Timed out after 45.000s waiting for marker 'WIFI_OK'\n"),
+            (0, ""),
+        ]
+        monkeypatch.setattr(
+            run, "stream_subprocess",
+            lambda command, **_kw: sequence.pop(0),
+        )
+        cell, note = run._run_demo_cell(Path("driver.py"), "cp-board")
+        assert cell == "PASS*"
+        assert note == "cp-board: demo passed on retry (cold-start grace)"
