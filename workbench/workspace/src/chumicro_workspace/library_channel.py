@@ -257,8 +257,11 @@ def extract_library(
                     f"snapshot has no {short_name!r} tree for "
                     f"{library_name!r}",
                 )
+            # filter="data" is explicit: 3.12/3.13 deprecation-warn without
+            # it (fatal under the -W error lanes) and it is the traversal-
+            # hardening default 3.14 adopts anyway.
             archive.extractall(  # noqa: S202 - paths validated above
-                into, members=selected,
+                into, members=selected, filter="data",
             )
     except tarfile.TarError as error:
         raise LibraryFetchError(
