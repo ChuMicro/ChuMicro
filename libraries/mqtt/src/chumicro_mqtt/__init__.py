@@ -27,10 +27,10 @@ def __getattr__(name):
 
     ``client`` is the fleet's single largest module (~40 KB of source).
     A board that imports ``chumicro_mqtt`` but never builds an
-    ``MQTTClient`` — a receive-only or wire-helper-only use — shouldn't
-    pin its compiled code objects in RAM, so the module is deferred until
-    the first access to one of its symbols.  Constructing the client at
-    startup keeps that one-time import cost on a fresh heap (see the guide).
+    ``MQTTClient`` — a receive-only or wire-helper-only use — pays no
+    RAM for its compiled code objects; the module loads on the first
+    access to one of its symbols.  Constructing the client at startup
+    keeps that one-time import cost on a fresh heap (see the guide).
     """
     if name in ("InboundPublish", "MQTTClient", "ProtocolState", "WhenOversized"):
         import chumicro_mqtt.client as _client  # noqa: PLC0415

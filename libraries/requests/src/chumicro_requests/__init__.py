@@ -37,8 +37,8 @@ def __getattr__(name):
     ``client`` is ~25 KB of source.  A board that imports
     ``chumicro_requests`` for its wire helpers (URL parsing, header dict,
     request encoding) but never builds an ``HttpClient`` shouldn't pin
-    the client's compiled code objects in RAM, so the module is deferred
-    until the first access to one of its symbols.  Constructing the
+    the client's compiled code objects in RAM; the module loads on
+    the first access to one of its symbols.  Constructing the
     client at startup keeps that one-time import cost on a fresh heap
     (see the guide).
     """
