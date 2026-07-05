@@ -50,6 +50,18 @@ The full measurement report (methods, dep-closure ordering, CP columns, calibrat
 - **Speculative/ceremonial API**: pure-passthrough properties, ABC-ish base shells (`_adapters/base.py`), knobs without consumers — audit-library already flags these; now they cost score.
 - **NOT dead weight (verified, leave alone)**: `testing.py` fakes never ship (both deploy walkers skip the `__chumicro_test_support__` marker); msgpack on CP binds the native module (624 B) — keep that path.
 
+## Density analysis (2026-07-05 follow-up) — reframes the levers
+
+Bytes-per-def says the fleet is not fat per feature: chumicro_requests is within 12 % of ulib-requests' stripped density (553 vs 468 B/def) and identical in mpy density (204 = 204); mqtt runs ~30 % denser per def but ships 89 defs to umqtt.simple's 13.  The 8–10× multiple is feature count.  Raw-line criticism also overstates shipped weight ~5.6× (816 KB raw → 145 KB mpy; fakes never ship, strip removes 58 %).  So the campaign's highest-leverage moves are structural and behavior-free, in this order:
+
+1. **Ship `.mpy`, not stripped `.py`** — fleet flash drops 350 KB → 145 KB with zero library edits; `prepare-mpy-cross` exists, the gap is the deploy walker.  (Deploy-pipeline change, campaign phase 0.)
+2. **Lazy `__init__` re-exports** — websockets already lazy-loads via module `__getattr__`; **mqtt, requests, http_server eagerly import their 25–40 KB client/server modules at package import**.  Applying websockets' pattern defers the big files until first touch: same API, pay-per-use heap, attacks the real scarcity (import RAM) directly.  (Tiny per-library diffs, campaign phase 1.)
+3. **Consolidate the four parallel `_wire.py` layers** — requests/_wire and http_server/_wire both parse HTTP; websockets/_wire parses the upgrade handshake.  `/audit-integration` seam, behavior-preserving.
+4. **Class/def/exception diet + error-string diet** — the original structural list, now ranked after the three above.
+5. **Frozen-bytecode option for known deployments** — firmware-level; the mpy table is its input.  Future.
+
+Success metric refined accordingly: per-library **import heap** and **mpy flash** (what boards feel), gated by check-size; the −40 % stripped-bytes trio target stays as the structural-diet goal but the levers above may beat it on the metrics that matter without touching a feature.
+
 ## Campaign shape (after CI)
 
 Per library, heavy trio first (websockets → requests → mqtt → http_server): an audit-embedded-led cut pass → apply → full preflight + on-device sweep + `check-size` ratchet-down commit.  Bakes re-run on mqtt after its pass (the negative-suite fakes pin behavior).  Fleet-wide passes (exception consolidation, error-string diet) follow as cross-library sweeps.  Success = trio ≈ −40 % stripped/mpy with all features and all tests green, budgets ratcheted to the new floor.
