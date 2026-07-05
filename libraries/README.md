@@ -17,7 +17,7 @@ Small, focused libraries for microcontrollers and laptops.  Use what you need �
 | **[timing](timing/)** | Timers that don't freeze your code — your loop keeps running while waiting.  No more `time.sleep()` locking everything up. |
 | **[runner](runner/)** | A simple task scheduler — register your services, call `runner.tick()` in your loop.  No async needed. |
 | **[compat](compat/)** | Standard library features that CircuitPython and MicroPython are missing (like `functools.partial`). |
-| **[logging](logging/)** | Leveled logging that's runner-friendly and never blocks your loop.  Per-logger levels with hierarchy resolution; zero chumicro deps. |
+| **[logging](logging/)** | Leveled logging that's runner-friendly and never blocks your loop.  Per-logger levels with hierarchy resolution; zero chumicro deps.  *Parked — kept in-tree and maintained but not currently published to PyPI or the bundle (Decision 0107); un-parks when a real consumer shows up.* |
 | **[msgpack](msgpack/)** | Compact binary serialization — 30–50% smaller than JSON, great for settings and sensor data.  Wire-compatible with PyPI `msgpack(use_single_float=True)`. |
 | **[config](config/)** | Type-checked runtime config with a shared dotted-key shape (`wifi.ssid`, `mqtt.broker.host`); each library reads its settings via `<Name>Config.from_config(...)`. |
 | **[kvstore](kvstore/)** | Tiny persistent key-value store — counters, timestamps, tokens.  Picks the right backend (NVM / NVS / LittleFS) for your board. |

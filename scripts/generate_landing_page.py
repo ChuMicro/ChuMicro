@@ -25,7 +25,7 @@ from __future__ import annotations
 from pathlib import Path
 from string import Template
 
-from repo_layout import discover_doc_dirs, read_pyproject_description
+from repo_layout import discover_doc_dirs, is_parked, read_pyproject_description
 from shared import TEMPLATES_DIR
 
 
@@ -56,10 +56,16 @@ def _discover_packages() -> tuple[list[dict], list[dict]]:
     device libraries, ``workbench/`` for host-only tools.  Any other
     parent (notably ``support/``) is skipped: support packages are
     not published and don't belong on the public landing page.
+
+    Parked libraries (Decision 0107) are skipped too: the landing page
+    advertises pip-installable, bundle-shipped packages, and a parked
+    library ships to neither until it is un-parked.
     """
     libraries: list[dict] = []
     workbench: list[dict] = []
     for package_dir in discover_doc_dirs():
+        if is_parked(package_dir):
+            continue
         metadata = _package_metadata(package_dir)
         parent_name = package_dir.parent.name
         if parent_name == "libraries":

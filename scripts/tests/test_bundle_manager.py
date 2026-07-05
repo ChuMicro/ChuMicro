@@ -729,6 +729,20 @@ class TestCollectLibraryMetadata:
             assert "version" in entry
             assert "description" in entry
 
+    def test_skips_parked_library(self, tmp_path: Path):
+        """A parked library is left out of the bundle README metadata
+        (Decision 0107): it never enters the bundle, so it must not be
+        advertised there."""
+        libraries_dir = tmp_path / "libraries"
+        _make_test_library(libraries_dir, name="mqtt")
+        _make_test_library(libraries_dir, name="logging")
+        (libraries_dir / "logging" / "PARKED").write_text("zero adopters\n")
+
+        metadata = _collect_library_metadata(tmp_path)
+
+        names = {entry["name"] for entry in metadata}
+        assert names == {"mqtt"}
+
 
 class TestGenerateBundleReadme:
     """Tests for generate_bundle_readme."""

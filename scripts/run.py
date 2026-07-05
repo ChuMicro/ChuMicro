@@ -42,6 +42,7 @@ from repo_layout import (
     discover_ruff_paths,
     discover_workbench_dirs,
     find_publishable_packages,
+    is_parked,
     is_ref_reachable,
     pythonpath_environment,
     resolve_scope,
@@ -3023,9 +3024,13 @@ def validate_mip(
         if libraries else None
     )
     if library_names is None:
-        # Auto-discover publishable libraries.
+        # Auto-discover publishable libraries.  Parked libraries
+        # (Decision 0107) are excluded — they are not staged into the
+        # bundle, so there is nothing to validate a mip install against.
         library_names = [
-            package_dir.name for package_dir in discover_library_dirs()
+            package_dir.name
+            for package_dir in discover_library_dirs()
+            if not is_parked(package_dir)
         ]
     if not library_names:
         print("No libraries found to validate.")

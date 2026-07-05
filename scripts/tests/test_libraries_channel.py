@@ -202,6 +202,27 @@ class TestStage:
         )
         assert set(document["libraries"]) == {"chumicro_mqtt"}
 
+    def test_parked_library_is_skipped(self, tmp_path: Path):
+        # The channel is a publish surface: a parked library (Decision
+        # 0107) must not be staged into it or listed in the catalog.
+        root = tmp_path / "repo"
+        libraries_dir = root / "libraries"
+        libraries_dir.mkdir(parents=True)
+        _make_library(
+            libraries_dir, "mqtt", version="1.0.0", description="d",
+        )
+        _make_library(
+            libraries_dir, "logging", version="0.5.1", description="d",
+        )
+        (libraries_dir / "logging" / "PARKED").write_text("zero adopters\n")
+
+        staging = tmp_path / "staged"
+        document = stage_libraries_channel(root, staging, tag="t")
+
+        assert set(document["libraries"]) == {"chumicro_mqtt"}
+        assert not (staging / "logging").exists()
+        assert (staging / "mqtt").is_dir()
+
 
 class TestMain:
     def test_stage_only_no_push(self, tmp_path: Path, capsys):
