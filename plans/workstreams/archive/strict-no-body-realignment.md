@@ -1,6 +1,6 @@
 # Strict-no-body docstring rule: codification + audit-comments realignment + body-slim sweep
 
-Status: queued
+Status: dropped (user call 2026-07-05 — not pursuing; archived with the comment-fact spot-check bullet in the same sweep)
 
 Surfaced 2026-05-26 by the audit-comments retrofit-test run on kvstore (commit `2356830e`).  The new verifier-blind dispatch surfaced ~30 CRITICAL body-paragraph violations in `libraries/kvstore/src/`.  The auditor (audit-comments dim 4 / dim 6) had judged those bodies as KEEPs under the essay-bloat detector + cold-maintainer test.  The verifier inherited the strict no-body rule from the commenter-verifier persona: summary line + Args/Returns/Raises only — the flash budget rules out prose bodies in library code and the rule kills prose-bug surface at the same time.
 
