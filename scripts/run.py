@@ -1735,12 +1735,13 @@ def preflight(
 
     Mirrors the CI matrix as closely as possible on the local machine:
     lint, build, docs (with griffe warning detection), CPython tests,
-    scripts infrastructure tests, example verification, version-check,
-    api-check, MicroPython and CircuitPython cross-runtime unit tests.
+    scripts infrastructure tests, example verification, size-budget
+    check, version-check, api-check, MicroPython and CircuitPython
+    cross-runtime unit tests.
 
-    The 12 phases run **in parallel** as independent subprocess
+    The 13 phases run **in parallel** as independent subprocess
     re-invocations of ``python scripts/run.py <subcommand>`` (two of the
-    12 — check-version and check-api — skip when ``origin/main`` is
+    13 — check-version and check-api — skip when ``origin/main`` is
     unreachable).  See Decision 0048 for the design.  Output routing
     depends on the context (Decision 0054): a TTY gets the status
     dispatcher (per-phase events live, failing-phase transcript dumped
@@ -1802,7 +1803,7 @@ def preflight(
     # Forward --package-workers to subcommands whose internal fan-out
     # honors the cap (test, build, docs, check-api).  Phases that don't
     # fan out per-package (lint, test-scripts, verify-examples,
-    # check-dep-graph, check-version, test-micropython,
+    # check-dep-graph, check-size, check-version, test-micropython,
     # test-circuitpython) ignore it.
     package_workers_args = ["--package-workers", str(package_workers)]
     check_api_workers_args = ["--max-workers", str(package_workers)]
@@ -1841,6 +1842,7 @@ def preflight(
         ("verify-examples", ["verify-examples", "--all"]),
         ("verify-demos", ["verify-demos"]),
         ("check-dep-graph", ["check-dep-graph"]),
+        ("check-size", ["check-size"]),
         ("check-version", ["check-version"] if can_diff else None),
         (
             "check-api",
@@ -3161,6 +3163,20 @@ def check_dep_graph() -> int:
     return render_dep_graph_main(["--check"])
 
 
+def check_size() -> int:
+    """Fail when a device library outgrows its committed size budget.
+
+    Measures each library's stripped-source and mpy-cross byte
+    footprint and compares against the per-library ceilings in
+    ``size-budgets.toml``.  Host-only, hermetic (no boards, no network),
+    and fast.  FAILs — never skips — when the prepared mpy-cross is
+    missing (with the ``prepare-mpy-cross`` remedy).  See
+    ``scripts/check_size.py``.
+    """
+    from check_size import main as check_size_main
+    return check_size_main([])
+
+
 # ---------------------------------------------------------------------------
 # Perf / heap benchmarking (opt-in local gate; see
 # plans/workstreams/perf-benchmarking.md).  Not wired into preflight: it
@@ -3769,6 +3785,10 @@ def _build_parser() -> argparse.ArgumentParser:
         "check-dep-graph",
         help="verify support/docs/dependency-graph.svg matches current pyproject deps",
     )
+    subparsers.add_parser(
+        "check-size",
+        help="fail when a device library outgrows its size-budgets.toml ceiling",
+    )
 
     bench_parser = subparsers.add_parser(
         "bench", parents=[binary],
@@ -4186,6 +4206,7 @@ def main(argv: list[str]) -> int:
         "prepare-circuitpython": prepare_circuitpython,
         "prepare-mpy-cross": prepare_mpy_cross,
         "check-dep-graph": check_dep_graph,
+        "check-size": check_size,
     }
 
     if args.task in no_arg:
