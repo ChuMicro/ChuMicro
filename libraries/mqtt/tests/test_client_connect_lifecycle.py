@@ -12,7 +12,6 @@ from chumicro_mqtt.testing import (
     new_client,
 )
 from chumicro_sockets.testing import FakeSocket, FakeSocketConnector
-from chumicro_test_harness.assertions import raises
 from chumicro_timing.testing import FakeTicks
 
 
@@ -101,13 +100,21 @@ class TestConnect:
         assert isinstance(client.last_error, MQTTConnectError)
         assert client.last_error.return_code == 4
 
-    def test_connect_without_disconnected_state_raises(self) -> None:
+    def test_connect_while_connecting_is_idempotent_noop(self) -> None:
+        # connect() is an intent, not a state-transition guard: called
+        # again while the connect is already in flight (CONNECTING) it is
+        # an idempotent no-op — no raise, no second connector, no state
+        # disturbance.  The "be connected" intent is already satisfied.
         sock = FakeSocket()
         ticks = FakeTicks()
         client = new_client(sock, ticks)
         client.connect()  # sets state to CONNECTING
-        with raises(Exception):  # noqa: B017
-            client.connect()
+        assert client.state == ProtocolState.CONNECTING
+        sent_after_first = bytes(sock.sent)
+        client.connect()  # no-op
+        assert client.state == ProtocolState.CONNECTING
+        # No second CONNECT packet queued.
+        assert bytes(sock.sent) == sent_after_first
 
 
 class TestDisconnect:

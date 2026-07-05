@@ -596,72 +596,74 @@ class MQTTClient:
         self._self_heal_attempts = 0
         self._self_heal_retry_at_ticks = None
         self._permanent_failure = False
+        # ``hold()`` latches this to suspend timer-driven reconnection
+        # (a held FAILED client does not dial and parks); ``connect()``
+        # releases it.
+        self._reconnect_held = False
 
     # ------------------------------------------------------------------
     # Public lifecycle
     # ------------------------------------------------------------------
 
     def connect(self):
-        """Begin the connect sequence — either bring up the transport via
-        the connector or queue CONNECT against the pre-built socket.
+        """Express the intent "be connected", acting on it now.
 
-        With a pre-built ``socket=`` (typical test idiom, or a caller
-        that already owns the connect): the MQTT CONNECT packet is
-        queued immediately and the state transitions to ``CONNECTING``.
-
-        With a ``transport_factory=``: the factory is invoked to build
-        a :class:`~chumicro_sockets.SocketConnector`, the state
-        transitions to ``AWAITING_TRANSPORT``, and subsequent
-        :meth:`handle` ticks drive the connect forward: the TCP phase
-        advances one tick at a time, while DNS resolution and, on
-        MicroPython / CircuitPython, the TLS handshake block the runner
-        for their duration.  When the connector reaches ``ready``, the
-        socket is promoted, the CONNECT packet is queued, and the state
-        moves to ``CONNECTING`` (all inside :meth:`handle`).  When the connector
-        fails, the state transitions to ``FAILED`` with ``last_error``
-        carrying the connector's error.
-
-        Factory errors raised synchronously from ``transport_factory()``
-        land as ``FAILED`` + ``last_error`` rather than propagating, so
-        the runner contract holds.  Self-heal retries on subsequent
-        ticks.
-
-        Each transport attempt is bounded by ``ack_timeout_seconds``
-        (connectors carry no deadline of their own); a timed-out
-        attempt is cancelled and faults to ``FAILED``, where self-heal
-        schedules the next attempt.
-
-        Callers loop ``while client.state not in
-        {CONNECTED, DISCONNECTED, FAILED}: handle()`` or run under a
-        Runner.
-
-        Raises:
-            MQTTError: Called in a non-DISCONNECTED state.
+        An intent, not a state-transition guard.  DISCONNECTED begins the
+        connect sequence; FAILED is "self-heal now" (reset backoff, dial
+        immediately via the same self-heal path a timer uses — identical
+        queue fate, minus the residual backoff); CONNECTED / CONNECTING /
+        AWAITING_TRANSPORT are an idempotent no-op.  Every state clears any
+        :meth:`hold` and latches the intent.  See the guide.
         """
-        if self.state != ProtocolState.DISCONNECTED:
-            raise MQTTError(
-                f"connect() requires DISCONNECTED state, was {self.state}",
-            )
+        # Clear any caller hold (connect() is the sole release) and latch
+        # "be connected" in every state.
+        self._reconnect_held = False
         self._user_wants_connected = True
-        # Fresh connect: clear any latched permanent failure and reset
-        # the self-heal backoff schedule from a prior FAILED session.
-        self._permanent_failure = False
-        self._self_heal_attempts = 0
-        self._self_heal_retry_at_ticks = None
-        if self._socket is None:
-            try:
-                self._connector = self._transport_factory()
-            except Exception as factory_error:  # noqa: BLE001 - documented: all factory errors -> FAILED
-                self.last_error = MQTTError(
-                    f"connector factory failed: {factory_error}",
-                )
-                self.state = ProtocolState.FAILED
+        if self.state == ProtocolState.DISCONNECTED:
+            # Fresh connect: clear the permanent-failure latch and reset
+            # the self-heal backoff from a prior FAILED session.
+            self._permanent_failure = False
+            self._self_heal_attempts = 0
+            self._self_heal_retry_at_ticks = None
+            if self._socket is None:
+                try:
+                    self._connector = self._transport_factory()
+                except Exception as factory_error:  # noqa: BLE001 - documented: all factory errors -> FAILED
+                    self.last_error = MQTTError(
+                        f"connector factory failed: {factory_error}",
+                    )
+                    self.state = ProtocolState.FAILED
+                    return
+                self._transport_deadline_ticks = self._deadline(self._ack_timeout_ms)
+                self.state = ProtocolState.AWAITING_TRANSPORT
                 return
-            self._transport_deadline_ticks = self._deadline(self._ack_timeout_ms)
-            self.state = ProtocolState.AWAITING_TRANSPORT
+            self._enqueue_connect_packet()
+            self.state = ProtocolState.CONNECTING
             return
-        self._enqueue_connect_packet()
-        self.state = ProtocolState.CONNECTING
+        if self.state == ProtocolState.FAILED:
+            # "Self-heal now": clear the permanent latch (one fresh
+            # attempt, as DISCONNECTED grants) and reset the backoff so the
+            # next handle() tick dials via the shared self-heal path.
+            self._permanent_failure = False
+            self._self_heal_attempts = 0
+            self._self_heal_retry_at_ticks = None
+            return
+        # AWAITING_TRANSPORT / CONNECTING / CONNECTED: intent already
+        # satisfied — idempotent no-op beyond the hold clear above.
+
+    def hold(self):
+        """Suspend timer-driven reconnection until the next :meth:`connect`.
+
+        The mate of intent-based :meth:`connect`, for when the app KNOWS
+        the link is down (a self-heal timer dialing a dead radio wastes
+        cycles).  A pure intent latch: no state change, no cancel of an
+        in-flight dial.  While FAILED it suppresses self-heal — no dial,
+        state stays FAILED with ``last_error`` kept, ``next_deadline``
+        parks; publishes still buffer per ``when_disconnected``.  Set
+        earlier it is dormant until the link faults to FAILED.
+        ``connect()`` is the release.  See the guide for the wifi wiring.
+        """
+        self._reconnect_held = True
 
     def _enqueue_connect_packet(self):
         """Encode the CONNECT packet, append it to the tx queue, and
@@ -737,6 +739,9 @@ class MQTTClient:
         self._pre_connect_queue = _new_tx_queue(self._pre_connect_queue_size)
         self.state = ProtocolState.DISCONNECTED
         self._user_wants_connected = False
+        # A deliberate teardown drops every reconnect intent, including a
+        # caller hold; a later connect() starts from a clean slate.
+        self._reconnect_held = False
         self.on_disconnect()
 
     def _reset_transient_state(self):
@@ -1083,7 +1088,8 @@ class MQTTClient:
         Mirrors ``next_deadline``'s parked-forever condition: a
         deliberate disconnect, or FAILED with self-heal impossible
         (permanent failure, no connector factory, or the user never
-        asked to be connected).
+        asked to be connected).  A :meth:`hold` is not stream-ending — it
+        is releasable, so the stream is only suspended.
         """
         if self.state == ProtocolState.DISCONNECTED:
             return True
@@ -1107,12 +1113,14 @@ class MQTTClient:
         state is worth a tick.  ``FAILED`` qualifies — ``handle()``'s
         FAILED branch is where ``_attempt_self_heal`` lives, and that
         has to keep firing until the broker is reachable again.
-        ``DISCONNECTED`` (a terminal state the user explicitly asked
-        for) and a permanently-failed client (a CONNACK rejection no
-        reconnect can fix) are gated out — neither has any handle work
-        left to do.
+        ``DISCONNECTED`` (a terminal state), a permanently-failed client
+        (a CONNACK rejection no reconnect can fix), and one held by
+        :meth:`hold` are gated out — none has handle work left until a
+        ``connect()``.
         """
-        if self.state == ProtocolState.FAILED and self._permanent_failure:
+        if self.state == ProtocolState.FAILED and (
+            self._permanent_failure or self._reconnect_held
+        ):
             return False
         return self.state is not ProtocolState.DISCONNECTED
 
@@ -1235,16 +1243,13 @@ class MQTTClient:
                 nearest = attempt_deadline
             return nearest
         if self.state == ProtocolState.FAILED:
-            # A self-heal-eligible FAILED client wakes at its next backoff
+            # A self-heal-active FAILED client wakes at its next backoff
             # retry — or immediately when no backoff is armed yet (the
-            # first attempt after a fresh failure), so the runner ticks
-            # self-heal instead of parking on some other service's
-            # socket.  A permanent failure (or no factory) parks forever.
-            if (
-                self._transport_factory is not None
-                and self._user_wants_connected
-                and not self._permanent_failure
-            ):
+            # first attempt after a fresh failure, or a connect()-forced
+            # reset), so the runner ticks self-heal instead of parking on
+            # some other service's socket.  A permanent failure, no
+            # factory, or a caller hold parks forever (until connect()).
+            if self._self_heal_active():
                 if self._self_heal_retry_at_ticks is None:
                     return now_ms
                 return self._self_heal_retry_at_ticks
@@ -1282,13 +1287,13 @@ class MQTTClient:
         queued by the checks above, or an application packet enqueued
         between ticks).
 
-        When the client is in ``FAILED`` and a ``transport_factory`` is
-        configured + the user originally called ``connect()``, this
-        tick attempts a self-heal: build a fresh connector and enter
-        ``AWAITING_TRANSPORT``.  Subsequent ticks drive the connector
-        through DNS / TCP / TLS without blocking the runner — exactly
-        the same path the initial :meth:`connect` takes.  Without a
-        factory the client stays in ``FAILED``.
+        When the client is in ``FAILED`` and self-heal is active (see
+        :meth:`_self_heal_active`), this tick attempts a self-heal: build
+        a fresh connector and enter ``AWAITING_TRANSPORT``.  Subsequent
+        ticks drive the connector through DNS / TCP / TLS without blocking
+        the runner — the same path the initial :meth:`connect` takes, and
+        the one ``connect()`` from FAILED re-arms.  Without a factory, or
+        while held, the client stays in ``FAILED``.
 
         ``AWAITING_TRANSPORT`` ticks check the transport-attempt
         deadline first (deadlines before I/O), then call
@@ -1310,11 +1315,7 @@ class MQTTClient:
         the same.
         """
         if self.state == ProtocolState.FAILED:
-            if (
-                self._transport_factory is None
-                or not self._user_wants_connected
-                or self._permanent_failure
-            ):
+            if not self._self_heal_active():
                 return
             if (
                 self._self_heal_retry_at_ticks is not None
@@ -1356,6 +1357,21 @@ class MQTTClient:
         except OSError as error:
             self.last_error = MQTTError(f"socket error: {error}")
             self.state = ProtocolState.FAILED
+
+    def _self_heal_active(self):
+        """Whether a FAILED client will (re)dial its transport on its own.
+
+        ``True`` only with a factory, the caller asking to connect, no
+        permanent CONNACK rejection, and no caller :meth:`hold`.  The
+        ``handle()`` self-heal branch and ``next_deadline``'s FAILED wake
+        both gate on this, keeping the dial and its scheduling in lockstep.
+        """
+        return (
+            self._transport_factory is not None
+            and self._user_wants_connected
+            and not self._permanent_failure
+            and not self._reconnect_held
+        )
 
     def _arm_self_heal_backoff(self, now_ms):
         """Schedule the earliest tick the next self-heal attempt may run.

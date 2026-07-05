@@ -197,7 +197,33 @@ Without a factory the client transitions to `FAILED` on socket death and stays t
 
 The factory is also the recommended way to wire up the **initial** connect: the runner is not blocked for the round-trip, and the same code path serves both initial-connect and reconnect.  `MQTTClient.from_config(...)` builds the connector factory for you from `mqtt.broker.host` / `mqtt.broker.port` (and `ssl_context=` for TLS).
 
-Call `connect()` **once**, at startup — self-heal owns every reconnect after that.  A common mistake when pairing with `chumicro-wifi` is to re-issue `mqtt.connect()` from an `on_state_change` callback each time wifi comes back up.  After the first connect the client is `CONNECTED`, `FAILED` (mid-self-heal), or `AWAITING_TRANSPORT` — never `DISCONNECTED` — so `connect()` raises `MQTTError` on every wifi-recovery, and the transport factory would already be re-dialing on its own.  Wire the callback to *nothing* (self-heal reconnects once wifi returns), or guard it with `if mqtt.state == ProtocolState.DISCONNECTED: mqtt.connect()` if a single call site must cover both first-connect and an explicit `disconnect()` teardown.
+### `connect()` is an intent; `hold()` is its mate
+
+`connect()` means "be connected", acting on it now.  It is safe to call in any state and does the least-surprising thing for the one it finds:
+
+- **DISCONNECTED** — starts the connect sequence (as above).
+- **FAILED** — reconnects **immediately**, short-circuiting any remaining self-heal backoff.  It fires the same reconnect the timer would — queued / in-flight / clean-session fate is identical — it just skips the wait.  Call it whenever you KNOW the link is back rather than letting the client sit out residual backoff.
+- **CONNECTED / CONNECTING / AWAITING_TRANSPORT** — idempotent no-op.  The intent is already being satisfied, so nothing is disturbed and no second dial races the one in flight.
+
+So re-issuing `mqtt.connect()` on wifi-recovery is not just safe, it is the recommended wiring: it dials the moment the link returns instead of waiting out the backoff.
+
+The symmetric primitive is **`hold()`**.  When your app KNOWS the link is down — its wifi service just reported the radio dropped — call `mqtt.hold()` to suspend the self-heal timer so it stops dialing into a dead radio (on ESP-IDF those doomed dials can even contend with the radio's own re-association).  While held, the client stays `FAILED` with `last_error` intact, publishes still buffer per `when_disconnected`, and the runner parks cleanly instead of spinning on retries.  `connect()` releases the hold and dials.
+
+`MQTTClient` never watches wifi itself — it runs on hosts with no radio, and it stays transport-agnostic — so the app that owns both services composes them.  The canonical `chumicro-wifi` wiring is one line each way:
+
+```python
+from chumicro_wifi import WifiState
+
+def on_wifi_state(old, new):
+    if new == WifiState.DISCONNECTED:
+        mqtt.hold()       # link is down: stop dialing a dead radio
+    elif new == WifiState.CONNECTED:
+        mqtt.connect()    # link is back: reconnect now (also clears the hold)
+
+wifi.on_state_change(on_wifi_state)
+```
+
+You can still wire the callback to nothing and let self-heal reconnect on its own — `hold()` / `connect()` only *tighten* the timing when the app has better information than the timer does.
 
 What happens to publishes issued during the outage depends on the state the client is in when `publish()` runs, and this is worth understanding because it decides which publishes survive a wifi drop:
 

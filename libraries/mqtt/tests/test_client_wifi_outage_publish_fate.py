@@ -29,10 +29,8 @@ preserve path lives in ``test_client_inflight_selfheal``.
 """
 
 from chumicro_mqtt import MQTTClient, ProtocolState
-from chumicro_mqtt._wire import MQTTError
 from chumicro_mqtt.testing import canned_connack_bytes, drive
 from chumicro_sockets.testing import FakeSocket, FakeSocketConnector
-from chumicro_test_harness.assertions import raises
 from chumicro_timing.testing import FakeTicks
 
 
@@ -145,20 +143,43 @@ class TestPublishFateAcrossWifiOutage:
         assert b"raced" not in recovered   # in-flight publish dropped
         assert b"buffered" in recovered    # pre-connect publish flushed
 
-    def test_connect_while_self_healing_raises_not_disconnected(self) -> None:
-        """connect() called on a FAILED (self-healing) client raises.
+    def test_connect_from_failed_reconnects_now_with_same_queue_fate(self) -> None:
+        """connect() on a FAILED (self-healing) client is "self-heal now".
 
         The flagship "call mqtt.connect() on wifi CONNECTED" wiring hits
-        this on every recovery after the first: the client is FAILED (not
-        DISCONNECTED) mid-self-heal, so connect() raises.  Benign in the
-        flagship (the exception is swallowed by the wifi state callback
-        and self-heal reconnects on its own), but it pins why re-calling
-        connect() on wifi-up is the wrong pattern — self-heal already owns
-        reconnection after the first connect().
+        this on every recovery: the client is FAILED (not DISCONNECTED)
+        mid-self-heal.  It no longer raises — connect() is an intent, so
+        it triggers the SAME reconnect the timer would, immediately.  And
+        the queue fate is byte-identical to a timer-fired self-heal
+        (compare the timer path in
+        ``test_one_outage_drops_the_raced_publish_but_flushes_the_queued_one``):
+        the publish that raced the drop is dropped by the clean_session
+        in-flight reset, while the one buffered after the drop flushes on
+        the reconnect CONNACK.  Full timer-vs-connect equivalence is
+        pinned in ``test_client_connect_intent``.
         """
         ticks = FakeTicks()
-        sock_one = FakeSocket()
-        client = _connect_to(sock_one, ticks=ticks)
+        sock_one, sock_two = FakeSocket(), FakeSocket()
+        client = _connect_to(sock_one, sock_two, ticks=ticks)
+
+        # Raced the drop -> in-flight on the doomed socket.
+        client.publish("raced", b"lost", qos=1)
+        drive(client, ticks, count=1)
+        assert len(client._in_flight) == 1  # noqa: SLF001
+
+        # Drop detected -> FAILED; next publish buffers in the queue.
         client.state = ProtocolState.FAILED
-        with raises(MQTTError):
-            client.connect()
+        client.publish("buffered", b"kept", qos=1)
+        assert len(client._pre_connect_queue) == 1  # noqa: SLF001
+
+        # The app knows wifi is back and says so: connect() dials now
+        # (no raise, no waiting out backoff).
+        sock_two.enqueue_recv(canned_connack_bytes(return_code=0))
+        client.connect()
+        drive(client, ticks, count=4)
+        assert client.state == ProtocolState.CONNECTED
+
+        recovered = bytes(sock_two.sent)
+        assert b"raced" not in recovered            # raced in-flight dropped
+        assert len(client._pre_connect_queue) == 0  # noqa: SLF001 - queue flushed
+        assert b"buffered" in recovered
