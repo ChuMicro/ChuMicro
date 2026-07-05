@@ -32,8 +32,23 @@ def _cmd_test(args: argparse.Namespace) -> int:
     prepend ``--cov-fail-under=<n>`` so the workspace-level gate
     kicks in.  User passthrough args (after ``--``) win over the
     workspace default, since pytest takes the last occurrence.
+
+    Fails loudly (nonzero, with a ``python run.py setup`` pointer)
+    when pytest itself is missing rather than shelling out to a raw
+    "No module named pytest" traceback — a workspace that never ran
+    ``setup``'s ``[dev]`` install has no test runner to reach.
     """
     workspace = _resolve_workspace(args)
+    try:
+        import pytest  # noqa: F401, PLC0415 - availability probe
+    except ImportError:
+        print(
+            "test: pytest is not installed in this venv.  Run "
+            "`python run.py setup` to install the workspace's [dev] "
+            "extra (pytest, pytest-cov, ruff, chumicro-checks).",
+            file=sys.stderr,
+        )
+        return 1
     quality = load_quality_config(workspace.workspace_yaml)
     quality_flags: list[str] = []
     if quality.coverage_threshold is not None:
@@ -52,8 +67,10 @@ def _cmd_lint(args: argparse.Namespace) -> int:
     Each tool reads its own config from ``pyproject.toml``
     (``[tool.ruff]`` and ``[tool.chumicro-checks]``).  Extra args
     after ``--`` forward to ruff.  Either tool missing from the venv
-    surfaces an exit-0 install hint, so this command stays
-    discoverable on workspaces without the ``[dev]`` extra installed.
+    fails loudly (nonzero, with a ``python run.py setup`` pointer)
+    rather than green-washing — a lint that lints nothing must not
+    report success on a workspace that never installed the ``[dev]``
+    extra.
 
     ``workspace.yml``'s ``quality.lint`` knobs flow through.
     ``enabled = false`` skips the phase.  ``tools`` selects which
@@ -77,12 +94,12 @@ def _cmd_lint(args: argparse.Namespace) -> int:
             import ruff  # noqa: F401, PLC0415 - availability probe
         except ImportError:
             print(
-                "ruff is not installed in this venv.  Install the dev "
-                "extras with:\n"
-                "    .venv/bin/pip install -e .[dev]\n"
-                "or add ruff to your workspace's pyproject.toml deps.",
+                "lint: ruff is not installed in this venv.  Run "
+                "`python run.py setup` to install the workspace's [dev] "
+                "extra (ruff, chumicro-checks, pytest).",
+                file=sys.stderr,
             )
-            return 0
+            return 1
         quality_flags: list[str] = []
         if quality.lint.select:
             quality_flags.extend(["--select", ",".join(quality.lint.select)])
@@ -101,12 +118,12 @@ def _cmd_lint(args: argparse.Namespace) -> int:
             import chumicro_checks  # noqa: F401, PLC0415 - availability probe
         except ImportError:
             print(
-                "chumicro-checks is not installed in this venv.  Install "
-                "it (or the dev extras) to run the CHU0NN rules:\n"
-                "    .venv/bin/pip install chumicro-checks\n"
-                "or add it to your workspace's pyproject.toml dev deps.",
+                "lint: chumicro-checks is not installed in this venv.  Run "
+                "`python run.py setup` to install the workspace's [dev] "
+                "extra (ruff, chumicro-checks, pytest).",
+                file=sys.stderr,
             )
-            return 0
+            return 1
         checks_completed = args._env.subprocess_runner(  # noqa: S603 - args fully controlled
             [sys.executable, "-m", "chumicro_checks", "--root", str(workspace.root)],
             cwd=workspace.root,

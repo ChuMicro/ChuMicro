@@ -6,9 +6,13 @@ is no scaffolding CLI command).  These zones govern only what
 
 * **Tool-owned**: `run.py`, `AGENTS.md`, `CONTRIBUTING.md`,  <!-- noqa: CHU006 -->
   `pyproject.toml`, `projects/_template/`, `examples/`
-  (reading-material demos shipped from the template), and
-  the agent-skill documents under `.github/skills/`.  `update`
-  rewrites these so newer template releases flow in.
+  (reading-material demos shipped from the template), the
+  agent-skill documents under `.github/skills/`, and the CI
+  workflows under `.github/workflows/` (their headers declare
+  themselves tool-owned, so `update` re-flows CI fixes — sibling
+  custom workflows the user adds live outside this set and stay
+  untouched).  `update` rewrites these so newer template releases
+  flow in.
 
 * **User-owned**: everything else, and it's the default.  Anything
   not explicitly tool-owned is left alone by `update`.  Covers
@@ -45,6 +49,7 @@ TOOL_OWNED_PATHS: frozenset[str] = frozenset({
 TOOL_OWNED_PREFIXES: tuple[str, ...] = (
     "projects/_template/",
     ".github/skills/",
+    ".github/workflows/",
     "examples/",
 )
 

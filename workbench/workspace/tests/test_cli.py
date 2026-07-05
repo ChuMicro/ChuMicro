@@ -127,8 +127,37 @@ class TestSetup:
             env=cli.CliEnv(subprocess_runner=runner),
         )
         assert exit_code == 0
+        # No `dev` extra declared → bare editable install.
         assert [call.args for call in runner.calls] == [
             [sys.executable, "-m", "pip", "install", "-e", str(root)],
+        ]
+
+    def test_installs_dev_extra_when_pyproject_declares_it(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        """A workspace whose pyproject carries a ``[dev]`` extra must be
+        installed as ``.[dev]`` so ``lint`` / ``test`` get ruff /
+        chumicro-checks / pytest — otherwise the very tools those
+        commands shell out to are absent."""
+        root = seed_workspace(tmp_path)
+        (root / "pyproject.toml").write_text(
+            "[project]\n"
+            "name = 'demo'\n"
+            "dependencies = []\n"
+            "\n"
+            "[project.optional-dependencies]\n"
+            'dev = ["pytest", "ruff", "chumicro-checks"]\n',
+        )
+
+        runner = FakeSubprocessRunner()
+        exit_code = cli.main(
+            ["setup", "--workspace-dir", str(root)],
+            env=cli.CliEnv(subprocess_runner=runner),
+        )
+        assert exit_code == 0
+        assert [call.args for call in runner.calls] == [
+            [sys.executable, "-m", "pip", "install", "-e", f"{root}[dev]"],
         ]
 
     def test_setup_succeeds_without_existing_workspace_yml(
@@ -3333,6 +3362,38 @@ class TestTestCommand:
         ]
         assert runner.calls[0].cwd == root
 
+    def test_fails_loudly_when_pytest_missing(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """When pytest isn't installed, ``test`` must exit nonzero with a
+        ``python run.py setup`` pointer instead of shelling out to a raw
+        "No module named pytest" traceback."""
+        root = seed_workspace(tmp_path)
+        runner = FakeSubprocessRunner()
+
+        import builtins
+        original_import = builtins.__import__
+
+        def fake_import(name: str, *args: Any, **kwargs: Any):
+            if name == "pytest":
+                raise ImportError("pytest not installed")
+            return original_import(name, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, "__import__", fake_import)
+        exit_code = cli.main(
+            ["test", "--workspace-dir", str(root)],
+            env=cli.CliEnv(subprocess_runner=runner),
+        )
+        assert exit_code != 0
+        # pytest never got shelled out to.
+        assert runner.calls == []
+        captured = capsys.readouterr()
+        assert "pytest is not installed" in captured.err
+        assert "python run.py setup" in captured.err
+
 
 class TestLintCommand:
     def test_shells_out_to_ruff_then_chumicro_checks(
@@ -3390,13 +3451,15 @@ class TestLintCommand:
         assert len(runner.calls) == 1
         assert runner.calls[0].args[2] == "ruff"
 
-    def test_skips_chumicro_checks_with_hint_when_missing(
+    def test_fails_loudly_when_chumicro_checks_missing(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        """When chumicro-checks isn't installed, ruff still runs; user gets a hint."""
+        """When chumicro-checks isn't installed, ruff still runs but lint
+        must fail nonzero — a green lint that skips a whole tool would
+        report success on a workspace that never installed ``[dev]``."""
         root = seed_workspace(tmp_path)
         runner = FakeSubprocessRunner()
 
@@ -3413,19 +3476,21 @@ class TestLintCommand:
             ["lint", "--workspace-dir", str(root)],
             env=cli.CliEnv(subprocess_runner=runner),
         )
-        assert exit_code == 0
-        # Ruff ran; chumicro-checks didn't.
+        assert exit_code != 0
+        # Ruff ran; chumicro-checks didn't (the probe short-circuited).
         assert len(runner.calls) == 1
-        out = capsys.readouterr().out
-        assert "chumicro-checks is not installed" in out
+        captured = capsys.readouterr()
+        assert "chumicro-checks is not installed" in captured.err
+        assert "python run.py setup" in captured.err
 
-    def test_skips_with_hint_when_ruff_missing(
+    def test_fails_loudly_when_ruff_missing(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        """When ruff isn't installed, exit 0 with a discoverable hint."""
+        """When ruff isn't installed, lint must exit nonzero with a
+        ``python run.py setup`` pointer rather than green-washing."""
         root = seed_workspace(tmp_path)
 
         # Force the import probe inside _cmd_lint to fail.
@@ -3442,10 +3507,10 @@ class TestLintCommand:
         exit_code = cli.main([
             "lint", "--workspace-dir", str(root),
         ])
-        assert exit_code == 0
+        assert exit_code != 0
         captured = capsys.readouterr()
-        assert "ruff is not installed" in captured.out
-        assert "pip install -e .[dev]" in captured.out
+        assert "ruff is not installed" in captured.err
+        assert "python run.py setup" in captured.err
 
 
 class TestQualityKnobsLint:
