@@ -1,18 +1,36 @@
 """Workspace quality knobs: `lint`, `coverage`.
 
-Reads the ``quality:`` block on ``workspace.yml`` carrying these
-pass-through knobs:
+Two sources, merged per key:
 
-.. code-block:: yaml
+* ``quality.toml`` at the workspace root — the committed policy.
+  Travels with the workspace's git history, so a shared repo carries
+  its own gates.  TOML mirror of the block below, without the
+  ``quality:`` wrapper:
 
-    quality:
-      lint:
-        enabled: true
-        tools: ["ruff", "chumicro-checks"]
-        select: ["E", "F", "I"]
-      coverage_threshold: 85
+  .. code-block:: toml
 
-Reads the block, validates its shape, and returns a typed
+      coverage_threshold = 85    # top-level keys go BEFORE any [table]
+
+      [lint]
+      enabled = true
+      tools = ["ruff", "chumicro-checks"]
+      select = ["E", "F", "I"]
+
+* the ``quality:`` block on ``workspace.yml`` — the per-machine
+  override (the file is gitignored).  Any key set here wins over
+  the same key in ``quality.toml``:
+
+  .. code-block:: yaml
+
+      quality:
+        lint:
+          enabled: true
+          tools: ["ruff", "chumicro-checks"]
+          select: ["E", "F", "I"]
+        coverage_threshold: 85
+
+Reads both, validates each file's shape separately (so an error
+names the file that carries it), merges, and returns a typed
 :class:`QualityConfig`.  Validation only.  Lint and coverage are
 run elsewhere.
 
@@ -31,6 +49,7 @@ run elsewhere.
 
 from __future__ import annotations
 
+import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -38,6 +57,9 @@ from typing import Any
 from ruamel.yaml import YAML
 
 from chumicro_workspace.loaders import WorkspaceConfigError
+
+#: Committed quality-policy file, resolved next to ``workspace.yml``.
+QUALITY_TOML_NAME = "quality.toml"
 
 #: Tools the lint phase knows how to run.  ``tools`` entries outside
 #: this set raise :class:`WorkspaceConfigError` at config-load time so
@@ -152,46 +174,82 @@ def _coerce_lint(raw: Any, path: Path) -> LintConfig:
     return LintConfig(enabled=enabled_raw, tools=tools_value, select=select_value)
 
 
-def load_quality_config(workspace_yaml: Path) -> QualityConfig:
-    """Load + validate the ``quality:`` block from a ``workspace.yml``.
-
-    A missing file or missing ``quality`` block returns a
-    :class:`QualityConfig` with library-default values (lint
-    enabled, no coverage gate).  Workspaces that haven't opted
-    in get the no-op behavior.
-
-    Raises :class:`WorkspaceConfigError` on shape violations so the
-    user sees the precise field that's wrong rather than a vague
-    ``ruff` exit code later.
-    """
-    document = _read_yaml_dict(workspace_yaml)
-    raw_quality = document.get("quality")
-    if raw_quality is None:
-        return QualityConfig()
-    if not isinstance(raw_quality, dict):
-        raise WorkspaceConfigError(
-            f"{workspace_yaml}: 'quality' must be a mapping, "
-            f"got {type(raw_quality).__name__}",
-        )
-
-    lint = _coerce_lint(raw_quality.get("lint"), workspace_yaml)
-
+def _coerce_coverage_threshold(raw_quality: dict[str, Any], path: Path) -> int | None:
+    """Validate and return ``coverage_threshold`` from a raw quality dict."""
     coverage_threshold_raw = raw_quality.get("coverage_threshold")
     if coverage_threshold_raw is None:
-        coverage_threshold: int | None = None
-    elif isinstance(coverage_threshold_raw, bool) or not isinstance(
+        return None
+    if isinstance(coverage_threshold_raw, bool) or not isinstance(
         coverage_threshold_raw, int,
     ):
         # bool is a subclass of int, so reject it explicitly so
         # `coverage_threshold: true` doesn't silently become 1.
         raise WorkspaceConfigError(
-            f"{workspace_yaml}: 'quality.coverage_threshold' must be "
+            f"{path}: 'quality.coverage_threshold' must be "
             f"an integer, got {type(coverage_threshold_raw).__name__}",
         )
-    else:
-        coverage_threshold = coverage_threshold_raw
+    return coverage_threshold_raw
 
+
+def _coerce_quality(raw_quality: dict[str, Any], path: Path) -> QualityConfig:
+    """Build a :class:`QualityConfig` from a raw quality dict."""
     return QualityConfig(
-        lint=lint,
-        coverage_threshold=coverage_threshold,
+        lint=_coerce_lint(raw_quality.get("lint"), path),
+        coverage_threshold=_coerce_coverage_threshold(raw_quality, path),
     )
+
+
+def _read_quality_toml(path: Path) -> dict[str, Any]:
+    """Read a ``quality.toml``'s top-level table; raise on malformed shape."""
+    if not path.is_file():
+        return {}
+    try:
+        with path.open("rb") as handle:
+            return tomllib.load(handle)
+    except tomllib.TOMLDecodeError as decode_error:
+        raise WorkspaceConfigError(f"{path}: {decode_error}") from decode_error
+
+
+def _merge_quality(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]:
+    """Overlay *overlay*'s set keys onto *base*, one level deep for ``lint``."""
+    merged = dict(base)
+    for key, value in overlay.items():
+        if key == "lint" and isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = {**merged[key], **value}
+        else:
+            merged[key] = value
+    return merged
+
+
+def load_quality_config(workspace_yaml: Path) -> QualityConfig:
+    """Load + validate the workspace quality config.
+
+    Two sources merge, per key: the committed ``quality.toml`` next to
+    *workspace_yaml* carries the policy that travels with the repo,
+    and ``workspace.yml``'s ``quality:`` block carries per-machine
+    overrides that win over it.  When neither exists, the defaults
+    apply (lint enabled, no coverage gate from these files;
+    ``pyproject.toml``'s ``fail_under`` still holds the floor).
+
+    Each source validates separately, so a shape violation raises
+    :class:`WorkspaceConfigError` naming the file that carries the bad
+    value rather than a vague tool exit code later.
+    """
+    toml_path = workspace_yaml.parent / QUALITY_TOML_NAME
+    toml_raw = _read_quality_toml(toml_path)
+    if toml_raw:
+        _coerce_quality(toml_raw, toml_path)  # validate with the right path
+
+    document = _read_yaml_dict(workspace_yaml)
+    yaml_raw = document.get("quality")
+    if yaml_raw is None:
+        yaml_raw = {}
+    elif not isinstance(yaml_raw, dict):
+        raise WorkspaceConfigError(
+            f"{workspace_yaml}: 'quality' must be a mapping, "
+            f"got {type(yaml_raw).__name__}",
+        )
+    if yaml_raw:
+        _coerce_quality(yaml_raw, workspace_yaml)  # validate with the right path
+
+    return _coerce_quality(_merge_quality(toml_raw, yaml_raw), workspace_yaml)
