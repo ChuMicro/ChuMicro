@@ -18,6 +18,7 @@ from __future__ import annotations
 import ast
 import re
 import tomllib
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any, cast
 
@@ -240,9 +241,55 @@ def resolve_effective_deploy_mode(
     return deploy_mode_override or device_entry.deploy_mode or DEFAULT_DEPLOY_MODE
 
 
+def _default_drive_scanner() -> list[Path]:
+    """Return mounted ``CIRCUITPY*`` volume paths (host mount-table scan).
+
+    Imported lazily so the module load doesn't pull in the drive-scan
+    code path on hosts that never deploy to CircuitPython over a drive.
+    """
+    from chumicro_deploy.circuitpy_drive import (  # noqa: PLC0415
+        _circuitpy_volume_candidates,
+    )
+
+    return _circuitpy_volume_candidates()
+
+
+def resolve_cp_deploy_transport(
+    runtime: str,
+    effective_mode: str,
+    deploy_transport_pref: str,
+    *,
+    drive_available: bool,
+) -> str:
+    """Resolve a CircuitPython entry's deploy path to ``"serial"`` or ``"drive"``.
+
+    - An explicit ``deploy_transport`` of ``"serial"`` / ``"drive"`` wins
+      outright — the honest representation for a board that structurally
+      has (or lacks) a CIRCUITPY volume, and the disambiguator on a
+      mixed bench where the host-side drive scan can't tell which mount
+      belongs to which board.
+    - ``"auto"`` picks serial only for a *flash* deploy when **no**
+      CIRCUITPY volume is mounted at all (a lone drive-less board);
+      otherwise it keeps the drive path.  RAM mode never needs serial —
+      its inline exec already runs drive-less on the stock transport.
+
+    Non-CircuitPython runtimes always return ``"drive"`` (ignored by
+    ``Device.create_transport``'s MicroPython branch).
+    """
+    if runtime != "circuitpython":
+        return "drive"
+    if deploy_transport_pref in ("serial", "drive"):
+        return deploy_transport_pref
+    if effective_mode == "flash" and not drive_available:
+        return "serial"
+    return "drive"
+
+
 def build_transport_for_entry(
     device_entry: DeviceEntry,
     deploy_mode: str | None = None,
+    *,
+    drive_scanner: Callable[[], list[Path]] | None = None,
 ) -> TransportProtocol:
     """Build a transport instance for a device entry.
 
@@ -251,13 +298,29 @@ def build_transport_for_entry(
     ``Device`` and delegates runtime branching.  Named to disambiguate
     from ``Device.create_transport`` itself: this one takes the
     registry record, that one takes the constructed Device.
+
+    For a CircuitPython entry it also resolves the drive-vs-serial
+    deploy path (see :func:`resolve_cp_deploy_transport`): the
+    ``deploy_transport`` preference from ``devices.yml``, falling back to
+    a host-side CIRCUITPY mount scan.  *drive_scanner* is injectable so
+    tests can drive the resolution without a real mount table.
     """
     effective_mode = resolve_effective_deploy_mode(device_entry, deploy_mode)
+    deploy_transport = "drive"
+    if device_entry.runtime == "circuitpython":
+        scanner = drive_scanner if drive_scanner is not None else _default_drive_scanner
+        deploy_transport = resolve_cp_deploy_transport(
+            device_entry.runtime,
+            effective_mode,
+            getattr(device_entry, "deploy_transport", "auto"),
+            drive_available=bool(scanner()),
+        )
     device = Device(
         transport=device_entry.runtime,
         address=device_entry.address,
         baudrate=device_entry.serial_baudrate,
         deploy_mode=effective_mode,
+        deploy_transport=deploy_transport,
     )
     return device.create_transport()
 

@@ -51,6 +51,9 @@ DEFAULT_DEVICES_FILENAME = "devices.yml"
 
 _REQUIRED_DEVICE_FIELDS = ("id", "runtime", "address")
 _VALID_RUNTIMES = ("micropython", "circuitpython")
+#: Recognized ``deploy_transport`` values.  Mirrors
+#: :data:`chumicro_deploy.device._VALID_DEPLOY_TRANSPORTS`.
+_VALID_DEPLOY_TRANSPORTS = ("auto", "serial", "drive")
 #: Derived from the :class:`DeployMode` enum so the tuple can't drift
 #: from the source of truth.
 _VALID_DEPLOY_MODES = tuple(mode.value for mode in DeployMode)
@@ -63,7 +66,7 @@ _VALID_IDE_RUNTIMES = ("micropython", "circuitpython", "both")
 #: to manage zone-wise.
 #: Anything outside this set falls into :attr:`DeviceEntry.extra`.
 _DEPLOY_ONLY_FIELDS: frozenset[str] = frozenset(
-    {"connection_type", "supports_ram_mode"},
+    {"connection_type", "supports_ram_mode", "deploy_transport"},
 )
 _KNOWN_KEYS: frozenset[str] = ALL_TOP_LEVEL_ENTRY_FIELDS | _DEPLOY_ONLY_FIELDS
 
@@ -99,6 +102,13 @@ class DeviceEntry:
     #: is a per-library concern, not this.  Absent in ``devices.yml``
     #: defaults to ``True``.
     supports_ram_mode: bool = True
+    #: CircuitPython deploy-path selector.  ``"auto"`` (default) lets
+    #: :func:`build_transport_for_entry` pick drive-vs-serial from
+    #: whether any CIRCUITPY volume is mounted; ``"serial"`` forces the
+    #: drive-less raw-REPL transport (a classic ESP32 with no native USB
+    #: exposes no CIRCUITPY drive); ``"drive"`` forces the CIRCUITPY-drive
+    #: transport.  Ignored for MicroPython.
+    deploy_transport: str = "auto"
     extra: dict = field(default_factory=dict)
 
 
@@ -187,6 +197,16 @@ def _validate_device(
             f"must be true or false"
         )
 
+    if (
+        "deploy_transport" in raw
+        and raw["deploy_transport"] not in _VALID_DEPLOY_TRANSPORTS
+    ):
+        raise DeviceConfigError(
+            f"Device entry {index} ({raw['id']}): "
+            f"invalid deploy_transport {raw['deploy_transport']!r}, "
+            f"must be one of {_VALID_DEPLOY_TRANSPORTS}"
+        )
+
     extra = {key: value for key, value in raw.items() if key not in _KNOWN_KEYS}
 
     return DeviceEntry(
@@ -198,6 +218,7 @@ def _validate_device(
         serial_baudrate=raw.get("serial_baudrate", 115200),
         deploy_mode=raw.get("deploy_mode", global_deploy_mode),
         supports_ram_mode=raw.get("supports_ram_mode", True),
+        deploy_transport=raw.get("deploy_transport", "auto"),
         extra=extra,
     )
 
@@ -385,6 +406,8 @@ def _normalize_device_entry(
     }
     if "serial_baudrate" in entry:
         normalized["baudrate"] = entry["serial_baudrate"]
+    if entry.get("deploy_transport"):
+        normalized["deploy_transport"] = entry["deploy_transport"]
     entry_deploy_mode = entry.get("deploy_mode")
     if entry_deploy_mode:
         normalized["deploy_mode"] = entry_deploy_mode

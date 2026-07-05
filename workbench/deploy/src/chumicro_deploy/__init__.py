@@ -19,6 +19,7 @@ details + deploy-mode preference into a single object that
 from __future__ import annotations
 
 from .circuitpython_bootstrap import build_circuitpython_bootstrap_scripts
+from .circuitpython_serial_transport import CircuitpythonSerialTransport
 from .circuitpython_transport import (
     CircuitpythonMidDeployDisconnected,
     CircuitpythonTransportError,
@@ -90,6 +91,7 @@ from .testing import FakeTransport
 
 __all__ = [
     "CircuitpythonMidDeployDisconnected",
+    "CircuitpythonSerialTransport",
     "CircuitpythonTransportError",
     "DEFAULT_DEPLOY_MODE",
     "DeployError",

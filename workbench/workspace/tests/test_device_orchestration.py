@@ -172,9 +172,17 @@ class TestCreateTransport:
         assert transport.mode == "ram"
 
     def test_circuitpython_flash_mode(self) -> None:
-        """Flash deploy mode should pass flash to CircuitPython transport."""
+        """Flash deploy mode should pass flash to CircuitPython transport.
+
+        A mounted CIRCUITPY volume is injected so the auto drive-vs-serial
+        resolution deterministically lands on the drive transport.
+        """
         entry = self._make_device_entry(runtime="circuitpython")
-        transport = device_testing.build_transport_for_entry(entry, deploy_mode="flash")
+        transport = device_testing.build_transport_for_entry(
+            entry,
+            deploy_mode="flash",
+            drive_scanner=lambda: [Path("/Volumes/CIRCUITPY")],
+        )
         assert transport.mode == "flash"
 
     def test_unsupported_runtime_raises(self) -> None:
@@ -218,8 +226,126 @@ class TestCreateTransport:
             runtime="circuitpython",
             deploy_mode="flash",
         )
-        transport = device_testing.build_transport_for_entry(entry)
+        transport = device_testing.build_transport_for_entry(
+            entry, drive_scanner=lambda: [Path("/Volumes/CIRCUITPY")],
+        )
         assert transport.mode == "flash"
+
+
+class TestLibraryNameHelpers:
+    """Non-chumicro dependencies / modules resolve to no workspace library."""
+
+    def test_pip_dependency_non_chumicro_is_none(self) -> None:
+        assert (
+            device_testing._library_name_from_pip_dependency("requests>=2.0")
+            is None
+        )
+
+    def test_pip_dependency_chumicro_strips_prefix_and_version(self) -> None:
+        assert (
+            device_testing._library_name_from_pip_dependency("chumicro-timing>=0.1")
+            == "timing"
+        )
+
+    def test_module_non_chumicro_is_none(self) -> None:
+        assert device_testing._library_name_from_module("os.path") is None
+
+    def test_module_chumicro_maps_to_library(self) -> None:
+        assert (
+            device_testing._library_name_from_module("chumicro_sockets.generators")
+            == "sockets"
+        )
+
+
+class TestResolveCpDeployTransport:
+    """Tests for the drive-vs-serial CircuitPython transport resolution."""
+
+    def _entry(self, **kwargs) -> DeviceEntry:
+        return DeviceEntry(
+            identifier="cp-board",
+            runtime="circuitpython",
+            address="/dev/null",
+            **kwargs,
+        )
+
+    def test_explicit_serial_pref_wins_even_with_a_drive_present(self) -> None:
+        """An explicit ``deploy_transport: serial`` overrides a mounted drive.
+
+        The disambiguator for a mixed bench: a drive-less board plugged in
+        alongside boards that *do* expose CIRCUITPY volumes.
+        """
+        assert (
+            device_testing.resolve_cp_deploy_transport(
+                "circuitpython", "flash", "serial", drive_available=True,
+            )
+            == "serial"
+        )
+
+    def test_explicit_drive_pref_wins_without_a_drive(self) -> None:
+        """An explicit ``deploy_transport: drive`` overrides an empty scan."""
+        assert (
+            device_testing.resolve_cp_deploy_transport(
+                "circuitpython", "flash", "drive", drive_available=False,
+            )
+            == "drive"
+        )
+
+    def test_auto_flash_no_drive_selects_serial(self) -> None:
+        """Auto + flash + no mounted CIRCUITPY volume → the serial path."""
+        assert (
+            device_testing.resolve_cp_deploy_transport(
+                "circuitpython", "flash", "auto", drive_available=False,
+            )
+            == "serial"
+        )
+
+    def test_auto_flash_with_drive_selects_drive(self) -> None:
+        """Auto + flash + a mounted volume → the drive path (unchanged)."""
+        assert (
+            device_testing.resolve_cp_deploy_transport(
+                "circuitpython", "flash", "auto", drive_available=True,
+            )
+            == "drive"
+        )
+
+    def test_auto_ram_never_selects_serial(self) -> None:
+        """RAM already runs drive-less via inline exec, so auto keeps drive."""
+        assert (
+            device_testing.resolve_cp_deploy_transport(
+                "circuitpython", "ram", "auto", drive_available=False,
+            )
+            == "drive"
+        )
+
+    def test_non_circuitpython_runtime_returns_drive(self) -> None:
+        """A MicroPython entry never routes through the serial path."""
+        assert (
+            device_testing.resolve_cp_deploy_transport(
+                "micropython", "flash", "auto", drive_available=False,
+            )
+            == "drive"
+        )
+
+    def test_build_transport_auto_no_drive_builds_serial(self) -> None:
+        """End-to-end: auto CP flash entry with no drive builds the serial transport."""
+        from chumicro_deploy import CircuitpythonSerialTransport
+
+        entry = self._entry(deploy_mode="flash")
+        transport = device_testing.build_transport_for_entry(
+            entry, drive_scanner=lambda: [],
+        )
+        assert isinstance(transport, CircuitpythonSerialTransport)
+        assert transport.mode == "serial"
+
+    def test_build_transport_explicit_serial_builds_serial(self) -> None:
+        """An explicit ``deploy_transport: serial`` builds the serial transport."""
+        from chumicro_deploy import CircuitpythonSerialTransport
+
+        entry = self._entry(deploy_mode="flash", deploy_transport="serial")
+        transport = device_testing.build_transport_for_entry(
+            entry, drive_scanner=lambda: [Path("/Volumes/CIRCUITPY")],
+        )
+        assert isinstance(transport, CircuitpythonSerialTransport)
 
 
 class TestBuildDeviceBootstrap:
@@ -378,6 +504,36 @@ class TestResolveLibrarySourceDirs:
 
         leaf_source = libraries_root / "leaf" / "src"
         assert leaf_source in result
+
+    def test_resolves_from_import_and_ignores_relative(
+        self, tmp_path: Path,
+    ) -> None:
+        """``from chumicro_x import y`` stages x; a relative import is ignored.
+
+        Covers the ``ast.ImportFrom`` arm of test-import resolution,
+        including the ``node.module is None`` relative-import short-circuit.
+        """
+        libraries_root = tmp_path / "libraries"
+        _make_synthetic_library(libraries_root, "leaf")
+        consumer_dir = _make_synthetic_library(libraries_root, "consumer")
+        functional_dir = consumer_dir / "functional_tests"
+        functional_dir.mkdir()
+        test_file = functional_dir / "test_from_import.py"
+        test_file.write_text(
+            "import os\n"  # non-chumicro Import -> not a workspace library
+            "from os import getcwd\n"  # non-chumicro ImportFrom -> skipped
+            "from chumicro_leaf import widget\n"
+            "from . import sibling\n"  # module is None -> skipped
+            "def test_ok() -> None:\n    pass\n",
+        )
+
+        result = device_testing.resolve_library_source_dirs(
+            consumer_dir,
+            libraries_root=libraries_root,
+            test_files=[test_file],
+        )
+
+        assert libraries_root / "leaf" / "src" in result
 
     def test_includes_own_source_dir(self, tmp_path: Path) -> None:
         """The library under test always shows up with its own ``src/``."""
