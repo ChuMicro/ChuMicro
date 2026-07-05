@@ -8,6 +8,7 @@ from chumicro_mqtt import MQTTClient
 from chumicro_sockets.testing import FakeSocket, FakeSocketConnector
 from chumicro_test_harness import skip
 from chumicro_test_harness.assertions import raises
+from chumicro_timing.testing import FakeTicks
 
 
 class TestFromConfigFactory:
@@ -110,21 +111,21 @@ class TestFromConfigFactory:
         encode their own TLS choice.  Confirms the dispatch doesn't
         accidentally consult ``ssl_context`` once a factory is in hand."""
         sock = FakeSocket()
+        # Inject the fake clock through from_config's ticks= seam so the
+        # connect-attempt deadline armed inside connect() and the fake
+        # nows below share one clock (see patterns.md "Fake-now tests").
         client = MQTTClient.from_config(
             {},
             transport_factory=self._injected_factory(sock),
             ssl_context="should-be-ignored",
+            ticks=FakeTicks(),
         )
         # Construction is side-effect free.  Calling connect() arms the
         # connector via the injected factory; one tick promotes the socket.
         client.connect()
-        # Drive with the client's own clock: connect() armed the
-        # connect-attempt deadline from real ticks_ms(), and a literal
-        # now=0 sits a half-ring away on the 2^29 tick ring for ~half of
-        # every ~6-day wrap period — an instant spurious expiry.
-        now = client._ticks.ticks_ms()  # noqa: SLF001
-        client.handle(now)
-        client.handle(now)
+        # Drive the connector one tick to advance past AWAITING_TRANSPORT.
+        client.handle(0)
+        client.handle(0)
         assert client._socket is sock  # noqa: SLF001
 
     def test_default_factory_requires_broker_host(self) -> None:
