@@ -19,6 +19,66 @@ def _write_workspace(tmp_path: Path, body: str) -> Path:
     return path
 
 
+def _write_quality_toml(tmp_path: Path, body: str) -> Path:
+    path = tmp_path / "quality.toml"
+    path.write_text(body)
+    return path
+
+
+class TestQualityToml:
+    """quality.toml is the committed policy; workspace.yml overrides per key."""
+
+    def test_toml_alone_sets_the_gates(self, tmp_path: Path) -> None:
+        _write_quality_toml(
+            tmp_path,
+            'coverage_threshold = 70\n\n[lint]\nselect = ["E", "F"]\n',
+        )
+        config = load_quality_config(tmp_path / "workspace.yml")
+        assert config.coverage_threshold == 70
+        assert config.lint.select == ["E", "F"]
+        assert config.lint.enabled is True
+
+    def test_workspace_yaml_overrides_toml_per_key(self, tmp_path: Path) -> None:
+        _write_quality_toml(
+            tmp_path,
+            'coverage_threshold = 70\n\n[lint]\nselect = ["E", "F"]\n',
+        )
+        path = _write_workspace(
+            tmp_path, "quality:\n  coverage_threshold: 90\n",
+        )
+        config = load_quality_config(path)
+        # The yaml override wins where set; the toml policy holds elsewhere.
+        assert config.coverage_threshold == 90
+        assert config.lint.select == ["E", "F"]
+
+    def test_lint_fields_merge_individually(self, tmp_path: Path) -> None:
+        _write_quality_toml(
+            tmp_path,
+            '[lint]\nenabled = true\nselect = ["E"]\n',
+        )
+        path = _write_workspace(
+            tmp_path, "quality:\n  lint:\n    enabled: false\n",
+        )
+        config = load_quality_config(path)
+        assert config.lint.enabled is False
+        assert config.lint.select == ["E"]
+
+    def test_toml_shape_error_names_the_toml_file(self, tmp_path: Path) -> None:
+        _write_quality_toml(tmp_path, "coverage_threshold = true\n")
+        with pytest.raises(WorkspaceConfigError, match="quality.toml"):
+            load_quality_config(tmp_path / "workspace.yml")
+
+    def test_toml_parse_error_names_the_toml_file(self, tmp_path: Path) -> None:
+        _write_quality_toml(tmp_path, "[lint\n")
+        with pytest.raises(WorkspaceConfigError, match="quality.toml"):
+            load_quality_config(tmp_path / "workspace.yml")
+
+    def test_unknown_lint_tool_in_toml_raises(self, tmp_path: Path) -> None:
+        _write_quality_toml(tmp_path, '[lint]\ntools = ["rough"]\n')
+        with pytest.raises(WorkspaceConfigError, match="unknown entries"):
+            load_quality_config(tmp_path / "workspace.yml")
+
+
 class TestDefaults:
     """Permissive default — missing block + missing file behave the same."""
 
