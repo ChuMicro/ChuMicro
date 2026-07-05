@@ -17,6 +17,7 @@ from __future__ import annotations
 import select
 import socket
 import struct
+import time
 from collections.abc import Callable, Iterator
 
 import pytest
@@ -378,3 +379,361 @@ def test_dispatch_quit_closes_session(proxy: NegativeProxy) -> None:
 
 def test_dispatch_empty_line_is_noop(proxy: NegativeProxy) -> None:
     assert proxy._dispatch("") == ""
+
+
+# --------------------------------------------------------------------------
+# delay command: dispatch surface (A9 — slow broker)
+# --------------------------------------------------------------------------
+
+
+def test_dispatch_delay_defaults_to_both(proxy: NegativeProxy) -> None:
+    assert proxy._dispatch("delay 4000") == "ok delay 4000 both"
+    assert proxy.controller.delay_c2b_ms == 4000
+    assert proxy.controller.delay_b2c_ms == 4000
+
+
+def test_dispatch_delay_b2c_only(proxy: NegativeProxy) -> None:
+    assert proxy._dispatch("delay 4000 b2c") == "ok delay 4000 b2c"
+    assert proxy.controller.delay_b2c_ms == 4000
+    assert proxy.controller.delay_c2b_ms == 0  # c2b untouched
+
+
+def test_dispatch_delay_c2b_only(proxy: NegativeProxy) -> None:
+    assert proxy._dispatch("delay 250 c2b") == "ok delay 250 c2b"
+    assert proxy.controller.delay_c2b_ms == 250
+    assert proxy.controller.delay_b2c_ms == 0
+
+
+def test_dispatch_delay_off_clears_both(proxy: NegativeProxy) -> None:
+    proxy.controller.delay_c2b_ms = proxy.controller.delay_b2c_ms = 4000
+    assert proxy._dispatch("delay off") == "ok delay 0 both"
+    assert proxy.controller.delay_c2b_ms == 0
+    assert proxy.controller.delay_b2c_ms == 0
+
+
+def test_dispatch_delay_zero_clears_named_direction(proxy: NegativeProxy) -> None:
+    proxy.controller.delay_c2b_ms = proxy.controller.delay_b2c_ms = 4000
+    assert proxy._dispatch("delay 0 b2c") == "ok delay 0 b2c"
+    assert proxy.controller.delay_b2c_ms == 0
+    assert proxy.controller.delay_c2b_ms == 4000  # c2b left engaged
+
+
+def test_dispatch_delay_bad_value_is_error(proxy: NegativeProxy) -> None:
+    assert proxy._dispatch("delay soon").startswith("err usage")
+    assert proxy.controller.delay_b2c_ms == 0
+
+
+def test_dispatch_delay_negative_is_error(proxy: NegativeProxy) -> None:
+    assert proxy._dispatch("delay -5").startswith("err usage")
+
+
+def test_dispatch_delay_bad_direction_is_error(proxy: NegativeProxy) -> None:
+    assert proxy._dispatch("delay 100 sideways").startswith("err usage")
+    assert proxy.controller.delay_b2c_ms == 0
+
+
+def test_dispatch_delay_missing_value_is_error(proxy: NegativeProxy) -> None:
+    assert proxy._dispatch("delay").startswith("err usage")
+
+
+def test_stat_line_reports_delays(proxy: NegativeProxy) -> None:
+    proxy._dispatch("delay 4000 b2c")
+    line = proxy._dispatch("stat")
+    assert "delay_b2c=4000" in line
+    assert "delay_c2b=0" in line
+
+
+# --------------------------------------------------------------------------
+# delay data-plane: queue-then-release, ordering, per-direction (A9)
+# --------------------------------------------------------------------------
+
+
+def test_delay_b2c_queues_instead_of_forwarding(make_conn: Callable[..., ConnBundle]) -> None:
+    conn, board_peer, broker_peer, controller = make_conn()
+    controller.delay_b2c_ms = 200
+    frame = _publish("bake", b"data", 1)
+    before = time.monotonic()
+    broker_peer.sendall(frame)
+    assert conn.pump(conn.broker) is True
+    # Nothing forwarded yet; the chunk is parked with a future release instant.
+    assert _read_available(board_peer, timeout=0.1) == b""
+    release = conn.next_release()
+    assert release is not None
+    assert release >= before + 0.2  # held at least the configured delay
+    assert controller.bytes_b2c_fwd == 0  # not counted as forwarded until released
+
+
+def test_delay_release_forwards_after_hold(make_conn: Callable[..., ConnBundle]) -> None:
+    conn, board_peer, broker_peer, controller = make_conn()
+    controller.delay_b2c_ms = 200
+    frame = _publish("bake", b"data", 1)
+    broker_peer.sendall(frame)
+    assert conn.pump(conn.broker) is True
+    release = conn.next_release()
+    assert release is not None
+    # Before the release instant: still held.
+    assert conn.flush_due(release - 0.05) is True
+    assert _read_available(board_peer, timeout=0.05) == b""
+    # At/after the release instant: forwarded intact.
+    assert conn.flush_due(release) is True
+    assert _read_available(board_peer) == frame
+    assert controller.bytes_b2c_fwd == len(frame)
+    assert conn.next_release() is None  # queue drained
+
+
+def test_delay_preserves_order_across_chunks(make_conn: Callable[..., ConnBundle]) -> None:
+    conn, board_peer, broker_peer, controller = make_conn()
+    controller.delay_b2c_ms = 100
+    first = _publish("a", b"one", 1)
+    second = _publish("a", b"two", 2)
+    broker_peer.sendall(first)
+    assert conn.pump(conn.broker) is True
+    broker_peer.sendall(second)
+    assert conn.pump(conn.broker) is True
+    # Both parked; release everything and assert FIFO ordering on the wire.
+    assert conn.flush_due(time.monotonic() + 1.0) is True
+    assert _read_available(board_peer) == first + second
+
+
+def test_delay_c2b_direction_queues_board_to_broker(make_conn: Callable[..., ConnBundle]) -> None:
+    conn, board_peer, broker_peer, controller = make_conn()
+    controller.delay_c2b_ms = 200
+    board_peer.sendall(b"CONNECT-bytes")
+    assert conn.pump(conn.board) is True
+    assert _read_available(broker_peer, timeout=0.1) == b""  # held
+    assert conn.flush_due(time.monotonic() + 1.0) is True
+    assert _read_available(broker_peer) == b"CONNECT-bytes"
+
+
+def test_delay_only_affects_selected_direction(make_conn: Callable[..., ConnBundle]) -> None:
+    conn, board_peer, broker_peer, controller = make_conn()
+    controller.delay_b2c_ms = 500  # only broker->client is slowed
+    board_peer.sendall(b"CONNECT-bytes")
+    assert conn.pump(conn.board) is True
+    assert _read_available(broker_peer) == b"CONNECT-bytes"  # c2b still immediate
+    assert conn.next_release() is None
+
+
+def test_delay_send_failure_tears_down(make_conn: Callable[..., ConnBundle]) -> None:
+    conn, board_peer, broker_peer, controller = make_conn()
+    controller.delay_b2c_ms = 100
+    broker_peer.sendall(_publish("bake", b"data", 1))
+    assert conn.pump(conn.broker) is True
+    board_peer.close()  # destination gone before the release fires
+    conn.board.close()
+    assert conn.flush_due(time.monotonic() + 1.0) is False
+
+
+# --------------------------------------------------------------------------
+# NegativeProxy delay scheduling: select-timeout + flush loop (A9)
+# --------------------------------------------------------------------------
+
+
+def _register(
+    proxy: NegativeProxy, make_conn: Callable[..., ConnBundle], conn_id: int
+) -> ConnBundle:
+    """Build a connection on the proxy's controller and register it."""
+    conn, board_peer, broker_peer, _ = make_conn(proxy.controller)
+    conn.conn_id = conn_id
+    proxy._connections[conn_id] = conn
+    proxy.controller.connections_active += 1
+    proxy.controller.connections_total += 1
+    return conn, board_peer, broker_peer, proxy.controller
+
+
+def test_select_timeout_default_without_pending(proxy: NegativeProxy) -> None:
+    assert proxy._select_timeout() == 1.0
+
+
+def test_select_timeout_shortens_for_pending(
+    proxy: NegativeProxy, make_conn: Callable[..., ConnBundle]
+) -> None:
+    conn, _board_peer, broker_peer, _ = _register(proxy, make_conn, 1)
+    proxy.controller.delay_b2c_ms = 300
+    broker_peer.sendall(_publish("a", b"x", 1))
+    assert conn.pump(conn.broker) is True
+    timeout = proxy._select_timeout()
+    assert 0.0 < timeout <= 0.3  # capped at the nearest release, not the 1 s idle
+
+
+def test_flush_delayed_releases_past_due(
+    proxy: NegativeProxy, make_conn: Callable[..., ConnBundle]
+) -> None:
+    conn, board_peer, _broker_peer, _ = _register(proxy, make_conn, 1)
+    frame = _publish("a", b"x", 1)
+    conn._pending_b2c.append((time.monotonic() - 1.0, frame))  # already overdue
+    proxy._flush_delayed()
+    assert _read_available(board_peer) == frame
+    assert conn.next_release() is None
+
+
+def test_flush_delayed_holds_future_items(
+    proxy: NegativeProxy, make_conn: Callable[..., ConnBundle]
+) -> None:
+    conn, board_peer, _broker_peer, _ = _register(proxy, make_conn, 1)
+    frame = _publish("a", b"x", 1)
+    conn._pending_b2c.append((time.monotonic() + 100.0, frame))
+    proxy._flush_delayed()
+    assert _read_available(board_peer, timeout=0.05) == b""
+    assert conn.next_release() is not None
+
+
+# --------------------------------------------------------------------------
+# freeze-existing / thaw: per-connection freeze scoping (A7)
+# --------------------------------------------------------------------------
+
+
+def test_dispatch_freeze_existing_no_connections(proxy: NegativeProxy) -> None:
+    assert proxy._dispatch("freeze-existing") == "ok froze 0"
+
+
+def test_dispatch_thaw_no_connections(proxy: NegativeProxy) -> None:
+    assert proxy._dispatch("thaw") == "ok thawed 0"
+
+
+def test_freeze_existing_freezes_only_current_connections(
+    proxy: NegativeProxy, make_conn: Callable[..., ConnBundle]
+) -> None:
+    existing, _, _, _ = _register(proxy, make_conn, 1)
+    assert proxy._dispatch("freeze-existing") == "ok froze 1"
+    assert existing.frozen is True
+    # A connection opened AFTER the freeze must pass through unfaulted — this
+    # is the A7 property the global blackhole can't provide.
+    fresh, _, _, _ = _register(proxy, make_conn, 2)
+    assert fresh.frozen is False
+
+
+def test_freeze_then_fresh_connection_forwards(
+    proxy: NegativeProxy, make_conn: Callable[..., ConnBundle]
+) -> None:
+    frozen_conn, frozen_board, frozen_broker, _ = _register(proxy, make_conn, 1)
+    proxy._dispatch("freeze-existing")
+    fresh_conn, fresh_board, fresh_broker, _ = _register(proxy, make_conn, 2)
+    # Frozen connection discards both directions...
+    frozen_board.sendall(b"ghost-publish")
+    assert frozen_conn.pump(frozen_conn.board) is True
+    assert _read_available(frozen_broker, timeout=0.1) == b""
+    # ...while the fresh re-dial reaches the broker cleanly.
+    fresh_board.sendall(b"fresh-connect")
+    assert fresh_conn.pump(fresh_conn.board) is True
+    assert _read_available(fresh_broker) == b"fresh-connect"
+
+
+def test_thaw_restores_forwarding(
+    proxy: NegativeProxy, make_conn: Callable[..., ConnBundle]
+) -> None:
+    conn, board_peer, broker_peer, _ = _register(proxy, make_conn, 1)
+    proxy._dispatch("freeze-existing")
+    assert proxy._dispatch("thaw") == "ok thawed 1"
+    assert conn.frozen is False
+    board_peer.sendall(b"after-thaw")
+    assert conn.pump(conn.board) is True
+    assert _read_available(broker_peer) == b"after-thaw"
+
+
+def test_frozen_connection_discards_both_directions(make_conn: Callable[..., ConnBundle]) -> None:
+    conn, board_peer, broker_peer, controller = make_conn()
+    conn.frozen = True
+    board_peer.sendall(b"c2b-bytes")
+    assert conn.pump(conn.board) is True  # socket stays open
+    assert _read_available(broker_peer, timeout=0.1) == b""
+    broker_peer.sendall(_publish("bake", b"data", 1))
+    assert conn.pump(conn.broker) is True
+    assert _read_available(board_peer, timeout=0.1) == b""
+    assert controller.bytes_c2b_fwd == 0
+    assert controller.bytes_b2c_fwd == 0
+
+
+def test_frozen_connection_still_detects_peer_close(make_conn: Callable[..., ConnBundle]) -> None:
+    # A frozen connection discards data but must still notice a real FIN/RST —
+    # the broker evicting the ghost (A7) has to tear the connection down.
+    conn, _board_peer, broker_peer, _ = make_conn()
+    conn.frozen = True
+    broker_peer.close()
+    assert conn.pump(conn.broker) is False
+
+
+def test_frozen_connection_holds_broker_leg_on_board_close(
+    make_conn: Callable[..., ConnBundle],
+) -> None:
+    # The literal A7 ghost: a self-healing board CLOSES its dead socket
+    # before re-dialing.  A frozen connection must swallow that FIN rather
+    # than propagate it, so the broker still holds the stale session when
+    # the same-client_id re-dial arrives (MUST_DISCONNECT_EXISTING).
+    conn, board_peer, _broker_peer, _ = make_conn()
+    conn.frozen = True
+    board_peer.close()
+    assert conn.pump(conn.board) is True  # connection survives
+    assert conn.board_gone is True
+    assert "half_open=1" in conn.stat_line()
+
+
+def test_unfrozen_connection_still_tears_down_on_board_close(
+    make_conn: Callable[..., ConnBundle],
+) -> None:
+    # The half-open hold is freeze-scoped: a normal board disconnect must
+    # keep tearing the whole connection down.
+    conn, board_peer, _broker_peer, _ = make_conn()
+    board_peer.close()
+    assert conn.pump(conn.board) is False
+    assert conn.board_gone is False
+
+
+def test_thaw_tears_down_half_open_ghosts(
+    proxy: NegativeProxy, make_conn: Callable[..., ConnBundle]
+) -> None:
+    # A ghost whose board leg is gone cannot resume forwarding; thaw reaps it.
+    conn, board_peer, _broker_peer, _ = _register(proxy, make_conn, 1)
+    proxy._dispatch("freeze-existing")
+    board_peer.close()
+    assert conn.pump(conn.board) is True
+    assert proxy._dispatch("thaw") == "ok thawed 1"
+    assert conn.conn_id not in proxy._connections
+
+
+# --------------------------------------------------------------------------
+# stat: per-connection visibility (A7 assertion surface)
+# --------------------------------------------------------------------------
+
+
+def test_stat_report_lists_each_connection(
+    proxy: NegativeProxy, make_conn: Callable[..., ConnBundle]
+) -> None:
+    _register(proxy, make_conn, 1)
+    _register(proxy, make_conn, 2)
+    report = proxy._dispatch("stat")
+    lines = report.splitlines()
+    assert lines[0].startswith("blackhole=")  # global summary first
+    assert "conns_active=2" in lines[0]
+    conn_lines = [line for line in lines if line.startswith("conn id=")]
+    assert len(conn_lines) == 2
+    assert any("id=1" in line for line in conn_lines)
+    assert any("id=2" in line for line in conn_lines)
+
+
+def test_stat_report_shows_frozen_and_byte_counts(
+    proxy: NegativeProxy, make_conn: Callable[..., ConnBundle]
+) -> None:
+    conn, board_peer, broker_peer, _ = _register(proxy, make_conn, 1)
+    board_peer.sendall(b"hello-broker")
+    assert conn.pump(conn.board) is True
+    proxy._dispatch("freeze-existing")
+    conn_line = next(
+        line for line in proxy._dispatch("stat").splitlines() if line.startswith("conn id=1")
+    )
+    assert "frozen=1" in conn_line
+    assert f"c2b_recv={len(b'hello-broker')}" in conn_line
+    assert f"c2b_fwd={len(b'hello-broker')}" in conn_line
+
+
+def test_stat_report_reports_pending_delay_depth(
+    proxy: NegativeProxy, make_conn: Callable[..., ConnBundle]
+) -> None:
+    conn, _board_peer, broker_peer, _ = _register(proxy, make_conn, 1)
+    proxy.controller.delay_b2c_ms = 500
+    broker_peer.sendall(_publish("a", b"x", 1))
+    assert conn.pump(conn.broker) is True
+    conn_line = next(
+        line for line in proxy._dispatch("stat").splitlines() if line.startswith("conn id=1")
+    )
+    assert "pend_b2c=1" in conn_line
