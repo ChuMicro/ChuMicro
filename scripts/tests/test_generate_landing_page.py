@@ -163,6 +163,16 @@ class TestDiscoverPackages:
         assert by_name["lib_b"]["has_testing"] is False
         assert by_name["tool_x"]["has_testing"] is True
 
+    def test_parked_library_not_advertised(self, synthetic_doc_dirs):
+        """A parked library drops off the landing page (Decision 0107): it
+        ships to neither PyPI nor the bundle, so advertising it would point
+        readers at an install that doesn't exist yet."""
+        (synthetic_doc_dirs[0] / "PARKED").write_text("zero adopters\n")
+        libraries, _workbench = _discover_packages()
+        library_names = {entry["name"] for entry in libraries}
+        assert "lib_a" not in library_names
+        assert "lib_b" in library_names
+
 
 class TestGenerate:
     """Tests for the full page generation against synthetic doc dirs."""

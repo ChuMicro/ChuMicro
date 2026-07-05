@@ -19,6 +19,7 @@ import repo_layout
 from repo_layout import (
     ALL_PLATFORMS,
     GITHUB_ORG,
+    PARKED_MARKER,
     PUBLISHABLE_ROOTS,
     RELEASE_RELEVANT,
     changed_publishable_packages,
@@ -33,10 +34,12 @@ from repo_layout import (
     filter_by_platform,
     find_package_dir,
     find_publishable_packages,
+    is_parked,
     is_ref_reachable,
     load_tomllib,
     order_libraries_by_dependency,
     pythonpath_environment,
+    read_parked_reason,
     read_platforms,
     read_pyproject_description,
     read_version,
@@ -352,6 +355,69 @@ class TestFindPublishablePackages:
         for package in find_publishable_packages():
             version_path = synthetic_workspace / package / "VERSION"
             assert version_path.exists(), f"Missing VERSION: {package}"
+
+    def test_excludes_parked_by_default(self, synthetic_workspace):
+        """A parked library drops out of the publish set (Decision 0107)."""
+        (synthetic_workspace / "libraries" / "lib_a" / PARKED_MARKER).write_text(
+            "parked for testing\n",
+        )
+        packages = find_publishable_packages()
+        assert "libraries/lib_a" not in packages
+        # Siblings are unaffected.
+        assert "libraries/lib_b" in packages
+
+    def test_include_parked_flag_returns_parked(self, synthetic_workspace):
+        """``include_parked=True`` restores parked libraries for dev-time
+        consumers (editable install keeps them importable)."""
+        (synthetic_workspace / "libraries" / "lib_a" / PARKED_MARKER).write_text(
+            "parked for testing\n",
+        )
+        packages = find_publishable_packages(include_parked=True)
+        assert "libraries/lib_a" in packages
+        assert "libraries/lib_b" in packages
+
+
+class TestParkedLibraries:
+    """Tests for the parked-library marker helpers (Decision 0107)."""
+
+    def test_is_parked_false_without_marker(self, synthetic_workspace):
+        """A library with no marker is not parked."""
+        assert is_parked(synthetic_workspace / "libraries" / "lib_a") is False
+
+    def test_is_parked_true_with_marker(self, synthetic_workspace):
+        """Presence of the marker file parks the library."""
+        library_dir = synthetic_workspace / "libraries" / "lib_a"
+        (library_dir / PARKED_MARKER).write_text("why + when\n")
+        assert is_parked(library_dir) is True
+
+    def test_marker_directory_does_not_count(self, synthetic_workspace):
+        """A directory named PARKED is not a marker — only a file parks."""
+        library_dir = synthetic_workspace / "libraries" / "lib_a"
+        (library_dir / PARKED_MARKER).mkdir()
+        assert is_parked(library_dir) is False
+
+    def test_read_parked_reason_returns_contents(self, synthetic_workspace):
+        """The recorded reason is read back, trimmed."""
+        library_dir = synthetic_workspace / "libraries" / "lib_a"
+        (library_dir / PARKED_MARKER).write_text("  zero adopters; parked 2026-07-05  \n")
+        assert read_parked_reason(library_dir) == "zero adopters; parked 2026-07-05"
+
+    def test_read_parked_reason_none_when_unparked(self, synthetic_workspace):
+        """An un-parked library has no reason."""
+        assert read_parked_reason(synthetic_workspace / "libraries" / "lib_a") is None
+
+    def test_read_parked_reason_none_when_marker_empty(self, synthetic_workspace):
+        """An empty marker file yields None rather than an empty string."""
+        library_dir = synthetic_workspace / "libraries" / "lib_a"
+        (library_dir / PARKED_MARKER).write_text("   \n")
+        assert read_parked_reason(library_dir) is None
+
+    def test_parked_library_still_discovered_for_tests(self, synthetic_workspace):
+        """Parking excludes from publish, not from test/lint discovery —
+        a parked library still appears in discover_library_dirs()."""
+        (synthetic_workspace / "libraries" / "lib_a" / PARKED_MARKER).write_text("p\n")
+        names = {directory.name for directory in discover_library_dirs()}
+        assert "lib_a" in names
 
 
 class TestReadVersion:

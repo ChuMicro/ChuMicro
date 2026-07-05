@@ -59,6 +59,7 @@ from repo_layout import (
     GITHUB_ORG,
     ROOT,
     discover_library_dirs,
+    is_parked,
     library_name_from_pip_dependency,
     load_tomllib,
     order_libraries_by_dependency,
@@ -463,8 +464,14 @@ def _resolve_library_names(libraries_arg: str | None) -> list[str]:
     if libraries_arg:
         return [name.strip() for name in libraries_arg.split(",") if name.strip()]
 
-    # Auto-discover from workspace.
-    return [package_dir.name for package_dir in discover_library_dirs()]
+    # Auto-discover from workspace.  Parked libraries (Decision 0107)
+    # are excluded: they never enter the bundle, so there is nothing to
+    # validate a mip install against.
+    return [
+        package_dir.name
+        for package_dir in discover_library_dirs()
+        if not is_parked(package_dir)
+    ]
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -33,7 +33,7 @@ from bundle_layout import (
     EXPERIMENTAL_LIBRARIES_REPO,
     STABLE_LIBRARIES_REPO,
 )
-from repo_layout import read_pyproject_description
+from repo_layout import is_parked, read_pyproject_description
 
 #: Trees copied into the channel.  ``src`` is what the deploy walker
 #: needs; the rest make the library runnable/adaptable in-workspace.
@@ -72,15 +72,20 @@ def _iter_libraries(root_dir: Path):
 
     A library qualifies when it has both ``VERSION`` and
     ``pyproject.toml`` at its root: the same gate the release
-    pipeline and ``check-version`` use.
+    pipeline and ``check-version`` use.  Parked libraries (Decision
+    0107) are skipped — the channel is a publish surface, and a parked
+    library is held out of the publish set.
     """
     libraries_dir = root_dir / "libraries"
     if not libraries_dir.is_dir():
         return
     for version_file in sorted(libraries_dir.glob("*/VERSION")):
         library_dir = version_file.parent
-        if (library_dir / "pyproject.toml").is_file():
-            yield library_dir.name, library_dir
+        if not (library_dir / "pyproject.toml").is_file():
+            continue
+        if is_parked(library_dir):
+            continue
+        yield library_dir.name, library_dir
 
 
 def _example_paths(library_dir: Path, name: str) -> list[str]:

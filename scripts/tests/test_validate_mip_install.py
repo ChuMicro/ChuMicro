@@ -115,6 +115,24 @@ class TestResolveLibraryNames:
         result = _resolve_library_names(None)
         assert set(result) == {"timing", "runner"}
 
+    def test_autodiscovery_excludes_parked(self, monkeypatch):
+        """Parked libraries (Decision 0107) drop out of auto-discovery —
+        they never enter the bundle, so there's nothing to validate."""
+        mock_dirs = [
+            Path("/workspace/libraries/timing"),
+            Path("/workspace/libraries/logging"),
+        ]
+        monkeypatch.setattr(
+            "validate_mip_install.discover_library_dirs",
+            lambda: mock_dirs,
+        )
+        monkeypatch.setattr(
+            "validate_mip_install.is_parked",
+            lambda library_dir: library_dir.name == "logging",
+        )
+        result = _resolve_library_names(None)
+        assert result == ["timing"]
+
     def test_empty_string_triggers_autodiscovery(self, monkeypatch):
         """Empty string triggers workspace auto-discovery (same as None)."""
         # Empty string parses to [], which is falsy, triggering auto-discovery.

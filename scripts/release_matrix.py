@@ -1,6 +1,7 @@
 """Build the release-job matrix from VERSION files.
 
-Walks ``libraries/*/VERSION`` and ``workbench/*/VERSION``, filters by an
+Walks ``libraries/*/VERSION`` and ``workbench/*/VERSION``, skips parked
+libraries (Decision 0107: held out of the publish set), filters by an
 optional package list, skips packages whose release tag already exists,
 and emits a GitHub Actions matrix JSON describing the packages to release.
 Decision 0032 rule 3: workbench packages carry ``kind=workbench`` so the
@@ -26,7 +27,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from repo_layout import ROOT
+from repo_layout import ROOT, is_parked
 
 
 def _read_version(version_file: Path) -> str:
@@ -61,6 +62,15 @@ def _collect_entries(
         for version_file in sorted(parent_dir.glob("*/VERSION")):
             library_dir = version_file.parent
             library_name = library_dir.name
+
+            # Parked libraries (Decision 0107) are held out of the
+            # publish set unconditionally — even an explicit --libraries
+            # request cannot release one; un-park it (remove the marker)
+            # first.  This is the primary release gate, so the exclusion
+            # lives here ahead of the name filter.
+            if is_parked(library_dir):
+                print(f"Library {library_name} is parked — excluding from release matrix.")
+                continue
 
             if libraries_filter is not None and library_name not in libraries_filter:
                 continue

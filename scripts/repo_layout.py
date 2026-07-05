@@ -499,7 +499,54 @@ def resolve_scope(
     return detected
 
 
-def find_publishable_packages() -> list[str]:
+# ---------------------------------------------------------------------------
+# Parked libraries
+# ---------------------------------------------------------------------------
+
+#: Marker filename that parks a library.  Present at a library root, it
+#: holds that library out of the *publish set* — the PyPI release
+#: matrix, the device bundle, the host libraries channel, the landing
+#: page, and mip validation all skip it — while leaving the library
+#: fully in-tree and maintained: tests, lint, docs build, and editable
+#: installs still cover it.  The file's contents are a free-text note
+#: recording why and when the library was parked.  See Decision 0107.
+PARKED_MARKER = "PARKED"
+
+
+def is_parked(library_dir: Path) -> bool:
+    """Return True when *library_dir* carries a :data:`PARKED_MARKER` file.
+
+    A parked library stays in the tree and stays green — tests, lint,
+    docs, and editable install still cover it — but is held back from
+    every publish channel until a real consumer appears.  Publish and
+    bundle enumerations consult this predicate and skip parked
+    libraries; discovery used for testing and linting does not.  This
+    is the single shared check for the marker (Decision 0107); every
+    consumer routes through it rather than reading the file itself.
+
+    Args:
+        library_dir: Root directory of the library.
+    """
+    return (library_dir / PARKED_MARKER).is_file()
+
+
+def read_parked_reason(library_dir: Path) -> str | None:
+    """Return the recorded reason a library is parked, or ``None``.
+
+    Reads the free-text contents of the :data:`PARKED_MARKER` file (the
+    why and when).  Returns ``None`` when the library is not parked or
+    the marker is empty.
+
+    Args:
+        library_dir: Root directory of the library.
+    """
+    marker = library_dir / PARKED_MARKER
+    if not marker.is_file():
+        return None
+    return marker.read_text().strip() or None
+
+
+def find_publishable_packages(*, include_parked: bool = False) -> list[str]:
     """Return relative paths to every publishable package in the workspace.
 
     A package is publishable when it has both a ``VERSION`` file (which
@@ -509,6 +556,17 @@ def find_publishable_packages() -> list[str]:
     CircuitPython bundle) or ``workbench/`` (host-only tools that ship
     to PyPI only; Decision 0032).  Support packages under ``support/``
     are workspace-internal and are never published.
+
+    Parked libraries (those carrying a :data:`PARKED_MARKER`; Decision
+    0107) are excluded by default — they stay in-tree and maintained
+    but are held out of the publish set.  Pass ``include_parked=True``
+    for dev-time consumers that must still see them: the
+    editable-install step, for one, keeps parked libraries importable
+    so their tests keep running.
+
+    Args:
+        include_parked: When True, parked libraries are returned
+            alongside the rest.  Defaults to False (publish semantics).
     """
     packages = []
     for publishable_root in (ROOT / "libraries", ROOT / "workbench"):
@@ -516,8 +574,11 @@ def find_publishable_packages() -> list[str]:
             continue
         for version_file in sorted(publishable_root.rglob("VERSION")):
             package_dir = version_file.parent
-            if (package_dir / "pyproject.toml").exists():
-                packages.append(str(package_dir.relative_to(ROOT)))
+            if not (package_dir / "pyproject.toml").exists():
+                continue
+            if not include_parked and is_parked(package_dir):
+                continue
+            packages.append(str(package_dir.relative_to(ROOT)))
     return packages
 
 

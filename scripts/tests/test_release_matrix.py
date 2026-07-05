@@ -114,6 +114,29 @@ class TestCollectEntries:
 
         assert entries[0]["version"] == "1.0.0"
 
+    def test_excludes_parked_library(self, fake_root: Path) -> None:
+        """A parked library is held out of the release matrix (Decision 0107)."""
+        _make_package(fake_root / "libraries", "timing", "1.0.0")
+        parked = _make_package(fake_root / "libraries", "logging", "0.5.1")
+        (parked / "PARKED").write_text("zero adopters\n")
+
+        entries = release_matrix._collect_entries(suffix="", libraries_filter=None)
+
+        names = [entry["library_name"] for entry in entries]
+        assert names == ["timing"]
+
+    def test_parked_excluded_even_when_named_in_filter(self, fake_root: Path) -> None:
+        """An explicit --libraries request cannot release a parked library —
+        un-parking (removing the marker) is the only way in (Decision 0107)."""
+        parked = _make_package(fake_root / "libraries", "logging", "0.5.1")
+        (parked / "PARKED").write_text("zero adopters\n")
+
+        entries = release_matrix._collect_entries(
+            suffix="", libraries_filter=["logging"],
+        )
+
+        assert entries == []
+
 
 class TestEmitOutputs:
     """Tests for _emit_outputs."""

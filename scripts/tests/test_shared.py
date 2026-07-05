@@ -6,12 +6,14 @@ import sys
 from pathlib import Path
 
 import pytest
+import shared
 from shared import (
     _read_prepared_binary,
     build_environment,
     build_jobs,
     ensure_build_tools,
     install_command,
+    install_editable,
     resolve_circuitpython_binary,
     resolve_cp_mpy_cross,
     resolve_micropython_binary,
@@ -133,6 +135,27 @@ class TestInstallCommand:
         result = install_command(python="/custom/python")
         assert "--python" in result
         assert "/custom/python" in result
+
+
+class TestInstallEditable:
+    """Tests for install_editable."""
+
+    def test_includes_parked_libraries(self, monkeypatch):
+        """Editable install passes ``include_parked=True`` so parked
+        libraries (Decision 0107) stay importable — parking holds a
+        library out of the publish set, not out of the workspace."""
+        recorded: dict[str, object] = {}
+
+        def _fake_publishable(*, include_parked: bool = False):
+            recorded["include_parked"] = include_parked
+            return ["libraries/logging"] if include_parked else []
+
+        monkeypatch.setattr(shared, "find_publishable_packages", _fake_publishable)
+        monkeypatch.setattr(shared, "find_support_packages", list)
+        monkeypatch.setattr(shared, "run_command", lambda command: 0)
+
+        assert install_editable() == 0
+        assert recorded["include_parked"] is True
 
 
 class TestRunningOnNativeWindows:

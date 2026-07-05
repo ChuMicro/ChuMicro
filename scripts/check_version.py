@@ -12,6 +12,16 @@ intent is to let pre-release packages absorb churn without nuisance
 "bump VERSION" failures.  The gate kicks in the moment VERSION crosses
 to anything non-zero.
 
+Parked libraries (Decision 0107) are deliberately *not* exempt.  Parking
+holds a library out of the publish set, not out of maintenance: it stays
+in-tree and keeps taking fixes, and the discipline that VERSION track
+``src/`` / ``pyproject.toml`` changes is exactly what keeps it
+release-ready, so un-parking (removing the marker) is a one-step action
+rather than a version-archaeology exercise.  Enforcement here keys off
+changed file paths under the publishable roots, so a parked library's
+edits still trip the gate with no special-casing — this comment records
+that the coverage is intended, not accidental.
+
 Usage::
 
     python scripts/check_version.py [--base BASE_REF]

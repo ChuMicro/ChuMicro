@@ -156,6 +156,11 @@ def install_editable(python: str | Path | None = None) -> int:
     setup.  Changes to source files are reflected immediately, with no
     reinstall needed.
 
+    Parked libraries are included (``include_parked=True``): parking
+    holds a library out of the *publish set*, not out of the workspace
+    — its tests still run and its imports must resolve, so it stays
+    editable-installed (Decision 0107).
+
     Args:
         python: Interpreter to install into.  Defaults to the running
             interpreter when *None*.
@@ -163,7 +168,7 @@ def install_editable(python: str | Path | None = None) -> int:
     Returns:
         Process exit code (0 on success).
     """
-    packages = find_publishable_packages() + find_support_packages()
+    packages = find_publishable_packages(include_parked=True) + find_support_packages()
     if not packages:
         return 0
 

@@ -67,6 +67,7 @@ from repo_layout import (
     GITHUB_ORG,
     ROOT,
     find_package_dir,
+    is_parked,
     load_tomllib,
     read_pyproject_description,
     run_git,
@@ -603,6 +604,10 @@ def build_circup_zips(
 def _collect_library_metadata(root_dir: Path) -> list[dict]:
     """Collect metadata for all publishable libraries.
 
+    Parked libraries (Decision 0107) are skipped: this metadata drives
+    the bundle README, and a parked library never enters the bundle, so
+    it must not be advertised there.
+
     Args:
         root_dir: Workspace root directory.
 
@@ -617,6 +622,8 @@ def _collect_library_metadata(root_dir: Path) -> list[dict]:
     for version_file in sorted(libraries_dir.rglob("VERSION")):
         library_dir = version_file.parent
         if not (library_dir / "pyproject.toml").exists():
+            continue
+        if is_parked(library_dir):
             continue
         version = version_file.read_text().strip()
         name = library_dir.name  # e.g. "timing"
