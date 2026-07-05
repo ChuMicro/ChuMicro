@@ -100,6 +100,14 @@ class CpWifiAdapter(WifiAdapter):
         only CP instantiates it).  Anything else (RuntimeError,
         AttributeError, programmer errors, wrong board) propagates
         to ``WifiService.last_error``.
+
+        When ``config.tx_power_dbm`` is set, applies it via
+        ``wifi.radio.tx_power`` on every fresh attempt — after
+        ``stop_station()`` (so the station-clear doesn't reset it) and
+        before ``connect()`` — so each reconnect re-establishes the
+        reduced power.  It is deliberately *not* applied on the
+        already-linked short-circuit above, which touches no radio
+        state at all because poking a live station destabilises it.
         """
         if self.radio.connected:
             return True
@@ -107,6 +115,8 @@ class CpWifiAdapter(WifiAdapter):
             self.radio.stop_station()
         except OSError:
             pass
+        if config.tx_power_dbm is not None:
+            self._apply_tx_power(config.tx_power_dbm)
         timeout_seconds = config.connect_timeout_ms / 1000
         try:
             self.radio.connect(
@@ -117,6 +127,26 @@ class CpWifiAdapter(WifiAdapter):
         except OSError:
             return False
         return self.radio.connected
+
+    def _apply_tx_power(self, tx_power_dbm):
+        """Set ``wifi.radio.tx_power`` to *tx_power_dbm* (a plain dBm value).
+
+        Called from :meth:`connect` only when
+        ``WifiConfig.tx_power_dbm`` is set — ``None`` leaves the radio
+        at its firmware default and this never runs.  The value comes
+        straight from config; the adapter carries no board-specific
+        knowledge of which boards need a reduced power.
+
+        A CP build that doesn't expose ``tx_power`` raises
+        ``AttributeError`` (``OSError`` if the driver rejects the
+        value); tolerate either and leave the radio at its default
+        power rather than faulting the service, matching how the
+        ``stop_station`` cleanup above degrades on ports that raise.
+        """
+        try:
+            self.radio.tx_power = tx_power_dbm
+        except (OSError, AttributeError):
+            pass
 
     def is_linked(self):
         """``True`` when ``wifi.radio.connected`` reports an active association.

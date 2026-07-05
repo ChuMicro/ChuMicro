@@ -290,6 +290,51 @@ def test_configure_tolerates_hostname_oserror_on_cyw43() -> None:
     assert wlan.active() is True
 
 
+def test_configure_sets_tx_power_when_provided_on_espidf() -> None:
+    """``tx_power_dbm`` maps to ``config(txpower=...)`` on the ESP-IDF stack."""
+    wlan = _FakeWlan()
+    adapter = MpWifiAdapter(wlan=wlan, stack="espidf")
+    adapter.configure(WifiConfig(ssid="x", password="y", tx_power_dbm=15))
+    assert {"txpower": 15} in wlan.config_calls
+    # The station must be up for the knob to take, so power is set only
+    # after activation — configure() always runs before any connect().
+    assert wlan.active() is True
+
+
+def test_configure_sets_tx_power_when_provided_on_cyw43() -> None:
+    """The knob is stack-agnostic: it applies on CYW43 too when set."""
+    wlan = _FakeWlan()
+    adapter = MpWifiAdapter(wlan=wlan, stack="cyw43")
+    adapter.configure(WifiConfig(ssid="x", password="y", tx_power_dbm=15))
+    assert {"txpower": 15} in wlan.config_calls
+
+
+def test_configure_skips_tx_power_when_none_on_espidf() -> None:
+    """The default ``tx_power_dbm=None`` issues no ``txpower`` config call."""
+    wlan = _FakeWlan()
+    adapter = MpWifiAdapter(wlan=wlan, stack="espidf")
+    adapter.configure(WifiConfig(ssid="x", password="y"))
+    txpower_calls = [call for call in wlan.config_calls if "txpower" in call]
+    assert txpower_calls == []
+
+
+def test_configure_tolerates_tx_power_unsupported_api_on_espidf() -> None:
+    """A build without the ``txpower`` knob raises ``ValueError``.  Tolerate it."""
+    wlan = _FakeWlan()
+    original_config = wlan.config
+
+    def _explode_on_txpower(**kwargs):
+        if "txpower" in kwargs:
+            raise ValueError("unknown config param")
+        original_config(**kwargs)
+
+    wlan.config = _explode_on_txpower
+    adapter = MpWifiAdapter(wlan=wlan, stack="espidf")
+    # Should not raise; the radio stays at its default power.
+    adapter.configure(WifiConfig(ssid="x", password="y", tx_power_dbm=15))
+    assert wlan.active() is True
+
+
 # ---------------------------------------------------------------------------
 # connect: non-blocking on both stacks.  Supervisor-off only on espidf
 # ---------------------------------------------------------------------------

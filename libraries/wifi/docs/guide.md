@@ -113,6 +113,7 @@ def main_run():
 | `reconnect_backoff_max_ms` | | `60_000` | Exponential-backoff cap. |
 | `reconnect_max` | | `None` (unlimited) | Consecutive failed attempts (initial connect + reconnects) before the terminal `FAILED` state. Leave `None` for always-on devices — see below. |
 | `power_save` | | `False` | Leave radio power-save on.  `False` disables it on Pi Pico W (CYW43); ignored on adapters without the knob. |
+| `tx_power_dbm` | | `None` (radio default) | Radio transmit power in dBm.  `None` leaves the firmware default untouched; set a reduced value (e.g. `15`) on boards unstable at full power.  Applied via `wifi.radio.tx_power` (CP) / `sta.config(txpower=…)` (MP); ignored on ports without the knob. |
 
 ```toml
 # Inside your project's runtime config (TOML on disk; deploy-flattened to msgpack on the device).
@@ -124,6 +125,8 @@ power_save = false                  # default; eliminates ~30-100 ms tick spikes
 ```
 
 The `power_save = false` default matters on Pi Pico W: the CYW43 chip's idle power-save mode introduces 30–100 ms tick stalls, which visibly stutter LED-blink rhythms and can break sub-second control loops.
+
+`tx_power_dbm` exists for boards that are unreliable at full transmit power. The canonical case is Unexpected Maker's P4-revision ESP32-S3 boards, which are [vendor-documented unstable](https://help.unexpectedmaker.com/docs/boards/wifi-stability-issues/) at full 20 dBm — dropping to `tx_power_dbm = 15` (~75 %) restores a clean join. This knowledge lives in your deploy config, not in the library: `chumicro-wifi` never inspects the board, it only applies the value you set and leaves the radio at its firmware default when the key is absent.
 
 ### `reconnect_max` and the never-restart guarantee
 

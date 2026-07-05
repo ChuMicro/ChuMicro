@@ -48,6 +48,19 @@ class WifiConfig:
             enabled.  ``False`` (default) disables power-save on
             backends that support it (Pi Pico W CYW43), and is
             ignored on backends that don't expose the knob.
+        tx_power_dbm: Radio transmit power, in dBm.  ``None``
+            (default) leaves the radio at its firmware default — the
+            library never imposes a power.  Set a reduced value (e.g.
+            ``15``) for boards that are unstable at full TX power: on
+            CircuitPython the CP adapter applies it via
+            ``wifi.radio.tx_power`` and on MicroPython the MP adapter
+            via ``sta.config(txpower=...)``, both before the connect
+            attempt.  A build that doesn't expose the knob ignores it
+            and stays at its default power.  The canonical use case is
+            Unexpected Maker P4-revision ESP32-S3 boards, which are
+            vendor-documented unstable at full 20 dBm; the deployer
+            sets this in config for those boards — the library carries
+            no board-specific knowledge.
     """
 
     #: Optional flat keys read by ``from_config`` / ``try_from_config``,
@@ -61,6 +74,7 @@ class WifiConfig:
         "reconnect_backoff_max_ms": 60_000,
         "reconnect_max": None,
         "power_save": False,
+        "tx_power_dbm": None,
     }
 
     def __init__(
@@ -73,6 +87,7 @@ class WifiConfig:
         reconnect_backoff_max_ms: int = 60_000,
         reconnect_max: int | None = None,
         power_save: bool = False,
+        tx_power_dbm: int | None = None,
     ) -> None:
         self.ssid = ssid
         self.password = password
@@ -82,6 +97,7 @@ class WifiConfig:
         self.reconnect_backoff_max_ms = reconnect_backoff_max_ms
         self.reconnect_max = reconnect_max
         self.power_save = power_save
+        self.tx_power_dbm = tx_power_dbm
 
     @classmethod
     def from_config(cls, config: object) -> "WifiConfig":

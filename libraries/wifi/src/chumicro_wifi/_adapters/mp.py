@@ -138,7 +138,7 @@ class MpWifiAdapter(WifiAdapter):
         return network.WLAN(network.STA_IF)  # pragma: no cover - MP runtime path
 
     def configure(self, config):
-        """Activate the radio + apply hostname + apply CYW43 power-save knob.
+        """Activate the radio + apply hostname + TX power + CYW43 power-save knob.
 
         ESP-IDF's ``reconnects`` knob can't be set before the first
         successful connect (it's read at re-association time, not
@@ -146,11 +146,15 @@ class MpWifiAdapter(WifiAdapter):
         :meth:`connect` after the first link-up.  The CYW43 ``pm``
         knob is stateless from the substrate's perspective, so it is
         applied here at configure time so the first link is
-        already in the user's preferred mode.
+        already in the user's preferred mode.  The TX-power knob, when
+        set, is applied right after activation (the station must be up
+        for ``config(txpower=...)`` to take) and before any connect.
         """
         if config.hostname is not None:
             self._apply_hostname(config.hostname)
         self._wlan.active(True)
+        if config.tx_power_dbm is not None:
+            self._apply_tx_power(config.tx_power_dbm)
         if self._stack == "cyw43" and not config.power_save:
             try:
                 self._wlan.config(pm=CYW43_PM_DISABLE)
@@ -186,6 +190,25 @@ class MpWifiAdapter(WifiAdapter):
         except (OSError, ValueError):
             # No hostname knob on this build; tolerate rather than
             # blocking deploy.
+            pass
+
+    def _apply_tx_power(self, tx_power_dbm):
+        """Set the radio transmit power via ``wlan.config(txpower=...)``.
+
+        Called from :meth:`configure` only when
+        ``WifiConfig.tx_power_dbm`` is set — ``None`` leaves the radio
+        at its firmware default and this never runs.  The value comes
+        straight from config; the adapter carries no board-specific
+        knowledge of which boards need a reduced power.
+
+        A build without the ``txpower`` config key raises ``ValueError``
+        (``OSError`` on some ports); tolerate it and leave the radio at
+        its default power rather than faulting the service, matching how
+        the ``pm`` / ``dhcp_hostname`` knobs above degrade.
+        """
+        try:
+            self._wlan.config(txpower=tx_power_dbm)
+        except (OSError, ValueError):
             pass
 
     def connect(self, config):

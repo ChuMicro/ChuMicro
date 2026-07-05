@@ -41,6 +41,7 @@ def test_wifi_config_direct_construction_with_required_only() -> None:
     assert config.hostname is None
     assert config.connect_timeout_ms == 15_000
     assert config.power_save is False
+    assert config.tx_power_dbm is None
 
 
 def test_wifi_config_from_config_required_only_via_dict() -> None:
@@ -76,6 +77,7 @@ def test_wifi_config_from_config_all_keys() -> None:
             "wifi.reconnect_backoff_max_ms": 30_000,
             "wifi.reconnect_max": 10,
             "wifi.power_save": True,
+            "wifi.tx_power_dbm": 15,
         },
     )
     assert config.hostname == "back-porch"
@@ -83,6 +85,7 @@ def test_wifi_config_from_config_all_keys() -> None:
     assert config.reconnect_backoff_start_ms == 500
     assert config.reconnect_max == 10
     assert config.power_save is True
+    assert config.tx_power_dbm == 15
 
 
 def test_wifi_config_from_config_missing_ssid_raises() -> None:
