@@ -58,7 +58,7 @@ def __getattr__(name):
     ``chumicro_http_server`` for its wire helpers (request parsing,
     header dict, query/target splitting) but never builds an
     ``HttpServer`` shouldn't pin the server's compiled code objects in
-    RAM, so the module is deferred until the first access to one of its
+    RAM; the module loads on the first access to one of its
     symbols.  Constructing the server at startup keeps that one-time
     import cost on a fresh heap (see the guide).
     """
