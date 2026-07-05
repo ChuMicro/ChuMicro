@@ -462,9 +462,11 @@ class _FakeDeployer:
         on_file_deleted: Callable[[str], None] | None = None,
         on_execute_line: Callable[[str], None] | None = None,
         tail_seconds: float | None = None,
+        force_deploy_mode: str | None = None,
     ) -> DeployResult:
         self.last_clean = clean
         self.last_wipe = wipe
+        self.last_force_deploy_mode = force_deploy_mode
         return self._consume()
 
     def _consume(self) -> DeployResult:

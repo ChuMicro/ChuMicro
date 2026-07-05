@@ -1576,6 +1576,78 @@ class TestDeployWipeFlag:
         assert not any(call[0] == "deploy_files" for call in transport.calls)
 
 
+class TestDeployModeFlags:
+    """`--deploy-mode` / `--force-deploy-mode` override the device's mode per run."""
+
+    def test_deploy_mode_overrides_device_but_preflight_still_applies(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """`--deploy-mode ram` starts the run in RAM mode; the staged
+        config msgpack then triggers the documented auto-switch back to
+        flash — proof the override reached pre-flight (a default flash
+        run prints no switch message)."""
+        root = seed_workspace(tmp_path)
+        seed_project(root, name="back-porch")
+
+        def build_fake(device: Any) -> FakeTransport:
+            fake_mode = "mount" if device.deploy_mode == "ram" else "copy"
+            return FakeTransport(mode=fake_mode, execute_output="")
+
+        _install_fake_transport(monkeypatch, factory=build_fake)
+
+        exit_code = cli.main([
+            "deploy", "--workspace-dir", str(root), "back-porch",
+            "--deploy-mode", "ram",
+        ])
+        assert exit_code == 0
+        assert "switching to flash mode" in capsys.readouterr().err
+
+    def test_force_deploy_mode_also_sets_the_run_mode(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """`--force-deploy-mode ram` sets the mode and bypasses pre-flight."""
+        root = seed_workspace(tmp_path)
+        seed_project(root, name="back-porch")
+
+        seen_modes: list[str] = []
+
+        def record_mode(device: Any) -> FakeTransport:
+            seen_modes.append(device.deploy_mode)
+            fake_mode = "mount" if device.deploy_mode == "ram" else "copy"
+            return FakeTransport(mode=fake_mode, execute_output="")
+
+        _install_fake_transport(monkeypatch, factory=record_mode)
+
+        exit_code = cli.main([
+            "deploy", "--workspace-dir", str(root), "back-porch",
+            "--force-deploy-mode", "ram",
+        ])
+        assert exit_code == 0
+        assert seen_modes == ["ram"]
+
+    def test_deploy_mode_and_force_are_mutually_exclusive(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """Passing both flags is an argparse error, not a silent pick."""
+        root = seed_workspace(tmp_path)
+        seed_project(root, name="back-porch")
+
+        with pytest.raises(SystemExit) as exit_info:
+            cli.main([
+                "deploy", "--workspace-dir", str(root), "back-porch",
+                "--deploy-mode", "ram", "--force-deploy-mode", "flash",
+            ])
+        assert exit_info.value.code == 2
+        assert "not allowed with" in capsys.readouterr().err
+
+
 class TestDeployDryRun:
     """`deploy --dry-run` shows the file map without writing."""
 

@@ -442,6 +442,7 @@ class RecoveringDeployer:
         on_file_deleted: Callable[[str], None] | None = None,
         on_execute_line: Callable[[str], None] | None = None,
         tail_seconds: float | None = None,
+        force_deploy_mode: str | None = None,
     ) -> DeployResult:
         """Diff-deploy *source* with classify / coach / (optional retry)."""
         return self._run(
@@ -454,6 +455,7 @@ class RecoveringDeployer:
                 on_file_deleted=on_file_deleted,
                 on_execute_line=on_execute_line,
                 tail_seconds=tail_seconds,
+                force_deploy_mode=force_deploy_mode,
             ),
         )
 

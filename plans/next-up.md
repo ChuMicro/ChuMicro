@@ -8,7 +8,6 @@
 
 ## Next
 
-- [ ] **Workspace deploy CLI: expose `--deploy-mode` / `--force-deploy-mode`.**  Per-deploy mode override exists only as `Deployer` kwargs; the 2026-07-05 template fact-check found the flags documented but unregistered, and the template docs now describe the `devices.yml`-field path only.  User call 2026-07-05: tooling should carry this.
 - [ ] **`shared/` import shape.**  Template docs now teach the deploy-verified bare form (`from foo import bar`); decide whether `build_search_paths` should also honor the `shared.foo` package form (host/device parity, MP namespace-package limits apply) or bare-name stays the contract.
 - [ ] **Quality-gate home for workspaces.**  A template team can't version its own gates: `pyproject.toml` is tool-owned, `workspace.yml` (holding `quality:`) is gitignored.  Needs a committed user-owned home; user decision pending.
 - [ ] **Device-matrix reliability (user call 2026-07-05).**  [workstreams/device-matrix-reliability.md](workstreams/device-matrix-reliability.md) — phases 1+2 SHIPPED same day (serial-mode CP transport hardware-proven on tinypico-cp; wifi 0.7.1 station-clear fix validated on tinys3-cp, demo sweep green).  Open: tinypico-cp CP-runtime corruption discriminator (swap the TinyPICO pair's runtimes), phase 3 many-volume drive-resolution hardening, phase 4 first-association grace, phase 5 `wifi.tx_power_dbm` knob (UM P4 mitigation), tinys3-cp on RF watch (P4-family, RSSI −82).

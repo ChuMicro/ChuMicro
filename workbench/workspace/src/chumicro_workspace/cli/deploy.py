@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import argparse
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -614,6 +614,12 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
                 print(
                     f"deploy: --- {device.transport}@{device.address} ---",
                 )
+            # A CLI mode override applies to this run only; the
+            # persistent setting stays in devices.yml.  Must land
+            # before layout resolution, which is mode-dependent.
+            requested_mode = args.force_deploy_mode or args.deploy_mode
+            if requested_mode is not None and requested_mode != device.deploy_mode:
+                device = replace(device, deploy_mode=requested_mode)
             # Source policy (layout resolution + the four source
             # factories) lives in one owner; no command places a
             # project on a board by another route.
@@ -658,6 +664,7 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
                     clean=args.clean,
                     wipe=args.wipe,
                     on_file_deleted=deleted.append,
+                    force_deploy_mode=args.force_deploy_mode,
                 )
             except (CircuitpythonTransportError, MicropythonTransportError) as deploy_error:
                 # RecoveringDeployer already printed the coached recovery
@@ -923,6 +930,30 @@ def _add_deploy_parser(subparsers: argparse._SubParsersAction) -> None:
             "the device's configured runtime — files marked for a "
             "different runtime via __chumicro_runtimes__ are filtered "
             "out.  Set this to override the auto-derived value."
+        ),
+    )
+    deploy_mode_group = deploy_parser.add_mutually_exclusive_group()
+    deploy_mode_group.add_argument(
+        "--deploy-mode",
+        choices=("ram", "flash"),
+        default=None,
+        help=(
+            "Override the device's deploy_mode for this run only.  The "
+            "requires_flash pre-flight still applies: a project that "
+            "imports a flagged library auto-promotes ram -> flash and "
+            "prints why.  The devices.yml deploy_mode field is the "
+            "persistent form of this setting."
+        ),
+    )
+    deploy_mode_group.add_argument(
+        "--force-deploy-mode",
+        choices=("ram", "flash"),
+        default=None,
+        help=(
+            "Set the mode for this run AND bypass the requires_flash "
+            "pre-flight — `ram` stays ram even when a flagged library "
+            "is in the import graph.  For debugging the auto-switch "
+            "behavior itself; prefer --deploy-mode otherwise."
         ),
     )
     deploy_parser.add_argument(
