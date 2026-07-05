@@ -94,9 +94,52 @@ jobs:
             --suffix "${{ steps.channel.outputs.suffix }}" \
             --libraries "${{ inputs.libraries }}"
 
+  # Publishing to PyPI is immutable — nothing ships unless the full local
+  # gate passes on the exact ref being released.  Self-contained (runs
+  # preflight here rather than trusting a prior ci.yml run's status) so a
+  # release from any ref is provably green.  (2026-07-05 CI stand-up; the
+  # old workflow published on `needs: detect` alone.)
+  preflight-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+          cache: "pip"
+
+      - uses: actions/cache@v4
+        id: tools-cache
+        with:
+          path: .tools
+          key: tools-${{ hashFiles('target-runtimes.toml', 'scripts/prepare_*.py', 'scripts/shared.py') }}
+
+      - name: Install unix-port build dependencies
+        if: steps.tools-cache.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libffi-dev pkg-config
+
+      - name: Install workspace tooling
+        run: python scripts/run.py setup
+
+      - name: Prepare runtime lane binaries
+        if: steps.tools-cache.outputs.cache-hit != 'true'
+        run: |
+          python scripts/run.py prepare-micropython
+          python scripts/run.py prepare-circuitpython
+          python scripts/run.py prepare-mpy-cross
+
+      - name: Preflight
+        run: python scripts/run.py preflight --coverage-threshold 94
+
   release:
     name: "Release ${{ matrix.library_name }} v${{ matrix.version }}"
-    needs: detect
+    needs: [detect, preflight-gate]
     if: needs.detect.outputs.has_releases == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
