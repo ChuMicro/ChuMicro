@@ -10,7 +10,7 @@ The linter (`python scripts/run.py lint`) enforces most of these automatically. 
 
 ## Baseline
 
-We follow [PEP 8](https://peps.python.org/pep-0008/), the standard Python style guide, with a **100-character line limit** (configured in `pyproject.toml`). This is enforced automatically by [Ruff](https://docs.astral.sh/ruff/), a fast Python linter. You don't need to memorize PEP 8 — Ruff tells you when something is off.
+[PEP 8](https://peps.python.org/pep-0008/) with a **100-character line limit** (configured in `pyproject.toml`), enforced by [Ruff](https://docs.astral.sh/ruff/). Nothing exotic.
 
 ## Naming
 
@@ -23,9 +23,11 @@ We use descriptive names so everyone can read the code without extra context. Th
 | Same expansions apply as suffixes | `base_ref` → `base_reference`; `build_env` → `build_environment` | `CHU001` linter |
 | Short-but-complete words are fine | `dir`, `key`, `tag`, `raw`, `pin`, `led`, `ok`, `end`, `args`, `config` | — |
 | For-loop targets are exempt | `for i in range(10)`, `for k, v in items()` | — |
-| Suppress with `# noqa: CHU001` | Only when matching an upstream API that you cannot rename | — |
+| Suppress with `# noqa: CHU001` | At upstream-API boundaries: `i2c_addr = kwargs["addr"]  # noqa: CHU001` | — |
 
-**Why:** We optimize for readability across experience levels — full words over abbreviations. Python's common abbreviations (`msg`, `err`, `exc`, `buf`) are instantly familiar to experienced developers but not self-explanatory to everyone. Newcomers, multilingual developers working across multiple languages, and non-native English speakers don't share that background — `exc` isn't obviously "exception" if you haven't seen it before. The full words save every future reader a mental lookup. The linter handles this automatically, so it doesn't cost you time. We know it feels different from other Python projects — that's intentional. ([Decision 0022](../../plans/decisions/0022-naming-conventions.md))
+Yes, this bans some domain idiom: datasheets label the pin `ADDR`, git has `refs`, and this table renames both. [Decision 0022](../../plans/decisions/0022-naming-conventions.md) weighed exactly that and chose one vocabulary anyway; the `noqa` row above is the boundary valve where an upstream API forces the abbreviation.
+
+**Why, honestly:** two reasons. First, full words read without context: newcomers, non-native English speakers, and anyone outside Python's abbreviation culture get `exception` for free where `exc` costs them a lookup. Second, and just as load-bearing: a large share of the patches in this repo are agent-written, agents obey linters and ignore prose conventions, so anything the project cares about becomes a lint rule, and humans inherit the same gate so there's exactly one rule set. If you've written Python for years, this rule will fight your muscle memory, and we know it. Each hit is a mechanical fix (the message names the exact replacement), so expect several in your first PR and near zero after that.
 
 ## Type annotations
 
@@ -54,11 +56,11 @@ Code that runs on a device — `libraries/*/src/`, `support/test_harness/` — m
 ```python
 # ✅ Works on all runtimes
 from chumicro_timing.ticks import ticks_ms, ticks_diff
-from chumicro_timing.heartbeat import Heartbeat
+from chumicro_timing.deadline import Rate
 
 # ❌ Breaks CircuitPython RAM-mode
 from .ticks import ticks_ms, ticks_diff
-from .heartbeat import Heartbeat
+from .deadline import Rate
 ```
 
 **Why:** CircuitPython RAM mode assembles library modules as class-as-module stubs and `exec()`'s them inside the raw REPL. The namespace passed to `exec()` has no `__package__` attribute, so Python can't resolve a leading `.` — `from .foo import bar` raises `ImportError`. Flash mode works fine because files land on the device filesystem and get a real `__package__` when imported, but any module whose RAM-mode path is exercised (which includes every published library) has to work in both modes.
@@ -96,24 +98,37 @@ The sections you'll use most:
 - **`Returns:`** — description only (no `type:` prefix)
 - **`Raises:`** — `ExceptionType: description`
 
-The docs build fails on [griffe](https://mkdocstrings.github.io/griffe/) warnings about missing or malformed sections, so you'll know right away if something needs fixing.
+The published API reference is generated from these docstrings, which is why the gate exists: the docs build fails on [griffe](https://mkdocstrings.github.io/griffe/) warnings about missing or malformed sections, so the hosted reference can't silently rot.
 
 ([Decision 0021](../../plans/decisions/0021-docstring-type-policy.md))
 
 ## Documentation tone
 
-Style for READMEs, library guides, and contributing docs (not docstrings — those are above). These rules apply to the root README, every library's README and `docs/guide.md`, every workbench README, and contributing pages.
+Style for prose docs: the root README, every library's README and `docs/guide.md`, every workbench README, and contributing pages. (Docstrings are covered above.)
 
 - **Anchor on a concrete user-visible promise, not an abstract design principle.** *"Keep a status LED blinking through a slow network call"* beats *"transparent state matters more than syntactic concurrency."* First-time readers don't share the vocabulary; they share the LED. Design philosophy belongs in ADRs, not in the project's top-level README.
-- **No second-person ("you" / "your") in third-person documentation.** *"A microcontroller running anything beyond blink has to handle slow operations without freezing"* beats *"you're building something on a CircuitPython board."* Second-person presumes the reader's situation. READMEs land on PyPI homepages, GitHub search results, and blog links — they need to be welcoming without narrating at the reader. (Code-block comments and step-by-step tutorials are different — imperative is fine: *"install the package."*) Quick check: grep the draft for `\byou\b` / `\byour\b` / `\bwe\b`.
+- **Address the reader directly when it helps.** *"You decide how long to wait"* beats a passive construction. Don't invent the reader's situation, though: a conditional (*"if you've ever watched a board hang"*) or a capability (*"keep a status LED blinking through a slow network call"*) is honest; *"you're building a weather station"* narrates at someone who isn't there.
 - **Don't bury the substantive matrix behind a folder-README link.** The library matrix and workbench matrix belong on the root README, not as a one-line `[Libraries](libraries/)` link. Most visitors only see one URL — the root. Folder-READMEs reinforce with deeper context (dependency graph, problem-driven selection); they're not the *only* home for the matrix.
 - **Code, prose, and any visual must tell the same story.** If the hero promises an LED, the code shows `led.value = not led.value`, not `print()`. If the hero promises composition, the code shows multiple services on one runner. If a visual is added, it depicts what the prose says. When in doubt, skip the visual — prose + code can carry the load alone.
 - **Don't redirect to sibling packages from a published package's docs.** A publishable package's public surface (README, guide, module docstrings) should describe what THIS package does, not what it doesn't do. Phrasings like *"This package doesn't do X — use `other-package` for X instead"* / *"For X, lives one level up in Y"* leak mono-repo awareness into a PyPI-facing artefact, and relative paths like `../workspace/` only resolve in the mono-repo docs site — they break PyPI README rendering. Cross-tool positioning that describes in-scope relationships is fine; redirecting readers to a sibling to fill a gap isn't.
 - **Feature bullets are consumer-first and concrete.** Lead with what the user can DO (*"Bring your own socket, your own clock"*), not the implementation pattern (*"Constructor-injected duck-typed I/O dependencies"*). Name concrete things — actual library class names, stdlib alternatives, production scenarios — not abstractions like *"valid producer"* / *"any object that satisfies the contract"*. Acknowledge defaults first, then the swap-out path. No type-system jargon (`duck-typed`, `Protocol`, `structural typing`), no method-name lists in the pitch, no test-fake framing (production swap-ins belong; test fakes don't).
 
+### Voice
+
+How the prose in this project's docs should sound:
+
+- **No em-dashes.** Anywhere, including code comments, table cells, and quoted output that doesn't actually contain one. Use a period, a comma, a colon, or parentheses.
+- **Plain words over clever ones.** If a phrase needs decoding (*"the runtime split"*, *"transport wiring"*), spell out what it means instead. Clever wording that costs the reader a second read is a defect, not style.
+- **Say what the project believes, straight.** When the project holds a position (blocking code is a bad foundation for a device), state it. Don't pad it with *"that's fine for many projects"* diplomacy the project doesn't actually believe.
+- **Concrete beats rhetorical.** Measured numbers (80 lines vs 7), named hardware (Pico W, ESP32), real failure moments (a board hanging because the router was unplugged). Every claim traces to code, a measurement, or a decision record, or it doesn't ship.
+- **Don't over-compress.** Staccato fragment chains (*"Write it once. Test it. Ship it."*), *"the whole X"*, and symmetrical triads read as performance, not information. Normal sentences, varied length, one idea flowing into the next.
+- **Behavior over mechanics.** What the reader can do and what happens when they do it. How it's built inside belongs in ADRs and library guides.
+- **At most one metaphor per page, and never the same one twice.**
+- **Gloss jargon at first use in beginner-facing docs** (TLS, MQTT, mpremote, venv), then use it freely. Terms sitting in reference tables the reader reaches later don't need glossing.
+
 ## String formatting
 
-Use f-strings for all string formatting. They're the most readable option and work identically across all three runtimes.
+Use f-strings for building strings. Deferred-formatting APIs that take a template plus arguments (a logging seam, for example) are the exception, not a violation.
 
 ```python
 # ✅
@@ -134,8 +149,8 @@ try:
     subprocess.run(["xattr", "-cr", str(path)], check=True)
 except FileNotFoundError:
     print("WARNING: xattr not found — skipping extended attribute removal")
-except subprocess.CalledProcessError as exc:
-    print(f"WARNING: xattr failed: {exc}")
+except subprocess.CalledProcessError as exception:
+    print(f"WARNING: xattr failed: {exception}")
 
 # ❌ silent
 try:
@@ -242,14 +257,26 @@ class PacketReader:
 
 `chumicro-runner` is the only sanctioned scheduler.  Services register via `runner.add(service)` (check / handle), `runner.add_periodic(handler, period_ms=...)` (periodic), or `runner.add_generator(gen)` (generator function for sequential I/O — see the [runner README](../../libraries/runner/README.md#generator-driven-sequential-io)).
 
-**`async` / `await` and the `asyncio` module are banned across `libraries/` / `support/` / `workbench/`.**  This is a hard rule.  Specifically:
+Two facts drive the concurrency rule, both verified against the runtimes' compiler sources in [Decision 0087](../../plans/decisions/0087-generators-for-sequential-io.md): CircuitPython compiles every `await` into an `__await__` method dispatch that allocates a fresh generator on each resume (MicroPython compiles the same `await` to a single `YIELD_FROM` bytecode), and Adafruit's CircuitPython asyncio port has had a broken socket/stream layer since 2021.  Building on `async` means paying per-await heap churn on one runtime and inheriting an unmaintained stream layer, or quietly targeting only the other runtime.  `yield from` is one bytecode on both, and the wait objects it drives are reusable.
+
+So: **`async` / `await` and the `asyncio` module are banned across `libraries/` / `support/` / `workbench/`.**  Specifically:
 
 - `async def`, `await`, `async with`, `async for`.
 - `import asyncio` / `from asyncio import …`.
 - `import uasyncio` / `from uasyncio import …` (MicroPython alias).
 - A module file or directory named `asyncio*`.
 
-The substitute is `def` + `yield` / `yield from` against the wait shapes the runner accepts.  Reasoning (yield-point hygiene, transparency, the per-`await` allocation cost on CircuitPython, smaller lint surface) lives in the runner's user guide.  An unenforced lint today; if asyncio code starts creeping in, the rule moves to `chumicro-checks` and gets a `CHU` code.
+The translation is mechanical:
+
+```python
+async def fetch():                      # what you'd write elsewhere
+    response = await get(url)
+
+def fetch():                            # what you write here
+    response = yield from get(transport_factory, url)
+```
+
+Enforced by lint rule `CHU033` (AST-based, so the keywords inside string literals don't trip it; `functional_tests/` are excluded because host-only test servers may reach asyncio through a host package).  The ban covers `workbench/` too, where the tools are CPython-only and none of the device-side reasons apply.  That's a deliberate tax: one concurrency model in the repo means host-tree patterns can't drift into device trees, and a contributor moving between them never switches paradigms.
 
 ## Coverage exclusions
 
@@ -261,7 +288,7 @@ Add the comment to any line, `if` branch, or function that can't be tested on CP
 
 ```python
 # Single line
-x = board.D5  # pragma: no cover
+status_pin = board.D5  # pragma: no cover
 
 # Entire branch
 if sys.implementation.name == "circuitpython":  # pragma: no cover
@@ -307,7 +334,7 @@ Covered lines show in green, missed lines in red. Much easier than reading line 
 
 `python scripts/run.py lint` runs three tools back to back. If all three pass, your code is style-correct.
 
-**Ruff** — a fast Python linter that enforces:
+**Ruff** enforces:
 
 | Rule set | What it catches |
 |---|---|
@@ -324,7 +351,7 @@ Covered lines show in green, missed lines in red. Much easier than reading line 
 - Abbreviated names we prefer spelled out (`env` → `environment`, `buf` → `buffer`)
 - Those same abbreviations as suffixes (`base_ref` → `base_reference`, `build_env` → `build_environment`)
 
-**`CHU002`–`CHU005`** (same package) catch whitespace bugs that diff noisily and are easy to miss in review:
+**`CHU002`–`CHU005`** (same package) are CI backstops for whitespace bugs that diff noisily.  Any editor's trim-on-save handles all four; nobody is expected to police them by hand:
 
 | Rule | What it catches |
 |---|---|
@@ -345,4 +372,4 @@ Inline the prose instead of cross-linking.  Suppress with `# noqa: CHU006` (or `
 
 **`CHU007`** (same package) enforces Decision 0052: workbench packages do not import library packages.  Walks `workbench/*/src/` and flags any `import chumicro_<libname>` or `from chumicro_<libname>` where `<libname>` matches a `libraries/` package.  Workbench is host-only and ships to laptops; libraries target devices and their CPython compatibility exists for testing/dev, not as a production runtime.  Use third-party PyPI equivalents (`pyserial`, `msgpack`, `ruamel.yaml`, etc.).  Templates / on-device payloads embedded as bytes are not scanned — those run on the device and legitimately import library packages.  Suppress with `# noqa: CHU007` only on legitimate payload-style imports (rare).
 
-If lint passes, your style is correct. You don't need to memorize any of this — the error messages tell you exactly what to fix and why.
+When lint flags something, the error message tells you what to fix and why.
