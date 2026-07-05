@@ -1207,3 +1207,20 @@ A skill phase runner shells out to one clean-room `claude -p` whose agent calls 
 Reference implementation: `wf_run.py` (`run_workflow` + `copy_winner`); callers `regen_phase2.py` / `regen_symbol.py` (full guard) and `regen_phase1.py` (prompt-only — its fresh-room precondition makes stale artifacts impossible and a zero-fact triage legitimately writes nothing). Corollary for single-shot `claude -p` writers (`tighten_symbol.py`): delete the expected output before the call so the existence check is honest. (These files moved out with the regen-comments skill on 2026-07-04 — now `skills/regen-comments/` in the `regen-voice-tools` repo; see `workstreams/regen-voice-extraction.md`.)
 
 - **User-global memory leaks into every `claude -p` unless you pass `--safe-mode`.** A `/tmp` cwd keeps project `CLAUDE.md`/`AGENTS.md` out by cwd-ancestry, but `~/.claude/CLAUDE.md`, user hooks, skills, plugins, and MCP servers load regardless of cwd. `--safe-mode` excludes all of them while OAuth login and the Workflow/Task tools keep working (`--bare` also exists but drops OAuth — wrong for launchers whose preflight checks CLI login). Verified 2026-06-12: a tracer instruction in user memory is visible to bare `claude -p` and invisible under `--safe-mode`, and a Workflow-tool run completes under the flag. Reference: `audit_phase1.claude_p_workflow` in `.github/skills/audit-code/`.
+
+## Fake-now tests vs deadlines armed at user-entry paths
+
+Client APIs that run outside the tick loop (`connect()`, `publish()`) arm
+their deadlines from a fresh real `ticks_ms()` read — deliberate, per
+`MQTTClient._deadline`'s docstring.  A test that then drives `handle()` with
+a literal fake now (`handle(0)`) is comparing two different clocks in
+`chumicro_timing`'s modular tick space (2^29 ring, ~6.2-day period): the
+sign of `ticks_diff(real_deadline, fake_now)` depends on where the real
+counter happens to sit, so the test passes or fails **by calendar date**.
+Bench-bitten 2026-07-05: `test_ssl_context_ignored_when_transport_factory_passed`
+landed green 07-04, flipped red 07-05, would have flipped back ~3 days later.
+
+Rule: a test may either (a) inject `ticks=FakeTicks()` at construction and
+use fake nows everywhere, or (b) construct with the real clock and drive
+`handle()` with `client._ticks.ticks_ms()` reads.  Never mix.  Construction
+paths that can't forward a `ticks=` override (`from_config`) force option (b).
