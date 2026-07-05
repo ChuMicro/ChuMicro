@@ -111,7 +111,7 @@ What grows slowly that the negative tests above won't catch.
 
 ## Where wifi-router cycle belongs
 
-B2 / B6 ambiguously straddle `chumicro-mqtt` and `chumicro-wifi`.  Open question for the resumer: does chumicro-mqtt own "I see the underlying socket fail, retry"?  Or does chumicro-wifi own "the radio's down, services should pause"?  Decision belongs in an ADR before B2 / B6 land.  Leaving them here as the surfacing trigger; route the actual tests to `chumicro-wifi`'s test inventory once the boundary is decided.
+**RESOLVED 2026-07-05 — Decision 0108.**  Neither library owns cross-service coordination: chumicro-mqtt owns "my socket failed, retry" (the paced self-heal timer, now the *fallback* trigger), and the app composes the layers through two caller-driven primitives — `mqtt.hold()` when it knows the link is down (no wasted dials into a dead radio), intent-based `mqtt.connect()` when it knows the link is back (immediate dial, backoff re-paced).  No dependency edge between the libraries.  The flagship example carries the canonical wiring.
 
 ## Harness reuse
 
