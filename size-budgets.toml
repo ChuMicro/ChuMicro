@@ -1,0 +1,91 @@
+# Per-library size budgets for the size-regression gate.
+#
+# The gate (scripts/check_size.py, wired into preflight as the
+# `check-size` phase) measures each device library under
+# libraries/<name>/src/chumicro_<name> on two host-side dimensions and
+# fails if either crosses the ceiling below:
+#
+#   stripped = UTF-8 bytes after the real deploy strip_source()
+#              (Decision 0090: blanks docstrings/comments), summed over
+#              the shipped package modules (test-support files like
+#              testing.py are excluded, mirroring the deploy walkers).
+#   mpy      = .mpy bytes after compiling each stripped module with the
+#              prepared MicroPython mpy-cross
+#              (.tools/micropython-<version>/mpy-cross/build/mpy-cross),
+#              summed per library.
+#
+# On-device import heap is deliberately NOT gated here — it lives in the
+# sweeps.  This gate is host-only, hermetic, and fast.
+#
+# CONTRACT — ceilings only ratchet DOWN.
+#   These numbers stop unchecked flash-footprint growth now and tighten
+#   as the planned cut round lands.  A commit that RAISES a ceiling must
+#   carry a measured justification in its message (why the growth is
+#   load-bearing and irreducible), mirroring the heap-override convention
+#   in target-runtimes.toml.  Lowering a ceiling to track a real cut
+#   needs no justification — that is the point.
+#
+# HOW THESE WERE GENERATED
+#   Measured at HEAD (commit "mqtt 0.26.0", 2026-07-05) with the gate's
+#   own tooling, then rounded up by max(+512 B, +2%) so byte-level noise
+#   (mpy-cross qstr ordering) can't flap the gate.  The +512 B floor
+#   gives small libraries a real cushion; the +2% covers the large ones.
+#   Measured fleet totals at generation: stripped 350,146 B / mpy
+#   137,626 B across 14 libraries.  Regenerate deliberately (never
+#   automatically — that would defeat the ratchet) when a cut round lands.
+
+[compat]
+stripped = 1940
+mpy = 1174
+
+[config]
+stripped = 5214
+mpy = 2752
+
+[http_server]
+stripped = 48608
+mpy = 19405
+
+[kvstore]
+stripped = 13470
+mpy = 6815
+
+[logging]
+stripped = 5582
+mpy = 2652
+
+[mqtt]
+stripped = 59412
+mpy = 20934
+
+[msgpack]
+stripped = 10733
+mpy = 4875
+
+[ntp]
+stripped = 7537
+mpy = 3566
+
+[requests]
+stripped = 55942
+mpy = 20141
+
+[runner]
+stripped = 20407
+mpy = 6831
+
+[sockets]
+stripped = 34164
+mpy = 15672
+
+[timing]
+stripped = 4738
+mpy = 2595
+
+[websockets]
+stripped = 78568
+mpy = 30892
+
+[wifi]
+stripped = 13866
+mpy = 6584

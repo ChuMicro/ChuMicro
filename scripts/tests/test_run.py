@@ -96,6 +96,8 @@ class TestMainDispatch:
             ("prepare-micropython", "prepare_micropython"),
             ("prepare-circuitpython", "prepare_circuitpython"),
             ("prepare-mpy-cross", "prepare_mpy_cross"),
+            ("check-dep-graph", "check_dep_graph"),
+            ("check-size", "check_size"),
         ],
     )
     def test_no_argument_tasks_dispatch(
@@ -1791,16 +1793,16 @@ class TestPreflightParallelDispatch:
         # And neither got handed to the parallel block.
         assert "check-version" not in captured_phases
         assert "check-api" not in captured_phases
-        # The other 9 phases are all present.
+        # The other 10 phases are all present.
         for expected in (
             "lint", "build", "docs", "test-scripts", "verify-examples",
-            "verify-demos", "check-dep-graph", "test-micropython",
-            "test-circuitpython",
+            "verify-demos", "check-dep-graph", "check-size",
+            "test-micropython", "test-circuitpython",
         ):
             assert expected in captured_phases
 
     def test_includes_diff_phases_when_origin_main_reachable(self, monkeypatch):
-        """All 12 phases dispatch when origin/main is reachable."""
+        """All 13 phases dispatch when origin/main is reachable."""
         monkeypatch.setattr(run, "is_ref_reachable", lambda *_a, **_kw: True)
 
         captured_labels: list[str] = []
@@ -1820,8 +1822,8 @@ class TestPreflightParallelDispatch:
         )
         assert captured_labels == [
             "lint", "build", "docs", python_version, "test-scripts",
-            "verify-examples", "verify-demos", "check-dep-graph", "check-version",
-            "check-api", "test-micropython", "test-circuitpython",
+            "verify-examples", "verify-demos", "check-dep-graph", "check-size",
+            "check-version", "check-api", "test-micropython", "test-circuitpython",
         ]
 
     def test_coverage_threshold_flows_to_test_phase_args(self, monkeypatch):

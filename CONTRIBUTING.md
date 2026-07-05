@@ -181,6 +181,7 @@ Specifically, preflight runs:
 - **Docs build** — mkdocs + griffe for every library; fails on missing docstrings or wrong section format.
 - **Example imports** — every example file under `libraries/*/examples/` must parse and import cleanly.
 - **API + version checks** — flags removed public symbols without a `VERSION` bump.
+- **Size budgets** — measures each library's stripped-source and mpy-cross byte footprint and fails when it outgrows its ceiling in `size-budgets.toml` (host-only; ceilings ratchet down, raising one needs a measured justification in the commit).
 
 CI runs the same `preflight` command on every push, plus a few extras that are expensive locally — building distribution wheels, validating the CircuitPython and MicroPython bundle packagings.  Anything CI catches that preflight wouldn't is a tooling gap, not a contributor responsibility — file it as a bug; preflight is meant to run the same checks CI runs.
 
