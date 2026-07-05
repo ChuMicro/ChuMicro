@@ -1222,5 +1222,7 @@ landed green 07-04, flipped red 07-05, would have flipped back ~3 days later.
 
 Rule: a test may either (a) inject `ticks=FakeTicks()` at construction and
 use fake nows everywhere, or (b) construct with the real clock and drive
-`handle()` with `client._ticks.ticks_ms()` reads.  Never mix.  Construction
-paths that can't forward a `ticks=` override (`from_config`) force option (b).
+`handle()` with `client._ticks.ticks_ms()` reads.  Never mix.  Every
+construction path must forward the `ticks=` seam — `from_config` gained it
+2026-07-05 after its absence forced (b) on a test that wanted (a); a factory
+that swallows the clock seam reintroduces this bug class for its callers.

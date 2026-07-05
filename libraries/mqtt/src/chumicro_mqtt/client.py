@@ -271,6 +271,7 @@ class MQTTClient:
         ssl_context: object | None = None,
         socket: object | None = None,
         transport_factory: object | None = None,
+        ticks: object | None = None,
     ) -> "MQTTClient":
         """Build an :class:`MQTTClient` from runtime config.
 
@@ -282,6 +283,12 @@ class MQTTClient:
         *socket* or *transport_factory* override
         bypasses the auto-built factory entirely.  Missing broker keys
         raise :class:`chumicro_config.MissingConfigKey`.
+
+        *ticks* forwards to the constructor's clock seam so tests can
+        inject :class:`chumicro_timing.testing.FakeTicks` through this
+        path too — every deadline the client arms (including at
+        user-entry calls like :meth:`connect`) reads the injected
+        clock, keeping fake-now `handle()` driving on a single clock.
 
         Raises:
             ValueError: *config* is not a mapping-like object (a raw
@@ -320,6 +327,7 @@ class MQTTClient:
             username=config.get("mqtt.username"),
             password=config.get("mqtt.password"),
             when_disconnected=config.get("mqtt.when_disconnected", "queue"),
+            ticks=ticks,
         )
 
     def __init__(
