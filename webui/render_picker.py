@@ -78,6 +78,11 @@ Spec schema:
             "label": "how the code does this",
             "text": "mechanism prose…"
           },
+          "status": "persisting",                         // optional chip in the card head (any short word;
+                                                          // the audit skills pass new / persisting / resolved
+                                                          // / waived for baseline + waiver continuity)
+          "muted": true,                                  // optional: grey the whole card (un-greys on hover) —
+                                                          // for a carried finding, so the eye lands on new ones
           "warning": "Validator: fix needs review …",     // optional amber callout; also puts an amber
                                                           // ⚠ in the card head (hover shows the text),
                                                           // so even a folded strip signals "go deeper"
@@ -264,6 +269,8 @@ CSS = _KIT_PALETTE + """
  .legend b{color:var(--fg);font-weight:620}
  .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:15px 17px;margin:12px 0;
   scroll-margin-top:14px}
+ .card.muted{opacity:.6}
+ .card.muted:hover,.card.muted:focus-within{opacity:1}
  .card.flash{animation:cardflash 1.8s ease-out}
  @keyframes cardflash{0%,30%{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
   100%{border-color:var(--border);box-shadow:0 0 0 0 transparent}}
@@ -283,6 +290,8 @@ CSS = _KIT_PALETTE + """
  .badge{font-size:11px;font-weight:700;letter-spacing:.4px;padding:2px 8px;border-radius:999px;color:#fff;background:var(--faint)}
  .b-critical{background:var(--bad)} .b-important{background:var(--warn)} .b-minor{background:var(--faint)} .b-ambiguous{background:var(--accent)}
  .srcchip{font-size:11.5px;color:var(--faint);background:var(--chip);border-radius:999px;padding:2px 9px}
+ .statuschip{font-size:11px;font-weight:700;letter-spacing:.3px;color:var(--faint);background:var(--chip);
+  border:1px solid var(--border);border-radius:999px;padding:1px 8px;text-transform:uppercase}
  .cardmeta{margin:6px 0 0;font-size:12.5px;color:var(--faint)}
  .summary{margin:10px 0 0;font-size:15.5px}
  details.detail{margin:10px 0 0}
@@ -898,6 +907,9 @@ def card_html(item, page_options, page_default, option_help):
         badge_class = BADGE_CLASSES.get(str(item["badge"]).lower(), "")
         badge = f'<span class="badge {badge_class}">{html.escape(str(item["badge"]))}</span>'
     source = f'<span class="srcchip">{html.escape(item["source"])}</span>' if item.get("source") else ""
+    # a status chip (baseline/waiver continuity: new / persisting / resolved / waived) and, paired
+    # with it, a `muted` card class that greys a carried card so the eye lands on the new findings
+    status = f'<span class="statuschip">{html.escape(str(item["status"]))}</span>' if item.get("status") else ""
     meta = f'<div class="cardmeta">{html.escape(item["meta"])}</div>' if item.get("meta") else ""
     summary = f'<p class="summary">{html.escape(item["summary"])}</p>' if item.get("summary") else ""
     where_html = ""
@@ -946,6 +958,8 @@ def card_html(item, page_options, page_default, option_help):
     )
     collapsed = bool(item.get("collapsed"))
     card_classes = "card collapsible collapsed" if collapsed else "card collapsible"
+    if item.get("muted"):
+        card_classes += " muted"
     chevron = '<span class="chev">▸</span>'
     fold_attr = ' data-fold="1"' if collapsed else ""
     facets_attr = ""
@@ -955,7 +969,7 @@ def card_html(item, page_options, page_default, option_help):
     return (
         f'<div class="{card_classes}" id="{anchor_id(item_id)}" data-id="{html.escape(item_id)}"'
         f' data-def="{html.escape(default or "")}"{sugg_attr}{fold_attr}{facets_attr}>'
-        f'<div class="cardhead">{chevron}<span class="cardid">{html.escape(item_id)}</span>{badge}{warn_flag}{source}'
+        f'<div class="cardhead">{chevron}<span class="cardid">{html.escape(item_id)}</span>{badge}{warn_flag}{source}{status}'
         f'<span class="cardtitle">{html.escape(item.get("title", ""))}</span></div>'
         f"{summary}"
         f'<div class="cardfold">{meta}{fields}{evidence}{detail}{warning}{body}</div>'

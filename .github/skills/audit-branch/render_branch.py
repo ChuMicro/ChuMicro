@@ -32,12 +32,20 @@ SKILL = os.path.dirname(os.path.abspath(__file__))
 PIPELINE = os.path.join(os.path.dirname(SKILL), "audit-code")
 sys.path.insert(0, PIPELINE)
 from render_eval import (  # noqa: E402
+    STATUS_HELP,
+    STATUS_ORDER,
+    apply_continuity_fields,
+    baseline_intro_bit,
     card_anchor,
+    continuity,
     facts_html,
+    load_baseline,
     load_room,
     patch_fields,
     path_features_section,
     render,
+    resolved_ghost_item,
+    status_facet_needed,
 )
 
 ANGLE_HELP = {
@@ -90,6 +98,7 @@ def build_branch_item(room, finding):
     if patch and (patch.get("repro") or "").strip():
         item["meta"] += " · executable repro (apply runs it red→green)"
     item.update(patch_fields(patch))
+    apply_continuity_fields(item, finding)
     return item
 
 
@@ -113,15 +122,28 @@ def per_file_section_html(room):
 
 
 def main():
-    if len(sys.argv) != 2:
-        raise SystemExit("usage: render_branch.py <rundir>")
-    rundir = os.path.abspath(sys.argv[1])
+    args = sys.argv[1:]
+    baseline = None
+    if "--baseline" in args:
+        index = args.index("--baseline")
+        baseline = args[index + 1]
+        args = args[:index] + args[index + 2:]
+    if len(args) != 1:
+        raise SystemExit("usage: render_branch.py <rundir> [--baseline <prior eval.json>]")
+    rundir = os.path.abspath(args[0])
     manifest_path = os.path.join(rundir, "manifest.json")
     manifest = json.load(open(manifest_path)) if os.path.exists(manifest_path) else {}
     label = manifest.get("label", os.path.basename(rundir))
     room = load_room(rundir, label)
 
+    resolved = []
+    if baseline:
+        prior_findings, prior_picks = load_baseline(baseline)
+        room["findings"], resolved = continuity.stamp_baseline(
+            room["findings"], prior_findings, prior_picks)
+
     items = [build_branch_item(room, finding) for finding in room["findings"]]
+    items += [resolved_ghost_item(finding) for finding in resolved]
 
     sections = []
     facts_file = os.path.join(rundir, "FEATURE_FACTS.md")
@@ -154,15 +176,20 @@ def main():
     intro_bits = [f"{n_files} changed files", f"{len(room['findings'])} findings"]
     if voice and voice != "plain":
         intro_bits.append(f"voice: {voice}")
+    baseline_bit = baseline_intro_bit(room["findings"], resolved) if baseline else None
+    if baseline_bit:
+        intro_bits.append(baseline_bit)
     intro_bits.append(status)
 
-    file_values = sorted({item["facets"]["file"] for item in items})
+    file_values = sorted({item["facets"].get("file") for item in items} - {None})
     facets = [
         {"key": "severity", "values": ["high", "med", "low"]},
         {"key": "angle", "values": ANGLES, "help": ANGLE_HELP},
     ]
     if len(file_values) > 1:
         facets.append({"key": "file", "values": file_values, "style": "select"})
+    if status_facet_needed(room["findings"], resolved):
+        facets.append({"key": "status", "values": STATUS_ORDER, "help": STATUS_HELP})
 
     render({
         "title": f"audit-branch — {label}",

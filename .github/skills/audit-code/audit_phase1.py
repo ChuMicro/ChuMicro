@@ -29,6 +29,8 @@ import time
 
 SKILL = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, SKILL)
+sys.path.insert(0, os.path.join(SKILL, os.pardir, "_shared"))
+import audit_continuity as continuity  # noqa: E402
 from preflight import require_claude  # noqa: E402
 
 TEST_DIRS = ("tests", "functional_tests")
@@ -259,6 +261,14 @@ def main():
     open(os.path.join(rundir, "voice_persona.txt"), "w").write(voice_persona(voice))
     open(os.path.join(rundir, "voice_sample.txt"), "w").write(voice_register_sample(voice))
 
+    # Stage the file-relevant slice of the waiver ledger into the room so the merger's actionability
+    # gate can suppress findings a human already skipped-with-a-note (invariant 9 stays intact: the
+    # ledger, not the orchestrator, authorizes a suppression). The ledger lives in the PROJECT repo,
+    # resolved from the target's dir -- never from the /tmp room.
+    basename = os.path.basename(target)
+    ledger_dir = continuity.default_ledger_dir(os.path.dirname(os.path.abspath(target)))
+    n_waivers = continuity.stage_waivers(rundir, [basename], ledger_dir)
+
     # the evaluation workflow, one clean-room claude -p. __TARGET__ hands the patcher the real
     # path as a STRING (for deriving repro import names); the room never gains read access to it.
     _stage("audit_wf.js", rundir, __RUNDIR__=rundir, __TARGET__=os.path.abspath(target))
@@ -279,6 +289,14 @@ def main():
     findings = ev.get("findings", [])
     converged = not (val.get("any_unreal") or val.get("any_fix_unsound"))
 
+    # Deterministic backstop for the merger's waiver consultation: mark every finding that matches a
+    # staged human waiver as suppressed (with the quoted note), so a suppression exists only when a
+    # real ledger entry matches its fingerprint. Rewrites eval.json in place.
+    n_suppressed = continuity.apply_waivers(findings, continuity.load_staged_waivers(rundir),
+                                            default_file=basename)
+    if n_suppressed:
+        json.dump(ev, open(os.path.join(rundir, "eval.json"), "w"), indent=1)
+
     def _count(key):
         out = {}
         for f in findings:
@@ -296,6 +314,8 @@ def main():
         "n_written": len(written.get("findings", [])),
         "n_patches": npatch,
         "n_repros": n_repros,
+        "n_waivers_staged": n_waivers,
+        "n_suppressed": n_suppressed,
         "by_angle": _count("angle"),
         "by_severity": _count("severity"),
         "tests_found": tests_found,
@@ -316,6 +336,8 @@ def main():
         print(f"      - {p}")
     print(f"  symbols summarized: {phase1['n_symbols']}")
     print(f"  findings: {len(findings)}   by angle: {phase1['by_angle']}   by severity: {phase1['by_severity']}")
+    if n_waivers or n_suppressed:
+        print(f"  waivers: {n_waivers} staged from the ledger, {n_suppressed} finding(s) suppressed")
     print(f"  prose written: {phase1['n_written']}   patches generated: {npatch}   "
           f"executable repros: {n_repros}")
     print(f"  validator: {'converged clean' if converged else 'left some findings unconfirmed (report flags them)'}")
