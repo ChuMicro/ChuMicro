@@ -62,7 +62,7 @@ Live inventory replaced the audit's assumptions: the April release infrastructur
 
 ## Sequence
 
-1. ~~Verify first ci.yml run green~~ — Actions re-enabled 2026-07-05; first run fires on the fix-landing push.
+1. ~~Verify first ci.yml run green~~ — VERIFIED 2026-07-05: run 28752439230 all five checks green.  The three shakedown failures were each real catches (platform-gated wedge test, threadbare compatibility install, tarfile filter deprecation fatal only on 3.12/3.13 under `-W error`) — fixed at the root, no lanes relaxed.
 2. ~~Land the monorepo code fixes~~ — DONE 2026-07-05 (B1, B2, B5 + promote skip-existing/tag-last, concurrency, 0.0.0 floor, B4 wiring, run.py-setup in every bundle_manager-invoking job).
 3. ~~Land the sister/workspace fixes~~ — DONE 2026-07-05 (B3 `[dev]` install + loud-fail lint, test.yml zone classification, CHU008 fix, tree hygiene, wifi_only orphan).
 4. GitHub/PyPI prerequisites — GitHub side DONE except the Bundle visibility flip (deferred, see 5); PyPI publishers (verify 8 + register 28) can happen any time, they expose nothing.
