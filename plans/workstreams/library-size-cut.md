@@ -62,6 +62,15 @@ Bytes-per-def says the fleet is not fat per feature: chumicro_requests is within
 
 Success metric refined accordingly: per-library **import heap** and **mpy flash** (what boards feel), gated by check-size; the −40 % stripped-bytes trio target stays as the structural-diet goal but the levers above may beat it on the metrics that matter without touching a feature.
 
+## Fragmentation + import-floor measurements (2026-07-05, real Pico W, MP, stripped .py)
+
+Bench answer to "does lazy loading help or hurt fragmentation":
+
+- **On-device compilation is fragmentation-tolerant.**  mqtt imported into a heap shredded to ~15 K largest contiguous block; websockets and kvstore+ntp into ≤10 K holes.  The lexer streams and the parser allocates small chunks — a lazy import essentially never fails *because* of fragmentation.
+- **The import floor is total transient headroom and tracks the largest single file, not library size.**  mqtt: 28.0 K persistent cost but a ~92–97 K free-heap floor (client.py = 40.4 K stripped).  websockets: 29.1 K persistent, ~66–76 K floor (_wire.py = 27.3 K).  Rule of thumb: floor ≈ persistent + ~1.6× largest file's stripped bytes.
+- **Lazy `__getattr__` re-exports (lever 2) are confirmed pure-win when first touch is at boot** (same packing as eager, pay-per-use).  Mid-runtime first touch has two costs: the full floor must be free at that moment, and the ~28 K of immovable objects scatter into existing holes (no compacting GC).  Ship the pattern with one line of doc guidance: *instantiate clients during startup*.
+- **New top-tier lever: split `mqtt/client.py`** (largest file in the fleet by a wide margin) into 3–4 modules along existing class boundaries (MQTTClient / in-flight+pending tracking / ProtocolState+inbound types).  While we ship `.py` source, every boot recompiles on-device and that one file sets a ~95 K floor — half a Pico W's heap.  Splitting drops the floor toward ≤70 K with zero API change.  Next candidates, already near-tolerable: requests/client.py (25.4 K), websockets/_wire.py (27.3 K).
+
 ## Campaign shape (after CI)
 
 Per library, heavy trio first (websockets → requests → mqtt → http_server): an audit-embedded-led cut pass → apply → full preflight + on-device sweep + `check-size` ratchet-down commit.  Bakes re-run on mqtt after its pass (the negative-suite fakes pin behavior).  Fleet-wide passes (exception consolidation, error-string diet) follow as cross-library sweeps.  Success = trio ≈ −40 % stripped/mpy with all features and all tests green, budgets ratcheted to the new floor.
