@@ -41,6 +41,8 @@ SKILL = os.path.dirname(os.path.abspath(__file__))
 # two front doors); this skill stages differently but runs the same room machinery
 PIPELINE = os.path.join(os.path.dirname(SKILL), "audit-code")
 sys.path.insert(0, PIPELINE)
+sys.path.insert(0, os.path.join(os.path.dirname(SKILL), "_shared"))
+import audit_continuity as continuity  # noqa: E402
 from audit_phase1 import (  # noqa: E402
     claude_p_workflow,
     find_tests,
@@ -248,13 +250,15 @@ def main():
     voice = flag("--voice")
     intent_arg = flag("--intent")
     facts = flag("--facts")
+    carry_from = flag("--carry-from")
     mode = "staged" if "--staged" in args else ("worktree" if "--worktree" in args else "range")
-    flag_vals = {v for v in (flag("--repo"), voice, intent_arg, facts) if v is not None}
+    flag_vals = {v for v in (flag("--repo"), voice, intent_arg, facts, carry_from) if v is not None}
     pos = [a for a in args if not a.startswith("--") and a not in flag_vals]
     if mode == "range":
         if len(pos) < 3:
             sys.exit("usage: branch_phase1.py <base_ref> <head_ref> <rundir> [--repo <root>] "
-                     "[--voice <key>] [--intent <text-or-path>] [--facts <FEATURE_FACTS.md>]\n"
+                     "[--voice <key>] [--intent <text-or-path>] [--facts <FEATURE_FACTS.md>] "
+                     "[--carry-from <prior_run_dir>]\n"
                      "       branch_phase1.py --staged|--worktree <rundir> [flags]")
         base, head, rundir = pos[0], pos[1], os.path.abspath(pos[2])
         merge_base = _git(repo, "merge-base", base, head).strip()
@@ -339,9 +343,12 @@ def main():
     open(os.path.join(rundir, "voice_persona.txt"), "w").write(voice_persona(voice))
     open(os.path.join(rundir, "voice_sample.txt"), "w").write(voice_register_sample(voice))
 
+    # the resolved head SHA of what was actually audited — a persisted run keeps it so a later
+    # incremental re-audit can stage only `head_sha..<new head>` (phase 4)
+    head_sha = _git(repo, "rev-parse", head).strip() if mode == "range" else merge_base
     label = f"{base}...{head}" if mode == "range" else f"{mode} vs HEAD"
-    manifest = {"mode": mode, "base": base, "head": head, "merge_base": merge_base,
-                "label": label, "repo": repo, "files": manifest_files,
+    manifest = {"mode": mode, "base": base, "head": head, "head_sha": head_sha,
+                "merge_base": merge_base, "label": label, "repo": repo, "files": manifest_files,
                 "n_python": len(python_changed), "n_usage_files": n_usages,
                 "tests_found": test_paths}
     json.dump(manifest, open(os.path.join(rundir, "manifest.json"), "w"), indent=1)
@@ -353,6 +360,12 @@ def main():
               f"({len(python_changed)} python)   usage files staged: {n_usages}")
         print(f"  tests found: {len(test_paths)}")
         return
+
+    # Stage the file-relevant slice of the waiver ledger into the room so the merger's actionability
+    # gate can suppress findings a human already skipped-with-a-note (invariant 9 stays intact: only
+    # the ledger authorizes a suppression, never the orchestrator). Ledger lives in the audited repo.
+    ledger_dir = continuity.default_ledger_dir(repo)
+    n_waivers = continuity.stage_waivers(rundir, [p for _s, p in files if p.endswith(".py")], ledger_dir)
 
     # the evaluation workflow, one clean-room claude -p
     wf_src = open(os.path.join(SKILL, "branch_wf.js")).read().replace("__RUNDIR__", rundir)
@@ -374,6 +387,30 @@ def main():
     findings = evaluation.get("findings", [])
     converged = not (validation.get("any_unreal") or validation.get("any_fix_unsound"))
 
+    # Deterministic backstop for the merger's waiver consultation: a finding is suppressed only when
+    # a real ledger entry matches its fingerprint (invariant 9). Findings carry their own file, so no
+    # default_file is needed. Rewrites eval.json in place.
+    n_suppressed = continuity.apply_waivers(findings, continuity.load_staged_waivers(rundir))
+
+    # Incremental carry (phase 4): the change-set was the delta range (prior-head..new-head), so the
+    # lenses paid only for the changed files. Prior findings on the UNCHANGED files are carried here
+    # via a cheap site re-check instead of a fresh lens pass; a still-live one is injected (greyed on
+    # the page), a resolved one is tracked.
+    n_carried = n_resolved_carried = 0
+    if carry_from:
+        prior_eval_path = os.path.join(os.path.abspath(carry_from), "eval.json")
+        prior_eval = (json.load(open(prior_eval_path))
+                      if os.path.exists(prior_eval_path) else {"findings": []})
+        prior_findings = prior_eval.get("findings", []) if isinstance(prior_eval, dict) else prior_eval
+        changeset_files = {path for _s, path in files}
+        carried_live, resolved_carried = continuity.carry_forward(
+            prior_findings, findings, changeset_files, repo)
+        findings.extend(carried_live)
+        n_carried, n_resolved_carried = len(carried_live), len(resolved_carried)
+
+    if n_suppressed or n_carried:
+        json.dump(evaluation, open(os.path.join(rundir, "eval.json"), "w"), indent=1)
+
     def _count(key):
         out = {}
         for finding in findings:
@@ -382,10 +419,13 @@ def main():
 
     n_repros = write_repros(rundir, patches)
     phase1 = {"target": label, "mode": mode, "rundir": rundir, "voice": voice or "plain",
+              "head_sha": head_sha,
               "converged": converged, "n_findings": len(findings),
               "n_written": len(written.get("findings", [])),
               "n_patches": len(patches.get("patches", [])),
               "n_repros": n_repros,
+              "n_waivers_staged": n_waivers, "n_suppressed": n_suppressed,
+              "n_carried": n_carried, "n_resolved_carried": n_resolved_carried,
               "by_angle": _count("angle"), "by_severity": _count("severity"),
               "files": [e["path"] for e in manifest_files], "tests_found": test_paths,
               "n_symbols": len(summary.get("symbols", [])),
@@ -405,6 +445,11 @@ def main():
           + ("" if test_paths else "  (none -> coverage lens treats the changes as unverified)"))
     print(f"  findings: {len(findings)}   by angle: {phase1['by_angle']}   "
           f"by severity: {phase1['by_severity']}")
+    if n_waivers or n_suppressed:
+        print(f"  waivers: {n_waivers} staged from the ledger, {n_suppressed} finding(s) suppressed")
+    if carry_from:
+        print(f"  incremental: {n_carried} finding(s) carried from the prior audit, "
+              f"{n_resolved_carried} resolved since")
     print(f"  prose written: {phase1['n_written']}   patches generated: {phase1['n_patches']}   "
           f"executable repros: {n_repros}")
     print(f"  validator: {'converged clean' if converged else 'left some findings unconfirmed (report flags them)'}")

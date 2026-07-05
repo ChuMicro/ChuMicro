@@ -131,11 +131,21 @@ FIXTURE = {
             "suggested": "discuss",            # triage bulk layer: ★ marker + the accept-all button
             "facets": {"severity": "med", "angle": "trap", "file": "a.py"},
         },
+        {
+            "id": "5",
+            "title": "carried finding — status chip + greyed card",
+            "badge": "MINOR",
+            "summary": "baseline/waiver continuity: a persisting card, greyed, chip-stamped",
+            "status": "persisting",            # renders a .statuschip in the card head
+            "muted": True,                     # greys the card (.card.muted)
+            "facets": {"severity": "low", "angle": "trap", "file": "a.py", "status": "persisting"},
+        },
     ],
     "facets": [
         {"key": "severity", "values": ["high", "med", "low"]},
         {"key": "angle", "help": {"trap": "correctness lens"}},
         {"key": "file", "style": "select"},
+        {"key": "status", "values": ["new", "persisting", "resolved", "waived"]},
     ],
 }
 
@@ -165,7 +175,7 @@ def check_structure(page):
         ('class="cedit"', 1, "edit box (item 2)"),
         ('class="editbox"', 1, "edit textarea"),
         ('class="cnone"', 1, "empty-candidate placeholder"),
-        ('class="opts"', 2, "default radio rows (items 1 + 4)"),
+        ('class="opts"', 3, "default radio rows (items 1 + 4 + 5)"),
         ('class="dline dold"', 2, "diff old lines"),
         ('class="dline dnew"', 2, "diff new lines"),
         ("--pagew:1280px", 1, "page_width override"),
@@ -175,8 +185,10 @@ def check_structure(page):
         ('data-key="decided"', 2, "decided facet chips"),
         ('class="badge b-critical"', 1, "CRITICAL badge"),
         ('class="badge b-important"', 1, "IMPORTANT badge"),
-        ('class="badge b-minor"', 1, "MINOR badge"),
+        ('class="badge b-minor"', 2, "MINOR badge (items 2 + 5)"),
         ('class="badge b-ambiguous"', 1, "AMBIGUOUS badge"),
+        ('class="statuschip"', 1, "status chip (item 5)"),
+        ("card collapsible muted", 1, "greyed carried card (item 5)"),
     ]
     problems = []
     for needle, count, label in expectations:

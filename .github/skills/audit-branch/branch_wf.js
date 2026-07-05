@@ -52,6 +52,7 @@ const SYMBOLS = RUNDIR + '/changed_symbols.json'
 const TESTS = RUNDIR + '/tests.py'
 const INTENT = RUNDIR + '/intent.txt'
 const FINDINGS = RUNDIR + '/findings'
+const WAIVERS = RUNDIR + '/waivers.json'   // staged human waivers (may be absent / {"waivers": []})
 
 // ---------- shared scales + the fact-fragment finding shape ----------
 // Lenses and the merger emit FRAGMENTS, not sentences. A later writer composes the reader prose; if
@@ -307,6 +308,8 @@ const EVAL_OUT = {
         effort: { type: 'string', enum: ['small', 'medium', 'large'] },
         confidence: { type: 'string', enum: ['high', 'med', 'low'] },
         defect: { type: 'string' }, bite: { type: 'string' }, fix: { type: 'string' },
+        suppressed: { type: 'boolean' },   // matches a human waiver -> kept but greyed on the page
+        waiver_note: { type: 'string' },   // the waiver's quoted human note, verbatim
       },
       required: ['id', 'angle', 'file', 'symbol', 'site', 'severity', 'effort', 'confidence', 'defect', 'bite', 'fix'] } },
     domain_facts: { type: 'array', items: { type: 'object', additionalProperties: false,
@@ -325,6 +328,12 @@ function mergePrompt(lensDump, intentFacts, feedback, prior) {
     + 'validates, praises, or affirms the change, that asks the author to "check" / "verify" / "confirm" '
     + 'something, or that has no file + symbol + quoted site to anchor it -- a finding that cannot be '
     + 'located is a guess, not a finding.\n'
+    + '- WAIVER GATE: if ' + WAIVERS + ' exists and lists waivers (each with a fingerprint = file + '
+    + 'symbol + defect, plus the human `note`), a finding whose file + symbol name the same locus AND '
+    + 'whose defect is the same underlying problem as a waiver is a KNOWN, HUMAN-ACCEPTED issue. KEEP it '
+    + '(do not drop it), set `suppressed: true`, and copy the waiver `note` verbatim into `waiver_note`. '
+    + 'A suppressed finding still gets an id and still renders -- greyed, with the note -- so the human '
+    + 'sees their prior decision was honored. Never suppress a finding no waiver matches.\n'
     + '- DEDUP: when two lenses report the SAME underlying problem (an integration break and the usage '
     + 'finding at its call site often are), merge into one -- keep the sharpest defect, the clearest bite, '
     + 'the most actionable fix, and the higher severity. Do not drop a distinct problem just because it '

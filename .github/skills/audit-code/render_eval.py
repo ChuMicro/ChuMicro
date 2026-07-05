@@ -50,8 +50,21 @@ import re
 import subprocess
 import sys
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, "_shared"))
+import audit_continuity as continuity  # noqa: E402
+
 SEV_RANK = {"high": 0, "med": 1, "low": 2}
 EFFORT_RANK = {"small": 0, "medium": 1, "large": 2}
+# baseline / waiver status a card can carry (phase 2/3/4): the facet values, hover help, and which
+# statuses grey the card. "new" is the only one the eye should land on first, so it stays un-muted.
+STATUS_ORDER = ["new", "persisting", "resolved", "waived"]
+STATUS_HELP = {
+    "new": "not in the baseline audit — raised for the first time this run",
+    "persisting": "also in the baseline audit — carried forward, greyed so the new findings lead",
+    "resolved": "in the baseline audit and gone now — no longer found",
+    "waived": "matches a human waiver in plans/audit-waivers/ — suppressed with the recorded note",
+}
+MUTED_STATUSES = {"persisting", "resolved", "waived"}
 ANGLE_HELP = {
     "trap": "correctness lens — inversions, off-by-ones, code that says one thing and does another, judged from comment-stripped code",
     "hazard": "adversarial-robustness lens — unbounded peer-controlled allocations, untrusted data reaching a sensitive sink, reentrancy windows, resources leaked on error paths",
@@ -63,7 +76,7 @@ ANGLE_HELP = {
 RENDERER = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                         os.pardir, os.pardir, os.pardir, "webui", "render_picker.py")
 USAGE = (
-    "usage: render_eval.py <rundir> <target.py>\n"
+    "usage: render_eval.py <rundir> <target.py> [--baseline <prior eval.json>]\n"
     "       render_eval.py --merge <outdir> <rundir> <target.py> [<rundir> <target.py> ...] [--lib <LIBRARY_FACTS.md>]"
 )
 
@@ -137,6 +150,90 @@ def is_unconfirmed(room, finding_id):
     return bool(verdict) and (not verdict.get("real", True) or not verdict.get("fix_sound", True))
 
 
+def apply_continuity_fields(item, finding):
+    """Stamp a card with its baseline / waiver status (phase 2–4): a status chip, greying for a
+    carried card, and a skip default plus the recorded note for a waived or prior-skipped finding.
+    No-op on a plain first-run audit (the finding carries no continuity metadata)."""
+    status = finding.get("baseline_status") or ("waived" if finding.get("suppressed") else None)
+    if not status:
+        return item
+    item["status"] = status
+    item.setdefault("facets", {})["status"] = status
+    if status in MUTED_STATUSES:
+        item["muted"] = True
+    riders = []
+    if finding.get("suppressed") and finding.get("waiver_note"):
+        item["default"] = "skip"
+        riders.append(f"Waived (plans/audit-waivers): {finding['waiver_note']}")
+    if finding.get("preload_choice"):
+        item["default"] = finding["preload_choice"]
+        if finding.get("preload_note"):
+            riders.append(f"Carried from a prior skip: {finding['preload_note']}")
+    if riders:
+        item["warning"] = (" ".join(riders) + " " + item.get("warning", "")).strip()
+    return item
+
+
+def resolved_ghost_item(finding, namespace=None):
+    """An informational (radio-less) card for a finding that the baseline audit raised and this run
+    no longer finds — greyed, chip-stamped resolved, so a fixed defect reads as progress rather than
+    vanishing silently."""
+    finding_id = finding.get("id")
+    severity = finding.get("severity", "low")
+    angle = finding.get("angle", "trap")
+    file = finding.get("file")
+    place = finding.get("symbol", "?")
+    if file:
+        place = f"{file} · {place}"
+    item = {
+        "id": f"{namespace}#resolved-{finding_id}" if namespace else f"resolved-{finding_id}",
+        "title": (finding.get("title") or finding.get("defect") or "resolved finding")[:80],
+        "badge": severity,
+        "source": angle,
+        "status": "resolved",
+        "muted": True,
+        "options": [],
+        "where": {"place": place, "code": finding.get("site", "")},
+        "summary": "Resolved — present in the baseline audit, no longer found this run.",
+        "why": finding.get("bite", ""),
+        "facets": {"severity": severity, "angle": angle, "status": "resolved"},
+        "collapsed": True,
+    }
+    if namespace:
+        item["facets"]["file"] = os.path.basename(file) if file else namespace
+    elif file:
+        # branch page: the file facet keys on the repo-relative path (build_branch_item does too)
+        item["facets"]["file"] = file
+    return item
+
+
+def load_baseline(baseline_path):
+    """Prior findings + the prior run's selection picks from a persisted eval.json (its
+    selection.txt sibling, when the prior run's blob was persisted alongside)."""
+    prior = json.load(open(baseline_path)) if os.path.exists(baseline_path) else {"findings": []}
+    prior_findings = prior.get("findings", []) if isinstance(prior, dict) else prior
+    picks = {}
+    sibling = os.path.join(os.path.dirname(os.path.abspath(baseline_path)), "selection.txt")
+    if os.path.exists(sibling):
+        picks = continuity.parse_picks(open(sibling).read())
+    return prior_findings, picks
+
+
+def status_facet_needed(findings, resolved):
+    return bool(resolved) or any(f.get("baseline_status") or f.get("suppressed") for f in findings)
+
+
+def baseline_intro_bit(findings, resolved):
+    """A `vs baseline: N new · M persisting · K resolved` subtitle fragment, or None."""
+    counts = {"new": 0, "persisting": 0, "resolved": len(resolved), "waived": 0}
+    for finding in findings:
+        status = finding.get("baseline_status") or ("waived" if finding.get("suppressed") else None)
+        if status in counts:
+            counts[status] += 1
+    live = [f"{counts[key]} {key}" for key in STATUS_ORDER if counts[key]]
+    return ("vs baseline: " + " · ".join(live)) if live else None
+
+
 def build_item(room, finding, namespace=None):
     """Build one picker card from a finding. A namespace (merge mode) prefixes the id
     (heartbeat#3), leads the where row with the file name, tags the card for the file-chip
@@ -184,6 +281,7 @@ def build_item(room, finding, namespace=None):
     if patch and (patch.get("repro") or "").strip():
         item["meta"] += " · executable repro (apply runs it red→green)"
     item.update(patch_fields(patch))
+    apply_continuity_fields(item, finding)
     return item
 
 
@@ -256,9 +354,15 @@ def render(spec, output_dir):
         raise SystemExit(result.returncode)
 
 
-def main_single(rundir, target):
+def main_single(rundir, target, baseline=None):
     room = load_room(rundir, target)
+    resolved = []
+    if baseline:
+        prior_findings, prior_picks = load_baseline(baseline)
+        room["findings"], resolved = continuity.stamp_baseline(
+            room["findings"], prior_findings, prior_picks, default_file=os.path.basename(target))
     items = [build_item(room, finding) for finding in room["findings"]]
+    items += [resolved_ghost_item(finding) for finding in resolved]
 
     sections = []
     if room["summary"].get("module_summary"):
@@ -285,7 +389,17 @@ def main_single(rundir, target):
     intro_bits = [f"{len(room['findings'])} findings"]
     if voice and voice != "plain":
         intro_bits.append(f"voice: {voice}")
+    baseline_bit = baseline_intro_bit(room["findings"], resolved) if baseline else None
+    if baseline_bit:
+        intro_bits.append(baseline_bit)
     intro_bits.append(status)
+
+    facets = [
+        {"key": "severity", "values": ["high", "med", "low"]},
+        {"key": "angle", "values": ["trap", "hazard", "drift", "coverage", "clarity", "path"], "help": ANGLE_HELP},
+    ]
+    if status_facet_needed(room["findings"], resolved):
+        facets.append({"key": "status", "values": STATUS_ORDER, "help": STATUS_HELP})
 
     file_name = room["file_name"]
     render({
@@ -301,10 +415,7 @@ def main_single(rundir, target):
             "discuss": "no change yet; talk it through in the session first (unconfirmed findings start here)",
             "skip": "leave as is",
         },
-        "facets": [
-            {"key": "severity", "values": ["high", "med", "low"]},
-            {"key": "angle", "values": ["trap", "hazard", "drift", "coverage", "clarity", "path"], "help": ANGLE_HELP},
-        ],
+        "facets": facets,
         "sections": sections,
         "items": items,
     }, room["rundir"])
@@ -378,6 +489,13 @@ def main_merge(output_dir, room_args, library_facts):
 
     file_names = [room["file_name"] for room in rooms]
     title_scope = ", ".join(file_names) if len(file_names) <= 3 else f"{len(file_names)} files"
+    facets = [
+        {"key": "severity", "values": ["high", "med", "low"]},
+        {"key": "angle", "values": ["trap", "hazard", "drift", "coverage", "clarity", "path"], "help": ANGLE_HELP},
+        {"key": "file", "values": file_names, "style": "select"},
+    ]
+    if status_facet_needed([finding for _room, finding in pairs], []):
+        facets.append({"key": "status", "values": STATUS_ORDER, "help": STATUS_HELP})
     render({
         "title": f"audit-code — {title_scope}",
         "key": f"audit-code:merged:{os.path.basename(output_dir)}",
@@ -391,11 +509,7 @@ def main_merge(output_dir, room_args, library_facts):
             "discuss": "no change yet; talk it through in the session first (unconfirmed findings start here)",
             "skip": "leave as is",
         },
-        "facets": [
-            {"key": "severity", "values": ["high", "med", "low"]},
-            {"key": "angle", "values": ["trap", "hazard", "drift", "coverage", "clarity", "path"], "help": ANGLE_HELP},
-            {"key": "file", "values": file_names, "style": "select"},
-        ],
+        "facets": facets,
         "sections": sections,
         "items": items,
     }, output_dir)
@@ -410,6 +524,11 @@ def main_merge(output_dir, room_args, library_facts):
 
 def main():
     arguments = sys.argv[1:]
+    baseline = None
+    if "--baseline" in arguments:
+        index = arguments.index("--baseline")
+        baseline = arguments[index + 1]
+        arguments = arguments[:index] + arguments[index + 2:]
     if arguments and arguments[0] == "--merge":
         arguments = arguments[1:]
         library_facts = None
@@ -422,7 +541,7 @@ def main():
         room_args = [(arguments[i], arguments[i + 1]) for i in range(1, len(arguments), 2)]
         main_merge(arguments[0], room_args, library_facts)
     elif len(arguments) == 2:
-        main_single(arguments[0], arguments[1])
+        main_single(arguments[0], arguments[1], baseline=baseline)
     else:
         raise SystemExit(USAGE)
 
