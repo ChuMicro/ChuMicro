@@ -8,7 +8,7 @@ This guide is for developers using editors other than PyCharm and VS Code — Ne
 
 ## Setup
 
-Follow steps 1–4 of the [setup walkthrough](../../CONTRIBUTING.md#setting-up-your-development-environment) in the contributing guide to fork the repository, clone it, and install dependencies:
+Follow steps 1–4 of the [setup walkthrough](../../CONTRIBUTING.md#setting-up) in the contributing guide to fork the repository, clone it, and install dependencies:
 
 ```bash
 cd ChuMicro
@@ -92,7 +92,7 @@ Zed uses Pyright by default and reads `pyrightconfig.json` automatically. Select
 
 ### Emacs (lsp-mode / eglot)
 
-Both `lsp-mode` and `eglot` support Pyright. Activate the venv before starting Emacs (or configure `python-shell-virtualenv-root`), and Pyright will read `pyrightconfig.json` from the project root.
+Both `lsp-mode` and `eglot` support Pyright. Launch Emacs from a shell with the venv activated, or point Pyright at the venv directly via the `venvPath` / `venv` keys in `pyrightconfig.json`; either way Pyright reads `pyrightconfig.json` from the project root.
 
 ### Sublime Text (LSP-pyright)
 
@@ -132,5 +132,5 @@ Run preflight before opening a PR:
 
 ```bash
 python scripts/run.py preflight
-# Expected: "Preflight passed — required CI checks should pass."
+# Expected: "Preflight passed.  Required CI checks should pass."
 ```

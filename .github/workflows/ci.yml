@@ -64,7 +64,11 @@ jobs:
           python scripts/run.py prepare-mpy-cross
 
       - name: Preflight (13 phases — the local gate, verbatim)
-        run: python scripts/run.py preflight --coverage-threshold 94
+        # No --coverage-threshold flag: CI enforces the pyproject default
+        # (the human gate, Decision 0025). Agents self-enforce 94 on their
+        # own invocations per AGENTS.md; CI is the same gate a contributor
+        # runs locally, so "preflight passed" means CI passes.
+        run: python scripts/run.py preflight
 
       - name: Upload build artifacts
         # Preflight's build phase produced these; publish them for

@@ -4,409 +4,260 @@
 <h1 align="center">ChuMicro</h1>
 
 <p align="center">
-  <strong><big>Non-blocking libraries that run unmodified on CircuitPython, MicroPython, and CPython.</big></strong>
+  <strong><big>Python libraries for microcontrollers that never freeze your program.  One codebase for CircuitPython, MicroPython, and your laptop.</big></strong>
 </p>
 
 <p align="center"><big>
   <a href="https://chumicro.github.io/ChuMicro/">Docs</a> •
   <a href="#install">Install</a> •
-  <a href="#libraries">Libraries</a> •
-  <a href="#deploying-examples-to-a-board">Deploy examples</a> •
-  <a href="#running-tests">Run tests</a> •
-  <a href="#workbench-tools">Tools</a> •
-  <a href="https://github.com/ChuMicro/ChuMicro-Workspace-Template">Workspace template</a> •
+  <a href="#the-libraries">Libraries</a> •
+  <a href="#watch-it-work-on-real-hardware">Demos</a> •
+  <a href="#start-a-real-project">Start a project</a> •
   <a href="CONTRIBUTING.md">Contributing</a> •
   <a href="https://github.com/ChuMicro/ChuMicro/issues">Issues</a>
 </big></p>
 
 ---
 
-ChuMicro is a family of small Python libraries for microcontroller projects: WiFi, MQTT, HTTP server and client, sockets, NTP, websockets, timing helpers, leveled logging, persistent storage, and more.  Each library installs on its own, so pick what you need.
+ChuMicro is a family of small Python libraries for microcontrollers: WiFi, MQTT, HTTP client and server, WebSockets, sockets, network time, timers, configuration, and storage that survives a reboot.  Each library installs by itself, so a project that only needs a timer gets a timer and nothing else.
 
-The same library source code runs on three Python runtimes without modification:
+Two rules run through every library.
 
-- **CircuitPython** on a dev board (Adafruit Feather, Raspberry Pi Pico W, …)
-- **MicroPython** on a dev board (ESP32 family, RP2040 / RP2350, …)
-- **CPython** on your laptop, for development, unit tests, and offline iteration
+The first rule: never stop the program.  A microcontroller usually has several jobs running at once.  It keeps the WiFi alive, stays connected to an MQTT broker (the message hub most home-automation setups talk through), blinks a status LED, watches a button.  Most Python libraries for boards block: while a request waits on a slow server, or WiFi retries a dead router, the entire device freezes and every other job stops with it.  Code that stops the world to wait on a network is a bad foundation for a device, and if you've ever watched a board hang for thirty seconds because the router was unplugged, you already know it.  ChuMicro libraries do their work in small steps inside your loop.  Each pass, every library does a little and hands control back, so a dead network costs you nothing but the network: the LED keeps blinking, the button keeps answering, and you choose how long to wait and what happens when the waiting is over.
 
-Everything is non-blocking: **no `async` / `await`, no threads**.  Concurrent work shares a single `while True:` loop, taking small turns so each one keeps making progress.
+The second rule: the same code runs everywhere.  A library written for CircuitPython won't run on MicroPython, and one written for MicroPython won't run on CircuitPython, so changing boards often means porting your project.  Every ChuMicro library runs unmodified on CircuitPython, MicroPython, and the standard Python on your computer.  You can develop and test a program at your desk, then deploy the same files to a Pico W running CircuitPython or an ESP32 running MicroPython.
 
-## What makes ChuMicro different
+## An LED blink without time.sleep()
 
-- **One codebase, three Python runtimes.**  Each library is written once and runs unmodified on CircuitPython, MicroPython, and CPython.  No per-runtime forks, no shim modules, no "this works on CP but breaks on MP" gotchas.  Develop and unit-test on a laptop, and the same source ships to your board.
-
-- **Non-blocking by design.**  No `async` / `await`, no threads.  Each long-running operation (a WiFi reconnect, a TLS handshake, an HTTP request, an MQTT subscribe) yields back to the main loop in small chunks.  Other work in the same loop (an LED heartbeat, a button check, a display update, a sensor read) keeps running alongside it.  Same shape as Arduino's `loop()` body.
-
-- **Iterating on real hardware is one command.**  Drop in a board, run `chumicro-workspace deploy-example <library> <example>`, and the example runs on the device.  Firmware install (UF2 or esptool), board discovery, source push, and REPL tail are all built in.  No Makefile, no manual `mpremote`, no copying files to a USB drive that mounts inconsistently.
-
-- **Tested at every level, through one `pytest` invocation.**  Every library has CPython unit tests for fast iteration on a laptop.  The same tests also run under MicroPython and CircuitPython's desktop builds (their "unix ports"), so "works on CPython, breaks on the device runtime" is caught before code reaches a board.  On-device functional tests stage source onto a connected board and run in its actual Python runtime.  All four paths route through regular `pytest` via the `chumicro-pytest-device` plugin, so an IDE play button drives every layer the same way.  Examples are exercised on real CircuitPython and MicroPython boards as part of the release process.
-
-- **A real project layout once examples aren't enough.**  The [workspace template](https://github.com/ChuMicro/ChuMicro-Workspace-Template) is a clone-and-go starter with a `projects/` tree, host-staged deploys (no save-on-every-keystroke editing on the board's FAT filesystem), a device registry shared with the deploy tools, workspace-wide config + secrets, and a `pytest` setup that runs tests both on a laptop and on the board.
-
-- **Bring your own socket, your own clock.**  Each library accepts its I/O dependencies as constructor arguments.  `MQTTClient` takes a socket. `Heartbeat` takes a clock.  You decide what to pass.  ChuMicro provides defaults (`chumicro-sockets`, `chumicro-timing`) so minimal wiring works.  Nothing locks you in: pass a stdlib `socket.socket` for a desktop script, a wrapper around an existing networking library, or anything else that exposes the small set of methods the library needs.  Adopting just one library into an existing codebase?  [Standalone integration](docs/contributing/standalone-integration.md) is the full recipe — bring-your-own transport and clock, the measured zero-sibling import closure, and host tests with no board.  When the default is fully replaced, [Slimming Your Deploy](docs/contributing/slimming-your-deploy.md) shows how to drop `chumicro-sockets` from the on-device files too.
-
-- **Runs on common Python-capable dev boards.**  Tested on real CircuitPython and MicroPython boards before each release.  Any board that runs CircuitPython or MicroPython with at least 256 KB of RAM and 2 MB physical / ~800 KB usable flash should work.
-
-## From blink to a full IoT loop
-
-A short tour of what ChuMicro code looks like.  We'll start with the simplest possible thing (a non-blocking LED blink) and finish with a four-service IoT device (WiFi + HTTP + MQTT + the LED) sharing one `while True:` loop.  The loop pattern stays identical throughout. New services just slot in alongside the existing ones.
-
-The blink itself (the embedded version of "hello world") toggles the onboard LED once per second **without** `time.sleep()` pausing anything else.  The loop structure and timing API are identical on CircuitPython and MicroPython, only the LED toggle changes per runtime.
-
-**CircuitPython**, save as `code.py`, uses the onboard LED (`board.LED`):
+The first thing every tutorial teaches is `time.sleep()`.  It's also the reason most board code can only do one thing at a time.  Here's the embedded hello world with no sleep in it:
 
 ```python
 import board, digitalio
-from chumicro_timing import Heartbeat, ticks_ms
+from chumicro_timing import Rate, ticks_ms
 
 led = digitalio.DigitalInOut(board.LED)
 led.direction = digitalio.Direction.OUTPUT
-heartbeat = Heartbeat(period_ms=1000)
+blink = Rate(500, ticks_ms())
 
 while True:
     now = ticks_ms()
-    if heartbeat.poll(now):
+    if blink.due(now):
         led.value = not led.value
+    # everything else your device does goes here, one small step at a time
 ```
 
-**MicroPython**, save as `main.py`, uses `Pin(2)` (typical ESP32 onboard LED, adjust for your board):
+The loop never pauses.  `Rate` answers "is it time yet?", the LED toggles when it is, and the loop moves on either way.  Everything in ChuMicro is built on this shape: the MQTT client, the HTTP server, and the WiFi supervisor each do one small piece of work per pass through the loop, exactly like this blink.  (CircuitPython shown; the MicroPython version differs only in the LED lines, and both ship in [timing's examples](libraries/timing/examples/).)
+
+## Give WiFi a deadline and keep blinking
+
+Hand your services to the `Runner` and it deals out the turns.  Here's the scenario this project measures itself against: WiFi comes up on a time budget while the LED keeps its rhythm.
 
 ```python
-from machine import Pin
-from chumicro_timing import Heartbeat, ticks_ms
-
-led = Pin(2, Pin.OUT)
-heartbeat = Heartbeat(period_ms=1000)
-
-while True:
-    now = ticks_ms()
-    if heartbeat.poll(now):
-        led.value(not led.value())
-```
-
-**CPython** — no board handy?  `print` stands in for the LED toggle, so you can run this on your laptop with `python3 hello.py`:
-
-```python
-from chumicro_timing import Heartbeat, ticks_ms
-
-heartbeat = Heartbeat(period_ms=1000)
-
-while True:
-    now = ticks_ms()
-    if heartbeat.poll(now):
-        print("beat!")
-```
-
-`Heartbeat` is the timer, and `ticks_ms()` is the current time in milliseconds.
-
-### Now drop a network request in next to it
-
-Cooperative-loop payoff: a real WiFi connect, a real HTTP request, and the LED heartbeat all share the same `while True:`, and the LED stays smooth through both.  Here's a single program that runs on **both CircuitPython and MicroPython**. It connects to WiFi, fetches a URL every 30 seconds, and **never pauses the blink** while either of those happens.  Only the LED pin setup differs between the two runtimes. Everything below the branch is identical:
-
-```python
-import sys
-from chumicro_timing import Heartbeat, ticks_ms
-from chumicro_wifi import WifiConfig, WifiService
-from chumicro_requests import HttpClient
-
-# Only the LED setup differs between runtimes:
-if sys.implementation.name == "circuitpython":
-    import board, digitalio
-    _led = digitalio.DigitalInOut(board.LED)
-    _led.direction = digitalio.Direction.OUTPUT
-    def toggle_led():
-        _led.value = not _led.value
-else:  # MicroPython
-    from machine import Pin
-    _led = Pin(2, Pin.OUT)                 # adjust pin for your board
-    def toggle_led():
-        _led.value(not _led.value())
-
-# Everything below works the same on both runtimes:
-wifi = WifiService(WifiConfig(ssid="your-network", password="your-password"))
-http = HttpClient.from_config({}, radio=wifi.adapter.radio)
-blink = Heartbeat(period_ms=500)
-fetch = Heartbeat(period_ms=30_000)
-
-request = None
-while True:
-    now = ticks_ms()
-
-    if wifi.check(now):                    # if wifi has work this tick (connecting, reconnecting)…
-        wifi.handle(now)                   # …do one small piece of it and return
-    if blink.poll(now):                    # every 500 ms, this fires exactly once
-        toggle_led()
-
-    if fetch.poll(now) and wifi.connected and request is None:
-        request = http.get("http://example.com")     # every 30 s, queue a fetch for example.com
-
-    if request is not None:                # if a fetch is queued or in flight,
-        if http.check(now):                #   if there's network work for it this tick…
-            http.handle(now)               #   …advance it by one chunk (send / recv / parse a piece)
-        if request.done:                   # once the response is fully read,
-            print("status:", request.result.status_code)
-            request = None                 # clear the slot so the next 30 s tick can queue another fetch
-```
-
-Each pass through the loop nudges WiFi forward, toggles the LED if its 500 ms is up, decides whether to start a new fetch, and advances any fetch already in flight by one chunk.  Nothing blocks. Even a slow TLS handshake or a stalled peer just means more loop passes happen, and the LED keeps ticking through all of them.
-
-**The same pattern runs on CPython too**, where your laptop's OS already handles WiFi, so `WifiService` drops out and the LED becomes a `print`.  Useful for developing and unit-testing your loop logic before deploying:
-
-```python
-from chumicro_timing import Heartbeat, ticks_ms
-from chumicro_requests import HttpClient
-
-http = HttpClient.from_config({})
-blink = Heartbeat(period_ms=500)
-fetch = Heartbeat(period_ms=30_000)
-
-request = None
-while True:
-    now = ticks_ms()
-
-    if blink.poll(now):                    # every 500 ms, this fires exactly once
-        print("beat!")                     # stand-in for the LED toggle
-
-    if fetch.poll(now) and request is None:
-        request = http.get("http://example.com")     # every 30 s, queue a fetch for example.com
-
-    if request is not None:                # if a fetch is queued or in flight,
-        if http.check(now):                #   if there's network work for it this tick…
-            http.handle(now)               #   …advance it by one chunk
-        if request.done:                   # once the response is fully read,
-            print("status:", request.result.status_code)
-            request = None                 # clear the slot for the next 30 s tick
-```
-
-### Now scale it up: add MQTT and `chumicro_runner`
-
-Once your project has more services (WiFi, an HTTP client, an MQTT client, a button, a display), hand-rolling the `if X.check(now): X.handle(now)` dispatch in the main loop gets repetitive.  **`chumicro_runner`** is a tiny scheduler that takes that dispatch off your hands: register each service once, and the main loop becomes `while True: runner.tick()`.  Here's the same scenario, **with MQTT added** alongside the HTTP fetch so the runner pattern has something to actually carry its weight:
-
-```python
-import sys, json
 from chumicro_runner import Runner
 from chumicro_wifi import WifiConfig, WifiService
-from chumicro_requests import HttpClient
-from chumicro_mqtt import MQTTClient, ProtocolState
 
-# LED setup, same per-runtime branch as before:
-if sys.implementation.name == "circuitpython":
-    import board, digitalio
-    _led = digitalio.DigitalInOut(board.LED)
-    _led.direction = digitalio.Direction.OUTPUT
-    def toggle_led(now): _led.value = not _led.value
-else:  # MicroPython
-    from machine import Pin
-    _led = Pin(2, Pin.OUT)                        # adjust pin for your board
-    def toggle_led(now): _led.value(not _led.value())
+wifi = WifiService(WifiConfig(ssid="home-wifi", password="…"))
 
-# Services. All share the same wifi radio:
-wifi = WifiService(WifiConfig(ssid="your-network", password="your-password"))
-http = HttpClient.from_config({}, radio=wifi.adapter.radio)
-mqtt = MQTTClient.from_config({
-    "mqtt.broker.host": "broker.example.com", "mqtt.broker.port": 1883,
-    "mqtt.client_id": "demo-device",
-}, radio=wifi.adapter.radio)
-mqtt.on_message = lambda topic, payload: print(f"command: {topic} <- {payload!r}")
-mqtt.connect()                                    # non-blocking, runner drives handshake + retry
+def toggle_led(now):
+    led.value = not led.value      # led set up as in the blink example above
 
-# Runner calls this when a fetch completes (success or failure):
-def on_fetch_done(handle):
-    if handle.error is None:
-        print("fetch:", handle.response.status_code)
-    else:
-        print("fetch failed:", handle.error)
-
-# Runner calls this every 30 s. If wifi is up and the client is idle, queue a fetch.
-# on_done binds the response handling to the request that produced it — no shared slot,
-# no separate "is the reply ready yet?" task:
-def start_fetch(now):
-    if wifi.connected and not http.busy:
-        http.get("http://example.com", on_done=on_fetch_done)
-
-# Runner calls this every 5 s. If MQTT is connected, publish a telemetry heartbeat (else skip this tick):
-def publish_telemetry(now):
-    if mqtt.state == ProtocolState.CONNECTED:
-        mqtt.publish("demo/telemetry", json.dumps({"uptime_ms": now}).encode(), qos=0)
-
-# Wire everything to one runner. Order doesn't matter, each task gets a turn each tick:
 runner = Runner()
-runner.add(wifi)                                        # wifi state machine + reconnect
-runner.add(http)                                        # advance any in-flight HTTP request
-runner.add(mqtt)                                        # advance MQTT (handshake, publish, recv)
-runner.add_periodic(start_fetch, period_ms=30_000)      # fetch example.com every 30 s
-runner.add_periodic(publish_telemetry, period_ms=5_000) # publish heartbeat every 5 s
-runner.add_periodic(toggle_led, period_ms=500)          # toggle LED every 500 ms
+runner.add(wifi)                                  # connects, retries, reconnects on drop
+runner.add_periodic(toggle_led, period_ms=500)    # blinks no matter what wifi is doing
 
-# Each tick, Runner gives every registered task a turn; runner.wait
-# then idles the CPU until the next socket is ready or the next
-# deadline arrives, so the loop draws microamps between events:
+if runner.run_until(lambda: wifi.connected, timeout_ms=20_000):
+    print("online:", wifi.ip)
+else:
+    print("no wifi yet, starting anyway")         # wifi keeps retrying in the background
+
 while True:
-    now_ms = runner.tick()
-    runner.wait(now_ms)
+    now = runner.tick()    # every service takes one small step
+    runner.wait(now)       # then the CPU idles until something actually needs it
 ```
 
-Same cooperative loop, same per-tick advancement: every registered task still gets a turn each tick, still yields after one chunk of work.  **Four services + three periodic tasks** all sharing one `while True:` loop. The dispatch lives in a handful of declarative registrations up front, instead of growing the loop body with another `if X.check(now): X.handle(now)` for every new service you add.  Add a button, a display, an NTP client. Each is one more `runner.add(...)`, not three more lines inside the loop.  `runner.wait(now_ms)` lets the CPU sleep between events — without it, the loop busy-polls and burns battery on a board that's mostly waiting.
+Unplug the router and this program does not hang.  The LED blinks through the retries, the twenty seconds run out, and the device starts working offline.  The WiFi service keeps retrying with backoff, and when the network comes back, `wifi.connected` flips true.  The last line matters too: `runner.wait()` sleeps the CPU until the next socket event or timer deadline instead of spinning the loop flat out, and on battery that idle time is what your runtime budget is made of.
 
-For more runnable patterns, see [`libraries/timing/examples/`](libraries/timing/examples/) (debounce, multi-heartbeat, timeout, periodic ticks), [`libraries/requests/examples/`](libraries/requests/examples/) (the fetch pattern), and [`libraries/runner/examples/`](libraries/runner/examples/) (the full runner-registration cookbook).
+## Sequential work reads top to bottom
+
+Some work is a sequence: connect, send, wait for the reply, read it.  Spelled out as callbacks and status flags, a four-step sequence scatters across a file.  This repository keeps the receipt: its TCP echo demo exists in [both styles](demos/), and the spelled-out version is a state-machine class with its own states and handler methods where the generator version is one short function you read top to bottom.
+
+A generator is plain Python.  Each `yield from` marks the line where your code pauses; the rest of the device runs; your code resumes on that line when the socket is ready.
+
+```python
+from chumicro_requests.generators import get
+from chumicro_requests.sockets_factory import chumicro_sockets_connector_factory
+
+transport_factory = chumicro_sockets_connector_factory(radio=wifi.adapter.radio)
+
+def fetch_forecast():
+    response = yield from get(transport_factory, "http://example.com/")
+    print(response.status_code, len(response.body))
+
+handle = runner.add_generator(fetch_forecast())
+runner.run_until(handle, timeout_ms=30_000)
+```
+
+The request advances between LED blinks and MQTT keepalives.  A slow server or a stalled TLS handshake (TLS is the encryption behind https) doesn't take the device down with it, and the timeout is an argument, not an architecture.  The runnable version of this file, WiFi wiring included, ships in the requests library's `examples/` folder.
+
+### Why generators and not async/await?
+
+Because `async` support is uneven across the two device runtimes, and the difference bites.  MicroPython ships a capable asyncio in its firmware.  CircuitPython's asyncio is a separate add-on library whose socket and stream layer remains incomplete, and smaller boards don't include async support in the firmware at all.  Code built on asyncio quietly commits you to one runtime.
+
+Generators sidestep that.  They're core Python, identical on CircuitPython, MicroPython, and CPython, and they're the machinery `async` compiles down to anyway.  ChuMicro drives them directly and skips the keywords.  Three things get better:
+
+- Every pause is a visible `yield from` in your source.  You can set a breakpoint on it, and when a deployed board misbehaves, the serial traceback shows which line it was waiting on.
+- The device pays less.  On CircuitPython, each `await` compiles into a method call that allocates a fresh object on the heap every time the line resumes; in a receive loop, that's an allocation per pass, on a board where the heap is measured in kilobytes.  `yield from` is a single bytecode on both device runtimes, ChuMicro reuses the wait objects it yields, and the runner's own tests hold its wait path to zero steady-state allocation.  These are measurements against the two runtimes' compilers, not vibes; [Decision 0087](plans/decisions/0087-generators-for-sequential-io.md) has the numbers.
+- Nothing pulls you toward coroutines you don't need.  A WiFi supervisor, an MQTT keepalive, a button debounce: each one is "check whether there's work, do one piece of it."  ChuMicro services expose exactly that pair of methods and the runner calls them.  Generators are reserved for the flows that genuinely read as a sequence.
+
+The full reasoning is in the project's [decision records](plans/decisions/).
+
+## The engineering underneath
+
+Claims about embedded software are cheap, so this project keeps receipts:
+
+- Every library has a flash-size ceiling in CI.  A change that outgrows its budget fails the build and needs a measured justification to raise it.
+- Hot paths carry zero-allocation contracts, tested on the device runtimes with the garbage collector disabled, because on a small heap the killer isn't peak memory, it's fragmentation and churn.
+- Limits are measured, not guessed.  Recursion guards are set by probing the worst supported board until it faults, then backing off; deadlines and buffer sizes trace to bench numbers.
+- Every non-obvious choice has a written [decision record](plans/decisions/): what was decided, what the alternatives were, and the evidence.  Over a hundred of them, and they get revisited when the facts change.
+- When something fails on your bench, the tools classify the failure and name the fix (drive not mounted, board in bootloader mode, port held by another process) instead of leaving you a stack trace.
+
+## Test on your laptop, not over a serial cable
+
+Every library takes its I/O and its clock as constructor arguments: a socket, a millisecond tick source.  On a board you hand in the real thing.  On your laptop you hand in a fake, and your tests run in milliseconds with no hardware plugged in.  Libraries with hardware-shaped dependencies ship their fakes in a `testing` module (`from chumicro_timing.testing import FakeTicks`), so your tests use the same tools the project's own tests do.
+
+The same test suite also runs under desktop builds of MicroPython and CircuitPython, which catches "works on my laptop, breaks on the board" before any code touches hardware.  If you've ever debugged a library by adding prints and re-copying files to a USB drive, this is the part of ChuMicro you'll thank yourself for.
+
+Adopting one library into an existing project works too: bring your own socket and clock, take only the files you need.  See [standalone integration](docs/contributing/standalone-integration.md).
+
+## Watch it work on real hardware
+
+The fastest way to judge a library is to watch it complete a real exchange.  The [`demos/`](demos/) folder holds end-to-end scenarios where your board and your laptop play both sides, each one a single command from a clone of this repo:
+
+- **[`mqtt_sensor_motor`](demos/mqtt_sensor_motor/)**: the board publishes its temperature over MQTT and takes fan-speed commands back, dimming its LED to match.  Your laptop runs the broker and the controller.
+- **[`http_server_roundtrip`](demos/http_server_roundtrip/)**: the board serves HTTP routes, the laptop discovers it and exercises them.
+- **[`sockets_runner_connector`](demos/sockets_runner_connector/)**: the TCP echo written as a straight-line generator, next to a [twin demo](demos/sockets_runner_connector_explicit/) doing the same job as an explicit state machine, so you can compare the two styles line by line.
+
+Each demo's README says what you'll see and what it proves.  For single-library learning material, every library also ships an `examples/` folder that deploys to a board with one command (below).
 
 ## Install
 
-If you're already working in a project (yours, or someone else's), and you just want to drop in one ChuMicro library:
+> **New to board Python?**  A brand-new board may have no CircuitPython or MicroPython on it yet, and the commands below assume one is already running.  Either works with ChuMicro (CircuitPython is the gentler start).  Skip ahead to [Try an example on a board](#try-an-example-on-a-board), which handles the firmware and gets an LED blinking in four commands.
+
+Already have a project and want one library on your board?  Every library installs by name, on every runtime.  Swap in `chumicro-mqtt`, `chumicro-wifi`, or anything from the table below:
 
 ```bash
 # CircuitPython, via the circup bundle manager
 circup bundle-add ChuMicro/ChuMicro-Bundle
 circup install chumicro-timing
 
-# MicroPython, via mip
+# MicroPython, via mpremote (MicroPython's CLI tool) and mip (its package manager)
 mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_timing
 
 # CPython, via pip
 pip install chumicro-timing
 ```
 
-Substitute the library name you want (e.g. `chumicro-mqtt`, `chumicro-wifi`).  For the full install matrix, pre-compiled `.mpy` bundles, and the experimental release channel, see [`INSTALL.md`](INSTALL.md).
+[`INSTALL.md`](INSTALL.md) covers pre-compiled `.mpy` packages for lower RAM use, the experimental release channel, and per-runtime notes.
 
-If you're **starting a new project from scratch** (your own source layout, your own deploys, multiple boards or projects), see [Start a new project](#start-a-new-project) further down.
+## The libraries
 
-## Libraries
-
-These libraries run on a board (or on your laptop, when developing).  Each one installs independently and pulls in as few other libraries as possible, so you can drop in just `timing` for a single sensor sketch, or pull in the whole stack for a connected device.
+Each library installs independently and pulls in as little as possible.  Install one for a sensor sketch, or combine a dozen for a connected device.
 
 | Library | What it's for |
 |---|---|
-| **[timing](libraries/timing/)** | Periodic timers and millisecond clock math that don't block the loop.  Reach for it when you want "every 5 seconds, read the sensor" or "if no response in 2 seconds, give up", without ever calling `time.sleep()`. |
-| **[runner](libraries/runner/)** | A tiny task scheduler.  Register the services you want to run (WiFi, MQTT, your app logic, …), call `runner.tick()` from your main loop, and it gives each one a turn.  The glue that lets several libraries share the same `while True:` cleanly. |
-| **[compat](libraries/compat/)** | A few Python standard-library features that CircuitPython and MicroPython don't ship (like `functools.partial`).  Use it when you want one piece of code to work across all three runtimes. |
-| **[logging](libraries/logging/)** | Leveled logging (DEBUG / INFO / WARNING / ERROR / CRITICAL) that yields between records, so it doesn't pause the rest of your program.  Per-logger levels with parent-name resolution, no dependencies on other ChuMicro libraries.  *Parked — maintained in-tree but not currently published (Decision 0107).* |
-| **[msgpack](libraries/msgpack/)** | Binary serialization that's smaller than JSON for typical sensor payloads.  Use it for saving settings, sensor data, or compact MQTT payloads.  Wire-compatible with the PyPI `msgpack` library. |
-| **[config](libraries/config/)** | Type-checked runtime configuration.  Each library reads its settings from a shared config object using dotted keys (`wifi.ssid`, `mqtt.broker.host`), so you don't repeat parsing logic in every project. |
-| **[kvstore](libraries/kvstore/)** | A tiny key-value store for small bits of state that need to survive a reboot: boot counters, last-seen timestamps, auth tokens.  Picks a backend based on what's available on the runtime (NVM, NVS, or a filesystem fallback). See the library guide for the current mapping. |
-| **[wifi](libraries/wifi/)** | A single WiFi service that works the same across CircuitPython and MicroPython on both ESP32 and Pi Pico W.  Connects, reconnects on drop, and surfaces state changes as events you can wire into the rest of your app. |
-| **[sockets](libraries/sockets/)** | TCP, TLS, and UDP socket helpers that work the same across all three runtimes.  Used internally by `requests`, `mqtt`, `http_server`, `websockets`, and `ntp`, and usable directly when you want raw sockets.  Custom-CA TLS (an internal broker, a self-signed cert) is supported via `ssl_context_with_ca(...)`. See [`libraries/sockets/examples/tls_with_custom_ca.py`](libraries/sockets/examples/tls_with_custom_ca.py) for the pattern. |
-| **[ntp](libraries/ntp/)** | Time sync over SNTP.  Gets your board's clock close enough to UTC for TLS certificate-validity checks and timestamped logs.  Pure Python, no native code. |
-| **[requests](libraries/requests/)** | Non-blocking HTTP/1.1 client.  The LED keeps blinking through a TLS handshake, a slow response, or a peer that goes silent mid-stream. |
-| **[http_server](libraries/http_server/)** | Non-blocking HTTP/1.1 server with a `@server.route` decorator (method dispatch, path parameters).  TLS is supported where the runtime allows it. See the library guide for the current support matrix. |
-| **[mqtt](libraries/mqtt/)** | Non-blocking MQTT 3.1.1 client with QoS 0 and 1, last-will, retain, concurrent in-flight publishes, and TLS (MQTTS / port 8883). |
-| **[websockets](libraries/websockets/)** | Non-blocking WebSocket client and server (RFC 6455 framing), plain (`ws://`) and TLS (`wss://`).  Works alongside `http_server` for combined HTTP + WS / HTTPS + WSS deployments. |
+| **[timing](libraries/timing/)** | Timers and deadlines that never block.  "Every 5 seconds, read the sensor."  "No reply in 2 seconds, give up."  No `time.sleep()`. |
+| **[runner](libraries/runner/)** | The scheduler.  Register your services, call `runner.tick()` in your loop, everyone gets a turn.  `runner.wait()` idles the CPU between events. |
+| **[wifi](libraries/wifi/)** | One WiFi service for both device runtimes.  Connects, retries with backoff, reconnects on drop, and tells your app what changed. |
+| **[requests](libraries/requests/)** | HTTP/1.1 client.  A slow server or a TLS handshake never freezes your loop. |
+| **[http_server](libraries/http_server/)** | HTTP/1.1 server with a `@server.route` decorator.  TLS where the runtime supports it; the guide has the current map. |
+| **[mqtt](libraries/mqtt/)** | MQTT 3.1.1 client with QoS 0 and 1, last will, retain, and TLS.  Stays connected while your loop does everything else. |
+| **[websockets](libraries/websockets/)** | WebSocket client and server, plain and TLS.  Pairs with `http_server` on one device. |
+| **[sockets](libraries/sockets/)** | TCP, TLS, and UDP that behave the same on all three runtimes.  Used underneath `requests`, `http_server`, `mqtt`, and `websockets`, and usable directly. |
+| **[ntp](libraries/ntp/)** | Sets the board's clock from the network.  Close enough to UTC for TLS certificate checks and honest log timestamps. |
+| **[config](libraries/config/)** | Typed runtime settings with one dotted-key convention (`wifi.ssid`, `mqtt.broker.host`) shared by every library. |
+| **[kvstore](libraries/kvstore/)** | Small persistent storage for what must survive a reboot: boot counters, tokens, timestamps.  Picks the right backend for your board. |
+| **[msgpack](libraries/msgpack/)** | Binary serialization, smaller than JSON for typical sensor payloads.  Compatible with the wider `msgpack` ecosystem. |
+| **[compat](libraries/compat/)** | The few standard-library pieces the device runtimes don't ship, so one file of code can run everywhere. |
 
-For a dependency graph and a "pick a library by problem" guide, see [`libraries/README.md`](libraries/).
+For a dependency graph and a "pick a library by problem" index, see [`libraries/README.md`](libraries/).
 
-## Deploying examples to a board
+## Try an example on a board
 
-Every library above ships with runnable examples in its `examples/` folder.  If you have a microcontroller on hand, this repository can deploy any of those examples to your board directly, no need to set up a project of your own first.  Use this when you want to try a library on real hardware before adopting it, contribute to ChuMicro, or get a feel for the deploy / REPL / firmware tools.  (For real project work, see [Start a new project](#start-a-new-project) below. The per-library `examples/` folders are meant for trying things, not as a long-term home for your code.)
-
-**Step 1.** Clone the repository and install everything into a Python virtual environment:
+Every library ships runnable examples, and this repository deploys any of them to a connected board.  Nothing to set up beyond a clone:
 
 ```bash
 git clone https://github.com/ChuMicro/ChuMicro
 cd ChuMicro
-python3 scripts/prepare_workspace.py    # creates .venv, installs every library + workbench tool
-```
-
-`prepare_workspace.py` auto-creates a `.venv/` and installs the libraries + the host-side CLI tools (`chumicro-workspace`, `chumicro-deploy`, `chumicro-repl`) into it.  It uses `uv` if you have it, otherwise stdlib `venv`.
-
-If you'd rather use your own Python environment (`pyenv`, `conda`, `uv`, a system Python, an existing project venv), activate it and run `python3 scripts/run.py setup` instead. That skips the venv-creation step and installs everything into whichever interpreter is active.
-
-**Step 2.** Plug in a board that already runs CircuitPython or MicroPython, then ask `chumicro-workspace` to deploy an example.  The first positional is a library name (from the table above), the second is an example file's stem (from that library's `examples/` folder):
-
-```bash
+python3 scripts/prepare_workspace.py                  # one-time: creates an isolated Python env, installs everything
+source .venv/bin/activate                             # puts the chumicro tools on your PATH
 chumicro-workspace deploy-example timing heartbeat_blink
-chumicro-workspace deploy-example mqtt   telemetry
-chumicro-workspace deploy-example wifi   connect_to_ap
 ```
 
-On your first run, you'll be walked through picking the right serial port, probing the board to detect whether it's CircuitPython or MicroPython, and remembering the board for future commands.  After that, `deploy-example` just deploys.
+The first deploy walks you through picking the board's serial port and detecting its runtime, then remembers the board.  `chumicro-workspace deploy-example --list` prints every library-and-example pair you can deploy.  Networked examples read your WiFi name and password from a gitignored `secrets.toml` at the repo root; [wiring wifi credentials](docs/wiring-wifi-credentials.md) covers the details.
 
-`chumicro-workspace deploy-example --list` prints every available `<library> <example>` pair you can run.  If you'd prefer to do the register-the-board step up front (and ship a built-in demo at the same time), run `chumicro-workspace bootstrap` first. Same wizard, just standalone.
+If your board doesn't have CircuitPython or MicroPython on it yet, `chumicro-deploy flash-firmware` installs one first.  It handles both the UF2-drive style (Pico) and the esptool style (ESP32); `--help` covers the flags per method.
 
-<!-- TODO(gif): terminal capture — clone → prepare_workspace → deploy-example → blinking LED. -->
+## Start a real project
 
-**If your board is still running its factory firmware (Arduino-style, or a bare chip with no Python on it yet)**, you'll need to flash CircuitPython or MicroPython onto it first.  The wizard above can't help yet. There's no Python on the board for it to probe, and `chumicro-workspace install-firmware` won't run against an unregistered board.  Use the lower-level **`chumicro-deploy flash-firmware`** CLI instead, which takes an explicit serial port (or UF2 bootloader-drive path) and a firmware URL.  Exact flags vary by chip family (UF2 for RP2040 / RP2350, `esptool` for ESP32 boards):
-
-```bash
-chumicro-deploy flash-firmware --help    # full flag reference per method
-```
-
-Once the firmware lands and the board reboots, the `chumicro-workspace deploy-example` step above works as written. The wizard detects the freshly-flashed board and registers it on first run.
-
-<!-- TODO(gif): flash-firmware on an Arduino-flashed board, then deploy-example. -->
-
-## Running tests
-
-ChuMicro tests at four layers: CPython unit tests, the same tests under MicroPython + CircuitPython unix-port builds, on-device functional tests on a connected board, and a full CI mirror.  Day-to-day iteration uses plain `pytest` from the repo root. The `chumicro-pytest-device` plugin transparently routes the unix-port + on-device layers through the same `pytest` invocation, so IDE play buttons work at file or function granularity across every layer.
-
-```bash
-pytest libraries/timing/tests                            # CPython unit tests
-pytest libraries/ --target unix-port --runtime both      # MicroPython + CircuitPython unix-port
-pytest libraries/timing/functional_tests                 # on-device, staged onto a connected board
-python3 scripts/run.py preflight                         # full CI mirror (lint + every test layer + docs)
-```
-
-First-time unix-port use: run `python3 scripts/run.py prepare-micropython` and `prepare-circuitpython` once to build the binaries under `.tools/` (gitignored, ~1 minute each).
-
-For the full reference, see [CONTRIBUTING.md › Testing](CONTRIBUTING.md#testing). It covers the `run.py` wrappers (per-library coverage gates, parallel runtime phases, PR-summary markdown, scope-by-library / file / function), `devices.yml` setup, and IDE play-button integration.
-
-## Workbench tools
-
-These are command-line tools that run on **your laptop**, not on the board.  You don't need them to use the libraries above (they're optional), but they're what turns flashing firmware, deploying source code, and reading a board's output into one command each, consistently across different boards and runtimes.  The [`deploy-example` commands](#deploying-examples-to-a-board) you ran above are thin wrappers around these tools.
-
-| Tool | What it does |
-|---|---|
-| **[chumicro-deploy](workbench/deploy/)** | Low-level board interaction: probe a board to ask "what runtime and version are you running?", push source code, flash firmware (UF2 file or via `esptool`).  When something goes wrong, it tries to classify the failure and tell you what to do about it (drive not mounted, board in bootloader mode, port held by another process, …). |
-| **[chumicro-repl](workbench/repl/)** | A serial REPL with syntax-highlighted traceback display, a `mpremote`-compatible TUI, and a `tail()` follow-mode that streams a board's output to your terminal.  Also exposes a programmatic `ReplSession` if you want to drive a board from a Python script or test fixture. |
-| **[chumicro-workspace](workbench/workspace/)** | Umbrella CLI for project workflows: scaffold a new project, install firmware, deploy one or many projects to one or many boards, open a REPL, register a new board, run lint + tests, do health checks (`status`, `doctor`).  Both this repository (when you run `deploy-example` here) and the workspace template use it. |
-| **[chumicro-pytest-device](workbench/pytest-device/)** | A `pytest` plugin that runs tests **on a real board**.  When pytest finds a test under a `functional_tests/` folder, this plugin stages the test source onto a connected board, runs it in the device's Python runtime, and reports the result back to pytest like any other test.  Auto-registers: drop it in and it works. |
-
-## Start a new project
-
-For real project work (your own source layout, multiple projects, multiple boards, a test suite, CI), **[ChuMicro-Workspace-Template](https://github.com/ChuMicro/ChuMicro-Workspace-Template)** is a clone-and-go starter repository that's recommended even for a single project on a single board.  What you get:
-
-- **A project tree.** `projects/<name>/` holds your code, and one workspace can hold many projects across many boards.  A `rename` command moves projects cleanly when you reorganize.
-- **Atomic, safer deploys.** Your source stays on your laptop, in version control, and the workbench pushes it to the board on demand.  No save-on-every-keystroke editing on the board's FAT filesystem (which wears the flash and corrupts on cable jiggles), and "RAM mode" deploys give you fast iteration with *no flash writes at all*.
-- **Workspace-wide config + per-project overrides.** `workspace.yml` for host-only settings, `secrets.toml` for wifi password / MQTT auth (gitignored), `project_config.toml` per project. Everything deep-merges into a single config file your device reads at boot.
-- **Board registry.** A `devices.yml` file remembers which boards you've registered, so every CLI knows which port and runtime to use.
-- **Tests on the laptop *and* on the board.** `pytest` for fast unit tests, `chumicro-pytest-device` for tests that run on real hardware, and a workspace-level `preflight` (lint + tests) you can hook into CI.
-- **No `pip install` prerequisite.** `python3 run.py setup` self-bootstraps a virtual environment, installs everything, and materializes the templated config files.  System Python 3.11+ is enough.
+When you move past trying examples, start from the **[workspace template](https://github.com/ChuMicro/ChuMicro-Workspace-Template)**.  It's a clone-and-go repository where your source lives on your laptop under version control and deploys to the board on demand, instead of being edited live on a USB drive that corrupts when the cable wiggles.  While you iterate, RAM-mode deploys write nothing to flash at all; when you ship, flash deploys are checksum-verified.  Your WiFi password lives in a gitignored `secrets.toml` and gets baked onto the board at deploy time, so credentials never sit in your code or your git history.  And the same `pytest` that tests on your laptop tests on the board.
 
 ```bash
 git clone --depth 1 https://github.com/ChuMicro/ChuMicro-Workspace-Template my-workspace
-cd my-workspace && rm -rf .git && git init     # start your own git history
-python3 run.py setup                           # creates .venv, installs everything
-python3 run.py bootstrap                       # pick a port, register the board, ship the demo
+cd my-workspace && rm -rf .git && git init      # make its history yours
+python3 run.py setup                            # creates a venv, installs everything
+python3 run.py bootstrap                        # register your board, ship the starter demo
 ```
 
-See the workspace template's [README](https://github.com/ChuMicro/ChuMicro-Workspace-Template#readme) for the full walkthrough, the `example_sensor` reference project (a WiFi-to-MQTT heartbeat with a persistent boot counter), and the multi-board / multi-project flow.
+Its README walks through the reference project, a WiFi-to-MQTT sensor node with a persistent boot counter, and the multi-board flow.
+
+## Testing
+
+Every library is tested at four levels: plain `pytest` on your laptop, the same tests under desktop builds of MicroPython and CircuitPython, functional tests that run on a real connected board, and examples exercised on physical hardware before each release.  All of it runs through plain `pytest`, and that includes the hardware: click the play button next to a functional test in your IDE and it stages onto the plugged-in board, runs in the board's own Python, and reports back like any other test.
+
+```bash
+pytest libraries/timing/tests                            # laptop unit tests
+pytest libraries/ --target unix-port --runtime both      # device runtimes, no device needed
+pytest libraries/timing/functional_tests                 # on a real connected board
+python3 scripts/run.py preflight                         # everything CI checks, locally
+```
+
+[CONTRIBUTING.md](CONTRIBUTING.md#testing) covers the details, including hardware setup for on-device runs.
+
+## Bench tools
+
+Command-line tools that run on your laptop, not the board.  They're what make the hardware workflow here one command per job: flash firmware, push code, read the board's output, run tests on the silicon.  And they stand on their own: they work against any CircuitPython or MicroPython board, whether or not your code uses the chumicro libraries.
+
+| Tool | What it does |
+|---|---|
+| **[chumicro-workspace](workbench/workspace/)** | The front door: scaffold projects, install firmware, deploy code, open a REPL, register boards, run checks. |
+| **[chumicro-deploy](workbench/deploy/)** | Low-level board operations: probe what's running, push files, flash firmware, and fail with messages that say what to actually do. |
+| **[chumicro-repl](workbench/repl/)** | Serial REPL and output tailing with readable tracebacks.  Scriptable from Python when a tool or test needs to drive a board. |
+| **[chumicro-pytest-device](workbench/pytest-device/)** | The pytest plugin that stages tests onto a connected board and reports results back like any other test run. |
+
+## Bring an AI coding agent
+
+This repository is built so an agent can actually drive it.  The CLIs answer the questions an agent needs answered (`chumicro-deploy probe` reports what runtime and version a board is running), and when something fails, the tools classify the failure into a message that names the fix (drive not mounted, board in bootloader mode, port held by another process) instead of leaving a bare stack trace to guess at.
+
+The practical effect: you can plug in a board you know nothing about and tell your agent "get this onto CircuitPython and blink an LED," and the agent has real commands for every step — probe the port, flash the right firmware, deploy an example, tail the serial output, and read back what happened.  [`AGENTS.md`](AGENTS.md) is the agent's operating manual for working in this repo; the [workspace template](https://github.com/ChuMicro/ChuMicro-Workspace-Template) carries its own, plus step-by-step skill files for board registration, firmware, and deploy-and-debug.
 
 ## Documentation
 
-📖 **[chumicro.github.io/ChuMicro](https://chumicro.github.io/ChuMicro/)** for full hosted docs. Each library has its own guide and API reference, with a version selector for switching between stable and experimental.
-
-Workbench tools have their own hosted docs, linked from each tool's row in the [Workbench tools](#workbench-tools) table above.
-
-## Repository layout
-
-If you've cloned the repo and want a map of what's where:
-
-```text
-chumicro/
-├── libraries/             # Publishable libraries that run on microcontrollers (CP + MP + CPython)
-├── workbench/             # Publishable host-only tools that run on a laptop (CPython only)
-├── support/               # Internal packages (docs assets, test harness), never published
-├── scripts/               # Developer tasks (run.py is the entry point)
-├── docs/contributing/     # Style guide, cheat sheet, setup guides
-├── plans/                 # Work queue, decisions, patterns, workstreams
-├── .github/
-│   ├── workflows/         # CI, release, promote, docs-deploy
-│   └── skills/            # Agent skill instructions
-├── target-runtimes.toml   # Pinned runtime versions
-└── LICENSE                # MIT
-```
+📖 **[chumicro.github.io/ChuMicro](https://chumicro.github.io/ChuMicro/)**: hosted guides and API reference for every library, with a version selector for stable and experimental.
 
 ## Contributing
 
-Issues, bug reports, and pull requests are welcome.  See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the human contributor guide, or [`AGENTS.md`](AGENTS.md) if you're using an AI coding agent.
+Issues, bug reports, and pull requests are welcome.  So is "I ran it on this board and here's what happened," which is some of the most useful feedback a hardware project can get.  Start with [`CONTRIBUTING.md`](CONTRIBUTING.md); if you're working with an AI coding agent, see [`AGENTS.md`](AGENTS.md).
+
+A map of the repository, if you've cloned it and want to look around:
+
+```text
+libraries/    the libraries that run on boards (and your laptop)
+workbench/    the host-side CLI tools
+demos/        end-to-end scenarios: board + laptop, one command
+docs/         contributor guides and troubleshooting
+plans/        design decisions and work queue
+scripts/      developer task runner (run.py)
+```
 
 ## License
 

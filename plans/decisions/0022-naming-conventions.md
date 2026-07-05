@@ -21,9 +21,11 @@ Python's common abbreviations — `msg`, `err`, `exc`, `buf`, `cmd` — are trib
 
 The abbreviations save a few keystrokes per line.  The full words save every future reader a mental lookup.  We chose the side that scales.
 
-This is a deliberate tradeoff.  Some experienced developers will find it verbose; the linter tells you exactly what to type, so the cost in practice is near zero.
+The other driver, stated plainly because it's load-bearing: a large share of the patches in this repo are agent-written.  Agents obey lint rules and ignore prose conventions (the Context above is the receipt), so anything the project actually cares about has to be a lint rule.  Humans inherit the same gate because maintaining two divergent rule sets is worse than one strict one.
 
-A useful side effect: longer names push lines past the 100-character limit, which forces multi-line formatting.  That forced splitting consistently improves readability — each argument on its own line is easier to scan, diff, and annotate with `git blame`.
+This is a deliberate tradeoff.  Experienced developers will find it verbose, and the rule fights muscle memory that predates this project.  The linter names the exact replacement, which makes each hit mechanical — not free.
+
+A side effect we've come to like, not a goal: longer names push some lines past the 100-character limit, which forces multi-line formatting, and an argument per line is easier to diff and `git blame`.
 
 ## Decision
 
