@@ -1,6 +1,6 @@
 # Workstream: audit pipeline continuity — persistence, baseline carryover, waiver ledger, incremental re-audit
 
-Status: **proposed.**  Directions decided in the 2026-06-12 `/audit-skill` discussion of audit-code + audit-branch (report: `.scratch/skill-audits/audit-code+audit-branch-20260612T013211Z.md`, items 55 / 56 / 64 / 66).
+Status: **shipped 2026-07-05** (all four phases; see git log for the landing commit).  Originally proposed:  Directions decided in the 2026-06-12 `/audit-skill` discussion of audit-code + audit-branch (report: `.scratch/skill-audits/audit-code+audit-branch-20260612T013211Z.md`, items 55 / 56 / 64 / 66).
 
 ## Problem
 
