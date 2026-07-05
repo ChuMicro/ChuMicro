@@ -8,7 +8,7 @@
 version = "10.2.0"
 
 [micropython]
-version = "v1.26.0"
+version = "v1.27.0"
 
 [heap]
 # Free-heap ceilings for the unix-port test lanes, measured on the
