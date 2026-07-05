@@ -4,7 +4,7 @@
 
 ## Now
 
-- [ ] **Release-fabric readiness — remediated, CI verified green, gated on docs (2026-07-05).**  [workstreams/release-fabric-readiness.md](workstreams/release-fabric-readiness.md) — all 5 blockers fixed, GitHub infra stood up, CI live and green (all five required checks); `Release` + `Deploy Documentation` disabled_manually per the docs gate.  Open: docs/guides redo (gates going public), PyPI publishers (verify 8 + register 28, Chrome drive whenever), Bundle visibility flip + first-release sequence after docs.
+- [ ] **Release-fabric readiness — remediated, CI verified green, gated on docs (2026-07-05).**  [workstreams/release-fabric-readiness.md](workstreams/release-fabric-readiness.md) — all 5 blockers fixed, GitHub infra stood up, CI live and green (all five required checks); `Release` + `Deploy Documentation` disabled_manually per the docs gate.  Open: docs/guides redo (gates going public), Bundle visibility flip + first-release sequence after docs (incl. token-bootstrap of the 26 missing PyPI projects — pending publishers are capped at one per workflow tuple, see workstream doc; 8 existing verified, 2 pending registered, 4 leftover stable release.yml publishers are prune candidates).
 - [ ] **Docs & guides redo (user call 2026-07-05).**  Gates everything public: re-do docs/guides across monorepo + sister repo, absorbing the channel-inversion fixes (all install defaults point at stable — see release-fabric workstream D1) and the launch promotion-wave story; then re-enable Release/docs-deploy, flip ChuMicro-Bundle public, first release.
 
 ## Next
