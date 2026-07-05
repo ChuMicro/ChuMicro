@@ -27,10 +27,10 @@ Scan the output. Ask yourself:
 ## 2. Run preflight
 
 ```bash
-python scripts/run.py preflight --coverage-threshold 94 2>&1 | tail -5
+set -o pipefail; python scripts/run.py preflight --coverage-threshold 94 2>&1 | tail -5
 ```
 
-Must show: `Preflight passed`. If it fails because of your work, fix it before committing.  If preflight is already red and the failure isn't from your work, surface and stop — don't ship onto a broken `main` (per AGENTS.md).
+Must show: `Preflight passed`. The `pipefail` is load-bearing: without it the pipeline reports `tail`'s exit status, and an `&&` chain hung off this command will happily commit and push a red tree (this shipped a CHU012 failure to main on 2026-07-05).  Never fuse this command with the commit in one `&&` chain — run the gate, read its verdict, then commit.  If it fails because of your work, fix it before committing.  If preflight is already red and the failure isn't from your work, surface and stop — don't ship onto a broken `main` (per AGENTS.md).
 
 ## 3. Compress durable lessons before committing
 
