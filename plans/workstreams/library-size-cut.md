@@ -1,0 +1,55 @@
+# Workstream: library size cut — structural −40% on the heavy trio, fleet-wide diet
+
+Status: **scoped, gated, queued behind CI stand-up** (user calls 2026-07-05: cut depth = structural with all features retained; gate lands NOW at baseline; audit north star inverts for `libraries/`; CI first, then this campaign).
+
+## Why
+
+Libraries ship to boards with ~100–200 K free heap and ~800 K usable flash, yet the 2026-07-05 measured baseline (real Pico W pair, Decision-0090 stripped source, repo mpy-cross) shows:
+
+- Importing all 14 libraries costs **142,672 B of MP heap — 72 % of a Pico W** (rest heap 201,344 B).  The heavy trio (requests + websockets + mqtt) alone ≈ 80 K on either runtime.
+- Fleet flash: **145,338 B of mpy** from 349,785 B stripped source (816 KB raw; strip removes 58 %).
+- Calibration: chumicro_mqtt ≈ **9× umqtt.simple** (stripped), ≈ 8× (mpy), ≈ 7× (import heap); chumicro_requests ≈ 10× micropython-lib requests.  Honesty note: those references cannot run on CircuitPython at all (`import socket`), so part of our multiple buys CP portability, async, and payload guards — the achievable band with features retained is judged 4–6×, not 1×.
+- The growth mechanism is a ratchet: budgets exist only for the unstripped test lanes, and each feature bump is individually "justified" (live specimen: 2026-07-05's attempted mqtt 240 K → 256 K bump for one new method — rejected same day by splitting suite files instead).
+
+## Decisions taken (2026-07-05)
+
+1. **Cut depth: structural, target ≈ −40 % on the heavy trio; every feature stays.**  Deep feature-triage and minimal-first rewrites were considered and deferred.
+2. **Size gate at today's baseline** — committed `size-budgets.toml` (per-library stripped-bytes + mpy-bytes ceilings, +small noise margin), fast host-side `check-size` preflight phase, ceilings ratchet DOWN as cuts land, raises need measured justification in the commit.  On-device import heap is a sweep-layer measurement, not a preflight gate.  (Built 2026-07-05, see gate commit.)
+3. **Audit north star inverted for `libraries/`**: audit-embedded's lens (flash, import RAM, allocations, class/def/exception count, string weight) is primary; standards lenses advisory there.  Standards remain primary for scripts/, workbench/, webui/, skills.  (Landed 2026-07-05, see inversion commit.)
+4. **Sequencing: CI stands up first**, so the whole campaign runs with CI + the size gate protecting it.
+
+## Baseline (2026-07-05, per library: stripped B / mpy B / MP import heap B / shipped classes / defs)
+
+| library | stripped | mpy | MP heap | classes | defs |
+|---|--:|--:|--:|--:|--:|
+| websockets | 77,027 | 31,048 | 26,352 | 24 | 131 |
+| mqtt (pre-0.26.0) | 57,886 | 20,821 | 25,264 | 16 | 89 |
+| requests | 54,845 | 20,254 | 27,504 | 15 | 99 |
+| http_server | 47,654 | 19,533 | 17,984 | 19 | 91 |
+| sockets | 33,494 | 16,276 | 4,128 | 15 | 91 |
+| runner | 19,895 | 6,811 | 13,888 | 8 | 42 |
+| wifi | 13,354 | 6,919 | 3,888 | 6 | 39 |
+| kvstore | 12,958 | 7,171 | 3,776 | 10 | 41 |
+| msgpack | 10,221 | 4,611 | 5,312 (CP: 624 — native module) | 0 | 18 |
+| ntp | 7,025 | 3,414 | 4,288 | 3 | 16 |
+| logging | 5,070 | 2,388 | 3,984 | 3 | 22 |
+| config | 4,702 | 2,609 | 2,576 | 4 | 12 |
+| timing | 4,226 | 2,575 | 3,424 | 3 | 18 |
+| compat | 1,428 | 908 | 240 | 1 | 3 |
+
+The full measurement report (methods, dep-closure ordering, CP columns, calibration rows) lives in the 2026-07-05 session record; `check-size` re-derives current numbers on every preflight.
+
+## Cut targets (what the bytes say — comments are NOT on this list; 0090 already strips them)
+
+- **Exception taxonomies**: requests carries 6 exception classes in `_wire.py`, websockets 7, http_server 9 — each a type object + qstrs.  Consolidate toward one base + code/reason field per library where handling doesn't genuinely fork.
+- **Class/def diet**: websockets ships 24 classes / 131 defs; state-holder micro-classes and one-call helpers merge.  Every def is a code object + qstr; every class a type + dict.
+- **File merges**: per-module import overhead; sockets ships 9 files, wifi 7.
+- **Error-string diet**: f-string prose lives in flash post-strip; long diagnostic messages shrink to terse code-bearing forms (the guide can carry the prose).
+- **Biggest single files first**: `mqtt/client.py` (40 K stripped, 56 defs), `requests/client.py` (25 K), `requests/_wire.py` (24 K), `websockets/_wire.py` (27 K), `websockets/_session.py` (22 K), `http_server/server.py` (22 K).
+- **runner MP/CP asymmetry**: 13,888 B MP import vs 6,224 B CP — find the MP-only weight.
+- **Speculative/ceremonial API**: pure-passthrough properties, ABC-ish base shells (`_adapters/base.py`), knobs without consumers — audit-library already flags these; now they cost score.
+- **NOT dead weight (verified, leave alone)**: `testing.py` fakes never ship (both deploy walkers skip the `__chumicro_test_support__` marker); msgpack on CP binds the native module (624 B) — keep that path.
+
+## Campaign shape (after CI)
+
+Per library, heavy trio first (websockets → requests → mqtt → http_server): an audit-embedded-led cut pass → apply → full preflight + on-device sweep + `check-size` ratchet-down commit.  Bakes re-run on mqtt after its pass (the negative-suite fakes pin behavior).  Fleet-wide passes (exception consolidation, error-string diet) follow as cross-library sweeps.  Success = trio ≈ −40 % stripped/mpy with all features and all tests green, budgets ratcheted to the new floor.
