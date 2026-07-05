@@ -5,6 +5,7 @@ import os
 import stat
 from pathlib import Path
 
+import pytest
 from bundle_manager import (
     CP_MPY_FOLDER,
     DEVICE_RUNTIMES,
@@ -422,6 +423,123 @@ class TestPatchExperimental:
         assert "ChuMicro-Bundle-Experimental" in patched
         assert '/experimental/"' in patched
         assert '/stable/"' not in patched
+
+    def test_hyphenated_name_from_project_table(self, tmp_path: Path):
+        """B1: the name comes from [project].name, not the directory.
+
+        ``libraries/http_server/`` declares ``chumicro-http-server`` — a
+        directory-derived ``chumicro-http_server`` would miss it and exit.
+        """
+        pyproject_content = (
+            '[project]\n'
+            'name = "chumicro-http-server"\n'
+        )
+        library_dir = tmp_path / "http_server"
+        library_dir.mkdir()
+        (library_dir / "pyproject.toml").write_text(pyproject_content)
+
+        patch_experimental(library_dir)
+
+        patched = (library_dir / "pyproject.toml").read_text()
+        assert 'name = "chumicro-http-server-experimental"' in patched
+
+    def test_missing_name_exits(self, tmp_path: Path):
+        """A pyproject with no [project].name exits (B1 guard preserved)."""
+        library_dir = tmp_path / "broken"
+        library_dir.mkdir()
+        (library_dir / "pyproject.toml").write_text('[project]\nversion = "1.0.0"\n')
+
+        with pytest.raises(SystemExit):
+            patch_experimental(library_dir)
+
+    def test_rewrites_chumicro_deps_with_and_without_specifiers(self, tmp_path: Path):
+        """B2: chumicro deps gain -experimental; specifiers are preserved."""
+        pyproject_content = (
+            '[project]\n'
+            'name = "chumicro-http-server"\n'
+            'dependencies = [\n'
+            '    "chumicro-config",\n'
+            '    "chumicro-deploy>=0.1.0",\n'
+            ']\n'
+        )
+        library_dir = tmp_path / "http_server"
+        library_dir.mkdir()
+        (library_dir / "pyproject.toml").write_text(pyproject_content)
+
+        patch_experimental(library_dir)
+
+        patched = (library_dir / "pyproject.toml").read_text()
+        assert '"chumicro-config-experimental"' in patched
+        assert '"chumicro-deploy-experimental>=0.1.0"' in patched
+        # No un-suffixed intra-chumicro dep survives.
+        assert '"chumicro-config"' not in patched
+        assert '"chumicro-deploy>=0.1.0"' not in patched
+
+    def test_leaves_non_chumicro_deps_untouched(self, tmp_path: Path):
+        """B2: third-party deps are not rewritten."""
+        pyproject_content = (
+            '[project]\n'
+            'name = "chumicro-workspace"\n'
+            'dependencies = [\n'
+            '    "chumicro-deploy",\n'
+            '    "msgpack>=1.0",\n'
+            '    "ruamel.yaml>=0.18",\n'
+            ']\n'
+        )
+        library_dir = tmp_path / "workspace"
+        library_dir.mkdir()
+        (library_dir / "pyproject.toml").write_text(pyproject_content)
+
+        patch_experimental(library_dir)
+
+        patched = (library_dir / "pyproject.toml").read_text()
+        assert '"chumicro-deploy-experimental"' in patched
+        assert '"msgpack>=1.0"' in patched
+        assert '"ruamel.yaml>=0.18"' in patched
+        assert "msgpack-experimental" not in patched
+        assert "ruamel.yaml-experimental" not in patched
+
+    def test_leaves_optional_dependencies_untouched(self, tmp_path: Path):
+        """The rewrite is scoped to [project].dependencies only."""
+        pyproject_content = (
+            '[project]\n'
+            'name = "chumicro-http-server"\n'
+            'dependencies = [\n'
+            '    "chumicro-config",\n'
+            ']\n'
+            '\n'
+            '[project.optional-dependencies]\n'
+            'test = [\n'
+            '    "chumicro-config",\n'
+            ']\n'
+        )
+        library_dir = tmp_path / "http_server"
+        library_dir.mkdir()
+        (library_dir / "pyproject.toml").write_text(pyproject_content)
+
+        patch_experimental(library_dir)
+
+        patched = (library_dir / "pyproject.toml").read_text()
+        # The runtime dep is rewritten; the test-extra dep is preserved.
+        assert patched.count('"chumicro-config-experimental"') == 1
+        assert patched.count('"chumicro-config"') == 1
+
+    def test_package_with_no_deps(self, tmp_path: Path):
+        """A package with no dependencies patches name/URLs and no more."""
+        pyproject_content = (
+            '[project]\n'
+            'name = "chumicro-timing"\n'
+            'dependencies = []\n'
+        )
+        library_dir = tmp_path / "timing"
+        library_dir.mkdir()
+        (library_dir / "pyproject.toml").write_text(pyproject_content)
+
+        patch_experimental(library_dir)
+
+        patched = (library_dir / "pyproject.toml").read_text()
+        assert 'name = "chumicro-timing-experimental"' in patched
+        assert "-experimental>" not in patched
 
 
 class TestBuildCircupZips:

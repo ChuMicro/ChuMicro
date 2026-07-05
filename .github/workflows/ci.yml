@@ -113,6 +113,13 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.14"
+          cache: "pip"
+
+      - name: Install workspace tooling
+        # bundle_manager (staging below) imports chumicro_deploy at module
+        # level (Decision 0090 strip reuse) — a bare runner dies on
+        # ModuleNotFoundError without the workspace environment.
+        run: python scripts/run.py setup
 
       - uses: actions/cache@v4
         id: tools-cache
