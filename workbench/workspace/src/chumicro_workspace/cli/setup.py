@@ -16,6 +16,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tomllib
 from collections.abc import Callable
 from pathlib import Path
 
@@ -49,11 +50,33 @@ from chumicro_workspace.workspace import (
 # ---------------------------------------------------------------------------
 
 
+def _pyproject_declares_dev_extra(pyproject: Path) -> bool:
+    """Return True when *pyproject* declares a ``dev`` optional-dependency extra.
+
+    Read from ``[project.optional-dependencies]``.  A workspace whose
+    pyproject carries a ``dev`` extra (pytest / ruff / chumicro-checks)
+    wants ``setup`` to install it so ``lint`` / ``test`` have their
+    tools.  An unreadable or malformed pyproject falls back to ``False``
+    so setup degrades to the bare editable install rather than crashing.
+    """
+    try:
+        data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError):
+        return False
+    optional = data.get("project", {}).get("optional-dependencies", {})
+    return isinstance(optional, dict) and "dev" in optional
+
+
 def _setup_pip_install_editable(
     workspace: WorkspaceLayout,
     subprocess_runner: Callable[..., subprocess.CompletedProcess],
 ) -> int:
     """Run ``pip install -e <workspace.root>`` when a pyproject.toml is present.
+
+    Installs ``.[dev]`` when the workspace pyproject declares a ``dev``
+    extra so ``lint`` / ``test`` have ruff / chumicro-checks / pytest;
+    falls back to the bare ``.`` install when no ``dev`` extra is
+    declared, so runtime-only workspaces keep working.
 
     Returns the subprocess return code (``0`` on success, nonzero from pip on
     failure).  Returns ``0`` and prints a skip note when no pyproject.toml is
@@ -67,9 +90,14 @@ def _setup_pip_install_editable(
             "skipping editable install.",
         )
         return 0
-    print(f"setup: installing {workspace.root} (editable)")
+    if _pyproject_declares_dev_extra(pyproject):
+        install_target = f"{workspace.root}[dev]"
+        print(f"setup: installing {workspace.root} (editable, [dev] extra)")
+    else:
+        install_target = str(workspace.root)
+        print(f"setup: installing {workspace.root} (editable)")
     completed = subprocess_runner(  # noqa: S603 - args fully controlled
-        [sys.executable, "-m", "pip", "install", "-e", str(workspace.root)],
+        [sys.executable, "-m", "pip", "install", "-e", install_target],
         check=False,
     )
     return completed.returncode
@@ -157,7 +185,8 @@ def _setup_additive_reapply(workspace: WorkspaceLayout) -> None:
 def _cmd_setup(args: argparse.Namespace) -> int:
     """Install workspace dependencies and materialize workspace templates.
 
-    Runs ``pip install -e .`` in the workspace root when a
+    Runs ``pip install -e .`` (or ``.[dev]`` when the workspace
+    pyproject declares a ``dev`` extra) in the workspace root when a
     ``pyproject.toml`` is present, then materializes any missing
     workspace templates (``devices.yml``, ``workspace.yml``,
     ``secrets.toml``) from the content shipped in

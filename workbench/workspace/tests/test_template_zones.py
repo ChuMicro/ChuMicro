@@ -19,6 +19,10 @@ class TestClassify:
             ".github/skills/deploy-and-debug/SKILL.md",
             ".github/skills/add-new-project/SKILL.md",
             ".github/skills/register-board/SKILL.md",
+            # CI workflows declare themselves tool-owned in their
+            # headers; `update` must re-flow CI fixes into existing
+            # workspaces.
+            ".github/workflows/test.yml",
             # `examples/` is reading material; `update` re-flows
             # the content from upstream.
             "examples/README.md",
