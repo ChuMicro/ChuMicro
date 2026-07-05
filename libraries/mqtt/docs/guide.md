@@ -197,6 +197,15 @@ Without a factory the client transitions to `FAILED` on socket death and stays t
 
 The factory is also the recommended way to wire up the **initial** connect: the runner is not blocked for the round-trip, and the same code path serves both initial-connect and reconnect.  `MQTTClient.from_config(...)` builds the connector factory for you from `mqtt.broker.host` / `mqtt.broker.port` (and `ssl_context=` for TLS).
 
+Call `connect()` **once**, at startup — self-heal owns every reconnect after that.  A common mistake when pairing with `chumicro-wifi` is to re-issue `mqtt.connect()` from an `on_state_change` callback each time wifi comes back up.  After the first connect the client is `CONNECTED`, `FAILED` (mid-self-heal), or `AWAITING_TRANSPORT` — never `DISCONNECTED` — so `connect()` raises `MQTTError` on every wifi-recovery, and the transport factory would already be re-dialing on its own.  Wire the callback to *nothing* (self-heal reconnects once wifi returns), or guard it with `if mqtt.state == ProtocolState.DISCONNECTED: mqtt.connect()` if a single call site must cover both first-connect and an explicit `disconnect()` teardown.
+
+What happens to publishes issued during the outage depends on the state the client is in when `publish()` runs, and this is worth understanding because it decides which publishes survive a wifi drop:
+
+- Issued while still `CONNECTED` — the link is physically down but the client hasn't detected it yet (detection lags by up to `ack_timeout_seconds`, longer if a blocked reactor starves its ticks) — a QoS-1 publish opens an in-flight entry sent on the doomed socket.  It is never acked, and with the default `clean_session=True` the self-heal reconnect resets the in-flight table, so that publish is **dropped**.  This is ordinary clean-session semantics (the broker forgets the session too); set `clean_session=False` for a persistent broker to have these redelivered with `DUP=1` instead.
+- Issued once the client is `FAILED` / `AWAITING_TRANSPORT` — after the drop is detected — the publish buffers into the bounded pre-connect queue and **flushes** on the reconnect `CONNACK`, oldest first.
+
+So a wifi outage can lose the last publish or two that raced the drop-detection window while flushing everything queued after it — not a bug, but a reason to keep the reactor tick-healthy (a substrate call that blocks the loop widens the raced-and-dropped window) and to choose `clean_session` deliberately.
+
 ## Bring your own transport
 
 `MQTTClient` does not care which library produces its socket.  Any object exposing the four-method contract works:
