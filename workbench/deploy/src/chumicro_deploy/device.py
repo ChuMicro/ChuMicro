@@ -33,6 +33,17 @@ DEFAULT_DEPLOY_MODE = "flash"
 #: On-device directory where deployed library files land by default.
 DEFAULT_RESOURCE_PREFIX = "/lib"
 
+#: Default deploy-transport selection.  ``"auto"`` lets the host-side
+#: builder pick drive-vs-serial (see
+#: :func:`chumicro_workspace.device_orchestration.build_transport_for_entry`);
+#: ``"serial"`` forces the drive-less raw-REPL path for a board that
+#: has no CIRCUITPY volume (classic ESP32, no native USB); ``"drive"``
+#: forces the CIRCUITPY-drive path.  Only meaningful for CircuitPython.
+DEFAULT_DEPLOY_TRANSPORT = "auto"
+
+#: Recognized ``deploy_transport`` values.
+_VALID_DEPLOY_TRANSPORTS = ("auto", "serial", "drive")
+
 
 @dataclass(frozen=True)
 class Device:
@@ -78,6 +89,7 @@ class Device:
     address: str
     baudrate: int = DEFAULT_BAUDRATE
     deploy_mode: str = DEFAULT_DEPLOY_MODE
+    deploy_transport: str = DEFAULT_DEPLOY_TRANSPORT
     entrypoint_name: str | None = None
     resource_prefix: str = DEFAULT_RESOURCE_PREFIX
     transport_factory: Callable[[Device], TransportProtocol] | None = field(
@@ -95,6 +107,12 @@ class Device:
             allowed = ", ".join(f"{mode.value!r}" for mode in DeployMode)
             raise ValueError(
                 f"Unsupported deploy_mode: {self.deploy_mode!r} "
+                f"(expected {allowed})"
+            )
+        if self.deploy_transport not in _VALID_DEPLOY_TRANSPORTS:
+            allowed = ", ".join(f"{choice!r}" for choice in _VALID_DEPLOY_TRANSPORTS)
+            raise ValueError(
+                f"Unsupported deploy_transport: {self.deploy_transport!r} "
                 f"(expected {allowed})"
             )
 
@@ -142,6 +160,7 @@ class Device:
             address=data["address"],
             baudrate=int(data.get("baudrate", DEFAULT_BAUDRATE)),
             deploy_mode=data.get("deploy_mode", DEFAULT_DEPLOY_MODE),
+            deploy_transport=data.get("deploy_transport", DEFAULT_DEPLOY_TRANSPORT),
             entrypoint_name=data.get("entrypoint_name"),
             resource_prefix=data.get("resource_prefix", DEFAULT_RESOURCE_PREFIX),
         )
@@ -172,6 +191,23 @@ class Device:
             )
         # __post_init__ has already rejected anything except the two
         # supported runtimes, so we can assume circuitpython here.
+        #
+        # ``deploy_transport == "serial"`` selects the drive-less
+        # raw-REPL transport (a board with no CIRCUITPY volume — classic
+        # ESP32 without native USB).  ``"auto"`` / ``"drive"`` keep the
+        # CIRCUITPY-drive transport: this method is pure construction and
+        # cannot probe for a drive, so the auto → serial fallback is
+        # resolved one layer up in
+        # ``build_transport_for_entry`` before the Device is built.
+        if self.deploy_transport == "serial":
+            from .circuitpython_serial_transport import (
+                CircuitpythonSerialTransport,
+            )
+
+            return CircuitpythonSerialTransport(
+                self.address,
+                baudrate=self.baudrate,
+            )
         from .circuitpython_transport import CircuitpythonTransport
 
         return CircuitpythonTransport(
