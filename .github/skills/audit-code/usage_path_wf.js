@@ -6,10 +6,14 @@
 // just "X breaks at hop 3" but "X breaks the reconnect feature via this chain".
 //
 // args: {
-//   pathsFile:  absolute path to usage_trace.py's output (edges / files / stops / seeds / roots)
+//   pathsFile:  absolute path to usage_trace.py's output. Edges are RESOLVED call sites, not name
+//               hits: each {seed, callee, callee_file, caller_qual, caller_file, root, depth,
+//               call_sites:[{line,text}]}. `seed` is the top-level symbol the call belongs to (the
+//               fan-out unit); `callee` is the exact method/function called; `call_sites` are the
+//               confirmed lines. Also carries files / stops / seeds / roots.
 //   roomDir:    the run room — agents read eval.json there to avoid re-filing ledger findings,
 //               and voice_persona.txt for the compose register
-//   seeds:      the seed symbol names to fan out over (one judge agent per seed)
+//   seeds:      the seed groups to fan out over (one judge agent per seed group)
 // }
 // Returns { features, findings } — the orchestrator Writes it to a file and runs
 // `usage_trace.py merge <roomDir> <file>`, then re-renders the page.
@@ -83,8 +87,9 @@ const PROSE_OUT = {
 phase('Map')
 const featureMap = await agent(
   'You are the FEATURE MAPPER for a usage-path audit. Read the trace at ' + PATHS + ' (its `files` '
-  + 'list names every traced file as root:relpath; `seeds` are the audited symbols; `edges` are the '
-  + 'call-graph hops). Read the traced files and each root\'s natural entry docs (a README, a docs/ '
+  + 'list names every traced file as root:relpath; `seeds` are the audited symbol groups; `edges` '
+  + 'are jedi-resolved call sites, each with the `seed` group it belongs to and its `call_sites`). '
+  + 'Read the traced files and each root\'s natural entry docs (a README, a docs/ '
   + 'guide, package __init__ docstrings) and produce the FEATURE MAP: the user-facing feature sets '
   + 'this code serves. For each feature: name (short, domain terms), summary (what a user gets from '
   + 'it, 1-2 sentences), entry_points (the files/symbols where the feature lives), touched_by (which '
@@ -96,11 +101,25 @@ log('feature map: ' + featureMap.features.length + ' feature(s): ' + featureMap.
 
 phase('Judge')
 const judgePrompt = (seed) =>
-  'You are the USAGE-PATH lens, judging seed symbol `' + seed + '`. The traced call graph is at '
-  + PATHS + ' (edges: {callee, caller_qual, caller_file, root, depth}; `stops` names where the '
-  + 'walk hit its caps -- judge only what was traced, never guess past a stop). Reconstruct this '
-  + 'seed\'s chains outward -- direct callers, then theirs -- and READ THE REAL FILES along them, '
-  + 'comments included; you may read any traced file in any listed root.\n\n'
+  'You are the USAGE-PATH lens, judging seed group `' + seed + '`. The traced call graph is at '
+  + PATHS + '. Take the edges where `edge.seed == "' + seed + '"` -- each is a jedi-RESOLVED call '
+  + 'site (fields {callee, callee_file, caller_qual, caller_file, root, depth, call_sites:[{line, '
+  + 'text}]}), so `callee` names the exact method/function reached and every site really resolves '
+  + 'to it -- no same-name collisions, and generic names like tick/run/handle are real call sites '
+  + 'here, not guesses. `stops` names where the walk hit a depth or total-file cap -- judge only '
+  + 'what was traced, never guess past a stop. Reconstruct this group\'s chains outward -- direct '
+  + 'callers, then theirs -- and READ THE REAL FILES along them, comments included; you may read '
+  + 'any traced file in any listed root.\n\n'
+  + 'RISK-SAMPLE, do not enumerate. A resolved generic name can carry many call sites; walking '
+  + 'every one is noise. Sample the CONTRACT EDGES -- the sites where the seed\'s behavior is most '
+  + 'likely to bite:\n'
+  + '- error / exception / retry paths (a caller inside a try/except, a reconnect or backoff loop)\n'
+  + '- boundary, sentinel, or default values fed in or returned (0, None, empty, timeouts, first/'
+  + 'last iteration)\n'
+  + '- CROSS-LIBRARY SEAMS -- a call_site whose caller_file sits in a different package/root than '
+  + 'callee_file; the seam is where an assumption is least likely to be shared\n'
+  + 'Judge those sampled sites deeply; name in each finding which site(s) you took and why they '
+  + 'were the risky ones. A representative sample beaten hard beats a shallow sweep of all.\n\n'
   + 'Hunt what only the TRANSITIVE path shows:\n'
   + '- an assumption a caller two or more hops out makes that the seed\'s behavior breaks -- name '
   + 'the level where it surfaces, not just where it starts\n'
