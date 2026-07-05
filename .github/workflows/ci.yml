@@ -1,5 +1,13 @@
 name: Continuous Integration
 
+# Design (2026-07-05 CI stand-up): the preflight job is a thin shell around
+# `python scripts/run.py preflight` — the same 13-phase gate every local
+# checkpoint runs.  CI cannot drift from the local gate because it does not
+# re-enumerate the phases; preflight IS the definition of green.  The repo
+# works direct-to-main, so everything runs on push as well as pull_request
+# (the old workflow gated its deep checks to pull_request only, which meant
+# they never ran).
+
 on:
   push:
     branches:
@@ -11,33 +19,72 @@ defaults:
     shell: bash
 
 jobs:
-  lint:
+  preflight:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v6
+        with:
+          # check-version / check-api diff against origin/main.
+          fetch-depth: 0
 
       - uses: actions/setup-python@v6
         with:
-          python-version: "3.13"
+          python-version: "3.14"
           cache: "pip"
 
-      - name: Install tooling
-        run: python -m pip install --upgrade pip ruff
+      # Single unified cache for all .tools/ artifacts (unix-port runtimes +
+      # mpy-cross).  Separate cache actions on the same path corrupt each
+      # other — one key covers everything the prepare scripts produce.
+      - uses: actions/cache@v4
+        id: tools-cache
+        with:
+          path: .tools
+          key: tools-${{ hashFiles('target-runtimes.toml', 'scripts/prepare_*.py', 'scripts/shared.py') }}
 
-      - name: Lint
-        run: python scripts/run.py lint
+      - name: Install unix-port build dependencies
+        if: steps.tools-cache.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libffi-dev pkg-config
 
-  test:
+      - name: Install workspace tooling
+        # Installs requirements-dev (ruff, pytest, chumicro_checks, jedi,
+        # build backends, doc tooling) and the editable workspace packages —
+        # the same environment `run.py preflight` assumes locally.  The old
+        # lint job installed only ruff, so `python -m chumicro_checks` could
+        # never run in CI.
+        run: python scripts/run.py setup
+
+      - name: Prepare runtime lane binaries
+        if: steps.tools-cache.outputs.cache-hit != 'true'
+        run: |
+          python scripts/run.py prepare-micropython
+          python scripts/run.py prepare-circuitpython
+          python scripts/run.py prepare-mpy-cross
+
+      - name: Preflight (13 phases — the local gate, verbatim)
+        run: python scripts/run.py preflight --coverage-threshold 94
+
+      - name: Upload build artifacts
+        # Preflight's build phase produced these; publish them for
+        # inspection and downstream jobs.
+        uses: actions/upload-artifact@v7
+        with:
+          name: distribution
+          path: libraries/*/dist/
+          if-no-files-found: ignore
+
+  # CPython version-compatibility matrix for the host-side packages.
+  # Preflight covers 3.14 (the dev pin); this job keeps the published
+  # floor honest.  Unit tests only — the deep phases live in preflight.
+  compatibility:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
-      # Run all Python versions even if one fails so the full
-      # compatibility picture is visible in a single CI run.
       fail-fast: false
       matrix:
         python-version: ["3.11", "3.12", "3.13"]
-
     steps:
       - uses: actions/checkout@v6
 
@@ -47,177 +94,16 @@ jobs:
           cache: "pip"
 
       - name: Install tooling
-        run: python -m pip install --upgrade pip pytest pytest-cov
+        run: python -m pip install --upgrade pip pytest pytest-cov pyyaml
 
-      - name: Run tests with coverage
+      - name: Run tests
         run: python scripts/run.py test --all
 
-  test-scripts:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.13"
-          cache: "pip"
-
-      - name: Install tooling
-        run: python -m pip install --upgrade pip pytest pyyaml
-
-      - name: Run scripts infrastructure tests
-        run: python scripts/run.py test-scripts
-
-  # Syntax-check every examples/ file to catch import errors and typos
-  # before they reach users.
-  verify-examples:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.13"
-
-      - name: Verify examples
-        run: python scripts/run.py verify-examples --all
-
-  # Build documentation on PRs to catch rendering errors before merge.
-  # Actual deployment happens in docs-deploy.yml on push to main.
-  documentation-build:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.13"
-          cache: "pip"
-
-      - name: Install tooling
-        run: python -m pip install --upgrade pip zensical mkdocstrings[python]
-
-      - name: Build documentation
-        run: python scripts/run.py docs --all
-
-  build:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.13"
-          cache: "pip"
-
-      - name: Install tooling
-        run: python -m pip install --upgrade pip build hatchling
-
-      - name: Build packages
-        run: python scripts/run.py build
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v7
-        with:
-          name: distribution
-          path: libraries/*/dist/
-
-  # Enforce that any library with source changes also bumps its VERSION file.
-  version-check:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          # Full history needed to diff against the base branch.
-          fetch-depth: 0
-
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.13"
-
-      - name: Check VERSION enforcement
-        run: python scripts/run.py check-version --base origin/${{ github.base_ref }}
-
-  # Detect backwards-incompatible API changes by comparing the PR branch
-  # against the base branch using griffe.
-  api-check:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          # Full history needed to diff against the base branch.
-          fetch-depth: 0
-
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.13"
-          cache: "pip"
-
-      - name: Install tooling
-        run: python -m pip install --upgrade pip griffe
-
-      - name: Check API breakages
-        run: python scripts/run.py check-api --base origin/${{ github.base_ref }}
-
-
-  # -------------------------------------------------------------------------
-  # Cross-runtime unit tests — pull request only to conserve CI minutes.
-  # Parametrized as a matrix to avoid duplicating near-identical job
-  # definitions for each runtime.
-  # -------------------------------------------------------------------------
-  cross-runtime-tests:
-    if: github.event_name == 'pull_request'
-    name: "${{ matrix.runtime_label }} unit tests"
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runtime_label: MicroPython
-            runtime_slug: micropython
-          - runtime_label: CircuitPython
-            runtime_slug: circuitpython
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.13"
-
-      - uses: actions/cache@v4
-        id: runtime-cache
-        with:
-          path: .tools
-          key: ${{ matrix.runtime_slug }}-${{ hashFiles('target-runtimes.toml', format('scripts/prepare_{0}.py', matrix.runtime_slug), 'scripts/shared.py') }}
-
-      - name: Install unix-port build dependencies
-        if: steps.runtime-cache.outputs.cache-hit != 'true'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libffi-dev pkg-config
-      - name: "Prepare ${{ matrix.runtime_label }} unix-port runtime"
-        if: steps.runtime-cache.outputs.cache-hit != 'true'
-        run: python scripts/run.py prepare-${{ matrix.runtime_slug }}
-      - name: "Run ${{ matrix.runtime_label }} unit tests"
-        run: python scripts/run.py test-${{ matrix.runtime_slug }}
-
-  # -------------------------------------------------------------------------
-  # Validate mpy bytecode — build mpy-cross, stage all libraries into a
-  # local bundle, and verify that MicroPython can install and import both
-  # .py and .mpy6 formats via mip against a local HTTP server.
-  # Catches broken mpy compilation or manifest errors before merge.
-  # -------------------------------------------------------------------------
+  # Build mpy-cross, stage every library into a local bundle, and verify
+  # MicroPython can mip-install and import both .py and .mpy formats.
+  # Not a preflight phase (needs the staged-bundle topology), so it keeps
+  # its own job — now on push too, not just pull_request.
   validate-mpy:
-    if: github.event_name == 'pull_request'
     name: Validate mpy bytecode
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -226,11 +112,8 @@ jobs:
 
       - uses: actions/setup-python@v6
         with:
-          python-version: "3.13"
+          python-version: "3.14"
 
-      # Single unified cache for all .tools/ artifacts (mpy-cross + unix-port).
-      # Using separate cache actions for the same path causes the second
-      # restore to overwrite the first, leading to subtle corruption.
       - uses: actions/cache@v4
         id: tools-cache
         with:
@@ -260,7 +143,5 @@ jobs:
               "$library_dir" "$version" .bundle-staging
           done
 
-
       - name: Validate mip install from staged bundle
         run: python scripts/run.py validate-mip --staging-dir .bundle-staging
-
