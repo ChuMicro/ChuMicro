@@ -21,9 +21,28 @@ from chumicro_mqtt._wire import (
 
 gc.collect()
 
-from chumicro_mqtt.client import InboundPublish, MQTTClient, ProtocolState, WhenOversized  # noqa: E402, I001 - preceded by gc.collect().
+
+def __getattr__(name):
+    """Lazy-load the client half on first access (PEP 562).
+
+    ``client`` is the fleet's single largest module (~40 KB of source).
+    A board that imports ``chumicro_mqtt`` but never builds an
+    ``MQTTClient`` — a receive-only or wire-helper-only use — shouldn't
+    pin its compiled code objects in RAM, so the module is deferred until
+    the first access to one of its symbols.  Constructing the client at
+    startup keeps that one-time import cost on a fresh heap (see the guide).
+    """
+    if name in ("InboundPublish", "MQTTClient", "ProtocolState", "WhenOversized"):
+        import chumicro_mqtt.client as _client  # noqa: PLC0415
+
+        return getattr(_client, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 __all__ = [
+    # pyright: ignore[reportUnsupportedDunderAll] — InboundPublish,
+    # MQTTClient, ProtocolState, and WhenOversized are PEP-562 lazy via
+    # __getattr__.
     "InboundPublish",
     "MQTTClient",
     "MQTTBackpressureError",

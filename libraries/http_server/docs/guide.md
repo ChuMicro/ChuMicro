@@ -29,6 +29,8 @@ while True:
         server.handle(now)
 ```
 
+Build your server at startup. The first `HttpServer` reference imports the server module, so let that one-time cost land on a fresh heap.
+
 `transport_factory` is a callable — the listener opens lazily on the first `handle()` call so construction is side-effect-free and unit-testable against a `FakeSocket`.
 
 ## Runner pattern

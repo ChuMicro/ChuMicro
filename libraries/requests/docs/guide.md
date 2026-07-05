@@ -24,6 +24,8 @@ print(response.text)               # decoded str
 print(response.json())             # parsed JSON
 ```
 
+Build your client at startup. The first `HttpClient` reference imports the client module, so let that one-time cost land on a fresh heap.
+
 ## POST / PUT / PATCH / DELETE
 
 `HttpClient` exposes a method per verb. Bodies can be raw bytes / str
