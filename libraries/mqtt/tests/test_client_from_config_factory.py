@@ -118,9 +118,13 @@ class TestFromConfigFactory:
         # Construction is side-effect free.  Calling connect() arms the
         # connector via the injected factory; one tick promotes the socket.
         client.connect()
-        # Drive the connector one tick to advance past AWAITING_TRANSPORT.
-        client.handle(0)
-        client.handle(0)
+        # Drive with the client's own clock: connect() armed the
+        # connect-attempt deadline from real ticks_ms(), and a literal
+        # now=0 sits a half-ring away on the 2^29 tick ring for ~half of
+        # every ~6-day wrap period — an instant spurious expiry.
+        now = client._ticks.ticks_ms()  # noqa: SLF001
+        client.handle(now)
+        client.handle(now)
         assert client._socket is sock  # noqa: SLF001
 
     def test_default_factory_requires_broker_host(self) -> None:
