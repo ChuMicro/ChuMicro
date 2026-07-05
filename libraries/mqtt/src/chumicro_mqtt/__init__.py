@@ -33,6 +33,9 @@ def __getattr__(name):
     keeps that one-time import cost on a fresh heap (see the guide).
     """
     if name in ("InboundPublish", "MQTTClient", "ProtocolState", "WhenOversized"):
+        # Same pre-compile sweep the eager import path ran: the big
+        # module compiles into a freshly collected heap, not a dirty one.
+        gc.collect()
         import chumicro_mqtt.client as _client  # noqa: PLC0415
 
         return getattr(_client, name)
