@@ -7,18 +7,40 @@ replaces that: a board dials the proxy instead of the broker directly,
 and the proxy forwards the byte streams both ways.  A tiny line-oriented
 TCP control port lets the bake harness provoke failures on demand:
 
-* ``blackhole on|off`` — silently stop forwarding BOTH directions while
-  keeping the sockets open.  Bytes are received and discarded, so the
-  board's TCP sends still succeed but nothing arrives at the far end and
-  nothing comes back — the NAT-silent-drop simulation (scenario B1).  The
-  board hits ``ack_timeout``, transitions to FAILED, and self-heals with a
-  fresh connection once the blackhole is lifted.
+* ``blackhole on|off`` — silently stop forwarding BOTH directions (ALL
+  connections) while keeping the sockets open.  Bytes are received and
+  discarded, so the board's TCP sends still succeed but nothing arrives at
+  the far end and nothing comes back — the NAT-silent-drop simulation
+  (scenario B1).  The board hits ``ack_timeout``, transitions to FAILED,
+  and self-heals with a fresh connection once the blackhole is lifted.
 * ``drop-puback on|off`` — forward everything EXCEPT broker->client PUBACK
   frames (scenario A3).  Publishes flow through untouched; the acks are
   eaten, so the client's in-flight deadline eventually rearms / retries.
+* ``delay <ms>|off [b2c|c2b|both]`` — release forwarded data ``<ms>``
+  milliseconds after receipt instead of immediately, ordering preserved,
+  sockets kept healthy (scenario A9, the slow-but-alive broker).  The
+  direction defaults to ``both``; ``delay 4000 b2c`` models late acks
+  (board->broker publishes flow at line rate, broker->board PUBACKs come
+  back ~4 s late).  ``delay 0`` / ``delay off`` clears the delay for the
+  named direction (or both when none is named).  Delayed bytes ride the
+  same selector as the data plane — the loop simply shortens its select
+  timeout to the next release instant, so nothing busy-spins and no
+  connection is stalled by another's delay.
+* ``freeze-existing`` / ``thaw`` — ``freeze-existing`` freezes only the
+  connections active at the instant it is issued (bytes discarded BOTH
+  directions, sockets held open); connections opened afterwards pass
+  through unfaulted.  Unlike the global ``blackhole``, a board that
+  re-dials after a freeze reaches the broker cleanly — the topology
+  scenario A7 needs (a frozen half-open ghost while a same-``client_id``
+  re-dial forces the broker's MQTT 3.1.4 takeover).  ``thaw`` clears the
+  freeze on every connection.
 * ``kill`` — hard-close (RST) both sockets of every active connection
   (scenario A1's abrupt broker death).
-* ``stat`` — bytes / frames forwarded per direction, connection counts.
+* ``stat`` — a global summary line (flags, delays, per-direction byte /
+  frame counters, connection counts) followed by one ``conn id=... `` line
+  per active connection (id, frozen flag, per-connection byte counts,
+  pending delayed-byte depth).  ``conns_active=N`` on the summary line says
+  exactly how many per-connection lines follow.
 
 The proxy is single-threaded and selectors-based: the data plane and the
 control plane share one selector, so flag mutations from a control command
@@ -45,6 +67,7 @@ import socket
 import struct
 import sys
 import time
+from collections import deque
 from dataclasses import dataclass, field
 
 # Size of each recv() pull.  Large enough to swallow a 4 KB PUBLISH plus
@@ -185,6 +208,8 @@ class Controller:
 
     blackhole: bool = False
     drop_puback: bool = False
+    delay_c2b_ms: int = 0  # board->broker forward latency, milliseconds (0 = off)
+    delay_b2c_ms: int = 0  # broker->board forward latency, milliseconds (0 = off)
     bytes_c2b_recv: int = 0  # board->broker bytes received by the proxy
     bytes_c2b_fwd: int = 0  # board->broker bytes actually forwarded
     bytes_b2c_recv: int = 0  # broker->board bytes received by the proxy
@@ -199,6 +224,7 @@ class Controller:
         return (
             f"blackhole={'on' if self.blackhole else 'off'} "
             f"drop_puback={'on' if self.drop_puback else 'off'} "
+            f"delay_c2b={self.delay_c2b_ms} delay_b2c={self.delay_b2c_ms} "
             f"conns_active={self.connections_active} "
             f"conns_total={self.connections_total} "
             f"c2b_recv={self.bytes_c2b_recv} c2b_fwd={self.bytes_c2b_fwd} "
@@ -216,6 +242,29 @@ class ProxyConnection:
     broker: socket.socket
     controller: Controller
     filter: PubackFilter = field(default_factory=PubackFilter)
+    # Per-connection freeze (scenario A7): when set, this connection discards
+    # BOTH directions with the sockets held open, exactly like ``blackhole``
+    # but scoped to this one connection so a fresh re-dial is unaffected.
+    frozen: bool = False
+    # Set when the board abandons a FROZEN connection (its self-heal closes
+    # the dead socket).  The broker leg is held open regardless — the literal
+    # A7 half-open ghost — so the broker still owns a stale session for the
+    # client_id until it evicts it (MUST_DISCONNECT_EXISTING) or ``thaw``
+    # tears the remnant down.  Without this, the board-side FIN would
+    # propagate and kill the ghost before the re-dial arrives.
+    board_gone: bool = False
+    # Per-connection byte tallies, so ``stat`` can attribute traffic to a
+    # specific connection (the controller counters are cumulative across all
+    # connections, including closed ones).
+    bytes_c2b_recv: int = 0
+    bytes_c2b_fwd: int = 0
+    bytes_b2c_recv: int = 0
+    bytes_b2c_fwd: int = 0
+    # Delayed-release queues (scenario A9).  Each entry is ``(release_monotonic,
+    # chunk)``; enqueued in arrival order and released strictly FIFO so ordering
+    # is preserved even if the delay is retuned mid-flight.
+    _pending_c2b: deque[tuple[float, bytes]] = field(default_factory=deque)
+    _pending_b2c: deque[tuple[float, bytes]] = field(default_factory=deque)
     _last_forwarded: int = 0
     _last_dropped: int = 0
 
@@ -233,18 +282,20 @@ class ProxyConnection:
         try:
             data = self.board.recv(RECV_CHUNK)
         except OSError:
+            if self.frozen:
+                self.board_gone = True
+                return True  # Hold the broker leg open (A7 half-open ghost).
             return False
         if not data:
+            if self.frozen:
+                self.board_gone = True
+                return True  # Hold the broker leg open (A7 half-open ghost).
             return False  # Board closed its side.
         self.controller.bytes_c2b_recv += len(data)
-        if self.controller.blackhole:
+        self.bytes_c2b_recv += len(data)
+        if self.controller.blackhole or self.frozen:
             return True  # Silent drop: received and discarded, socket stays open.
-        try:
-            self.broker.sendall(data)
-        except OSError:
-            return False
-        self.controller.bytes_c2b_fwd += len(data)
-        return True
+        return self._forward_to_broker(data)
 
     def _pump_broker_to_client(self) -> bool:
         try:
@@ -254,20 +305,83 @@ class ProxyConnection:
         if not data:
             return False  # Broker closed its side.
         self.controller.bytes_b2c_recv += len(data)
-        if self.controller.blackhole:
+        self.bytes_b2c_recv += len(data)
+        if self.controller.blackhole or self.frozen:
             return True  # Silent drop.
         try:
             forward = self.filter.feed(data, self.controller.drop_puback)
         except ProxyFrameError:
             return False  # Unalignable stream: tear down.
-        if forward:
-            try:
-                self.board.sendall(forward)
-            except OSError:
-                return False
-            self.controller.bytes_b2c_fwd += len(forward)
+        alive = self._forward_to_client(forward) if forward else True
         self._sync_frame_counts()
+        return alive
+
+    # -- forwarding (immediate or delayed release) -------------------------
+
+    def _forward_to_broker(self, data: bytes) -> bool:
+        if self.controller.delay_c2b_ms > 0:
+            release = time.monotonic() + self.controller.delay_c2b_ms / 1000.0
+            self._pending_c2b.append((release, data))
+            return True
+        return self._send_to_broker(data)
+
+    def _forward_to_client(self, data: bytes) -> bool:
+        if self.controller.delay_b2c_ms > 0:
+            release = time.monotonic() + self.controller.delay_b2c_ms / 1000.0
+            self._pending_b2c.append((release, data))
+            return True
+        return self._send_to_client(data)
+
+    def _send_to_broker(self, data: bytes) -> bool:
+        try:
+            self.broker.sendall(data)
+        except OSError:
+            return False
+        self.controller.bytes_c2b_fwd += len(data)
+        self.bytes_c2b_fwd += len(data)
         return True
+
+    def _send_to_client(self, data: bytes) -> bool:
+        try:
+            self.board.sendall(data)
+        except OSError:
+            return False
+        self.controller.bytes_b2c_fwd += len(data)
+        self.bytes_b2c_fwd += len(data)
+        return True
+
+    def flush_due(self, now: float) -> bool:
+        """Release any delayed chunks whose hold time has elapsed.
+
+        Returns True to keep the connection, False when a send failed and it
+        should be torn down.  Released FIFO so ordering is preserved.
+        """
+        while self._pending_c2b and self._pending_c2b[0][0] <= now:
+            if not self._send_to_broker(self._pending_c2b.popleft()[1]):
+                return False
+        while self._pending_b2c and self._pending_b2c[0][0] <= now:
+            if not self._send_to_client(self._pending_b2c.popleft()[1]):
+                return False
+        return True
+
+    def next_release(self) -> float | None:
+        """Earliest pending release instant across both directions, or None."""
+        heads = []
+        if self._pending_c2b:
+            heads.append(self._pending_c2b[0][0])
+        if self._pending_b2c:
+            heads.append(self._pending_b2c[0][0])
+        return min(heads) if heads else None
+
+    def stat_line(self) -> str:
+        """Per-connection snapshot line for the ``stat`` command."""
+        return (
+            f"conn id={self.conn_id} frozen={1 if self.frozen else 0} "
+            f"half_open={1 if self.board_gone else 0} "
+            f"c2b_recv={self.bytes_c2b_recv} c2b_fwd={self.bytes_c2b_fwd} "
+            f"b2c_recv={self.bytes_b2c_recv} b2c_fwd={self.bytes_b2c_fwd} "
+            f"pend_c2b={len(self._pending_c2b)} pend_b2c={len(self._pending_b2c)}"
+        )
 
     def _sync_frame_counts(self) -> None:
         """Fold this connection's new frame tallies into the shared counters."""
@@ -300,7 +414,8 @@ class ProxyConfig:
 
 
 _CONTROL_HELP = (
-    "commands: blackhole on|off | drop-puback on|off | kill | "
+    "commands: blackhole on|off | drop-puback on|off | "
+    "delay <ms>|off [b2c|c2b|both] | freeze-existing | thaw | kill | "
     "stat | reset-stats | help | quit"
 )
 
@@ -333,9 +448,10 @@ class NegativeProxy:
         )
         try:
             while True:
-                for key, _mask in self.selector.select(timeout=1.0):
+                for key, _mask in self.selector.select(timeout=self._select_timeout()):
                     handler = key.data
                     handler(key.fileobj)
+                self._flush_delayed()
         except KeyboardInterrupt:
             self._log("interrupted, shutting down")
         finally:
@@ -396,6 +512,23 @@ class NegativeProxy:
             return
         if not conn.pump(sock):
             self._teardown(conn)
+            return
+        if conn.board_gone and sock is conn.board:
+            # Frozen ghost: the board's leg is dead but the broker leg stays
+            # open.  Drop the dead socket from the selector so its perpetual
+            # EOF-readable state can't spin the loop.
+            try:
+                self.selector.unregister(conn.board)
+            except (KeyError, ValueError):
+                pass
+            try:
+                conn.board.close()
+            except OSError:
+                pass
+            self._log(
+                f"conn {conn.conn_id} board leg closed; broker leg held "
+                f"(frozen half-open ghost)"
+            )
 
     def _find_connection(self, sock: socket.socket) -> ProxyConnection | None:
         for conn in self._connections.values():
@@ -427,6 +560,63 @@ class NegativeProxy:
             self._teardown(conn, hard=True)
             killed += 1
         return killed
+
+    # -- delayed release (scenario A9) -------------------------------------
+
+    def _select_timeout(self) -> float:
+        """How long the next ``select`` may block.
+
+        Normally 1 s (the housekeeping cadence).  When any connection holds a
+        delayed chunk, shorten it to the nearest release instant so the loop
+        wakes exactly in time to forward — riding the existing selector rather
+        than sleeping in the forward path, and never busy-spinning: once the
+        queues drain the timeout returns to 1 s.
+        """
+        earliest: float | None = None
+        for conn in self._connections.values():
+            release = conn.next_release()
+            if release is not None and (earliest is None or release < earliest):
+                earliest = release
+        if earliest is None:
+            return 1.0
+        return max(0.0, min(1.0, earliest - time.monotonic()))
+
+    def _flush_delayed(self) -> None:
+        """Release every delayed chunk whose hold time has elapsed."""
+        now = time.monotonic()
+        for conn in list(self._connections.values()):
+            if not conn.flush_due(now):
+                self._teardown(conn)
+
+    def _freeze_existing(self) -> int:
+        """Freeze every currently-active connection (scenario A7).
+
+        Connections opened after this call are untouched, so a same-client_id
+        re-dial reaches the broker cleanly while the ghost stays frozen.
+        """
+        frozen = 0
+        for conn in self._connections.values():
+            conn.frozen = True
+            frozen += 1
+        self._log(f"freeze-existing -> {frozen} connection(s) frozen")
+        return frozen
+
+    def _thaw_all(self) -> int:
+        """Clear the freeze on every connection; returns how many were frozen.
+
+        Half-open ghosts (board leg already abandoned while frozen) cannot
+        resume — their broker leg is torn down instead of thawed.
+        """
+        thawed = 0
+        for conn in list(self._connections.values()):
+            if conn.frozen:
+                thawed += 1
+                if conn.board_gone:
+                    self._teardown(conn)
+                else:
+                    conn.frozen = False
+        self._log(f"thaw -> {thawed} connection(s) thawed")
+        return thawed
 
     # -- control plane -----------------------------------------------------
 
@@ -483,10 +673,17 @@ class NegativeProxy:
             return self._set_flag("blackhole", argument)
         if command == "drop-puback":
             return self._set_flag("drop_puback", argument)
+        if command == "delay":
+            direction = parts[2].lower() if len(parts) > 2 else "both"
+            return self._set_delay(argument, direction)
+        if command == "freeze-existing":
+            return f"ok froze {self._freeze_existing()}"
+        if command == "thaw":
+            return f"ok thawed {self._thaw_all()}"
         if command == "kill":
             return f"ok killed {self._kill_all()}"
         if command == "stat":
-            return self.controller.stat_line()
+            return self._stat_report()
         if command == "reset-stats":
             self._reset_stats()
             return "ok reset-stats"
@@ -503,6 +700,37 @@ class NegativeProxy:
         self._log(f"{attribute} -> {argument}")
         return f"ok {attribute.replace('_', '-')} {argument}"
 
+    _DELAY_USAGE = "err usage: delay <ms>|off [b2c|c2b|both]"
+
+    def _set_delay(self, value: str | None, direction: str) -> str:
+        """Set (or clear) the per-direction forward latency in milliseconds."""
+        if direction not in ("b2c", "c2b", "both"):
+            return self._DELAY_USAGE
+        if value is None:
+            return self._DELAY_USAGE
+        if value == "off":
+            milliseconds = 0
+        else:
+            try:
+                milliseconds = int(value)
+            except ValueError:
+                return self._DELAY_USAGE
+            if milliseconds < 0:
+                return self._DELAY_USAGE
+        if direction in ("c2b", "both"):
+            self.controller.delay_c2b_ms = milliseconds
+        if direction in ("b2c", "both"):
+            self.controller.delay_b2c_ms = milliseconds
+        self._log(f"delay -> {milliseconds}ms {direction}")
+        return f"ok delay {milliseconds} {direction}"
+
+    def _stat_report(self) -> str:
+        """Global summary line followed by one line per active connection."""
+        lines = [self.controller.stat_line()]
+        for conn in sorted(self._connections.values(), key=lambda entry: entry.conn_id):
+            lines.append(conn.stat_line())
+        return "\n".join(lines)
+
     def _reset_stats(self) -> None:
         for attribute in (
             "bytes_c2b_recv", "bytes_c2b_fwd", "bytes_b2c_recv", "bytes_b2c_fwd",
@@ -510,6 +738,8 @@ class NegativeProxy:
         ):
             setattr(self.controller, attribute, 0)
         for conn in self._connections.values():
+            conn.bytes_c2b_recv = conn.bytes_c2b_fwd = 0
+            conn.bytes_b2c_recv = conn.bytes_b2c_fwd = 0
             conn._last_forwarded = conn.filter.frames_forwarded
             conn._last_dropped = conn.filter.frames_dropped
 
