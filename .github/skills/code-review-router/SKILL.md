@@ -7,6 +7,10 @@ description: Intelligently routes code reviews between Gemini CLI and Codex CLI 
 
 Routes code reviews to the optimal CLI (Gemini or Codex) based on change characteristics.
 
+## Device-library changes (`libraries/`)
+
+When the diff touches files under `libraries/`, the changed code ships to constrained microcontrollers (256 KB RAM, ~800 KB usable flash) and embedded cost is the primary review lens: flash bytes, import-time RAM, hot-path allocations, class/def/exception count, and string-constant weight outrank docstring completeness, defensive guards, and error-prose polish. Instruct whichever CLI runs to foreground that lens for those files and to flag any change that *adds* code to a device library without justifying its bytes; treat standards-only findings there as advisory. Standards stay primary for everything outside `libraries/`. Baseline and cut campaign: `plans/workstreams/library-size-cut.md`.
+
 ## When NOT to Use This Skill
 
 - For non-code reviews (documentation proofreading, prose editing)

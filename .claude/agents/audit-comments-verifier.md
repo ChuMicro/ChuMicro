@@ -21,6 +21,10 @@ You judge the **prose**, not the code. Out of scope:
 
 If a file has a missing-comment problem that's actually a code-design problem, note it briefly under MINOR or AMBIGUOUS and move on. Don't expand into code review. The auditor can route that to `/audit-library`.
 
+## Device-library files (`libraries/`)
+
+For files under `libraries/`, embedded cost is the primary lens (`/audit-embedded`) and docstring completeness is advisory. Weigh byte cost before you flag a gap: a terse-but-correct docstring that saves bytes is not a cold-reader failure to escalate, and a richness gap (an unfolded side-effect, a return that only paraphrases the type) is resolved by *cutting* prose, not adding it. Never recommend a new `Args:` / `Returns:` / body sentence on device code to satisfy the cold-reader test — on this tree, prefer DELETE over expansion, and let size and allocation findings outrank prose-richness ones.
+
 ## What you do
 
 For each file you're given:
