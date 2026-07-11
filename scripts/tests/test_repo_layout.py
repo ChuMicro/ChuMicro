@@ -31,6 +31,7 @@ from repo_layout import (
     discover_ruff_paths,
     discover_source_roots,
     discover_workbench_dirs,
+    effective_diff_base,
     filter_by_platform,
     find_package_dir,
     find_publishable_packages,
@@ -958,3 +959,63 @@ class TestReleaseTags:
         """No matching tags → empty list regardless of stable_only."""
         self._patch_tags(monkeypatch, "")
         assert repo_layout.release_tags("timing", stable_only=True) == []
+
+
+class TestEffectiveDiffBase:
+    """Tests for effective_diff_base — the direct-to-main push fallback."""
+
+    #: Git environment overrides so commits work in CI (no global user config).
+    _GIT_ENV = {
+        "GIT_AUTHOR_NAME": "test",
+        "GIT_AUTHOR_EMAIL": "test@test",
+        "GIT_COMMITTER_NAME": "test",
+        "GIT_COMMITTER_EMAIL": "test@test",
+    }
+
+    def _git(self, *arguments: str, cwd: Path) -> None:
+        """Run a git command with CI-safe identity."""
+        import os
+        import subprocess
+
+        merged = {**os.environ, **self._GIT_ENV}
+        subprocess.run(
+            ["git", *arguments],
+            cwd=cwd, capture_output=True, check=True, env=merged,
+        )
+
+    def _repo_with_commits(self, tmp_path: Path, monkeypatch, count: int) -> Path:
+        """Init a repo at tmp_path with *count* empty commits; pin ROOT to it."""
+        self._git("init", cwd=tmp_path)
+        for index in range(count):
+            self._git("commit", "--allow-empty", "-m", f"c{index}", cwd=tmp_path)
+        monkeypatch.setattr(repo_layout, "ROOT", tmp_path)
+        return tmp_path
+
+    def test_base_at_head_falls_back_to_parent(self, tmp_path, monkeypatch, capsys):
+        """origin/main == HEAD (the direct-to-main push shape) → HEAD^."""
+        repo = self._repo_with_commits(tmp_path, monkeypatch, count=2)
+        self._git("branch", "pushed-main", cwd=repo)
+
+        assert effective_diff_base("pushed-main") == "HEAD^"
+        assert "diffing against HEAD^" in capsys.readouterr().out
+
+    def test_base_behind_head_is_unchanged(self, tmp_path, monkeypatch):
+        """A base ref that differs from HEAD is used as-is."""
+        repo = self._repo_with_commits(tmp_path, monkeypatch, count=1)
+        self._git("branch", "old-main", cwd=repo)
+        self._git("commit", "--allow-empty", "-m", "newer", cwd=repo)
+
+        assert effective_diff_base("old-main") == "old-main"
+
+    def test_root_commit_keeps_base(self, tmp_path, monkeypatch):
+        """HEAD with no parent (root commit) keeps the original base."""
+        repo = self._repo_with_commits(tmp_path, monkeypatch, count=1)
+        self._git("branch", "pushed-main", cwd=repo)
+
+        assert effective_diff_base("pushed-main") == "pushed-main"
+
+    def test_unresolvable_base_is_unchanged(self, tmp_path, monkeypatch):
+        """A ref that doesn't resolve is returned untouched."""
+        self._repo_with_commits(tmp_path, monkeypatch, count=2)
+
+        assert effective_diff_base("origin/nonexistent") == "origin/nonexistent"

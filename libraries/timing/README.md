@@ -15,7 +15,7 @@ Capture `ticks_ms()` once per loop pass, hand it to a `Rate` or a `Deadline`, an
 
 ```bash
 # CircuitPython (after `circup bundle-add ChuMicro/ChuMicro-Bundle`)
-circup install chumicro-timing
+circup install chumicro_timing
 
 # MicroPython
 mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_timing

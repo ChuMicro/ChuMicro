@@ -147,7 +147,7 @@ def _render_library_install(first_library: dict) -> str:
       <div class="install-block">
         <h3>circup (CircuitPython)</h3>
         <pre>circup bundle-add ChuMicro/ChuMicro-Bundle
-circup install {package}</pre>
+circup install {import_name}</pre>
       </div>
       <div class="install-block">
         <h3>mip (MicroPython)</h3>

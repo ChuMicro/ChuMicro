@@ -14,7 +14,7 @@ Example output::
       ...
 
 Setup:
-1. Install ``chumicro_timing`` (``circup install chumicro-timing``
+1. Install ``chumicro_timing`` (``circup install chumicro_timing``
    or copy the package to ``lib/``).
 2. Wire a momentary button between the chosen GPIO and **GND**;
    the internal pull-up is enabled below.  Many boards (Feather,

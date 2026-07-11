@@ -15,7 +15,7 @@ Each library exposes a `<Name>Config.from_config()` factory that reads its own d
 
 ```bash
 # CircuitPython (after `circup bundle-add ChuMicro/ChuMicro-Bundle`)
-circup install chumicro-config
+circup install chumicro_config
 
 # MicroPython
 mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_config

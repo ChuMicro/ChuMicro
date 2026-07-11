@@ -16,6 +16,16 @@ def _make_archive(target: Path, payload: dict[str, str]) -> None:
             archive.writestr(name, content)
 
 
+#: Minimal payload satisfying the full-tree archive verification
+#: (pyproject.toml, VERSION, src/ must all be present after extraction).
+_FULL_TREE_PAYLOAD = {
+    "src/chumicro_timing/__init__.py": "# new\n",
+    "VERSION": "1.0.0\n",
+    "pyproject.toml": "[project]\nname = 'chumicro-timing'\n",
+    "README.md": "# new\n",
+}
+
+
 class TestReplacePackageSource:
     """Tests for _replace_package_source."""
 
@@ -47,17 +57,38 @@ class TestReplacePackageSource:
         (library_dir / "README.md").write_text("old\n")
 
         archive = tmp_path / "archive.zip"
-        _make_archive(archive, {
-            "pyproject.toml": "[project]\nname = 'chumicro-timing'\n",
-            "VERSION": "2.0.0\n",
-            "README.md": "new\n",
-        })
+        _make_archive(archive, {**_FULL_TREE_PAYLOAD, "VERSION": "2.0.0\n"})
 
         release_source._replace_package_source(library_dir, archive)
 
         assert (library_dir / "VERSION").read_text() == "2.0.0\n"
         assert "chumicro-timing" in (library_dir / "pyproject.toml").read_text()
-        assert (library_dir / "README.md").read_text() == "new\n"
+        assert (library_dir / "README.md").read_text() == "# new\n"
+
+    def test_removes_trees_absent_from_archive(self, tmp_path: Path) -> None:
+        """Existing trees not in the archive (tests/, docs/) are wiped, not mixed.
+
+        The stable sdist ships tests/, examples/, and docs/; leaving
+        main-current copies in place would blend frozen src with newer
+        trees in the promoted build.
+        """
+        library_dir = tmp_path / "libraries" / "timing"
+        (library_dir / "tests").mkdir(parents=True)
+        (library_dir / "tests" / "test_newer_api.py").write_text("# from main\n")
+        (library_dir / "docs").mkdir()
+        (library_dir / "docs" / "guide.md").write_text("# from main\n")
+
+        archive = tmp_path / "archive.zip"
+        _make_archive(archive, {
+            **_FULL_TREE_PAYLOAD,
+            "tests/test_frozen.py": "# frozen\n",
+        })
+
+        release_source._replace_package_source(library_dir, archive)
+
+        assert not (library_dir / "tests" / "test_newer_api.py").exists()
+        assert not (library_dir / "docs").exists()
+        assert (library_dir / "tests" / "test_frozen.py").read_text() == "# frozen\n"
 
     def test_tolerates_missing_targets(self, tmp_path: Path) -> None:
         """Replaying onto a directory without existing files does not raise."""
@@ -65,11 +96,22 @@ class TestReplacePackageSource:
         library_dir.mkdir(parents=True)
 
         archive = tmp_path / "archive.zip"
-        _make_archive(archive, {"VERSION": "1.0.0\n"})
+        _make_archive(archive, _FULL_TREE_PAYLOAD)
 
         release_source._replace_package_source(library_dir, archive)
 
         assert (library_dir / "VERSION").read_text() == "1.0.0\n"
+
+    def test_incomplete_archive_raises(self, tmp_path: Path) -> None:
+        """An archive missing src/ (the pre-full-tree format) fails loudly."""
+        library_dir = tmp_path / "libraries" / "timing"
+        library_dir.mkdir(parents=True)
+
+        archive = tmp_path / "archive.zip"
+        _make_archive(archive, {"VERSION": "1.0.0\n", "pyproject.toml": "[project]\n"})
+
+        with pytest.raises(RuntimeError, match="full-tree archive"):
+            release_source._replace_package_source(library_dir, archive)
 
 
 class TestMain:
@@ -105,7 +147,7 @@ class TestMain:
         def fake_download(tag: str, source_zip: str, target_dir: Path) -> Path:
             archive = target_dir / source_zip
             target_dir.mkdir(parents=True, exist_ok=True)
-            _make_archive(archive, {"VERSION": "1.0.0\n"})
+            _make_archive(archive, _FULL_TREE_PAYLOAD)
             return archive
 
         monkeypatch.setattr(release_source, "_download_archive", fake_download)

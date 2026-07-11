@@ -17,6 +17,15 @@ body:
         - runner
         - compat
         - msgpack
+        - config
+        - http-server
+        - kvstore
+        - mqtt
+        - ntp
+        - requests
+        - sockets
+        - websockets
+        - wifi
         - Other / not sure
     validations:
       required: true

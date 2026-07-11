@@ -148,7 +148,7 @@ Already have a project and want one library on your board?  Every library instal
 ```bash
 # CircuitPython, via the circup bundle manager
 circup bundle-add ChuMicro/ChuMicro-Bundle
-circup install chumicro-timing
+circup install chumicro_timing
 
 # MicroPython, via mpremote (MicroPython's CLI tool) and mip (its package manager)
 mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_timing

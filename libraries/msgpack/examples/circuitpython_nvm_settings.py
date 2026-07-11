@@ -29,7 +29,7 @@ Setup:
 
 1. Install the library::
 
-       circup install chumicro-msgpack
+       circup install chumicro_msgpack
 
    Or copy ``chumicro_msgpack/`` to the ``lib/`` folder on your board.
 

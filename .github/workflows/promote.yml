@@ -26,6 +26,13 @@ on:
 # and libraries repos, so a promotion must not run concurrently with an
 # experimental release.  Same repo-scoped group name as release.yml's
 # `release` group — GitHub Actions queues across workflows that share it.
+#
+# TRAP: GitHub keeps one RUNNING plus at most one PENDING run per group;
+# queuing another run CANCELS the previously pending one with no failure
+# signal (cancel-in-progress only protects the running run).  Never
+# bulk-dispatch promotions — a back-to-back wave of N dispatches silently
+# loses all but two.  Use scripts/promote_wave.py, which dispatches
+# strictly one at a time in dependency order.
 concurrency:
   group: release
   cancel-in-progress: false
@@ -250,11 +257,6 @@ jobs:
             "${{ needs.validate.outputs.version }}" \
             .bundle-staging
 
-      # ---------------------------------------------------------------
-      # Pre-publish validation: verify mip install + import works from
-      # the staged artifacts BEFORE pushing to the live bundle repo.
-      # ---------------------------------------------------------------
-
       - name: Install unix-port build dependencies
         if: steps.tools-cache.outputs.cache-hit != 'true'
         run: |
@@ -264,12 +266,6 @@ jobs:
       - name: Prepare MicroPython unix-port
         if: steps.tools-cache.outputs.cache-hit != 'true'
         run: python scripts/run.py prepare-micropython
-
-      - name: Validate staged bundle locally
-        run: |
-          python scripts/run.py validate-mip \
-            --staging-dir .bundle-staging \
-            --libraries "${{ needs.validate.outputs.library_name }}"
 
       - name: Configure SSH for bundle repository
         uses: webfactory/ssh-agent@v0.9.1
@@ -283,6 +279,23 @@ jobs:
         run: |
           cp -r .bundle-staging/* .bundle-repo/
           cp LICENSE .bundle-repo/LICENSE
+
+      # ---------------------------------------------------------------
+      # Pre-publish validation: verify mip install + import works BEFORE
+      # pushing to the live bundle repo.  Runs against the MERGED tree
+      # (clone + overlay), not .bundle-staging alone: a single promoted
+      # library's package.json references its intra-workspace deps by
+      # bundle URL, and those deps only exist in the clone — staging-only
+      # validation import-fails every library with such deps.  The FIRST
+      # promotion wave must still be dependency-ordered (the clone starts
+      # empty); scripts/promote_wave.py handles that.
+      # ---------------------------------------------------------------
+
+      - name: Validate merged bundle locally
+        run: |
+          python scripts/run.py validate-mip \
+            --staging-dir .bundle-repo \
+            --libraries "${{ needs.validate.outputs.library_name }}"
 
       - name: Generate bundle README
         run: |

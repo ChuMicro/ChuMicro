@@ -243,14 +243,14 @@ When your PR merges, the VERSION bump triggers an automatic **experimental relea
 - Your package is published to PyPI as `chumicro-my-sensor-experimental`
 - Files are pushed to the [experimental bundle repo](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental)
 - Experimental docs are deployed
-- A git tag `my-sensor-v0.1.0-experimental` is created
+- A git tag `chumicro-my-sensor-v0.1.0-experimental` is created
 
 Users can install your library immediately:
 
 ```bash
 # CircuitPython
 circup bundle-add ChuMicro/ChuMicro-Bundle-Experimental
-circup install chumicro-my-sensor
+circup install chumicro_my_sensor
 
 # MicroPython
 mpremote mip install github:ChuMicro/ChuMicro-Bundle-Experimental/chumicro_my_sensor

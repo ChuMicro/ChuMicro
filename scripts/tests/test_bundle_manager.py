@@ -16,7 +16,9 @@ from bundle_manager import (
     _collect_library_metadata,
     _data_files_from,
     _derive_bundle_id,
+    _experimental_dependency,
     _find_bundle_modules,
+    _project_dependencies_span,
     _read_chumicro_dependencies,
     build_bundle,
     build_circup_zips,
@@ -540,6 +542,152 @@ class TestPatchExperimental:
         patched = (library_dir / "pyproject.toml").read_text()
         assert 'name = "chumicro-timing-experimental"' in patched
         assert "-experimental>" not in patched
+
+    def test_already_patched_is_noop(self, tmp_path: Path, capsys):
+        """A second run leaves the file byte-identical — no
+        '-experimental-experimental' name and no new PyPI project."""
+        pyproject_content = (
+            '[project]\n'
+            'name = "chumicro-http-server-experimental"\n'
+            'dependencies = [\n'
+            '    "chumicro-config-experimental",\n'
+            '    "chumicro-deploy-experimental>=0.1.0",\n'
+            ']\n'
+            '\n'
+            '[project.urls]\n'
+            'Bundle = "https://github.com/ChuMicro/ChuMicro-Bundle-Experimental"\n'
+        )
+        library_dir = tmp_path / "http_server"
+        library_dir.mkdir()
+        (library_dir / "pyproject.toml").write_text(pyproject_content)
+
+        patch_experimental(library_dir)
+
+        assert (library_dir / "pyproject.toml").read_text() == pyproject_content
+        assert "already patched" in capsys.readouterr().out
+
+    def test_already_suffixed_dep_not_resuffixed(self, tmp_path: Path):
+        """A dep already on the experimental channel keeps a single suffix
+        while the rest of the pyproject still patches."""
+        pyproject_content = (
+            '[project]\n'
+            'name = "chumicro-http-server"\n'
+            'dependencies = [\n'
+            '    "chumicro-config-experimental",\n'
+            '    "chumicro-deploy>=0.1.0",\n'
+            ']\n'
+        )
+        library_dir = tmp_path / "http_server"
+        library_dir.mkdir()
+        (library_dir / "pyproject.toml").write_text(pyproject_content)
+
+        patch_experimental(library_dir)
+
+        patched = (library_dir / "pyproject.toml").read_text()
+        assert 'name = "chumicro-http-server-experimental"' in patched
+        assert '"chumicro-config-experimental"' in patched
+        assert '"chumicro-deploy-experimental>=0.1.0"' in patched
+        assert "experimental-experimental" not in patched
+
+    def test_single_line_dependencies_array(self, tmp_path: Path):
+        """A one-line dependencies array is rewritten without the span
+        spilling into [project.optional-dependencies]."""
+        pyproject_content = (
+            '[project]\n'
+            'name = "chumicro-workspace"\n'
+            'dependencies = ["chumicro-msgpack>=0.2.0"]\n'
+            '\n'
+            '[project.optional-dependencies]\n'
+            'test = [\n'
+            '    "chumicro-msgpack>=0.2.0",\n'
+            ']\n'
+        )
+        library_dir = tmp_path / "workspace"
+        library_dir.mkdir()
+        (library_dir / "pyproject.toml").write_text(pyproject_content)
+
+        patch_experimental(library_dir)
+
+        patched = (library_dir / "pyproject.toml").read_text()
+        # The runtime dep is rewritten; the test-extra dep is preserved.
+        assert patched.count('"chumicro-msgpack-experimental>=0.2.0"') == 1
+        assert patched.count('"chumicro-msgpack>=0.2.0"') == 1
+        assert '    "chumicro-msgpack>=0.2.0",' in patched
+
+    def test_single_line_dependencies_at_end_of_file(self, tmp_path: Path):
+        """A one-line array with no later bare ']' line patches instead of
+        exiting (the span finder used to return None here)."""
+        pyproject_content = (
+            '[project]\n'
+            'name = "chumicro-workspace"\n'
+            'dependencies = ["chumicro-msgpack>=0.2.0"]\n'
+        )
+        library_dir = tmp_path / "workspace"
+        library_dir.mkdir()
+        (library_dir / "pyproject.toml").write_text(pyproject_content)
+
+        patch_experimental(library_dir)
+
+        patched = (library_dir / "pyproject.toml").read_text()
+        assert 'dependencies = ["chumicro-msgpack-experimental>=0.2.0"]' in patched
+
+
+class TestExperimentalDependency:
+    """Tests for _experimental_dependency."""
+
+    def test_appends_suffix_preserving_specifier(self):
+        """The suffix lands on the name; the specifier is untouched."""
+        result = _experimental_dependency("chumicro-deploy>=0.1.0")
+        assert result == "chumicro-deploy-experimental>=0.1.0"
+
+    def test_bare_name(self):
+        """A specifier-less entry gains just the suffix."""
+        assert _experimental_dependency("chumicro-config") == "chumicro-config-experimental"
+
+    def test_already_suffixed_returns_unchanged(self):
+        """A dep already on the experimental channel is not re-suffixed."""
+        dependency = "chumicro-deploy-experimental>=0.1.0"
+        assert _experimental_dependency(dependency) == dependency
+
+
+class TestProjectDependenciesSpan:
+    """Tests for _project_dependencies_span."""
+
+    def test_multi_line_array_spans_to_bare_bracket(self):
+        """The span runs from the opening line through the bare ']' line."""
+        content = (
+            'dependencies = [\n'
+            '    "chumicro-config",\n'
+            ']\n'
+            '\n'
+            '[project.optional-dependencies]\n'
+        )
+        span = _project_dependencies_span(content)
+
+        assert span is not None
+        start, end = span
+        assert content[start:end] == 'dependencies = [\n    "chumicro-config",\n]\n'
+
+    def test_single_line_array_closes_on_opening_line(self):
+        """A ']' on the opening line closes the array — the span must not
+        extend into [project.optional-dependencies]."""
+        content = (
+            'dependencies = ["chumicro-msgpack>=0.2.0"]\n'
+            '\n'
+            '[project.optional-dependencies]\n'
+            'test = [\n'
+            '    "chumicro-msgpack>=0.2.0",\n'
+            ']\n'
+        )
+        span = _project_dependencies_span(content)
+
+        assert span is not None
+        start, end = span
+        assert content[start:end] == 'dependencies = ["chumicro-msgpack>=0.2.0"]\n'
+
+    def test_absent_array_returns_none(self):
+        """No dependencies array yields None."""
+        assert _project_dependencies_span('[project]\nname = "chumicro-timing"\n') is None
 
 
 class TestBuildCircupZips:

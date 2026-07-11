@@ -20,8 +20,8 @@ body:
     id: tag
     attributes:
       label: Experimental tag
-      description: "The exact experimental tag to promote (e.g., timing-v0.2.0-experimental)"
-      placeholder: timing-v0.2.0-experimental
+      description: "The exact experimental tag to promote (e.g., chumicro-timing-v0.2.0-experimental)"
+      placeholder: chumicro-timing-v0.2.0-experimental
     validations:
       required: true
 

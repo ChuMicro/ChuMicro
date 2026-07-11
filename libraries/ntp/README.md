@@ -15,7 +15,7 @@ Polls one server, advances on each runner tick, and gives you the unix seconds w
 
 ```bash
 # CircuitPython (after `circup bundle-add ChuMicro/ChuMicro-Bundle`)
-circup install chumicro-ntp
+circup install chumicro_ntp
 
 # MicroPython
 mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_ntp

@@ -30,6 +30,12 @@ on:
   # Stable promotion uses promote.yml (standalone).  See Decision 0023.
 
 # One release at a time to avoid race conditions on tags.
+#
+# TRAP: GitHub keeps one RUNNING plus at most one PENDING run per group;
+# queuing another run CANCELS the previously pending one with no failure
+# signal (cancel-in-progress only protects the running run).  Never
+# bulk-dispatch runs sharing this group — for promotion waves use
+# scripts/promote_wave.py, which dispatches strictly one at a time.
 concurrency:
   group: release
   cancel-in-progress: false
@@ -178,11 +184,31 @@ jobs:
         # stable package, so it must contain the original pyproject.toml
         # (not the experimental-patched one).  See Decision 0023.
         #
+        # git archive of the FULL tracked tree, not a cherry-picked file
+        # list: the sdist ships tests/, examples/, and docs/ too, and
+        # promote's replay rebuilds from this archive alone — anything
+        # missing here would get silently backfilled from main-current
+        # content.  When the release tag already exists (an
+        # --include-tagged re-run), the tag is the source of truth;
+        # archiving the current checkout would silently swap the frozen
+        # zip for a drifted tree.  First runs archive the gated sha.
+        #
         # This step MUST run before patch-experimental.
+        env:
+          LIBRARY_DIR: ${{ matrix.library_dir }}
+          LIBRARY_NAME: ${{ matrix.library_name }}
+          VERSION: ${{ matrix.version }}
+          TAG: ${{ matrix.tag }}
         run: |
-          cd "${{ matrix.library_dir }}"
-          zip -r "${GITHUB_WORKSPACE}/chumicro-${{ matrix.library_name }}-v${{ matrix.version }}-source.zip" \
-            src/ pyproject.toml VERSION README.md
+          git fetch --tags --quiet origin
+          if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
+            source_ref="refs/tags/${TAG}"
+          else
+            source_ref="${{ github.sha }}"
+          fi
+          git archive --format=zip \
+            -o "${GITHUB_WORKSPACE}/chumicro-${LIBRARY_NAME}-v${VERSION}-source.zip" \
+            "${source_ref}:${LIBRARY_DIR}"
 
       - name: Patch package name for experimental
         if: needs.detect.outputs.is_experimental == 'true'
@@ -305,12 +331,6 @@ jobs:
             --matrix "$MATRIX_JSON" \
             ${{ needs.detect.outputs.is_experimental == 'true' && '--experimental' || '' }}
 
-      # ---------------------------------------------------------------
-      # Pre-publish validation: verify mip install + import works from
-      # the staged artifacts BEFORE pushing to the live bundle repo.
-      # This catches broken .mpy compilation or manifest errors early.
-      # ---------------------------------------------------------------
-
       - name: Install unix-port build dependencies
         if: steps.tools-cache.outputs.cache-hit != 'true'
         run: |
@@ -320,13 +340,6 @@ jobs:
       - name: Prepare MicroPython unix-port
         if: steps.tools-cache.outputs.cache-hit != 'true'
         run: python scripts/run.py prepare-micropython
-
-      - name: Validate staged bundle locally
-        run: |
-          libraries=$(jq -r '[.include[].library_name] | join(",")' <<< "$MATRIX_JSON")
-          python scripts/run.py validate-mip \
-            --staging-dir .bundle-staging \
-            --libraries "$libraries"
 
       - name: Configure SSH for bundle repository
         uses: webfactory/ssh-agent@v0.9.1
@@ -344,6 +357,24 @@ jobs:
         run: |
           cp -r .bundle-staging/* .bundle-repo/
           cp LICENSE .bundle-repo/LICENSE
+
+      # ---------------------------------------------------------------
+      # Pre-publish validation: verify mip install + import works BEFORE
+      # pushing to the live bundle repo.  This catches broken .mpy
+      # compilation or manifest errors early.  Validation runs against
+      # the MERGED tree (clone + overlay), not .bundle-staging alone:
+      # a staged library's package.json references its intra-workspace
+      # deps by bundle URL, and when those deps aren't part of this
+      # release they only exist in the clone — staging-only validation
+      # import-fails every such library.
+      # ---------------------------------------------------------------
+
+      - name: Validate merged bundle locally
+        run: |
+          libraries=$(jq -r '[.include[].library_name] | join(",")' <<< "$MATRIX_JSON")
+          python scripts/run.py validate-mip \
+            --staging-dir .bundle-repo \
+            --libraries "$libraries"
 
       - name: Generate bundle README
         run: |

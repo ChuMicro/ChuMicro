@@ -15,7 +15,7 @@ One entry per socket shape (`connector`, `listener`, `udp_socket`) hides the per
 
 ```bash
 # CircuitPython (after `circup bundle-add ChuMicro/ChuMicro-Bundle`)
-circup install chumicro-sockets
+circup install chumicro_sockets
 
 # MicroPython
 mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_sockets

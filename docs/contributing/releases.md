@@ -12,7 +12,7 @@ When your PR merges to `main` with a `VERSION` bump, an **experimental release**
 
 1. The package is built and published to PyPI as `chumicro-<name>-experimental`
 2. Files are pushed to the [experimental bundle repo](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental)
-3. A git tag is created (e.g., `timing-v0.2.0-experimental`)
+3. A git tag is created (e.g., `chumicro-timing-v0.2.0-experimental`)
 4. Experimental docs are deployed
 
 No manual steps — it just happens on merge.
@@ -25,7 +25,7 @@ No manual steps — it just happens on merge.
 |---|---|---|
 | **PyPI package** | `chumicro-timing-experimental` | `chumicro-timing` |
 | **Bundle repo** | `ChuMicro-Bundle-Experimental` | `ChuMicro-Bundle` |
-| **Git tag** | `timing-v0.2.0-experimental` | `timing-v0.2.0` |
+| **Git tag** | `chumicro-timing-v0.2.0-experimental` | `chumicro-timing-v0.2.0` |
 | **Import path** | `chumicro_timing` | `chumicro_timing` |
 
 Import paths are identical across channels — switching from experimental to stable is a drop-in replacement. No code changes needed on the device.
@@ -35,7 +35,7 @@ Import paths are identical across channels — switching from experimental to st
 ```bash
 # CircuitPython (circup)
 circup bundle-add ChuMicro/ChuMicro-Bundle-Experimental
-circup install chumicro-timing
+circup install chumicro_timing
 
 # MicroPython (mip)
 mpremote mip install github:ChuMicro/ChuMicro-Bundle-Experimental/chumicro_timing
@@ -52,9 +52,15 @@ pip install chumicro-timing-experimental
 
 What maintainers look for: preflight passes, ideally tested on hardware, no known regressions, docs are complete, and the API is intentional (breaking changes after stable require a major bump).
 
+**Promoting several packages at once:** never dispatch `promote.yml` back to back. The shared `release` concurrency group holds one running plus at most one pending run and silently cancels the rest. Run the wave through the dispatcher instead, which orders packages so dependencies promote first and watches each run to completion:
+
+```bash
+python scripts/promote_wave.py <experimental-tag> [<experimental-tag> ...]
+```
+
 ## Versioning
 
-See [VERSION bumps](../../CONTRIBUTING.md#version-bumps) in the contributing guide for when and how to bump. Libraries version independently — bumping one has no effect on others.
+See [VERSION bumps](../../CONTRIBUTING.md#version-bumps-and-publishing) in the contributing guide for when and how to bump. Libraries version independently — bumping one has no effect on others.
 
 ## FAQ
 

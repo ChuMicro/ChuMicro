@@ -11,7 +11,7 @@ These commands assume your board already runs CircuitPython or MicroPython.  A b
 ```bash
 # CircuitPython (via circup)
 circup bundle-add ChuMicro/ChuMicro-Bundle    # one-time, registers the bundle
-circup install chumicro-timing                # then install any library by name
+circup install chumicro_timing                # then install any library by name
 
 # MicroPython (via mip)
 mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_timing
@@ -28,7 +28,7 @@ Each library's README carries its own install line, so once the bundle is regist
 
 ```bash
 circup bundle-add ChuMicro/ChuMicro-Bundle
-circup install chumicro-timing
+circup install chumicro_timing
 ```
 
 Bundle registration is per-machine, not per-project.  Add it once on a laptop and every workspace on that laptop sees it.
@@ -74,7 +74,7 @@ Pre-release builds publish automatically whenever a library's `VERSION` bumps on
 # CircuitPython: switch to experimental
 circup bundle-remove ChuMicro/ChuMicro-Bundle              # skip if never added
 circup bundle-add ChuMicro/ChuMicro-Bundle-Experimental
-circup install chumicro-timing
+circup install chumicro_timing
 
 # MicroPython
 mpremote mip install github:ChuMicro/ChuMicro-Bundle-Experimental/chumicro_timing
@@ -107,7 +107,7 @@ A few libraries have per-board restrictions.  Each library README's "Platform su
 ## Troubleshooting
 
 - **No CIRCUITPY drive appears, or circup finds no board.**  The board may not be running CircuitPython yet.  Flash a runtime first: see the README's [Try an example on a board](README.md#try-an-example-on-a-board) or `chumicro-deploy flash-firmware --help`.
-- **`circup install` says the package isn't in any bundle.**  You haven't run `circup bundle-add ChuMicro/ChuMicro-Bundle` yet.  Registration is per-machine; do it once.
+- **`circup install` says a library is `not a known CircuitPython library`.**  Most often the name is hyphenated.  circup installs by the on-device package name, which uses underscores: run `circup install chumicro_timing`, not `chumicro-timing`.  If the name is already underscored, you may not have registered the bundle yet: run `circup bundle-add ChuMicro/ChuMicro-Bundle` once (registration is per-machine, so do it once).
 - **`mpremote mip install` hangs.**  The board needs network connectivity; mip downloads from GitHub through the device's wifi.  Bring wifi up first, or download the package on your laptop and `mpremote cp` it over.
 - **`pip install` says "no matching distribution found".**  Check the spelling against the library table in the [README](README.md).  If the name is right, the library may not have a stable release yet, in which case the experimental package name (`chumicro-timing-experimental`) will have it.
 - **`ImportError` after install on a board.**  Verify the files actually landed: `mpremote ls /lib/` on MicroPython, or look for `/lib/chumicro_timing/` on the CIRCUITPY drive.  circup and mip don't always report partial installs cleanly.
