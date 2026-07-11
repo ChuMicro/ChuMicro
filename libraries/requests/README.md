@@ -15,7 +15,7 @@ A `requests`-flavored surface that advances one chunk per runner tick — connec
 
 ```bash
 # CircuitPython (after `circup bundle-add ChuMicro/ChuMicro-Bundle`)
-circup install chumicro-requests
+circup install chumicro_requests
 
 # MicroPython
 mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_requests

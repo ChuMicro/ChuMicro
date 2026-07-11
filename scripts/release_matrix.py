@@ -23,6 +23,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -35,10 +36,26 @@ from repo_layout import ROOT, is_parked
 #: enforced by ``scripts/check_version.py`` (``PRE_RELEASE_FLOOR``).
 PRE_RELEASE_FLOOR = "0.0.0"
 
+#: A releasable version is exactly MAJOR.MINOR.PATCH.  Anything else would
+#: publish to experimental but could never be promoted (promote_validate.py's
+#: tag regex is strict), and the raw string interpolates into workflow shell
+#: lines.
+_VERSION_PATTERN = re.compile(r"^\d+\.\d+\.\d+$")
+
 
 def _read_version(version_file: Path) -> str:
-    """Return the trimmed VERSION file contents."""
-    return version_file.read_text().strip()
+    """Return the trimmed VERSION file contents, validated as MAJOR.MINOR.PATCH.
+
+    Args:
+        version_file: Path to a package's VERSION file.
+    """
+    version = version_file.read_text().strip()
+    if not _VERSION_PATTERN.match(version):
+        sys.exit(
+            f"Malformed VERSION in {version_file}: {version!r} "
+            "(expected MAJOR.MINOR.PATCH, e.g. 1.2.3)"
+        )
+    return version
 
 
 def _tag_exists(tag: str) -> bool:
@@ -63,6 +80,7 @@ def _collect_entries(
     Args:
         suffix: Tag suffix (e.g. ``"-experimental"``).
         libraries_filter: Package basenames to include (``None`` = all).
+            Names that match no discovered package abort the run.
         include_tagged: When True, keep packages whose release tag already
             exists.  Dispatch-only escape hatch for the "tag exists but the
             bundle/publish leg never ran" trap; ``skip-existing`` on the
@@ -70,6 +88,7 @@ def _collect_entries(
             release-update behavior make the re-run idempotent.
     """
     entries: list[dict[str, str]] = []
+    discovered_names: set[str] = set()
     parents: list[tuple[Path, str]] = [
         (ROOT / "libraries", "library"),
         (ROOT / "workbench", "workbench"),
@@ -80,6 +99,7 @@ def _collect_entries(
         for version_file in sorted(parent_dir.glob("*/VERSION")):
             library_dir = version_file.parent
             library_name = library_dir.name
+            discovered_names.add(library_name)
 
             # Parked libraries (Decision 0107) are held out of the
             # publish set unconditionally — even an explicit --libraries
@@ -119,6 +139,20 @@ def _collect_entries(
                 "tag": tag,
                 "kind": kind,
             })
+
+    # A typo'd or PyPI-form filter name (mqqt, http-server instead of the
+    # directory basename http_server) would otherwise silently no-op:
+    # has_releases=false and a green run that published nothing.  Error
+    # style mirrors repo_layout.resolve_named_packages().
+    if libraries_filter is not None:
+        unknown = sorted(set(libraries_filter) - discovered_names)
+        if unknown:
+            available = ", ".join(sorted(discovered_names))
+            sys.exit(
+                f"Unknown package(s): {', '.join(unknown)} "
+                "(--libraries takes directory basenames, e.g. http_server)\n"
+                f"Available: {available}"
+            )
     return entries
 
 
@@ -168,6 +202,12 @@ def main(argv: list[str] | None = None) -> int:
     libraries_filter: list[str] | None = None
     if args.libraries:
         libraries_filter = [name.strip() for name in args.libraries.split(",") if name.strip()]
+
+    # Unscoped, --include-tagged would re-include EVERY tagged package,
+    # rebuilding them from a drifted tree and overwriting the source-zip
+    # assets on their GitHub releases.
+    if args.include_tagged and not libraries_filter:
+        sys.exit("--include-tagged requires --libraries to scope the re-run")
 
     entries = _collect_entries(
         args.suffix, libraries_filter, include_tagged=args.include_tagged,

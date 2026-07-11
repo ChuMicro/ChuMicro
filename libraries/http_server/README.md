@@ -15,7 +15,7 @@ Routing with `@server.route` (method dispatch, path parameters), bounded multi-c
 
 ```bash
 # CircuitPython (after `circup bundle-add ChuMicro/ChuMicro-Bundle`)
-circup install chumicro-http-server
+circup install chumicro_http_server
 
 # MicroPython
 mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_http_server

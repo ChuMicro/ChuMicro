@@ -15,7 +15,7 @@ Import from `chumicro_compat` instead of the stdlib and your code works everywhe
 
 ```bash
 # CircuitPython (after `circup bundle-add ChuMicro/ChuMicro-Bundle`)
-circup install chumicro-compat
+circup install chumicro_compat
 
 # MicroPython
 mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_compat

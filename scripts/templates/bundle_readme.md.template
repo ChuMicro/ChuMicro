@@ -24,7 +24,7 @@ circup is CircuitPython's package manager — it uses [bundles](https://learn.ad
 
 ```bash
 circup bundle-add {github_org}/{bundle_repo}
-circup install chumicro-timing
+circup install chumicro_timing
 ```
 
 > If you previously registered the {alt_channel_lower} bundle, remove it first — circup may pick either version when both are active:

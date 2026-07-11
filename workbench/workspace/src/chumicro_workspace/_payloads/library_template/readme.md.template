@@ -33,7 +33,7 @@ Set a deadline, poll each tick, get `True` once when time's up — no `time.slee
 
 ```bash
 # CircuitPython (after `circup bundle-add ChuMicro/ChuMicro-Bundle`)
-circup install chumicro-{name}
+circup install {import_name}
 
 # MicroPython
 mpremote mip install github:ChuMicro/ChuMicro-Bundle/{import_name}

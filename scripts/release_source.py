@@ -1,9 +1,11 @@
 """Download + unpack a frozen library source archive from a GitHub Release.
 
 Used by promote.yml to replay the experimental source onto main's
-working tree before building the stable package.  The archive carries
-``src/``, ``pyproject.toml``, ``VERSION``, and ``README.md``: every
-file the build needs.
+working tree before building the stable package.  The archive is a
+``git archive`` snapshot of the library's full tracked tree (``src/``,
+``pyproject.toml``, ``VERSION``, ``README.md``, plus the ``tests/``,
+``examples/``, and ``docs/`` trees the sdist ships), so the promoted
+build carries no main-current content.
 
 Usage::
 
@@ -49,16 +51,28 @@ def _download_archive(tag: str, source_zip: str, target_dir: Path) -> Path:
 
 
 def _replace_package_source(library_dir: Path, archive_path: Path) -> None:
-    """Remove the existing package source under ``library_dir`` and unpack ``archive_path``."""
-    src_dir = library_dir / "src"
-    if src_dir.is_dir():
-        shutil.rmtree(src_dir)
-    for filename in ("pyproject.toml", "VERSION", "README.md"):
-        target = library_dir / filename
-        if target.is_file():
-            target.unlink()
+    """Replace ``library_dir``'s entire content with ``archive_path``'s.
+
+    Everything under the package directory is removed first: the sdist
+    ships ``tests/``, ``examples/``, and ``docs/`` alongside ``src/``,
+    so extracting over a partially-cleared checkout would mix frozen
+    source with whatever main carries at promotion time.
+    """
+    for child in library_dir.iterdir():
+        if child.is_dir():
+            shutil.rmtree(child)
+        else:
+            child.unlink()
     with zipfile.ZipFile(archive_path) as archive:
         archive.extractall(library_dir)
+    for required in ("pyproject.toml", "VERSION", "src"):
+        if not (library_dir / required).exists():
+            raise RuntimeError(
+                f"Archive {archive_path.name} is missing {required!r} — it "
+                "predates the full-tree archive format and cannot be promoted "
+                "safely.  Re-release the experimental version to mint a "
+                "full-tree archive."
+            )
 
 
 def main(argv: list[str] | None = None) -> int:

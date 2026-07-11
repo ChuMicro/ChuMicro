@@ -15,7 +15,7 @@ Stdlib-compatible level constants (`DEBUG` / `INFO` / `WARNING` / `ERROR` / `CRI
 
 ```bash
 # CircuitPython (after `circup bundle-add ChuMicro/ChuMicro-Bundle`)
-circup install chumicro-logging
+circup install chumicro_logging
 
 # MicroPython
 mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_logging

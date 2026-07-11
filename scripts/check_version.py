@@ -38,6 +38,7 @@ from repo_layout import (
     RELEASE_RELEVANT,
     ROOT,
     changed_files,
+    effective_diff_base,
     read_version,
     release_tags,
 )
@@ -158,7 +159,9 @@ def main(argv: list[str] | None = None) -> int:
         help="Base ref to diff against (default: origin/main)",
     )
     args = parser.parse_args(argv)
-    return _check(args.base)
+    # On a direct-to-main push origin/main == HEAD and the diff would be
+    # empty; fall back to HEAD^ so the pushed commit itself is gated.
+    return _check(effective_diff_base(args.base))
 
 
 if __name__ == "__main__":

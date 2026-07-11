@@ -211,7 +211,7 @@ When the host can't reach the snapshot channel — air-gapped, behind a custom r
 ```bash
 # CircuitPython — register the bundle once per machine, then install by name
 circup bundle-add ChuMicro/ChuMicro-Bundle
-circup install chumicro-wifi chumicro-mqtt chumicro-runner
+circup install chumicro_wifi chumicro_mqtt chumicro_runner
 
 # MicroPython — one mip install per library; the board needs wifi to fetch
 mpremote connect /dev/cu.usbmodem1101 mip install \

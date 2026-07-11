@@ -16,7 +16,7 @@ Example output::
 
 Setup:
 1. Install ``chumicro_runner`` and ``chumicro_timing``
-   (``circup install chumicro-runner`` or copy both packages
+   (``circup install chumicro_runner`` or copy both packages
    to ``lib/``).
 2. Wire a momentary button between the chosen GPIO and **GND**.
    The internal pull-up keeps the pin high when the button is

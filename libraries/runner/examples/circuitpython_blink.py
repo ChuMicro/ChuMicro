@@ -6,7 +6,7 @@ can verify the loop is alive without watching the LED itself.
 
 Setup:
 1. Install ``chumicro_runner`` and ``chumicro_timing``
-   (``circup install chumicro-runner`` or copy both packages
+   (``circup install chumicro_runner`` or copy both packages
    to ``lib/``).
 2. No extra wiring needed.  Uses the built-in LED (``board.LED``).
 3. Save this file as ``code.py`` on the board.

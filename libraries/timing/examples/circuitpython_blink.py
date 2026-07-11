@@ -6,7 +6,7 @@ on each toggle so a serial console (or a sweep harness) can verify
 the loop without watching the LED itself.
 
 Setup:
-1. Install ``chumicro_timing`` (``circup install chumicro-timing``
+1. Install ``chumicro_timing`` (``circup install chumicro_timing``
    or copy the package to ``lib/``).
 2. No extra wiring — uses the built-in LED (``board.LED``).
    Works on most CircuitPython boards (Feather, QT Py, Metro, etc.).

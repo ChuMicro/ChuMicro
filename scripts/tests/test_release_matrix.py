@@ -88,6 +88,42 @@ class TestCollectEntries:
         names = [entry["library_name"] for entry in entries]
         assert names == ["timing"]
 
+    def test_unknown_filter_name_exits(self, fake_root: Path) -> None:
+        """A typo'd --libraries name fails loudly instead of silently
+        no-opping into has_releases=false on a green run."""
+        _make_package(fake_root / "libraries", "mqtt", "1.0.0")
+
+        with pytest.raises(SystemExit) as excinfo:
+            release_matrix._collect_entries(suffix="", libraries_filter=["mqqt"])
+
+        message = str(excinfo.value)
+        assert "Unknown package(s): mqqt" in message
+        assert "Available: mqtt" in message
+
+    def test_pypi_hyphen_form_filter_name_exits(self, fake_root: Path) -> None:
+        """The PyPI hyphen form (http-server) is rejected; the directory
+        basename (http_server) is the valid spelling."""
+        _make_package(fake_root / "libraries", "http_server", "1.0.0")
+
+        with pytest.raises(SystemExit) as excinfo:
+            release_matrix._collect_entries(
+                suffix="", libraries_filter=["http-server"],
+            )
+
+        message = str(excinfo.value)
+        assert "Unknown package(s): http-server" in message
+        assert "http_server" in message
+
+    def test_malformed_version_exits(self, fake_root: Path) -> None:
+        """A malformed VERSION aborts the matrix build: it could publish to
+        experimental but never promote (promote_validate.py is strict)."""
+        _make_package(fake_root / "libraries", "timing", "1.2.3rc1")
+
+        with pytest.raises(SystemExit) as excinfo:
+            release_matrix._collect_entries(suffix="", libraries_filter=None)
+
+        assert "1.2.3rc1" in str(excinfo.value)
+
     def test_skips_existing_tags(
         self, fake_root: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
@@ -189,6 +225,32 @@ class TestCollectEntries:
         )
 
         assert entries == []
+
+
+class TestReadVersion:
+    """Tests for _read_version."""
+
+    def test_valid_version_passes(self, tmp_path: Path) -> None:
+        """A MAJOR.MINOR.PATCH version is returned trimmed."""
+        version_file = tmp_path / "VERSION"
+        version_file.write_text("1.2.3\n")
+
+        assert release_matrix._read_version(version_file) == "1.2.3"
+
+    @pytest.mark.parametrize(
+        "raw", ["1.2", "v1.2.3", "1.2.3-rc1", "1.2.3.4", "banana", ""],
+    )
+    def test_malformed_version_exits(self, tmp_path: Path, raw: str) -> None:
+        """A non-MAJOR.MINOR.PATCH VERSION exits naming the path and content."""
+        version_file = tmp_path / "VERSION"
+        version_file.write_text(raw + "\n")
+
+        with pytest.raises(SystemExit) as excinfo:
+            release_matrix._read_version(version_file)
+
+        message = str(excinfo.value)
+        assert str(version_file) in message
+        assert repr(raw) in message
 
 
 class TestEmitOutputs:
@@ -299,9 +361,34 @@ class TestMain:
         monkeypatch.setattr(release_matrix, "_tag_exists", lambda _: True)
         monkeypatch.delenv("GITHUB_OUTPUT", raising=False)
 
-        result = release_matrix.main(["--include-tagged"])
+        result = release_matrix.main(["--include-tagged", "--libraries", "timing"])
 
         assert result == 0
         captured = capsys.readouterr()
         assert "has_releases=true" in captured.out
         assert "chumicro-timing-v1.0.0" in captured.out
+
+    def test_include_tagged_without_libraries_exits(
+        self, fake_root: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """An unscoped --include-tagged would re-run EVERY tagged package,
+        overwriting GitHub-release assets from a drifted tree."""
+        _make_package(fake_root / "libraries", "timing", "1.0.0")
+        monkeypatch.delenv("GITHUB_OUTPUT", raising=False)
+
+        with pytest.raises(SystemExit) as excinfo:
+            release_matrix.main(["--include-tagged"])
+
+        assert "--include-tagged requires --libraries" in str(excinfo.value)
+
+    def test_include_tagged_with_blank_libraries_exits(
+        self, fake_root: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A whitespace-only --libraries value does not scope the re-run."""
+        _make_package(fake_root / "libraries", "timing", "1.0.0")
+        monkeypatch.delenv("GITHUB_OUTPUT", raising=False)
+
+        with pytest.raises(SystemExit) as excinfo:
+            release_matrix.main(["--include-tagged", "--libraries", " , "])
+
+        assert "--include-tagged requires --libraries" in str(excinfo.value)

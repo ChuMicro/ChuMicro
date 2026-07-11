@@ -15,7 +15,7 @@ RFC 6455 framing and masking, opening + closing handshakes, text + binary + ping
 
 ```bash
 # CircuitPython (after `circup bundle-add ChuMicro/ChuMicro-Bundle`)
-circup install chumicro-websockets
+circup install chumicro_websockets
 
 # MicroPython
 mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_websockets

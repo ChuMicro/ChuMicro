@@ -15,7 +15,7 @@ One WiFi service across CircuitPython (Adafruit boards) and MicroPython on both 
 
 ```bash
 # CircuitPython (after `circup bundle-add ChuMicro/ChuMicro-Bundle`)
-circup install chumicro-wifi
+circup install chumicro_wifi
 
 # MicroPython
 mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_wifi

@@ -28,6 +28,7 @@ from concurrent.futures import ThreadPoolExecutor
 from repo_layout import (
     ROOT,
     changed_publishable_packages,
+    effective_diff_base,
     find_package_dir,
     read_version,
     release_tags,
@@ -300,7 +301,9 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     args = parser.parse_args(argv)
-    return _check(args.base, max_workers=args.max_workers)
+    # On a direct-to-main push origin/main == HEAD and the diff would be
+    # empty; fall back to HEAD^ so the pushed commit itself is gated.
+    return _check(effective_diff_base(args.base), max_workers=args.max_workers)
 
 
 if __name__ == "__main__":

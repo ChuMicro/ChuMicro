@@ -15,7 +15,7 @@ A dict-shaped store with `commit()` semantics.  Auto-detects the right backend p
 
 ```bash
 # CircuitPython (after `circup bundle-add ChuMicro/ChuMicro-Bundle`)
-circup install chumicro-kvstore
+circup install chumicro_kvstore
 
 # MicroPython
 mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_kvstore

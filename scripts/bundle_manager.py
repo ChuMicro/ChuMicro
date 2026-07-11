@@ -768,12 +768,18 @@ def _experimental_dependency(dependency: str) -> str:
     The version specifier / extras / marker are preserved verbatim so an
     experimental wheel pins the experimental project:
     ``"chumicro-deploy>=0.1.0"`` -> ``"chumicro-deploy-experimental>=0.1.0"``.
+    An entry whose name already ends with ``-experimental`` is returned
+    unchanged.
 
     Args:
         dependency: A ``project.dependencies`` entry (e.g.
             ``"chumicro-deploy>=0.1.0"``).
     """
     name = strip_pip_dependency_version(dependency)
+    # Re-suffixing would pin a nonexistent *-experimental-experimental
+    # project.
+    if name.endswith("-experimental"):
+        return dependency
     split_at = dependency.index(name) + len(name)
     return f"{dependency[:split_at]}-experimental{dependency[split_at:]}"
 
@@ -782,10 +788,12 @@ def _project_dependencies_span(content: str) -> tuple[int, int] | None:
     """Return the ``[start, end)`` char slice of the ``[project].dependencies``
     array, or ``None`` when the array is absent.
 
-    Each entry sits on its own line (the workspace convention), so the
-    array opens at a ``dependencies = [`` line and closes at the first
-    following line that is a bare ``]``.  Scoping to this block keeps the
-    dependency rewrite from touching an identically-named entry in
+    The array opens at a ``dependencies = [`` line.  A single-line array
+    (``dependencies = ["chumicro-msgpack>=0.2.0"]``) closes on that same
+    line; otherwise each entry sits on its own line (the workspace
+    convention) and the array closes at the first following line that is
+    a bare ``]``.  Scoping to this block keeps the dependency rewrite from
+    touching an identically-named entry in
     ``[project.optional-dependencies]``.
 
     Args:
@@ -797,6 +805,11 @@ def _project_dependencies_span(content: str) -> tuple[int, int] | None:
         if open_index is None:
             if line.replace(" ", "").replace("\t", "").startswith("dependencies=["):
                 open_index = offset
+                # A single-line array — scanning on would extend the span
+                # into [project.optional-dependencies] (or off the end of
+                # the file, returning None).
+                if line.rstrip().endswith("]"):
+                    return open_index, offset + len(line)
         elif line.strip() == "]":
             return open_index, offset + len(line)
         offset += len(line)
@@ -872,6 +885,13 @@ def patch_experimental(library_dir: Path) -> None:
     name = project.get("name")
     if not isinstance(name, str) or not name.strip():
         sys.exit(f"Cannot find a [project].name in {pyproject_path}")
+
+    # Idempotency guard: patching an already-patched tree would produce a
+    # "*-experimental-experimental" name and double-suffixed deps — and
+    # publish a brand-new, wrong PyPI project.
+    if name.endswith("-experimental"):
+        print(f"{pyproject_path} is already patched ({name}) — nothing to do.")
+        return
 
     # 1. Rename the PyPI package to its experimental counterpart.
     original_name = f'name = "{name}"'
@@ -980,7 +1000,9 @@ def main() -> None:
     )
     stage_matrix_parser.add_argument(
         "--matrix", required=True,
-        help='JSON matrix string (e.g. \'{"include": [{"lib_dir": "...", "version": "..."}]}\')',
+        help="JSON matrix string as emitted by release_matrix.py, with "
+        "library_dir/version/library_name keys per entry (e.g. "
+        '\'{"include": [{"library_dir": "libraries/timing", "version": "1.2.3", ...}]}\')',
     )
     stage_matrix_parser.add_argument(
         "--cp-mpy-cross", default=None,

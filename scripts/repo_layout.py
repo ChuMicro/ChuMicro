@@ -743,6 +743,30 @@ def changed_files(base_reference: str) -> list[str]:
     return [line for line in result.stdout.strip().splitlines() if line]
 
 
+def effective_diff_base(base_reference: str) -> str:
+    """Return *base_reference*, or ``HEAD^`` when it points at HEAD.
+
+    On a direct-to-main CI push ``origin/main`` IS the pushed commit, so
+    an ``origin/main...HEAD`` diff is empty and every changed-file gate
+    (check-version, check-api) silently passes.  Diffing against HEAD's
+    first parent instead covers the pushed commit itself.  The original
+    reference is kept when it doesn't resolve, when it differs from
+    HEAD, or when HEAD has no parent (root commit) — callers keep their
+    existing empty-diff behavior in those cases.
+    """
+    base = run_git("rev-parse", "--verify", f"{base_reference}^{{commit}}")
+    head = run_git("rev-parse", "--verify", "HEAD^{commit}")
+    if base.returncode != 0 or head.returncode != 0:
+        return base_reference
+    if base.stdout.strip() != head.stdout.strip():
+        return base_reference
+    parent = run_git("rev-parse", "--verify", "HEAD^^{commit}")
+    if parent.returncode != 0:
+        return base_reference
+    print(f"NOTE: {base_reference} == HEAD (direct-to-main push) — diffing against HEAD^.")
+    return "HEAD^"
+
+
 def changed_publishable_packages(base_reference: str) -> set[tuple[str, str]]:
     """Return ``(parent, name)`` pairs for packages with release-relevant changes.
 

@@ -15,7 +15,7 @@ The subset of [MessagePack](https://msgpack.org) that fits on a 256 KB board —
 
 ```bash
 # CircuitPython (after `circup bundle-add ChuMicro/ChuMicro-Bundle`)
-circup install chumicro-msgpack
+circup install chumicro_msgpack
 
 # MicroPython
 mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_msgpack

@@ -45,6 +45,42 @@
   color: "c5def5"
   description: "chumicro-msgpack library"
 
+- name: "lib:config"
+  color: "c5def5"
+  description: "chumicro-config library"
+
+- name: "lib:http-server"
+  color: "c5def5"
+  description: "chumicro-http-server library"
+
+- name: "lib:kvstore"
+  color: "c5def5"
+  description: "chumicro-kvstore library"
+
+- name: "lib:mqtt"
+  color: "c5def5"
+  description: "chumicro-mqtt library"
+
+- name: "lib:ntp"
+  color: "c5def5"
+  description: "chumicro-ntp library"
+
+- name: "lib:requests"
+  color: "c5def5"
+  description: "chumicro-requests library"
+
+- name: "lib:sockets"
+  color: "c5def5"
+  description: "chumicro-sockets library"
+
+- name: "lib:websockets"
+  color: "c5def5"
+  description: "chumicro-websockets library"
+
+- name: "lib:wifi"
+  color: "c5def5"
+  description: "chumicro-wifi library"
+
 # --- Semver labels ---
 - name: "semver:patch"
   color: "bfe5bf"

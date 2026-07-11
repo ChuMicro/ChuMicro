@@ -15,7 +15,7 @@ QoS 0 + QoS 1, last-will, retain, wildcard topic matching, automatic per-device 
 
 ```bash
 # CircuitPython (after `circup bundle-add ChuMicro/ChuMicro-Bundle`)
-circup install chumicro-mqtt
+circup install chumicro_mqtt
 
 # MicroPython
 mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_mqtt

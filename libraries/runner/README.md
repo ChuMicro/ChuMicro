@@ -17,7 +17,7 @@ We picked tick-based over an event loop because transparent state matters more t
 
 ```bash
 # CircuitPython (after `circup bundle-add ChuMicro/ChuMicro-Bundle`)
-circup install chumicro-runner
+circup install chumicro_runner
 
 # MicroPython
 mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_runner
