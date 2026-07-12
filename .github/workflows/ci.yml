@@ -33,14 +33,19 @@ jobs:
           python-version: "3.14"
           cache: "pip"
 
-      # Single unified cache for all .tools/ artifacts (unix-port runtimes +
-      # mpy-cross).  Separate cache actions on the same path corrupt each
-      # other — one key covers everything the prepare scripts produce.
+      # Cache keys are split by the toolset a job produces (tools-full- /
+      # tools-mp-mpy- / tools-mp-): under the old shared key, validate-mpy
+      # (which builds only mpy-cross + micropython) could win the save on a
+      # fresh key, and this job would then restore a circuitpython-less
+      # .tools whose cache "hit" ALSO skips the build-deps install needed
+      # to self-heal.  Still exactly one cache action per path — separate
+      # cache actions on the same path corrupt each other.  This job
+      # produces all three toolsets → tools-full-.
       - uses: actions/cache@v4
         id: tools-cache
         with:
           path: .tools
-          key: tools-${{ hashFiles('target-runtimes.toml', 'scripts/prepare_*.py', 'scripts/shared.py') }}
+          key: tools-full-${{ hashFiles('target-runtimes.toml', 'scripts/prepare_*.py', 'scripts/shared.py') }}
 
       - name: Install unix-port build dependencies
         if: steps.tools-cache.outputs.cache-hit != 'true'
@@ -129,11 +134,13 @@ jobs:
         # ModuleNotFoundError without the workspace environment.
         run: python scripts/run.py setup
 
+      # tools-mp-mpy-: this job builds only mpy-cross + micropython — see
+      # the preflight cache comment for why keys are split per toolset.
       - uses: actions/cache@v4
         id: tools-cache
         with:
           path: .tools
-          key: tools-${{ hashFiles('target-runtimes.toml', 'scripts/prepare_*.py', 'scripts/shared.py') }}
+          key: tools-mp-mpy-${{ hashFiles('target-runtimes.toml', 'scripts/prepare_*.py', 'scripts/shared.py') }}
 
       - name: Install unix-port build dependencies
         if: steps.tools-cache.outputs.cache-hit != 'true'

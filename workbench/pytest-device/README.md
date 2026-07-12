@@ -72,15 +72,15 @@ The plugin discovers the board, stages `chumicro_timing/src/` + the test, execut
 
 ## Where this fits
 
-Depends on [`chumicro-deploy`](../deploy/) for staging tests on a board.  Auto-registers via `pytest11`; reads `devices.yml` written by [`chumicro-workspace`](../workspace/).
+Depends on [`chumicro-deploy`](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/deploy) for staging tests on a board.  Auto-registers via `pytest11`; reads `devices.yml` written by [`chumicro-workspace`](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/workspace).
 
 ## Companions
 
 | Workbench tool | Why you'd use it alongside |
 |---|---|
-| [`chumicro-deploy`](../deploy/) | The transport layer the plugin uses for staging.  Useful directly when you want to drive a board outside of pytest |
-| [`chumicro-repl`](../repl/) | Tail a board's REPL after a deploy — handy for follow-up debugging when a functional test surprises you |
-| [`chumicro-workspace`](../workspace/) | The host CLI for project workspaces.  Reads the same `devices.yml` schema |
+| [`chumicro-deploy`](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/deploy) | The transport layer the plugin uses for staging.  Useful directly when you want to drive a board outside of pytest |
+| [`chumicro-repl`](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/repl) | Tail a board's REPL after a deploy — handy for follow-up debugging when a functional test surprises you |
+| [`chumicro-workspace`](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/workspace) | The host CLI for project workspaces.  Reads the same `devices.yml` schema |
 
 ## Contributing
 

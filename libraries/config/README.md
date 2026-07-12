@@ -69,7 +69,7 @@ class WifiConfig:
 
 ## Where this fits
 
-Depends on [`chumicro-msgpack`](../msgpack/) for decode.  Most ChuMicro libraries with a `<Name>Config.from_config()` factory read their slice off the shared `RuntimeConfig` via `config.get(...)`; [`chumicro-wifi`](../wifi/) additionally uses the `load_section` helper here.  Other consumers: [`chumicro-mqtt`](../mqtt/), [`chumicro-ntp`](../ntp/), [`chumicro-requests`](../requests/), [`chumicro-websockets`](../websockets/), [`chumicro-http_server`](../http_server/).
+Depends on [`chumicro-msgpack`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/msgpack) for decode.  Most ChuMicro libraries with a `<Name>Config.from_config()` factory read their slice off the shared `RuntimeConfig` via `config.get(...)`; [`chumicro-wifi`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/wifi) additionally uses the `load_section` helper here.  Other consumers: [`chumicro-mqtt`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/mqtt), [`chumicro-ntp`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/ntp), [`chumicro-requests`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/requests), [`chumicro-websockets`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/websockets), [`chumicro-http_server`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/http_server).
 
 ## Platform support
 
@@ -77,7 +77,7 @@ Works on CPython, MicroPython, and CircuitPython.
 
 ## Examples
 
-[`examples/end_to_end.py`](examples/end_to_end.py) shows the full read → `load_section` → typed-config flow on CPython; see any consumer library (starting with `chumicro-wifi`) for the integrated usage shape.
+[`examples/end_to_end.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/config/examples/end_to_end.py) shows the full read → `load_section` → typed-config flow on CPython; see any consumer library (starting with `chumicro-wifi`) for the integrated usage shape.
 
 ## Contributing
 

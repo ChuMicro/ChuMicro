@@ -5,7 +5,7 @@ align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
 **Non-blocking WebSocket (RFC 6455) client and server, plain and TLS.**
 
-RFC 6455 framing and masking, opening + closing handshakes, text + binary + ping/pong, and oversized-message guards.  Plays alongside [`chumicro-http-server`](../http_server/) for combined HTTP + WS / HTTPS + WSS deployments.  Built on [`chumicro-sockets`](../sockets/) and [`chumicro-timing`](../timing/).
+RFC 6455 framing and masking, opening + closing handshakes, text + binary + ping/pong, and oversized-message guards.  Plays alongside [`chumicro-http-server`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/http_server) for combined HTTP + WS / HTTPS + WSS deployments.  Built on [`chumicro-sockets`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/sockets) and [`chumicro-timing`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/timing).
 
 <br clear="left">
 
@@ -81,7 +81,7 @@ Wire-format primitives (`FrameParser`, `encode_frame`, the handshake parsers and
 
 ## Where this fits
 
-Depends on [`chumicro-sockets`](../sockets/) and [`chumicro-timing`](../timing/).  Pairs with [`chumicro-http-server`](../http_server/) for combined HTTP + WS / HTTPS + WSS deployments.
+Depends on [`chumicro-sockets`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/sockets) and [`chumicro-timing`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/timing).  Pairs with [`chumicro-http-server`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/http_server) for combined HTTP + WS / HTTPS + WSS deployments.
 
 ## Platform support
 
@@ -91,8 +91,8 @@ Works on CPython, MicroPython, and CircuitPython.
 
 | Example | What it shows |
 |---|---|
-| [`client.py`](examples/client.py) | WebSocket client on real CP/MP hardware — brings wifi up via the bundled `helpers`, connects to a configured echo server, prints every inbound message while a counter ticks alongside. |
-| [`server.py`](examples/server.py) | WebSocket echo server on real CP/MP hardware — accepts inbound connections on the configured host/port and echoes every frame back. |
+| [`client.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/websockets/examples/client.py) | WebSocket client on real CP/MP hardware — brings wifi up via the bundled `helpers`, connects to a configured echo server, prints every inbound message while a counter ticks alongside. |
+| [`server.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/websockets/examples/server.py) | WebSocket echo server on real CP/MP hardware — accepts inbound connections on the configured host/port and echoes every frame back. |
 
 ## Contributing
 

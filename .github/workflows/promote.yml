@@ -21,6 +21,14 @@ on:
         description: "Dry run — validate and build but do not publish or tag"
         type: boolean
         default: false
+      allow_downgrade:
+        description: "Skip the version-monotonicity guard. Only for a hotfix that intentionally republishes an older version as stable."
+        type: boolean
+        default: false
+      resume:
+        description: "Re-run a promotion that died after the stable tag was written. Requires the stable tag to exist; every downstream leg is idempotent. If a newer stable shipped meanwhile, add allow_downgrade to finish deliberately."
+        type: boolean
+        default: false
 
 # Serialize against release.yml: both workflows push to the shared bundle
 # and libraries repos, so a promotion must not run concurrently with an
@@ -60,6 +68,7 @@ jobs:
       library_dir: ${{ steps.validate.outputs.library_dir }}
       package_kind: ${{ steps.validate.outputs.package_kind }}
       source_zip: ${{ steps.validate.outputs.source_zip }}
+      has_docs: ${{ steps.validate.outputs.has_docs }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -73,12 +82,18 @@ jobs:
         name: Parse, locate, validate preconditions
         # promote_validate.py parses the experimental tag, locates the
         # source package under libraries/ or workbench/, and verifies
-        # the experimental tag exists, the stable tag does not, and the
-        # source archive is attached to the experimental GitHub Release.
+        # the experimental tag exists, the stable tag does not (unless
+        # resume, which inverts that check), the source archive is
+        # attached to the experimental GitHub Release, and the version
+        # is newer than the newest stable release (unless allow_downgrade).
         # Workbench packages (Decision 0032 rule 3) get package_kind=workbench
-        # so the bundle + validate-mip jobs further down skip them.
+        # so the bundle + validate-mip jobs further down skip them, and
+        # packages without a mkdocs.yml get has_docs=false so the docs
+        # job skips them.
         env:
           TAG: ${{ inputs.experimental_tag }}
+          ALLOW_DOWNGRADE: ${{ inputs.allow_downgrade }}
+          RESUME: ${{ inputs.resume }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python scripts/promote_validate.py
 
@@ -114,7 +129,11 @@ jobs:
         id: tools-cache
         with:
           path: .tools
-          key: tools-${{ hashFiles('target-runtimes.toml', 'scripts/prepare_*.py', 'scripts/shared.py') }}
+          # tools-full-: this job produces the full toolset (micropython
+          # + circuitpython + mpy-cross).  Keyed per produced toolset so
+          # a cache hit from a lighter job can't satisfy this one with a
+          # partial .tools/ tree.
+          key: tools-full-${{ hashFiles('target-runtimes.toml', 'scripts/prepare_*.py', 'scripts/shared.py') }}
 
       - name: Install unix-port build dependencies
         if: steps.tools-cache.outputs.cache-hit != 'true'
@@ -235,11 +254,13 @@ jobs:
       # Single unified cache for all .tools/ artifacts (mpy-cross + unix-port).
       # Using separate cache actions for the same path causes the second
       # restore to overwrite the first, leading to subtle corruption.
+      # tools-mp-mpy-: this job produces mpy-cross + micropython only,
+      # so it must not share a key with jobs producing other toolsets.
       - uses: actions/cache@v4
         id: tools-cache
         with:
           path: .tools
-          key: tools-${{ hashFiles('target-runtimes.toml', 'scripts/prepare_*.py', 'scripts/shared.py') }}
+          key: tools-mp-mpy-${{ hashFiles('target-runtimes.toml', 'scripts/prepare_*.py', 'scripts/shared.py') }}
 
       - name: Build mpy-cross compilers
         if: steps.tools-cache.outputs.cache-hit != 'true'
@@ -268,7 +289,7 @@ jobs:
         run: python scripts/run.py prepare-micropython
 
       - name: Configure SSH for bundle repository
-        uses: webfactory/ssh-agent@v0.9.1
+        uses: webfactory/ssh-agent@v0.10.0
         with:
           ssh-private-key: ${{ secrets.BUNDLE_DEPLOY_KEY }}
 
@@ -304,8 +325,11 @@ jobs:
             -o .bundle-repo/README.md
 
       - name: Create circup zips
+        # --reuse-if-clean: on a resume re-run the overlay changes nothing
+        # (the bundle already carries the promoted files), so next-date-tag
+        # reuses HEAD's existing date tag instead of minting a duplicate.
         run: |
-          date_tag=$(python scripts/bundle_manager.py next-date-tag .bundle-repo)
+          date_tag=$(python scripts/bundle_manager.py next-date-tag .bundle-repo --reuse-if-clean)
           echo "date_tag=${date_tag}" >> "$GITHUB_ENV"
 
           python scripts/bundle_manager.py circup-zip .bundle-repo .circup-zips \
@@ -319,17 +343,30 @@ jobs:
             --commit-message "Update: ${{ needs.validate.outputs.library_name }} v${{ needs.validate.outputs.version }}"
 
       - name: Create bundle release
+        # Idempotent: a resume re-run reuses HEAD's date tag when restaging
+        # is byte-identical (tooling or metadata drift on main mints a
+        # fresh tag instead — harmless).  `gh release create` writes the
+        # release BEFORE uploading assets and does not roll back, so when
+        # the release already exists the re-run reconciles the circup zips
+        # with --clobber instead of short-circuiting past an asset-less
+        # release.
         run: |
           library_name="${{ needs.validate.outputs.library_name }}"
           version="${{ needs.validate.outputs.version }}"
           body=$(printf "## Updated libraries\n\n- **%s** v%s" "$library_name" "$version")
 
-          gh release create "${{ env.date_tag }}" \
-            --repo "ChuMicro/ChuMicro-Bundle" \
-            --verify-tag \
-            --title "Bundle ${{ env.date_tag }}" \
-            --notes "$body" \
-            .circup-zips/*.zip
+          TAG="${{ env.date_tag }}"
+          REPO_SLUG="ChuMicro/ChuMicro-Bundle"
+          if gh release view "$TAG" --repo "$REPO_SLUG" >/dev/null 2>&1; then
+            gh release upload "$TAG" --repo "$REPO_SLUG" --clobber .circup-zips/*.zip
+          else
+            gh release create "$TAG" \
+              --repo "$REPO_SLUG" \
+              --verify-tag \
+              --title "Bundle $TAG" \
+              --notes "$body" \
+              .circup-zips/*.zip
+          fi
         env:
           GH_TOKEN: ${{ secrets.BUNDLE_TOKEN }}
 
@@ -357,7 +394,8 @@ jobs:
         id: tools-cache
         with:
           path: .tools
-          key: tools-${{ hashFiles('target-runtimes.toml', 'scripts/prepare_*.py', 'scripts/shared.py') }}
+          # tools-mp-: this job produces micropython only.
+          key: tools-mp-${{ hashFiles('target-runtimes.toml', 'scripts/prepare_*.py', 'scripts/shared.py') }}
 
       - name: Install unix-port build dependencies
         if: steps.tools-cache.outputs.cache-hit != 'true'
@@ -392,7 +430,10 @@ jobs:
   docs:
     name: Deploy stable docs
     needs: [validate, release]
-    if: ${{ !inputs.dry_run }}
+    # has_docs gate: packages without a mkdocs.yml (workbench checks,
+    # pytest-device) have nothing to deploy, so an unconditional run would
+    # fail permanently after the PyPI publish, unfixable by re-run.
+    if: ${{ !inputs.dry_run && needs.validate.outputs.has_docs == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -422,6 +463,20 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      # Replay the frozen experimental source before building: docs_deploy
+      # labels the stable deploy with read_version(library_dir), i.e. the
+      # VERSION file on this checkout.  Without the replay, main HEAD's
+      # current VERSION (and docs tree) would be published as "stable"
+      # instead of the promoted version's.
+      - name: Download and unpack source archive
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python scripts/release_source.py \
+            --tag "${{ inputs.experimental_tag }}" \
+            --source-zip "${{ needs.validate.outputs.source_zip }}" \
+            --library-dir "${{ needs.validate.outputs.library_dir }}"
 
       - name: Deploy and push stable docs
         # docs_deploy_retry.py fetches gh-pages, runs run.py docs-deploy,
@@ -461,7 +516,7 @@ jobs:
           python-version: "3.13"
 
       - name: Configure SSH for libraries channel repository
-        uses: webfactory/ssh-agent@v0.9.1
+        uses: webfactory/ssh-agent@v0.10.0
         with:
           ssh-private-key: ${{ secrets.LIBRARIES_DEPLOY_KEY }}
 

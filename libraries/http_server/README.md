@@ -87,7 +87,7 @@ See the [user guide](https://chumicro.github.io/ChuMicro/http_server/stable/guid
 
 ## Where this fits
 
-Depends on [`chumicro-sockets`](../sockets/) (TCP listener) and [`chumicro-timing`](../timing/) (ticks).  Pairs with [`chumicro-websockets`](../websockets/) for combined HTTP + WS deployments.  Self-contained otherwise — the shared HTTP/1.1 primitives (case-insensitive header dict, charset parsing) are inlined locally, so a server-only board never ships [`chumicro-requests`](../requests/).
+Depends on [`chumicro-sockets`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/sockets) (TCP listener) and [`chumicro-timing`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/timing) (ticks).  Pairs with [`chumicro-websockets`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/websockets) for combined HTTP + WS deployments.  Self-contained otherwise — the shared HTTP/1.1 primitives (case-insensitive header dict, charset parsing) are inlined locally, so a server-only board never ships [`chumicro-requests`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/requests).
 
 ## Platform support
 

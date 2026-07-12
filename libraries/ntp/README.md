@@ -60,7 +60,7 @@ print("unix seconds:", request.unix_seconds)
 
 ## Where this fits
 
-Depends on [`chumicro-sockets`](../sockets/) for UDP transport and [`chumicro-timing`](../timing/) for ticks.  A single `pip install chumicro-ntp` brings the stack.  Used directly in app code; no other ChuMicro library depends on it.
+Depends on [`chumicro-sockets`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/sockets) for UDP transport and [`chumicro-timing`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/timing) for ticks.  A single `pip install chumicro-ntp` brings the stack.  Used directly in app code; no other ChuMicro library depends on it.
 
 ## Platform support
 
@@ -70,7 +70,7 @@ Pure-Python; runs identically on CPython, MicroPython, and CircuitPython.
 
 | Example | What it shows |
 |---|---|
-| [`examples/ntp_query.py`](examples/ntp_query.py) | Real query against `pool.ntp.org` — wifi up, UDP socket via factory, runner-shaped poll loop.  Cross-runtime (CP + MP). |
+| [`examples/ntp_query.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/ntp/examples/ntp_query.py) | Real query against `pool.ntp.org` — wifi up, UDP socket via factory, runner-shaped poll loop.  Cross-runtime (CP + MP). |
 
 ## Contributing
 

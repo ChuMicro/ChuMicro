@@ -20,8 +20,9 @@ Subcommands:
     stage-matrix       Stage artifacts for libraries in a JSON matrix (--matrix).
     readme             Generate a bundle repo README.md.
     circup-zip         Build circup-format zip bundles from a bundle directory.
-    patch-experimental Patch pyproject.toml for experimental channel release.
-    next-date-tag      Print the next available date-based tag for a bundle repo.
+    patch-experimental Patch pyproject.toml + README.md for experimental channel release.
+    next-date-tag      Print the next available date-based tag for a bundle repo
+                       (``--reuse-if-clean`` reuses HEAD's tag on a no-change re-run).
 
 Examples:
     python scripts/bundle_manager.py stage libraries/timing 0.1.0 .bundle-staging
@@ -41,6 +42,7 @@ from __future__ import annotations
 import argparse
 import ast
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -861,8 +863,60 @@ def _rewrite_experimental_dependencies(
     return content[:open_index] + block + content[close_index:]
 
 
+def _patch_experimental_readme(readme_path: Path, name: str) -> None:
+    """Patch a library's README.md for experimental channel release.
+
+    The README ships verbatim as the PyPI long-description, so an
+    experimental project page must not show stable install COMMANDS.
+    Rewrites are scoped to install-command lines only (``pip install``,
+    ``mip install``, ``circup bundle-add``) — prose and footer links
+    that legitimately reference both channels (e.g. a labeled "Stable
+    docs" link) keep their targets, otherwise the labels would lie:
+
+    - ``pip install`` lines referencing the stable *name* gain the
+      ``-experimental`` suffix.
+    - ``ChuMicro-Bundle`` references on install-command lines point at
+      the experimental bundle repo.  A reference already reading
+      ``ChuMicro-Bundle-Experimental`` is left alone (no double suffix).
+    - ``/stable/`` on install-command lines switches to
+      ``/experimental/``.
+
+    Args:
+        readme_path: Path to the library's README.md.
+        name: The stable ``[project].name`` (e.g. ``chumicro-timing``).
+    """
+    original = readme_path.read_text()
+
+    # Suffix the package name only on pip install lines, and only when
+    # the match is the whole name — a name followed by another name
+    # character is a longer (possibly already-suffixed) package.
+    name_pattern = re.compile(rf"{re.escape(name)}(?![A-Za-z0-9._-])")
+    bundle_pattern = re.compile(rf"{re.escape(STABLE_BUNDLE_REPO)}(?!-Experimental)")
+    lines = original.splitlines(keepends=True)
+    for index, line in enumerate(lines):
+        if "pip install" in line:
+            line = name_pattern.sub(f"{name}-experimental", line)
+        if "install" in line or "bundle-add" in line:
+            line = bundle_pattern.sub(EXPERIMENTAL_BUNDLE_REPO, line)
+            line = line.replace("/stable/", "/experimental/")
+        lines[index] = line
+    content = "".join(lines)
+
+    if content == original:
+        return
+    readme_path.write_text(content)
+
+    # Print patched lines for verification.
+    print("Patched README.md:")
+    # Line counts always match — every rewrite substitutes within a line.
+    patched_pairs = zip(original.splitlines(), content.splitlines(), strict=True)
+    for original_line, patched_line in patched_pairs:
+        if original_line != patched_line:
+            print(f"  {patched_line}")
+
+
 def patch_experimental(library_dir: Path) -> None:
-    """Patch a library's pyproject.toml for experimental channel release.
+    """Patch a library's pyproject.toml and README.md for experimental release.
 
     Renames the PyPI package to ``*-experimental`` (read from
     ``[project].name`` rather than derived from the directory, so a
@@ -870,7 +924,9 @@ def patch_experimental(library_dir: Path) -> None:
     patches correctly), rewrites intra-chumicro ``[project].dependencies``
     to their ``-experimental`` counterparts, redirects the Bundle URL to
     the experimental bundle repo, and switches the Documentation URL from
-    ``/stable/`` to ``/experimental/``.
+    ``/stable/`` to ``/experimental/``.  The README.md (the PyPI
+    long-description), when present, gets the matching install-command and
+    link rewrites via :func:`_patch_experimental_readme`.
 
     Args:
         library_dir: Root directory of the library (e.g. ``libraries/timing``).
@@ -924,8 +980,18 @@ def patch_experimental(library_dir: Path) -> None:
         elif stripped.startswith(('"chumicro-', "'chumicro-")) and "-experimental" in stripped:
             print(f"  {line}")
 
+    # The README ships verbatim as the PyPI long-description, so its
+    # install commands and links must follow the channel rename.
+    readme_path = library_dir / "README.md"
+    if readme_path.exists():
+        _patch_experimental_readme(readme_path, name)
 
-def next_date_tag(bundle_dir: Path) -> str:
+
+#: A bundle release tag: YYYYMMDD with optional numeric suffix segments.
+_DATE_TAG_PATTERN = re.compile(r"^\d{8}(\.\d+)*$")
+
+
+def next_date_tag(bundle_dir: Path, *, reuse_if_clean: bool = False) -> str:
     """Compute the next available date-based tag for a bundle release.
 
     Tags use ``YYYYMMDD`` for the first release of a day, with
@@ -933,10 +999,27 @@ def next_date_tag(bundle_dir: Path) -> str:
 
     Args:
         bundle_dir: Path to the cloned bundle repository.
+        reuse_if_clean: When True and the checkout's working tree is
+            clean (``git status --porcelain`` empty) and the HEAD commit
+            already carries at least one date tag, return the highest
+            such tag instead of minting a new one — a release re-run
+            that produced no content changes reuses its existing tag.
 
     Returns:
-        The next available date tag string.
+        The next available date tag string (or the reused HEAD tag).
     """
+    if reuse_if_clean:
+        status = run_git("status", "--porcelain", cwd=bundle_dir)
+        if not status.stdout.strip():
+            head_tags = run_git("tag", "--points-at", "HEAD", cwd=bundle_dir)
+            date_tags = [
+                tag
+                for tag in head_tags.stdout.strip().splitlines()
+                if _DATE_TAG_PATTERN.match(tag)
+            ]
+            if date_tags:
+                return max(date_tags, key=lambda tag: tuple(int(part) for part in tag.split(".")))
+
     today = datetime.now(timezone.utc).strftime("%Y%m%d")  # noqa: UP017
 
     result = run_git(
@@ -1064,7 +1147,7 @@ def main() -> None:
     # Patch pyproject.toml for experimental release.
     patch_parser = subparsers.add_parser(
         "patch-experimental",
-        help="Patch pyproject.toml for experimental channel release",
+        help="Patch pyproject.toml and README.md for experimental channel release",
     )
     patch_parser.add_argument(
         "library_dir", type=Path,
@@ -1079,6 +1162,12 @@ def main() -> None:
     date_tag_parser.add_argument(
         "bundle_dir", type=Path,
         help="Path to the cloned bundle repository",
+    )
+    date_tag_parser.add_argument(
+        "--reuse-if-clean",
+        action="store_true",
+        help="When the checkout is clean and HEAD already carries a date tag, "
+        "print the highest such tag instead of minting a new one",
     )
 
     args = parser.parse_args()
@@ -1123,7 +1212,7 @@ def main() -> None:
     elif args.command == "patch-experimental":
         patch_experimental(args.library_dir)
     elif args.command == "next-date-tag":
-        print(next_date_tag(args.bundle_dir))
+        print(next_date_tag(args.bundle_dir, reuse_if_clean=args.reuse_if_clean))
     else:
         parser.print_help()
         raise SystemExit(1)

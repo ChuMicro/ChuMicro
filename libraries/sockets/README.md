@@ -81,7 +81,7 @@ without hitting the network.
 
 ## Where this fits
 
-No runtime dependencies.  On CircuitPython the caller passes a radio (e.g. `wifi.radio`, or `chumicro-wifi`'s adapter radio) from which the socketpool is built.  Substrate for every networked library that follows: [`chumicro-requests`](../requests/), [`chumicro-http-server`](../http_server/), [`chumicro-mqtt`](../mqtt/), [`chumicro-websockets`](../websockets/), and [`chumicro-ntp`](../ntp/).
+No runtime dependencies.  On CircuitPython the caller passes a radio (e.g. `wifi.radio`, or `chumicro-wifi`'s adapter radio) from which the socketpool is built.  Substrate for every networked library that follows: [`chumicro-requests`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/requests), [`chumicro-http-server`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/http_server), [`chumicro-mqtt`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/mqtt), [`chumicro-websockets`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/websockets), and [`chumicro-ntp`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/ntp).
 
 ## Platform support
 
@@ -91,9 +91,9 @@ Works on CPython, MicroPython, and CircuitPython.
 
 | Example | What it shows |
 |---|---|
-| [`tcp_roundtrip.py`](examples/tcp_roundtrip.py) | Real TCP connect → send → recv → close.  Same shape on every runtime; pass `radio=wifi.radio` on CircuitPython. |
-| [`tls_with_custom_ca.py`](examples/tls_with_custom_ca.py) | Custom-CA TLS via `ssl_context_with_ca`.  Documents the substrate quirks observed on Pi Pico W mbedTLS in the docstring. |
-| [`udp_echo_client.py`](examples/udp_echo_client.py) | Board-side UDP echo client — wifi up, send datagram to a host echo server, read echo back, non-blocking.  Cross-runtime (CP + MP). |
+| [`tcp_roundtrip.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/sockets/examples/tcp_roundtrip.py) | Real TCP connect → send → recv → close.  Same shape on every runtime; pass `radio=wifi.radio` on CircuitPython. |
+| [`tls_with_custom_ca.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/sockets/examples/tls_with_custom_ca.py) | Custom-CA TLS via `ssl_context_with_ca`.  Documents the substrate quirks observed on Pi Pico W mbedTLS in the docstring. |
+| [`udp_echo_client.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/sockets/examples/udp_echo_client.py) | Board-side UDP echo client — wifi up, send datagram to a host echo server, read echo back, non-blocking.  Cross-runtime (CP + MP). |
 
 ## Contributing
 

@@ -5,7 +5,7 @@ align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
 **A persistent dict for counters, timestamps, and tokens that need to survive a reboot.**
 
-A dict-shaped store with `commit()` semantics.  Auto-detects the right backend per runtime (NVM on CircuitPython, NVS on ESP32 MicroPython, LittleFS elsewhere, in-memory for tests), bounds writes with `commit_if_changed()` so unchanged state doesn't wear the flash, and surfaces capacity and corruption honestly.  Not a config system — for declarative settings see [`chumicro-config`](../config/).
+A dict-shaped store with `commit()` semantics.  Auto-detects the right backend per runtime (NVM on CircuitPython, NVS on ESP32 MicroPython, LittleFS elsewhere, in-memory for tests), bounds writes with `commit_if_changed()` so unchanged state doesn't wear the flash, and surfaces capacity and corruption honestly.  Not a config system — for declarative settings see [`chumicro-config`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/config).
 
 <br clear="left">
 
@@ -64,7 +64,7 @@ Works on CPython, MicroPython, and CircuitPython.
 
 | Example | What it shows |
 |---|---|
-| [`boot_counter.py`](examples/boot_counter.py) | Boot counter persisted across reboots; auto-detect picks the right backend per runtime |
+| [`boot_counter.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/kvstore/examples/boot_counter.py) | Boot counter persisted across reboots; auto-detect picks the right backend per runtime |
 
 ## Contributing
 
