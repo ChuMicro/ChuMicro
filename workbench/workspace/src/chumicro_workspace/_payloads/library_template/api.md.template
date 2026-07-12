@@ -9,16 +9,4 @@
      manual edits here. -->
 
 ::: {import_name}
-
----
-
-<div class="chumicro-footer" markdown>
-
-[← Home](index.md)
-
-[Source](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/{name}) · \
-[PyPI](https://pypi.org/project/chumicro-{name}/) · \
-[Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) · \
-[Experimental Bundle](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental)
-
-</div>
+{footer_page}

@@ -12,7 +12,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
 authors = [
-    {{ name = "ChuMicro" }},
+    {{ name = "{author}" }},
 ]
 keywords = [
     # Workbench tools run on the host (laptop), not on a board.  Tag with
@@ -35,13 +35,7 @@ dependencies = [
     # libraries/ — those are for the device.
 ]
 
-[project.urls]
-Homepage = "https://github.com/ChuMicro/ChuMicro"
-Documentation = "https://chumicro.github.io/ChuMicro/{name}/stable/"
-Source = "https://github.com/ChuMicro/ChuMicro/tree/main/workbench/{name}"
-Issues = "https://github.com/ChuMicro/ChuMicro/issues"
-
-[project.scripts]
+{project_urls}[project.scripts]
 # Workbench packages typically expose a CLI.  Wire the entry-point
 # function here; argparse + dispatch live in src/chumicro_{import_name}/cli.py.
 chumicro-{name} = "chumicro_{import_name}.cli:main"

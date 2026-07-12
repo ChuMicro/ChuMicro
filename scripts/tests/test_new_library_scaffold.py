@@ -52,6 +52,26 @@ class TestScaffoldLibrary:
         pyproject = (tmp_path / "libraries" / "mylib" / "pyproject.toml").read_text()
         assert 'name = "chumicro-mylib"' in pyproject
 
+    def test_mono_repo_scaffold_is_branded(self, tmp_path: Path, monkeypatch):
+        """The mono-repo wrapper stamps ChuMicro identity into its scaffolds.
+
+        Unlike a downstream ``chumicro-workspace new --library`` run (which
+        gets the neutral self-owned default), the mono-repo's own new-library
+        flow points README + pyproject at the ChuMicro repos where these
+        libraries live, so the emitted package resolves its Homepage / Source
+        / bundle links.
+        """
+        monkeypatch.setattr("new_library_scaffold.ROOT", tmp_path)
+        (tmp_path / "libraries").mkdir()
+
+        _scaffold_library("mylib")
+        library_dir = tmp_path / "libraries" / "mylib"
+        readme = (library_dir / "README.md").read_text()
+        pyproject = (library_dir / "pyproject.toml").read_text()
+        assert "chumicro_tip.png" in readme
+        assert "Part of the [ChuMicro]" in readme
+        assert "Homepage = \"https://github.com/ChuMicro/ChuMicro\"" in pyproject
+
     def test_init_exports_class(self, tmp_path: Path, monkeypatch):
         """__init__.py exports the generated class name."""
         monkeypatch.setattr("new_library_scaffold.ROOT", tmp_path)

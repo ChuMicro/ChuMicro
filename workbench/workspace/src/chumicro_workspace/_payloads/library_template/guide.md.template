@@ -104,19 +104,7 @@ Works identically on CPython, MicroPython, and CircuitPython.  All tick arithmet
 
 | Example | What it shows |
 |---|---|
-| [`countdown_basic.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/{name}/examples/countdown_basic.py) | Single-shot fire on CPython — no hardware needed |
-| [`circuitpython_button_hold.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/{name}/examples/circuitpython_button_hold.py) | LED stays lit for 5 s after a button press on CircuitPython |
-| [`micropython_button_hold.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/{name}/examples/micropython_button_hold.py) | Same button-hold pattern on MicroPython |
-
----
-
-<div class="chumicro-footer" markdown>
-
-[← Home](index.md)
-
-[Source](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/{name}) · \
-[PyPI](https://pypi.org/project/chumicro-{name}/) · \
-[Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) · \
-[Experimental Bundle](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental)
-
-</div>
+| [`countdown_basic.py`]({examples_url_base}countdown_basic.py) | Single-shot fire on CPython — no hardware needed |
+| [`circuitpython_button_hold.py`]({examples_url_base}circuitpython_button_hold.py) | LED stays lit for 5 s after a button press on CircuitPython |
+| [`micropython_button_hold.py`]({examples_url_base}micropython_button_hold.py) | Same button-hold pattern on MicroPython |
+{footer_page}
