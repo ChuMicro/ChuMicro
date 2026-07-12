@@ -21,6 +21,7 @@ from chumicro_deploy import (
     Device,
     MicropythonTransportError,
     RecoveringDeployer,
+    UnresolvedImportError,
 )
 from chumicro_deploy.config.default import load_devices_yml
 
@@ -47,7 +48,10 @@ from chumicro_workspace.deploy_source import project_directory_source
 from chumicro_workspace.deploy_targets import read_deploy_targets
 from chumicro_workspace.example_source import example_source
 from chumicro_workspace.health import HealthLevel, collect_health_findings
-from chumicro_workspace.import_graph import project_import_graph_source
+from chumicro_workspace.import_graph import (
+    project_import_graph_source,
+    shared_import_hint,
+)
 from chumicro_workspace.workspace import (
     ProjectClassification,
     WorkspaceLayout,
@@ -638,6 +642,19 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
                 )
             except _DeployLayoutError as layout_error:
                 print(f"deploy: {layout_error}", file=sys.stderr)
+                exit_code = 2
+                continue
+            except UnresolvedImportError as import_error:
+                # The import-graph walk found a module that resolves to no
+                # deployed file; refuse before sending bytes rather than
+                # ship an import that would ImportError at first boot.
+                # Print the refusal cleanly (it would otherwise dump a raw
+                # traceback), and when the missing module is a mis-spelled
+                # shared/ import, append the bare-name fix.
+                print(f"deploy: {import_error}", file=sys.stderr)
+                hint = shared_import_hint(import_error.unresolved)
+                if hint is not None:
+                    print(f"  hint: {hint}", file=sys.stderr)
                 exit_code = 2
                 continue
             if args.dry_run:

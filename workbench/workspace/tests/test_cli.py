@@ -805,6 +805,39 @@ class TestDeploy:
         assert "workspace_runtime" not in captured
         assert "/lib/projects/" not in captured
 
+    def test_shared_package_form_import_is_refused_with_hint(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """A project importing ``shared.foo`` is refused with the bare-name fix.
+
+        A ``shared/`` module is imported by its bare stem (``import foo``);
+        the package form ``from shared.foo import bar`` resolves to no
+        deployed file, so deploy refuses before sending bytes and appends
+        the one-line fix instead of dumping a raw traceback.
+        """
+        root = seed_workspace(tmp_path)
+        shared = root / "shared"
+        shared.mkdir()
+        (shared / "external_lib.py").write_text("def helper(): pass\n")
+        project_dir = root / "projects" / "back-porch"
+        project_dir.mkdir(parents=True)
+        (project_dir / "project_config.toml").write_text("[wifi]\nssid = 'x'\n")
+        (project_dir / "app.py").write_text(
+            "from shared.external_lib import helper\ndef run(): pass\n",
+        )
+
+        exit_code = cli.main([
+            "deploy", "--workspace-dir", str(root),
+            "--boot-shim", "--import-graph", "back-porch",
+            "--dry-run",
+        ])
+        assert exit_code == 2
+        captured = capsys.readouterr().err
+        assert "unresolved import" in captured.lower()
+        assert "shared/ modules import by bare name" in captured
+
     def test_import_graph_flag_uses_ast_walker(
         self,
         tmp_path: Path,
