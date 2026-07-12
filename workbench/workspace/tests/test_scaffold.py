@@ -6,6 +6,8 @@ from pathlib import Path
 
 import pytest
 from chumicro_workspace.scaffold import (
+    CHUMICRO_BRANDING,
+    NEUTRAL_BRANDING,
     LibraryAlreadyExistsError,
     _class_name,
     _display_name,
@@ -109,11 +111,12 @@ class TestScaffoldLibrary:
         Workbench packages aren't cross-runtime and don't ship via
         bundles, so their docs should not carry the library shape's
         Runner pattern / Memory notes sections or the Bundle footer
-        link.  Also call out that the source URL points at
+        link.  Also call out that the branded source URL points at
         ``workbench/<name>/``, not ``libraries/<name>/``.
         """
         created = scaffold_library(
             tmp_path / "workbench", "trinket", package_kind="workbench",
+            branding=CHUMICRO_BRANDING,
         )
         guide_text = (created / "docs" / "guide.md").read_text()
         index_text = (created / "docs" / "index.md").read_text()
@@ -141,8 +144,10 @@ class TestScaffoldLibrary:
     def test_library_kind_keeps_library_flavored_docs(
         self, tmp_path: Path,
     ) -> None:
-        """Default `package_kind="library"` keeps the library doc shape."""
-        created = scaffold_library(tmp_path / "libraries", "gpio")
+        """Branded `package_kind="library"` keeps the library doc shape."""
+        created = scaffold_library(
+            tmp_path / "libraries", "gpio", branding=CHUMICRO_BRANDING,
+        )
         guide_text = (created / "docs" / "guide.md").read_text()
         index_text = (created / "docs" / "index.md").read_text()
 
@@ -155,3 +160,119 @@ class TestScaffoldLibrary:
         # Library source URL.
         assert "tree/main/libraries/gpio" in guide_text
         assert "All ChuMicro Libraries" in index_text
+
+
+class TestScaffoldBranding:
+    """Branded scaffolds point at the upstream repos; neutral scaffolds don't.
+
+    The mono-repo passes ``CHUMICRO_BRANDING`` so its packages resolve at
+    the ChuMicro repos, bundle, and docs site; a downstream
+    ``chumicro-workspace new --library`` run leaves the neutral default so
+    the emitted package owns itself.
+    """
+
+    def test_neutral_is_the_default(self, tmp_path: Path) -> None:
+        """No branding argument means the self-owned rendering.
+
+        A scaffold with no ``branding=`` carries none of the ChuMicro
+        banner, family blockquote, bundle, repository, or docs-site URLs
+        that the branded rendering adds.  (Worked-example body prose that
+        names sibling chumicro libraries is shared template content the
+        owner rewrites, and is out of scope here.)
+        """
+        created = scaffold_library(tmp_path / "libraries", "gpio")
+        readme_text = (created / "README.md").read_text()
+        assert "chumicro_tip.png" not in readme_text
+        assert "Part of the [ChuMicro]" not in readme_text
+        assert "ChuMicro-Bundle" not in readme_text
+        assert "github.com/ChuMicro" not in readme_text
+        assert "chumicro.github.io" not in readme_text
+
+    def test_neutral_readme_installs_from_pypi_only(
+        self, tmp_path: Path,
+    ) -> None:
+        """The neutral README install block is a plain PyPI install.
+
+        A user's own library isn't in the ChuMicro bundle, so the circup /
+        mip bundle lines and the mono-repo INSTALL-guide link are dropped;
+        only ``pip install chumicro-<name>`` remains.
+        """
+        created = scaffold_library(tmp_path / "libraries", "gpio")
+        readme_text = (created / "README.md").read_text()
+        assert "pip install chumicro-gpio" in readme_text
+        assert "circup" not in readme_text
+        assert "mip install" not in readme_text
+        assert "Clone the [mono-repo]" not in readme_text
+
+    def test_neutral_pyproject_omits_project_urls_and_author(
+        self, tmp_path: Path,
+    ) -> None:
+        """The neutral pyproject drops the ChuMicro URLs and authorship.
+
+        ``[project.urls]`` is omitted entirely (no Homepage / Source /
+        Issues / Bundle pointing at ChuMicro) and the author is a TODO
+        placeholder rather than "ChuMicro".
+        """
+        created = scaffold_library(tmp_path / "libraries", "gpio")
+        pyproject_text = (created / "pyproject.toml").read_text()
+        assert "[project.urls]" not in pyproject_text
+        assert "github.com/ChuMicro" not in pyproject_text
+        assert 'name = "ChuMicro"' not in pyproject_text
+        assert "TODO" in pyproject_text
+
+    def test_neutral_mkdocs_omits_site_and_repo_urls(
+        self, tmp_path: Path,
+    ) -> None:
+        """The neutral mkdocs.yml keeps site_name but drops the ChuMicro URLs."""
+        created = scaffold_library(tmp_path / "libraries", "gpio")
+        mkdocs_text = (created / "mkdocs.yml").read_text()
+        assert "site_name: chumicro-gpio" in mkdocs_text
+        assert "repo_url:" not in mkdocs_text
+        assert "chumicro.github.io" not in mkdocs_text
+
+    def test_neutral_docs_drop_the_branded_footer(
+        self, tmp_path: Path,
+    ) -> None:
+        """Neutral docs carry no upstream footer link block."""
+        created = scaffold_library(tmp_path / "libraries", "gpio")
+        for doc_filename in ("index.md", "guide.md", "api.md", "testing.md"):
+            doc_text = (created / "docs" / doc_filename).read_text()
+            assert "chumicro-footer" not in doc_text
+            assert "github.com/ChuMicro" not in doc_text
+
+    def test_branded_readme_carries_upstream_identity(
+        self, tmp_path: Path,
+    ) -> None:
+        """`CHUMICRO_BRANDING` restores the banner, family note, and bundle.
+
+        The mono-repo's own scaffolds keep the ChuMicro hero banner, the
+        "Part of the ChuMicro family" note, the bundle install lines, and
+        the MIT-into-monorepo license link.
+        """
+        created = scaffold_library(
+            tmp_path / "libraries", "gpio", branding=CHUMICRO_BRANDING,
+        )
+        readme_text = (created / "README.md").read_text()
+        assert "chumicro_tip.png" in readme_text
+        assert "Part of the [ChuMicro]" in readme_text
+        assert "circup install chumicro_gpio" in readme_text
+        assert "github.com/ChuMicro/ChuMicro/blob/main/LICENSE" in readme_text
+
+    def test_branded_and_neutral_share_the_body(self, tmp_path: Path) -> None:
+        """Both flavors render from one template set: shared body is identical.
+
+        The quick-example and API-summary body a user rewrites is the same
+        under either branding; only the upstream-identity fragments differ.
+        """
+        branded = scaffold_library(
+            tmp_path / "branded", "gpio", branding=CHUMICRO_BRANDING,
+        )
+        neutral = scaffold_library(
+            tmp_path / "neutral", "gpio", branding=NEUTRAL_BRANDING,
+        )
+        for text in (
+            (branded / "README.md").read_text(),
+            (neutral / "README.md").read_text(),
+        ):
+            assert "**A single-shot timer that fires once after N milliseconds.**" in text
+            assert "## Quick example" in text

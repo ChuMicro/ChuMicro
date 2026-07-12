@@ -16,6 +16,7 @@ those.
 from __future__ import annotations
 
 from chumicro_workspace.scaffold import (
+    CHUMICRO_BRANDING,
     LibraryAlreadyExistsError,
     scaffold_library,
 )
@@ -32,13 +33,20 @@ def _scaffold_library(name: str, *, workbench: bool = False) -> int:
     *workbench=True* scaffolds a host-only CPython tool under
     ``workbench/`` instead (workbench-flavored pyproject + docs, no
     Runner pattern).  Same parent/kind split the workspace CLI's
-    ``new --library`` / ``new --workbench`` uses.  Returns 0 on
-    success, 1 when the target already exists.
+    ``new --library`` / ``new --workbench`` uses.  Passes
+    ``CHUMICRO_BRANDING`` so the emitted package points at the ChuMicro
+    repos, bundle, and docs site where these libraries actually live
+    (the workspace CLI leaves the neutral, self-owned default for
+    downstream users).  Returns 0 on success, 1 when the target already
+    exists.
     """
     package_kind = "workbench" if workbench else "library"
     target_dir = ROOT / ("workbench" if workbench else "libraries")
     try:
-        created = scaffold_library(target_dir, name, package_kind=package_kind)
+        created = scaffold_library(
+            target_dir, name, package_kind=package_kind,
+            branding=CHUMICRO_BRANDING,
+        )
     except LibraryAlreadyExistsError as exception:
         print(f"Directory already exists: {exception}")
         return 1
