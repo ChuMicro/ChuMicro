@@ -392,10 +392,13 @@ jobs:
 
       - name: Create circup zips
         run: |
+          # finalize-tag pins the staged manifests' dep placeholders to the
+          # release tag, so installs resolve deps at the snapshot they were
+          # validated with instead of the bundle repo's future HEAD.
           # --reuse-if-clean: a re-run after "push succeeded, release create
           # failed" reprints the already-pushed tag instead of minting a
           # fresh one on identical content (which would orphan the original).
-          date_tag=$(python scripts/bundle_manager.py next-date-tag .bundle-repo --reuse-if-clean)
+          date_tag=$(python scripts/bundle_manager.py finalize-tag .bundle-repo --reuse-if-clean)
           echo "date_tag=${date_tag}" >> "$GITHUB_ENV"
 
           repository_name="${{ needs.detect.outputs.bundle_repository }}"

@@ -3,6 +3,7 @@
 import json
 import os
 import stat
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -22,9 +23,11 @@ from bundle_manager import (
     _read_chumicro_dependencies,
     build_bundle,
     build_circup_zips,
+    finalize_bundle_tag,
     generate_bundle_readme,
     next_date_tag,
     patch_experimental,
+    pin_bundle_deps,
 )
 
 
@@ -339,26 +342,32 @@ class TestReadChuMicroDependencies:
         assert len(result) == 2
 
 
+#: Git environment overrides so commits work in CI (no global user config).
+_GIT_ENV = {
+    "GIT_AUTHOR_NAME": "test",
+    "GIT_AUTHOR_EMAIL": "test@test",
+    "GIT_COMMITTER_NAME": "test",
+    "GIT_COMMITTER_EMAIL": "test@test",
+}
+
+
+def _git(*arguments: str, cwd: Path) -> None:
+    """Run a git command with CI-safe identity."""
+    import subprocess
+
+    merged = {**os.environ, **_GIT_ENV}
+    subprocess.run(
+        ["git", *arguments],
+        cwd=cwd, capture_output=True, check=True, env=merged,
+    )
+
+
 class TestNextDateTag:
     """Tests for next_date_tag."""
 
-    #: Git environment overrides so commits work in CI (no global user config).
-    _GIT_ENV = {
-        "GIT_AUTHOR_NAME": "test",
-        "GIT_AUTHOR_EMAIL": "test@test",
-        "GIT_COMMITTER_NAME": "test",
-        "GIT_COMMITTER_EMAIL": "test@test",
-    }
-
     def _git(self, *arguments: str, cwd: Path) -> None:
         """Run a git command with CI-safe identity."""
-        import subprocess
-
-        merged = {**os.environ, **self._GIT_ENV}
-        subprocess.run(
-            ["git", *arguments],
-            cwd=cwd, capture_output=True, check=True, env=merged,
-        )
+        _git(*arguments, cwd=cwd)
 
     def test_no_existing_tags(self, tmp_path: Path, monkeypatch):
         """No existing tags returns today's date."""
@@ -433,6 +442,155 @@ class TestNextDateTag:
         tag = next_date_tag(tmp_path, reuse_if_clean=True)
         assert len(tag) == 8
         assert tag.isdigit()
+
+
+def _write_manifest(
+    manifest_path: Path,
+    deps: list[list[str]] | None,
+    version: str = "1.0.0",
+) -> None:
+    """Write a package.json in build_bundle's exact serialization."""
+    package = manifest_path.parent.name
+    manifest: dict = {
+        "urls": [[f"{package}/x.py", f"github:ChuMicro/ChuMicro-Bundle/{package}/x.py"]],
+        "version": version,
+    }
+    if deps:
+        manifest["deps"] = deps
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(manifest_path, "w") as manifest_file:
+        json.dump(manifest, manifest_file, indent=2)
+        manifest_file.write("\n")
+
+
+def _manifest_deps(manifest_path: Path) -> list[list[str]]:
+    """Read back a manifest's deps list."""
+    return json.loads(manifest_path.read_text()).get("deps", [])
+
+
+class TestPinBundleDeps:
+    """Tests for pin_bundle_deps."""
+
+    def test_scan_rewrites_only_placeholder_entries(self, tmp_path: Path):
+        """A scan pins HEAD-placeholder deps and leaves real pins alone."""
+        manifest = tmp_path / "chumicro_runner" / "package.json"
+        _write_manifest(manifest, [
+            ["github:ChuMicro/ChuMicro-Bundle/chumicro_timing", "HEAD"],
+            ["github:ChuMicro/ChuMicro-Bundle/chumicro_config", "20260101"],
+        ])
+
+        rewritten = pin_bundle_deps(tmp_path, "20260711")
+
+        assert rewritten == [manifest]
+        assert _manifest_deps(manifest) == [
+            ["github:ChuMicro/ChuMicro-Bundle/chumicro_timing", "20260711"],
+            ["github:ChuMicro/ChuMicro-Bundle/chumicro_config", "20260101"],
+        ]
+
+    def test_scan_skips_manifests_without_deps(self, tmp_path: Path):
+        """Dependency-free manifests are not rewritten (or returned)."""
+        manifest = tmp_path / "chumicro_timing" / "package.json"
+        _write_manifest(manifest, None)
+        before = manifest.read_text()
+
+        assert pin_bundle_deps(tmp_path, "20260711") == []
+        assert manifest.read_text() == before
+
+    def test_explicit_manifests_repin_all_entries(self, tmp_path: Path):
+        """An explicit manifest list rewrites every dep entry to the tag."""
+        staged = tmp_path / "chumicro_runner" / "package.json"
+        untouched = tmp_path / "chumicro_mqtt" / "package.json"
+        _write_manifest(staged, [
+            ["github:ChuMicro/ChuMicro-Bundle/chumicro_timing", "20260101"],
+        ])
+        _write_manifest(untouched, [
+            ["github:ChuMicro/ChuMicro-Bundle/chumicro_timing", "20260101"],
+        ])
+
+        rewritten = pin_bundle_deps(tmp_path, "20260711", manifests=[staged])
+
+        assert rewritten == [staged]
+        assert _manifest_deps(staged)[0][1] == "20260711"
+        assert _manifest_deps(untouched)[0][1] == "20260101"
+
+    def test_rewrite_preserves_build_bundle_serialization(self, tmp_path: Path):
+        """A pinned manifest stays byte-identical to build_bundle's output
+        for the same content (indent-2 JSON plus trailing newline)."""
+        manifest = tmp_path / "chumicro_runner" / "package.json"
+        _write_manifest(manifest, [
+            ["github:ChuMicro/ChuMicro-Bundle/chumicro_timing", "HEAD"],
+        ])
+        expected = tmp_path / "expected" / "chumicro_runner" / "package.json"
+        _write_manifest(expected, [
+            ["github:ChuMicro/ChuMicro-Bundle/chumicro_timing", "20260711"],
+        ])
+
+        pin_bundle_deps(tmp_path / "chumicro_runner", "20260711")
+
+        assert manifest.read_bytes() == expected.read_bytes()
+
+
+class TestFinalizeBundleTag:
+    """Tests for finalize_bundle_tag."""
+
+    def test_first_push_mints_tag_and_pins_placeholders(self, tmp_path: Path):
+        """With no date tag on HEAD, the minted tag lands in the manifests."""
+        _git("init", cwd=tmp_path)
+        _git("commit", "--allow-empty", "-m", "seed", cwd=tmp_path)
+        manifest = tmp_path / "chumicro_runner" / "package.json"
+        _write_manifest(manifest, [
+            ["github:ChuMicro/ChuMicro-Bundle/chumicro_timing", "HEAD"],
+        ])
+
+        tag = finalize_bundle_tag(tmp_path, reuse_if_clean=True)
+
+        assert len(tag) == 8 and tag.isdigit()
+        assert _manifest_deps(manifest)[0][1] == tag
+
+    def test_no_change_rerun_reuses_tag_and_stays_clean(self, tmp_path: Path):
+        """Re-staging identical content over a pushed bundle reuses HEAD's
+        tag and leaves the tree byte-identical (the re-run no-op path)."""
+        _git("init", cwd=tmp_path)
+        manifest = tmp_path / "chumicro_runner" / "package.json"
+        dependency_reference = "github:ChuMicro/ChuMicro-Bundle/chumicro_timing"
+        _write_manifest(manifest, [[dependency_reference, "20260101"]])
+        _git("add", "-A", cwd=tmp_path)
+        _git("commit", "-m", "release", cwd=tmp_path)
+        _git("tag", "20260101", cwd=tmp_path)
+
+        # Simulate the overlay of a re-run: same content, placeholder pin.
+        _write_manifest(manifest, [[dependency_reference, "HEAD"]])
+
+        tag = finalize_bundle_tag(tmp_path, reuse_if_clean=True)
+
+        assert tag == "20260101"
+        status = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=tmp_path, capture_output=True, text=True, check=True,
+        )
+        assert status.stdout.strip() == ""
+
+    def test_real_change_mints_new_tag_and_repins(self, tmp_path: Path):
+        """A genuine release mints the next tag, pins the staged manifest to
+        it, and leaves a prior push's manifest pinned to its own snapshot."""
+        _git("init", cwd=tmp_path)
+        staged = tmp_path / "chumicro_runner" / "package.json"
+        old = tmp_path / "chumicro_mqtt" / "package.json"
+        dependency_reference = "github:ChuMicro/ChuMicro-Bundle/chumicro_timing"
+        _write_manifest(staged, [[dependency_reference, "20260101"]], version="1.0.0")
+        _write_manifest(old, [[dependency_reference, "20251231"]])
+        _git("add", "-A", cwd=tmp_path)
+        _git("commit", "-m", "release", cwd=tmp_path)
+        _git("tag", "20260101", cwd=tmp_path)
+
+        # Overlay of a new runner release: bumped version, placeholder pin.
+        _write_manifest(staged, [[dependency_reference, "HEAD"]], version="1.1.0")
+
+        tag = finalize_bundle_tag(tmp_path, reuse_if_clean=True)
+
+        assert tag != "20260101"
+        assert _manifest_deps(staged)[0][1] == tag
+        assert _manifest_deps(old)[0][1] == "20251231"
 
 
 class TestPatchExperimental:

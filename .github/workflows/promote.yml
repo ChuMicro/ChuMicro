@@ -325,11 +325,14 @@ jobs:
             -o .bundle-repo/README.md
 
       - name: Create circup zips
-        # --reuse-if-clean: on a resume re-run the overlay changes nothing
-        # (the bundle already carries the promoted files), so next-date-tag
-        # reuses HEAD's existing date tag instead of minting a duplicate.
+        # finalize-tag pins the staged manifests' dep placeholders to the
+        # release tag (installs resolve deps at the validated snapshot,
+        # not the bundle repo's future HEAD).  --reuse-if-clean: on a
+        # resume re-run the pinned overlay changes nothing (the bundle
+        # already carries the promoted files), so it reuses HEAD's
+        # existing date tag instead of minting a duplicate.
         run: |
-          date_tag=$(python scripts/bundle_manager.py next-date-tag .bundle-repo --reuse-if-clean)
+          date_tag=$(python scripts/bundle_manager.py finalize-tag .bundle-repo --reuse-if-clean)
           echo "date_tag=${date_tag}" >> "$GITHUB_ENV"
 
           python scripts/bundle_manager.py circup-zip .bundle-repo .circup-zips \
