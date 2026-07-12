@@ -37,9 +37,12 @@ purpose.
 
 `shared/` continues to ship pre-existing in the template (with
 its own `README.md` explaining what goes in it), so beginners
-discover it via `ls`-or-IDE-tree.  Imported as
-`from shared.foo import bar` (no `__init__.py` required —
-implicit namespace packages, Python 3.3+).
+discover it via `ls`-or-IDE-tree.  A file `shared/foo.py` is
+imported by its bare module name (`from foo import bar`), not
+`shared.foo`: the deploy search path roots at the `shared/`
+directory itself, so its modules resolve as top-level names with
+no package qualifier and no `__init__.py`.  See
+[Decision 0110](0110-shared-imports-by-bare-module-name.md).
 
 ### 2. `libraries/` becomes lazy
 

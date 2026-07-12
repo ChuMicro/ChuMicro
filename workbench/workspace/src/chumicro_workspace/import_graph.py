@@ -151,6 +151,35 @@ def build_search_paths(
     return resolved
 
 
+#: One-line fix printed when a project imports a `shared/` module by
+#: the wrong (package) name.  A workspace roots its import search path at
+#: the `shared/` directory itself, so `shared/foo.py` is `from foo import
+#: bar`; there is no `shared` package to qualify against.
+SHARED_BARE_NAME_HINT = (
+    "shared/ modules import by bare name: use `from foo import bar`, "
+    "not `from shared.foo import bar`."
+)
+
+
+def shared_import_hint(unresolved: list[tuple[Path, str]]) -> str | None:
+    """Return the bare-name fix when an unresolved import names ``shared``.
+
+    ``unresolved`` is the ``(importing_file, module_name)`` list an
+    :class:`chumicro_deploy.UnresolvedImportError` collected before
+    refusing a deploy.  When any ``module_name``'s top segment is
+    ``shared`` (``shared`` or ``shared.foo``), the project spelled a
+    ``shared/`` module as if ``shared`` were a package; the search path
+    roots at ``shared/`` instead, so the module resolves by its bare
+    stem.  Returns :data:`SHARED_BARE_NAME_HINT` for that case, or
+    ``None`` when no unresolved import names ``shared`` (nothing to
+    coach).
+    """
+    for _importing_file, module_name in unresolved:
+        if module_name.split(".", 1)[0] == "shared":
+            return SHARED_BARE_NAME_HINT
+    return None
+
+
 def project_import_graph_source(
     project_dir: Path,
     *,

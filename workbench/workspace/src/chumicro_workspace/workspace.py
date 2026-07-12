@@ -163,9 +163,11 @@ class WorkspaceLayout:
     def shared_dir(self) -> Path:
         """Path to ``<root>/shared/`` for flat shared modules.
 
-        Files under ``shared/`` are imported by projects directly
-        (``from shared.foo import bar``) without any package scaffolding.
-        No tests, no version, no chumicro library shape.
+        A file ``shared/foo.py`` is imported by projects under its bare
+        module name (``from foo import bar``), never ``shared.foo``: the
+        deploy search path roots at this directory, so its modules resolve
+        as top-level names without any package scaffolding.  No tests, no
+        version, no chumicro library shape.
         """
         return self.root / "shared"
 

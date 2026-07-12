@@ -3,11 +3,14 @@
 from pathlib import Path
 
 import pytest
+from chumicro_deploy import UnresolvedImportError
 from chumicro_workspace.deploy_source import RUNTIME_CONFIG_DEVICE_PATH
 from chumicro_workspace.import_graph import (
+    SHARED_BARE_NAME_HINT,
     build_search_paths,
     project_import_graph_source,
     read_library_sources,
+    shared_import_hint,
 )
 from chumicro_workspace.loaders import WorkspaceConfigError
 from chumicro_workspace.workspace import WorkspaceLayout
@@ -347,3 +350,59 @@ class TestProjectImportGraphSource:
         files = source.files()
         assert "/lib/_adapters/mp.py" in files
         assert "/lib/_adapters/cp.py" not in files
+
+
+# ---------------------------------------------------------------------------
+# shared_import_hint
+# ---------------------------------------------------------------------------
+
+
+class TestSharedImportHint:
+    def test_bare_shared_name_returns_hint(self) -> None:
+        """A bare ``import shared`` (shared/ mistaken for a package) coaches."""
+        unresolved = [(Path("projects/x/code.py"), "shared")]
+        assert shared_import_hint(unresolved) == SHARED_BARE_NAME_HINT
+
+    def test_dotted_shared_name_returns_hint(self) -> None:
+        """``from shared.foo import bar`` records ``shared.foo`` and coaches."""
+        unresolved = [(Path("projects/x/code.py"), "shared.foo")]
+        assert shared_import_hint(unresolved) == SHARED_BARE_NAME_HINT
+
+    def test_non_shared_name_returns_none(self) -> None:
+        """An unresolved third-party import is unrelated; no hint."""
+        unresolved = [(Path("projects/x/code.py"), "chumicro_missing")]
+        assert shared_import_hint(unresolved) is None
+
+    def test_shared_prefix_word_returns_none(self) -> None:
+        """A module whose name merely starts with ``shared`` is not ``shared``."""
+        unresolved = [(Path("projects/x/code.py"), "shared_helper")]
+        assert shared_import_hint(unresolved) is None
+
+    def test_empty_list_returns_none(self) -> None:
+        assert shared_import_hint([]) is None
+
+    def test_package_form_deploy_is_refused_with_hint(self, tmp_path: Path) -> None:
+        """The walker refuses ``from shared.foo import bar`` and the hint fires.
+
+        The bare form (``import foo``) is the deploy-verified contract; the
+        package form resolves to no deployed file because the search path
+        roots at ``shared/`` itself, so ``shared.foo`` is unresolved and the
+        refusal carries the bare-name fix.
+        """
+        (tmp_path / "workspace.yml").write_text("# machinery only\n")
+        (tmp_path / "secrets.toml").write_text("")
+        shared = tmp_path / "shared"
+        shared.mkdir()
+        (shared / "sensor.py").write_text("def read(): return 1\n")
+
+        project_dir = tmp_path / "projects" / "porch"
+        project_dir.mkdir(parents=True)
+        (project_dir / "project_config.toml").write_text("[app]\n")
+        (project_dir / "code.py").write_text("from shared.sensor import read\n")
+        workspace = WorkspaceLayout(root=tmp_path)
+
+        with pytest.raises(UnresolvedImportError) as caught:
+            project_import_graph_source(project_dir, workspace=workspace)
+        missing = [module for _file, module in caught.value.unresolved]
+        assert missing == ["shared.sensor"]
+        assert shared_import_hint(caught.value.unresolved) == SHARED_BARE_NAME_HINT
