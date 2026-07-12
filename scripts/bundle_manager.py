@@ -23,6 +23,9 @@ Subcommands:
     patch-experimental Patch pyproject.toml + README.md for experimental channel release.
     next-date-tag      Print the next available date-based tag for a bundle repo
                        (``--reuse-if-clean`` reuses HEAD's tag on a no-change re-run).
+    finalize-tag       Pin staged package.json dep refs to the release tag and
+                       print it (next-date-tag plus dep pinning; what the
+                       release workflows call before bundle_push).
 
 Examples:
     python scripts/bundle_manager.py stage libraries/timing 0.1.0 .bundle-staging
@@ -311,8 +314,10 @@ def build_bundle(
     manifest: dict = {"urls": urls, "version": version}
     # Dependencies reference the same bundle repo so that experimental
     # installs pull experimental deps and stable installs pull stable deps.
+    # The ref is a stage-time placeholder: the snapshot tag doesn't exist
+    # yet, so finalize_bundle_tag rewrites it before the bundle push.
     mip_dependencies = [
-        [_dependency_to_mip_reference(dependency, bundle_repo), "HEAD"]
+        [_dependency_to_mip_reference(dependency, bundle_repo), _STAGE_TIME_DEP_PIN]
         for dependency in _read_chumicro_dependencies(library_dir)
     ]
     if mip_dependencies:
@@ -406,7 +411,7 @@ def build_bundle(
 
         mpy_manifest: dict = {"urls": mpy_urls, "version": version}
         mpy_mip_dependencies = [
-            [_dependency_to_mpy_mip_reference(dependency, bundle_repo), "HEAD"]
+            [_dependency_to_mpy_mip_reference(dependency, bundle_repo), _STAGE_TIME_DEP_PIN]
             for dependency in _read_chumicro_dependencies(library_dir)
         ]
         if mpy_mip_dependencies:
@@ -990,6 +995,128 @@ def patch_experimental(library_dir: Path) -> None:
 #: A bundle release tag: YYYYMMDD with optional numeric suffix segments.
 _DATE_TAG_PATTERN = re.compile(r"^\d{8}(\.\d+)*$")
 
+#: Stage-time placeholder for manifest dep refs.  The snapshot tag a
+#: package ships under doesn't exist until push time, so build_bundle
+#: stages deps pinned to this value and finalize_bundle_tag rewrites
+#: them to the real tag.  A pushed manifest must never carry it: an
+#: install would resolve deps at whatever the bundle repo's HEAD is at
+#: install time, not at the snapshot the package was validated with.
+_STAGE_TIME_DEP_PIN = "HEAD"
+
+
+def _head_date_tag(bundle_dir: Path) -> str | None:
+    """Return the highest date tag on HEAD, or None if HEAD has none.
+
+    Args:
+        bundle_dir: Path to the cloned bundle repository.
+    """
+    head_tags = run_git("tag", "--points-at", "HEAD", cwd=bundle_dir)
+    date_tags = [
+        tag
+        for tag in head_tags.stdout.strip().splitlines()
+        if _DATE_TAG_PATTERN.match(tag)
+    ]
+    if not date_tags:
+        return None
+    return max(date_tags, key=lambda tag: tuple(int(part) for part in tag.split(".")))
+
+
+def pin_bundle_deps(
+    bundle_dir: Path,
+    tag: str,
+    *,
+    manifests: list[Path] | None = None,
+) -> list[Path]:
+    """Rewrite package.json dep pins under *bundle_dir* to *tag*.
+
+    When *manifests* is None, scans every manifest in the tree and
+    rewrites dep entries pinned to the stage-time placeholder.  Passing
+    an explicit list instead rewrites all dep entries of exactly those
+    manifests — used when a freshly minted tag supersedes the reuse
+    candidate they were just pinned to — without touching manifests
+    from earlier pushes, whose pins must keep naming their own snapshot.
+
+    Args:
+        bundle_dir: Path to the cloned bundle repository.
+        tag: The tag to pin dep entries to.
+        manifests: Explicit manifests to re-pin, or None to scan.
+
+    Returns:
+        The manifests that were rewritten.
+    """
+    if manifests is None:
+        targets = [
+            manifest_path
+            for manifest_path in sorted(bundle_dir.rglob("package.json"))
+            if ".git" not in manifest_path.relative_to(bundle_dir).parts
+        ]
+        only_value = _STAGE_TIME_DEP_PIN
+    else:
+        targets = manifests
+        only_value = None
+
+    rewritten: list[Path] = []
+    for manifest_path in targets:
+        manifest = json.loads(manifest_path.read_text())
+        changed = False
+        for entry in manifest.get("deps", []):
+            if only_value is not None and entry[1] != only_value:
+                continue
+            if entry[1] != tag:
+                entry[1] = tag
+                changed = True
+        if changed:
+            with open(manifest_path, "w") as manifest_file:
+                json.dump(manifest, manifest_file, indent=2)
+                manifest_file.write("\n")
+            rewritten.append(manifest_path)
+    return rewritten
+
+
+def finalize_bundle_tag(bundle_dir: Path, *, reuse_if_clean: bool = False) -> str:
+    """Pin staged dep placeholders and return the release tag.
+
+    Breaks the circularity between "what tag does this push get"
+    (depends on whether the staged overlay changed anything) and "what
+    do the staged manifests' dep pins say" (part of the content being
+    compared):
+
+    1. Pin placeholders to HEAD's own date tag.  On a no-change re-run
+       the tree becomes byte-identical to HEAD, so the reuse branch of
+       :func:`next_date_tag` fires and the already-pushed tag is
+       reused.
+    2. Otherwise the tree is genuinely dirty: mint the next tag and
+       re-pin the same manifests to it.
+
+    Every pushed manifest's dep pins therefore name the tag of the
+    snapshot they shipped in — an install of ``package@tag`` resolves
+    its deps at that same validated snapshot.
+
+    Args:
+        bundle_dir: Path to the cloned bundle repository, with staged
+            artifacts already overlaid.
+        reuse_if_clean: Passed through to :func:`next_date_tag`.
+
+    Returns:
+        The release tag the bundle push should use.
+    """
+    candidate = _head_date_tag(bundle_dir)
+    pinned: list[Path] = []
+    if candidate is not None:
+        pinned = pin_bundle_deps(bundle_dir, candidate)
+    tag = next_date_tag(bundle_dir, reuse_if_clean=reuse_if_clean)
+    if tag != candidate:
+        if candidate is None:
+            pinned = pin_bundle_deps(bundle_dir, tag)
+        elif pinned:
+            pinned = pin_bundle_deps(bundle_dir, tag, manifests=pinned)
+    if pinned:
+        print(
+            f"Pinned deps in {len(pinned)} manifest(s) to {tag}",
+            file=sys.stderr,
+        )
+    return tag
+
 
 def next_date_tag(bundle_dir: Path, *, reuse_if_clean: bool = False) -> str:
     """Compute the next available date-based tag for a bundle release.
@@ -1011,14 +1138,9 @@ def next_date_tag(bundle_dir: Path, *, reuse_if_clean: bool = False) -> str:
     if reuse_if_clean:
         status = run_git("status", "--porcelain", cwd=bundle_dir)
         if not status.stdout.strip():
-            head_tags = run_git("tag", "--points-at", "HEAD", cwd=bundle_dir)
-            date_tags = [
-                tag
-                for tag in head_tags.stdout.strip().splitlines()
-                if _DATE_TAG_PATTERN.match(tag)
-            ]
-            if date_tags:
-                return max(date_tags, key=lambda tag: tuple(int(part) for part in tag.split(".")))
+            head_tag = _head_date_tag(bundle_dir)
+            if head_tag is not None:
+                return head_tag
 
     today = datetime.now(timezone.utc).strftime("%Y%m%d")  # noqa: UP017
 
@@ -1170,6 +1292,22 @@ def main() -> None:
         "print the highest such tag instead of minting a new one",
     )
 
+    # Pin staged dep placeholders and print the release tag.
+    finalize_parser = subparsers.add_parser(
+        "finalize-tag",
+        help="Pin staged package.json dep refs to the release tag and print it",
+    )
+    finalize_parser.add_argument(
+        "bundle_dir", type=Path,
+        help="Path to the cloned bundle repository with staging overlaid",
+    )
+    finalize_parser.add_argument(
+        "--reuse-if-clean",
+        action="store_true",
+        help="When pinning to HEAD's tag leaves the checkout clean, "
+        "print that tag instead of minting a new one",
+    )
+
     args = parser.parse_args()
 
     if args.command == "readme":
@@ -1213,6 +1351,8 @@ def main() -> None:
         patch_experimental(args.library_dir)
     elif args.command == "next-date-tag":
         print(next_date_tag(args.bundle_dir, reuse_if_clean=args.reuse_if_clean))
+    elif args.command == "finalize-tag":
+        print(finalize_bundle_tag(args.bundle_dir, reuse_if_clean=args.reuse_if_clean))
     else:
         parser.print_help()
         raise SystemExit(1)
