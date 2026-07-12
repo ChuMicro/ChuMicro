@@ -149,9 +149,9 @@ def _read_prepared_binary_marker(
 ) -> str | None:
     """Read ``<workspace>/.tools/<runtime>.path`` if present.
 
-    The ``prepare-micropython`` / ``prepare-circuitpython`` scripts
-    write the absolute path of the compiled unix-port binary to this
-    marker so other commands can resolve it without recompiling.
+    The firmware-preparation tooling that builds the unix-port binary
+    writes the absolute path of the compiled binary to this marker so
+    other commands can resolve it without recompiling.
     """
     marker = workspace_root / _TOOLS_DIR_NAME / f"{runtime}.path"
     if not marker.exists():
