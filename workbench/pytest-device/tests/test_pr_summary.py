@@ -168,7 +168,7 @@ class TestFormatPrSummaryBlock:
         assert data_row.count("|") == 9
 
     def test_deploy_mode_surfaces_even_without_probe(self) -> None:
-        """Bare ``test-libraries-functional`` (no probe result) still shows the deploy mode."""
+        """A device with no probe result still shows its deploy mode in the summary row."""
         result = _make_device_result(
             identifier="cp", runtime="circuitpython",
             address="/dev/cu.usbmodem2",

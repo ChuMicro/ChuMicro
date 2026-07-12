@@ -121,6 +121,57 @@ class TestRunPyPatterns:
         assert any("bare " + "run.py" in finding.message for finding in findings)  # noqa: CHU006  assertion text matches the rule's own message
 
 
+class TestMonoRepoTaskNamePattern:
+    def test_test_libraries_functional_flagged(self, tmp_path: Path) -> None:
+        body = "# run " + "test-libraries-" + "functional to sweep\n"  # noqa: CHU006  fixture: rule-pattern data
+        _stage_publishable(tmp_path, "libraries", "wifi", "src/x.py", body)
+        findings = CHU006.check(tmp_path)
+        assert any("mono-repo task name" in finding.message for finding in findings)
+
+    def test_prepare_micropython_flagged(self, tmp_path: Path) -> None:
+        body = "# see " + "prepare-" + "micropython output\n"  # noqa: CHU006  fixture: rule-pattern data
+        _stage_publishable(tmp_path, "libraries", "wifi", "src/x.py", body)
+        findings = CHU006.check(tmp_path)
+        assert any("mono-repo task name" in finding.message for finding in findings)
+
+    def test_verify_examples_flagged_in_docs(self, tmp_path: Path) -> None:
+        body = "# gated by " + "verify-" + "examples\n"  # noqa: CHU006  fixture: rule-pattern data
+        _stage_publishable(tmp_path, "libraries", "wifi", "docs/guide.md", body)
+        findings = CHU006.check(tmp_path)
+        assert any("mono-repo task name" in finding.message for finding in findings)
+
+    def test_neighboring_hyphenated_name_not_matched(self, tmp_path: Path) -> None:
+        # A hyphenated name the pattern deliberately omits (a package's
+        # own ``test-utils`` helper) must not trip it — the suffix has to
+        # be one of the listed mono-repo tasks.
+        _stage_publishable(
+            tmp_path, "libraries", "wifi", "src/x.py", "# uses test-utils here\n",
+        )
+        assert all(
+            "mono-repo task name" not in finding.message
+            for finding in CHU006.check(tmp_path)
+        )
+
+    def test_workspace_package_exempt(self, tmp_path: Path) -> None:
+        # chumicro_workspace owns the workspace shim; its tree keeps the
+        # same exemption the bare-run.py pattern grants it.
+        body = "# mirrors " + "test-" + "circuitpython\n"  # noqa: CHU006  fixture: rule-pattern data
+        _stage_publishable(tmp_path, "workbench", "workspace", "src/x.py", body)
+        findings = CHU006.check(tmp_path)
+        assert all(
+            "mono-repo task name" not in finding.message for finding in findings
+        )
+
+    def test_checks_package_exempt(self, tmp_path: Path) -> None:
+        # This rule's own tree names the tasks it flags as pattern data.
+        body = "# flags " + "prepare-" + "mpy-cross\n"  # noqa: CHU006  fixture: rule-pattern data
+        _stage_publishable(tmp_path, "workbench", "checks", "src/x.py", body)
+        findings = CHU006.check(tmp_path)
+        assert all(
+            "mono-repo task name" not in finding.message for finding in findings
+        )
+
+
 class TestMonoRepoFraming:
     def test_chumicro_mono_repo_flagged(self, tmp_path: Path) -> None:
         _stage_publishable(
