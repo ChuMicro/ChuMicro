@@ -679,6 +679,26 @@ class TestDeploy:
             cli.main(["deploy", "--workspace-dir", str(root), "ghost"])
         assert "ghost" in str(caught.value)
 
+    def test_empty_devices_yml_coaches_instead_of_tracebacks(
+        self, tmp_path: Path,
+    ) -> None:
+        """An empty ``devices: []`` (the fresh-clone default) makes deploy
+        exit with a coached add-device pointer that quotes
+        ``load_devices_yml``'s "No devices configured" reason, rather than
+        letting that ``ValueError`` reach the user as a raw traceback.
+        """
+        root = seed_workspace(tmp_path)
+        seed_project(root)
+        (root / "devices.yml").write_text("devices: []\n")
+        with pytest.raises(SystemExit) as caught:
+            cli.main([
+                "deploy", "--workspace-dir", str(root),
+                "--dry-run", "back-porch",
+            ])
+        message = str(caught.value)
+        assert "No devices configured" in message
+        assert "add-device" in message
+
     def test_traceback_returns_exit_one(
         self,
         tmp_path: Path,
