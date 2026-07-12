@@ -109,10 +109,9 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     - ``--pr-summary``: when set, prints a Markdown device-testing
       block at session end. Opt-in so IDE play-button runs stay quiet.
     - ``--pr-summary-command``: literal command string to render in
-      the ``- Command:`` line of the PR block.  The
-      ``test-libraries-functional`` wrapper passes the reconstructed
-      invocation. Direct pytest runs can omit it and get the raw
-      ``pytest ...``.
+      the ``- Command:`` line of the PR block.  The calling
+      orchestrator passes the reconstructed invocation. Direct pytest
+      runs can omit it and get the raw ``pytest ...``.
     """
     group = parser.getgroup("chumicro", "ChuMicro device-test plugin")
     group.addoption(
@@ -219,8 +218,8 @@ class _PRSummaryCollector:
     :class:`DeviceRunResult` shape ``pr_summary.format_pr_summary_block``
     expects.  Empty containers are populated on first encounter and
     the overall order (device declaration order, then file declaration
-    order) matches the ``test-libraries-functional`` orchestrator's
-    output so the Markdown is stable across the two code paths.
+    order) matches the calling orchestrator's output so the Markdown is
+    stable across the two code paths.
     """
 
     def __init__(self) -> None:

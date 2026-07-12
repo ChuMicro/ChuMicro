@@ -8,7 +8,7 @@ collects per-device, per-file, and per-test results into
 
 Output is intentionally readable both as raw text (monospace tables)
 and as rendered Markdown on GitHub.  Layout changes need a paired
-baseline refresh on the ``test-libraries-functional`` smoke runs.
+baseline refresh on the calling orchestrator's smoke runs.
 """
 
 from __future__ import annotations
@@ -218,7 +218,7 @@ def format_pr_summary_block(
     summary row is enough.
 
     Args:
-        command: Reconstructed ``test-libraries-functional`` invocation string.
+        command: Invocation string reconstructed by the calling orchestrator.
         per_device_results: Per-device :class:`DeviceRunResult`
             instances in the order they ran.
         total_duration_seconds: Total wall-clock time for the whole
