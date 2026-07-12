@@ -1,6 +1,8 @@
 # Workstream: examples/helpers.py cross-library drift
 
-Status: **proposed.** Surfaced 2026-05-20 by `/audit-workspace` in routed-finding mode against a duplication finding originally raised during the repo-wide `/audit-comments` sweep. The same 340-LOC `examples/helpers.py` ships in six network-using libraries, with four byte-identical copies and two already drifted after per-library audit-comments passes.
+Status: **shipped 2026-07-11.** Surfaced 2026-05-20 by `/audit-workspace` in routed-finding mode against a duplication finding originally raised during the repo-wide `/audit-comments` sweep. The same 340-LOC `examples/helpers.py` ships in six network-using libraries, with four byte-identical copies and two already drifted after per-library audit-comments passes.
+
+Shipped as option (b), scaffold + sync. The canonical body reconciles the dominant 340-line copy with the mqtt and websockets de-em-dashing, the requests docstring compressions, and a dropped set of `chumicro_timing` / `chumicro_wifi` internal cross-references; its top docstring now names `scripts/templates/examples_helpers.py` and the preflight drift check as its source of truth. That 330-line body lives at `scripts/templates/examples_helpers.py`, the new-library scaffold emits it, and all six library copies plus the scaffold payload template are resynced byte-for-byte. A new drift lint, `CHU035`, fails preflight when any copy diverges. By ship time the drift had spread past the two copies the evidence table below records: sockets, websockets, and the scaffold payload template had each drifted too, so seven copies were reconciled onto the canon, not six.
 
 ## Evidence
 

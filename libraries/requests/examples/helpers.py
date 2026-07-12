@@ -1,15 +1,19 @@
 """Standalone wifi-up helper for library examples that bring wifi up.
 
-Self-contained — relies only on runtime built-ins (CP `wifi`, MP
-`network`, `struct`).  Each network-using library copies this file
-into its `examples/` directory.
+Self-contained: relies only on runtime built-ins (CP `wifi`, MP
+`network`, `struct`).  Each network-using library ships a copy in its
+`examples/` directory.  The canonical body lives at
+`scripts/templates/examples_helpers.py`; the new-library scaffold emits
+it into a fresh library, and a preflight drift check keeps every
+`examples/helpers.py` byte-identical to it.  Edit the canonical file,
+not a per-library copy.
 
 What it does:
 
 * `runtime_config()` reads `/runtime_config.msgpack` (a flat-key
   config dict baked onto the device by whichever deploy pipeline
   put it there) and returns it as a Python dict.  Uses the inline
-  decoder below — works on every runtime including Pi Pico W
+  decoder below.  Works on every runtime including Pi Pico W
   MicroPython, whose firmware doesn't ship `msgpack`.
 * `wifi_up()` brings the link up via the runtime's built-in wifi
   primitives and returns ``(radio, ip)``.
@@ -44,24 +48,23 @@ MicroPython::
 
     wlan = network.WLAN(network.STA_IF)
     wlan.active(True)
-    # Pi Pico W (CYW43) only — disable aggressive idle power-save so
+    # Pi Pico W (CYW43) only: disable aggressive idle power-save so
     # connects don't take 30+ seconds.  Whitelist by os.uname().machine
-    # (see _CYW43_MACHINES below).  Other boards skip the call —
-    # ESP32 rejects the kwarg with ESP_ERR_INVALID_ARG (raised as
-    # RuntimeError, not OSError / ValueError) and has its own
-    # power-save defaults.
+    # (see _CYW43_MACHINES below).  Other boards skip the call: ESP32
+    # rejects the kwarg with ESP_ERR_INVALID_ARG (raised as RuntimeError,
+    # not OSError / ValueError) and has its own power-save defaults.
     if os.uname().machine in _CYW43_MACHINES:
         wlan.config(pm=0xA11140)
     wlan.connect("my-ssid", "my-password")
     while not wlan.isconnected():
         time.sleep(0.1)
     ip = wlan.ifconfig()[0]
-    # MP has no per-radio socket pool — `import socket` operates
+    # MP has no per-radio socket pool: `import socket` operates
     # against the global active interface, so there's nothing equivalent
     # to thread around.  `wifi_up` returns `None` for the radio slot.
 """
 
-#: Helper imports CP `wifi` and MP `network` — runtime built-ins, not
+#: Helper imports CP `wifi` and MP `network`: runtime built-ins, not
 #: importable on the host.  The marker tells `verify_examples.py` to
 #: skip platform-import checks here.
 __chumicro_runtimes__ = ("circuitpython", "micropython")
@@ -135,12 +138,12 @@ def ticks_diff(end, start):
     return ((diff + _TICKS_HALFPERIOD) & _TICKS_MAX) - _TICKS_HALFPERIOD
 
 
-#: Known CYW43-based MicroPython board identifiers (``os.uname().machine``).
-#: The CYW43 chip's aggressive idle power-save makes wifi connects take
-#: 30+ seconds; ``wlan.config(pm=0xa11140)`` disables it.  Add new entries
-#: as CYW43-bearing boards land in upstream MP — match the exact string
-#: ``os.uname().machine`` returns on the board (visible in the REPL via
-#: ``import os; print(os.uname().machine)``).
+#: MicroPython board identifiers (``os.uname().machine``) whose wifi
+#: needs ``wlan.config(pm=0xa11140)`` before connect.  Without this call
+#: the CYW43 chip's aggressive idle power-save makes connects take 30+
+#: seconds.  Add new entries as CYW43-bearing boards land in upstream MP,
+#: matching the exact ``os.uname().machine`` string the board returns
+#: (visible in the REPL via ``import os; print(os.uname().machine)``).
 _CYW43_MACHINES = (
     "Raspberry Pi Pico W with RP2040",
 )
@@ -149,7 +152,7 @@ _CYW43_MACHINES = (
 def runtime_config():
     """Return ``/runtime_config.msgpack`` decoded as a dict, or ``{}``.
 
-    Uses the inline msgpack decoder below — no on-device `msgpack`
+    Uses the inline msgpack decoder below.  No on-device `msgpack`
     module needed.  Returns ``{}`` if the file is absent (raw
     single-file deploys, or any deploy that didn't bake one).
     """
@@ -171,7 +174,7 @@ def wifi_up(default_ssid, default_password, *, timeout_s=15):
     when present; otherwise uses the supplied defaults.  Blocks until
     the link is connected or *timeout_s* elapses.
 
-    On CircuitPython the returned radio is `wifi.radio` — pass it
+    On CircuitPython the returned radio is `wifi.radio`: pass it
     through wherever a socket pool is built (``socketpool.SocketPool(radio)``).
     On MicroPython the returned radio is ``None``: there's no per-radio
     socket pool to thread, the global `socket` module reads from
@@ -195,7 +198,7 @@ def wifi_up(default_ssid, default_password, *, timeout_s=15):
 
     name = sys.implementation.name
     if name == "circuitpython":
-        import wifi  # noqa: PLC0415 — CP-only
+        import wifi  # noqa: PLC0415 - CP-only
         wifi.radio.connect(ssid, password)
         deadline = time.time() + timeout_s
         while not wifi.radio.connected:
@@ -205,15 +208,15 @@ def wifi_up(default_ssid, default_password, *, timeout_s=15):
         return wifi.radio, str(wifi.radio.ipv4_address)
 
     if name == "micropython":
-        import network  # noqa: PLC0415 — MP-only
+        import network  # noqa: PLC0415 - MP-only
         wlan = network.WLAN(network.STA_IF)
         wlan.active(True)
         # CYW43 boards (Pi Pico W today, list in _CYW43_MACHINES above)
         # default to aggressive idle power-save which makes connects
-        # take 30+ seconds.  Disable it via the 0xA11140 magic
-        # constant.  Other boards skip the call — ESP32 rejects the
-        # kwarg with ESP_ERR_INVALID_ARG (raised as RuntimeError, not
-        # OSError / ValueError) and has its own power-save defaults.
+        # take 30+ seconds.  Disable it via the 0xA11140 magic constant.
+        # Other boards skip the call: ESP32 rejects the kwarg with
+        # ESP_ERR_INVALID_ARG (raised as RuntimeError, not OSError /
+        # ValueError) and has its own power-save defaults.
         if os.uname().machine in _CYW43_MACHINES:
             wlan.config(pm=0xA11140)
         wlan.connect(ssid, password)
@@ -230,7 +233,7 @@ def wifi_up(default_ssid, default_password, *, timeout_s=15):
 
 
 # ---------------------------------------------------------------------------
-# Tiny msgpack decoder — handles every type used by runtime_config.msgpack:
+# Tiny msgpack decoder.  Handles every type used by runtime_config.msgpack:
 # nil / bool / int (every width) / float 32+64 / str / bin / array / map.
 # No ext / timestamp.  Spec: github.com/msgpack/msgpack/blob/master/spec.md
 # ---------------------------------------------------------------------------

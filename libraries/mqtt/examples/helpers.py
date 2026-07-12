@@ -1,9 +1,12 @@
 """Standalone wifi-up helper for library examples that bring wifi up.
 
 Self-contained: relies only on runtime built-ins (CP `wifi`, MP
-`network`, `struct`).  Each network-using library copies this file
-into its `examples/` directory.  The new-library scaffold ships the
-original so a fresh library starts with a working copy.
+`network`, `struct`).  Each network-using library ships a copy in its
+`examples/` directory.  The canonical body lives at
+`scripts/templates/examples_helpers.py`; the new-library scaffold emits
+it into a fresh library, and a preflight drift check keeps every
+`examples/helpers.py` byte-identical to it.  Edit the canonical file,
+not a per-library copy.
 
 What it does:
 
@@ -45,10 +48,11 @@ MicroPython::
 
     wlan = network.WLAN(network.STA_IF)
     wlan.active(True)
-    # Pi Pico W (CYW43) only: ``wlan.config(pm=...)`` disables an
-    # aggressive idle power-save that otherwise makes connect take
-    # 30+ seconds.  See _CYW43_MACHINES below for the full whitelist
-    # and rationale.
+    # Pi Pico W (CYW43) only: disable aggressive idle power-save so
+    # connects don't take 30+ seconds.  Whitelist by os.uname().machine
+    # (see _CYW43_MACHINES below).  Other boards skip the call: ESP32
+    # rejects the kwarg with ESP_ERR_INVALID_ARG (raised as RuntimeError,
+    # not OSError / ValueError) and has its own power-save defaults.
     if os.uname().machine in _CYW43_MACHINES:
         wlan.config(pm=0xA11140)
     wlan.connect("my-ssid", "my-password")
@@ -76,10 +80,10 @@ _RUNTIME_CONFIG_PATH = "/runtime_config.msgpack"
 def _resolve_ticks_ms():
     """Pick the best raw ms tick source available on this runtime.
 
-    Resolution order: ``supervisor.ticks_ms`` (CP 7+) >
-    ``time.ticks_ms`` (MP) > ``time.monotonic_ns`` >
-    ``time.monotonic`` (final fallback).  Matches
-    ``chumicro_timing.ticks._resolve_ticks_ms``.
+    Resolution order: ``supervisor.ticks_ms`` (CP 7+), then
+    ``time.ticks_ms`` (MP), then ``time.monotonic_ns``, then
+    ``time.monotonic`` as the final fallback.  Reimplemented inline so
+    example helpers don't depend on ``chumicro_timing``.
     """
     try:
         import supervisor  # type: ignore[import-not-found]
@@ -107,13 +111,9 @@ _TICKS_HALFPERIOD = _TICKS_PERIOD // 2
 def ticks_ms():
     """Return a wrapping monotonic millisecond count in ``[0, 2**29 - 1]``.
 
-    Same shape as :func:`chumicro_timing.ticks_ms`.  Pass this value
-    to ``check`` / ``handle`` of any chumicro service so the time-base
-    matches the library's internal deadline math and per-request
-    timeouts compute correctly.  Reimplemented inline (rather than
-    importing :mod:`chumicro_timing`) so example helpers stay within
-    the "examples can only import their owning library + its declared
-    deps" rule across every library.
+    Pass this value to ``check`` / ``handle`` of any chumicro service
+    so the time-base matches the library's internal deadline math and
+    per-request timeouts compute correctly.
     """
     return _raw_ticks_ms() & _TICKS_MAX
 
@@ -121,8 +121,7 @@ def ticks_ms():
 def ticks_add(ticks, delta):
     """Add *delta* milliseconds to a wrapping tick value.
 
-    Mirrors :func:`chumicro_timing.ticks_add`.  Wraps at ``2**29``,
-    *delta* must be in ``(-2**28, +2**28)``.
+    Wraps at ``2**29``; *delta* must be in ``(-2**28, +2**28)``.
     """
     if -_TICKS_HALFPERIOD < delta < _TICKS_HALFPERIOD:
         return (ticks + delta) % _TICKS_PERIOD
@@ -132,21 +131,19 @@ def ticks_add(ticks, delta):
 def ticks_diff(end, start):
     """Signed millisecond difference *end* minus *start* with wraparound.
 
-    Mirrors :func:`chumicro_timing.ticks_diff`.  Correct as long as
-    the two values are within ``2**28`` ms (~3.1 days) of each other.
+    Correct as long as the two values are within ``2**28`` ms
+    (~3.1 days) of each other.
     """
     diff = (end - start) & _TICKS_MAX
     return ((diff + _TICKS_HALFPERIOD) & _TICKS_MAX) - _TICKS_HALFPERIOD
 
 
 #: MicroPython board identifiers (``os.uname().machine``) whose wifi
-#: needs ``wlan.config(pm=0xa11140)`` before connect.  Without this
-#: call the CYW43 chip's aggressive idle power-save makes connects
-#: take 30+ seconds.  The hex constant is replicated from
-#: ``chumicro_wifi._adapters.mp.CYW43_PM_DISABLE``.  Add new entries
-#: when a CYW43-bearing MP board lands upstream and match the exact
-#: ``os.uname().machine`` string the board returns (visible in the
-#: REPL via ``import os; print(os.uname().machine)``).
+#: needs ``wlan.config(pm=0xa11140)`` before connect.  Without this call
+#: the CYW43 chip's aggressive idle power-save makes connects take 30+
+#: seconds.  Add new entries as CYW43-bearing boards land in upstream MP,
+#: matching the exact ``os.uname().machine`` string the board returns
+#: (visible in the REPL via ``import os; print(os.uname().machine)``).
 _CYW43_MACHINES = (
     "Raspberry Pi Pico W with RP2040",
 )
@@ -171,10 +168,10 @@ def runtime_config():
 
 
 def wifi_up(default_ssid, default_password, *, timeout_s=15):
-    """Bring wifi up.  Return ``(radio, ip)``.
+    """Bring wifi up; return ``(radio, ip)``.
 
     Reads `wifi.ssid` / `wifi.password` from `/runtime_config.msgpack`
-    when present, otherwise uses the supplied defaults.  Blocks until
+    when present; otherwise uses the supplied defaults.  Blocks until
     the link is connected or *timeout_s* elapses.
 
     On CircuitPython the returned radio is `wifi.radio`: pass it
@@ -214,11 +211,12 @@ def wifi_up(default_ssid, default_password, *, timeout_s=15):
         import network  # noqa: PLC0415 - MP-only
         wlan = network.WLAN(network.STA_IF)
         wlan.active(True)
-        # Whitelisted CYW43 boards need ``wlan.config(pm=...)`` to skip
-        # aggressive idle power-save (see _CYW43_MACHINES above).  Other
-        # boards skip the call (ESP32 rejects the kwarg with
-        # ESP_ERR_INVALID_ARG raised as RuntimeError, not OSError /
-        # ValueError, and has its own power-save defaults).
+        # CYW43 boards (Pi Pico W today, list in _CYW43_MACHINES above)
+        # default to aggressive idle power-save which makes connects
+        # take 30+ seconds.  Disable it via the 0xA11140 magic constant.
+        # Other boards skip the call: ESP32 rejects the kwarg with
+        # ESP_ERR_INVALID_ARG (raised as RuntimeError, not OSError /
+        # ValueError) and has its own power-save defaults.
         if os.uname().machine in _CYW43_MACHINES:
             wlan.config(pm=0xA11140)
         wlan.connect(ssid, password)
@@ -242,7 +240,7 @@ def wifi_up(default_ssid, default_password, *, timeout_s=15):
 
 
 def _msgpack_unpack(data, pos):
-    """Decode one msgpack value starting at *pos*.  Return ``(value, new_pos)``."""
+    """Decode one msgpack value starting at *pos*; return ``(value, new_pos)``."""
     tag = data[pos]
     pos += 1
     if tag < 0x80:                      # positive fixint
