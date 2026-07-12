@@ -153,17 +153,30 @@ def _find_devices_yml_entry_for_args(
 
 
 def _resolve_device(workspace: WorkspaceLayout, args: argparse.Namespace) -> Device:
-    """Construct a :class:`Device` for the selected entry in devices.yml."""
+    """Construct a :class:`Device` for the selected entry in devices.yml.
+
+    A missing, empty, or otherwise unresolvable ``devices.yml`` exits
+    with a coached one-line message instead of letting
+    ``load_devices_yml``'s ``ValueError`` reach the user as a traceback
+    (a fresh workspace materializes an empty ``devices: []`` file, so the
+    empty case is the common one, not a corner case).
+    """
     if not workspace.devices_yaml.is_file():
         raise SystemExit(
             f"error: {workspace.devices_yaml} not found — run "
             "'add-device' to register a board first.",
         )
-    return load_devices_yml(
-        workspace.devices_yaml,
-        device_id=args.device_id,
-        runtime=args.runtime,
-    )
+    try:
+        return load_devices_yml(
+            workspace.devices_yaml,
+            device_id=args.device_id,
+            runtime=args.runtime,
+        )
+    except ValueError as error:
+        raise SystemExit(
+            f"error: {error} — run 'add-device' to register a board, "
+            "or pass --device <id> to pick a registered one.",
+        ) from error
 
 
 def _resolve_all_devices(workspace: WorkspaceLayout) -> list[Device]:
