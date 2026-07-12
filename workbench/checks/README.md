@@ -5,7 +5,7 @@ align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
 **The workspace lint rules ruff can't express — for ChuMicro mono-repos and downstream workspaces.**
 
-A small CLI + rule set (`CHU001`–`CHU034`, with `CHU021`–`CHU023` retired) covering descriptive names, mono-repo-vs-published-tree isolation, workbench-doesn't-import-libraries, silent test skips, plans-doc brevity, command-table parity, docstring-capability honesty, cross-runtime example imports, coverage-claim honesty, whitespace / line-ending hygiene in doc + plan trees ruff never sees, archived-decision marker consistency, ADR-authoring discipline, governance-doc orphan detection, demo-surface isolation, the no-async-in-library-code contract, the one-device-staging-path reservation, and other policies that ruff doesn't have a check for.  Drop it on any CPython 3.11+ workspace; rules silently no-op in repos where their target paths don't exist, so it's safe in the mono-repo, the workspace-template, or a downstream user workspace alike.
+A small CLI + rule set (`CHU001`–`CHU035`, with `CHU021`–`CHU023` retired) covering descriptive names, mono-repo-vs-published-tree isolation, workbench-doesn't-import-libraries, silent test skips, plans-doc brevity, command-table parity, docstring-capability honesty, cross-runtime example imports, coverage-claim honesty, whitespace / line-ending hygiene in doc + plan trees ruff never sees, archived-decision marker consistency, ADR-authoring discipline, governance-doc orphan detection, demo-surface isolation, the no-async-in-library-code contract, the one-device-staging-path reservation, the example-helpers byte-identity contract, and other policies that ruff doesn't have a check for.  Drop it on any CPython 3.11+ workspace; rules silently no-op in repos where their target paths don't exist, so it's safe in the mono-repo, the workspace-template, or a downstream user workspace alike.
 
 <br clear="left">
 
@@ -70,6 +70,7 @@ Each rule walks the paths it targets and silently no-ops in repos where those pa
 | `CHU032` | No cross-reference pointer phrases in publishable comments — each stands alone for a cold reader |
 | `CHU033` | No `async` / `await` / `asyncio` in first-party package code — use generators |
 | `CHU034` | Device-staging primitives are `chumicro_deploy`-internal — stage code through `Deployer.deploy_diff()` |
+| `CHU035` | Example `helpers.py` copies must stay byte-identical to `scripts/templates/examples_helpers.py` |
 
 ### Configuration
 
