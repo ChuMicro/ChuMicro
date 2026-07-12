@@ -5,7 +5,7 @@ align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
 **A non-blocking MQTT 3.1.1 client (QoS 0 + 1) that fits inside your runner tick.**
 
-QoS 0 + QoS 1, last-will, retain, wildcard topic matching, automatic per-device topic prefixing, a bounded pre-connect publish queue, and a two-tier inbound size model that keeps heap usage bounded on memory-tight boards — runner-shaped, no threads, no async.  A configurable per-tick recv budget keeps a large inbound blob from monopolising the loop, and failed QoS-1 publishes roll back the packet-id allocation cleanly on backpressure.  Built on [`chumicro-sockets`](../sockets/) (TCP + TLS) and [`chumicro-timing`](../timing/) (ticks).
+QoS 0 + QoS 1, last-will, retain, wildcard topic matching, automatic per-device topic prefixing, a bounded pre-connect publish queue, and a two-tier inbound size model that keeps heap usage bounded on memory-tight boards — runner-shaped, no threads, no async.  A configurable per-tick recv budget keeps a large inbound blob from monopolising the loop, and failed QoS-1 publishes roll back the packet-id allocation cleanly on backpressure.  Built on [`chumicro-sockets`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/sockets) (TCP + TLS) and [`chumicro-timing`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/timing) (ticks).
 
 <br clear="left">
 
@@ -81,7 +81,7 @@ QoS 0 + QoS 1 are implemented; QoS 2 raises `UnsupportedQoSError`.  Last-will, r
 
 ## Where this fits
 
-Depends on [`chumicro-sockets`](../sockets/) (TCP + TLS) and [`chumicro-timing`](../timing/) for ticks.  Used directly in app code; no other ChuMicro library depends on it.
+Depends on [`chumicro-sockets`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/sockets) (TCP + TLS) and [`chumicro-timing`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/timing) for ticks.  Used directly in app code; no other ChuMicro library depends on it.
 
 ## Platform support
 
@@ -91,8 +91,8 @@ Works on CPython, MicroPython, and CircuitPython.
 
 | Example | What it shows |
 |---|---|
-| [`telemetry.py`](examples/telemetry.py) | Periodic QoS-1 publish on a real CP/MP board.  Brings wifi up, connects to a broker, subscribes to a command topic, publishes a synthetic reading every N seconds while an LED-blink counter verifies the publish never blocks waiting for PUBACK.  Reads wifi + broker config from `runtime_config.msgpack` (chumicro-workspace) with constants fallback.  Broker host/port must be set explicitly — the library refuses to silently dial a third-party broker.  Cross-runtime (CP + MP). |
-| [`bench.py`](examples/bench.py) | Self-driving validation bench.  Deploy + watch serial — the device runs the scenarios end-to-end (steady inline, oversized drain, oversize-topic, QoS-1 round-trip, sustained burst, keepalive) against a real broker and prints a pass/fail summary table.  Used to confirm the library's heap-bounded oversize handling and the two-tier inbound model behave as advertised on a 256 KB-RAM-class board.  Optional companion [`bench_host.py`](examples/bench_host.py) (host-side, needs `pip install paho-mqtt`) captures the verdict from the broker and can publish a 64 KB hostile payload for extra oversized-tier stress. |
+| [`telemetry.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/mqtt/examples/telemetry.py) | Periodic QoS-1 publish on a real CP/MP board.  Brings wifi up, connects to a broker, subscribes to a command topic, publishes a synthetic reading every N seconds while an LED-blink counter verifies the publish never blocks waiting for PUBACK.  Reads wifi + broker config from `runtime_config.msgpack` (chumicro-workspace) with constants fallback.  Broker host/port must be set explicitly — the library refuses to silently dial a third-party broker.  Cross-runtime (CP + MP). |
+| [`bench.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/mqtt/examples/bench.py) | Self-driving validation bench.  Deploy + watch serial — the device runs the scenarios end-to-end (steady inline, oversized drain, oversize-topic, QoS-1 round-trip, sustained burst, keepalive) against a real broker and prints a pass/fail summary table.  Used to confirm the library's heap-bounded oversize handling and the two-tier inbound model behave as advertised on a 256 KB-RAM-class board.  Optional companion [`bench_host.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/mqtt/examples/bench_host.py) (host-side, needs `pip install paho-mqtt`) captures the verdict from the broker and can publish a 64 KB hostile payload for extra oversized-tier stress. |
 
 ## Wiring wifi + broker config for examples and functional tests
 

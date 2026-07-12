@@ -75,7 +75,7 @@ Opt-in completion-wait vocabulary for generator flows — import explicitly.
 
 ## Where this fits
 
-Leaf — no upstream ChuMicro deps.  Everything in ChuMicro that owns time depends on it: [`runner`](../runner/), [`sockets`](../sockets/), [`ntp`](../ntp/), [`requests`](../requests/), [`http_server`](../http_server/), [`mqtt`](../mqtt/), [`websockets`](../websockets/).
+Leaf — no upstream ChuMicro deps.  Everything in ChuMicro that owns time depends on it: [`runner`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner), [`sockets`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/sockets), [`ntp`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/ntp), [`requests`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/requests), [`http_server`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/http_server), [`mqtt`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/mqtt), [`websockets`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/websockets).
 
 ## Platform support
 

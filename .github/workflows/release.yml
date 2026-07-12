@@ -123,11 +123,16 @@ jobs:
           python-version: "3.14"
           cache: "pip"
 
+      # tools-full-: this job builds all three toolsets.  Keys are split
+      # per produced toolset so a lighter job's save cannot poison this
+      # restore with a circuitpython-less .tools whose cache "hit" also
+      # skips the build-deps install needed to self-heal (see ci.yml
+      # preflight for the full story).
       - uses: actions/cache@v4
         id: tools-cache
         with:
           path: .tools
-          key: tools-${{ hashFiles('target-runtimes.toml', 'scripts/prepare_*.py', 'scripts/shared.py') }}
+          key: tools-full-${{ hashFiles('target-runtimes.toml', 'scripts/prepare_*.py', 'scripts/shared.py') }}
 
       - name: Install unix-port build dependencies
         if: steps.tools-cache.outputs.cache-hit != 'true'
@@ -305,14 +310,16 @@ jobs:
           python-version: "3.13"
           cache: "pip"
 
-      # Single unified cache for all .tools/ artifacts (mpy-cross + unix-port).
-      # Using separate cache actions for the same path causes the second
-      # restore to overwrite the first, leading to subtle corruption.
+      # tools-mp-mpy-: this job builds only mpy-cross + the micropython
+      # unix-port.  Keys are split per produced toolset so a lighter job's
+      # save cannot poison a fuller job's restore (see ci.yml preflight).
+      # Still one cache action per path — separate cache actions for the
+      # same path make the second restore overwrite the first.
       - uses: actions/cache@v4
         id: tools-cache
         with:
           path: .tools
-          key: tools-${{ hashFiles('target-runtimes.toml', 'scripts/prepare_*.py', 'scripts/shared.py') }}
+          key: tools-mp-mpy-${{ hashFiles('target-runtimes.toml', 'scripts/prepare_*.py', 'scripts/shared.py') }}
 
       - name: Build mpy-cross compilers
         if: steps.tools-cache.outputs.cache-hit != 'true'
@@ -342,7 +349,7 @@ jobs:
         run: python scripts/run.py prepare-micropython
 
       - name: Configure SSH for bundle repository
-        uses: webfactory/ssh-agent@v0.9.1
+        uses: webfactory/ssh-agent@v0.10.0
         with:
           ssh-private-key: ${{ needs.detect.outputs.is_experimental == 'true' && secrets.EXPERIMENTAL_BUNDLE_DEPLOY_KEY || secrets.BUNDLE_DEPLOY_KEY }}
 
@@ -385,7 +392,10 @@ jobs:
 
       - name: Create circup zips
         run: |
-          date_tag=$(python scripts/bundle_manager.py next-date-tag .bundle-repo)
+          # --reuse-if-clean: a re-run after "push succeeded, release create
+          # failed" reprints the already-pushed tag instead of minting a
+          # fresh one on identical content (which would orphan the original).
+          date_tag=$(python scripts/bundle_manager.py next-date-tag .bundle-repo --reuse-if-clean)
           echo "date_tag=${date_tag}" >> "$GITHUB_ENV"
 
           repository_name="${{ needs.detect.outputs.bundle_repository }}"
@@ -410,15 +420,26 @@ jobs:
           bundle_repository="${{ needs.detect.outputs.bundle_repository }}"
           body=$(jq -r '"## Updated libraries\n\n" + ([.include[] | "- **" + .library_name + "** v" + .version] | join("\n"))' <<< "$MATRIX_JSON")
 
-          # Create a GitHub Release in the bundle repository.  --verify-tag
-          # ensures the tag was pushed in the previous step; it prevents
-          # creating an orphaned release if the push failed.
-          gh release create "${{ env.date_tag }}" \
-            --repo "${bundle_repository}" \
-            --verify-tag \
-            --title "Bundle ${{ env.date_tag }}" \
-            --notes "$body" \
-            .circup-zips/*.zip
+          # Create a GitHub Release in the bundle repository, idempotently:
+          # `gh release create` writes the release BEFORE uploading assets
+          # and does not roll back on upload failure, so when the release
+          # already exists (a prior run died mid-way) the re-run must still
+          # reconcile the circup zips — a bare view-or-create would leave
+          # an asset-less release green forever.  --clobber makes the
+          # upload a no-op-safe overwrite.  --verify-tag ensures the tag
+          # was pushed in the previous step; it prevents creating an
+          # orphaned release if the push failed.
+          if gh release view "${{ env.date_tag }}" --repo "${bundle_repository}" >/dev/null 2>&1; then
+            gh release upload "${{ env.date_tag }}" --repo "${bundle_repository}" \
+              --clobber .circup-zips/*.zip
+          else
+            gh release create "${{ env.date_tag }}" \
+              --repo "${bundle_repository}" \
+              --verify-tag \
+              --title "Bundle ${{ env.date_tag }}" \
+              --notes "$body" \
+              .circup-zips/*.zip
+          fi
         env:
           GH_TOKEN: ${{ secrets.BUNDLE_TOKEN }}
 
@@ -445,11 +466,13 @@ jobs:
         with:
           python-version: "3.13"
 
+      # tools-mp-: this job builds only the micropython unix-port (see
+      # ci.yml preflight for why keys are split per produced toolset).
       - uses: actions/cache@v4
         id: tools-cache
         with:
           path: .tools
-          key: tools-${{ hashFiles('target-runtimes.toml', 'scripts/prepare_*.py', 'scripts/shared.py') }}
+          key: tools-mp-${{ hashFiles('target-runtimes.toml', 'scripts/prepare_*.py', 'scripts/shared.py') }}
 
       - name: Install unix-port build dependencies
         if: steps.tools-cache.outputs.cache-hit != 'true'
@@ -502,7 +525,7 @@ jobs:
           python-version: "3.13"
 
       - name: Configure SSH for libraries channel repository
-        uses: webfactory/ssh-agent@v0.9.1
+        uses: webfactory/ssh-agent@v0.10.0
         with:
           ssh-private-key: ${{ needs.detect.outputs.is_experimental == 'true' && secrets.EXPERIMENTAL_LIBRARIES_DEPLOY_KEY || secrets.LIBRARIES_DEPLOY_KEY }}
 

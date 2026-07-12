@@ -68,7 +68,7 @@ print(response.json())            # parsed JSON when Content-Type is application
 
 ## Where this fits
 
-Depends on [`chumicro-sockets`](../sockets/) for TCP / TLS and [`chumicro-timing`](../timing/) for ticks.  Used directly in app code.
+Depends on [`chumicro-sockets`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/sockets) for TCP / TLS and [`chumicro-timing`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/timing) for ticks.  Used directly in app code.
 
 ## Platform support
 

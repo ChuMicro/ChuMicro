@@ -5,7 +5,7 @@ align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
 **Wifi that auto-reconnects so your app code doesn't have to.**
 
-One WiFi service across CircuitPython (Adafruit boards) and MicroPython on both ESP32 and Pi Pico W.  Owns the radio (no `CIRCUITPY_WIFI_*` settings, no firmware-level auto-reconnect competing with you), surfaces state transitions as events you can wire into the rest of your app via [`chumicro-runner`](../runner/), and reads its config section via [`chumicro-config`](../config/).  CircuitPython's substrate-level `connect()` is blocking — see [Platform support](#platform-support) for what that means in practice.
+One WiFi service across CircuitPython (Adafruit boards) and MicroPython on both ESP32 and Pi Pico W.  Owns the radio (no `CIRCUITPY_WIFI_*` settings, no firmware-level auto-reconnect competing with you), surfaces state transitions as events you can wire into the rest of your app via [`chumicro-runner`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner), and reads its config section via [`chumicro-config`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/config).  CircuitPython's substrate-level `connect()` is blocking — see [Platform support](#platform-support) for what that means in practice.
 
 <br clear="left">
 
@@ -62,7 +62,7 @@ wifi.on_state_change(lambda old, new: print(f"{old} -> {new}"))
 
 ## Where this fits
 
-Depends on [`chumicro-config`](../config/) for its config section and registers with [`chumicro-runner`](../runner/) for its tick contract.  Provides the radio that the networking layers — [`chumicro-sockets`](../sockets/) on CircuitPython, downstream of that for HTTP / MQTT / WebSocket / NTP — sit on top of.
+Depends on [`chumicro-config`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/config) for its config section and registers with [`chumicro-runner`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner) for its tick contract.  Provides the radio that the networking layers — [`chumicro-sockets`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/sockets) on CircuitPython, downstream of that for HTTP / MQTT / WebSocket / NTP — sit on top of.
 
 ## Platform support
 
@@ -78,7 +78,7 @@ MicroPython's `wlan.connect()` is genuinely non-blocking on both ESP32 and Pi Pi
 
 | Example | What it shows |
 |---|---|
-| [`connect_to_ap.py`](examples/connect_to_ap.py) | Connect to a real AP, print state transitions, observe IP — reads `wifi.ssid` / `wifi.password` from `runtime_config.msgpack`. |
+| [`connect_to_ap.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/wifi/examples/connect_to_ap.py) | Connect to a real AP, print state transitions, observe IP — reads `wifi.ssid` / `wifi.password` from `runtime_config.msgpack`. |
 
 ## Wiring wifi credentials for examples and functional tests
 

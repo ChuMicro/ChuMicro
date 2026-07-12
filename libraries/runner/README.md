@@ -5,9 +5,9 @@ align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
 **Tick-based scheduling without `async`. Every state change is one `print()` away.**
 
-Register your services once, call `runner.tick()` in your main loop, and each one gets a turn each tick.  Every networked library in ChuMicro ([wifi](../wifi/), [sockets](../sockets/), [mqtt](../mqtt/), [requests](../requests/), [http_server](../http_server/), [websockets](../websockets/)) registers here — your LED keeps blinking through TLS handshakes, slow HTTP responses, and stalled peers because every service gets a fair share of every tick.
+Register your services once, call `runner.tick()` in your main loop, and each one gets a turn each tick.  Every networked library in ChuMicro ([wifi](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/wifi), [sockets](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/sockets), [mqtt](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/mqtt), [requests](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/requests), [http_server](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/http_server), [websockets](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/websockets)) registers here — your LED keeps blinking through TLS handshakes, slow HTTP responses, and stalled peers because every service gets a fair share of every tick.
 
-We picked tick-based over an event loop because transparent state matters more than syntactic concurrency on a board where serial output is your only window.  Works on CircuitPython, MicroPython, and CPython.  Built on [chumicro-timing](../timing/).
+We picked tick-based over an event loop because transparent state matters more than syntactic concurrency on a board where serial output is your only window.  Works on CircuitPython, MicroPython, and CPython.  Built on [chumicro-timing](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/timing).
 
 <br clear="left">
 
@@ -328,7 +328,7 @@ assert recorder.calls == [100]
 
 ## Where this fits
 
-Depends on [`chumicro-timing`](../timing/) for the tick source.  Every networked library in ChuMicro registers here — [`wifi`](../wifi/), [`sockets`](../sockets/), [`requests`](../requests/), [`http_server`](../http_server/), [`mqtt`](../mqtt/), [`websockets`](../websockets/) — so the runner lives at the center of any multi-service app.
+Depends on [`chumicro-timing`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/timing) for the tick source.  Every networked library in ChuMicro registers here — [`wifi`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/wifi), [`sockets`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/sockets), [`requests`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/requests), [`http_server`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/http_server), [`mqtt`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/mqtt), [`websockets`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/websockets) — so the runner lives at the center of any multi-service app.
 
 ## Platform support
 

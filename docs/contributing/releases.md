@@ -58,6 +58,14 @@ What maintainers look for: preflight passes, ideally tested on hardware, no know
 python scripts/promote_wave.py <experimental-tag> [<experimental-tag> ...]
 ```
 
+### Promotion flags
+
+`promote.yml` accepts two optional flags. Leave both off for a normal promotion.
+
+**`allow_downgrade`** skips the check that the promoted version must be newer than the newest stable release. Without it, promoting an older experimental tag fails validation instead of quietly rolling the stable bundle and docs back to the older version. Set it only when a hotfix intentionally republishes an older version as stable.
+
+**`resume`** re-runs a promotion that failed after the stable tag was written. Validation then requires the stable tag to exist, and every downstream step is safe to repeat, so the whole pipeline runs again to completion. If a newer stable version shipped in the meantime, the resume fails the version check on purpose; add `allow_downgrade` to finish it deliberately.
+
 ## Versioning
 
 See [VERSION bumps](../../CONTRIBUTING.md#version-bumps-and-publishing) in the contributing guide for when and how to bump. Libraries version independently — bumping one has no effect on others.

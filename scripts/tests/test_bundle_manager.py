@@ -400,6 +400,40 @@ class TestNextDateTag:
         tag = next_date_tag(tmp_path)
         assert tag == f"{today}.3"
 
+    def test_reuse_if_clean_returns_highest_head_date_tag(self, tmp_path: Path):
+        """A clean checkout whose HEAD carries date tags reuses the highest
+        one (numeric compare — .10 outranks .9) instead of minting a new tag."""
+        self._git("init", cwd=tmp_path)
+        self._git("commit", "--allow-empty", "-m", "init", cwd=tmp_path)
+        for tag_name in ["20260101", "20260101.9", "20260101.10", "v1.0.0"]:
+            self._git("tag", tag_name, cwd=tmp_path)
+
+        assert next_date_tag(tmp_path, reuse_if_clean=True) == "20260101.10"
+
+    def test_reuse_if_clean_dirty_tree_mints_next_tag(self, tmp_path: Path):
+        """A dirty working tree falls through to the existing next-tag
+        behavior even though HEAD carries a date tag."""
+        from datetime import datetime, timezone
+
+        today = datetime.now(timezone.utc).strftime("%Y%m%d")  # noqa: UP017
+
+        self._git("init", cwd=tmp_path)
+        self._git("commit", "--allow-empty", "-m", "init", cwd=tmp_path)
+        self._git("tag", today, cwd=tmp_path)
+        (tmp_path / "untracked.txt").write_text("dirty\n")
+
+        assert next_date_tag(tmp_path, reuse_if_clean=True) == f"{today}.1"
+
+    def test_reuse_if_clean_without_head_date_tag_mints_next_tag(self, tmp_path: Path):
+        """A clean tree whose HEAD carries no date-shaped tag mints a new tag."""
+        self._git("init", cwd=tmp_path)
+        self._git("commit", "--allow-empty", "-m", "init", cwd=tmp_path)
+        self._git("tag", "v1.0.0", cwd=tmp_path)
+
+        tag = next_date_tag(tmp_path, reuse_if_clean=True)
+        assert len(tag) == 8
+        assert tag.isdigit()
+
 
 class TestPatchExperimental:
     """Tests for patch_experimental."""
@@ -630,6 +664,114 @@ class TestPatchExperimental:
 
         patched = (library_dir / "pyproject.toml").read_text()
         assert 'dependencies = ["chumicro-msgpack-experimental>=0.2.0"]' in patched
+
+
+class TestPatchExperimentalReadme:
+    """patch_experimental also patches the library README (the PyPI
+    long-description) so an experimental project page never shows stable
+    install commands.  Rewrites stay scoped to install-command lines;
+    labeled cross-channel links in prose keep their targets."""
+
+    _PYPROJECT = (
+        '[project]\n'
+        'name = "chumicro-timing"\n'
+        '\n'
+        '[project.urls]\n'
+        'Bundle = "https://github.com/ChuMicro/ChuMicro-Bundle"\n'
+        'Documentation = "https://chumicro.github.io/ChuMicro/timing/stable/"\n'
+    )
+
+    _README = (
+        "# chumicro-timing\n"
+        "\n"
+        "```bash\n"
+        "# CircuitPython (after `circup bundle-add ChuMicro/ChuMicro-Bundle`)\n"
+        "circup install chumicro_timing\n"
+        "mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_timing\n"
+        "pip install chumicro-timing\n"
+        "```\n"
+        "\n"
+        "[Stable docs](https://chumicro.github.io/ChuMicro/timing/stable/)\n"
+        "[Experimental bundle](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental"
+        "/tree/main/chumicro_timing)\n"
+        "Everything in chumicro-timing works on CPython too.\n"
+    )
+
+    def _make_library(self, tmp_path: Path) -> Path:
+        library_dir = tmp_path / "timing"
+        library_dir.mkdir()
+        (library_dir / "pyproject.toml").write_text(self._PYPROJECT)
+        (library_dir / "README.md").write_text(self._README)
+        return library_dir
+
+    def test_pip_install_line_rewritten(self, tmp_path: Path):
+        """The pip install line gains -experimental; a prose mention of the
+        stable name outside a pip install line stays untouched."""
+        library_dir = self._make_library(tmp_path)
+
+        patch_experimental(library_dir)
+
+        patched = (library_dir / "README.md").read_text()
+        assert "pip install chumicro-timing-experimental\n" in patched
+        assert "Everything in chumicro-timing works on CPython too.\n" in patched
+
+    def test_bundle_references_rewritten(self, tmp_path: Path):
+        """ChuMicro-Bundle references move to the experimental bundle repo;
+        an already-experimental reference is not double-suffixed."""
+        library_dir = self._make_library(tmp_path)
+
+        patch_experimental(library_dir)
+
+        patched = (library_dir / "README.md").read_text()
+        assert "circup bundle-add ChuMicro/ChuMicro-Bundle-Experimental" in patched
+        assert "github:ChuMicro/ChuMicro-Bundle-Experimental/chumicro_timing" in patched
+        assert "Bundle-Experimental-Experimental" not in patched
+
+    def test_stable_rewrites_scoped_to_install_lines(self, tmp_path: Path):
+        """/stable/ switches to /experimental/ on install-command lines only.
+
+        The labeled footer link ("Stable docs") keeps its target — a
+        rewritten target under an unchanged label would lie.
+        """
+        library_dir = self._make_library(tmp_path)
+        readme = library_dir / "README.md"
+        readme.write_text(
+            readme.read_text()
+            + "pip install chumicro-timing  "
+            + "# docs: https://chumicro.github.io/ChuMicro/timing/stable/\n"
+        )
+
+        patch_experimental(library_dir)
+
+        patched = readme.read_text()
+        assert "[Stable docs](https://chumicro.github.io/ChuMicro/timing/stable/)" in patched
+        assert (
+            "pip install chumicro-timing-experimental  "
+            "# docs: https://chumicro.github.io/ChuMicro/timing/experimental/" in patched
+        )
+
+    def test_second_run_leaves_readme_byte_identical(self, tmp_path: Path):
+        """A second run hits the pyproject idempotency guard and leaves the
+        README byte-identical to the first run's output."""
+        library_dir = self._make_library(tmp_path)
+
+        patch_experimental(library_dir)
+        first_run_readme = (library_dir / "README.md").read_text()
+
+        patch_experimental(library_dir)
+
+        assert (library_dir / "README.md").read_text() == first_run_readme
+
+    def test_package_without_readme_works(self, tmp_path: Path):
+        """A library without a README.md still patches its pyproject."""
+        library_dir = tmp_path / "timing"
+        library_dir.mkdir()
+        (library_dir / "pyproject.toml").write_text(self._PYPROJECT)
+
+        patch_experimental(library_dir)
+
+        patched = (library_dir / "pyproject.toml").read_text()
+        assert 'name = "chumicro-timing-experimental"' in patched
 
 
 class TestExperimentalDependency:

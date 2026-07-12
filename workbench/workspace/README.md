@@ -125,7 +125,7 @@ When the project ships its own `code.py` / `main.py`, plain mode kicks in and de
 
 ## Where this fits
 
-Depends on [`chumicro-deploy`](../deploy/) (transport) and [`chumicro-repl`](../repl/) (lazily loaded for `repl` tail/interactive mode and `deploy --tail`).  Top-level umbrella CLI — most users reach for `chumicro-workspace`, not the lower-level tools directly.  The on-device side is [`chumicro-config`](../../libraries/config/), which reads the msgpack this package writes.
+Depends on [`chumicro-deploy`](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/deploy) (transport) and [`chumicro-repl`](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/repl) (lazily loaded for `repl` tail/interactive mode and `deploy --tail`).  Top-level umbrella CLI — most users reach for `chumicro-workspace`, not the lower-level tools directly.  The on-device side is [`chumicro-config`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/config), which reads the msgpack this package writes.
 
 ## Public Python API
 
@@ -172,15 +172,15 @@ Plus `chumicro_workspace.workspace.WorkspaceLayout`, `chumicro_workspace.health.
 
 | Workbench tool | Why you'd use it alongside |
 |---|---|
-| [`chumicro-deploy`](../deploy/) | Lower-level transport + flashing.  Workspace composes on top |
-| [`chumicro-repl`](../repl/) | Interactive + tail serial REPL |
-| [`chumicro-pytest-device`](../pytest-device/) | Run tests on real boards via pytest |
+| [`chumicro-deploy`](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/deploy) | Lower-level transport + flashing.  Workspace composes on top |
+| [`chumicro-repl`](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/repl) | Interactive + tail serial REPL |
+| [`chumicro-pytest-device`](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/pytest-device) | Run tests on real boards via pytest |
 
 ## Examples
 
-This package is a CLI tool — there's no "use it in your code" example shape that doesn't just mirror a CLI subcommand.  See the [user guide](docs/guide.md) for end-to-end walkthroughs (config pipeline, deploy modes, library scaffolding, board onboarding) and `chumicro-workspace --help` for the full command surface.
+This package is a CLI tool — there's no "use it in your code" example shape that doesn't just mirror a CLI subcommand.  See the [user guide](https://github.com/ChuMicro/ChuMicro/blob/main/workbench/workspace/docs/guide.md) for end-to-end walkthroughs (config pipeline, deploy modes, library scaffolding, board onboarding) and `chumicro-workspace --help` for the full command surface.
 
-The Python API surface (the `from chumicro_workspace import ...` block above) exists so [`chumicro-deploy`](../deploy/), the workspace template's `run.py` shim, and the [`chumicro-workspace` CLI](src/chumicro_workspace/cli.py) itself can compose against it — not as a "build your own workspace tool" surface.  If you find yourself reaching for it, the CLI probably already exposes what you want; file an issue if it doesn't.
+The Python API surface (the `from chumicro_workspace import ...` block above) exists so [`chumicro-deploy`](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/deploy), the workspace template's `run.py` shim, and the [`chumicro-workspace` CLI](https://github.com/ChuMicro/ChuMicro/blob/main/workbench/workspace/src/chumicro_workspace/cli.py) itself can compose against it — not as a "build your own workspace tool" surface.  If you find yourself reaching for it, the CLI probably already exposes what you want; file an issue if it doesn't.
 
 ## Contributing
 

@@ -110,11 +110,11 @@ For a workspace project that already has a `devices.yml`, swap the `Device(...)`
 
 ## Where this fits
 
-Leaf — no upstream ChuMicro deps (uses third-party `pyserial` and `mpremote` for transport).  Sister of [`chumicro-repl`](../repl/), substrate for [`chumicro-workspace`](../workspace/) and [`chumicro-pytest-device`](../pytest-device/).
+Leaf — no upstream ChuMicro deps (uses third-party `pyserial` and `mpremote` for transport).  Sister of [`chumicro-repl`](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/repl), substrate for [`chumicro-workspace`](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/workspace) and [`chumicro-pytest-device`](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/pytest-device).
 
 ## Companion: chumicro-repl
 
-[`chumicro-repl`](../repl/) is the sister workbench tool for opening interactive serial sessions and tailing the friendly REPL after a deploy.  Both packages consume the same `devices.yml` schema (owned here in `chumicro_deploy.config.default`), so a single workspace file points both at the same boards.  Use `chumicro_repl.tail(device, seconds)` to follow a deploy and fail-fast on a traceback; use `chumicro_repl.ReplSession(device)` for headless test fixtures over raw REPL.
+[`chumicro-repl`](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/repl) is the sister workbench tool for opening interactive serial sessions and tailing the friendly REPL after a deploy.  Both packages consume the same `devices.yml` schema (owned here in `chumicro_deploy.config.default`), so a single workspace file points both at the same boards.  Use `chumicro_repl.tail(device, seconds)` to follow a deploy and fail-fast on a traceback; use `chumicro_repl.ReplSession(device)` for headless test fixtures over raw REPL.
 
 ## Examples
 

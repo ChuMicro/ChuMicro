@@ -119,11 +119,11 @@ The round-trip's friendly-banner reprint is consumed by the fetcher's read-until
 
 ## Where this fits
 
-Leaf — no upstream ChuMicro deps (uses third-party `pyserial` and `prompt_toolkit`).  Sister of [`chumicro-deploy`](../deploy/); used by [`chumicro-workspace`](../workspace/) for deploy-and-tail flows.
+Leaf — no upstream ChuMicro deps (uses third-party `pyserial` and `prompt_toolkit`).  Sister of [`chumicro-deploy`](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/deploy); used by [`chumicro-workspace`](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/workspace) for deploy-and-tail flows.
 
 ## Companion: chumicro-deploy
 
-[`chumicro-deploy`](../deploy/) is the sister workbench tool for pushing code onto a board, probing identity, and flashing firmware.  `chumicro-repl` is narrower — it opens a serial REPL given a port path — so the two compose cleanly: `Deployer.deploy(source)` writes the payload, then `tail(device, seconds=10)` (or any of the API entry points) follows the board for first-cycle output.
+[`chumicro-deploy`](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/deploy) is the sister workbench tool for pushing code onto a board, probing identity, and flashing firmware.  `chumicro-repl` is narrower — it opens a serial REPL given a port path — so the two compose cleanly: `Deployer.deploy(source)` writes the payload, then `tail(device, seconds=10)` (or any of the API entry points) follows the board for first-cycle output.
 
 ## Examples
 
