@@ -186,6 +186,17 @@ _PATTERNS: tuple[LeakPattern, ...] = (
         _outside_runpy_owners,
     ),
     (
+        re.compile(
+            r"\b(?:test-(?:libraries-functional|all-runtimes|circuitpython"
+            r"|micropython|workbench-functional)|verify-(?:examples|demos)"
+            r"|prepare-(?:circuitpython|micropython|mpy-cross))\b"
+        ),  # noqa: CHU006  rule-pattern data: the regex names the tasks it flags
+        "mono-repo task name — a scripts/run.py task (e.g. "  # noqa: CHU006  same reason
+        "test-libraries-functional) a consumer with no mono-repo task "  # noqa: CHU006  same reason
+        "runner can't invoke; name the user-facing action instead",
+        _outside_runpy_owners,
+    ),
+    (
         re.compile(r"\bchumicro\s+mono[\s-]?repo\b", re.IGNORECASE),
         "'chumicro mono-repo' framing — consumer reads this without that context",
         _outside_chumicro_checks,
