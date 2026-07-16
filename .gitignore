@@ -97,3 +97,4 @@ chumicro-dev-config.toml
 firmware-*.bin
 *.uf2
 
+.claude/settings.local.json
