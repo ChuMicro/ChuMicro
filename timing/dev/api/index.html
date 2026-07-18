@@ -1117,7 +1117,7 @@
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Signed value in <code>[-TICKS_HALFPERIOD, TICKS_HALFPERIOD)</code>, accurate only for</p>
+                <p>Signed value in <code>[-TICKS_HALFPERIOD, TICKS_HALFPERIOD)</code>; gaps over ~3.1 days</p>
               </div>
             </td>
           </tr>
@@ -1127,7 +1127,7 @@
             </td>
             <td>
               <div class="doc-md-description">
-                <p>gaps under ~3.1 days (half the wrap period); larger gaps alias to the wrong sign.</p>
+                <p>(half the wrap period) alias to the wrong sign.</p>
               </div>
             </td>
           </tr>
@@ -1162,9 +1162,6 @@
     <div class="doc doc-contents first">
 
         <p>Value objects built on the tick functions: <code>Deadline</code> and <code>Rate</code>.</p>
-<p>Both take a caller-supplied <code>now_ms</code> and hold no clock of their own, so a
-service can thread its runner's <code>now_ms</code> through them and stay testable
-with a fake clock.</p>
 
 
 
@@ -1201,10 +1198,6 @@ with a fake clock.</p>
 
 
         <p>A single armed deadline: <code>period_ms</code> from the <code>now_ms</code> it was built at.</p>
-<p><code>expired</code> and <code>remaining</code> check the due tick against a supplied
-<code>now_ms</code>, and <code>reset</code> re-arms the same period.  Keep one long-lived
-<code>Deadline</code> per timeout rather than building one each tick on a hot
-path, where the free <code>ticks_add</code> / <code>ticks_diff</code> fit better.</p>
 
 
 
@@ -1305,10 +1298,6 @@ path, where the free <code>ticks_add</code> / <code>ticks_diff</code> fit better
 
 
         <p>Fires at most once per <code>period_ms</code>, drift-free and phase-aligned.</p>
-<p><code>due</code> advances the scheduled tick by whole periods rather than
-re-anchoring to <code>now_ms</code>, so fires stay on the original cadence.  A
-stall longer than one period skips the missed fires instead of bursting
-to catch up.</p>
 
 
 
@@ -1343,8 +1332,6 @@ to catch up.</p>
     <div class="doc doc-contents ">
 
         <p>Return <code>True</code> once the period has elapsed, re-phasing to the next fire.</p>
-<p>Fires at most once per <code>period_ms</code>; a fire drops any periods missed
-during a stall rather than firing repeatedly to catch up.</p>
 
 
     </div>
@@ -1401,12 +1388,6 @@ during a stall rather than firing repeatedly to catch up.</p>
     <div class="doc doc-contents first">
 
         <p>Completion-wait vocabulary: <code>Signal</code> and <code>wait_for</code>.</p>
-<p>Opt-in submodule, imported explicitly::</p>
-<div class="language-text highlight"><pre><span></span><code>from chumicro_timing.waits import Signal, wait_for
-</code></pre></div>
-<p><code>Signal</code> is a one-slot completion token; <code>wait_for</code> suspends a
-runner-driven generator until the signal is set, or an optional deadline
-elapses.</p>
 
 
 
@@ -1443,9 +1424,6 @@ elapses.</p>
 
 
         <p>One-slot completion token connecting callback-style services to generator tasks.</p>
-<p>The completing side calls <code>set(value)</code>; a generator suspended via
-<code>yield from wait_for(signal)</code> resumes on the next tick with that value.
-<code>clear()</code> re-arms the token so one signal serves many sequential waits.</p>
 
 
 
@@ -1583,8 +1561,7 @@ elapses.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The signal to wait on.  Not cleared on return; call
-<code>signal.clear()</code> before reusing it for another wait.</p>
+                <p>Signal to wait on; not cleared on return.</p>
               </div>
             </td>
             <td>
@@ -1600,9 +1577,7 @@ elapses.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Optional absolute <code>ticks_ms</code> deadline (compute
-via <code>ticks_add(ticks_ms(), timeout_ms)</code>).  <code>None</code> waits
-indefinitely.</p>
+                <p>Absolute <code>ticks_ms</code> deadline, or <code>None</code> to wait indefinitely.</p>
               </div>
             </td>
             <td>
@@ -1674,9 +1649,7 @@ indefinitely.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p><code>ETIMEDOUT</code> when <em>deadline_ms</em> elapses before the
-signal is set.  Raised inside the generator body, so the
-generator catches it there or lets it end the task.</p>
+                <p><code>ETIMEDOUT</code> when <em>deadline_ms</em> elapses before the signal is set.</p>
               </div>
             </td>
           </tr>
