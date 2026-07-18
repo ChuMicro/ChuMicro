@@ -911,9 +911,6 @@ treated as an unsolicited ack and faults the client.</p>
     <div class="doc doc-contents first">
 
         <p>Pre-baked broker responses and client fixtures for unit tests.</p>
-<p>Script broker responses with <code>sock.enqueue_recv(canned_connack_bytes())</code>
-against a :class:<code>chumicro_sockets.testing.FakeSocket</code>, let the client
-tick, then assert the wire format on <code>sock.sent</code>.</p>
 
 
 
@@ -969,9 +966,7 @@ tick, then assert the wire format on <code>sock.sent</code>.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>0 = accepted.  1-5 = various rejection reasons
-per MQTT 3.1.1 §3.2.2.3.  Tests for the rejection path
-pass non-zero here.</p>
+                <p>0 = accepted; 1-5 = rejection reasons (MQTT 3.1.1 §3.2.2.3).</p>
               </div>
             </td>
             <td>
@@ -987,8 +982,7 @@ pass non-zero here.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Bit 0 of the ack flags byte.  <code>True</code> only
-on a clean_session=False resume.</p>
+                <p>Bit 0 of the ack flags byte.</p>
               </div>
             </td>
             <td>
@@ -1105,9 +1099,6 @@ on a clean_session=False resume.</p>
     <div class="doc doc-contents ">
 
         <p>Build an MQTTClient against <em>sock</em> and <em>ticks</em> with test defaults.</p>
-<p>Defaults: <code>client_id="test-client"</code>, <code>keep_alive_seconds=60</code>,
-<code>ack_timeout_seconds=5.0</code>, <code>publish_retry_max=2</code>.  Any keyword
-in <em>overrides</em> wins over the default of the same name.</p>
 
 
     </div>

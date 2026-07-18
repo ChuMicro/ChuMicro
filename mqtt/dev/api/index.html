@@ -622,10 +622,6 @@
     <div class="doc doc-contents first">
 
         <p>Non-blocking MQTT 3.1.1 client for CircuitPython, MicroPython, and CPython.</p>
-<p>Drive :class:<code>MQTTClient</code> from a tick loop: :meth:<code>MQTTClient.check</code>
-reports whether work is pending and :meth:<code>MQTTClient.handle</code> does one
-slice of progress per call. QoS 0 and QoS 1 are supported; QoS 2 raises
-:class:<code>UnsupportedQoSError</code>.</p>
 
 
 
@@ -664,9 +660,6 @@ slice of progress per call. QoS 0 and QoS 1 are supported; QoS 2 raises
 
 
         <p>The outbound queue is full, so the caller must back off.</p>
-<p>Raised by :meth:<code>MQTTClient.publish</code> when another packet would exceed
-<code>max_tx_queue_size</code>. Call :meth:<code>MQTTClient.handle</code> once to drain,
-then retry the publish.</p>
 
 
 
@@ -698,8 +691,6 @@ then retry the publish.</p>
 
 
         <p>CONNACK arrived with a non-zero return code.</p>
-<p>The numeric <code>return_code</code> attribute lets callers branch on the
-rejection reason.</p>
 
 
 
@@ -836,8 +827,6 @@ rejection reason.</p>
     <div class="doc doc-contents ">
 
         <p>Return <code>True</code> when <em>topic</em> matches the wildcard <em>pattern</em>.</p>
-<p><code>+</code> matches one topic level.  <code>#</code> matches any number of levels
-and must be the last character of the pattern.</p>
 
 
     </div>
