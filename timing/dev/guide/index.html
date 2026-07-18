@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="../img/favicon.png">
-      <meta name="generator" content="zensical-0.0.33">
+      <meta name="generator" content="zensical-0.0.39">
     
     
       
@@ -32,7 +32,7 @@
       
         
       
-      <link rel="stylesheet" href="../assets/stylesheets/modern/main.53a7feaf.min.css">
+      <link rel="stylesheet" href="../assets/stylesheets/modern/main.1e981d71.min.css">
       
         
           
@@ -318,9 +318,9 @@
         <li class="md-nav__item">
   <a href="#overview" class="md-nav__link">
     <span class="md-ellipsis">
-      
+      <span class="md-typeset">
         Overview
-      
+      </span>
     </span>
   </a>
   
@@ -329,9 +329,9 @@
         <li class="md-nav__item">
   <a href="#getting-started" class="md-nav__link">
     <span class="md-ellipsis">
-      
+      <span class="md-typeset">
         Getting started
-      
+      </span>
     </span>
   </a>
   
@@ -339,11 +339,11 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#basic-heartbeat" class="md-nav__link">
+  <a href="#basic-periodic-cadence" class="md-nav__link">
     <span class="md-ellipsis">
-      
-        Basic heartbeat
-      
+      <span class="md-typeset">
+        Basic periodic cadence
+      </span>
     </span>
   </a>
   
@@ -352,20 +352,9 @@
           <li class="md-nav__item">
   <a href="#shared-timestamps" class="md-nav__link">
     <span class="md-ellipsis">
-      
+      <span class="md-typeset">
         Shared timestamps
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#checking-without-consuming" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Checking without consuming
-      
+      </span>
     </span>
   </a>
   
@@ -374,9 +363,20 @@
           <li class="md-nav__item">
   <a href="#resetting" class="md-nav__link">
     <span class="md-ellipsis">
-      
+      <span class="md-typeset">
         Resetting
-      
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#behavior-under-late-polls" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Behavior under late polls
+      </span>
     </span>
   </a>
   
@@ -388,11 +388,22 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#deadlines" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Deadlines
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#using-ticks-directly" class="md-nav__link">
     <span class="md-ellipsis">
-      
+      <span class="md-typeset">
         Using ticks directly
-      
+      </span>
     </span>
   </a>
   
@@ -401,42 +412,31 @@
         <li class="md-nav__item">
   <a href="#wraparound-details" class="md-nav__link">
     <span class="md-ellipsis">
-      
+      <span class="md-typeset">
         Wraparound details
-      
+      </span>
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#platform-behavior" class="md-nav__link">
+  <a href="#platform-notes" class="md-nav__link">
     <span class="md-ellipsis">
-      
-        Platform behavior
-      
+      <span class="md-typeset">
+        Platform notes
+      </span>
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#using-with-runner" class="md-nav__link">
+  <a href="#using-with-chumicro-runner" class="md-nav__link">
     <span class="md-ellipsis">
-      
-        Using with Runner
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#integration-with-a-tick-based-scheduler" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Integration with a tick-based scheduler
-      
+      <span class="md-typeset">
+        Using with chumicro-runner
+      </span>
     </span>
   </a>
   
@@ -445,22 +445,39 @@
         <li class="md-nav__item">
   <a href="#examples" class="md-nav__link">
     <span class="md-ellipsis">
-      
+      <span class="md-typeset">
         Examples
-      
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Examples">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#sensor-timeouts-timeout_checkpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Sensor timeouts (<code>timeout_check.py</code>)
+      </span>
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#whats-new" class="md-nav__link">
+        
+          <li class="md-nav__item">
+  <a href="#button-debounce-debouncepy" class="md-nav__link">
     <span class="md-ellipsis">
-      
-        What's new
-      
+      <span class="md-typeset">
+        Button debounce (<code>debounce.py</code>)
+      </span>
     </span>
   </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -569,9 +586,9 @@
         <li class="md-nav__item">
   <a href="#overview" class="md-nav__link">
     <span class="md-ellipsis">
-      
+      <span class="md-typeset">
         Overview
-      
+      </span>
     </span>
   </a>
   
@@ -580,9 +597,9 @@
         <li class="md-nav__item">
   <a href="#getting-started" class="md-nav__link">
     <span class="md-ellipsis">
-      
+      <span class="md-typeset">
         Getting started
-      
+      </span>
     </span>
   </a>
   
@@ -590,11 +607,11 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#basic-heartbeat" class="md-nav__link">
+  <a href="#basic-periodic-cadence" class="md-nav__link">
     <span class="md-ellipsis">
-      
-        Basic heartbeat
-      
+      <span class="md-typeset">
+        Basic periodic cadence
+      </span>
     </span>
   </a>
   
@@ -603,20 +620,9 @@
           <li class="md-nav__item">
   <a href="#shared-timestamps" class="md-nav__link">
     <span class="md-ellipsis">
-      
+      <span class="md-typeset">
         Shared timestamps
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#checking-without-consuming" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Checking without consuming
-      
+      </span>
     </span>
   </a>
   
@@ -625,9 +631,20 @@
           <li class="md-nav__item">
   <a href="#resetting" class="md-nav__link">
     <span class="md-ellipsis">
-      
+      <span class="md-typeset">
         Resetting
-      
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#behavior-under-late-polls" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Behavior under late polls
+      </span>
     </span>
   </a>
   
@@ -639,11 +656,22 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#deadlines" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Deadlines
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#using-ticks-directly" class="md-nav__link">
     <span class="md-ellipsis">
-      
+      <span class="md-typeset">
         Using ticks directly
-      
+      </span>
     </span>
   </a>
   
@@ -652,42 +680,31 @@
         <li class="md-nav__item">
   <a href="#wraparound-details" class="md-nav__link">
     <span class="md-ellipsis">
-      
+      <span class="md-typeset">
         Wraparound details
-      
+      </span>
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#platform-behavior" class="md-nav__link">
+  <a href="#platform-notes" class="md-nav__link">
     <span class="md-ellipsis">
-      
-        Platform behavior
-      
+      <span class="md-typeset">
+        Platform notes
+      </span>
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#using-with-runner" class="md-nav__link">
+  <a href="#using-with-chumicro-runner" class="md-nav__link">
     <span class="md-ellipsis">
-      
-        Using with Runner
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#integration-with-a-tick-based-scheduler" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Integration with a tick-based scheduler
-      
+      <span class="md-typeset">
+        Using with chumicro-runner
+      </span>
     </span>
   </a>
   
@@ -696,22 +713,39 @@
         <li class="md-nav__item">
   <a href="#examples" class="md-nav__link">
     <span class="md-ellipsis">
-      
+      <span class="md-typeset">
         Examples
-      
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Examples">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#sensor-timeouts-timeout_checkpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Sensor timeouts (<code>timeout_check.py</code>)
+      </span>
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#whats-new" class="md-nav__link">
+        
+          <li class="md-nav__item">
+  <a href="#button-debounce-debouncepy" class="md-nav__link">
     <span class="md-ellipsis">
-      
-        What's new
-      
+      <span class="md-typeset">
+        Button debounce (<code>debounce.py</code>)
+      </span>
     </span>
   </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -738,56 +772,70 @@
 <p><code>chumicro-timing</code> provides two things:</p>
 <ol>
 <li><strong>Tick helpers</strong> — <code>ticks_ms()</code>, <code>ticks_diff()</code>, and <code>ticks_add()</code> that handle counter wraparound correctly across all three Python runtimes.</li>
-<li><strong>Heartbeat</strong> — a periodic timer that tells you when a time interval has elapsed, without blocking.</li>
+<li><strong>Value objects</strong> built on those helpers:<ul>
+<li><code>Deadline</code> — a single armed timeout: check <code>expired(now)</code> / <code>remaining(now)</code>, <code>reset(now)</code> to re-arm.</li>
+<li><code>Rate</code> — a drift-free periodic cadence (the replacement for the old <code>Heartbeat</code>): <code>due(now)</code> returns <code>True</code> at most once per period.</li>
+</ul>
+</li>
 </ol>
-<p>These are the building blocks for non-blocking timing on microcontrollers. Instead of calling <code>time.sleep()</code> (which blocks everything), you capture a timestamp once per loop and check <code>heartbeat.poll(now)</code> for each component.</p>
+<p>These are the building blocks for non-blocking timing on microcontrollers. Instead of calling <code>time.sleep()</code> (which blocks everything), you capture a timestamp once per loop and hand it to each timer.</p>
+<p>For generator-based flows that suspend until a completion event, the opt-in <code>chumicro_timing.waits</code> submodule adds <code>Signal</code> and <code>wait_for</code> — the completion-wait vocabulary. Import it explicitly: <code>from chumicro_timing.waits import Signal, wait_for</code>.</p>
 <h2 id="getting-started">Getting started<a class="headerlink" href="#getting-started" title="Permanent link">&para;</a></h2>
-<h3 id="basic-heartbeat">Basic heartbeat<a class="headerlink" href="#basic-heartbeat" title="Permanent link">&para;</a></h3>
+<h3 id="basic-periodic-cadence">Basic periodic cadence<a class="headerlink" href="#basic-periodic-cadence" title="Permanent link">&para;</a></h3>
 <p>The most common pattern is a periodic action in a main loop:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_timing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Heartbeat</span><span class="p">,</span> <span class="n">ticks_ms</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_timing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Rate</span><span class="p">,</span> <span class="n">ticks_ms</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">led_heartbeat</span> <span class="o">=</span> <span class="n">Heartbeat</span><span class="p">(</span><span class="n">period_ms</span><span class="o">=</span><span class="mi">500</span><span class="p">)</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">led_rate</span> <span class="o">=</span> <span class="n">Rate</span><span class="p">(</span><span class="mi">500</span><span class="p">,</span> <span class="n">ticks_ms</span><span class="p">())</span>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
 </span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
 </span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">now</span> <span class="o">=</span> <span class="n">ticks_ms</span><span class="p">()</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="k">if</span> <span class="n">led_heartbeat</span><span class="o">.</span><span class="n">poll</span><span class="p">(</span><span class="n">now</span><span class="p">):</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="k">if</span> <span class="n">led_rate</span><span class="o">.</span><span class="n">due</span><span class="p">(</span><span class="n">now</span><span class="p">):</span>
 </span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>        <span class="c1"># This runs twice per second</span>
 </span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>        <span class="n">toggle_led</span><span class="p">()</span>
 </span></code></pre></div>
-<p><code>poll(now_ms)</code> returns <code>True</code> once per elapsed period and advances the internal timer. Calling it again with the same timestamp returns <code>False</code> until the next period elapses.</p>
+<p><code>Rate(period_ms, now_ms)</code> takes the current time at construction so it can phase-align its schedule. <code>due(now_ms)</code> returns <code>True</code> at most once per elapsed period and advances the internal schedule. Calling it again with the same timestamp returns <code>False</code> until the next period elapses.</p>
 <h3 id="shared-timestamps">Shared timestamps<a class="headerlink" href="#shared-timestamps" title="Permanent link">&para;</a></h3>
 <p><strong>Always capture <code>ticks_ms()</code> once per loop iteration</strong> and pass the same value to every component. This prevents drift between independent clock reads:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_timing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Heartbeat</span><span class="p">,</span> <span class="n">ticks_ms</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_timing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Rate</span><span class="p">,</span> <span class="n">ticks_ms</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">fast</span> <span class="o">=</span> <span class="n">Heartbeat</span><span class="p">(</span><span class="n">period_ms</span><span class="o">=</span><span class="mi">100</span><span class="p">)</span>   <span class="c1"># 10 Hz</span>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">slow</span> <span class="o">=</span> <span class="n">Heartbeat</span><span class="p">(</span><span class="n">period_ms</span><span class="o">=</span><span class="mi">5000</span><span class="p">)</span>  <span class="c1"># every 5 seconds</span>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>    <span class="n">now</span> <span class="o">=</span> <span class="n">ticks_ms</span><span class="p">()</span>  <span class="c1"># ONE reading per iteration</span>
-</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>    <span class="k">if</span> <span class="n">fast</span><span class="o">.</span><span class="n">poll</span><span class="p">(</span><span class="n">now</span><span class="p">):</span>
-</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>        <span class="n">read_sensor</span><span class="p">()</span>
-</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>    <span class="k">if</span> <span class="n">slow</span><span class="o">.</span><span class="n">poll</span><span class="p">(</span><span class="n">now</span><span class="p">):</span>
-</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>        <span class="n">send_report</span><span class="p">()</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">now</span> <span class="o">=</span> <span class="n">ticks_ms</span><span class="p">()</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">fast</span> <span class="o">=</span> <span class="n">Rate</span><span class="p">(</span><span class="mi">100</span><span class="p">,</span> <span class="n">now</span><span class="p">)</span>   <span class="c1"># 10 Hz</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="n">slow</span> <span class="o">=</span> <span class="n">Rate</span><span class="p">(</span><span class="mi">5000</span><span class="p">,</span> <span class="n">now</span><span class="p">)</span>  <span class="c1"># every 5 seconds</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>    <span class="n">now</span> <span class="o">=</span> <span class="n">ticks_ms</span><span class="p">()</span>  <span class="c1"># ONE reading per iteration</span>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>    <span class="k">if</span> <span class="n">fast</span><span class="o">.</span><span class="n">due</span><span class="p">(</span><span class="n">now</span><span class="p">):</span>
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>        <span class="n">read_sensor</span><span class="p">()</span>
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>    <span class="k">if</span> <span class="n">slow</span><span class="o">.</span><span class="n">due</span><span class="p">(</span><span class="n">now</span><span class="p">):</span>
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>        <span class="n">send_report</span><span class="p">()</span>
 </span></code></pre></div>
-<p>On a slow microcontroller, calling <code>ticks_ms()</code> separately for each component would return slightly different values. A heartbeat that should fire at the same moment as another might not. Sharing the timestamp eliminates this class of bug.</p>
-<h3 id="checking-without-consuming">Checking without consuming<a class="headerlink" href="#checking-without-consuming" title="Permanent link">&para;</a></h3>
-<p><code>is_due(now_ms)</code> tells you whether the period has elapsed without advancing the timer. This is useful when you need to check timing state without committing to an action:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">now</span> <span class="o">=</span> <span class="n">ticks_ms</span><span class="p">()</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="k">if</span> <span class="n">heartbeat</span><span class="o">.</span><span class="n">is_due</span><span class="p">(</span><span class="n">now</span><span class="p">):</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    <span class="c1"># Period has elapsed, but the timer hasn&#39;t been reset yet.</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="c1"># Calling is_due(now) again will still return True.</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="k">pass</span>
-</span></code></pre></div>
-<p>Call <code>poll(now)</code> when you're ready to consume the beat and start the next period.</p>
+<p>On a slow microcontroller, calling <code>ticks_ms()</code> separately for each component would return slightly different values. A timer that should fire at the same moment as another might not. Sharing the timestamp eliminates this class of bug.</p>
 <h3 id="resetting">Resetting<a class="headerlink" href="#resetting" title="Permanent link">&para;</a></h3>
-<p><code>reset(now_ms)</code> restarts the timer from the given timestamp:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">now</span> <span class="o">=</span> <span class="n">ticks_ms</span><span class="p">()</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">heartbeat</span><span class="o">.</span><span class="n">reset</span><span class="p">(</span><span class="n">now</span><span class="p">)</span>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="c1"># The next beat is now period_ms from this moment,</span>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="c1"># regardless of when the last beat was.</span>
+<p><code>reset(now_ms)</code> restarts the cadence from the given timestamp:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">now</span> <span class="o">=</span> <span class="n">ticks_ms</span><span class="p">()</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">led_rate</span><span class="o">.</span><span class="n">reset</span><span class="p">(</span><span class="n">now</span><span class="p">)</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="c1"># The next fire is now period_ms from this moment,</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="c1"># regardless of when the last fire was.</span>
 </span></code></pre></div>
+<h3 id="behavior-under-late-polls">Behavior under late polls<a class="headerlink" href="#behavior-under-late-polls" title="Permanent link">&para;</a></h3>
+<p><code>Rate</code> is <strong>drift-free / phase-aligned</strong>. When the loop runs late, <code>due(now)</code> fires and advances the <em>scheduled</em> tick by whole periods — it does not re-anchor to <code>now</code>. A 200 ms cadence keeps landing on 200, 400, 600 … even when individual polls arrive a few milliseconds late, and that jitter never accumulates. If the loop stalls for longer than one period, the missed fires are skipped rather than replayed back-to-back: <code>due(now)</code> returns <code>True</code> once and the schedule jumps forward to the next period boundary after <code>now</code>.</p>
+<p>This is the opposite of the old <code>Heartbeat</code>, which re-anchored the next deadline to <code>now</code> on every fire and so drifted forward by each loop's late-arrival cost. <code>Rate</code> gives you the phase-locked behavior by default. If you want to see those mechanics spelled out by hand, <a href="https://github.com/ChuMicro/ChuMicro/tree/main/libraries/timing/examples/phase_locked_tick.py"><code>examples/phase_locked_tick.py</code></a> carries the deadline manually — that is exactly what <code>Rate</code> does for you internally.</p>
+<h2 id="deadlines">Deadlines<a class="headerlink" href="#deadlines" title="Permanent link">&para;</a></h2>
+<p>A <code>Deadline</code> is a single armed timeout. Arm it with the current time, then poll it:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_timing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Deadline</span><span class="p">,</span> <span class="n">ticks_ms</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">deadline</span> <span class="o">=</span> <span class="n">Deadline</span><span class="p">(</span><span class="mi">500</span><span class="p">,</span> <span class="n">ticks_ms</span><span class="p">())</span>  <span class="c1"># due 500 ms from now</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="k">while</span> <span class="ow">not</span> <span class="n">deadline</span><span class="o">.</span><span class="n">expired</span><span class="p">(</span><span class="n">ticks_ms</span><span class="p">()):</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="k">if</span> <span class="n">sensor_ready</span><span class="p">():</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>        <span class="k">break</span>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>    <span class="n">do_other_work</span><span class="p">()</span>
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="n">left</span> <span class="o">=</span> <span class="n">deadline</span><span class="o">.</span><span class="n">remaining</span><span class="p">(</span><span class="n">ticks_ms</span><span class="p">())</span>  <span class="c1"># ms until due, clamped at 0</span>
+</span></code></pre></div>
+<p><code>expired(now)</code> reports whether the deadline has passed; <code>remaining(now)</code> returns the milliseconds left (clamped at <code>0</code>). <code>reset(now)</code> re-arms the same period from a new moment.</p>
 <h2 id="using-ticks-directly">Using ticks directly<a class="headerlink" href="#using-ticks-directly" title="Permanent link">&para;</a></h2>
-<p>For custom timing logic that doesn't fit the heartbeat pattern, use the tick functions directly:</p>
+<p>For custom timing logic, you can use the tick functions directly:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_timing</span><span class="w"> </span><span class="kn">import</span> <span class="n">ticks_ms</span><span class="p">,</span> <span class="n">ticks_diff</span><span class="p">,</span> <span class="n">ticks_add</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="c1"># Record a timestamp</span>
@@ -801,12 +849,13 @@
 </span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="c1"># Compute a deadline</span>
 </span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="n">deadline</span> <span class="o">=</span> <span class="n">ticks_add</span><span class="p">(</span><span class="n">start</span><span class="p">,</span> <span class="mi">3000</span><span class="p">)</span>  <span class="c1"># 3 seconds from start</span>
 </span></code></pre></div>
-<p><strong>Important</strong>: Do not use plain subtraction (<code>end - start</code>) on tick values. The counter wraps every ~6.2 days, and plain subtraction gives wrong results near the boundary. Always use <code>ticks_diff()</code>.</p>
+<p><strong>Important</strong>: Do not use plain subtraction (<code>end - start</code>) on tick values, and never compute a deadline as <code>now + delta</code>. The counter wraps every ~6.2 days, and plain arithmetic gives wrong results near the boundary. Use <code>ticks_diff()</code> to measure elapsed time and <code>ticks_add()</code> to offset a timestamp.</p>
+<p>The safe default is to reach for <code>Deadline</code> rather than arm a timeout by hand. <code>Deadline(timeout_ms, ticks_ms())</code> arms via <code>ticks_add</code> internally, so the <code>now + delta</code> footgun is simply unrepresentable — you never write the wrapping arithmetic yourself. Keep <code>ticks_add</code> / <code>ticks_diff</code> for the cases where you genuinely need the raw tick values.</p>
 <h2 id="wraparound-details">Wraparound details<a class="headerlink" href="#wraparound-details" title="Permanent link">&para;</a></h2>
 <p>The tick counter uses a 2²⁹ ms period (~6.2 days). This keeps all arithmetic within small integers, avoiding heap-allocated big integers on boards without big-int support.</p>
 <p><code>ticks_diff()</code> is correct as long as the two timestamps are no more than ~3.1 days apart (half the period). For any practical embedded timing, this is more than sufficient.</p>
 <p><code>ticks_add()</code> rejects deltas at or beyond the half-period (±2²⁸ ms) with an <code>OverflowError</code>.</p>
-<h2 id="platform-behavior">Platform behavior<a class="headerlink" href="#platform-behavior" title="Permanent link">&para;</a></h2>
+<h2 id="platform-notes">Platform notes<a class="headerlink" href="#platform-notes" title="Permanent link">&para;</a></h2>
 <p>The tick source is selected automatically at import time:</p>
 <table>
 <thead>
@@ -840,22 +889,21 @@
 </tbody>
 </table>
 <p>All sources are masked to the 2²⁹ period, so behavior is identical regardless of which source is used.</p>
-<h2 id="using-with-runner">Using with Runner<a class="headerlink" href="#using-with-runner" title="Permanent link">&para;</a></h2>
-<p>For applications with many components, <code>chumicro-runner</code> provides a <code>Runner</code> that captures the timestamp for you and services active components. See the <a href="https://github.com/ChuMicro/ChuMicro/blob/main/libraries/runner/docs/guide.md">chumicro-runner guide</a> for details.</p>
-<h2 id="integration-with-a-tick-based-scheduler">Integration with a tick-based scheduler<a class="headerlink" href="#integration-with-a-tick-based-scheduler" title="Permanent link">&para;</a></h2>
-<p><code>Heartbeat</code> is designed to be polled from a main loop or tick-based scheduler — it never blocks. A typical pattern:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_timing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Heartbeat</span><span class="p">,</span> <span class="n">ticks_ms</span>
+<h2 id="using-with-chumicro-runner">Using with chumicro-runner<a class="headerlink" href="#using-with-chumicro-runner" title="Permanent link">&para;</a></h2>
+<p><code>Rate</code> is designed to be polled from a main loop or tick-based scheduler — it never blocks. A typical pattern:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_timing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Rate</span><span class="p">,</span> <span class="n">ticks_ms</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="n">heartbeat</span> <span class="o">=</span> <span class="n">Heartbeat</span><span class="p">(</span><span class="n">period_ms</span><span class="o">=</span><span class="mi">1000</span><span class="p">)</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="n">rate</span> <span class="o">=</span> <span class="n">Rate</span><span class="p">(</span><span class="mi">1000</span><span class="p">,</span> <span class="n">ticks_ms</span><span class="p">())</span>
 </span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>
 </span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="k">def</span><span class="w"> </span><span class="nf">on_tick</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 </span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Called once per scheduler tick.&quot;&quot;&quot;</span>
 </span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>    <span class="n">now</span> <span class="o">=</span> <span class="n">ticks_ms</span><span class="p">()</span>
-</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>    <span class="k">if</span> <span class="n">heartbeat</span><span class="o">.</span><span class="n">poll</span><span class="p">(</span><span class="n">now</span><span class="p">):</span>
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>    <span class="k">if</span> <span class="n">rate</span><span class="o">.</span><span class="n">due</span><span class="p">(</span><span class="n">now</span><span class="p">):</span>
 </span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>        <span class="n">do_periodic_work</span><span class="p">()</span>
 </span></code></pre></div>
+<p>For applications with many components, <a href="https://chumicro.github.io/ChuMicro/runner/stable/"><code>chumicro-runner</code></a> captures the timestamp once per tick and dispatches it to every registered service.</p>
 <h2 id="examples">Examples<a class="headerlink" href="#examples" title="Permanent link">&para;</a></h2>
-<p>The <a href="../../examples/">examples</a> directory contains complete runnable scripts:</p>
+<p>The <a href="https://github.com/ChuMicro/ChuMicro/tree/main/libraries/timing/examples">examples</a> directory contains complete runnable scripts:</p>
 <table>
 <thead>
 <tr>
@@ -866,11 +914,11 @@
 <tbody>
 <tr>
 <td><code>heartbeat_blink.py</code></td>
-<td>Basic heartbeat in a main loop (the embedded hello world)</td>
+<td>Basic periodic Rate in a main loop (the embedded hello world)</td>
 </tr>
 <tr>
 <td><code>multiple_heartbeats.py</code></td>
-<td>Several heartbeats at different rates sharing one timestamp</td>
+<td>Several Rate timers at different rates sharing one timestamp</td>
 </tr>
 <tr>
 <td><code>timeout_check.py</code></td>
@@ -882,7 +930,11 @@
 </tr>
 <tr>
 <td><code>periodic_tick.py</code></td>
-<td>Manual periodic action — what <code>Heartbeat</code> does under the hood</td>
+<td>Manual periodic action — the same logic <code>Rate</code> wraps</td>
+</tr>
+<tr>
+<td><code>phase_locked_tick.py</code></td>
+<td>Drift-free deadline carrier by hand — the phase-locked schedule <code>Rate</code> provides built-in</td>
 </tr>
 <tr>
 <td><code>circuitpython_blink.py</code></td>
@@ -903,14 +955,12 @@
 </tbody>
 </table>
 <p>Simulated examples run on CPython.  Hardware examples (<code>circuitpython_*</code> / <code>micropython_*</code>) require a real board — see the setup notes in each file.</p>
-<h2 id="whats-new">What's new<a class="headerlink" href="#whats-new" title="Permanent link">&para;</a></h2>
-<!-- Add entries for user-visible changes when bumping VERSION.
-     One bullet per change. Internal refactors don't need entries.
-     At stable promotion, collapse/edit as needed. -->
-
-<ul>
-<li><strong>0.1.24</strong>: Documentation sync and CI build performance improvements.</li>
-</ul>
+<h3 id="sensor-timeouts-timeout_checkpy">Sensor timeouts (<code>timeout_check.py</code>)<a class="headerlink" href="#sensor-timeouts-timeout_checkpy" title="Permanent link">&para;</a></h3>
+<p>Shows <code>ticks_add</code> for computing an absolute deadline and <code>ticks_diff</code> for checking it.  A <code>wait_for_sensor(timeout_ms)</code> helper polls a simulated sensor until it reads ready or the deadline expires, returning the elapsed time on success or <code>-1</code> on timeout.  The deadline is computed once with <code>ticks_add(start, timeout_ms)</code>; each iteration tests <code>ticks_diff(now, deadline) &lt; 0</code> to decide whether to keep polling.</p>
+<p>The same pattern generalises to any "fail after N ms" check — handshake completion, status-register polling, button-hold detection.</p>
+<h3 id="button-debounce-debouncepy">Button debounce (<code>debounce.py</code>)<a class="headerlink" href="#button-debounce-debouncepy" title="Permanent link">&para;</a></h3>
+<p>Shows <code>ticks_ms</code> and <code>ticks_diff</code> for the classic debounce pattern.  A raw button signal bounces for a few ms after each press; the debouncer records the timestamp of the last accepted transition and rejects further changes until a quiet period (<code>DEBOUNCE_MS</code>) has elapsed.</p>
+<p>The same shape applies any time you need to suppress rapid signal changes — button presses, sensor readings near a threshold, motion-detector pulses.</p>
 <hr />
 <div class="chumicro-footer">
 <p><a href="../">← Home</a></p>
@@ -970,7 +1020,7 @@
       <script id="__config" type="application/json">{"annotate":null,"base":"..","features":[],"search":"../assets/javascripts/workers/search.e2d2d235.min.js","tags":null,"translations":{"clipboard.copied":"Copied to clipboard","clipboard.copy":"Copy to clipboard","search.result.more.one":"1 more on this page","search.result.more.other":"# more on this page","search.result.none":"No matching documents","search.result.one":"1 matching document","search.result.other":"# matching documents","search.result.placeholder":"Type to start searching","search.result.term.missing":"Missing","select.version":"Select version"},"version":{"default":["stable","experimental"],"provider":"mike"}}</script>
     
     
-      <script src="../assets/javascripts/bundle.63456bd9.min.js"></script>
+      <script src="../assets/javascripts/bundle.dbc0afdc.min.js"></script>
       
     
   </body>
