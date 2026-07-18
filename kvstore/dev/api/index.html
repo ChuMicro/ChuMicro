@@ -744,9 +744,6 @@
     <div class="doc doc-contents first">
 
         <p>Persisted runtime state for CircuitPython, MicroPython, and CPython.</p>
-<p>A small mutable key-value store for state that must survive reboot:
-counters, timestamps, tokens, retry budgets. Not a config system, not a
-database. A per-runtime backend is selected automatically.</p>
 
 
 
@@ -805,9 +802,7 @@ database. A per-runtime backend is selected automatically.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Backend selection: <code>"auto"</code> (default, per-runtime
-choice), <code>"memory"</code>, <code>"nvm"</code>, <code>"nvs"</code>, <code>"littlefs"</code>,
-or a concrete backend instance for tests.</p>
+                <p><code>"auto"</code>, <code>"memory"</code>, <code>"nvm"</code>, <code>"nvs"</code>, <code>"littlefs"</code>, or a backend instance.</p>
               </div>
             </td>
             <td>
@@ -852,8 +847,6 @@ or a concrete backend instance for tests.</p>
     <div class="doc doc-contents ">
 
         <p>Encoded size of the current in-memory dict, not the persisted payload.</p>
-<p>Each read runs a full msgpack encode of the dict and is not memoized,
-so read it sparingly rather than polling it every tick.</p>
 
     </div>
 
@@ -956,10 +949,6 @@ so read it sparingly rather than polling it every tick.</p>
     <div class="doc doc-contents ">
 
         <p>Commit only when the encoded payload changed since the last persist.</p>
-<p>This spares flash wear on raw-flash backends. The encode is skipped
-entirely when no mapping method has run since the last persist, so
-scheduling it every tick is cheap. A value mutated in place through a
-nested object (outside the mapping API) is not seen as a change.</p>
 
 
     <p><span class="doc-section-title">Returns:</span></p>
@@ -1001,7 +990,6 @@ nested object (outside the mapping API) is not seen as a change.</p>
     <div class="doc doc-contents ">
 
         <p>Remove <em>key</em> and return its value, or <em>default</em> when supplied.</p>
-<p>Like <code>dict.pop</code>: with no <em>default</em>, a missing key raises <code>KeyError</code>.</p>
 
 
     </div>
@@ -1070,9 +1058,6 @@ nested object (outside the mapping API) is not seen as a change.</p>
 
 
         <p>Persisted state failed its integrity check on load.</p>
-<p>Raised only from an explicit <code>reload()</code>. Auto-load on construction
-reports corruption through the <code>is_corrupt</code> property instead and
-resets the store to empty.</p>
 
 
 

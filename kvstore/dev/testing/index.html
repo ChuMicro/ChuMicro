@@ -854,8 +854,7 @@
     <div class="doc doc-contents first">
 
         <p>Test helpers for libraries that depend on <code>chumicro-kvstore</code>.</p>
-<p><code>FakeKVStore</code> gives downstream libraries a real store to test against
-instead of hand-rolling a mock.</p>
+<p><code>FakeKVStore</code> gives downstream tests a real store to run against.</p>
 
 
 
@@ -894,8 +893,6 @@ instead of hand-rolling a mock.</p>
 
 
         <p>In-memory <code>KVStore</code> with explicit corruption and capacity hooks.</p>
-<p>Wraps <code>MemoryBackend</code> so downstream tests exercise the real
-<code>KVStore</code> API and code path.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -918,8 +915,7 @@ instead of hand-rolling a mock.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Optional capacity override in bytes, to drive the
-<code>KVStoreFull</code> path in downstream tests.</p>
+                <p>Optional capacity override in bytes, to drive the <code>KVStoreFull</code> path.</p>
               </div>
             </td>
             <td>
@@ -951,8 +947,7 @@ instead of hand-rolling a mock.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>When <code>True</code>, each public-API call appends an entry
-to <code>self.calls</code> for later assertion.</p>
+                <p>When <code>True</code>, each public-API call is appended to <code>self.calls</code>.</p>
               </div>
             </td>
             <td>
@@ -1017,8 +1012,6 @@ to <code>self.calls</code> for later assertion.</p>
     <div class="doc doc-contents ">
 
         <p>Mark the underlying memory backend corrupt.</p>
-<p>The next <code>reload()</code> surfaces the corruption; in-memory state stays
-intact until then, mirroring production behavior.</p>
 
 
     </div>
@@ -1055,9 +1048,6 @@ intact until then, mirroring production behavior.</p>
     <div class="doc doc-contents ">
 
         <p>Adjust the simulated capacity mid-test.</p>
-<p>Updates both the backend and the <code>KVStore.capacity</code> snapshot taken
-at construction, so a raised cap takes effect: the store's own
-pre-check reads that snapshot, not the backend.</p>
 
 
     </div>
