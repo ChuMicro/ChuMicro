@@ -136,11 +136,18 @@ while True:
     })
 
     publish_done = [False]
+
+    def _on_publish(_topic, _payload, flag=publish_done):
+        # flag[0] = True as a statement: CircuitPython / MicroPython don't
+        # expose list.__setitem__ as an attribute, so the lambda form
+        # (flag.__setitem__(0, True)) raises AttributeError on-device.
+        flag[0] = True
+
     mqtt.publish(
         topic,
         payload.encode(),
         qos=1,
-        on_publish=lambda _topic, _payload, flag=publish_done: flag.__setitem__(0, True),
+        on_publish=_on_publish,
     )
 
     led_counter = 0
