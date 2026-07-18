@@ -688,13 +688,7 @@
     <div class="doc doc-contents first">
 
         <p>Cross-runtime TCP, TLS, and UDP sockets for CircuitPython, MicroPython, and CPython.</p>
-<p>The public factories (<code>connector</code>, <code>listener</code>, <code>udp_socket</code>) pick a
-per-runtime adapter from <code>sys.implementation.name</code>, so user code never
-writes a runtime check. TLS is opt-in through <code>tls=True</code> plus an optional
-<code>ssl.SSLContext</code>; <code>context=None</code> verifies against the runtime's default
-trust store. Returned sockets are duck-typed: downstream libraries hold them
-and call <code>send</code> / <code>recv_into</code> / <code>close</code> (TCP) or <code>sendto</code> /
-<code>recvfrom_into</code> / <code>close</code> (UDP) directly.</p>
+<p>The public factories are <code>connector</code>, <code>listener</code>, and <code>udp_socket</code>.</p>
 
 
 
@@ -759,15 +753,6 @@ and call <code>send</code> / <code>recv_into</code> / <code>close</code> (TCP) o
     <div class="doc doc-contents ">
 
         <p>Return a non-blocking, tick-driven TCP or TLS connector.</p>
-<p>The returned <code>SocketConnector</code> advances DNS, TCP, then optional TLS
-across repeated <code>tick(now_ms)</code> calls; once <code>state == "ready"</code> the
-connected socket is on <code>connector.socket</code>. It exposes the runner-contract
-surface, so <code>Runner.add(connector(...))</code> registers it directly and
-<code>chumicro_sockets.generators.connect</code> can drive it from a generator.</p>
-<p><code>tls=True</code> with <code>context=None</code> verifies against the runtime's default
-trust: CircuitPython's firmware CA store, CPython's host OS store, or the
-library-shipped bundle on MicroPython. DNS resolves with a synchronous
-<code>getaddrinfo</code> on every runtime, so passing an IP literal skips it.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -790,8 +775,7 @@ library-shipped bundle on MicroPython. DNS resolves with a synchronous
             </td>
             <td>
               <div class="doc-md-description">
-                <p>DNS name or IP literal. With <code>tls=True</code> it is also the
-<code>server_hostname</code> used for SNI and certificate verification.</p>
+                <p>DNS name or IP literal; also the TLS <code>server_hostname</code> when <code>tls=True</code>.</p>
               </div>
             </td>
             <td>
@@ -839,8 +823,7 @@ library-shipped bundle on MicroPython. DNS resolves with a synchronous
             </td>
             <td>
               <div class="doc-md-description">
-                <p>SSLContext for the <code>tls=True</code> path. <code>None</code> uses the
-runtime default trust store. Ignored when <code>tls=False</code>.</p>
+                <p>SSLContext for the <code>tls=True</code> path; <code>None</code> uses the runtime default trust store.</p>
               </div>
             </td>
             <td>
@@ -856,8 +839,7 @@ runtime default trust store. Ignored when <code>tls=False</code>.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>CP-only radio object (pass <code>wifi.radio</code> on CP boards);
-ignored on MicroPython and CPython.</p>
+                <p>CP-only radio object (pass <code>wifi.radio</code> on CP boards); ignored elsewhere.</p>
               </div>
             </td>
             <td>
@@ -883,17 +865,7 @@ ignored on MicroPython and CPython.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>A <code>SocketConnector</code> in the <code>"awaiting_dns"</code> state; call <code>tick</code></p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                  <code><span title="object">object</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>until it reaches <code>"ready"</code> or <code>"failed"</code>.</p>
+                <p>A <code>SocketConnector</code> in the <code>"awaiting_dns"</code> state.</p>
               </div>
             </td>
           </tr>
@@ -917,12 +889,6 @@ ignored on MicroPython and CPython.</p>
     <div class="doc doc-contents ">
 
         <p>Open a non-blocking TCP or TLS listening socket.</p>
-<p>The returned listener is non-blocking: <code>accept()</code> returns
-<code>(client_socket, address)</code> when a connection is ready, or raises
-<code>OSError(EAGAIN)</code> when the queue is empty. With <code>tls=True</code> each accepted
-client is TLS-wrapped before <code>accept()</code> returns it, and the handshake runs
-synchronously inside <code>accept()</code> (on Pi Pico W class boards that can take
-100-500 ms per connection and stall the runner for that window).</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -993,8 +959,7 @@ synchronously inside <code>accept()</code> (on Pi Pico W class boards that can t
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Server-side <code>ssl.SSLContext</code>. Required when <code>tls=True</code>;
-ignored otherwise.</p>
+                <p>Server-side <code>ssl.SSLContext</code>; required when <code>tls=True</code>, ignored otherwise.</p>
               </div>
             </td>
             <td>
@@ -1026,8 +991,7 @@ ignored otherwise.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>CP-only radio object (pass <code>wifi.radio</code> on CP boards);
-ignored on MicroPython and CPython.</p>
+                <p>CP-only radio object (pass <code>wifi.radio</code> on CP boards); ignored elsewhere.</p>
               </div>
             </td>
             <td>
@@ -1053,17 +1017,7 @@ ignored on MicroPython and CPython.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>A listening socket exposing <code>accept()</code> / <code>close()</code> /</p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                  <code><span title="object">object</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p><code>setblocking()</code>.</p>
+                <p>A listening socket exposing <code>accept()</code> / <code>close()</code> / <code>setblocking()</code>.</p>
               </div>
             </td>
           </tr>
@@ -1140,11 +1094,6 @@ ignored on MicroPython and CPython.</p>
     <div class="doc doc-contents ">
 
         <p>Build a server-side SSLContext from in-memory cert and key bytes.</p>
-<p>Presents the server's own certificate and private key to clients (the
-counterpart to :func:<code>ssl_context_with_ca</code>, which trusts a CA to verify
-someone else's certificate). Not supported on CircuitPython, whose
-<code>load_cert_chain</code> needs filesystem paths rather than in-memory bytes; use
-:func:<code>ssl_context_with_cert_and_key_paths</code> there.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1233,10 +1182,6 @@ someone else's certificate). Not supported on CircuitPython, whose
     <div class="doc doc-contents ">
 
         <p>Build a server-side SSLContext from cert and key files on flash.</p>
-<p>Works on every supported runtime, so this is the recommended API for
-CircuitPython-targeted code (CP's <code>load_cert_chain</code> only accepts
-filesystem paths). Still unsupported on CP-rp2 boards, where
-<code>listener(tls=True)</code> refuses up front.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1325,9 +1270,6 @@ filesystem paths). Still unsupported on CP-rp2 boards, where
     <div class="doc doc-contents ">
 
         <p>Open a UDP datagram socket bound to (bind_host, bind_port).</p>
-<p><code>bind_host="0.0.0.0"</code> with <code>bind_port=0</code> requests an ephemeral port on
-every interface. Call <code>getsockname()</code> on the result to learn the bound
-address when the OS chose the port.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1382,8 +1324,7 @@ address when the OS chose the port.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>CP-only radio object (pass <code>wifi.radio</code> on CP boards);
-ignored on MicroPython and CPython.</p>
+                <p>CP-only radio object (pass <code>wifi.radio</code> on CP boards); ignored elsewhere.</p>
               </div>
             </td>
             <td>
@@ -1399,8 +1340,7 @@ ignored on MicroPython and CPython.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Set <code>SO_BROADCAST</code> so <code>sendto</code> to a broadcast address
-succeeds. Off by default; kernels reject broadcast sends without it.</p>
+                <p>Set <code>SO_BROADCAST</code> so <code>sendto</code> to a broadcast address succeeds.</p>
               </div>
             </td>
             <td>
@@ -1461,13 +1401,6 @@ succeeds. Off by default; kernels reject broadcast sends without it.</p>
     <div class="doc doc-contents ">
 
         <p>Build an SSLContext that trusts the CA(s) in <em>ca_pem</em>.</p>
-<p>The common "default settings except the trust anchor" recipe. Accepted
-input formats follow each runtime's <code>ssl</code> binding: PEM works everywhere,
-DER only on MicroPython and CPython (CircuitPython is PEM-only). Concatenated
-multi-cert bundles work on every runtime. Only the RFC 7468
-<code>-----BEGIN CERTIFICATE-----</code> armor is accepted; other armors (legacy
-<code>X509 CERTIFICATE</code>, <code>TRUSTED CERTIFICATE</code>, <code>PKCS7</code>, bare base64) raise
-<code>ValueError</code> rather than silently mistrusting.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1490,8 +1423,7 @@ multi-cert bundles work on every runtime. Only the RFC 7468
             </td>
             <td>
               <div class="doc-md-description">
-                <p>CA bundle. PEM (<code>str</code> or <code>bytes</code>) on every runtime; DER
-(<code>bytes</code>) on MicroPython and CPython only.</p>
+                <p>CA bundle; PEM on every runtime, DER (<code>bytes</code>) on MicroPython and CPython only.</p>
               </div>
             </td>
             <td>
@@ -1540,8 +1472,7 @@ multi-cert bundles work on every runtime. Only the RFC 7468
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The input is not an accepted format for the runtime (for
-example DER on CircuitPython, or neither PEM nor DER).</p>
+                <p>The input is not an accepted format for the runtime.</p>
               </div>
             </td>
           </tr>
@@ -1565,10 +1496,6 @@ example DER on CircuitPython, or neither PEM nor DER).</p>
     <div class="doc doc-contents ">
 
         <p>Return an SSLContext that skips certificate verification.</p>
-<p>An explicit opt-out for callers that intentionally do not validate the peer
-(development against self-signed brokers, captive-portal probes, smoke tests
-against untrusted hosts). Named so reviewers can grep for it; using it where
-:func:<code>ssl_context_with_ca</code> would serve is a security defect.</p>
 
 
     <p><span class="doc-section-title">Returns:</span></p>
@@ -1610,11 +1537,6 @@ against untrusted hosts). Named so reviewers can grep for it; using it where
     <div class="doc doc-contents ">
 
         <p>Replace or revert the CA bundle used by <code>connector(tls=True, context=None)</code>.</p>
-<p>On MicroPython this swaps the library's shipped default CA bundle for a
-project-specific one (useful for a private internal CA, or a rotated public
-root the shipped set does not yet include). Pass <code>None</code> to revert to the
-shipped bundle. No-op on CircuitPython and CPython, which get their trust
-roots from the firmware bundle or the host OS store.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1637,8 +1559,7 @@ roots from the firmware bundle or the host OS store.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>PEM-encoded CA bundle (single or multi-cert) as bytes or
-str, or <code>None</code> to revert to the shipped bundle.</p>
+                <p>PEM-encoded CA bundle as bytes or str, or <code>None</code> to revert to the shipped bundle.</p>
               </div>
             </td>
             <td>
