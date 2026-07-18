@@ -1,8 +1,9 @@
-"""Tests for CHU036: no subscript-dunder calls in device code.
+"""Tests for CHU036: no subscript-dunder attribute use in device code.
 
-Covers the flag on device library source and device-marked examples, the
-exemptions (super() override, host code, a noqa line, a bare definition),
-and the silent no-op when no trees exist.
+Covers the flag on device library source and device-marked examples in
+both the call and the bare-reference form, the exemptions (super()
+override, a self / cls receiver, host code, a noqa line, a bare
+definition), and the silent no-op when no trees exist.
 """
 
 from __future__ import annotations
@@ -43,6 +44,57 @@ def test_getitem_and_delitem_also_flagged(tmp_path: Path):
     body = "d = {}\nd.__getitem__('k')\nd.__delitem__('k')\n"
     _write(tmp_path / "libraries" / "kv" / "src" / "chumicro_kv" / "c.py", body)
     assert len(CHU036.check(tmp_path)) == 2
+
+
+def test_bare_reference_flagged(tmp_path: Path):
+    # Captured for later, never called inline — still an AttributeError on a
+    # built-in receiver on-device.
+    body = "flag = [False]\nhandler = flag.__setitem__\n"
+    _write(tmp_path / "libraries" / "mqtt" / "src" / "chumicro_mqtt" / "c.py", body)
+    findings = CHU036.check(tmp_path)
+    assert len(findings) == 1
+    assert findings[0].line == 2
+
+
+def test_self_receiver_not_flagged(tmp_path: Path):
+    # ``self`` binds a user-defined class, which exposes its own dunders
+    # on-device, so calling one on ``self`` is safe.
+    body = (
+        "class D:\n"
+        "    def __setitem__(self, k, v):\n"
+        "        self._d = v\n"
+        "    def copy_into(self, k, v):\n"
+        "        self.__setitem__(k, v)\n"
+    )
+    _write(tmp_path / "libraries" / "kv" / "src" / "chumicro_kv" / "c.py", body)
+    assert CHU036.check(tmp_path) == []
+
+
+def test_cls_receiver_not_flagged(tmp_path: Path):
+    body = (
+        "class D:\n"
+        "    def __setitem__(self, k, v):\n"
+        "        pass\n"
+        "    @classmethod\n"
+        "    def seed(cls, obj, k, v):\n"
+        "        cls.__setitem__(obj, k, v)\n"
+    )
+    _write(tmp_path / "libraries" / "kv" / "src" / "chumicro_kv" / "c.py", body)
+    assert CHU036.check(tmp_path) == []
+
+
+def test_attribute_of_self_still_flagged(tmp_path: Path):
+    # ``self.buf`` may be a built-in list; only a direct ``self`` receiver is
+    # exempt, not an attribute reached through it.
+    body = (
+        "class D:\n"
+        "    def store(self, k, v):\n"
+        "        self.buf.__setitem__(k, v)\n"
+    )
+    _write(tmp_path / "libraries" / "kv" / "src" / "chumicro_kv" / "c.py", body)
+    findings = CHU036.check(tmp_path)
+    assert len(findings) == 1
+    assert findings[0].line == 3
 
 
 def test_super_override_not_flagged(tmp_path: Path):

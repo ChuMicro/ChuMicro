@@ -1,4 +1,4 @@
-"""CHU036: device code must not call subscript dunders as attributes.
+"""CHU036: device code must not use subscript dunders as attributes.
 
 ``obj.__setitem__(k, v)`` / ``obj.__getitem__(k)`` / ``obj.__delitem__(k)``
 work on CPython, where every built-in type exposes its dunders as
@@ -8,6 +8,14 @@ attribute '__setitem__'``.  The idiom slips past ``verify-examples``,
 which only import-checks, so it surfaces only when the line runs on a
 device (a QoS-1 publish callback did exactly this and stormed both an
 RP2040 and an ESP32-S2).
+
+The call form ``x.__setitem__(k, v)`` and a bare reference ``h =
+x.__setitem__`` both fail: the ``AttributeError`` is raised at the
+attribute access, whether it is called inline or captured and called
+later.  A ``super()`` / ``self`` / ``cls`` receiver is exempt — those
+bind a user-defined class, which does expose its own dunders on-device
+(and if the class did not define the dunder the access would already
+fail on CPython, which the host suites catch).
 
 Use subscript syntax instead: ``obj[k] = v`` / ``obj[k]`` / ``del obj[k]``.
 When a lambda needs the assignment, promote it to a named function whose
@@ -65,7 +73,7 @@ def _is_device_file(scope_path: Path, text: str) -> bool:
 
 
 def _is_super_call(node: ast.expr) -> bool:
-    """Return whether *node* is a ``super()`` call."""
+    """Return whether *node* is a ``super()`` / ``super(Cls, self)`` call."""
     return (
         isinstance(node, ast.Call)
         and isinstance(node.func, ast.Name)
@@ -73,22 +81,47 @@ def _is_super_call(node: ast.expr) -> bool:
     )
 
 
-def _banned_calls(tree: ast.AST) -> list[int]:
-    """Return the line of every offending ``x.<banned dunder>(...)`` call.
+#: Receiver names that always bind a user-defined class, never a built-in.
+#: A user class (unlike list / dict / bytearray) exposes its own subscript
+#: dunders as attributes on CircuitPython / MicroPython, so ``self`` / ``cls``
+#: receivers are safe.  If the enclosing class did not define the dunder the
+#: access would already fail on CPython, so the host suites catch that.
+_SAFE_RECEIVER_NAMES = frozenset({"self", "cls"})
 
-    ``super().__setitem__(...)`` is excluded: inside a dunder override it
-    delegates to a user-defined parent method (not a built-in attribute),
-    which is the correct idiom and works on-device.
+
+def _has_safe_receiver(receiver: ast.expr) -> bool:
+    """Return whether *receiver*'s subscript dunders are attribute-accessible
+    on-device.
+
+    ``super()`` delegates to a user-defined parent method rather than a
+    built-in attribute; ``self`` / ``cls`` bind a user-defined class, which
+    exposes its own dunders.  Any other receiver — a bare name, a subscript,
+    another attribute — could be a built-in list / dict / bytearray, which
+    does not, so it stays in scope.
+    """
+    if _is_super_call(receiver):
+        return True
+    return isinstance(receiver, ast.Name) and receiver.id in _SAFE_RECEIVER_NAMES
+
+
+def _banned_dunder_lines(tree: ast.AST) -> list[int]:
+    """Return the line of every ``<receiver>.<banned dunder>`` reference.
+
+    Catches both the call form ``x.__setitem__(k, v)`` and a bare attribute
+    reference such as ``handler = x.__setitem__`` — both raise
+    ``AttributeError`` on a built-in receiver on-device, whether the
+    attribute is invoked immediately or captured and called later.
+    Receivers whose dunders are attribute-accessible on-device are excluded
+    (see :func:`_has_safe_receiver`).
     """
     lines: list[int] = []
     for node in ast.walk(tree):
         if (
-            isinstance(node, ast.Call)
-            and isinstance(node.func, ast.Attribute)
-            and node.func.attr in _BANNED_DUNDERS
-            and not _is_super_call(node.func.value)
+            isinstance(node, ast.Attribute)
+            and node.attr in _BANNED_DUNDERS
+            and not _has_safe_receiver(node.value)
         ):
-            lines.append(node.func.lineno)
+            lines.append(node.lineno)
     return lines
 
 
@@ -130,7 +163,7 @@ class CHU036_DeviceDunderSubscript(Rule):
 
         source_lines = text.splitlines()
         findings: list[Finding] = []
-        for line_number in _banned_calls(tree):
+        for line_number in _banned_dunder_lines(tree):
             line = (
                 source_lines[line_number - 1]
                 if 0 < line_number <= len(source_lines)
@@ -144,9 +177,10 @@ class CHU036_DeviceDunderSubscript(Rule):
                     line=line_number,
                     code=self.code,
                     message=(
-                        "device code calls a subscript dunder as an "
+                        "device code uses a subscript dunder as an "
                         "attribute; CircuitPython / MicroPython don't expose "
-                        "it on built-in types (AttributeError on-device). "
+                        "it on built-in types (AttributeError on-device, "
+                        "whether called inline or captured for later). "
                         "Use obj[key] = value / obj[key] / del obj[key]"
                     ),
                 )
