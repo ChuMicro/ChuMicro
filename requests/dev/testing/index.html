@@ -1035,47 +1035,20 @@ finishes with an <code>HttpError</code> and its <code>on_done</code> callback fi
 
     <div class="doc doc-contents first">
 
-        <p><code>FakeHttpClient</code> plus low-level helpers for the real-client suite.</p>
-<p>Two layers live here:</p>
-<ul>
-<li>
-<p>:class:<code>FakeHttpClient</code> — a scripted in-memory stand-in for an
-  :class:<code>HttpClient</code> constructor-injected dependency.  Mirrors the
-  production verb surface (<code>get</code> / <code>post</code> / <code>put</code> / <code>patch</code> /
-  <code>delete</code> / <code>check</code> / <code>handle</code> / <code>busy</code> / <code>on_oversized</code>)
-  but completes each request from a scripted response queue instead
-  of opening a socket.</p>
-</li>
-<li>
-<p>:func:<code>make_factory</code>, :func:<code>canned_response</code>, :func:<code>drive_until_done</code>,
-  :func:<code>make_client</code> — the lower-level fixtures the real-client
-  test suite uses to drive an actual :class:<code>HttpClient</code> against a
-  :class:<code>chumicro_sockets.testing.FakeSocket</code>.  Building blocks; pick
-  one per test depending on whether the deliverable is <em>response on
-  the wire</em> (low level) or <em>behavior of code that holds an HttpClient</em>
-  (FakeHttpClient).</p>
-</li>
-</ul>
-<p>Idiom — testing code that takes an HttpClient::</p>
-<div class="language-text highlight"><pre><span></span><code>from chumicro_requests.testing import FakeHttpClient
-
-fake = FakeHttpClient()
-fake.enqueue_response(status=200, body=b&#39;{&quot;temp_f&quot;: 72}&#39;)
-weather = WeatherFetcher(http_client=fake)
-weather.tick(now_ms=0)               # internally calls fake.get(...)
-weather.tick(now_ms=10)              # one handle() tick completes
-assert weather.last_temperature == 72
-assert fake.calls[0].url == &quot;http://api.example.test/weather&quot;
-</code></pre></div>
-<p>The fake completes the in-flight request on the next :meth:<code>handle</code>
-call after the request method (<code>get</code> / <code>post</code> / etc.), exercising
-the runner integration the same way the real client would.  Scripted
-entries are consumed FIFO; an empty queue raises :class:<code>HttpError</code>
-to surface "test forgot to enqueue a response" as a clear failure.</p>
-<p>This module is test-support — the <code>__chumicro_test_support__</code>
-marker below keeps it out of every bundle and every product / app /
-functional device deploy, so it never lands on a shipped board (the
-on-device unit sweep is the one path that stages it).</p>
+        <p><code>FakeHttpClient</code> plus low-level fixtures for the client test suite.</p>
+<p>Two layers live here. :class:<code>FakeHttpClient</code> is a scripted in-memory
+stand-in for an :class:<code>HttpClient</code> dependency: it mirrors the verb
+surface (<code>get</code> / <code>post</code> / ... / <code>check</code> / <code>handle</code> / <code>busy</code>)
+but completes each request from a scripted queue instead of opening a
+socket. :func:<code>make_factory</code>, :func:<code>canned_response</code>,
+:func:<code>drive_until_done</code>, and :func:<code>make_client</code> drive a real
+:class:<code>HttpClient</code> against a
+:class:<code>chumicro_sockets.testing.FakeSocket</code>.</p>
+<p>Script responses with :meth:<code>FakeHttpClient.enqueue_response</code> or
+:meth:<code>FakeHttpClient.enqueue_error</code>; each request pops one entry FIFO,
+and the next :meth:<code>FakeHttpClient.handle</code> tick completes the in-flight
+request. An empty queue raises :class:<code>HttpError</code> so a test that forgot
+to enqueue fails clearly.</p>
 
 
 
@@ -1455,13 +1428,10 @@ the production validation.</p>
 
         <p>Complete the in-flight request from the scripted outcome.</p>
 <p>Fires the handle's <code>on_done</code> callback (if registered) after
-the fake has returned to idle, matching the production client's
-post-completion behavior.  A streamed request's scripted body
-is installed as the handle's body source, so the code under
-test drains it via <code>read_body_into</code> after this tick (the
-production client publishes headers earlier, mid-body; the fake
-compresses the whole exchange into one tick, which preserves
-the caller's loop contract — reads return the body, then <code>0</code>).</p>
+the fake has returned to idle, matching the production client. A
+streamed request's scripted body is installed as the handle's
+body source, so the code under test drains it via
+<code>read_body_into</code> after this tick.</p>
 
 
     </div>

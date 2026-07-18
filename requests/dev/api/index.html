@@ -619,17 +619,6 @@
   
 </li>
         
-          <li class="md-nav__item">
-  <a href="#chumicro_requests.__getattr__" class="md-nav__link">
-    <span class="md-ellipsis">
-      <span class="md-typeset">
-        __getattr__
-      </span>
-    </span>
-  </a>
-  
-</li>
-        
       </ul>
     </nav>
   
@@ -987,17 +976,6 @@
   
 </li>
         
-          <li class="md-nav__item">
-  <a href="#chumicro_requests.__getattr__" class="md-nav__link">
-    <span class="md-ellipsis">
-      <span class="md-typeset">
-        __getattr__
-      </span>
-    </span>
-  </a>
-  
-</li>
-        
       </ul>
     </nav>
   
@@ -1042,13 +1020,11 @@
     <div class="doc doc-contents first">
 
         <p>Non-blocking HTTP/1.1 client for CircuitPython, MicroPython, and CPython.</p>
-<p>Built on :mod:<code>chumicro_sockets</code> (TCP + TLS) and :mod:<code>chumicro_timing</code>
-(ticks).  Tick-based runner contract — :meth:<code>HttpClient.check(now_ms)</code>
-reports whether work is pending and :meth:<code>handle(now_ms)</code> does one
-slice of progress per call, so an LED can keep blinking through a
-request in flight, a TLS handshake, or a stalled-peer timeout.</p>
-<p>Not supported: HTTP/1.1 keep-alive, gzip, cookies, streaming uploads,
-multi-in-flight requests on the same client.</p>
+<p>The client is tick-based: :meth:<code>HttpClient.check</code> reports whether work
+is pending and :meth:<code>handle</code> makes one slice of progress per call, so
+other tasks keep running while a request is in flight. v1 does not do
+keep-alive, gzip, cookies, streaming uploads, or several in-flight
+requests on one client.</p>
 
 
 
@@ -1085,17 +1061,9 @@ multi-in-flight requests on the same client.</p>
 
 
         <p>Header dict whose lookups fold to lowercase.</p>
-<p>HTTP/1.1 §3.2 requires header names to be case-insensitive on
-receipt (servers and clients alike).  We store the original-cased
-name (so callers see <code>Content-Type</code> and not <code>content-type</code>)
-keyed off the lowercased form.</p>
-<p>Multi-value headers (<code>Set-Cookie</code>, <code>Via</code>) join with <code>,</code>
-per RFC 7230 §3.2.2 when the same header arrives twice; v1 has
-no cookie jar so the join is informational.</p>
-<p>Implements <code>__getitem__</code> / <code>__setitem__</code> / <code>__contains__</code> /
-<code>__len__</code> / <code>__iter__</code> / <code>get</code> / <code>items</code> — enough for the
-response API surface.  Not a full :class:<code>MutableMapping</code> to keep
-the embedded footprint small.</p>
+<p>HTTP header names are case-insensitive, so lookups fold to lowercase
+while the original casing is preserved for callers. A header that
+arrives twice has its values joined with <code>,</code> per RFC 7230 §3.2.2.</p>
 
 
 
@@ -1200,8 +1168,8 @@ for repeated header lines (<code>Set-Cookie</code>, <code>Via</code>).</p>
 
 
         <p>Caller issued a request while another was still in flight.</p>
-<p>v1 of chumicro-requests is single-in-flight — the caller must wait
-for <code>handle.done</code> before issuing another.</p>
+<p>v1 is single-in-flight: wait for <code>handle.done</code> before issuing
+another.</p>
 
 
 
@@ -1264,12 +1232,9 @@ for <code>handle.done</code> before issuing another.</p>
 
 
         <p>Response body exceeded <code>max_body_bytes</code>.</p>
-<p>Raised when <code>when_oversized=DISCONNECT</code>.  The other policies
-(<code>DROP_SILENT</code>, <code>DROP_WITH_EVENT</code>) drop the payload silently
-or fire an event without raising.</p>
-<p><code>reported_length</code> is the projected total body size at the moment
-the cap was crossed — useful when the error is re-raised to the
-caller under <code>DISCONNECT</code>.</p>
+<p>Raised only under <code>when_oversized=DISCONNECT</code>; the other policies
+drop the payload without raising. <code>reported_length</code> is the
+projected total body size at the moment the cap was crossed.</p>
 
 
 
@@ -1318,10 +1283,9 @@ caller under <code>DISCONNECT</code>.</p>
 
 
         <p>Server sent bytes the spec doesn't allow.</p>
-<p>Malformed status line, header without a colon, body shorter than
-the advertised <code>Content-Length</code>, etc.  Always a peer or network
-bug — the right response is usually fail the request and surface
-the error to the caller.</p>
+<p>Malformed status line, a header without a colon, a body shorter than
+the advertised <code>Content-Length</code>, and the like. Always a peer or
+network bug.</p>
 
 
 
@@ -1467,26 +1431,17 @@ the error to the caller.</p>
 
 
         <p>Streaming HTTP/1.1 response parser.</p>
-<p>Fed raw bytes via :meth:<code>feed</code>; the state advances as soon as
-enough bytes have arrived.  Callers check :attr:<code>state</code> to know
-whether to keep feeding (anything other than <code>DONE</code>/<code>ERROR</code>)
-or stop (<code>DONE</code>).</p>
-<p>Body framing:</p>
-<ul>
-<li><code>Content-Length: N</code> — read exactly N bytes.</li>
-<li><code>Transfer-Encoding: chunked</code> — RFC 7230 §4.1 chunked decode.
-  Chunk-extensions and trailers are accepted and discarded.</li>
-<li>Neither header — read until the peer closes (signaled by
-  :meth:<code>feed_eof</code>).</li>
-</ul>
-<p>The <code>max_body_bytes</code> cap is enforced incrementally — once total
-body bytes pass the cap the parser raises (or drops, depending on
-<em>when_oversized</em>) on the first :meth:<code>feed</code> past the threshold.</p>
-<p>With <code>stream_body=True</code> the body is not accumulated at all:
-decoded bytes wait in a fixed staging window the consumer drains
-via :meth:<code>read_body_into</code>, the feeder bounds each :meth:<code>feed</code> by
-:meth:<code>body_free</code>, and <code>max_body_bytes</code> does not apply (the
-window is the RAM bound).</p>
+<p>Fed raw bytes via :meth:<code>feed</code>; the state advances as soon as enough
+bytes arrive, and callers watch :attr:<code>state</code> to know whether to keep
+feeding. Three body framings are decoded: <code>Content-Length: N</code> reads
+exactly N bytes, <code>Transfer-Encoding: chunked</code> does RFC 7230 §4.1
+chunked decode, and a response with neither reads until the peer
+closes (signaled by :meth:<code>feed_eof</code>).</p>
+<p>By default the body is buffered whole and capped at <code>max_body_bytes</code>.
+With <code>stream_body=True</code> it is instead staged in a fixed window the
+consumer drains via :meth:<code>read_body_into</code>; the feeder bounds each
+:meth:<code>feed</code> by :meth:<code>body_free</code>, and <code>max_body_bytes</code> does not
+apply.</p>
 
 
 
@@ -1523,11 +1478,8 @@ window is the RAM bound).</p>
     <div class="doc doc-contents ">
 
         <p>Body bytes received so far (final once :attr:<code>state</code> is <code>DONE</code>).</p>
-<p>Reads through the cached <code>_body_view</code> (zero-copy memoryview
-slice) and snapshots one <code>bytes</code> copy for the caller —
-<code>Response.text</code> calls <code>.decode()</code> on the result, which
-memoryview lacks.  In streamed-body mode this is only the
-staged, not-yet-consumed window, not the whole body.</p>
+<p>In streamed-body mode this is only the staged, not-yet-consumed
+window, not the whole body.</p>
 
     </div>
 
@@ -1547,7 +1499,7 @@ staged, not-yet-consumed window, not the whole body.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Construct a one-shot parser.</p>
+        <p>Construct the parser.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1570,9 +1522,8 @@ staged, not-yet-consumed window, not the whole body.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Hard cap on body size — bigger triggers the
-<code>WhenOversized</code> policy.  Not applied when
-<em>stream_body</em> is set: the staging window is the bound.</p>
+                <p>Cap on the buffered body size; not applied
+when <em>stream_body</em> is set.</p>
               </div>
             </td>
             <td>
@@ -1588,10 +1539,8 @@ staged, not-yet-consumed window, not the whole body.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Hard cap on the accumulated status-line +
-header (and chunk-frame) bytes staged before the body;
-exceeding it fails with :class:<code>HttpProtocolError</code> so a
-peer can't grow the staging buffer without bound.</p>
+                <p>Cap on the status-line and header bytes
+staged before the body.</p>
               </div>
             </td>
             <td>
@@ -1607,15 +1556,8 @@ peer can't grow the staging buffer without bound.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Optional caller-owned <code>bytearray</code> to use as
-the steady-state body buffer.  When provided (typically
-by <code>HttpClient</code> so the buffer survives across requests),
-the parser writes into it for any response that fits
-and rebinds to a geometrically-grown replacement when a
-write would overflow.  When <code>None</code>, the parser starts with
-an empty bytearray and grows on demand — fine for
-one-shot users, but per-request churn for long-lived
-clients.</p>
+                <p>Optional caller-owned <code>bytearray</code> reused as
+the steady-state body buffer.</p>
               </div>
             </td>
             <td>
@@ -1631,9 +1573,8 @@ clients.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Pre-cached <code>memoryview(body_buffer)</code>
-supplied by the caller to avoid the parser constructing
-one.  Required when <code>body_buffer</code> is provided.</p>
+                <p>Pre-cached <code>memoryview(body_buffer)</code>;
+required when <em>body_buffer</em> is given.</p>
               </div>
             </td>
             <td>
@@ -1649,14 +1590,8 @@ one.  Required when <code>body_buffer</code> is provided.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>When <code>True</code>, the body buffer becomes a
-fixed-capacity staging window instead of a whole-body
-accumulator: decoded body bytes wait in it until the
-consumer copies them out via :meth:<code>read_body_into</code>,
-and the feeder must bound each :meth:<code>feed</code> by
-:meth:<code>body_free</code> (overflowing the window latches an
-:class:<code>HttpError</code>).  A <code>None</code> <em>body_buffer</em> gets a
-fresh <code>DEFAULT_STREAM_BUFFER_SIZE</code> window.</p>
+                <p>When <code>True</code>, stage the body in a fixed window
+instead of buffering it whole.</p>
               </div>
             </td>
             <td>
@@ -1683,11 +1618,9 @@ fresh <code>DEFAULT_STREAM_BUFFER_SIZE</code> window.</p>
     <div class="doc doc-contents ">
 
         <p>Writable staging space in the streamed-body window, in bytes.</p>
-<p>The feeder must keep each :meth:<code>feed</code> at or under this value
-(decoded body bytes never exceed the wire bytes fed, for any
-of the three framings), so the window can never overflow.
-Meaningful in streamed-body mode; whole-body mode grows on
-demand instead.</p>
+<p>The feeder must keep each :meth:<code>feed</code> at or under this value so
+the window can never overflow. Meaningful only in streamed-body
+mode.</p>
 
 
     </div>
@@ -1706,12 +1639,10 @@ demand instead.</p>
     <div class="doc doc-contents ">
 
         <p>Copy staged body bytes into caller-owned <em>buffer</em>; return the count.</p>
-<p>Copies up to <code>len(buffer)</code> bytes from the staging window via
-slice-assign (no allocation) and advances the read cursor.
-Returns <code>0</code> when nothing is staged.  A full drain resets both
-cursors so the whole window is writable again — the producer
-stalls (<code>body_free() == 0</code>) until the consumer drains, rather
-than paying a compaction copy.</p>
+<p>Copies up to <code>len(buffer)</code> bytes from the staging window and
+advances the read cursor. Returns <code>0</code> when nothing is staged. A
+full drain resets both cursors so the whole window is writable
+again.</p>
 
 
     </div>
@@ -1730,8 +1661,8 @@ than paying a compaction copy.</p>
     <div class="doc doc-contents ">
 
         <p>Drop every staged body byte and reset both cursors.</p>
-<p>Used for response bodies that are decoded but never delivered —
-a redirect hop's body in streamed mode.</p>
+<p>Used for a body that is decoded but never delivered, like a
+redirect hop's body in streamed mode.</p>
 
 
     </div>
@@ -1750,12 +1681,10 @@ a redirect hop's body in streamed mode.</p>
     <div class="doc doc-contents ">
 
         <p>Append <em>chunk</em> to the parser's buffer and advance the state.</p>
-<p>A protocol / oversize failure latches :attr:<code>state</code> to <code>ERROR</code>
-and stores the exception on :attr:<code>error</code> rather than raising
-here — the driving client checks the state and re-raises
-:attr:<code>error</code>.  (The three non-ASCII line-decode failures are the
-only paths that raise directly, for the client's request-line
-error path.)</p>
+<p>A protocol or oversize failure latches :attr:<code>state</code> to <code>ERROR</code>
+and stores the exception on :attr:<code>error</code> instead of raising, so
+the driving client checks the state and re-raises. (The non-ASCII
+line-decode paths are the only ones that raise directly.)</p>
 
 
     </div>
@@ -1774,11 +1703,10 @@ error path.)</p>
     <div class="doc doc-contents ">
 
         <p>Signal that the peer closed the connection.</p>
-<p>For a <code>Content-Length</code>-framed response this is a protocol
-error if the body was short.  For a length-unknown response
-(no <code>Content-Length</code>, no <code>Transfer-Encoding</code>) this is the
-normal end-of-body signal.  Mid-chunk it's always an error —
-chunked encoding is self-terminating.</p>
+<p>For a <code>Content-Length</code>-framed response a short body is a
+protocol error; for a length-unknown response this is the normal
+end-of-body signal; mid-chunk it is always an error (chunked
+encoding is self-terminating).</p>
 
 
     </div>
@@ -1828,7 +1756,7 @@ chunked encoding is self-terminating.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>HTTP verb — <code>"GET"</code>, <code>"POST"</code>, etc.  Sent verbatim.</p>
+                <p>HTTP verb (<code>"GET"</code>, <code>"POST"</code>, etc.), sent verbatim.</p>
               </div>
             </td>
             <td>
@@ -1861,7 +1789,7 @@ include the port via <code>"host:port"</code> if non-default).</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Request-target — typically the URL path + query.</p>
+                <p>Request-target, typically the URL path + query.</p>
               </div>
             </td>
             <td>
@@ -1989,16 +1917,8 @@ here rather than encoded differently on each runtime.</p>
     <div class="doc doc-contents ">
 
         <p>Extract the <code>charset=...</code> parameter from a Content-Type header.</p>
-<p>Per RFC 7231 §3.1.1.5 the Content-Type value may carry a
-<code>charset</code> parameter — for example <code>text/html; charset=utf-8</code>
-or <code>application/json; charset="ISO-8859-1"</code>.  We tokenize on
-semicolons, look for a <code>charset=</code> token (case-insensitive),
-strip optional surrounding quotes per RFC 7231 §3.1.1.1, and
-fall back to <code>"utf-8"</code> when no charset is present or the
-header itself is missing.</p>
-<p>Defaulting to UTF-8 matches RFC 8259 §8.1 for <code>application/json</code>
-and aligns with current web practice for <code>text/*</code> even though
-historical RFC 2616 defaulted text to ISO-8859-1.</p>
+<p>Falls back to <code>"utf-8"</code> when the header is missing or carries no
+charset.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -2093,13 +2013,7 @@ historical RFC 2616 defaulted text to ISO-8859-1.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>HTTP or HTTPS URL.  Examples:
-<code>parse_url("http://example.com/")</code> returns
-<code>("http", "example.com", 80, "/")</code>.
-<code>parse_url("http://example.com:8080/path?q=1")</code> returns
-<code>("http", "example.com", 8080, "/path?q=1")</code>.
-<code>parse_url("https://example.com")</code> returns
-<code>("https", "example.com", 443, "/")</code>.</p>
+                <p>HTTP or HTTPS URL, e.g. <code>"http://example.com:8080/path?q=1"</code>.</p>
               </div>
             </td>
             <td>
@@ -2125,7 +2039,7 @@ historical RFC 2616 defaulted text to ISO-8859-1.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>4-tuple <code>(scheme, host, port, path)</code>.  <em>path</em> always starts</p>
+                <p>4-tuple <code>(scheme, host, port, path)</code>. <em>path</em> always starts</p>
               </div>
             </td>
           </tr>
@@ -2183,14 +2097,10 @@ missing, or port is not a base-10 integer.</p>
     <div class="doc doc-contents ">
 
         <p>Resolve a <code>Location</code> header value against the current request URL.</p>
-<p>Handles the three RFC 7231 §7.1.2 reference shapes:</p>
-<ul>
-<li><strong>Absolute</strong> — <code>http://...</code> / <code>https://...</code>: returned verbatim.</li>
-<li><strong>Absolute-path</strong> — starts with <code>/</code>: keeps current scheme + host</li>
-<li>port, replaces path + query.</li>
-<li><strong>Relative-path</strong> — anything else: keeps current scheme + host +
-  port, replaces the last path segment.</li>
-</ul>
+<p>Handles the three RFC 7231 §7.1.2 shapes: an absolute URL is returned
+verbatim, an absolute path (leading <code>/</code>) keeps the current scheme,
+host, and port, and a relative path additionally replaces the last
+path segment.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -2284,31 +2194,6 @@ missing, or port is not a base-10 integer.</p>
           </tr>
       </tbody>
     </table>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h3 id="chumicro_requests.__getattr__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="fm">__getattr__</span><span class="p">(</span><span class="n">name</span><span class="p">)</span></code>
-
-<a href="#chumicro_requests.__getattr__" class="headerlink" title="Permanent link">&para;</a></h3>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Lazy-load the client half on first access (PEP 562).</p>
-<p><code>client</code> is ~25 KB of source.  A board that imports
-<code>chumicro_requests</code> for its wire helpers (URL parsing, header dict,
-request encoding) but never builds an <code>HttpClient</code> shouldn't pin
-the client's compiled code objects in RAM; the module loads on
-the first access to one of its symbols.  Constructing the
-client at startup keeps that one-time import cost on a fresh heap
-(see the guide).</p>
 
 
     </div>
