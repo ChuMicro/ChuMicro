@@ -734,11 +734,7 @@
     <div class="doc doc-contents first">
 
         <p>Unified wifi supervisor across CircuitPython, MicroPython, and CPython.</p>
-<p>Exports :class:<code>WifiService</code> (the reconnect state machine), :class:<code>WifiConfig</code>
-(typed connection settings), and :class:<code>WifiState</code> (state-name constants); test
-code imports :class:<code>chumicro_wifi.testing.FakeWifi</code>. This library is the sole
-wifi supervisor on every runtime: no <code>CIRCUITPY_WIFI_*</code> keys, no firmware-level
-auto-reconnect.</p>
+<p>Exports :class:<code>WifiService</code>, :class:<code>WifiConfig</code>, and :class:<code>WifiState</code>.</p>
 
 
 
@@ -797,7 +793,7 @@ auto-reconnect.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>AP SSID to associate with. Required.</p>
+                <p>AP SSID to associate with.</p>
               </div>
             </td>
             <td>
@@ -813,7 +809,7 @@ auto-reconnect.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>WPA passphrase. Required.</p>
+                <p>WPA passphrase.</p>
               </div>
             </td>
             <td>
@@ -845,8 +841,7 @@ auto-reconnect.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Maximum wait for a single <code>connect()</code>
-attempt, in milliseconds. Defaults to 15 s.</p>
+                <p>Max wait for a single connect attempt, in ms (default 15 s).</p>
               </div>
             </td>
             <td>
@@ -862,8 +857,7 @@ attempt, in milliseconds. Defaults to 15 s.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Initial delay between reconnect
-attempts after a link drop. Defaults to 1 s.</p>
+                <p>Initial delay between reconnect attempts (default 1 s).</p>
               </div>
             </td>
             <td>
@@ -879,8 +873,7 @@ attempts after a link drop. Defaults to 1 s.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Cap on the exponential reconnect
-backoff. Defaults to 60 s.</p>
+                <p>Cap on the exponential reconnect backoff (default 60 s).</p>
               </div>
             </td>
             <td>
@@ -896,13 +889,7 @@ backoff. Defaults to 60 s.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Consecutive failed attempts (the initial connect
-plus every reconnect since the last link) before the service
-enters the terminal <code>FAILED</code> state. <code>None</code> (default)
-retries forever with capped backoff, which is what lets an
-unattended device ride out an outage without a board restart.
-Set a finite cap only when exhaustion should escalate, since
-<code>FAILED</code> is terminal and recovery then needs a restart.</p>
+                <p>Failed attempts before terminal <code>FAILED</code>; <code>None</code> (default) retries forever.</p>
               </div>
             </td>
             <td>
@@ -918,9 +905,7 @@ Set a finite cap only when exhaustion should escalate, since
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Whether to leave the radio's power-save mode enabled.
-<code>False</code> (default) disables it on backends that support the
-knob (Pi Pico W CYW43) and is ignored on backends that don't.</p>
+                <p>Whether to leave the radio's power-save mode enabled (default <code>False</code>).</p>
               </div>
             </td>
             <td>
@@ -936,11 +921,7 @@ knob (Pi Pico W CYW43) and is ignored on backends that don't.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Radio transmit power in dBm, or <code>None</code> (default)
-to leave the radio at its firmware default. Set a reduced
-value (e.g. <code>15</code>) for boards unstable at full TX power; the
-adapter applies it before the connect attempt, and a build
-without the knob ignores it.</p>
+                <p>Radio transmit power in dBm, or <code>None</code> (default) for the firmware default.</p>
               </div>
             </td>
             <td>
@@ -987,8 +968,6 @@ without the knob ignores it.</p>
     <div class="doc doc-contents ">
 
         <p>Build a <code>WifiConfig</code> from the flat runtime config.</p>
-<p>Reads <code>wifi.ssid</code> and <code>wifi.password</code> (required) plus any
-present optional <code>wifi.*</code> keys from <em>config</em>.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1011,8 +990,7 @@ present optional <code>wifi.*</code> keys from <em>config</em>.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>A :class:<code>chumicro_config.RuntimeConfig</code> (typically
-<code>chumicro_config.config</code>) or plain flat dict.</p>
+                <p>A :class:<code>chumicro_config.RuntimeConfig</code> or plain flat dict.</p>
               </div>
             </td>
             <td>
@@ -1038,8 +1016,7 @@ present optional <code>wifi.*</code> keys from <em>config</em>.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p><code>wifi.ssid</code> or
-<code>wifi.password</code> is absent from <em>config</em>.</p>
+                <p><code>wifi.ssid</code> or <code>wifi.password</code> is absent.</p>
               </div>
             </td>
           </tr>
@@ -1049,9 +1026,7 @@ present optional <code>wifi.*</code> keys from <em>config</em>.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p><em>config</em> is <code>None</code> or
-not a mapping. Use :meth:<code>try_from_config</code> for the soft
-path.</p>
+                <p><em>config</em> is <code>None</code> or not a mapping.</p>
               </div>
             </td>
           </tr>
@@ -1079,9 +1054,6 @@ path.</p>
     <div class="doc doc-contents ">
 
         <p>Soft-load a <code>WifiConfig</code>, returning <code>None</code> when not configured.</p>
-<p>Returns <code>None</code> whenever :meth:<code>from_config</code> would raise:
-<em>config</em> is <code>None</code>, isn't a mapping, or is missing a required
-<code>wifi.*</code> key. Use it as a "skip if not configured" gate.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1104,8 +1076,7 @@ path.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>A :class:<code>chumicro_config.RuntimeConfig</code>, plain flat
-dict, or <code>None</code>.</p>
+                <p>A :class:<code>chumicro_config.RuntimeConfig</code>, plain flat dict, or <code>None</code>.</p>
               </div>
             </td>
             <td>
@@ -1131,17 +1102,7 @@ dict, or <code>None</code>.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>A <code>WifiConfig</code> instance, or <code>None</code> when the section is</p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                  <code><a class="autorefs autorefs-internal" href="./#chumicro_wifi.WifiConfig">WifiConfig</a> | None</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>not configured.</p>
+                <p>A <code>WifiConfig</code> instance, or <code>None</code> when the section is not configured.</p>
               </div>
             </td>
           </tr>
@@ -1177,11 +1138,6 @@ dict, or <code>None</code>.</p>
 
 
         <p>Drives a wifi adapter through connect, monitor, and reconnect.</p>
-<p>On CircuitPython the connect step blocks: <code>wifi.radio.connect</code> has no
-non-blocking variant, so a connect attempt driven from <code>handle()</code>
-stalls every co-scheduled runner service for up to
-<code>connect_timeout_ms</code> (default 15 s). MicroPython and CPython connect
-without stalling the loop, so keep <code>connect_timeout_ms</code> modest on CP.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1220,9 +1176,7 @@ without stalling the loop, so keep <code>connect_timeout_ms</code> modest on CP.
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Optional :class:<code>WifiAdapter</code>. When <code>None</code> (default),
-:func:<code>_select_adapter</code> picks the runtime-appropriate one.
-Tests inject a :class:<code>FakeWifiAdapter</code>.</p>
+                <p>Optional :class:<code>WifiAdapter</code>; <code>None</code> (default) selects the runtime-appropriate one.</p>
               </div>
             </td>
             <td>
@@ -1238,10 +1192,7 @@ Tests inject a :class:<code>FakeWifiAdapter</code>.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Optional tick source exposing <code>ticks_ms</code>, <code>ticks_diff</code>,
-and <code>ticks_add</code> (the <code>chumicro_timing.ticks</code> shape).
-Defaults to that submodule (real clock); tests pass
-<code>FakeTicks</code> from <code>chumicro_timing.testing</code>.</p>
+                <p>Optional <code>chumicro_timing.ticks</code>-shaped source; defaults to the real clock.</p>
               </div>
             </td>
             <td>
@@ -1308,9 +1259,6 @@ Defaults to that submodule (real clock); tests pass
     <div class="doc doc-contents ">
 
         <p>Assigned IPv4 string, or <code>None</code> when not connected.</p>
-<p>Allocates on each access (the substrate builds a fresh string or
-tuple), so read it once after a connect and stash the result rather
-than polling it inside a tick loop.</p>
 
     </div>
 
@@ -1353,8 +1301,7 @@ than polling it inside a tick loop.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Called as <code>callback(old_state, new_state)</code>.
-Multiple callbacks fire in registration order.</p>
+                <p>Called as <code>callback(old_state, new_state)</code> in registration order.</p>
               </div>
             </td>
             <td>
@@ -1381,9 +1328,6 @@ Multiple callbacks fire in registration order.</p>
     <div class="doc doc-contents ">
 
         <p>Return <code>True</code> when the service has work to do this tick.</p>
-<p>Work is due when a connected link has dropped (time to reconnect)
-or when the backoff timer for the next connect attempt has elapsed.
-Returns <code>False</code> in the terminal <code>FAILED</code> state.</p>
 
 
     </div>
@@ -1402,8 +1346,6 @@ Returns <code>False</code> in the terminal <code>FAILED</code> state.</p>
     <div class="doc doc-contents ">
 
         <p>Drive the state machine forward.</p>
-<p>If <code>check</code> returned <code>False</code> and <code>handle</code> is called
-anyway, returns without changing state.</p>
 
 
     </div>
@@ -1434,8 +1376,6 @@ anyway, returns without changing state.</p>
 
 
         <p>State-name constants for :class:<code>WifiService</code>.</p>
-<p>Plain strings because :mod:<code>enum</code> is unavailable on some MicroPython
-boards. Compare via <code>state == WifiState.CONNECTED</code>.</p>
 
 
 

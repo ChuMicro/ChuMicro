@@ -1114,9 +1114,7 @@
     <div class="doc doc-contents first">
 
         <p>Test helpers for libraries that depend on <code>chumicro-wifi</code>.</p>
-<p>Hosts the test fakes (:class:<code>FakeWifi</code>, :class:<code>FakeWifiAdapter</code>) that
-downstream libraries drive instead of hand-rolling a wifi mock, plus the
-CPython-default adapter <code>WifiService</code> falls back to off-device.</p>
+<p>Hosts the test fakes :class:<code>FakeWifi</code> and :class:<code>FakeWifiAdapter</code>.</p>
 
 
 
@@ -1155,15 +1153,6 @@ CPython-default adapter <code>WifiService</code> falls back to off-device.</p>
 
 
         <p>In-memory adapter with explicit hooks for test scenarios.</p>
-<p>Drive the connection lifecycle with :meth:<code>set_connect_outcome</code> /
-:meth:<code>set_connect_outcomes</code> (what <code>connect</code> returns or raises),
-:meth:<code>drop_link</code> / :meth:<code>restore_link</code> (model a flapping link), and
-:meth:<code>set_deferred_link</code> (model a non-blocking MicroPython join). Every
-adapter call is recorded in <code>self.calls</code> for assertions.</p>
-<p><code>connect_blocks</code> defaults to <code>True</code> (blocking substrate: a
-<code>connect() == False</code> is a settled failure). Flip it with
-:meth:<code>set_connect_blocks</code> or :meth:<code>set_deferred_link</code> to model the
-non-blocking MicroPython substrate.</p>
 
 
 
@@ -1242,8 +1231,7 @@ non-blocking MicroPython substrate.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p><code>True</code> (success), <code>False</code> (clean refusal), or an
-exception class to raise.</p>
+                <p><code>True</code> (success), <code>False</code> (clean refusal), or an exception class to raise.</p>
               </div>
             </td>
             <td>
@@ -1292,9 +1280,7 @@ exception class to raise.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Iterable of outcome values consumed in order by
-successive :meth:<code>connect</code> calls. After the queue drains,
-falls back to the default from :meth:<code>set_connect_outcome</code>.</p>
+                <p>Iterable of outcome values consumed in order, then falls back to the default.</p>
               </div>
             </td>
             <td>
@@ -1321,10 +1307,6 @@ falls back to the default from :meth:<code>set_connect_outcome</code>.</p>
     <div class="doc doc-contents ">
 
         <p>Toggle the blocking (CP) vs non-blocking (MP) <code>connect</code> model.</p>
-<p><code>True</code> (default): a <code>connect() == False</code> is a settled failure.
-<code>False</code>: it means "join dispatched, still in flight", so the
-service polls :meth:<code>is_linked</code> over its <code>connect_timeout_ms</code>
-window before counting a failure.</p>
 
 
     </div>
@@ -1343,11 +1325,6 @@ window before counting a failure.</p>
     <div class="doc doc-contents ">
 
         <p>Model a non-blocking join that links after <em>link_after</em> polls.</p>
-<p>Puts the adapter in non-blocking mode (<code>connect_blocks = False</code>):
-the next :meth:<code>connect</code> dispatches and returns <code>False</code>, and
-:meth:<code>is_linked</code> reports <code>True</code> on the <em>link_after</em>-th poll,
-matching a real MicroPython <code>wlan.connect()</code> that settles over
-seconds.</p>
 
 
     </div>
@@ -1384,8 +1361,6 @@ seconds.</p>
     <div class="doc doc-contents ">
 
         <p>Simulate the AP coming back on its own (no <code>connect</code> call).</p>
-<p>Complement to :meth:<code>drop_link</code>: flips :meth:<code>is_linked</code> back to
-<code>True</code> so tests can model a flapping link.</p>
 
 
     </div>
@@ -1418,9 +1393,6 @@ seconds.</p>
 
 
         <p><code>WifiService</code> wrapping a :class:<code>FakeWifiAdapter</code> for tests.</p>
-<p>Bundles the service and adapter so tests don't wire them by hand, and
-re-exposes the adapter's test hooks (<code>set_connect_outcome</code>,
-<code>drop_link</code>, <code>calls</code>) on the wrapper.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1443,8 +1415,7 @@ re-exposes the adapter's test hooks (<code>set_connect_outcome</code>,
             </td>
             <td>
               <div class="doc-md-description">
-                <p>A tick source, typically a
-:class:<code>chumicro_timing.testing.FakeTicks</code> the test advances.</p>
+                <p>A tick source, typically a :class:<code>chumicro_timing.testing.FakeTicks</code>.</p>
               </div>
             </td>
             <td>
@@ -1460,8 +1431,7 @@ re-exposes the adapter's test hooks (<code>set_connect_outcome</code>,
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Optional :class:<code>WifiConfig</code>. When <code>None</code>, a fast-backoff
-default is used (ssid="testnet", password="password").</p>
+                <p>Optional :class:<code>WifiConfig</code>; <code>None</code> uses a fast-backoff default.</p>
               </div>
             </td>
             <td>
@@ -1505,7 +1475,7 @@ default is used (ssid="testnet", password="password").</p>
 
     <div class="doc doc-contents ">
 
-        <p>List of recorded adapter calls. Assertion target for tests.</p>
+        <p>List of recorded adapter calls.</p>
 
     </div>
 
@@ -1634,8 +1604,6 @@ default is used (ssid="testnet", password="password").</p>
     <div class="doc doc-contents ">
 
         <p>Run one runner-style <code>check</code> + <code>handle</code> cycle.</p>
-<p>Condenses the inner loop a <code>Runner</code> would run so tests don't need
-to wire a full <code>Runner</code>.</p>
 
 
     </div>
