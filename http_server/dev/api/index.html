@@ -1087,11 +1087,7 @@
     <div class="doc doc-contents first">
 
         <p>Non-blocking HTTP/1.1 server for CircuitPython, MicroPython, and CPython.</p>
-<p>Tick-based: :meth:<code>HttpServer.check</code> reports whether work is pending and
-:meth:<code>HttpServer.handle</code> does one slice of progress per call, so the
-caller's loop keeps running other work through a slow or stalled client.
-Keep-alive, chunked request bodies, WebSockets, cookies, and multipart
-upload are not supported.</p>
+<p>The entry point is :class:<code>HttpServer</code>.</p>
 
 
 
@@ -1128,9 +1124,6 @@ upload are not supported.</p>
 
 
         <p>Header dict whose lookups fold to lowercase.</p>
-<p>Stores the original-cased name (callers see <code>Content-Type</code>, not
-<code>content-type</code>) keyed off the lowercased form. A header that arrives
-twice has its values joined with <code>,</code> per RFC 7230 §3.2.2.</p>
 
 
 
@@ -1201,7 +1194,6 @@ twice has its values joined with <code>,</code> per RFC 7230 §3.2.2.</p>
     <div class="doc doc-contents ">
 
         <p>Append <em>value</em> to an existing header, joining with <code>,</code>.</p>
-<p>A new name behaves like :meth:<code>__setitem__</code>.</p>
 
 
     </div>
@@ -1232,10 +1224,6 @@ twice has its values joined with <code>,</code> per RFC 7230 §3.2.2.</p>
 
 
         <p>Streaming HTTP/1.1 request parser.</p>
-<p>Fed raw bytes via :meth:<code>feed</code>; the state advances as soon as enough
-bytes arrive. Callers check :attr:<code>state</code> to know whether to keep
-feeding (anything other than <code>DONE</code> / <code>ERROR</code>) or stop. Chunked
-request bodies are not supported.</p>
 
 
 
@@ -1314,8 +1302,7 @@ request bodies are not supported.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Hard cap on body size; a bigger body raises
-:class:<code>ServerOversizedError</code> (413).</p>
+                <p>Body-size cap; a bigger body is rejected with 413.</p>
               </div>
             </td>
             <td>
@@ -1331,9 +1318,7 @@ request bodies are not supported.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Hard cap on the request-line length; a
-longer line without a CRLF raises
-:class:<code>ServerRequestLineTooLargeError</code> (414).</p>
+                <p>Request-line cap; a longer line without a CRLF is rejected with 414.</p>
               </div>
             </td>
             <td>
@@ -1349,8 +1334,7 @@ longer line without a CRLF raises
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Hard cap on the total header-section bytes;
-crossing it raises :class:<code>ServerHeadersTooLargeError</code> (431).</p>
+                <p>Header-section cap; crossing it is rejected with 431.</p>
               </div>
             </td>
             <td>
@@ -1366,9 +1350,7 @@ crossing it raises :class:<code>ServerHeadersTooLargeError</code> (431).</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Optional caller-owned <code>bytearray</code> reused as a
-steady-state body buffer; <code>None</code> allocates a sized-to-fit
-buffer per body.</p>
+                <p>Optional caller-owned bytearray reused per body; <code>None</code> allocates per body.</p>
               </div>
             </td>
             <td>
@@ -1384,8 +1366,7 @@ buffer per body.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Pre-cached <code>memoryview(body_buffer)</code>; made
-for you when omitted.</p>
+                <p>Pre-cached memoryview of <em>body_buffer</em>; made for you when omitted.</p>
               </div>
             </td>
             <td>
@@ -1452,7 +1433,7 @@ for you when omitted.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Signal that the peer closed.  Mid-headers is a protocol error.</p>
+        <p>Signal that the peer closed.</p>
 
 
     </div>
@@ -1483,9 +1464,6 @@ for you when omitted.</p>
 
 
         <p>Streaming request parser states.</p>
-<p>Forward-only::</p>
-<p>REQUEST_LINE -&gt; HEADERS -&gt; BODY -&gt; DONE
-                               -&gt; ERROR (any state)</p>
 
 
 
@@ -1613,8 +1591,6 @@ for you when omitted.</p>
 
 
         <p>A sender-controlled allocation hit a documented cap.</p>
-<p>Carries :attr:<code>status_code</code> (the 413 / 414 / 431 the connection layer
-responds with) so the catch site need not hard-code it.</p>
 
 
 
@@ -1663,7 +1639,6 @@ responds with) so the catch site need not hard-code it.</p>
 
 
         <p>Request <code>Content-Length</code> exceeds <code>max_body_bytes</code> (413).</p>
-<p>:attr:<code>reported_length</code> is the length the client declared.</p>
 
 
 
@@ -1786,8 +1761,6 @@ responds with) so the catch site need not hard-code it.</p>
     <div class="doc doc-contents ">
 
         <p>Extract the <code>charset=...</code> parameter from a Content-Type header.</p>
-<p>Falls back to <code>"utf-8"</code> when no charset is present or the header is
-missing.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1860,8 +1833,6 @@ missing.</p>
     <div class="doc doc-contents ">
 
         <p>Parse a <code>foo=bar&amp;baz=qux</code> query string into a header-shaped dict.</p>
-<p>Keys fold to lowercase (so <code>a=1&amp;A=2</code> merge into one entry) and
-percent-encoding is not decoded. Repeated keys join with <code>,</code>.</p>
 
 
     </div>
@@ -1880,8 +1851,6 @@ percent-encoding is not decoded. Repeated keys join with <code>,</code>.</p>
     <div class="doc doc-contents ">
 
         <p>Split a request-target into <code>(path, raw_query)</code>.</p>
-<p><em>raw_query</em> is everything after the first <code>?</code>, or <code>""</code> when there
-is none.</p>
 
 
     </div>
@@ -1912,12 +1881,7 @@ A server that never streams never loads it.</p>
     <div class="doc doc-contents first">
 
         <p>Streamed response bodies for chumicro-http-server (opt-in submodule).</p>
-<p>A handler returns a :class:<code>StreamingResponse</code> carrying a byte source, and
-the server drains it to the client across ticks. Import it explicitly::</p>
-<div class="language-text highlight"><pre><span></span><code>from chumicro_http_server.streaming import build_streaming_response
-</code></pre></div>
-<p>The base server loads this module only when a handler actually streams, so
-a server that never streams never pays for its framing code.</p>
+<p>The entry points are :class:<code>StreamingResponse</code> and :func:<code>build_streaming_response</code>.</p>
 
 
 
@@ -1954,11 +1918,6 @@ a server that never streams never pays for its framing code.</p>
 
 
         <p>A response whose body a byte source produces incrementally.</p>
-<p>Build one with :func:<code>build_streaming_response</code> and return it from a
-handler to serve a body far larger than the heap (a sensor-log dump, a
-file off storage) without materializing it. The server drains
-:attr:<code>source</code> across ticks, framing each fill as <code>Content-Length</code>
-body bytes or a chunked chunk.</p>
 
 
 
@@ -2002,8 +1961,6 @@ body bytes or a chunked chunk.</p>
     <div class="doc doc-contents ">
 
         <p>Build a :class:<code>StreamingResponse</code> served from a byte <em>source</em>.</p>
-<p>Return the result from a handler to stream a body too large to buffer.
-The server pulls one staging-window fill per tick from <em>source</em>.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -2042,10 +1999,7 @@ The server pulls one staging-window fill per tick from <em>source</em>.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Fill-a-buffer callable <code>source(buffer) -&gt; int</code>. Each call
-writes up to <code>len(buffer)</code> body bytes and returns <code>n &gt; 0</code>
-(wrote <code>buffer[:n]</code>), <code>0</code> (nothing ready this tick, the
-server retries), or :data:<code>SOURCE_EOF</code> (<code>-1</code>, end of body).</p>
+                <p>Fill callable <code>source(buffer) -&gt; int</code>; bytes written, 0 if none ready, or SOURCE_EOF.</p>
               </div>
             </td>
             <td>
@@ -2061,9 +2015,7 @@ server retries), or :data:<code>SOURCE_EOF</code> (<code>-1</code>, end of body)
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Total when known, framed as <code>Content-Length</code>; the
-source must then produce exactly this many bytes before
-:data:<code>SOURCE_EOF</code>. <code>None</code> (default) frames chunked.</p>
+                <p>Total to frame as <code>Content-Length</code>; <code>None</code> (default) frames chunked.</p>
               </div>
             </td>
             <td>
@@ -2079,8 +2031,7 @@ source must then produce exactly this many bytes before
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Optional extra headers. Do not set <code>Content-Length</code> /
-<code>Transfer-Encoding</code> / <code>Connection</code>; the server owns framing.</p>
+                <p>Optional extra headers; do not set Content-Length / Transfer-Encoding / Connection.</p>
               </div>
             </td>
             <td>
@@ -2130,9 +2081,6 @@ source must then produce exactly this many bytes before
     <div class="doc doc-contents ">
 
         <p>Serialize a :class:<code>StreamingResponse</code>'s header block to wire bytes.</p>
-<p>Emits the status line, the framing header (<code>Content-Length</code> when a
-total was declared, <code>Transfer-Encoding: chunked</code> otherwise),
-<code>Connection: close</code>, and the caller's headers, but no body.</p>
 
 
 <p><span class="doc-section-title">Raises:</span></p>
@@ -2150,8 +2098,7 @@ total was declared, <code>Transfer-Encoding: chunked</code> otherwise),
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The reason phrase or a header carries a CR,
-LF, or NUL.</p>
+                <p>The reason phrase or a header carries a CR, LF, or NUL.</p>
               </div>
             </td>
           </tr>
@@ -2175,10 +2122,6 @@ LF, or NUL.</p>
     <div class="doc doc-contents ">
 
         <p>Encode <em>response</em>'s headers onto <em>conn</em> and arm the source drain.</p>
-<p>The header block flushes through the same <code>_drive_send</code> path as a
-buffered response; once it drains, <code>_drive_send</code> hands off to
-:func:<code>drive_stream_body</code>. An unencodable header block falls back to
-the canned 500, safe because no body byte was sent yet.</p>
 
 
     </div>
@@ -2196,12 +2139,7 @@ the canned 500, safe because no body byte was sent yet.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Drain <em>conn</em>'s byte source to its socket, framed, up to
-<code>send_budget</code> bytes this tick.</p>
-<p>The per-tick send budget bounds bytes sent per connection, so one
-stream can't starve others. A partial send or EAGAIN parks with the
-framing intact, and the source is polled for the next fill only once
-the current one fully drains.</p>
+        <p>Drain <em>conn</em>'s byte source to its socket, framed, up to <code>send_budget</code> bytes this tick.</p>
 
 
     </div>
