@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="../img/favicon.png">
-      <meta name="generator" content="zensical-0.0.33">
+      <meta name="generator" content="zensical-0.0.39">
     
     
       
@@ -32,7 +32,7 @@
       
         
       
-      <link rel="stylesheet" href="../assets/stylesheets/modern/main.53a7feaf.min.css">
+      <link rel="stylesheet" href="../assets/stylesheets/modern/main.1e981d71.min.css">
       
         
           
@@ -318,9 +318,9 @@
         <li class="md-nav__item">
   <a href="#overview" class="md-nav__link">
     <span class="md-ellipsis">
-      
+      <span class="md-typeset">
         Overview
-      
+      </span>
     </span>
   </a>
   
@@ -329,9 +329,9 @@
         <li class="md-nav__item">
   <a href="#functoolspartial" class="md-nav__link">
     <span class="md-ellipsis">
-      
+      <span class="md-typeset">
         functools.partial
-      
+      </span>
     </span>
   </a>
   
@@ -341,9 +341,9 @@
           <li class="md-nav__item">
   <a href="#basic-usage" class="md-nav__link">
     <span class="md-ellipsis">
-      
+      <span class="md-typeset">
         Basic usage
-      
+      </span>
     </span>
   </a>
   
@@ -352,9 +352,9 @@
           <li class="md-nav__item">
   <a href="#freezing-keyword-arguments" class="md-nav__link">
     <span class="md-ellipsis">
-      
+      <span class="md-typeset">
         Freezing keyword arguments
-      
+      </span>
     </span>
   </a>
   
@@ -363,9 +363,9 @@
           <li class="md-nav__item">
   <a href="#wiring-callbacks-with-frozen-context" class="md-nav__link">
     <span class="md-ellipsis">
-      
+      <span class="md-typeset">
         Wiring callbacks with frozen context
-      
+      </span>
     </span>
   </a>
   
@@ -374,9 +374,9 @@
           <li class="md-nav__item">
   <a href="#inspecting-a-partial-object" class="md-nav__link">
     <span class="md-ellipsis">
-      
+      <span class="md-typeset">
         Inspecting a partial object
-      
+      </span>
     </span>
   </a>
   
@@ -390,9 +390,9 @@
         <li class="md-nav__item">
   <a href="#platform-notes" class="md-nav__link">
     <span class="md-ellipsis">
-      
+      <span class="md-typeset">
         Platform notes
-      
+      </span>
     </span>
   </a>
   
@@ -401,20 +401,9 @@
         <li class="md-nav__item">
   <a href="#examples" class="md-nav__link">
     <span class="md-ellipsis">
-      
+      <span class="md-typeset">
         Examples
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#whats-new" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        What's new
-      
+      </span>
     </span>
   </a>
   
@@ -498,9 +487,9 @@
         <li class="md-nav__item">
   <a href="#overview" class="md-nav__link">
     <span class="md-ellipsis">
-      
+      <span class="md-typeset">
         Overview
-      
+      </span>
     </span>
   </a>
   
@@ -509,9 +498,9 @@
         <li class="md-nav__item">
   <a href="#functoolspartial" class="md-nav__link">
     <span class="md-ellipsis">
-      
+      <span class="md-typeset">
         functools.partial
-      
+      </span>
     </span>
   </a>
   
@@ -521,9 +510,9 @@
           <li class="md-nav__item">
   <a href="#basic-usage" class="md-nav__link">
     <span class="md-ellipsis">
-      
+      <span class="md-typeset">
         Basic usage
-      
+      </span>
     </span>
   </a>
   
@@ -532,9 +521,9 @@
           <li class="md-nav__item">
   <a href="#freezing-keyword-arguments" class="md-nav__link">
     <span class="md-ellipsis">
-      
+      <span class="md-typeset">
         Freezing keyword arguments
-      
+      </span>
     </span>
   </a>
   
@@ -543,9 +532,9 @@
           <li class="md-nav__item">
   <a href="#wiring-callbacks-with-frozen-context" class="md-nav__link">
     <span class="md-ellipsis">
-      
+      <span class="md-typeset">
         Wiring callbacks with frozen context
-      
+      </span>
     </span>
   </a>
   
@@ -554,9 +543,9 @@
           <li class="md-nav__item">
   <a href="#inspecting-a-partial-object" class="md-nav__link">
     <span class="md-ellipsis">
-      
+      <span class="md-typeset">
         Inspecting a partial object
-      
+      </span>
     </span>
   </a>
   
@@ -570,9 +559,9 @@
         <li class="md-nav__item">
   <a href="#platform-notes" class="md-nav__link">
     <span class="md-ellipsis">
-      
+      <span class="md-typeset">
         Platform notes
-      
+      </span>
     </span>
   </a>
   
@@ -581,20 +570,9 @@
         <li class="md-nav__item">
   <a href="#examples" class="md-nav__link">
     <span class="md-ellipsis">
-      
+      <span class="md-typeset">
         Examples
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#whats-new" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        What's new
-      
+      </span>
     </span>
   </a>
   
@@ -681,12 +659,21 @@
 <p>The public attributes match CPython's <code>functools.partial</code>:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_compat.functools</span><span class="w"> </span><span class="kn">import</span> <span class="n">partial</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">p</span> <span class="o">=</span> <span class="n">partial</span><span class="p">(</span><span class="nb">int</span><span class="p">,</span> <span class="s2">&quot;ff&quot;</span><span class="p">,</span> <span class="n">base</span><span class="o">=</span><span class="mi">16</span><span class="p">)</span>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="nb">print</span><span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">func</span><span class="p">)</span>       <span class="c1"># &lt;class &#39;int&#39;&gt;</span>
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="nb">print</span><span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">args</span><span class="p">)</span>        <span class="c1"># (&#39;ff&#39;,)</span>
-</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="nb">print</span><span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">keywords</span><span class="p">)</span>    <span class="c1"># {&#39;base&#39;: 16}</span>
-</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="nb">print</span><span class="p">(</span><span class="n">p</span><span class="p">())</span>           <span class="c1"># 255</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="k">def</span><span class="w"> </span><span class="nf">connect</span><span class="p">(</span><span class="n">host</span><span class="p">,</span> <span class="n">port</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">tls</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">host</span><span class="si">}</span><span class="s2">:</span><span class="si">{</span><span class="n">port</span><span class="si">}</span><span class="s2"> tls=</span><span class="si">{</span><span class="n">tls</span><span class="si">}</span><span class="s2">&quot;</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="n">p</span> <span class="o">=</span> <span class="n">partial</span><span class="p">(</span><span class="n">connect</span><span class="p">,</span> <span class="s2">&quot;broker.local&quot;</span><span class="p">,</span> <span class="n">tls</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="nb">print</span><span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">func</span><span class="p">)</span>       <span class="c1"># &lt;function connect ...&gt;</span>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="nb">print</span><span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">args</span><span class="p">)</span>        <span class="c1"># (&#39;broker.local&#39;,)</span>
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="nb">print</span><span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">keywords</span><span class="p">)</span>    <span class="c1"># {&#39;tls&#39;: True}</span>
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="nb">print</span><span class="p">(</span><span class="n">p</span><span class="p">(</span><span class="mi">1883</span><span class="p">))</span>       <span class="c1"># broker.local:1883 tls=True</span>
 </span></code></pre></div>
+<blockquote>
+<p>The example uses a pure-Python function so it runs identically on
+every runtime.  Passing a keyword to a C builtin like <code>int(x, base=16)</code>
+works on CPython but raises <code>TypeError</code> on MicroPython / CircuitPython,
+whose builtins take those arguments positionally only.</p>
+</blockquote>
 <h2 id="platform-notes">Platform notes<a class="headerlink" href="#platform-notes" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -702,11 +689,11 @@
 </tr>
 <tr>
 <td>MicroPython</td>
-<td>Pure-Python polyfill with <code>__slots__</code> for minimal memory</td>
+<td>Pure-Python polyfill</td>
 </tr>
 <tr>
 <td>CircuitPython</td>
-<td>Pure-Python polyfill with <code>__slots__</code> for minimal memory</td>
+<td>Pure-Python polyfill</td>
 </tr>
 </tbody>
 </table>
@@ -735,18 +722,13 @@
 </tr>
 </tbody>
 </table>
-<h2 id="whats-new">What's new<a class="headerlink" href="#whats-new" title="Permanent link">&para;</a></h2>
-<!-- Add entries for user-visible changes when bumping VERSION.
-     One bullet per change. Internal refactors don't need entries.
-     At stable promotion, collapse/edit as needed. -->
-
-<ul>
-<li><strong>0.1.23</strong>: CI and documentation improvements.</li>
-</ul>
 <hr />
 <div class="chumicro-footer">
 <p><a href="../">← Home</a></p>
-<p><a href="https://github.com/ChuMicro/ChuMicro/tree/main/libraries/compat">Source</a> · <a href="https://pypi.org/project/chumicro-compat/">PyPI</a> · <a href="https://github.com/ChuMicro/ChuMicro-Bundle">Bundle</a> · <a href="https://github.com/ChuMicro/ChuMicro-Bundle-Experimental">Experimental Bundle</a></p>
+<p><a href="https://github.com/ChuMicro/ChuMicro/tree/main/libraries/compat">Source</a> · \
+<a href="https://pypi.org/project/chumicro-compat/">PyPI</a> · \
+<a href="https://github.com/ChuMicro/ChuMicro-Bundle">Bundle</a> · \
+<a href="https://github.com/ChuMicro/ChuMicro-Bundle-Experimental">Experimental Bundle</a></p>
 </div>
 
 
@@ -802,7 +784,7 @@
       <script id="__config" type="application/json">{"annotate":null,"base":"..","features":[],"search":"../assets/javascripts/workers/search.e2d2d235.min.js","tags":null,"translations":{"clipboard.copied":"Copied to clipboard","clipboard.copy":"Copy to clipboard","search.result.more.one":"1 more on this page","search.result.more.other":"# more on this page","search.result.none":"No matching documents","search.result.one":"1 matching document","search.result.other":"# matching documents","search.result.placeholder":"Type to start searching","search.result.term.missing":"Missing","select.version":"Select version"},"version":{"default":["stable","experimental"],"provider":"mike"}}</script>
     
     
-      <script src="../assets/javascripts/bundle.63456bd9.min.js"></script>
+      <script src="../assets/javascripts/bundle.dbc0afdc.min.js"></script>
       
     
   </body>
