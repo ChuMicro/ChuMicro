@@ -823,9 +823,7 @@ Import them the same way:</p>
     <div class="doc doc-contents first">
 
         <p>Test helpers for libraries that consume chumicro-logging.</p>
-<p><code>RecordingHandler</code> captures records for assertions and <code>FailingHandler</code>
-raises on every emit, so downstream libraries can test against logger output
-without writing one-off mocks.</p>
+<p>Provides <code>RecordingHandler</code> and <code>FailingHandler</code>.</p>
 
 
 
@@ -884,8 +882,7 @@ without writing one-off mocks.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Minimum level captured. Defaults to <code>0</code> so every record
-passes through regardless of the logger threshold.</p>
+                <p>Minimum level captured; defaults to <code>0</code> so every record passes.</p>
               </div>
             </td>
             <td>
@@ -1043,8 +1040,7 @@ passes through regardless of the logger threshold.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The exception instance to raise. Defaults to
-<code>RuntimeError("handler boom")</code>.</p>
+                <p>Exception instance to raise; defaults to <code>RuntimeError("handler boom")</code>.</p>
               </div>
             </td>
             <td>

@@ -988,10 +988,6 @@
     <div class="doc doc-contents first">
 
         <p>Leveled logging for chumicro libraries, with no chumicro dependencies.</p>
-<p>A lightweight subset of the standard library <code>logging</code> that runs the same on
-CircuitPython, MicroPython, and CPython: integer levels, named loggers, a
-handler protocol, and a buffered handler that defers I/O to the runner tick so
-emission never blocks a hot path.</p>
 
 
 
@@ -1028,10 +1024,6 @@ emission never blocks a hot path.</p>
 
 
         <p>Runner-shaped handler that buffers records and flushes on <code>handle</code>.</p>
-<p><code>emit</code> only appends to a bounded buffer, so a library on a hot tick can
-log without paying for I/O. When the buffer is full the oldest record is
-dropped and <code>dropped</code> is incremented, on the assumption an operator wants
-to see recent activity when the log rate outruns the flush cadence.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1054,8 +1046,7 @@ to see recent activity when the log rate outruns the flush cadence.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>A handler exposing <code>emit(level, name, message)</code>
-(typically a <code>StreamHandler</code>).</p>
+                <p>A handler exposing <code>emit(level, name, message)</code>, typically a <code>StreamHandler</code>.</p>
               </div>
             </td>
             <td>
@@ -1196,7 +1187,7 @@ to see recent activity when the log rate outruns the flush cadence.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Buffer the record. Drop the oldest if full.</p>
+        <p>Buffer the record, dropping the oldest if full.</p>
 
 
     </div>
@@ -1237,8 +1228,7 @@ to see recent activity when the log rate outruns the flush cadence.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Current tick value (unused; required by the
-runner contract).</p>
+                <p>Current tick value; unused but required by the runner contract.</p>
               </div>
             </td>
             <td>
@@ -1264,7 +1254,7 @@ runner contract).</p>
 
     <div class="doc doc-contents ">
 
-        <p>Drain the buffer to the downstream handler. Returns flushed count.</p>
+        <p>Drain the buffer to the downstream handler and return the count flushed.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1287,8 +1277,7 @@ runner contract).</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Current tick value (unused; required by the
-runner contract).</p>
+                <p>Current tick value; unused but required by the runner contract.</p>
               </div>
             </td>
             <td>
@@ -1327,9 +1316,6 @@ runner contract).</p>
 
 
         <p>A named logger with a level threshold and a list of handlers.</p>
-<p>Records below the configured level are dropped before any handler is
-consulted, and a handler that raises never escapes the logger: the failure
-increments <code>handler_errors</code> instead.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1448,7 +1434,7 @@ increments <code>handler_errors</code> instead.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Attach a handler. No-op if already attached.</p>
+        <p>Attach a handler, unless it is already attached.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1497,7 +1483,7 @@ increments <code>handler_errors</code> instead.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Detach a handler. No-op if not attached.</p>
+        <p>Detach a handler if it is currently attached.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1547,8 +1533,6 @@ increments <code>handler_errors</code> instead.</p>
     <div class="doc doc-contents ">
 
         <p>Return <code>True</code> if <em>level</em> would be emitted by this logger.</p>
-<p>Useful for skipping expensive message construction when the
-record would be dropped anyway.</p>
 
 
     </div>
@@ -1567,10 +1551,6 @@ record would be dropped anyway.</p>
     <div class="doc doc-contents ">
 
         <p>Emit <em>message</em> at <em>level</em> to every attached handler.</p>
-<p>With <em>args</em>, the record is built as <code>message % args</code> only after the
-level gate, so a dropped record never pays for the interpolation. A
-format mismatch is caught, rendered as a visible fallback, and counted
-in <code>handler_errors</code> rather than raised into the caller.</p>
 
 
     </div>
@@ -1691,8 +1671,6 @@ in <code>handler_errors</code> rather than raised into the caller.</p>
 
 
         <p>Synchronous handler writing formatted records to a writable stream.</p>
-<p>On microcontrollers the stream typically resolves to the serial console
-via <code>sys.stdout</code>; on CPython any file-like object works.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1747,8 +1725,7 @@ via <code>sys.stdout</code>; on CPython any file-like object works.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Callable rendering <code>(level, name, message)</code> to a string.
-Defaults to <code>default_formatter</code>.</p>
+                <p>Renders <code>(level, name, message)</code> to a string; defaults to <code>default_formatter</code>.</p>
               </div>
             </td>
             <td>
@@ -1791,7 +1768,6 @@ Defaults to <code>default_formatter</code>.</p>
     <div class="doc doc-contents ">
 
         <p>Format the record and write it to the stream.</p>
-<p>Records below the handler's level are dropped silently.</p>
 
 
     </div>
