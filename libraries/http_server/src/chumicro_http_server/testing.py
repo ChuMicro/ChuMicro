@@ -1,14 +1,7 @@
 """Test fakes and builders for ``chumicro-http-server``.
 
-Two host-only helpers for tests that wire ``HttpServer`` against
-pre-baked HTTP/1.1 request bytes:
-
-- :class:`FakeListener` — listener stub that hands out queued
-  :class:`~chumicro_sockets.testing.FakeSocket` instances on
-  ``accept()``.  Raises ``OSError(errno.EAGAIN, "would block")`` when
-  the queue is empty so the server's EAGAIN path runs unchanged.
-- :func:`request_bytes` — build a raw HTTP/1.1 request byte string
-  (start line + optional ``Content-Length`` + extra headers + body).
+Host-only helpers for tests that wire ``HttpServer`` against pre-baked
+HTTP/1.1 request bytes: :class:`FakeListener` and :func:`request_bytes`.
 """
 
 __chumicro_test_support__ = True
@@ -20,13 +13,10 @@ import errno
 class FakeListener:
     """Listener stub that hands out queued connections on ``accept()``.
 
-    Construct with a list of ``(FakeSocket, peer)`` tuples — the same
-    ``(socket, address)`` shape a real ``accept()`` returns, which the
-    server unpacks.  Each ``accept()`` call pops the next tuple; an empty
-    queue raises ``OSError(errno.EAGAIN, "would block")`` matching the
-    EAGAIN shape the real listener uses on this host (``11`` on Linux /
-    MP / CP, ``35`` on macOS CPython) so the server's would-block
-    handling exercises unchanged.
+    Construct with a list of ``(FakeSocket, peer)`` tuples, the shape a
+    real ``accept()`` returns. Each ``accept()`` pops the next tuple; an
+    empty queue raises ``OSError(errno.EAGAIN, ...)`` so the server's
+    would-block path runs unchanged.
     """
 
     def __init__(self, connections):

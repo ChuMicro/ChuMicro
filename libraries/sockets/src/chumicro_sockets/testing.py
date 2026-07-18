@@ -1,33 +1,12 @@
-"""``FakeSocket`` — drives downstream tests without a real network.
+"""In-memory socket test doubles: ``FakeSocket``, ``FakeUDPSocket``, ``FakeSocketConnector``.
 
-Implements the full TCP client socket surface
-(``send`` / ``recv_into`` / ``close`` / ``setblocking`` / ``settimeout``)
-against in-memory bytearrays.  Three knobs cover almost every test
-pattern downstream libs need:
-
-* :attr:`FakeSocket.sent` — bytes written via :meth:`send`.  Tests
-  assert against this to confirm correct wire-format encoding.
-* :meth:`enqueue_recv` — script bytes the next :meth:`recv_into`
-  call(s) will return.  Multiple chunks queue in FIFO order.
-* :meth:`enqueue_eagain_for_send` / :meth:`enqueue_eagain_for_recv` —
-  script the next :meth:`send` or :meth:`recv_into` to raise
-  ``OSError(errno.EAGAIN)``.  Lets tests exercise non-blocking
-  partial-completion paths.
-
-Idiom for downstream libs::
-
-    from chumicro_sockets.testing import FakeSocket
-
-    sock = FakeSocket()
-    sock.enqueue_recv(b"\\x20\\x02\\x00\\x00")  # MQTT CONNACK
-    client = MQTTClient(sock)
-    client.connect()
-    assert sock.sent.startswith(b"\\x10")        # CONNECT packet wire prefix
-
-The fake's behavior is deterministic: sends always succeed (modulo
-scripted EAGAINs), recv_into reads from the queue head, and close
-flips a flag so subsequent operations raise the same ``OSError`` a
-real closed socket would.
+They implement the cross-runtime socket surface against in-memory buffers so
+downstream tests exercise wire-format encoding, non-blocking partial-completion,
+and the multi-tick connect path without a real network. ``enqueue_recv`` scripts
+future reads, ``enqueue_eagain_for_send`` / ``enqueue_eagain_for_recv`` script
+``OSError(EAGAIN)`` raises, and ``sent`` records what was written. Behavior is
+deterministic: sends succeed except where an EAGAIN is scripted, reads come from
+the queue head, and ``close`` makes later operations raise like a real socket.
 """
 
 __chumicro_test_support__ = True
@@ -36,12 +15,9 @@ __chumicro_test_support__ = True
 import errno
 from collections import deque
 
-# Upper bound on enqueued bytes / datagrams a test can script before
-# the deque starts dropping the oldest entry.  No real test comes
-# close — but MicroPython's ``deque`` requires a positive ``maxlen``
-# (no unbounded form), so we pick a value that's effectively infinite
-# for test purposes while staying with the deque primitive that
-# library code uses (``patterns.md`` §"FIFO queues use ``deque``").
+# Cap on enqueued entries before the deque drops the oldest. No real test comes
+# close, but MicroPython's ``deque`` requires a positive ``maxlen`` (no
+# unbounded form), so this is a large stand-in for infinity.
 _FAKE_SOCKET_QUEUE_MAXLEN = 1024
 
 # Poll-interest bits for ``FakeSocketConnector.io_interest``; mirror
@@ -67,17 +43,12 @@ class FakeSocket:
         self.closed: bool = False
         #: Reflects the most recent :meth:`setblocking` / :meth:`settimeout`.
         self.blocking: bool = True
-        # ``deque((), maxlen)`` — positional form is required on
-        # MicroPython.  We deliberately exercise the same primitive
-        # the production libraries use (mqtt, websockets, events…)
-        # so any future MP-specific deque quirks surface here too.
+        # ``deque((), maxlen)``: positional form required on MicroPython. Uses
+        # the production libraries' primitive so MP deque quirks surface here.
         self._recv_queue: deque[bytes] = deque((), _FAKE_SOCKET_QUEUE_MAXLEN)
-        # Peer-close (clean FIN) is separate from own-side ``close()``.
-        # Set by :meth:`simulate_peer_close`.  When True, ``recv_into``
-        # returns 0 once the queue drains — matching real non-blocking
-        # ``recv_into`` semantics on CPython / MicroPython / CircuitPython
-        # where a connected non-blocking socket returns 0 only on a
-        # peer FIN, never on a quiet line (which raises EAGAIN).
+        # Peer-close (clean FIN), separate from own-side ``close()`` and set by
+        # :meth:`simulate_peer_close`. When True, ``recv_into`` returns 0 once
+        # the queue drains, matching a real non-blocking socket on a peer FIN.
         self._peer_closed: bool = False
         self._send_eagains: int = 0
         self._recv_eagains: int = 0
@@ -87,10 +58,8 @@ class FakeSocket:
     def enqueue_recv(self, chunk: bytes) -> None:
         """Append *chunk* to the recv-side queue.
 
-        Each :meth:`recv_into` call pops one chunk off the head and
-        copies up to ``nbytes`` bytes from it.  If ``nbytes`` is
-        smaller than the chunk, the leftover bytes are pushed back
-        on the head — mimics how a real socket fragments reads.
+        Each :meth:`recv_into` pops one chunk off the head; a short read pushes
+        the leftover back on the head, mimicking real socket fragmentation.
         """
         if not isinstance(chunk, (bytes, bytearray, memoryview)):
             raise TypeError("enqueue_recv expects bytes-like")
@@ -105,14 +74,11 @@ class FakeSocket:
         self._recv_eagains += int(count)
 
     def simulate_peer_close(self) -> None:
-        """Simulate a clean peer FIN — once the recv queue drains,
+        """Simulate a clean peer FIN: once the recv queue drains,
         :meth:`recv_into` returns 0 instead of raising EAGAIN.
 
-        Separate from :meth:`close` (which models own-side close and
-        makes every subsequent operation raise ``OSError(EBADF)``).
-        Use this to exercise the broker-graceful-disconnect / peer-FIN
-        path without losing the ability to script remaining bytes
-        (e.g. a final DISCONNECT packet) before the FIN.
+        Separate from :meth:`close`, which models own-side close and makes every
+        later operation raise ``OSError(EBADF)``.
         """
         self._peer_closed = True
 
@@ -129,17 +95,12 @@ class FakeSocket:
         return len(view)
 
     def recv_into(self, buffer: bytearray, nbytes: int = 0) -> int:
-        """Pop the queue head, copy into *buffer*, return bytes written.
+        """Pop the queue head into *buffer* and return the number of bytes written.
 
-        Matches real non-blocking ``recv_into`` semantics on CPython,
-        MicroPython lwIP, and CircuitPython lwIP:
-
-        * Queue non-empty: return ``min(capacity, chunk_length)`` bytes.
-        * Queue empty AND :meth:`simulate_peer_close` was called: return
-          0 (clean peer FIN).
-        * Queue empty otherwise: raise ``OSError(EAGAIN)`` (no data this
-          tick on a still-connected socket).
-        * Socket :meth:`close`'d: raise ``OSError(EBADF)``.
+        Matches real non-blocking ``recv_into``: returns the copied count when
+        the queue has data, returns 0 once the queue drains after
+        :meth:`simulate_peer_close`, and otherwise raises ``OSError(EAGAIN)``
+        (or ``OSError(EBADF)`` once closed).
         """
         self._raise_if_closed()
         if self._recv_eagains > 0:
@@ -173,39 +134,25 @@ class FakeSocket:
 
     def _raise_if_closed(self) -> None:
         if self.closed:
-            # Stdlib raises OSError(EBADF=9) on a closed fd.  We pick
-            # the same shape so downstream error-handling code that
-            # checks ``except OSError`` works identically.
+            # Stdlib raises OSError(EBADF) on a closed fd; match that shape so
+            # downstream ``except OSError`` handling works identically.
             raise OSError(errno.EBADF, "socket closed")
 
 
 class FakeUDPSocket:
     """In-memory UDP socket for tests.
 
-    Datagram-shaped counterpart of :class:`FakeSocket`.  Exposes the
-    cross-runtime UDP surface (``sendto`` / ``recvfrom_into`` /
-    ``close`` / ``setblocking`` / ``settimeout`` / ``getsockname``);
-    plus :meth:`enqueue_recv` scripts future ``recvfrom_into`` returns
-    and :attr:`sent` exposes the byte log of every ``sendto`` call as
-    ``(data, host, port)`` tuples.
-
-    Idiom for downstream tests::
-
-        from chumicro_sockets.testing import FakeUDPSocket
-
-        sock = FakeUDPSocket()
-        sock.enqueue_recv(b"reply", host="10.0.0.5", port=123)
-        client = NTPClient(socket=sock)
-        client.send_request("10.0.0.5")
-
-        assert sock.sent[0] == (b"<48-byte NTP request>", "10.0.0.5", 123)
+    The datagram counterpart of :class:`FakeSocket`. Exposes the cross-runtime
+    UDP surface (``sendto`` / ``recvfrom_into`` / ``close`` / ``setblocking`` /
+    ``settimeout`` / ``getsockname``); :meth:`enqueue_recv` scripts future
+    ``recvfrom_into`` returns and :attr:`sent` records every ``sendto`` as a
+    ``(data, host, port)`` tuple.
 
     Args:
-        bind_host: Reported by :meth:`getsockname` as the locally-bound
-            host.  Defaults to ``"0.0.0.0"``.
-        bind_port: Reported by :meth:`getsockname` as the locally-bound
-            port.  Defaults to ``54321`` (a stand-in for an OS-assigned
-            ephemeral port).
+        bind_host: Reported by :meth:`getsockname` as the bound host. Defaults
+            to ``"0.0.0.0"``.
+        bind_port: Reported by :meth:`getsockname` as the bound port. Defaults
+            to ``54321`` (a stand-in for an OS-assigned ephemeral port).
     """
 
     def __init__(
@@ -218,7 +165,7 @@ class FakeUDPSocket:
         self.closed: bool = False
         #: Reflects the most recent :meth:`setblocking` / :meth:`settimeout`.
         self.blocking: bool = True
-        # ``deque((), maxlen)`` — see FakeSocket for the reasoning.
+        # ``deque((), maxlen)``: see FakeSocket for the reasoning.
         self._recv_queue: deque = deque((), _FAKE_SOCKET_QUEUE_MAXLEN)
         self._send_eagains: int = 0
         self._recv_eagains: int = 0
@@ -236,11 +183,9 @@ class FakeUDPSocket:
     ) -> None:
         """Append a datagram to the recv-side queue.
 
-        The next :meth:`recvfrom_into` call pops it off the head and
-        copies up to ``len(buffer)`` bytes from it (truncates the rest
-        — matches real UDP semantics).  *host* and *port* identify the
-        sender; tests assert against them when their protocol cares
-        who replied.
+        The next :meth:`recvfrom_into` pops it off the head and copies up to
+        ``len(buffer)`` bytes, truncating the rest as real UDP does. *host* and
+        *port* identify the sender for tests that assert on who replied.
         """
         if not isinstance(data, (bytes, bytearray, memoryview)):
             raise TypeError("enqueue_recv expects bytes-like")
@@ -267,15 +212,11 @@ class FakeUDPSocket:
         return len(view)
 
     def recvfrom_into(self, buffer: bytearray, nbytes: int = 0) -> tuple:
-        """Pop a queued datagram into *buffer*, return ``(n, (host, port))``.
+        """Pop a queued datagram into *buffer* and return ``(n, (host, port))``.
 
-        Raises ``OSError(EAGAIN)`` when the queue is empty, matching a
-        real non-blocking UDP socket on CircuitPython / MicroPython: no
-        datagram ready is a would-block, not a zero-length read.  A
-        genuine zero-length datagram (enqueued via ``enqueue_recv(b"")``)
-        still returns ``0``.  Datagrams larger than ``nbytes`` (or
-        ``len(buffer)`` when ``nbytes=0``) are truncated; the unread tail
-        is discarded, matching real UDP.
+        Raises ``OSError(EAGAIN)`` when the queue is empty (a would-block, not a
+        zero-length read); a genuine empty datagram still returns ``0``.
+        Datagrams larger than the buffer are truncated, matching real UDP.
         """
         self._raise_if_closed()
         if self._recv_eagains > 0:
@@ -314,36 +255,22 @@ class FakeUDPSocket:
 class FakeSocketConnector:
     """Scriptable test double for :class:`SocketConnector`.
 
-    Same observable surface as the real connector — ``state``,
-    ``socket``, ``last_error``, ``io_*``, ``check`` / ``handle`` /
-    ``tick`` / ``next_deadline`` / ``cancel`` — but transitions are
-    driven by an in-test script instead of real network I/O.
+    Exposes the same observable surface as the real connector (``state``,
+    ``socket``, ``last_error``, the ``io_*`` and ``check`` / ``handle`` /
+    ``tick`` / ``next_deadline`` / ``cancel`` methods), but transitions come
+    from a scripted list of action strings instead of real I/O. Each ``tick``
+    (or ``handle``) consumes one action:
 
-    Construct with a list of step actions; each call to ``tick`` (or
-    ``handle``) consumes one action.  Actions are short strings:
+    * ``"dns_ok"``: ``awaiting_dns`` to ``awaiting_tcp``.
+    * ``"tcp_pending"``: stay in ``awaiting_tcp``.
+    * ``"tcp_ok"``: ``awaiting_tcp`` to ``awaiting_tls`` (if ``tls``) or ``ready``.
+    * ``"tls_pending"``: stay in ``awaiting_tls`` and narrow ``io_interest`` to read.
+    * ``"tls_ok"``: ``awaiting_tls`` to ``ready``.
+    * ``"fail:<message>"``: transition to ``failed`` with *message* as ``last_error``.
 
-    * ``"dns_ok"`` — ``awaiting_dns`` → ``awaiting_tcp``.
-    * ``"tcp_pending"`` — stay in ``awaiting_tcp`` (simulates an
-      EINPROGRESS round-trip).
-    * ``"tcp_ok"`` — ``awaiting_tcp`` → ``awaiting_tls`` (if ``tls``)
-      or ``ready``.
-    * ``"tls_pending"`` — stay in ``awaiting_tls`` (simulates a
-      handshake round that wants more data; narrows ``io_interest``
-      to read-only, matching the real connector after a
-      ``SSLWantReadError`` step).
-    * ``"tls_ok"`` — ``awaiting_tls`` → ``ready``.
-    * ``"fail:<message>"`` — transition to ``failed`` with the given
-      message as ``last_error``.
-
-    The fake's ``socket`` attribute holds the :class:`FakeSocket`
-    passed in at construction (or a fresh one if none given) from
-    ``awaiting_tcp`` onward — mirroring the real connector, which
-    builds its socket at TCP-connect entry and keeps it live through
-    ``ready``.  ``failed`` and ``cancel`` clear it back to ``None``.
-
-    Use this in consumer-side unit tests (``MQTTClient`` against the
-    multi-tick connect path).  Real-network tests live in the adapter
-    test files.
+    The ``socket`` attribute holds the :class:`FakeSocket` from ``awaiting_tcp``
+    onward and clears to ``None`` on ``failed`` / ``cancel``, mirroring the real
+    connector.
     """
 
     def __init__(
@@ -364,29 +291,21 @@ class FakeSocketConnector:
         self.state = "awaiting_dns"
         self.socket: FakeSocket | None = None
         self.last_error: Exception | None = None
-        # Mirrors the real connector: read+write until the first
-        # handshake step names a direction ("tls_pending" narrows to
-        # read, the direction a real WantRead step records).
+        # Mirrors the real connector: read+write until the first handshake step
+        # names a direction ("tls_pending" narrows to read).
         self._tls_interest = _IO_READ | _IO_WRITE
 
     @property
     def io_socket(self) -> object | None:
-        """The connector's socket-ish object for ``Runner.wait``, or ``None``.
-
-        Returns :attr:`socket` as-is once built, matching the real
-        connector; the runner unwraps any ``.sock`` adapter wrapper at
-        the poller.  ``None`` at ``awaiting_dns`` before the socket
-        exists and after ``failed`` / ``cancel`` clear it.
-        """
+        """The socket for ``Runner.wait`` once built, or ``None`` before and after."""
         if self.socket is None:
             return None
         return self.socket
 
     def io_interest(self, now_ms: int) -> int:  # noqa: ARG002 (runner contract)
-        """Poll-interest bitmask matching the real ``SocketConnector``:
-        TLS handshake wants the direction the last step named
-        (read+write before the first step), TCP-connect wants write,
-        other phases register nothing."""
+        """Poll-interest bitmask matching the real ``SocketConnector``: the
+        handshake direction during ``awaiting_tls``, write during
+        ``awaiting_tcp``, nothing else."""
         if self.state == "awaiting_tls":
             return self._tls_interest
         if self.state == "awaiting_tcp":
@@ -406,8 +325,7 @@ class FakeSocketConnector:
         if self.state in ("ready", "failed"):
             return
         if not self._actions:
-            return  # No script left; stay where we are (useful for
-            # exercising "wait one more tick" idioms in consumers).
+            return  # No script left; stay put (test "wait one more tick" idioms).
         action = self._actions.pop(0)
         if action.startswith("fail:"):
             self.last_error = OSError(action[5:])

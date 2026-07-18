@@ -1,19 +1,16 @@
 """CircuitPython ``microcontroller.nvm`` backend with CRC framing.
 
-Persists a single msgpack payload into the NVM byte slab, prefixed
-with magic header + CRC32 for power-loss-corruption detection::
+Stores one msgpack payload in the NVM byte slab behind a fixed header, so
+a power loss mid-write is caught on the next load instead of read back as
+valid data. The on-slab layout (do not change without an ABI bump) is::
 
-    offset 0:  4 bytes — MAGIC b"CKVS"
-    offset 4:  2 bytes — LEN (little-endian uint16)
-    offset 6:  4 bytes — CRC32 (little-endian uint32, IEEE polynomial)
-    offset 10: LEN bytes — MSGPACK payload
+    offset 0:  4 bytes  MAGIC b"CKVS"
+    offset 4:  2 bytes  LEN (little-endian uint16)
+    offset 6:  4 bytes  CRC32 (little-endian uint32, IEEE polynomial)
+    offset 10: LEN bytes  MSGPACK payload
 
-A blank slab (all ``0xFF`` from raw flash erase, or all ``0x00`` on
-some chips) is treated as "no state yet" and loads as empty.  Bad
-magic raises ``KVStoreCorrupt``.
-
-Tests inject a ``bytearray`` ``nvm`` substrate to exercise the full
-framing without a CircuitPython runtime.
+A blank slab (all ``0xFF`` from a flash erase, or all ``0x00`` on some
+chips) loads as empty; a bad magic raises ``KVStoreCorrupt``.
 """
 
 __chumicro_runtimes__ = ("circuitpython",)
@@ -26,9 +23,8 @@ from chumicro_kvstore.core import Backend, KVStoreCorrupt, KVStoreFull
 class CpNvmBackend(Backend):
     """CircuitPython NVM backend.
 
-    ``nvm`` defaults to the live ``microcontroller.nvm`` byte slab;
-    tests inject a plain ``bytearray`` to exercise the framing on a
-    host without hardware.
+    ``nvm`` defaults to the live ``microcontroller.nvm`` slab; tests pass a
+    plain ``bytearray`` to exercise the framing without hardware.
     """
 
     HEADER_MAGIC = b"CKVS"
@@ -48,11 +44,6 @@ class CpNvmBackend(Backend):
 
     @staticmethod
     def _acquire_runtime_nvm() -> bytearray:
-        """Return ``microcontroller.nvm`` or raise a clear error.
-
-        The wrapper exists so the CPython-side error is informative
-        rather than a bare ``ImportError`` from ``microcontroller``.
-        """
         try:
             import microcontroller  # pragma: no cover - CP runtime path
         except ImportError as error:
@@ -71,9 +62,8 @@ class CpNvmBackend(Backend):
         Raises:
             KVStoreCorrupt: Magic, length, or CRC failed validation.
         """
-        # Treat all-0xFF and all-0x00 magic bytes as a blank slab.  Raw
-        # flash typically erases to 0xFF, and some chips power up to
-        # 0x00.  Neither pattern indicates corruption.
+        # All-0xFF (flash erase) or all-0x00 (some chips power up this way)
+        # is a blank slab, not corruption.
         magic = bytes(self._nvm[0 : len(self.HEADER_MAGIC)])
         if magic in (b"\xff\xff\xff\xff", b"\x00\x00\x00\x00"):
             return b""
@@ -112,11 +102,6 @@ class CpNvmBackend(Backend):
             + len(payload).to_bytes(2, "little")
             + crc.to_bytes(4, "little")
         )
-        # Write header + payload in one slice-assign.  On CircuitPython
-        # the slab is ``microcontroller.nvm``; a single assign is one
-        # flash-write span rather than two, halving the erase of the
-        # first page and shrinking the torn-record window.  A power loss
-        # mid-write still leaves a torn record, which the CRC rejects on
-        # the next load (``KVStoreCorrupt`` -> empty store).  On host
-        # tests the slab is a plain bytearray.
+        # One slice-assign writes header and payload as a single flash-write
+        # span, shrinking the torn-record window (the CRC rejects a torn record).
         self._nvm[0 : self.HEADER_SIZE + len(payload)] = header + payload

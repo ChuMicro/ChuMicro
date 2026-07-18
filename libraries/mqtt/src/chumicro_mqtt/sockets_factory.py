@@ -11,16 +11,19 @@ from chumicro_config import MissingConfigKey
 def chumicro_sockets_connector_factory(config, *, radio=None, ssl_context=None):
     """Build a ``() -> SocketConnector`` factory from *config*.
 
-    Reads ``mqtt.broker.host`` / ``mqtt.broker.port``.  Both are
-    required so the library never silently dials a third-party broker.
-    Routes through :func:`chumicro_sockets.connector` with ``tls=True``
-    when *ssl_context* is supplied.  Missing keys raise
-    :class:`chumicro_config.MissingConfigKey`.
+    Reads the required ``mqtt.broker.host`` / ``mqtt.broker.port`` so the
+    library never silently dials a third-party broker. Passing an
+    *ssl_context* routes through :func:`chumicro_sockets.connector` with
+    ``tls=True``.
 
-    The returned callable is what ``MQTTClient(transport_factory=...)``
-    expects: each invocation hands back a fresh non-blocking connector
-    in ``"awaiting_dns"``.  :class:`MQTTClient` drives it across ticks
-    so the runner is not blocked for the DNS / TCP / TLS round-trip.
+    Returns:
+        A zero-arg callable, the shape ``MQTTClient(transport_factory=...)``
+        expects. Each call returns a fresh non-blocking connector that the
+        client drives across ticks, so the runner never blocks on the
+        DNS / TCP / TLS round-trip.
+
+    Raises:
+        MissingConfigKey: A required broker key is missing.
     """
     for required_key in ("mqtt.broker.host", "mqtt.broker.port"):
         if required_key not in config:

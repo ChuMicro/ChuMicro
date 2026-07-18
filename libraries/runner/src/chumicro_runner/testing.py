@@ -11,14 +11,9 @@ class FakePoller:
     """Host-test fake for ``select.poll().ipoll``.
 
     Use as ``Runner(poller=FakePoller())`` so unit tests can drive
-    ``Runner.wait`` without a real OS poller (CPython's ``select.poll``
-    needs real file descriptors that the in-memory fake sockets do
-    not have).
-
-    Records every ``register`` / ``modify`` / ``unregister`` / ``ipoll``
-    call so tests can assert on what the runner did with the poll
-    set.  ``set_ready(obj, eventmask)`` queues a ready pair for the
-    next ``ipoll`` call.
+    ``Runner.wait`` without a real OS poller.  Records every ``register``
+    / ``modify`` / ``unregister`` / ``ipoll`` call for assertions;
+    ``set_ready(obj, eventmask)`` queues a pair for the next ``ipoll``.
     """
 
     def __init__(self) -> None:
@@ -68,19 +63,12 @@ class CallRecorder:
     """
 
     def __init__(self) -> None:
-        """Create an empty recorder."""
         self.calls: list[int] = []
 
     def __call__(self, now_ms: int) -> None:
-        """Record a call with the given timestamp.
-
-        Args:
-            now_ms: Tick value passed by the runner.
-        """
         self.calls.append(now_ms)
 
     def __len__(self) -> int:
-        """Return the number of recorded calls."""
         return len(self.calls)
 
     def clear(self) -> None:

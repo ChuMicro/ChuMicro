@@ -1,10 +1,10 @@
-"""Runtime-config helpers: section loader + on-device reader.
+"""Runtime-config helpers: section loader and on-device reader.
 
-Apps import :data:`config` (lazy-loaded ``/runtime_config.msgpack``,
-or ``None`` when absent) or :func:`load_runtime_config` for the
-explicit read.  Library authors use :func:`load_section` /
-:func:`try_load_section` to build typed ``<Name>Config`` instances.
-Patterns and exceptions live in ``docs/guide.md``.
+Apps import :data:`config` (the lazily-loaded ``/runtime_config.msgpack``,
+or ``None`` when absent) or :func:`load_runtime_config`. Library authors
+use :func:`load_section` / :func:`try_load_section` to build typed
+``<Name>Config`` instances. Patterns and exceptions live in
+``docs/guide.md``.
 """
 
 import gc
@@ -19,7 +19,7 @@ from chumicro_config.section import (
 )
 
 __all__ = [
-    # pyright: ignore[reportUnsupportedDunderAll] — the runtime symbols
+    # pyright: ignore[reportUnsupportedDunderAll]: the runtime symbols
     # below are PEP-562 lazy via __getattr__.
     "ConfigError",
     "InvalidConfigType",
@@ -33,13 +33,8 @@ __all__ = [
 
 
 def __getattr__(name: str):
-    """Lazy-load the runtime reader on first access (PEP 562).
-
-    ``runtime`` imports ``chumicro_msgpack`` at module scope, so keeping
-    ``config`` / ``load_runtime_config`` out of the eager import path
-    means a library that only uses ``load_section`` never drags the
-    msgpack decoder into RAM.
-    """
+    # Lazy PEP 562 imports: a library that only calls load_section never
+    # drags runtime (and its chumicro_msgpack dependency) into RAM.
     if name == "config":
         from chumicro_config.runtime import config  # noqa: PLC0415
 

@@ -1,8 +1,8 @@
 """Default :mod:`chumicro_sockets` wiring for :class:`HttpServer`.
 
-Opt-in submodule — the package's ``__init__.py`` does not import it,
-so users who pass their own ``transport_factory`` never pull
-:mod:`chumicro_sockets` into the deploy graph.
+Opt-in submodule: the package does not import it, so users who pass their
+own ``transport_factory`` never pull :mod:`chumicro_sockets` into the
+deploy graph.
 """
 
 import chumicro_sockets
@@ -12,12 +12,13 @@ from chumicro_config import MissingConfigKey
 def chumicro_sockets_factory(config, *, radio=None, ssl_context=None):
     """Build a ``() -> ListeningSocket`` factory from *config*.
 
-    Reads ``http_server.bind_host`` / ``http_server.bind_port`` /
-    ``http_server.tls.cert_path`` / ``http_server.tls.key_path``.
-    Returns a plain TCP factory unless *ssl_context* is supplied or
-    both TLS paths are set, in which case a TLS factory is built.
-    Exactly one of ``cert_path`` / ``key_path`` raises
-    :class:`chumicro_config.MissingConfigKey`.
+    Reads ``http_server.bind_host`` / ``bind_port`` and the optional
+    ``http_server.tls.cert_path`` / ``key_path``. Returns a TLS factory
+    when *ssl_context* is supplied or both TLS paths are set, otherwise a
+    plain TCP factory.
+
+    Raises:
+        MissingConfigKey: Exactly one of ``cert_path`` / ``key_path`` is set.
     """
     host = config.get("http_server.bind_host", "0.0.0.0")
     port = config.get("http_server.bind_port", 8080)
@@ -30,7 +31,7 @@ def chumicro_sockets_factory(config, *, radio=None, ssl_context=None):
             else "http_server.tls.key_path"
         )
         raise MissingConfigKey(
-            f"required config key {missing!r} is missing — TLS "
+            f"required config key {missing!r} is missing; TLS "
             "requires both cert_path and key_path",
         )
 

@@ -1,43 +1,11 @@
 """MessagePack serialization for CircuitPython, MicroPython, and CPython.
 
-Implements a strict 32-bit-int / 16-bit-length subset of the
-`MessagePack spec <https://github.com/msgpack/msgpack/blob/master/spec.md>`_:
-
-- integers in ``[-2**31, 2**32-1]``  (fixint, ``int8/16/32``, ``uint8/16/32``)
-- 32-bit floats only  (``float32``)
-- strings, bytes, arrays, and maps up to 65 535 elements / bytes
-
-The subset is what fits on a small board, but the bytes are
-spec-compliant. Any standard MessagePack reader decodes them.
-
-Public API
-----------
-- ``packb(obj)`` — pack a Python object to msgpack bytes.
-- ``unpackb(data)`` — unpack msgpack bytes to a Python object.
-- ``pack(obj, stream)`` — pack to a writable stream.
-- ``unpack(stream)`` — unpack one object from a readable stream.
-
-Cross-runtime compatibility
----------------------------
-On CircuitPython boards that include the native ``msgpack`` module,
-all four functions delegate to the C implementation.  The pure-Python
-encoder in ``_pure`` is never imported, keeping heap usage lower on
-memory-tight boards.
-
-On CPython and MicroPython, the implementation is always the pure
-Python ``_pure`` encoder.  PyPI's ``msgpack`` package implements the
-*full* spec (``float64``, ``int64``, ``*32``-length prefixes,
-``strict_map_key=True`` by default), a different contract.  Host code
-that produces bytes for a chumicro device should use
-``msgpack.packb(obj, use_single_float=True)`` and stay inside the size
-limits above.  The resulting bytes are byte-for-byte identical to
-``chumicro_msgpack.packb(obj)``, pinned by the
-``test_byte_identity_with_pypi_msgpack`` test in this package.
-
-Out-of-subset bytes encountered on decode (``0xcb`` float64, ``0xcf``
-uint64, ``0xd3`` int64, ``0xc6/0xdb/0xdd/0xdf`` ``*32``-length tags)
-raise ``ValueError`` with a message that names the tag and points at
-the producer-side fix.
+Implements a strict subset of the `MessagePack spec
+<https://github.com/msgpack/msgpack/blob/master/spec.md>`_: integers in
+``[-2**31, 2**32-1]``, 32-bit floats, and strings, bytes, arrays, and
+maps up to 65 535 elements or bytes. The subset is what fits on a small
+board, but the bytes stay spec-compliant, so any standard MessagePack
+reader decodes them.
 """
 
 import gc
@@ -45,6 +13,8 @@ import sys
 
 _native_loaded = False
 if sys.implementation.name == "circuitpython":
+    # Prefer the native C msgpack module when present; it keeps heap usage
+    # lower than importing the pure-Python encoder.
     try:
         from io import BytesIO
 
@@ -52,10 +22,6 @@ if sys.implementation.name == "circuitpython":
 
         def packb(obj: object) -> bytes:  # pragma: no cover
             """Pack *obj* to msgpack bytes using the native encoder.
-
-            Allocates a ``BytesIO`` buffer internally.  For small payloads
-            this is fine; for larger data or tight loops, prefer
-            ``pack(obj, stream)`` to write directly to a destination.
 
             Args:
                 obj: Python object to serialize.
@@ -70,12 +36,6 @@ if sys.implementation.name == "circuitpython":
         def unpackb(data: bytes | bytearray | memoryview) -> object:  # pragma: no cover
             """Unpack msgpack *data* to a Python object using the native decoder.
 
-            Normalizes the native decoder to the pure decoder's contract:
-            truncated input (native ``EOFError``) and trailing bytes past
-            one object both surface as ``ValueError``, so a caller's
-            ``except ValueError`` for corrupt config behaves the same on
-            every runtime.
-
             Args:
                 data: Msgpack-encoded data.
 
@@ -87,6 +47,8 @@ if sys.implementation.name == "circuitpython":
                     the first object.
             """
             buffer = BytesIO(data)
+            # The native decoder raises EOFError on truncation; translate it
+            # to the ValueError our contract (and the pure path) promises.
             try:
                 result = unpack(buffer)
             except EOFError as truncation_error:

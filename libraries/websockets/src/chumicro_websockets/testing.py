@@ -1,26 +1,9 @@
 """Test helpers for libraries that depend on chumicro-websockets.
 
-Two fakes parallel to the patterns proven in
-:mod:`chumicro_sockets.testing`.  Fakes ship in the upstream library
-so consumers don't write their own:
-
-* :class:`FakeConnection`: bidirectional in-memory pipe satisfying
-  the TCP client socket shape (``send`` / ``recv_into`` / ``close`` /
-  ``setblocking`` / ``settimeout``) consumed by
-  :class:`WebSocketClient` / :class:`Connection`.  Drive both sides
-  via :meth:`feed_inbound` (peer pushes data the local end will
-  read) + :meth:`read_outbound` (drain whatever the local end has
-  written).  Inject an ``OSError`` via ``raise_on_send`` /
-  ``raise_on_recv`` to exercise EAGAIN and socket-error paths.
-
-* :class:`FakeListener`: stand-in for
-  :func:`chumicro_sockets.listener`.  Tests call
-  :meth:`queue_accept` to enqueue a :class:`FakeConnection` that
-  the next :meth:`accept` call returns.  An empty queue surfaces
-  EAGAIN exactly like a real non-blocking listener.
-
-For ticks-domain fakes use :class:`chumicro_timing.testing.FakeTicks`;
-pass it through the client's / server's ``ticks=`` kwarg.
+Two in-memory fakes: :class:`FakeConnection` (a bidirectional pipe
+satisfying the TCP client socket shape) and :class:`FakeListener` (a
+stand-in for :func:`chumicro_sockets.listener`). For ticks, use
+:class:`chumicro_timing.testing.FakeTicks` via the ``ticks=`` kwarg.
 """
 
 __chumicro_test_support__ = True
@@ -34,34 +17,22 @@ class FakeConnection:
 
     Inject into :class:`WebSocketClient` via ``transport_factory=lambda
     *_args, **_kwargs: FakeConnection()``, or hand into a
-    :class:`Connection` directly.  The two halves of the pipe are
-    addressable distinctly:
-
-    * :meth:`feed_inbound` puts bytes on the peer-to-local path
-      so they show up on the next :meth:`recv_into`.
-    * :meth:`read_outbound` drains whatever the local end has written
-      (via :meth:`send`) so test assertions can inspect the bytes.
+    :class:`Connection` directly. Drive the two halves with
+    :meth:`feed_inbound` (bytes the local end will read) and
+    :meth:`read_outbound` (drain what the local end wrote).
 
     The fake is non-blocking: an empty inbound buffer raises
-    ``OSError(EAGAIN)``.  Closing inbound via :meth:`close_inbound`
-    flips the EAGAIN behavior to "EOF" so tests can simulate a
-    peer disconnecting.
+    ``OSError(EAGAIN)``, and :meth:`close_inbound` flips that to EOF.
 
     Error injection:
 
-    * ``raise_on_send``: set to an :class:`Exception` instance and
-      the next :meth:`send` raises it (then resets to ``None``).
-    * ``raise_on_recv``: same shape for :meth:`recv_into`.
-    * ``send_chunk_cap``: when set, each :meth:`send` returns at
-      most this many bytes.  Useful for exercising partial-send
-      resumption without injecting a full error.
+    * ``raise_on_send`` / ``raise_on_recv``: set to an exception instance
+      and the next :meth:`send` / :meth:`recv_into` raises it, then resets.
+    * ``send_chunk_cap``: cap each :meth:`send` to this many bytes, for
+      exercising partial-send resumption.
 
-    Public observation:
-
-    * ``closed``: flips ``True`` after :meth:`close`.
-    * ``outbound`` / ``inbound``: raw :class:`bytearray` buffers
-      (read-only convention; tests should use :meth:`read_outbound`
-      and :meth:`feed_inbound`).
+    ``closed`` flips ``True`` after :meth:`close`; ``outbound`` /
+    ``inbound`` are the raw buffers (prefer the helper methods).
     """
 
     def __init__(self) -> None:
@@ -125,10 +96,8 @@ class FakeConnection:
         if not self.inbound:
             if self.eof:
                 return 0
-            # ``OSError(errno.EAGAIN)`` rather than ``BlockingIOError``.
-            # MicroPython lacks the latter.  Real adapters raise
-            # ``OSError`` too on every runtime, so this is closer to
-            # what production sees on the host the test is running on.
+            # OSError(EAGAIN), not BlockingIOError: MicroPython lacks the
+            # latter, and real adapters raise OSError on every runtime.
             raise OSError(errno.EAGAIN, "no data ready")
         take = min(cap, len(self.inbound))
         buffer[:take] = self.inbound[:take]
@@ -158,7 +127,7 @@ class FakeListener:
         self.closed = False
 
     def queue_accept(self, peer: FakeConnection) -> None:
-        """Enqueue *peer* — the next ``accept()`` call returns it."""
+        """Enqueue *peer*; the next ``accept()`` call returns it."""
         self._pending.append(peer)
 
     def accept(self):

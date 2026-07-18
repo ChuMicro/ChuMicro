@@ -9,19 +9,16 @@ except ImportError:
         return value
 
 
-# The 2**29 ms period (~6.2 days) matches CircuitPython's
-# ``supervisor.ticks_ms`` wrap (the adafruit_ticks reference); this
-# library normalizes to it on every runtime.  MicroPython's
-# ``time.ticks_ms`` wraps at a larger, port-dependent period, so the
-# normalization masks that difference and keeps add/diff results under
-# 2**30 — boards without big-int support never heap-allocate a long.
+# 2**29 ms (~6.2 days) matches CircuitPython's supervisor.ticks_ms wrap;
+# normalizing every runtime to it keeps add/diff under 2**30, so boards
+# without big-int support never heap-allocate a long.
 TICKS_PERIOD = const(1 << 29)
 TICKS_MAX = const(TICKS_PERIOD - 1)
 TICKS_HALFPERIOD = const(TICKS_PERIOD // 2)
 
 
 def _resolve_ticks_ms() -> object:
-    """Returns the first available callable that yields millisecond ticks across runtimes."""
+    """Return the first available millisecond-tick clock across runtimes."""
     try:
         import supervisor
     except ImportError:

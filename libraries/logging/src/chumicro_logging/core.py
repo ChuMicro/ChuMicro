@@ -1,13 +1,7 @@
 """Core implementation for chumicro-logging.
 
-See ``__init__`` for the public API summary.  This module is pure-Python,
-imports ``sys`` and ``collections.deque``, and is identical on every
-supported runtime.
-
-``BufferedHandler``'s queue is a ``deque(iterable, maxlen)`` rather than
-a list — ``append`` and ``popleft`` are O(1) and the deque's native
-``maxlen`` enforcement gives drop-oldest behavior without the O(n)
-shift cost of ``list.pop(0)`` on small VMs.
+Pure Python with no chumicro dependencies, identical on every supported
+runtime. See ``__init__`` for the public API summary.
 """
 
 import sys
@@ -50,21 +44,13 @@ def default_formatter(level: int, name: str, message: str) -> str:
 class Logger:
     """A named logger with a level threshold and a list of handlers.
 
-    Loggers are not registered globally — the caller owns the instance
-    and passes it explicitly to subsystems that want to emit.  This
-    avoids import-order surprises and keeps the library stateless.
-
-    Records below the configured level are dropped before any handler
-    is consulted.  Each handler decides independently whether to emit.
-
-    Handler exceptions and ``message % args`` format mismatches never
-    escape the logger — they increment ``handler_errors`` and are
-    otherwise swallowed.  Logging must not crash the application that
-    uses it.
+    Records below the configured level are dropped before any handler is
+    consulted, and a handler that raises never escapes the logger: the failure
+    increments ``handler_errors`` instead.
 
     Args:
         name: Logger name; appears in formatted records.
-        level: Minimum level emitted.  Defaults to ``INFO``.
+        level: Minimum level emitted. Defaults to ``INFO``.
         handlers: Initial handlers; copied into an internal list.
     """
 
@@ -85,7 +71,7 @@ class Logger:
         return tuple(self._handlers)
 
     def add_handler(self, handler: object) -> None:
-        """Attach a handler.  No-op if already attached.
+        """Attach a handler. No-op if already attached.
 
         Args:
             handler: An object exposing ``emit(level, name, message)``.
@@ -94,7 +80,7 @@ class Logger:
             self._handlers.append(handler)
 
     def remove_handler(self, handler: object) -> None:
-        """Detach a handler.  No-op if not attached.
+        """Detach a handler. No-op if not attached.
 
         Args:
             handler: A previously attached handler.
@@ -113,13 +99,10 @@ class Logger:
     def log(self, level: int, message: str, *args: object) -> None:
         """Emit *message* at *level* to every attached handler.
 
-        When *args* is given the record is built as ``message % args``,
-        and only after the level gate — so a dropped record never pays
-        the interpolation.  Prefer ``log.info("x=%d", n)`` over a
-        pre-built f-string (``log.info(f"x={n}")``) so the formatting
-        stays off the hot path when the level is disabled.  A format/arg
-        mismatch is caught, rendered as a visible fallback, and counted
-        in ``handler_errors`` — never raised into the caller.
+        With *args*, the record is built as ``message % args`` only after the
+        level gate, so a dropped record never pays for the interpolation. A
+        format mismatch is caught, rendered as a visible fallback, and counted
+        in ``handler_errors`` rather than raised into the caller.
         """
         if level < self.level:
             return
@@ -127,9 +110,7 @@ class Logger:
             try:
                 message = message % args
             except Exception as format_error:  # noqa: BLE001
-                # A ``%`` format/arg mismatch must not crash the caller:
-                # ``log`` is reached from error paths where a raised
-                # exception would mask the original failure.  Render a
+                # A format/arg mismatch must not crash the caller: render a
                 # visible fallback and count it like a handler fault.
                 message = (
                     f"{message!r} % {args!r} "
@@ -168,22 +149,14 @@ class Logger:
 class StreamHandler:
     """Synchronous handler writing formatted records to a writable stream.
 
-    For every emitted record, writes the formatted line and a trailing
-    newline as two separate ``stream.write`` calls, then ``stream.flush()``
-    (when available).  Two writes avoid allocating a concatenated
-    ``line + "\\n"`` string per record.  On microcontrollers the stream
-    typically resolves to the serial console via ``sys.stdout``; on
-    CPython any file-like object works.
-
-    The handler keeps no buffer of its own — every call to ``emit``
-    hits the stream.  Use ``BufferedHandler`` to decouple emission
-    from a hot path.
+    On microcontrollers the stream typically resolves to the serial console
+    via ``sys.stdout``; on CPython any file-like object works.
 
     Args:
-        stream: A writable stream.  Defaults to ``sys.stdout``.
-        level: Minimum level emitted.  Defaults to ``DEBUG``.
-        formatter: Callable rendering ``(level, name, message)`` to
-            a string.  Defaults to ``default_formatter``.
+        stream: A writable stream. Defaults to ``sys.stdout``.
+        level: Minimum level emitted. Defaults to ``DEBUG``.
+        formatter: Callable rendering ``(level, name, message)`` to a string.
+            Defaults to ``default_formatter``.
     """
 
     def __init__(
@@ -204,6 +177,7 @@ class StreamHandler:
         """
         if level < self.level:
             return
+        # Two writes avoid allocating a ``line + "\n"`` string per record.
         self._stream.write(self._formatter(level, name, message))
         self._stream.write("\n")
         if self._flush is not None:
@@ -211,25 +185,18 @@ class StreamHandler:
 
 
 class BufferedHandler:
-    """Runner-shaped handler buffering records and flushing on ``handle``.
+    """Runner-shaped handler that buffers records and flushes on ``handle``.
 
-    Drop-in front of any other handler.  ``emit`` is cheap — it appends
-    to a bounded buffer — so libraries on a hot tick can log freely
-    without paying for I/O.  ``check(now_ms)`` returns ``True`` when
-    the buffer is non-empty; ``handle(now_ms)`` drains it to the
-    downstream handler.  Wire the buffered handler into a
-    ``chumicro-runner`` instance for automatic draining.
-
-    When the buffer is full, the **oldest** record is dropped and
-    ``dropped`` is incremented.  The newest record always wins on the
-    assumption the operator wants to see *recent* activity when the
-    rate exceeds the flush cadence.
+    ``emit`` only appends to a bounded buffer, so a library on a hot tick can
+    log without paying for I/O. When the buffer is full the oldest record is
+    dropped and ``dropped`` is incremented, on the assumption an operator wants
+    to see recent activity when the log rate outruns the flush cadence.
 
     Args:
         downstream: A handler exposing ``emit(level, name, message)``
             (typically a ``StreamHandler``).
-        capacity: Maximum buffered records.  Must be >= 1.
-        level: Minimum level buffered.  Defaults to ``DEBUG``.
+        capacity: Maximum buffered records. Must be >= 1.
+        level: Minimum level buffered. Defaults to ``DEBUG``.
 
     Raises:
         ValueError: If *capacity* < 1.
@@ -246,10 +213,11 @@ class BufferedHandler:
         self._downstream = downstream
         self._capacity = capacity
         self.level = level
+        # deque append/popleft are O(1), and maxlen drops the oldest record
+        # without the O(n) shift a list.pop(0) would cost on small VMs.
         self._buffer = deque((), capacity)
         self.dropped = 0
-        #: Count of downstream emit failures swallowed during drain (a
-        #: read-only CIRCUITPY filesystem, full flash, detached console).
+        #: Count of downstream emit failures swallowed during drain.
         self.handler_errors = 0
 
     @property
@@ -259,14 +227,11 @@ class BufferedHandler:
 
     @property
     def capacity(self) -> int:
-        """Maximum buffered records.  Read-only: the deque's ``maxlen``
-        is frozen at construction, so a mutable attribute would let the
-        drop accounting desync from the actual drop-oldest behavior.
-        """
+        """Maximum buffered records; read-only."""
         return self._capacity
 
     def emit(self, level: int, name: str, message: str) -> None:
-        """Buffer the record.  Drop the oldest if full."""
+        """Buffer the record. Drop the oldest if full."""
         if level < self.level:
             return
         if len(self._buffer) >= self._capacity:
@@ -284,7 +249,7 @@ class BufferedHandler:
         return len(self._buffer) > 0
 
     def handle(self, now_ms: int) -> int:
-        """Drain the buffer to the downstream handler.  Returns flushed count.
+        """Drain the buffer to the downstream handler. Returns flushed count.
 
         Args:
             now_ms: Current tick value (unused; required by the
@@ -295,11 +260,8 @@ class BufferedHandler:
         flushed = 0
         while buffer:
             level, name, message = buffer.popleft()
-            # Guard the downstream emit: this runs on the runner tick, so
-            # a raised OSError (read-only filesystem, full flash, detached
-            # console) would otherwise escape into the tick loop and crash
-            # the app — the same crash-safety contract the Logger keeps.
-            # The record was already popped; drop it and count the fault.
+            # Guard the downstream emit: on the runner tick a raised OSError
+            # (read-only filesystem, full flash) must not escape and crash the app.
             try:
                 emit(level, name, message)
             except Exception:  # noqa: BLE001 - a misbehaving handler can't crash the app

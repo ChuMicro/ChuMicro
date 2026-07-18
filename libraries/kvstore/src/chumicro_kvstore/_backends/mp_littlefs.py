@@ -1,16 +1,10 @@
 """MicroPython LittleFS backend.
 
-Persists the msgpack payload as ``/_chu_kv.msgpack`` (leading
-underscore keeps it out of file-manager listings).
-
-Atomicity comes from LittleFS's atomic-rename: writes land in
-``/_chu_kv.msgpack.tmp`` and rename over the payload path only
-after ``os.sync()``.  Power loss mid-write either leaves the old
-file intact or commits the new one — never a partial state.  No
-CRC framing: LittleFS wear-levels and verifies block integrity.
-
-Tests inject a filesystem substrate exposing ``open``, ``rename``,
-``remove``, and ``sync``.
+Persists the msgpack payload as ``/_chu_kv.msgpack``. Writes go to a
+``.tmp`` file and are renamed over the payload only after ``os.sync()``,
+so LittleFS's atomic rename leaves either the old file or the new one
+after a power loss, never a partial write. There is no CRC framing:
+LittleFS verifies block integrity itself.
 """
 
 __chumicro_runtimes__ = ("micropython",)
@@ -21,30 +15,23 @@ import os
 from chumicro_kvstore.core import Backend, KVStoreFull
 
 
+# Module-scope so this substrate class is built once at import, not once
+# per default-arg backend construction.
 class _RuntimeFs:
-    """Wrap ``builtins.open`` and ``os.{rename,remove,sync}`` as the
-    default filesystem substrate.
-
-    Defined at module scope so the class object is allocated once at
-    import rather than once per default-arg backend construction.
-    ``getattr(os, "sync", lambda: None)`` keeps the rp2 MP port (no
-    ``os.sync``) working: the rename itself is atomic on LittleFS.
-    """
-
     open = staticmethod(builtins.open)
     rename = staticmethod(os.rename)
     remove = staticmethod(os.remove)
+    # rp2 MicroPython has no os.sync; the LittleFS rename is atomic anyway.
     sync = staticmethod(getattr(os, "sync", lambda: None))
 
 
 class MpLittlefsBackend(Backend):
-    """MP LittleFS backend.
+    """MicroPython LittleFS backend.
 
-    ``path`` defaults to ``/_chu_kv.msgpack``; ``filesystem`` defaults
-    to the module's runtime shim and accepts any object exposing
-    ``open`` / ``rename`` / ``remove`` / ``sync``.  ``capacity``
-    defaults to 16 KB: generous for most partitions, bounded so a
-    runaway store can't fill the whole filesystem.
+    ``path`` defaults to ``/_chu_kv.msgpack`` and ``filesystem`` to the
+    module's runtime shim (any object exposing ``open`` / ``rename`` /
+    ``remove`` / ``sync``). ``capacity`` defaults to 16 KB, bounded so a
+    runaway store cannot fill the filesystem.
     """
 
     DEFAULT_PATH = "/_chu_kv.msgpack"
@@ -61,14 +48,12 @@ class MpLittlefsBackend(Backend):
 
     @staticmethod
     def _acquire_runtime_fs():
-        """Return the module-level runtime filesystem shim."""
         return _RuntimeFs
 
     def load(self) -> bytes:
-        """Return the file contents, or ``b""`` if the file does not exist.
+        """Return the file contents, or ``b""`` if the file is missing.
 
-        Missing file is treated as a blank substrate, no corruption
-        event.
+        A missing file is a blank substrate, not a corruption event.
         """
         try:
             handle = self._fs.open(self._path, "rb")
@@ -80,7 +65,7 @@ class MpLittlefsBackend(Backend):
             handle.close()
 
     def save(self, payload: bytes) -> None:
-        """Write *payload* atomically: tmp file → sync → rename.
+        """Write *payload* atomically via a tmp file, sync, then rename.
 
         Raises:
             KVStoreFull: ``payload`` exceeds capacity.
@@ -97,17 +82,14 @@ class MpLittlefsBackend(Backend):
             finally:
                 handle.close()
         except OSError:
-            # A failed write (e.g. ENOSPC) leaves a partial temp file on
-            # flash; remove it so it doesn't linger and eat space, then
-            # re-raise for the caller.
+            # A failed write (e.g. ENOSPC) can leave a partial temp file;
+            # remove it before re-raising so it does not eat flash.
             try:
                 self._fs.remove(self._tmp_path)
             except OSError:
                 pass  # already gone, or the fs can't remove it
             raise
-        # Sync before rename so the bytes hit flash before the
-        # directory entry flips.  LittleFS makes the rename itself
-        # atomic; the sync ensures the *contents* aren't half-written
-        # at the moment the rename commits.
+        # Sync before rename so the payload bytes reach flash before the
+        # directory entry flips; the rename itself is already atomic.
         self._fs.sync()
         self._fs.rename(self._tmp_path, self._path)

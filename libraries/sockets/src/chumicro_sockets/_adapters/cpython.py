@@ -1,15 +1,9 @@
-"""CPython adapter — stdlib ``socket`` + ``ssl``.
+"""CPython adapter: stdlib ``socket`` plus ``ssl``.
 
-Used:
-
-* on CPython directly (host-side tests, sim runs, downstream libs
-  imported on a laptop without a board);
-* as the test substrate for ``FakeSocket`` conformance — passing
-  tests here prove the contract every other adapter implements.
-
-``connector`` dials via a genuinely non-blocking per-tick state
-machine.  TLS uses ``ssl.SSLContext.wrap_socket``; ``context=None``
-means ``ssl.create_default_context()``.
+Runs on CPython directly (host-side tests, sim runs, downstream libraries on a
+laptop) and serves as the conformance substrate whose passing tests prove the
+contract every other adapter implements. ``connector`` dials via a genuinely
+non-blocking per-tick state machine.
 """
 
 #: Source bundle only; never lands on a device.
@@ -33,23 +27,15 @@ from chumicro_sockets._connector import (
 
 
 class _CPythonTLSSocketWrapper:
-    """Normalizes a CPython ``ssl.SSLSocket``'s would-block signal to ``OSError(EAGAIN)``.
-
-    Post-handshake, a non-blocking ``ssl.SSLSocket`` raises
-    ``ssl.SSLWantReadError`` / ``ssl.SSLWantWriteError`` where a plain
-    non-blocking socket raises ``OSError(EAGAIN)``.  The tick-driven
-    recv / send loops (``chumicro_sockets.generators`` and downstream
-    clients) branch on ``OSError(EAGAIN)``, so this wrapper translates
-    the ``SSLWant*`` exceptions on ``recv`` / ``recv_into`` / ``send``
-    to give TLS the same data-path contract as plain TCP.  The raw
-    ``SSLSocket`` stays on ``.sock`` so ``Runner.wait`` can register the
-    pollable (it reads ``getattr(io_socket, "sock", io_socket)``).
+    """Translates a CPython ``ssl.SSLSocket``'s ``SSLWant*`` would-block into
+    ``OSError(EAGAIN)`` on ``recv`` / ``recv_into`` / ``send``, so TLS sees the
+    same data-path contract as plain TCP. The raw ``SSLSocket`` stays on
+    ``.sock`` for the poller to register.
     """
 
     def __init__(self, sock):
         self.sock = sock
-        # ``close`` / ``setblocking`` / ``settimeout`` need no
-        # translation — forward them straight to the SSLSocket.
+        # close / setblocking / settimeout need no translation; forward them.
         self.close = sock.close
         self.setblocking = sock.setblocking
         self.settimeout = sock.settimeout
@@ -76,36 +62,25 @@ class _CPythonTLSSocketWrapper:
 
 
 def _resolve_default_context(context):
-    """Return *context* unchanged, or build CPython's default context if ``None``.
-
-    Uses :func:`ssl.create_default_context`, which validates against
-    the host OS trust store and turns on every secure default.
-    """
     return context if context is not None else ssl.create_default_context()
 
 
 def connector(host, port, *, tls=False, context=None, **_kwargs):
     """Return a non-blocking :class:`SocketConnector` for CPython.
 
-    Uses stdlib ``socket.getaddrinfo`` + non-blocking ``socket.connect``
-    (``BlockingIOError`` / EINPROGRESS, then ``select.select`` for
-    writability + ``SO_ERROR`` for the connect outcome) for a truly
-    per-tick non-blocking dial.  With ``tls=True`` a TLS handshake
-    phase follows, driven by
-    ``ssl.SSLContext.wrap_socket(do_handshake_on_connect=False)``
-    + ``sock.do_handshake()`` looped across ticks until done.
-    *context=None* uses :func:`ssl.create_default_context`.
+    Three genuine per-tick phases: non-blocking ``socket.connect`` (EINPROGRESS,
+    then ``select`` for writability and ``SO_ERROR`` for the outcome), then an
+    optional TLS handshake looped across ticks via ``do_handshake()``.
+    ``context=None`` uses the host OS trust store.
     """
     return _CPythonConnector(host, port, tls=tls, context=context)
 
 
 class _CPythonConnector(SocketConnector):
-    """CPython non-blocking dialer — three genuine per-tick phases.
+    """CPython non-blocking dialer: three genuine per-tick phases.
 
-    The state progression matches the base class's vocabulary:
-    ``awaiting_dns`` → ``awaiting_tcp`` → (optional ``awaiting_tls``)
-    → ``ready``.  Each ``tick`` advances one step; the TCP and TLS
-    steps return early (no state change) when the kernel hasn't
+    ``awaiting_dns`` to ``awaiting_tcp`` to optional ``awaiting_tls`` to
+    ``ready``; the TCP and TLS steps return early when the kernel has not
     finished the in-flight operation yet.
     """
 
@@ -140,10 +115,8 @@ class _CPythonConnector(SocketConnector):
             if self.state == STATE_AWAITING_TLS:
                 if not self._tls_ready(self.socket):
                     return
-                # Handshake done: wrap so the ready socket's recv / send
-                # report EAGAIN (not ssl.SSLWant*) on a would-block.  The
-                # raw SSLSocket stayed unwrapped through the handshake so
-                # ``do_handshake`` and ``io_socket`` polling saw it directly.
+                # Handshake done: wrap so the ready socket reports EAGAIN, not
+                # ssl.SSLWant*, on a would-block.
                 self.socket = _CPythonTLSSocketWrapper(self.socket)
                 self.state = STATE_READY
                 return
@@ -157,14 +130,12 @@ class _CPythonConnector(SocketConnector):
         try:
             sock.connect(sockaddr)
         except BlockingIOError:
-            pass  # Expected — connect is in progress.
+            pass  # Expected: connect is in progress.
         return sock
 
     def _tcp_ready(self, sock):
-        # ``SO_ERROR`` alone is unreliable right after a non-blocking
-        # connect on macOS (reads 0 mid-flight).  Wait for writability
-        # via ``select.select`` first; once writable, ``SO_ERROR`` is
-        # the connect outcome (0 = connected, non-zero = errno).
+        # SO_ERROR alone is unreliable right after a non-blocking connect on
+        # macOS; wait for writability first, then SO_ERROR is the outcome.
         _, writable, _ = select.select([], [sock], [], 0)
         if sock not in writable:
             return False
@@ -179,12 +150,9 @@ class _CPythonConnector(SocketConnector):
         )
 
     def _tls_ready(self, sock):
-        # Each ``SSLWant*`` names the one direction the handshake is
-        # blocked on; recording it lets ``io_interest`` drop the other
-        # bit.  Almost the whole handshake is spent in WantRead
-        # (awaiting the server's flight) on an always-writable socket,
-        # so keeping WRITE registered would busy-wake the poller until
-        # the peer responds.
+        # Each SSLWant* names the one direction the handshake is blocked on;
+        # recording it lets io_interest drop the other bit, so an always-writable
+        # socket does not busy-wake the poller during the WantRead-heavy handshake.
         try:
             sock.do_handshake()
         except ssl.SSLWantReadError:
@@ -199,18 +167,11 @@ class _CPythonConnector(SocketConnector):
 def listener(host, port, *, tls=False, context=None, backlog=4, **_kwargs):
     """Open a non-blocking TCP or TLS listening socket on CPython.
 
-    The plain-TCP form returns a real :class:`socket.socket` set to
-    non-blocking mode and bound + listening on (*host*, *port*).  It
-    already satisfies the ``ListeningSocket`` structural protocol —
-    :meth:`socket.accept` returns ``(socket, address)`` and raises
-    ``OSError(EAGAIN)`` when no connection is queued.
-
-    With ``tls=True`` the raw listener is wrapped so ``accept()``
-    returns a ``(tls_wrapped_client, address)`` tuple — the TLS
-    handshake happens synchronously inside ``accept()``.
-
-    ``SO_REUSEADDR`` is set so a quick restart of the server doesn't
-    trip ``OSError(EADDRINUSE)`` on the rebind.
+    Plain TCP returns a non-blocking :class:`socket.socket`; ``accept()`` returns
+    ``(socket, address)`` and raises ``OSError(EAGAIN)`` when nothing is queued.
+    With ``tls=True`` the listener is wrapped so ``accept()`` returns a TLS client
+    after a synchronous handshake. ``SO_REUSEADDR`` is set so a quick restart
+    does not trip ``EADDRINUSE``.
     """
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -223,16 +184,11 @@ def listener(host, port, *, tls=False, context=None, backlog=4, **_kwargs):
 
 
 def ssl_context_with_cert_and_key(cert_pem, key_pem):
-    """Build a server-side SSLContext that presents *cert_pem* signed by *key_pem*.
+    """Build a server-side SSLContext presenting *cert_pem* signed by *key_pem*.
 
-    Mirrors the client-side `ssl_context_with_ca` shape but loads a
-    *cert chain* + *private key* via `SSLContext.load_cert_chain`
-    (rather than a *trust store*).  The context is suitable for
-    `wrap_socket(..., server_side=True)` calls.
-
-    *cert_pem* and *key_pem* are PEM-encoded bytes / str.  CPython's
-    `load_cert_chain` accepts file paths only (not in-memory bytes),
-    so we write them to a temporary file and load from there.
+    CPython's ``load_cert_chain`` accepts file paths only, so this writes the PEM
+    material to temp files, loads it, then removes them. The context targets
+    ``PROTOCOL_TLS_SERVER``.
     """
     import os  # noqa: PLC0415 - runtime-gated
     import ssl  # noqa: PLC0415 - runtime-gated
@@ -262,11 +218,8 @@ def ssl_context_with_cert_and_key(cert_pem, key_pem):
     try:
         context.load_cert_chain(certfile=cert_path, keyfile=key_path)
     finally:
-        # ``load_cert_chain`` reads the PEM material into the context, so
-        # the temp files are no longer needed.  Remove them whether it
-        # succeeded or raised — ``delete=False`` above means they'd
-        # otherwise accumulate in the temp dir forever (private keys
-        # included).
+        # load_cert_chain has read the PEM into the context; remove the temp
+        # files whether it succeeded or raised (delete=False, and one is a key).
         for path in (cert_path, key_path):
             if path is not None:
                 try:
@@ -277,16 +230,9 @@ def ssl_context_with_cert_and_key(cert_pem, key_pem):
 
 
 class _CPythonTLSListenerWrapper:
-    """Wraps a raw CPython listener so accept() yields TLS sockets.
-
-    The TLS handshake runs inside `accept()` after the TCP `accept()`
-    returns the new client.  On a non-blocking listener the underlying
-    `accept()` raises `BlockingIOError` when no client is queued; we
-    propagate that as `OSError(EAGAIN)`.
-
-    Holds the raw listening socket on ``sock`` so Runner reads the
-    underlying registrable listener via the connector's ``io_socket``
-    (Runner uses ``getattr(io_socket, "sock", io_socket)``).
+    """Wraps a raw CPython listener so ``accept()`` runs the TLS handshake and
+    returns a TLS client. ``BlockingIOError`` (no client queued) surfaces as
+    ``OSError(EAGAIN)``. The raw listener stays on ``.sock`` for the poller.
     """
 
     def __init__(self, raw_listener, context):
@@ -295,11 +241,8 @@ class _CPythonTLSListenerWrapper:
 
     def accept(self):  # pragma: no cover - exercised by slice 7t live test
         client_raw, address = self.sock.accept()
-        # `wrap_socket(..., server_side=True)` performs the TLS
-        # handshake synchronously.  Set the underlying socket to
-        # blocking for the handshake (mbedTLS doesn't support
-        # async handshake on the server side cleanly), then back
-        # to non-blocking for the application traffic.
+        # wrap_socket(server_side=True) runs the handshake synchronously and
+        # needs a blocking socket, so flip to blocking for it and back after.
         client_raw.setblocking(True)
         try:
             wrapped = self._context.wrap_socket(client_raw, server_side=True)
@@ -322,9 +265,8 @@ class _CPythonTLSListenerWrapper:
 def udp_socket(*, bind_host="0.0.0.0", bind_port=0, broadcast=False, **_kwargs):
     """Open a UDP socket on CPython, bound to (bind_host, bind_port).
 
-    Returns a :class:`_CPythonUDPWrapper` so the public ``sendto(data,
-    host, port)`` separated-arg shape is honored (stdlib expects a
-    ``(host, port)`` tuple).
+    Wraps the stdlib socket so ``sendto`` takes separated ``(data, host, port)``
+    args instead of stdlib's ``(host, port)`` tuple.
     """
     import socket  # noqa: PLC0415 - runtime-gated
 
@@ -336,13 +278,6 @@ def udp_socket(*, bind_host="0.0.0.0", bind_port=0, broadcast=False, **_kwargs):
 
 
 class _CPythonUDPWrapper:
-    """Adapts a CPython ``socket.socket`` to the chumicro_sockets UDP protocol.
-
-    Normalizes ``sendto`` to the separated ``(data, host, port)``
-    signature and ``recvfrom_into`` to the ``(nbytes, (host, port))``
-    return tuple.
-    """
-
     def __init__(self, sock):
         self.sock = sock
         self.close = sock.close
@@ -361,14 +296,12 @@ class _CPythonUDPWrapper:
 
 
 def ssl_context_with_ca(ca_pem):
-    """Build an SSLContext that trusts only the CA(s) in *ca_pem*.
+    """Build a CPython SSLContext that trusts only the CA(s) in *ca_pem*.
 
-    Uses :meth:`ssl.SSLContext.load_verify_locations` with the PEM
-    bytes — stdlib accepts a string or bytes via ``cadata``, so we
-    pass either form through unchanged.  The context inherits
-    ``ssl.create_default_context``'s ``CERT_REQUIRED`` +
-    ``check_hostname=True`` defaults; only the trust anchor is
-    replaced.  Override on the returned context if needed.
+    Accepts PEM (``str`` or ``bytes``) or DER (``bytes``, first byte 0x30) via
+    ``load_verify_locations``, and raises ``ValueError`` for anything else. Keeps
+    ``create_default_context``'s ``CERT_REQUIRED`` + ``check_hostname=True``
+    defaults, replacing only the trust anchor.
     """
     import ssl  # noqa: PLC0415 - runtime-gated
 
@@ -378,33 +311,27 @@ def ssl_context_with_ca(ca_pem):
     else:
         raw = bytes(ca_pem)
         if b"-----BEGIN CERTIFICATE-----" in raw:
-            # PEM bytes — stdlib wants ``cadata`` as str for PEM.
+            # PEM bytes: stdlib wants cadata as str for PEM.
             context.load_verify_locations(cadata=raw.decode("ascii"))
         elif raw[:1] == b"\x30":
-            # DER (ASN.1 SEQUENCE) — stdlib accepts bytes-like cadata
-            # as DER directly.
+            # DER (ASN.1 SEQUENCE): stdlib accepts bytes-like cadata as DER.
             context.load_verify_locations(cadata=raw)
         else:
             raise ValueError(
                 "ssl_context_with_ca expects PEM "
                 "(-----BEGIN CERTIFICATE-----) or DER (ASN.1 SEQUENCE, "
-                "first byte 0x30) — got neither",
+                "first byte 0x30); got neither",
             )
     return context
 
 
 def ssl_context_no_verify():
-    """Return a CPython ``ssl.SSLContext`` that **skips** verification.
+    """Return a CPython ``ssl.SSLContext`` that skips verification.
 
-    Explicit opt-out for callers that intentionally don't want to
-    validate the peer.  Named so code reviewers can grep for it —
-    ``connector(host, port, tls=True, context=ssl_context_no_verify())``
-    shouts what it does.
-
-    Inverts both of ``ssl.create_default_context``'s secure defaults:
-    ``check_hostname = False`` (must come first — stdlib refuses to
-    set ``verify_mode = CERT_NONE`` while ``check_hostname`` is true)
-    and ``verify_mode = CERT_NONE``.
+    An explicit opt-out for callers that intentionally do not validate the peer;
+    named so reviewers can grep for it. Sets ``check_hostname = False`` first
+    (stdlib refuses ``CERT_NONE`` while it is true), then
+    ``verify_mode = CERT_NONE``.
     """
     import ssl  # noqa: PLC0415 - runtime-gated
 

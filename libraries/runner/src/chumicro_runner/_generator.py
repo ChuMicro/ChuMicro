@@ -1,62 +1,22 @@
 """Generator adapter for ``Runner.add_generator``.
 
-Bridges a Python generator function (``def`` + ``yield`` / ``yield from``)
-into the runner's check / handle / io_* protocol.  The wrapper is
-fully duck-typed: a generator yields *anything* that exposes the
-attributes the wrapper inspects.  No named protocol classes required.
-
-The duck-typed wait protocol — every attribute optional, defaults to
-None / False:
-
-* ``io_socket``: the underlying pollable the runner should register
-  with ipoll, or ``None``.
-* ``io_interest(now_ms) -> int``: bitmask (``chumicro_runner.IO_READ`` /
-  ``IO_WRITE``) of the poll directions to register the socket for; 0 or
-  an absent hook registers nothing.
-* ``next_deadline``: absolute tick at which the wrapper should resume
-  the generator; ``None`` means "resume on the next tick after an
-  ipoll wake or any other deadline elapses."
-* ``ready(now_ms) -> bool``: optional event predicate.  A wait
-  exposing it (and no socket) suspends the generator until ``ready``
-  returns True or ``next_deadline`` elapses (the timeout path) — the
-  shape ``chumicro_timing.waits.Signal`` implements for
-  completions that originate in callback-style services.
-
-A bare ``yield`` (sending ``None``) suspends for exactly one tick:
-the wrapper substitutes a private next-tick wait, so ``None`` in the
-wait slot strictly means the generator finished.
-
-The ``SocketConnector`` from ``chumicro_sockets`` already exposes
-these attributes natively, so a generator that wraps it can simply
-``yield connector`` — no extra wrapping needed.  Helper functions
-build small private wait objects for the other cases: the socket
-helpers in ``chumicro_sockets.generators`` for a bare socket,
-``sleep_until`` in ``chumicro_runner.generators`` for a deadline,
-``Signal`` / ``wait_for`` in ``chumicro_timing.waits`` for a
-callback-completed event.
-
-Sequential I/O state machines that would otherwise need an explicit
-per-state ``check`` / ``handle`` object collapse to a top-to-bottom
-generator body.  The substrate is plain Python generators driven via
-``.send()`` / ``.throw()`` / ``.close()`` — no ``async`` / ``await``
-keywords involved, and no event loop other than the runner's own tick
-loop.
-
-``GeneratorHandle`` is the public face returned by ``add_generator``;
-``_GeneratorWrapper`` is the runner-protocol adapter that users never
-touch directly.
+Bridges a plain Python generator (``def`` + ``yield``) into the runner's
+check / handle / io_* protocol.  The generator suspends by ``yield``-ing
+a duck-typed wait object whose optional ``io_socket`` /
+``io_interest(now_ms)`` / ``next_deadline`` / ``ready(now_ms)``
+attributes tell the wrapper when to resume it; a bare ``yield`` resumes
+on the next tick.  ``GeneratorHandle`` is the public handle returned to
+callers; ``_GeneratorWrapper`` is the internal adapter.
 """
 
 from chumicro_timing.ticks import ticks_diff
 
 
 class _NextTickWait:
-    """Bare-``yield`` wait: carries no wait hooks, so the wrapper resumes next tick."""
+    """Bare-``yield`` wait with no hooks, so the wrapper resumes next tick.
 
-    # Omitting every hook of the duck-typed wait protocol (io_socket /
-    # io_interest / next_deadline / ready), which chumicro_sockets.waits
-    # describes in full, is what pins this to a plain next-tick resume.
-    # One module-level instance serves every generator.
+    One module-level instance serves every generator.
+    """
 
 
 _NEXT_TICK_WAIT = _NextTickWait()
@@ -65,23 +25,18 @@ _NEXT_TICK_WAIT = _NextTickWait()
 class GeneratorHandle:
     """Public handle returned by ``Runner.add_generator``.
 
-    Observe completion via ``.done`` (False while the generator is
-    running, True after it returns normally, dies on an exception, or
-    is cancelled).  ``.error`` distinguishes the outcomes: ``None`` for
-    a normal return or cancel, the exception instance when the body
-    raised — so a ``while not handle.done`` driver can report *why* a
-    task ended instead of discovering a silent death by timeout.
-    Stop a long-running generator early via ``.cancel()``, which fires
-    any ``finally`` blocks inside the generator body — the natural place
-    to put socket close, deadline timer cancel, and so on.
+    ``.done`` is False while the generator runs, True once it returns,
+    raises, or is cancelled.  ``.error`` is ``None`` on a normal return
+    or cancel and the exception instance when the body raised, so a
+    driver can report why a task ended.  ``.cancel()`` stops a running
+    generator early, firing any ``finally`` blocks inside it.
     """
 
     def __init__(self) -> None:
         self.done = False
         self.error: BaseException | None = None
-        # Set by ``Runner.add_generator`` immediately after construction.
-        # ``cancel`` clears it so the second call is a no-op without
-        # needing a separate already-cancelled flag.
+        # Set by Runner.add_generator after construction; cancel clears it
+        # so a second cancel is a no-op without a separate flag.
         self._wrapper: _GeneratorWrapper | None = None
 
     def cancel(self) -> None:
@@ -98,31 +53,14 @@ class GeneratorHandle:
 
 
 class _GeneratorWrapper:
-    """Runner-protocol adapter that drives a generator via wait-tokens.
-
-    Constructed by ``Runner.add_generator``; never used directly by
-    library callers.  Satisfies the duck-typed contract the runner reads:
-    ``check`` / ``handle`` for tick scheduling, ``io_socket`` +
-    ``io_interest(now_ms)`` for poll-set membership,
-    ``io_error`` for POLLERR / POLLHUP dispatch, and ``next_deadline``
-    so a deadline-bearing wait (``sleep_until``) gates the wake timeout
-    in ``Runner.wait``.
-
-    The wrapper writes ``handle.done = True`` and removes its
-    ``TaskHandle`` from the runner the moment the generator finishes
-    (either by returning normally or by being cancelled), so the
-    consumer's ``while not handle.done`` loop exits cleanly without
-    leaving a dead entry in the runner.
-    """
+    """Runner-protocol adapter that drives a generator via wait-tokens."""
 
     def __init__(self, gen: object, handle: GeneratorHandle) -> None:
         self._gen = gen
         self._wait: object | None = None
         self._handle = handle
-        # Set by ``Runner.add_generator`` after the runner has appended
-        # this wrapper's TaskHandle to its ``_entries`` list.  The
-        # wrapper uses it to self-remove on ``StopIteration`` so a
-        # finished generator does not linger as a dead entry.
+        # Set by Runner.add_generator after it appends this wrapper's
+        # TaskHandle; used to self-remove when the generator finishes.
         self._task_handle: object | None = None
 
     def start(self) -> None:
@@ -133,18 +71,14 @@ class _GeneratorWrapper:
         wait = self._wait
         if wait is None:
             return False
-        # A socket-driven wait resumes every tick so its EAGAIN loop
-        # re-tries on each wake; ipoll in Runner.wait gates the sleep.
-        # When such a wait also carries next_deadline (a socket read
-        # with a timeout), that deadline only shortens Runner.wait's
-        # sleep — it must not delay the resume, or ready bytes would
-        # sit unread until the deadline.  A sleep-only wait (no socket)
-        # gates the resume on its deadline.
+        # A socket-driven wait resumes every tick so its EAGAIN loop retries
+        # on each wake (ipoll gates the sleep).  Any next_deadline it also
+        # carries only shortens the sleep; it must not delay this resume, or
+        # ready bytes would sit unread until the deadline.
         if getattr(wait, "io_socket", None) is not None:
             return True
-        # An event wait exposes ready(now_ms): resume once it fires, or
-        # when its next_deadline elapses (the timeout path); otherwise
-        # stay suspended so the wait is not busy-polled.
+        # An event wait exposes ready(now_ms): resume once it fires or its
+        # next_deadline elapses, else stay suspended so it is not busy-polled.
         ready = getattr(wait, "ready", None)
         if ready is not None:
             if ready(now_ms):
@@ -157,11 +91,8 @@ class _GeneratorWrapper:
         return True
 
     def handle(self, now_ms: int) -> None:
-        # check returning True is the gate; wait is non-None here.
-        # Resume the generator with now_ms — the value the gen receives
-        # at its yield expression.  Most helpers ignore it; long-running
-        # state machines can use it to advance internal deadlines
-        # without a second ticks_ms call.
+        # Resume the generator with now_ms, the value it receives at its
+        # yield expression (most helpers ignore it).
         self._advance(now_ms)
 
     @property
@@ -174,13 +105,8 @@ class _GeneratorWrapper:
     def io_interest(self, now_ms: int) -> int:
         """Poll-interest bitmask of the current wait, or 0 when idle.
 
-        Forwards to the yielded wait's own ``io_interest(now_ms)``: a
-        bare socket wait returns ``IO_READ`` / ``IO_WRITE``, a
-        ``SocketConnector`` returns its per-phase mask, a deadline-only
-        or bare-``yield`` wait returns 0.  A wait exposing no
-        ``io_interest`` (a minimal socket token) contributes nothing to
-        the poll set, matching the runner's ``getattr``-with-default
-        reading of an optional hook.
+        Forwards to the yielded wait's ``io_interest(now_ms)``; a wait
+        that exposes none contributes 0 to the poll set.
         """
         wait = self._wait
         if wait is None:
@@ -191,25 +117,18 @@ class _GeneratorWrapper:
         return interest(now_ms)
 
     def io_error(self, now_ms: int, eventmask: int) -> None:
-        """POLLERR / POLLHUP on the awaited socket — throw into the generator.
+        """POLLERR / POLLHUP on the awaited socket: throw ``OSError`` into the generator.
 
-        The generator can catch with ``except OSError:`` and recover, or
+        The generator can catch it with ``except OSError`` and recover, or
         let it propagate so the wrapper marks done and removes itself.
-        The eventmask is not forwarded; if a future caller needs the
-        bitmask, attach it to the exception.
         """
         self._advance_throw(OSError("POLLERR / POLLHUP on awaited socket"))
 
     def next_deadline(self, now_ms: int) -> int | None:
-        """Absolute tick at which the generator should be re-checked.
+        """Absolute tick at which the generator should be re-checked, or ``None``.
 
-        Reads the yielded wait's ``next_deadline`` — one convention
-        only: a callable taking ``now_ms`` and returning an absolute
-        tick or ``None`` (the ``SocketConnector`` shape, matching the
-        runner's service contract).  A wait without the attribute, or
-        whose call returns ``None``, is socket-driven (ipoll wake-up)
-        or unbounded.  ``Runner.wait`` mins this against every other
-        entry's deadline to compute its ipoll timeout.
+        Reads the yielded wait's ``next_deadline(now_ms)``; a wait without
+        it, or one that returns ``None``, is socket-driven or unbounded.
         """
         wait = self._wait
         if wait is None:
@@ -225,17 +144,14 @@ class _GeneratorWrapper:
         except StopIteration:
             self._mark_done()
         except BaseException as error:
-            # Generator raised — it has terminated.  Record the death on
-            # the handle (per-task attribution for the driver's
-            # ``while not handle.done`` loop) and drop the runner entry
-            # before re-raising so a dead wrapper does not linger if a
-            # caller catches the exception further up the stack.
+            # Generator raised, so it has terminated.  Record the death on
+            # the handle and drop the runner entry before re-raising.
             self._handle.error = error
             self._mark_done()
             raise
         else:
-            # A bare ``yield`` sends None; substitute the next-tick
-            # wait so a None wait slot strictly means finished.
+            # A bare yield sends None; substitute the next-tick wait so a
+            # None wait slot strictly means the generator finished.
             self._wait = wait if wait is not None else _NEXT_TICK_WAIT
 
     def _advance_throw(self, error: BaseException) -> None:
@@ -251,15 +167,9 @@ class _GeneratorWrapper:
             self._wait = wait if wait is not None else _NEXT_TICK_WAIT
 
     def _close(self) -> None:
-        """Cancellation path: close the generator and remove from runner.
-
-        ``gen.close()`` raises ``GeneratorExit`` inside the generator at
-        its current yield; ``finally`` blocks run.  A well-formed
-        generator catches nothing (or catches and re-raises) and exits.
-        A misbehaving generator that ignores ``GeneratorExit`` causes
-        ``gen.close()`` itself to raise ``RuntimeError`` — let it
-        propagate to the cancel caller; there is no recovery here.
-        """
+        # gen.close() raises GeneratorExit at the current yield so finally
+        # blocks run.  A generator that ignores GeneratorExit makes close()
+        # raise RuntimeError; let it propagate, there is no recovery here.
         if self._handle.done:
             return
         try:
@@ -268,14 +178,10 @@ class _GeneratorWrapper:
             self._mark_done()
 
     def _mark_done(self) -> None:
-        """Finalize the generator: clear the wait, set ``handle.done``, remove the runner entry.
-
-        Removing the entry clears ``_task_handle``, so a repeat call
-        removes nothing.
-        """
         self._wait = None
         self._handle.done = True
         task_handle = self._task_handle
         if task_handle is not None:
+            # Clear _task_handle first so a repeat call removes nothing.
             self._task_handle = None
             task_handle.remove()

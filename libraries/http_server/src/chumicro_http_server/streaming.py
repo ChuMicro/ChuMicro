@@ -1,28 +1,12 @@
 """Streamed response bodies for chumicro-http-server (opt-in submodule).
 
-Import explicitly, the way ``chumicro_requests.generators`` is::
+A handler returns a :class:`StreamingResponse` carrying a byte source, and
+the server drains it to the client across ticks. Import it explicitly::
 
-    from chumicro_http_server.streaming import build_streaming_response, SOURCE_EOF
+    from chumicro_http_server.streaming import build_streaming_response
 
-Server-side mirror of ``chumicro_requests``'s streamed *response* reads:
-a handler returns a :class:`StreamingResponse` carrying a byte
-**source** — a fill-a-buffer ``source(buffer) -> int`` — and the server
-drains it to the client across ticks, framing each fill as
-``Content-Length`` body bytes (total known) or a chunked chunk (total
-unknown), under the buffered path's per-tick send budget, EAGAIN
-backpressure, and request-timeout.  The only new steady-state heap is
-one fixed staging window per streaming connection.
-
-This is a *separate* module, not part of the base ``chumicro_http_server``
-import: :class:`~chumicro_http_server.HttpServer` recognizes a streaming
-response and drives it by duck-typing, so a server that only ever returns
-buffered responses never loads this module's framing bytecode — the same
-pay-for-what-you-use split that keeps ``chumicro_requests`` slim when a
-board never streams.  See ``docs/guide.md`` for the full guide.
-
-Chunked framing is allocation-free per chunk: the chunk-size line is
-written into a reserved head region of the staging buffer itself, so a
-whole chunk (``<hex>\\r\\n`` + body + ``\\r\\n``) is one contiguous send.
+The base server loads this module only when a handler actually streams, so
+a server that never streams never pays for its framing code.
 """
 
 import errno
@@ -53,8 +37,8 @@ __all__ = [
     "encode_streaming_headers",
 ]
 
-#: Terminating chunk of a chunked body: a zero-length chunk plus the
-#: (trailer-less) closing CRLF.  Sent once at :data:`SOURCE_EOF`.
+#: Terminating chunk of a chunked body (zero-length chunk plus closing
+#: CRLF). Sent once at :data:`SOURCE_EOF`.
 _CHUNK_TERMINATOR = b"0\r\n\r\n"
 _CHUNK_TERMINATOR_VIEW = memoryview(_CHUNK_TERMINATOR)
 
@@ -63,30 +47,24 @@ _HEX_DIGITS = b"0123456789abcdef"
 
 
 # ---------------------------------------------------------------------------
-# Streamed-send failures — all close the connection (framing is broken)
+# Streamed-send failures (all close the connection, framing is broken)
 # ---------------------------------------------------------------------------
 
 
 class _StreamError(ServerError):
-    """Base for streamed-send failures that break framing mid-body.
+    """Streamed-send failure that breaks framing mid-body.
 
-    A :class:`ServerError` so the connection's existing
-    ``except (OSError, ServerError)`` fail-and-close path handles it: the
-    framing is broken past where an error page could be sent.
+    A :class:`ServerError` so the connection's fail-and-close path handles
+    it (framing is broken past where an error page could be sent).
     """
 
 
 class _StreamSourceError(_StreamError):
-    """The byte source violated its contract mid-transfer (out-of-range
-    return, or a declared ``Content-Length`` it under-/over-ran)."""
+    """The byte source violated its contract mid-transfer."""
 
 
 class _StreamHandlerError(_StreamError):
-    """The byte source raised mid-transfer (original on ``__cause__``).
-
-    Bytes are already on the wire, so this can't become a 500 page; it
-    routes through the same fail-and-close path as every fatal error.
-    """
+    """The byte source raised mid-transfer (original on ``__cause__``)."""
 
 
 # ---------------------------------------------------------------------------
@@ -95,7 +73,6 @@ class _StreamHandlerError(_StreamError):
 
 
 def _hex_len(value):
-    """Number of lowercase-hex digits for *value* (``0`` needs one)."""
     length = 1
     while value >= 16:
         value >>= 4
@@ -104,13 +81,9 @@ def _hex_len(value):
 
 
 def _write_chunk_header(buffer, end, size):
-    """Write ``<hex-size>\\r\\n`` for *size* into *buffer* ending at *end*.
-
-    Fills straight into the staging bytearray with indexed byte
-    assignment (no allocation per chunk) and returns the header length,
-    so the framed chunk starts at ``end - returned``.  *size* must be
-    ``> 0`` (the terminator is the :data:`_CHUNK_TERMINATOR` constant).
-    """
+    # Writes ``<hex-size>\r\n`` backwards into the staging buffer ending at
+    # *end* (no per-chunk alloc) and returns the header length, so the chunk
+    # starts at ``end - returned``. *size* must be > 0.
     buffer[end - 1] = 0x0A  # \n
     buffer[end - 2] = 0x0D  # \r
     position = end - 2
@@ -130,21 +103,7 @@ def _write_chunk_header(buffer, end, size):
 
 
 class _StreamState:
-    """Drains a handler-supplied byte source to the client, framed.
-
-    Built once per streaming response over a reused per-connection
-    staging *buffer*.  The connection's send loop flushes the framed
-    span (:attr:`out_view` / :attr:`out_pos` / :attr:`out_end`) under its
-    per-tick budget + EAGAIN, calling :meth:`advance_sent` per partial
-    send and :meth:`pull` to frame the next fill only once the previous
-    fully drained — so a stalled client holds just one window.
-
-    Args:
-        source: The ``source(buffer) -> int`` fill callable.
-        content_length: Declared total for Content-Length framing, or
-            ``None`` for chunked.
-        buffer: Reused per-connection staging ``bytearray``.
-    """
+    """Drains a handler-supplied byte source to the client, framed."""
 
     def __init__(self, source, content_length, buffer):
         self._source = source
@@ -154,9 +113,8 @@ class _StreamState:
         self._view = memoryview(buffer)
         total = len(buffer)
         if self._chunked:
-            # Reserve a head region for the chunk-size line and a 2-byte
-            # tail for the chunk's trailing CRLF, so the source fills the
-            # middle and a whole framed chunk is one contiguous span.
+            # Reserve a head region for the chunk-size line and a 2-byte tail
+            # for the trailing CRLF, so a whole framed chunk is contiguous.
             self._header_reserve = _hex_len(total) + 2
             self._fill_capacity = total - self._header_reserve - 2
             if self._fill_capacity < 1:
@@ -185,13 +143,13 @@ class _StreamState:
 
     @property
     def finished(self):
-        """``True`` once the source signalled EOF and every framed byte
-        (including any chunked terminator) has drained."""
+        """``True`` once the source signalled EOF and every framed byte has
+        drained."""
         return self._eof and self.out_pos >= self.out_end
 
     @property
     def body_bytes_sent(self):
-        """Body (payload) bytes framed so far — excludes chunk framing."""
+        """Body (payload) bytes framed so far, excluding chunk framing."""
         return self._body_sent
 
     def advance_sent(self, count):
@@ -201,10 +159,9 @@ class _StreamState:
     def pull(self):
         """Poll the source once and frame the result.
 
-        ``False`` when the source is dry this tick (returned ``0``, not
-        done) so the connection parks; ``True`` when it framed data or
-        handled EOF.  Propagates whatever the source raises (the
-        connection wraps it as a :class:`_StreamHandlerError`).
+        Returns ``False`` when the source is dry this tick (so the
+        connection parks) and ``True`` when it framed data or handled EOF.
+        Propagates whatever the source raises.
         """
         count = self._source(self._fill_view)
         if count == SOURCE_EOF:
@@ -264,15 +221,10 @@ class StreamingResponse:
     """A response whose body a byte source produces incrementally.
 
     Build one with :func:`build_streaming_response` and return it from a
-    handler to serve a body far larger than the heap — a sensor-log dump,
-    a file off storage — without materializing it.  The server drains
-    :attr:`source` across ticks under the buffered path's send budget and
-    EAGAIN backpressure, framing each fill as ``Content-Length`` body
-    bytes (:attr:`content_length` known) or a chunked chunk (``None``).
-
-    :class:`~chumicro_http_server.HttpServer` recognizes it by duck type
-    (its :attr:`source` attribute) — it need not subclass
-    :class:`~chumicro_http_server.Response`.
+    handler to serve a body far larger than the heap (a sensor-log dump, a
+    file off storage) without materializing it. The server drains
+    :attr:`source` across ticks, framing each fill as ``Content-Length``
+    body bytes or a chunked chunk.
     """
 
     def __init__(
@@ -307,28 +259,20 @@ def build_streaming_response(
 ) -> StreamingResponse:
     """Build a :class:`StreamingResponse` served from a byte *source*.
 
-    Return the result from a handler to stream a body too large to
-    buffer.  The server pulls one staging-window fill per tick from
-    *source* and frames it — ``Content-Length`` when *content_length* is
-    given, chunked otherwise.
+    Return the result from a handler to stream a body too large to buffer.
+    The server pulls one staging-window fill per tick from *source*.
 
     Args:
         status: HTTP status code (default ``200``).
-        source: Fill-a-buffer callable ``source(buffer) -> int``.  Each
-            call writes up to ``len(buffer)`` body bytes into *buffer*
-            and returns ``n > 0`` (wrote ``buffer[:n]``), ``0`` (no bytes
-            ready this tick, body not finished — the server retries), or
-            :data:`SOURCE_EOF` (``-1``, end of body).  A log/file
-            generator that always has bytes until it ends never returns
-            ``0``; return ``0`` only for a source that can be empty for a
-            tick (an async-sampled sensor).
-        content_length: Total if known — a ``Content-Length`` header,
-            body framed raw; the source must then produce exactly this
-            many bytes before :data:`SOURCE_EOF` (a mismatch closes the
-            connection).  ``None`` (default) frames chunked.
-        headers: Optional extra headers.  Do not set ``Content-Length`` /
-            ``Transfer-Encoding`` / ``Connection`` — the server owns
-            framing.
+        source: Fill-a-buffer callable ``source(buffer) -> int``. Each call
+            writes up to ``len(buffer)`` body bytes and returns ``n > 0``
+            (wrote ``buffer[:n]``), ``0`` (nothing ready this tick, the
+            server retries), or :data:`SOURCE_EOF` (``-1``, end of body).
+        content_length: Total when known, framed as ``Content-Length``; the
+            source must then produce exactly this many bytes before
+            :data:`SOURCE_EOF`. ``None`` (default) frames chunked.
+        headers: Optional extra headers. Do not set ``Content-Length`` /
+            ``Transfer-Encoding`` / ``Connection``; the server owns framing.
 
     Returns:
         A :class:`StreamingResponse` for the handler to return.
@@ -347,13 +291,13 @@ def build_streaming_response(
 def encode_streaming_headers(response: StreamingResponse) -> bytes:
     """Serialize a :class:`StreamingResponse`'s header block to wire bytes.
 
-    Body-less counterpart of
-    :func:`~chumicro_http_server.encode_response`: status line, the
-    framing header (``Content-Length`` when a total was declared,
-    ``Transfer-Encoding: chunked`` otherwise), ``Connection: close``, the
-    caller's headers, terminating CRLF — no body (the source streams it).
-    Reuses the same CR / LF / NUL rejection so reflected request data
-    can't splice the response.
+    Emits the status line, the framing header (``Content-Length`` when a
+    total was declared, ``Transfer-Encoding: chunked`` otherwise),
+    ``Connection: close``, and the caller's headers, but no body.
+
+    Raises:
+        ServerProtocolError: The reason phrase or a header carries a CR,
+            LF, or NUL.
     """
     _reject_control_chars("reason", str(response.reason))
     headers = CaseInsensitiveDict()
@@ -375,9 +319,8 @@ def encode_streaming_headers(response: StreamingResponse) -> bytes:
 
 
 # ---------------------------------------------------------------------------
-# Connection drive helpers — reached only through the thin ``_Connection``
-# stubs (``_stage_streaming_response`` / ``_drive_stream_body``), so all of
-# this loads lazily, off the base import's always-loaded path.
+# Connection drive helpers, reached only through the thin ``_Connection``
+# stubs, so all of this loads lazily off the base import's path.
 # ---------------------------------------------------------------------------
 
 
@@ -386,9 +329,8 @@ def stage_streaming_response(conn, response):
 
     The header block flushes through the same ``_drive_send`` path as a
     buffered response; once it drains, ``_drive_send`` hands off to
-    :func:`drive_stream_body` because ``conn._stream`` is set.  An
-    unencodable header block (str value, non-ASCII reason) falls back to
-    the canned 500 — safe because no body byte was sent yet.
+    :func:`drive_stream_body`. An unencodable header block falls back to
+    the canned 500, safe because no body byte was sent yet.
     """
     try:
         header_bytes = encode_streaming_headers(response)
@@ -413,13 +355,10 @@ def drive_stream_body(conn):
     """Drain *conn*'s byte source to its socket, framed, up to
     ``send_budget`` bytes this tick.
 
-    The same ``send_budget_per_tick`` cap the buffered path uses bounds
-    bytes-sent-per-connection-per-tick, so one stream can't starve other
-    connections.  Partial sends / EAGAIN park with the framing intact;
-    the source is polled for the next fill only once the current one
-    fully drains, so a stalled client holds one window.  The
-    request-timeout deadline (checked in ``tick``) covers a stalled
-    streamed send.
+    The per-tick send budget bounds bytes sent per connection, so one
+    stream can't starve others. A partial send or EAGAIN parks with the
+    framing intact, and the source is polled for the next fill only once
+    the current one fully drains.
     """
     stream = conn._stream
     budget = conn._send_budget
@@ -448,8 +387,8 @@ def drive_stream_body(conn):
         try:
             progressed = stream.pull()
         except ServerError:
-            # Source contract violation / Content-Length mismatch — let
-            # the connection's fail-and-close handler take it.
+            # Source contract violation or Content-Length mismatch: let the
+            # connection's fail-and-close handler take it.
             raise
         except Exception as source_error:  # noqa: BLE001 - handler source raised mid-body
             # Framing is broken (bytes already on the wire); route through
@@ -458,4 +397,4 @@ def drive_stream_body(conn):
                 f"streaming source raised mid-body: {source_error!r}",
             ) from source_error
         if not progressed:
-            return  # source dry this tick — retry on a later tick
+            return  # source dry this tick; retry later

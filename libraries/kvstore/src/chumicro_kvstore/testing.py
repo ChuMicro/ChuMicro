@@ -1,16 +1,7 @@
 """Test helpers for libraries that depend on ``chumicro-kvstore``.
 
-``FakeKVStore`` is here for downstream libraries to test against
-instead of hand-rolling a store mock.
-
-Example::
-
-    from chumicro_kvstore.testing import FakeKVStore
-
-    store = FakeKVStore(capacity=256)        # simulate SAMD21 NVM
-    store["boot_count"] = 1
-    store.commit()
-    store.simulate_corrupt()                 # force is_corrupt next load
+``FakeKVStore`` gives downstream libraries a real store to test against
+instead of hand-rolling a mock.
 """
 
 __chumicro_test_support__ = True
@@ -20,18 +11,17 @@ from chumicro_kvstore.core import KVStore
 
 
 class FakeKVStore(KVStore):
-    """In-memory ``KVStore`` with explicit corruption + capacity hooks.
+    """In-memory ``KVStore`` with explicit corruption and capacity hooks.
 
-    Wraps ``MemoryBackend`` so every assertion downstream tests write
-    against the real ``KVStore`` API exercises the same code path the
-    production runtime takes.
+    Wraps ``MemoryBackend`` so downstream tests exercise the real
+    ``KVStore`` API and code path.
 
     Args:
-        capacity: Optional capacity override (bytes).  Drives the
-            ``KVStoreFull`` failure path in downstream tests.
+        capacity: Optional capacity override in bytes, to drive the
+            ``KVStoreFull`` path in downstream tests.
         initial_payload: Optional pre-seeded msgpack payload.
-        record_calls: When ``True``, every public-API call appends an
-            entry to ``self.calls`` for assertion.
+        record_calls: When ``True``, each public-API call appends an entry
+            to ``self.calls`` for later assertion.
     """
 
     def __init__(
@@ -81,9 +71,8 @@ class FakeKVStore(KVStore):
     def simulate_corrupt(self) -> None:
         """Mark the underlying memory backend corrupt.
 
-        The next ``reload()`` (or ``KVStore`` re-construction) will
-        surface a corruption event.  In-memory state stays intact
-        until explicitly reloaded, mirroring the production behavior.
+        The next ``reload()`` surfaces the corruption; in-memory state stays
+        intact until then, mirroring production behavior.
         """
         self._memory_backend.force_corrupt()
 
@@ -94,20 +83,14 @@ class FakeKVStore(KVStore):
     def set_capacity(self, capacity: int) -> None:
         """Adjust the simulated capacity mid-test.
 
-        Lets tests cross the ``KVStoreFull`` threshold deterministically
-        without manufacturing a giant payload.  Updates both the backend
-        and the ``KVStore.capacity`` snapshot taken at construction, so
-        raising the cap mid-test actually takes effect (the store's own
-        pre-check reads its snapshot, not the backend).
+        Updates both the backend and the ``KVStore.capacity`` snapshot taken
+        at construction, so a raised cap takes effect: the store's own
+        pre-check reads that snapshot, not the backend.
         """
         self._memory_backend.capacity = capacity
         self.capacity = capacity
 
     @property
     def raw_payload(self) -> bytes:
-        """Return the raw msgpack bytes currently held by the backend.
-
-        Useful for round-trip assertions without round-tripping through
-        the public reload path.
-        """
+        """Raw msgpack bytes currently held by the backend."""
         return self._memory_backend._payload  # noqa: SLF001 - test helper

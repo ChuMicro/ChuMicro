@@ -1,31 +1,20 @@
 """Test helpers for libraries that consume chumicro-logging.
 
-The library itself doesn't need fakes — its handlers are already
-trivial to substitute (any object exposing ``emit(level, name,
-message)`` works).  This module ships two helpers — ``RecordingHandler``
-and ``FailingHandler`` — that are useful when *downstream* libraries
-want to assert against logger output without writing one-off mocks.
-See ``docs/testing.md`` for worked examples.
-
-The helpers are test-support — the ``__chumicro_test_support__``
-marker below keeps this file out of every bundle and every product /
-app / functional device deploy (the on-device unit sweep stages it).
+``RecordingHandler`` captures records for assertions and ``FailingHandler``
+raises on every emit, so downstream libraries can test against logger output
+without writing one-off mocks.
 """
 
-#: Source bundle / sdist only -- never lands on a device.
+#: Source bundle and sdist only; never lands on a device.
 __chumicro_test_support__ = True
 
 
 class RecordingHandler:
     """Handler that captures records in a list for test assertions.
 
-    Each call to ``emit`` appends ``(level, name, message)``.  The
-    list is exposed as ``records`` and can be inspected, asserted
-    against, or cleared via ``clear()``.
-
     Args:
-        level: Minimum level captured.  Defaults to ``0`` so every
-            record passes through regardless of logger threshold.
+        level: Minimum level captured. Defaults to ``0`` so every record
+            passes through regardless of the logger threshold.
     """
 
     def __init__(self, level: int = 0) -> None:
@@ -58,14 +47,10 @@ class RecordingHandler:
 
 
 class FailingHandler:
-    """Handler that raises on every ``emit`` — used to exercise error paths.
-
-    The Logger's ``handler_errors`` counter increments each time this
-    fires.  Useful for asserting that a misbehaving handler never
-    crashes the application.
+    """Handler that raises on every ``emit``, to exercise error paths.
 
     Args:
-        exception: The exception instance to raise.  Defaults to
+        exception: The exception instance to raise. Defaults to
             ``RuntimeError("handler boom")``.
     """
 
