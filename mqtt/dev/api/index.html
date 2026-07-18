@@ -420,17 +420,6 @@
   
 </li>
         
-          <li class="md-nav__item">
-  <a href="#chumicro_mqtt.__getattr__" class="md-nav__link">
-    <span class="md-ellipsis">
-      <span class="md-typeset">
-        __getattr__
-      </span>
-    </span>
-  </a>
-  
-</li>
-        
       </ul>
     </nav>
   
@@ -589,17 +578,6 @@
   
 </li>
         
-          <li class="md-nav__item">
-  <a href="#chumicro_mqtt.__getattr__" class="md-nav__link">
-    <span class="md-ellipsis">
-      <span class="md-typeset">
-        __getattr__
-      </span>
-    </span>
-  </a>
-  
-</li>
-        
       </ul>
     </nav>
   
@@ -644,11 +622,10 @@
     <div class="doc doc-contents first">
 
         <p>Non-blocking MQTT 3.1.1 client for CircuitPython, MicroPython, and CPython.</p>
-<p>Built on :mod:<code>chumicro_sockets</code> (TCP + TLS) and :mod:<code>chumicro_timing</code>
-(ticks).  Tick-based runner contract: :meth:<code>MQTTClient.check(now_ms)</code>
-reports whether work is pending and :meth:<code>handle(now_ms)</code> does one
-slice of progress per call.</p>
-<p>QoS 0 and QoS 1 are supported.  QoS 2 raises :class:<code>UnsupportedQoSError</code>.</p>
+<p>Drive :class:<code>MQTTClient</code> from a tick loop: :meth:<code>MQTTClient.check</code>
+reports whether work is pending and :meth:<code>MQTTClient.handle</code> does one
+slice of progress per call. QoS 0 and QoS 1 are supported; QoS 2 raises
+:class:<code>UnsupportedQoSError</code>.</p>
 
 
 
@@ -687,9 +664,8 @@ slice of progress per call.</p>
 
 
         <p>The outbound queue is full, so the caller must back off.</p>
-<p>Raised by :meth:<code>MQTTClient.publish</code> (and friends) when appending
-another packet would exceed <code>max_tx_queue_size</code>.  The client is
-otherwise unaffected: call :meth:<code>MQTTClient.handle</code> once to drain,
+<p>Raised by :meth:<code>MQTTClient.publish</code> when another packet would exceed
+<code>max_tx_queue_size</code>. Call :meth:<code>MQTTClient.handle</code> once to drain,
 then retry the publish.</p>
 
 
@@ -722,7 +698,8 @@ then retry the publish.</p>
 
 
         <p>CONNACK arrived with a non-zero return code.</p>
-<p>The numeric <code>return_code</code> is on the exception so callers can branch.</p>
+<p>The numeric <code>return_code</code> attribute lets callers branch on the
+rejection reason.</p>
 
 
 
@@ -802,8 +779,6 @@ then retry the publish.</p>
 
 
         <p>The broker sent something the spec doesn't allow.</p>
-<p>Always a peer or network bug, so the right response is usually
-disconnect + reconnect.</p>
 
 
 
@@ -834,7 +809,7 @@ disconnect + reconnect.</p>
 
 
 
-        <p>User requested QoS 2.  Constants are reserved, but handlers aren't wired.</p>
+        <p>User requested QoS 2, which is not implemented.</p>
 
 
 
@@ -863,30 +838,6 @@ disconnect + reconnect.</p>
         <p>Return <code>True</code> when <em>topic</em> matches the wildcard <em>pattern</em>.</p>
 <p><code>+</code> matches one topic level.  <code>#</code> matches any number of levels
 and must be the last character of the pattern.</p>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h3 id="chumicro_mqtt.__getattr__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="fm">__getattr__</span><span class="p">(</span><span class="n">name</span><span class="p">)</span></code>
-
-<a href="#chumicro_mqtt.__getattr__" class="headerlink" title="Permanent link">&para;</a></h3>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Lazy-load the client half on first access (PEP 562).</p>
-<p><code>client</code> is the fleet's single largest module (~40 KB of source).
-A board that imports <code>chumicro_mqtt</code> but never builds an
-<code>MQTTClient</code> — a receive-only or wire-helper-only use — pays no
-RAM for its compiled code objects; the module loads on the first
-access to one of its symbols.  Constructing the client at startup
-keeps that one-time import cost on a fresh heap (see the guide).</p>
 
 
     </div>

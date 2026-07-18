@@ -911,15 +911,9 @@ treated as an unsolicited ack and faults the client.</p>
     <div class="doc doc-contents first">
 
         <p>Pre-baked broker responses and client fixtures for unit tests.</p>
-<p>Tests typically drive an MQTTClient via a
-:class:<code>chumicro_sockets.testing.FakeSocket</code>.  Script broker responses
-with <code>sock.enqueue_recv(canned_connack_bytes())</code> etc., let the
-client tick, then assert the wire format on <code>sock.sent</code>.</p>
-<p>The canned-bytes helpers stay in sync with the encoder/decoder so a
-hand-rolled byte literal in a test doesn't drift when the wire format
-gets a tweak.  <code>new_client</code> + <code>drive</code> package the common
-"FakeSocket + FakeTicks + sensible defaults" construction so cross-
-runtime test files don't each carry their own copy.</p>
+<p>Script broker responses with <code>sock.enqueue_recv(canned_connack_bytes())</code>
+against a :class:<code>chumicro_sockets.testing.FakeSocket</code>, let the client
+tick, then assert the wire format on <code>sock.sent</code>.</p>
 
 
 
