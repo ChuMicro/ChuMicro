@@ -1,50 +1,30 @@
-"""``WifiAdapter``: minimum protocol every concrete adapter satisfies.
+"""``WifiAdapter``: the contract every concrete wifi adapter satisfies.
 
-Adapters wrap the runtime's wifi stack (`wifi.radio` on CP,
-`network.WLAN` on MP).  ``WifiService`` drives them.  Users never
-touch them directly.
-
-Five members cover the substrate's lifecycle:
-
-* :meth:`configure`: apply hostname / power-save / static-IP
-  settings (called once at construction, before the first connect).
-* :meth:`connect`: non-blocking attempt to associate.  Adapters
-  whose substrate's connect call is blocking budget the call against
-  ``connect_timeout_ms`` and return when done.
-* :meth:`is_linked`: return ``True`` while the substrate reports
-  an active association.
-* :meth:`ip`: return the assigned IPv4 string, or ``None`` when
-  not linked.
-* :attr:`name`: stable identifier for the adapter ("cp",
-  "mp_esp32", "mp_rp2", "fake").  Read it as ``wifi.adapter.name``
-  for logging.
+Adapters wrap the runtime's wifi stack (``wifi.radio`` on CircuitPython,
+``network.WLAN`` on MicroPython); ``WifiService`` drives them and users
+never touch them directly.
 """
 
 
 class WifiAdapter:
-    """Concrete adapters inherit and override the six members below.
+    """Concrete adapters inherit this and override its members.
 
-    Class rather than ``Protocol`` because MicroPython has no
-    ``typing`` module that library code can import.
+    A plain class rather than a ``Protocol`` because MicroPython has no
+    ``typing`` module for library code to import.
     """
 
     name = "base"
 
-    #: Whether :meth:`connect` blocks until the association resolves and
-    #: returns the final result (``True``, CircuitPython), or dispatches
-    #: a non-blocking join that ``is_linked`` reports on a later tick
-    #: (``False``, MicroPython).  ``WifiService`` reads this to decide
-    #: whether a ``connect() == False`` is a settled failure or an
-    #: attempt still in flight.  Defaults to ``True`` (the safe reading:
-    #: treat the result as final).
+    #: Whether :meth:`connect` blocks until the association resolves
+    #: (``True``, CircuitPython) or dispatches a non-blocking join that
+    #: ``is_linked`` reports later (``False``, MicroPython). ``WifiService``
+    #: reads this to tell a settled failure from an attempt still in flight.
     connect_blocks = True
 
-    #: Runtime-specific radio handle.  Only meaningful on CircuitPython,
-    #: where downstream libraries (``chumicro-sockets``,
-    #: ``chumicro-ntp``) need a ``radio=`` argument routed through the
-    #: socketpool.  MP / CPython adapters keep this as ``None`` so user
-    #: code can write ``radio=wifi.adapter.radio`` uniformly across
-    #: every runtime.
+    #: Runtime-specific radio handle, meaningful only on CircuitPython where
+    #: downstream libraries route a ``radio=`` argument through the socketpool.
+    #: ``None`` on MicroPython / CPython so ``wifi.adapter.radio`` reads
+    #: uniformly across runtimes.
     radio = None
 
     def configure(self, config):
@@ -64,19 +44,17 @@ class WifiAdapter:
                 constructed with.
 
         Returns:
-            ``True`` if the connect call succeeded (linked), ``False``
-            if it timed out or the substrate refused.
+            ``True`` if the connect call succeeded (linked), ``False`` if
+            it timed out or the substrate refused.
 
         Raises:
-            Exception: Adapter-specific failures propagate.  The
-                service catches and stores them as ``last_error``.
+            Exception: Adapter-specific failures propagate. The service
+                catches and stores them as ``last_error``.
         """
         raise NotImplementedError
 
     def is_linked(self):
-        """Return whether the substrate currently reports an association."""
         raise NotImplementedError
 
     def ip(self):
-        """Return the assigned IPv4 string, or ``None``."""
         raise NotImplementedError

@@ -13,10 +13,6 @@ def chumicro_sockets_listener(config, *, radio=None):
     Reads ``websockets.server.host`` / ``websockets.server.port``
     (defaulting to ``0.0.0.0:8765``) and binds a
     :func:`chumicro_sockets.listener`.
-
-    Lives here, not in the eagerly-imported ``server`` module, so a
-    client-only deploy that skips this factory submodule never drags
-    :mod:`chumicro_sockets` onto the board.
     """
     from chumicro_sockets import listener  # noqa: PLC0415 - lazy
 
@@ -28,16 +24,10 @@ def chumicro_sockets_listener(config, *, radio=None):
 def chumicro_sockets_connector_factory(*, radio=None, ssl_context=None):
     """Build a ``(host, port, use_tls) -> connector`` factory.
 
-    Routes to :func:`chumicro_sockets.connector` — ``use_tls`` maps to
-    its ``tls=`` flag, with the supplied *ssl_context*.  CA pinning
-    via :func:`chumicro_sockets.ssl_context_with_ca` is required for
-    ``wss://`` on constrained boards.
-
-    The returned callable is what
-    ``WebSocketClient(transport_factory=...)`` expects: each connect()
-    invokes ``factory(host, port, use_tls)`` and drives the resulting
-    non-blocking connector across ticks until ``ready`` before the
-    HTTP upgrade exchange begins.
+    Routes to :func:`chumicro_sockets.connector`, mapping ``use_tls`` to
+    its ``tls=`` flag with the supplied *ssl_context*. CA pinning via
+    :func:`chumicro_sockets.ssl_context_with_ca` is required for ``wss://``
+    on constrained boards.
     """
     def factory(host, port, use_tls):
         from chumicro_sockets import connector  # noqa: PLC0415 - lazy

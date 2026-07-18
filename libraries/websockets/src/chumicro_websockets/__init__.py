@@ -1,11 +1,9 @@
-"""Non-blocking WebSocket client + server for CircuitPython, MicroPython, and CPython.
+"""Non-blocking WebSocket client and server for CircuitPython, MicroPython, and CPython.
 
-Built on :mod:`chumicro_sockets` (TCP + TLS) and :mod:`chumicro_timing`
-(ticks).  Both :class:`WebSocketClient` and :class:`WebSocketServer`
-follow the runner contract — :meth:`check(now_ms)` reports work
-pending and :meth:`handle(now_ms)` does one slice of progress per
-call, so an LED keeps blinking through the opening handshake, frame
-I/O, control-frame interleave, and the close handshake.
+Both :class:`WebSocketClient` and :class:`WebSocketServer` follow the
+runner contract: :meth:`check` reports whether work is pending and
+:meth:`handle` does one slice of progress per call, so an LED can keep
+blinking through the handshake, frame I/O, and close.
 """
 
 import gc
@@ -44,15 +42,8 @@ gc.collect()
 
 
 def __getattr__(name):
-    """Lazy-load the client / server halves on first access (PEP 562).
-
-    ``client`` and ``server`` are ~20 KB of source each.  A client-only
-    app — the common Pico W case — never touches ``WebSocketServer`` /
-    ``Connection``, and a server-only app never touches
-    ``WebSocketClient``, so importing both eagerly would pin the unused
-    half's compiled code objects in RAM.  Deferring each until its first
-    attribute access keeps only the half a deployment uses resident.
-    """
+    # Lazy PEP 562 imports: a client-only app never loads the server half
+    # (and vice versa), so the unused ~20 KB half stays out of RAM.
     if name == "WebSocketClient":
         from chumicro_websockets.client import WebSocketClient  # noqa: PLC0415
 
@@ -69,7 +60,7 @@ def __getattr__(name):
 
 
 __all__ = [
-    # pyright: ignore[reportUnsupportedDunderAll] — Connection,
+    # pyright: ignore[reportUnsupportedDunderAll]: Connection,
     # WebSocketClient, and WebSocketServer are PEP-562 lazy via
     # __getattr__.
     "CLOSE_BAD_DATA",

@@ -1,9 +1,7 @@
 """Per-runtime adapter modules.
 
-Lazy-imported by :mod:`chumicro_sockets`'s factories — each adapter
-brings in runtime-specific stdlib modules (``socketpool``, ``socket``,
-``ssl``) that aren't available everywhere.  Importing the wrong
-adapter module on a runtime that lacks its dependencies fails
-loudly; the factory routes around that by inspecting
-``sys.implementation.name`` first.
+Lazy-imported by the :mod:`chumicro_sockets` factories, which pick the right
+one from ``sys.implementation.name``. Each adapter imports runtime-specific
+stdlib modules (``socketpool``, ``socket``, ``ssl``) that are not available on
+every runtime, so importing the wrong one fails loudly.
 """

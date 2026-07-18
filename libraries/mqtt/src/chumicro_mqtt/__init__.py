@@ -1,11 +1,9 @@
 """Non-blocking MQTT 3.1.1 client for CircuitPython, MicroPython, and CPython.
 
-Built on :mod:`chumicro_sockets` (TCP + TLS) and :mod:`chumicro_timing`
-(ticks).  Tick-based runner contract: :meth:`MQTTClient.check(now_ms)`
-reports whether work is pending and :meth:`handle(now_ms)` does one
-slice of progress per call.
-
-QoS 0 and QoS 1 are supported.  QoS 2 raises :class:`UnsupportedQoSError`.
+Drive :class:`MQTTClient` from a tick loop: :meth:`MQTTClient.check`
+reports whether work is pending and :meth:`MQTTClient.handle` does one
+slice of progress per call. QoS 0 and QoS 1 are supported; QoS 2 raises
+:class:`UnsupportedQoSError`.
 """
 
 import gc
@@ -23,18 +21,10 @@ gc.collect()
 
 
 def __getattr__(name):
-    """Lazy-load the client half on first access (PEP 562).
-
-    ``client`` is the fleet's single largest module (~40 KB of source).
-    A board that imports ``chumicro_mqtt`` but never builds an
-    ``MQTTClient`` — a receive-only or wire-helper-only use — pays no
-    RAM for its compiled code objects; the module loads on the first
-    access to one of its symbols.  Constructing the client at startup
-    keeps that one-time import cost on a fresh heap (see the guide).
-    """
+    # Lazy PEP 562 import: client is the largest module, so a board that
+    # imports chumicro_mqtt but never builds an MQTTClient pays no RAM for it.
     if name in ("InboundPublish", "MQTTClient", "ProtocolState", "WhenOversized"):
-        # Same pre-compile sweep the eager import path ran: the big
-        # module compiles into a freshly collected heap, not a dirty one.
+        # Collect first so the big module compiles into a freshly swept heap.
         gc.collect()
         import chumicro_mqtt.client as _client  # noqa: PLC0415
 
@@ -43,7 +33,7 @@ def __getattr__(name):
 
 
 __all__ = [
-    # pyright: ignore[reportUnsupportedDunderAll] — InboundPublish,
+    # pyright: ignore[reportUnsupportedDunderAll]: InboundPublish,
     # MQTTClient, ProtocolState, and WhenOversized are PEP-562 lazy via
     # __getattr__.
     "InboundPublish",

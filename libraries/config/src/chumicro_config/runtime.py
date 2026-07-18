@@ -11,14 +11,19 @@ DEFAULT_RUNTIME_CONFIG_PATH = "/runtime_config.msgpack"
 
 
 def load_runtime_config(path: str | None = None) -> RuntimeConfig:
-    """Read + decode the deployed runtime config.
+    """Read and decode the deployed runtime config file.
 
-    Raises ``OSError`` if the file is missing, :class:`InvalidConfigType`
-    if the payload isn't a dict or is malformed msgpack (e.g. a
-    power-loss-truncated file, which ``unpackb`` rejects as bad framing).
-    *path* defaults to :data:`DEFAULT_RUNTIME_CONFIG_PATH`, read from the
-    module constant at call time so that one documented ABI value stays
-    the single source of the on-device location.
+    Args:
+        path: File to read; defaults to
+            :data:`DEFAULT_RUNTIME_CONFIG_PATH`.
+
+    Returns:
+        The decoded config wrapped in a :class:`RuntimeConfig`.
+
+    Raises:
+        OSError: The file is missing or unreadable.
+        InvalidConfigType: The payload is not valid msgpack or does not
+            decode to a dict.
     """
     if path is None:
         path = DEFAULT_RUNTIME_CONFIG_PATH
@@ -46,10 +51,8 @@ def _ensure_config_loaded() -> RuntimeConfig | None:
         try:
             _config_cache = load_runtime_config()
         except OSError as error:
-            # Only a genuinely-absent file means "no config" (None).  A
-            # real I/O failure (EIO / EACCES / a wedged filesystem) is
-            # not the same as absent and must not be silently masked;
-            # re-raise it.  errno is args[0] on every runtime.
+            # A genuinely-absent file means "no config" (None). A real I/O
+            # failure (EIO, EACCES) must not be masked as absent, so re-raise.
             if error.args and error.args[0] != errno.ENOENT:
                 raise
             _config_cache = None
@@ -58,9 +61,8 @@ def _ensure_config_loaded() -> RuntimeConfig | None:
 
 
 def __getattr__(name: str):
-    # `InvalidConfigType` (file present but malformed) is intentionally
-    # not caught here. Corruption is a hard deploy failure, surfaced
-    # loudly rather than silently masked as `config = None`.
+    # InvalidConfigType (file present but malformed) is deliberately not
+    # caught: corruption is a hard failure, not a silent config = None.
     if name == "config":
         return _ensure_config_loaded()
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

@@ -20,7 +20,6 @@ class FakeTicks:
     """Hand-driven ticks source; ``ticks_ms()`` only changes when ``advance()`` is called."""
 
     def __init__(self, start_ms: int = 0) -> None:
-        """Seeds the current reading to ``start_ms``."""
         self._current_ms = start_ms
 
     def advance(self, amount_ms: int) -> None:
@@ -28,16 +27,10 @@ class FakeTicks:
         self._current_ms += amount_ms
 
     def sleep_ms(self, duration_ms: int) -> None:
-        """Advances the fake clock by ``duration_ms`` instead of sleeping for real.
+        """Advance the fake clock by ``duration_ms`` instead of sleeping for real.
 
-        An honest stand-in for a runtime ``time.sleep_ms``: in real
-        time sleeping makes the clock move, so this moves ``ticks_ms()``
-        forward by ``duration_ms`` and returns at once.  ``Runner.wait``
-        calls this when its socket-less idle path delegates to an
-        injected ``FakeTicks``, so a test waits zero wall-clock while the
-        fake time it gates on advances by the computed timeout.  Matches
-        ``advance``: the bump lands on the unmasked reading and
-        ``ticks_ms()`` folds it into the wrap-safe range.
+        Sleeping in real time moves the clock forward, so this stand-in moves
+        ``ticks_ms()`` ahead by ``duration_ms`` and returns at once.
         """
         self._current_ms += duration_ms
 

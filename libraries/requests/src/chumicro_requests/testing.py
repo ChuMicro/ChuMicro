@@ -1,44 +1,19 @@
-"""``FakeHttpClient`` plus low-level helpers for the real-client suite.
+"""``FakeHttpClient`` plus low-level fixtures for the client test suite.
 
-Two layers live here:
+Two layers live here. :class:`FakeHttpClient` is a scripted in-memory
+stand-in for an :class:`HttpClient` dependency: it mirrors the verb
+surface (``get`` / ``post`` / ... / ``check`` / ``handle`` / ``busy``)
+but completes each request from a scripted queue instead of opening a
+socket. :func:`make_factory`, :func:`canned_response`,
+:func:`drive_until_done`, and :func:`make_client` drive a real
+:class:`HttpClient` against a
+:class:`chumicro_sockets.testing.FakeSocket`.
 
-* :class:`FakeHttpClient` — a scripted in-memory stand-in for an
-  :class:`HttpClient` constructor-injected dependency.  Mirrors the
-  production verb surface (``get`` / ``post`` / ``put`` / ``patch`` /
-  ``delete`` / ``check`` / ``handle`` / ``busy`` / ``on_oversized``)
-  but completes each request from a scripted response queue instead
-  of opening a socket.
-
-* :func:`make_factory`, :func:`canned_response`, :func:`drive_until_done`,
-  :func:`make_client` — the lower-level fixtures the real-client
-  test suite uses to drive an actual :class:`HttpClient` against a
-  :class:`chumicro_sockets.testing.FakeSocket`.  Building blocks; pick
-  one per test depending on whether the deliverable is *response on
-  the wire* (low level) or *behavior of code that holds an HttpClient*
-  (FakeHttpClient).
-
-Idiom — testing code that takes an HttpClient::
-
-    from chumicro_requests.testing import FakeHttpClient
-
-    fake = FakeHttpClient()
-    fake.enqueue_response(status=200, body=b'{"temp_f": 72}')
-    weather = WeatherFetcher(http_client=fake)
-    weather.tick(now_ms=0)               # internally calls fake.get(...)
-    weather.tick(now_ms=10)              # one handle() tick completes
-    assert weather.last_temperature == 72
-    assert fake.calls[0].url == "http://api.example.test/weather"
-
-The fake completes the in-flight request on the next :meth:`handle`
-call after the request method (``get`` / ``post`` / etc.), exercising
-the runner integration the same way the real client would.  Scripted
-entries are consumed FIFO; an empty queue raises :class:`HttpError`
-to surface "test forgot to enqueue a response" as a clear failure.
-
-This module is test-support — the ``__chumicro_test_support__``
-marker below keeps it out of every bundle and every product / app /
-functional device deploy, so it never lands on a shipped board (the
-on-device unit sweep is the one path that stages it).
+Script responses with :meth:`FakeHttpClient.enqueue_response` or
+:meth:`FakeHttpClient.enqueue_error`; each request pops one entry FIFO,
+and the next :meth:`FakeHttpClient.handle` tick completes the in-flight
+request. An empty queue raises :class:`HttpError` so a test that forgot
+to enqueue fails clearly.
 """
 
 #: Ships in the source bundle and sdist; never lands on a device.
@@ -56,14 +31,6 @@ from chumicro_requests.client import HttpClient, RequestHandle, Response
 
 
 class _ScriptedCall:
-    """One call recorded by :class:`FakeHttpClient`.
-
-    Captures the request shape the downstream code under test produced
-    — method, URL, headers, body / json payload, per-call timeout,
-    max-redirects, and the stream flag — so the test can assert on it
-    after the fact.
-    """
-
     def __init__(
         self, *, method, url, headers, body, json_body,
         timeout_ms, max_redirects, stream=False,
@@ -79,13 +46,7 @@ class _ScriptedCall:
 
 
 class _ScriptedBodySource:
-    """Serves a scripted body through ``read_body_into`` for streamed fakes.
-
-    Stands in for the response parser's staging window: each
-    ``read_body_into(buffer)`` copies the next slice of the scripted
-    body into the caller's buffer and returns the count, ``0`` once
-    exhausted.
-    """
+    """Serves a scripted body through ``read_body_into`` for streamed fakes."""
 
     def __init__(self, body):
         self._view = memoryview(bytes(body))
@@ -308,13 +269,10 @@ class FakeHttpClient:
         """Complete the in-flight request from the scripted outcome.
 
         Fires the handle's ``on_done`` callback (if registered) after
-        the fake has returned to idle, matching the production client's
-        post-completion behavior.  A streamed request's scripted body
-        is installed as the handle's body source, so the code under
-        test drains it via ``read_body_into`` after this tick (the
-        production client publishes headers earlier, mid-body; the fake
-        compresses the whole exchange into one tick, which preserves
-        the caller's loop contract — reads return the body, then ``0``).
+        the fake has returned to idle, matching the production client. A
+        streamed request's scripted body is installed as the handle's
+        body source, so the code under test drains it via
+        ``read_body_into`` after this tick.
         """
         if self._handle is None:
             return

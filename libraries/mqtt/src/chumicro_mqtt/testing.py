@@ -1,15 +1,8 @@
 """Pre-baked broker responses and client fixtures for unit tests.
 
-Tests typically drive an MQTTClient via a
-:class:`chumicro_sockets.testing.FakeSocket`.  Script broker responses
-with ``sock.enqueue_recv(canned_connack_bytes())`` etc., let the
-client tick, then assert the wire format on ``sock.sent``.
-
-The canned-bytes helpers stay in sync with the encoder/decoder so a
-hand-rolled byte literal in a test doesn't drift when the wire format
-gets a tweak.  ``new_client`` + ``drive`` package the common
-"FakeSocket + FakeTicks + sensible defaults" construction so cross-
-runtime test files don't each carry their own copy.
+Script broker responses with ``sock.enqueue_recv(canned_connack_bytes())``
+against a :class:`chumicro_sockets.testing.FakeSocket`, let the client
+tick, then assert the wire format on ``sock.sent``.
 """
 
 __chumicro_test_support__ = True

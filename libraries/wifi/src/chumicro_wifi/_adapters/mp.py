@@ -1,29 +1,10 @@
-"""MicroPython ``network.WLAN`` adapter for ESP-IDF and CYW43 wifi stacks.
+"""MicroPython ``network.WLAN`` adapter for the ESP-IDF and CYW43 wifi stacks.
 
-Wraps ``network.WLAN(network.STA_IF)`` on either stack.  The
-substrate API is identical between the two, so one class covers
-both.  Two stack-specific knobs are applied conditionally:
-
-* **ESP-IDF** (ESP32, S2, S3, C3, C6, …): after the first
-  successful connect, ``wlan.config(reconnects=0)`` disables the
-  firmware-level auto-reconnect supervisor so ``WifiService``
-  drives retries.
-* **CYW43** (Pi Pico W, …): at configure time, when
-  ``WifiConfig.power_save`` is ``False`` (default),
-  ``wlan.config(pm=0xa11140)`` disables CYW43 idle power-save
-  (eliminates ~30-100 ms tick spikes on chip wake-up).  CYW43
-  has no firmware reconnect supervisor, so no ``reconnects``
-  knob is issued.
-
-Stack detection lives in :meth:`MpWifiAdapter._detect_stack`.
-Tests inject the stack explicitly via ``stack="espidf"`` /
-``stack="cyw43"`` to exercise both branches on CPython without
-hardware.
-
-``wlan`` defaults to a fresh ``network.WLAN(network.STA_IF)``.
-Tests inject a fake matching the substrate's surface.  ``name``
-is ``"mp_esp32"`` on ESP-IDF or ``"mp_rp2"`` on CYW43, the
-value users read via ``wifi.adapter.name``.
+One class covers both stacks (their substrate API is identical); two
+stack-specific knobs, the ESP-IDF firmware-reconnect disable and the CYW43
+power-save disable, are applied conditionally. Stack detection lives in
+:meth:`MpWifiAdapter._detect_stack`; tests inject ``stack=`` to exercise
+both branches on CPython.
 """
 
 __chumicro_runtimes__ = ("micropython",)
@@ -39,16 +20,13 @@ except ImportError:
     def const(value):
         return value
 
-#: Magic value disabling CYW43 idle power-save mode.  Applied by
-#: the adapter when ``WifiConfig.power_save`` is ``False`` (the
-#: default).  Wrapped in ``const(...)`` so MicroPython inlines
-#: the literal at the use site at compile time.
+#: Magic value that disables CYW43 idle power-save mode. Applied when
+#: ``WifiConfig.power_save`` is ``False`` (the default). ``const(...)`` lets
+#: MicroPython inline the literal at compile time.
 CYW43_PM_DISABLE = const(0xA11140)
 
-#: Known CYW43-based MicroPython board identifiers.
-#: Add new entries as CYW43-bearing boards land in upstream MP, matching
-#: the exact string the board reports (visible via
-#: ``import sys; print(sys.implementation._machine)`` at the REPL).
+#: Known CYW43-based MicroPython board identifiers. Add new entries matching
+#: the exact string a board reports via ``sys.implementation._machine``.
 CYW43_MACHINES = (
     "Raspberry Pi Pico W with RP2040",
     "Raspberry Pi Pico 2 W with RP2350",
@@ -56,15 +34,6 @@ CYW43_MACHINES = (
 
 
 def _get_machine_name():
-    """Return the runtime's machine identifier, or ``""`` when unavailable.
-
-    Prefers ``sys.implementation._machine``, which is present on
-    MicroPython and CircuitPython for both real boards and
-    unix-port hosts.  Falls back to ``os.uname().machine`` on
-    CPython hosts where ``_machine`` is absent.  Returns ``""``
-    when neither source works, which routes
-    :meth:`MpWifiAdapter._detect_stack` to its ``"espidf"`` default.
-    """
     machine = getattr(sys.implementation, "_machine", None)
     if machine is not None:
         return machine
@@ -74,26 +43,20 @@ def _get_machine_name():
 
 
 class MpWifiAdapter(WifiAdapter):
-    """MP ``network.WLAN`` adapter for both ESP-IDF and CYW43 stacks.
+    """MicroPython ``network.WLAN`` adapter for the ESP-IDF and CYW43 stacks.
 
     Args:
-        wlan: Optional WLAN substrate.  When ``None`` (default),
-            constructs ``network.WLAN(network.STA_IF)``, only
-            available under MicroPython on a board with a wifi
-            chip.  Tests inject a fake matching the WLAN surface
-            the adapter touches: ``active(state=None)``,
-            ``connect(ssid, password)``, ``isconnected()``,
-            ``ifconfig()``, ``config(**kwargs)``.
-        stack: Optional stack identifier: ``"espidf"``,
-            ``"cyw43"``, or ``None`` (auto-detect via
-            ``import esp32``).  Tests pass this explicitly to
-            exercise either branch on CPython.
+        wlan: Optional WLAN substrate. When ``None`` (default), builds
+            ``network.WLAN(network.STA_IF)`` (MicroPython only). Tests inject
+            a fake matching the surface the adapter touches: ``active``,
+            ``connect``, ``isconnected``, ``ifconfig``, ``config``.
+        stack: ``"espidf"``, ``"cyw43"``, or ``None`` to auto-detect via
+            :meth:`_detect_stack`. Tests pass it explicitly to exercise
+            either branch on CPython.
     """
 
-    # MP's wlan.connect() dispatches a non-blocking join and returns
-    # immediately; is_linked() reports success on a later tick.  The
-    # service must treat connect() == False as an attempt still in
-    # flight, not a settled failure.
+    # MP's wlan.connect() is non-blocking: it dispatches the join and returns
+    # before is_linked() reports success, so connect() == False is not a failure.
     connect_blocks = False
 
     def __init__(self, wlan=None, *, stack=None):
@@ -112,22 +75,14 @@ class MpWifiAdapter(WifiAdapter):
 
     @staticmethod
     def _detect_stack():
-        """Return ``"cyw43"`` for known CYW43 boards, ``"espidf"`` otherwise.
-
-        Matches the runtime's machine identifier (via
-        :func:`_get_machine_name`) against :data:`CYW43_MACHINES`.
-        Misclassification toward ``"espidf"`` is safe because the
-        ESP-specific config knob no-ops on chips that don't expose
-        it.  Extend :data:`CYW43_MACHINES` when a new CYW43-bearing
-        board appears.
-        """
+        # Default to espidf on an unknown board: the ESP-only config knob
+        # no-ops on chips that don't expose it, so misclassifying is safe.
         if _get_machine_name() in CYW43_MACHINES:
             return "cyw43"
         return "espidf"
 
     @staticmethod
     def _acquire_runtime_wlan():
-        """Build ``network.WLAN(network.STA_IF)`` or raise a clear error."""
         try:
             import network  # pragma: no cover - MP runtime path
         except ImportError as error:
@@ -138,17 +93,12 @@ class MpWifiAdapter(WifiAdapter):
         return network.WLAN(network.STA_IF)  # pragma: no cover - MP runtime path
 
     def configure(self, config):
-        """Activate the radio + apply hostname + TX power + CYW43 power-save knob.
+        """Activate the radio and apply hostname, TX power, and power-save.
 
-        ESP-IDF's ``reconnects`` knob can't be set before the first
-        successful connect (it's read at re-association time, not
-        activation), so the supervisor-off call moves into
-        :meth:`connect` after the first link-up.  The CYW43 ``pm``
-        knob is stateless from the substrate's perspective, so it is
-        applied here at configure time so the first link is
-        already in the user's preferred mode.  The TX-power knob, when
-        set, is applied right after activation (the station must be up
-        for ``config(txpower=...)`` to take) and before any connect.
+        ESP-IDF's ``reconnects`` knob can't be set until after the first
+        successful connect, so that call lives in :meth:`connect`. TX power
+        is applied here right after activation (the station must be up for
+        it) and before any connect; the CYW43 ``pm`` power-save knob too.
         """
         if config.hostname is not None:
             self._apply_hostname(config.hostname)
@@ -159,21 +109,13 @@ class MpWifiAdapter(WifiAdapter):
             try:
                 self._wlan.config(pm=CYW43_PM_DISABLE)
             except (OSError, ValueError):
-                # Older MP firmware may not expose the pm knob, so
-                # proceed without it.  Power-save stays at the
-                # firmware default, meaning user code may notice idle
-                # latency spikes but the connection still works.
+                # Older MP firmware may not expose the pm knob; proceed without
+                # it. Power-save stays at default (possible idle latency spikes).
                 pass
 
     def _apply_hostname(self, hostname):
-        """Set the DHCP hostname, before the interface comes up.
-
-        ``network.hostname(...)`` is the portable API (CYW43 / rp2 and
-        recent ESP-IDF); ``wlan.config(dhcp_hostname=...)`` is the
-        ESP-port-only fallback.  The ESP kwarg raises ``ValueError`` on
-        CYW43, which is why the portable call is tried first — otherwise
-        the hostname silently never applies on a Pi Pico W.
-        """
+        # Try the portable network.hostname() first: the ESP-only
+        # dhcp_hostname kwarg below raises ValueError on CYW43 (Pi Pico W).
         try:
             import network  # pragma: no cover - MP runtime path
             network_hostname = getattr(network, "hostname", None)
@@ -188,50 +130,27 @@ class MpWifiAdapter(WifiAdapter):
         try:
             self._wlan.config(dhcp_hostname=hostname)
         except (OSError, ValueError):
-            # No hostname knob on this build; tolerate rather than
-            # blocking deploy.
+            # No hostname knob on this build; tolerate rather than block deploy.
             pass
 
     def _apply_tx_power(self, tx_power_dbm):
-        """Set the radio transmit power via ``wlan.config(txpower=...)``.
-
-        Called from :meth:`configure` only when
-        ``WifiConfig.tx_power_dbm`` is set — ``None`` leaves the radio
-        at its firmware default and this never runs.  The value comes
-        straight from config; the adapter carries no board-specific
-        knowledge of which boards need a reduced power.
-
-        A build without the ``txpower`` config key raises ``ValueError``
-        (``OSError`` on some ports); tolerate it and leave the radio at
-        its default power rather than faulting the service, matching how
-        the ``pm`` / ``dhcp_hostname`` knobs above degrade.
-        """
+        # A build without a txpower knob raises ValueError (OSError on some
+        # ports); tolerate it and stay at default power.
         try:
             self._wlan.config(txpower=tx_power_dbm)
         except (OSError, ValueError):
             pass
 
     def connect(self, config):
-        """Begin / drive the association via ``wlan.connect``.
+        """Dispatch the association via ``wlan.connect`` (non-blocking).
 
-        MP's ``connect`` is non-blocking and returns immediately
-        after dispatching the request.  ``isconnected()`` flips to
-        ``True`` once the AP responds.  The substrate's timeout
-        behavior is governed by ESP-IDF (or CYW43) below the
-        Python binding, so this adapter doesn't budget, leaving the
-        timing to ``WifiService``'s reconnect supervisor.
-
-        On the ESP-IDF stack, after the first link-up, drops the
-        firmware-level auto-reconnect supervisor so the library is
-        the sole driver of retry behavior.  CYW43 has no firmware
-        supervisor, so no supervisor-off call fires.
+        ``wlan.connect`` returns immediately after dispatching; the service
+        polls :meth:`is_linked` over the timeout window. On ESP-IDF, after
+        the first link-up, drops the firmware auto-reconnect supervisor so
+        the library is the sole retry driver; CYW43 has no such supervisor.
         """
-        # Already linked: don't re-issue wlan.connect(), which on
-        # ESP-IDF aborts and restarts the established association (or
-        # raises) and on CYW43 drops progress.  The service polls
-        # is_linked() during an in-flight attempt, so this guard fires
-        # when the association completed between the dispatch and the
-        # service's next attempt.
+        # Already linked: don't re-issue wlan.connect(), which aborts and
+        # restarts the association on ESP-IDF and drops progress on CYW43.
         if self._wlan.isconnected():
             self._disable_supervisor_once()
             return True
@@ -242,46 +161,32 @@ class MpWifiAdapter(WifiAdapter):
         return True
 
     def _disable_supervisor_once(self):
-        """Drop the ESP-IDF firmware auto-reconnect supervisor after the
-        first link-up so the library's reconnect supervisor is the sole
-        driver.  No-op on CYW43 (no firmware supervisor) and after the
-        first call."""
+        # ESP-IDF only: drop the firmware auto-reconnect supervisor after the
+        # first link-up so the library is the sole retry driver. No-op on CYW43.
         if self._stack == "espidf" and not self._supervisor_disabled:
             try:
                 self._wlan.config(reconnects=0)
                 self._supervisor_disabled = True
             except (OSError, ValueError):
-                # Some MP builds (older firmware, non-ESP-IDF stacks)
-                # don't expose the reconnects knob.  Proceed anyway,
-                # because the library's reconnect supervisor still
-                # works without the firmware-side guarantee.
+                # Some builds don't expose the reconnects knob; proceed anyway,
+                # the library's own reconnect supervisor still works.
                 pass
 
     def is_linked(self):
-        """``True`` while ``isconnected()`` reports an active association.
+        """``True`` while ``isconnected()`` reports an active link.
 
-        Link-loss detection here is laggy, not instant, on both stacks.
-        ESP-IDF's ``isconnected()`` follows the STA connection status,
-        which only flips on the driver's
-        ``WIFI_EVENT_STA_DISCONNECTED`` — raised after a beacon-miss /
-        inactivity timeout (seconds) or a failed TX, not the instant an
-        AP disappears.  CYW43 is the same shape: ``isconnected()`` tracks
-        the cyw43 link-status callback, which is likewise beacon-loss
-        driven.  So a silently-dropped AP can keep reading ``True`` here
-        for seconds; a dependent's socket EIO / timeout is often the
-        earlier signal.  ``WifiService`` polls this every ``check()``
-        while CONNECTED, catching the drop as soon as the driver reports
-        it.
+        Link-loss detection is laggy, not instant, on both stacks:
+        ``isconnected()`` flips only on the driver's beacon-miss / TX-fail
+        event (seconds after an AP disappears), so a dropped link can read
+        ``True`` for a while. ``WifiService`` polls this every ``check()``.
         """
         return bool(self._wlan.isconnected())
 
     def ip(self):
         """Return the IPv4 string from ``ifconfig()``, or ``None``.
 
-        ``ifconfig`` returns a 4-tuple ``(ip, netmask, gateway, dns)``,
-        whose first element is the address as a string.  Returns
-        ``None`` when not linked, or when the substrate's IP is the
-        unset sentinel ``"0.0.0.0"`` (post-association but pre-DHCP).
+        Returns ``None`` when not linked, or when the address is still the
+        unset sentinel ``"0.0.0.0"`` (associated but pre-DHCP).
         """
         if not self._wlan.isconnected():
             return None

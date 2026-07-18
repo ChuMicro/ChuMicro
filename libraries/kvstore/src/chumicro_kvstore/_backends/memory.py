@@ -1,10 +1,7 @@
-"""In-memory backend: CPython default + ``FakeKVStore`` substrate.
+"""In-memory backend: the CPython default and the ``FakeKVStore`` substrate.
 
-Stores the encoded payload in process memory; no persistence across
-process boundary by default.  *initial* seeds a known starting state.
-
-*capacity* is configurable so tests can simulate small-NVM edge
-cases without owning a real low-memory board.
+Holds the encoded payload in process memory with no persistence across
+runs.
 """
 
 import sys
@@ -13,11 +10,11 @@ from chumicro_kvstore.core import Backend, KVStoreCorrupt, KVStoreFull
 
 
 class MemoryBackend(Backend):
-    """Volatile backend that round-trips ``bytes`` payloads in-process.
+    """Volatile backend that round-trips ``bytes`` payloads in process.
 
-    ``initial`` seeds the backend with an existing msgpack payload;
-    ``capacity`` overrides the ``sys.maxsize`` default so tests can
-    drive ``KVStoreFull`` without manufacturing a giant payload.
+    ``initial`` seeds it with an existing msgpack payload; ``capacity``
+    overrides the ``sys.maxsize`` default so tests can drive
+    ``KVStoreFull`` without a giant payload.
     """
 
     name = "memory"

@@ -1,13 +1,10 @@
 """Non-blocking HTTP/1.1 client for CircuitPython, MicroPython, and CPython.
 
-Built on :mod:`chumicro_sockets` (TCP + TLS) and :mod:`chumicro_timing`
-(ticks).  Tick-based runner contract — :meth:`HttpClient.check(now_ms)`
-reports whether work is pending and :meth:`handle(now_ms)` does one
-slice of progress per call, so an LED can keep blinking through a
-request in flight, a TLS handshake, or a stalled-peer timeout.
-
-Not supported: HTTP/1.1 keep-alive, gzip, cookies, streaming uploads,
-multi-in-flight requests on the same client.
+The client is tick-based: :meth:`HttpClient.check` reports whether work
+is pending and :meth:`handle` makes one slice of progress per call, so
+other tasks keep running while a request is in flight. v1 does not do
+keep-alive, gzip, cookies, streaming uploads, or several in-flight
+requests on one client.
 """
 
 import gc
@@ -32,16 +29,9 @@ gc.collect()
 
 
 def __getattr__(name):
-    """Lazy-load the client half on first access (PEP 562).
-
-    ``client`` is ~25 KB of source.  A board that imports
-    ``chumicro_requests`` for its wire helpers (URL parsing, header dict,
-    request encoding) but never builds an ``HttpClient`` shouldn't pin
-    the client's compiled code objects in RAM; the module loads on
-    the first access to one of its symbols.  Constructing the
-    client at startup keeps that one-time import cost on a fresh heap
-    (see the guide).
-    """
+    # Lazy PEP 562 import: a board that uses only the wire helpers (URL
+    # parsing, header dict, request encoding) never pins the ~25 KB
+    # client module in RAM.
     if name in ("HttpClient", "RequestHandle", "Response", "WhenOversized"):
         # Pre-compile sweep; rationale in chumicro_mqtt.__getattr__.
         gc.collect()
@@ -52,7 +42,7 @@ def __getattr__(name):
 
 
 __all__ = [
-    # pyright: ignore[reportUnsupportedDunderAll] — HttpClient,
+    # pyright: ignore[reportUnsupportedDunderAll]: HttpClient,
     # RequestHandle, Response, and WhenOversized are PEP-562 lazy via
     # __getattr__.
     "CaseInsensitiveDict",
