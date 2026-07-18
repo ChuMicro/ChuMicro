@@ -1021,30 +1021,10 @@
     <div class="doc doc-contents first">
 
         <p>Test helpers for libraries that depend on chumicro-websockets.</p>
-<p>Two fakes parallel to the patterns proven in
-:mod:<code>chumicro_sockets.testing</code>.  Fakes ship in the upstream library
-so consumers don't write their own:</p>
-<ul>
-<li>
-<p>:class:<code>FakeConnection</code>: bidirectional in-memory pipe satisfying
-  the TCP client socket shape (<code>send</code> / <code>recv_into</code> / <code>close</code> /
-  <code>setblocking</code> / <code>settimeout</code>) consumed by
-  :class:<code>WebSocketClient</code> / :class:<code>Connection</code>.  Drive both sides
-  via :meth:<code>feed_inbound</code> (peer pushes data the local end will
-  read) + :meth:<code>read_outbound</code> (drain whatever the local end has
-  written).  Inject an <code>OSError</code> via <code>raise_on_send</code> /
-  <code>raise_on_recv</code> to exercise EAGAIN and socket-error paths.</p>
-</li>
-<li>
-<p>:class:<code>FakeListener</code>: stand-in for
-  :func:<code>chumicro_sockets.listener</code>.  Tests call
-  :meth:<code>queue_accept</code> to enqueue a :class:<code>FakeConnection</code> that
-  the next :meth:<code>accept</code> call returns.  An empty queue surfaces
-  EAGAIN exactly like a real non-blocking listener.</p>
-</li>
-</ul>
-<p>For ticks-domain fakes use :class:<code>chumicro_timing.testing.FakeTicks</code>;
-pass it through the client's / server's <code>ticks=</code> kwarg.</p>
+<p>Two in-memory fakes: :class:<code>FakeConnection</code> (a bidirectional pipe
+satisfying the TCP client socket shape) and :class:<code>FakeListener</code> (a
+stand-in for :func:<code>chumicro_sockets.listener</code>). For ticks, use
+:class:<code>chumicro_timing.testing.FakeTicks</code> via the <code>ticks=</code> kwarg.</p>
 
 
 
@@ -1083,34 +1063,20 @@ pass it through the client's / server's <code>ticks=</code> kwarg.</p>
         <p>Bidirectional in-memory pipe modeling a TCP client socket.</p>
 <p>Inject into :class:<code>WebSocketClient</code> via <code>transport_factory=lambda
 *_args, **_kwargs: FakeConnection()</code>, or hand into a
-:class:<code>Connection</code> directly.  The two halves of the pipe are
-addressable distinctly:</p>
-<ul>
-<li>:meth:<code>feed_inbound</code> puts bytes on the peer-to-local path
-  so they show up on the next :meth:<code>recv_into</code>.</li>
-<li>:meth:<code>read_outbound</code> drains whatever the local end has written
-  (via :meth:<code>send</code>) so test assertions can inspect the bytes.</li>
-</ul>
+:class:<code>Connection</code> directly. Drive the two halves with
+:meth:<code>feed_inbound</code> (bytes the local end will read) and
+:meth:<code>read_outbound</code> (drain what the local end wrote).</p>
 <p>The fake is non-blocking: an empty inbound buffer raises
-<code>OSError(EAGAIN)</code>.  Closing inbound via :meth:<code>close_inbound</code>
-flips the EAGAIN behavior to "EOF" so tests can simulate a
-peer disconnecting.</p>
+<code>OSError(EAGAIN)</code>, and :meth:<code>close_inbound</code> flips that to EOF.</p>
 <p>Error injection:</p>
 <ul>
-<li><code>raise_on_send</code>: set to an :class:<code>Exception</code> instance and
-  the next :meth:<code>send</code> raises it (then resets to <code>None</code>).</li>
-<li><code>raise_on_recv</code>: same shape for :meth:<code>recv_into</code>.</li>
-<li><code>send_chunk_cap</code>: when set, each :meth:<code>send</code> returns at
-  most this many bytes.  Useful for exercising partial-send
-  resumption without injecting a full error.</li>
+<li><code>raise_on_send</code> / <code>raise_on_recv</code>: set to an exception instance
+  and the next :meth:<code>send</code> / :meth:<code>recv_into</code> raises it, then resets.</li>
+<li><code>send_chunk_cap</code>: cap each :meth:<code>send</code> to this many bytes, for
+  exercising partial-send resumption.</li>
 </ul>
-<p>Public observation:</p>
-<ul>
-<li><code>closed</code>: flips <code>True</code> after :meth:<code>close</code>.</li>
-<li><code>outbound</code> / <code>inbound</code>: raw :class:<code>bytearray</code> buffers
-  (read-only convention; tests should use :meth:<code>read_outbound</code>
-  and :meth:<code>feed_inbound</code>).</li>
-</ul>
+<p><code>closed</code> flips <code>True</code> after :meth:<code>close</code>; <code>outbound</code> /
+<code>inbound</code> are the raw buffers (prefer the helper methods).</p>
 
 
 
@@ -1339,7 +1305,7 @@ constructor argument.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Enqueue <em>peer</em> — the next <code>accept()</code> call returns it.</p>
+        <p>Enqueue <em>peer</em>; the next <code>accept()</code> call returns it.</p>
 
 
     </div>

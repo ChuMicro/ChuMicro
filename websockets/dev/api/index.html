@@ -497,17 +497,6 @@
   
 </li>
         
-          <li class="md-nav__item">
-  <a href="#chumicro_websockets.__getattr__" class="md-nav__link">
-    <span class="md-ellipsis">
-      <span class="md-typeset">
-        __getattr__
-      </span>
-    </span>
-  </a>
-  
-</li>
-        
       </ul>
     </nav>
   
@@ -743,17 +732,6 @@
   
 </li>
         
-          <li class="md-nav__item">
-  <a href="#chumicro_websockets.__getattr__" class="md-nav__link">
-    <span class="md-ellipsis">
-      <span class="md-typeset">
-        __getattr__
-      </span>
-    </span>
-  </a>
-  
-</li>
-        
       </ul>
     </nav>
   
@@ -797,13 +775,11 @@
 
     <div class="doc doc-contents first">
 
-        <p>Non-blocking WebSocket client + server for CircuitPython, MicroPython, and CPython.</p>
-<p>Built on :mod:<code>chumicro_sockets</code> (TCP + TLS) and :mod:<code>chumicro_timing</code>
-(ticks).  Both :class:<code>WebSocketClient</code> and :class:<code>WebSocketServer</code>
-follow the runner contract — :meth:<code>check(now_ms)</code> reports work
-pending and :meth:<code>handle(now_ms)</code> does one slice of progress per
-call, so an LED keeps blinking through the opening handshake, frame
-I/O, control-frame interleave, and the close handshake.</p>
+        <p>Non-blocking WebSocket client and server for CircuitPython, MicroPython, and CPython.</p>
+<p>Both :class:<code>WebSocketClient</code> and :class:<code>WebSocketServer</code> follow the
+runner contract: :meth:<code>check</code> reports whether work is pending and
+:meth:<code>handle</code> does one slice of progress per call, so an LED can keep
+blinking through the handshake, frame I/O, and close.</p>
 
 
 
@@ -937,9 +913,8 @@ HTTP/1.1 (server-side: bad method/version/key).</p>
 
 
 
-        <p>Peer sent bytes RFC 6455 calls out as MUST close.  Right
-response: close with :data:<code>CLOSE_PROTOCOL_ERROR</code> (or
-:data:<code>CLOSE_BAD_DATA</code> for UTF-8).</p>
+        <p>Peer sent bytes RFC 6455 requires closing on (close with
+:data:<code>CLOSE_PROTOCOL_ERROR</code>, or :data:<code>CLOSE_BAD_DATA</code> for bad UTF-8).</p>
 
 
 
@@ -1204,7 +1179,7 @@ binary message holds <code>bytes</code> in <code>data</code> (<code>text</code> 
 
         <p>Compute <code>Sec-WebSocket-Accept</code> from the client's nonce.</p>
 <p>RFC 6455 §4.2.2: <code>base64(sha1(client_key + WS_MAGIC_GUID))</code>.
-<em>client_key</em> is the verbatim base64 nonce — do not decode first.</p>
+<em>client_key</em> is the verbatim base64 nonce; do not decode it first.</p>
 
 
     </div>
@@ -1241,38 +1216,10 @@ binary message holds <code>bytes</code> in <code>data</code> (<code>text</code> 
 
     <div class="doc doc-contents ">
 
-        <p>Split a <code>ws://</code> / <code>wss://</code> <em>url</em> into <code>(scheme, host, port, path)</code>.</p>
-<p><em>path</em> always starts with <code>/</code> and includes the query string if
-present.  Raises :class:<code>WebSocketURLError</code> on bad scheme, missing
-host, or out-of-range port.  Examples::</p>
-<div class="language-text highlight"><pre><span></span><code>ws://example.com/      -&gt; (&quot;ws&quot;, &quot;example.com&quot;, 80, &quot;/&quot;)
-wss://api.host:8443/v1 -&gt; (&quot;wss&quot;, &quot;api.host&quot;, 8443, &quot;/v1&quot;)
-ws://h/p?q=1           -&gt; (&quot;ws&quot;, &quot;h&quot;, 80, &quot;/p?q=1&quot;)
-</code></pre></div>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h3 id="chumicro_websockets.__getattr__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="fm">__getattr__</span><span class="p">(</span><span class="n">name</span><span class="p">)</span></code>
-
-<a href="#chumicro_websockets.__getattr__" class="headerlink" title="Permanent link">&para;</a></h3>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Lazy-load the client / server halves on first access (PEP 562).</p>
-<p><code>client</code> and <code>server</code> are ~20 KB of source each.  A client-only
-app — the common Pico W case — never touches <code>WebSocketServer</code> /
-<code>Connection</code>, and a server-only app never touches
-<code>WebSocketClient</code>, so importing both eagerly would pin the unused
-half's compiled code objects in RAM.  Deferring each until its first
-attribute access keeps only the half a deployment uses resident.</p>
+        <p>Split a <code>ws://</code> or <code>wss://</code> <em>url</em> into <code>(scheme, host, port, path)</code>.</p>
+<p><em>path</em> always starts with <code>/</code> and includes the query string when
+present. Raises :class:<code>WebSocketURLError</code> on a bad scheme, a missing
+host, or an out-of-range port.</p>
 
 
     </div>
