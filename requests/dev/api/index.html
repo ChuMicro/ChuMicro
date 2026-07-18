@@ -1020,11 +1020,6 @@
     <div class="doc doc-contents first">
 
         <p>Non-blocking HTTP/1.1 client for CircuitPython, MicroPython, and CPython.</p>
-<p>The client is tick-based: :meth:<code>HttpClient.check</code> reports whether work
-is pending and :meth:<code>handle</code> makes one slice of progress per call, so
-other tasks keep running while a request is in flight. v1 does not do
-keep-alive, gzip, cookies, streaming uploads, or several in-flight
-requests on one client.</p>
 
 
 
@@ -1061,9 +1056,6 @@ requests on one client.</p>
 
 
         <p>Header dict whose lookups fold to lowercase.</p>
-<p>HTTP header names are case-insensitive, so lookups fold to lowercase
-while the original casing is preserved for callers. A header that
-arrives twice has its values joined with <code>,</code> per RFC 7230 §3.2.2.</p>
 
 
 
@@ -1134,8 +1126,6 @@ arrives twice has its values joined with <code>,</code> per RFC 7230 §3.2.2.</p
     <div class="doc doc-contents ">
 
         <p>Append <em>value</em> to the existing header, joining with <code>,</code>.</p>
-<p>New keys behave like :meth:<code>__setitem__</code>.  Used by the parser
-for repeated header lines (<code>Set-Cookie</code>, <code>Via</code>).</p>
 
 
     </div>
@@ -1168,8 +1158,6 @@ for repeated header lines (<code>Set-Cookie</code>, <code>Via</code>).</p>
 
 
         <p>Caller issued a request while another was still in flight.</p>
-<p>v1 is single-in-flight: wait for <code>handle.done</code> before issuing
-another.</p>
 
 
 
@@ -1232,9 +1220,6 @@ another.</p>
 
 
         <p>Response body exceeded <code>max_body_bytes</code>.</p>
-<p>Raised only under <code>when_oversized=DISCONNECT</code>; the other policies
-drop the payload without raising. <code>reported_length</code> is the
-projected total body size at the moment the cap was crossed.</p>
 
 
 
@@ -1283,9 +1268,6 @@ projected total body size at the moment the cap was crossed.</p>
 
 
         <p>Server sent bytes the spec doesn't allow.</p>
-<p>Malformed status line, a header without a colon, a body shorter than
-the advertised <code>Content-Length</code>, and the like. Always a peer or
-network bug.</p>
 
 
 
@@ -1377,14 +1359,6 @@ network bug.</p>
 
 
         <p>Streaming response parser states.</p>
-<p>Forward-only.  Two body framings::</p>
-<p>STATUS -&gt; HEADERS -&gt; BODY            -&gt; DONE   (Content-Length / read-until-close)
-  STATUS -&gt; HEADERS -&gt; CHUNK_SIZE
-                        -&gt; CHUNK_DATA
-                        -&gt; CHUNK_SIZE  (loop)
-                        -&gt; CHUNK_TRAILER
-                        -&gt; DONE                  (Transfer-Encoding: chunked)
-                                          -&gt; ERROR (any state)</p>
 
 
 
@@ -1431,17 +1405,6 @@ network bug.</p>
 
 
         <p>Streaming HTTP/1.1 response parser.</p>
-<p>Fed raw bytes via :meth:<code>feed</code>; the state advances as soon as enough
-bytes arrive, and callers watch :attr:<code>state</code> to know whether to keep
-feeding. Three body framings are decoded: <code>Content-Length: N</code> reads
-exactly N bytes, <code>Transfer-Encoding: chunked</code> does RFC 7230 §4.1
-chunked decode, and a response with neither reads until the peer
-closes (signaled by :meth:<code>feed_eof</code>).</p>
-<p>By default the body is buffered whole and capped at <code>max_body_bytes</code>.
-With <code>stream_body=True</code> it is instead staged in a fixed window the
-consumer drains via :meth:<code>read_body_into</code>; the feeder bounds each
-:meth:<code>feed</code> by :meth:<code>body_free</code>, and <code>max_body_bytes</code> does not
-apply.</p>
 
 
 
@@ -1478,8 +1441,6 @@ apply.</p>
     <div class="doc doc-contents ">
 
         <p>Body bytes received so far (final once :attr:<code>state</code> is <code>DONE</code>).</p>
-<p>In streamed-body mode this is only the staged, not-yet-consumed
-window, not the whole body.</p>
 
     </div>
 
@@ -1522,8 +1483,7 @@ window, not the whole body.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Cap on the buffered body size; not applied
-when <em>stream_body</em> is set.</p>
+                <p>Cap on the buffered body size; ignored when <em>stream_body</em> is set.</p>
               </div>
             </td>
             <td>
@@ -1539,8 +1499,7 @@ when <em>stream_body</em> is set.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Cap on the status-line and header bytes
-staged before the body.</p>
+                <p>Cap on status-line and header bytes staged before the body.</p>
               </div>
             </td>
             <td>
@@ -1556,8 +1515,7 @@ staged before the body.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Optional caller-owned <code>bytearray</code> reused as
-the steady-state body buffer.</p>
+                <p>Optional caller-owned <code>bytearray</code> reused as the body buffer.</p>
               </div>
             </td>
             <td>
@@ -1573,8 +1531,7 @@ the steady-state body buffer.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Pre-cached <code>memoryview(body_buffer)</code>;
-required when <em>body_buffer</em> is given.</p>
+                <p>Pre-cached <code>memoryview(body_buffer)</code>; required with <em>body_buffer</em>.</p>
               </div>
             </td>
             <td>
@@ -1590,8 +1547,7 @@ required when <em>body_buffer</em> is given.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>When <code>True</code>, stage the body in a fixed window
-instead of buffering it whole.</p>
+                <p>When <code>True</code>, stage the body in a fixed window instead of buffering whole.</p>
               </div>
             </td>
             <td>
@@ -1618,9 +1574,6 @@ instead of buffering it whole.</p>
     <div class="doc doc-contents ">
 
         <p>Writable staging space in the streamed-body window, in bytes.</p>
-<p>The feeder must keep each :meth:<code>feed</code> at or under this value so
-the window can never overflow. Meaningful only in streamed-body
-mode.</p>
 
 
     </div>
@@ -1639,10 +1592,6 @@ mode.</p>
     <div class="doc doc-contents ">
 
         <p>Copy staged body bytes into caller-owned <em>buffer</em>; return the count.</p>
-<p>Copies up to <code>len(buffer)</code> bytes from the staging window and
-advances the read cursor. Returns <code>0</code> when nothing is staged. A
-full drain resets both cursors so the whole window is writable
-again.</p>
 
 
     </div>
@@ -1661,8 +1610,6 @@ again.</p>
     <div class="doc doc-contents ">
 
         <p>Drop every staged body byte and reset both cursors.</p>
-<p>Used for a body that is decoded but never delivered, like a
-redirect hop's body in streamed mode.</p>
 
 
     </div>
@@ -1681,10 +1628,6 @@ redirect hop's body in streamed mode.</p>
     <div class="doc doc-contents ">
 
         <p>Append <em>chunk</em> to the parser's buffer and advance the state.</p>
-<p>A protocol or oversize failure latches :attr:<code>state</code> to <code>ERROR</code>
-and stores the exception on :attr:<code>error</code> instead of raising, so
-the driving client checks the state and re-raises. (The non-ASCII
-line-decode paths are the only ones that raise directly.)</p>
 
 
     </div>
@@ -1703,10 +1646,6 @@ line-decode paths are the only ones that raise directly.)</p>
     <div class="doc doc-contents ">
 
         <p>Signal that the peer closed the connection.</p>
-<p>For a <code>Content-Length</code>-framed response a short body is a
-protocol error; for a length-unknown response this is the normal
-end-of-body signal; mid-chunk it is always an error (chunked
-encoding is self-terminating).</p>
 
 
     </div>
@@ -1756,7 +1695,7 @@ encoding is self-terminating).</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>HTTP verb (<code>"GET"</code>, <code>"POST"</code>, etc.), sent verbatim.</p>
+                <p>HTTP verb, sent verbatim.</p>
               </div>
             </td>
             <td>
@@ -1772,8 +1711,7 @@ encoding is self-terminating).</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Value for the <code>Host:</code> header (typically the URL host;
-include the port via <code>"host:port"</code> if non-default).</p>
+                <p>Value for the <code>Host:</code> header.</p>
               </div>
             </td>
             <td>
@@ -1805,10 +1743,7 @@ include the port via <code>"host:port"</code> if non-default).</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Optional iterable of <code>(name, value)</code> pairs, a plain
-<code>dict</code>, or a :class:<code>CaseInsensitiveDict</code>.  Caller-supplied
-headers override the defaults (<code>Host</code>, <code>User-Agent</code>,
-<code>Accept</code>, <code>Accept-Encoding</code>, <code>Connection</code>).</p>
+                <p>Optional <code>(name, value)</code> pairs, dict, or CaseInsensitiveDict; override the defaults.</p>
               </div>
             </td>
             <td>
@@ -1824,8 +1759,7 @@ headers override the defaults (<code>Host</code>, <code>User-Agent</code>,
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Optional <code>bytes</code> body.  When set, <code>Content-Length</code> is
-auto-added (callers can override via <em>headers</em>).</p>
+                <p>Optional <code>bytes</code> body; adds <code>Content-Length</code> when set.</p>
               </div>
             </td>
             <td>
@@ -1841,7 +1775,7 @@ auto-added (callers can override via <em>headers</em>).</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Override the default <code>User-Agent</code> string.</p>
+                <p>Override for the default <code>User-Agent</code> string.</p>
               </div>
             </td>
             <td>
@@ -1890,10 +1824,7 @@ auto-added (callers can override via <em>headers</em>).</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>A method, path, header name, or header value holds
-CR / LF / NUL or a non-ASCII character.  The request line and
-headers are ASCII-only on the wire, so non-ASCII is refused
-here rather than encoded differently on each runtime.</p>
+                <p>A method, path, or header holds CR / LF / NUL or non-ASCII.</p>
               </div>
             </td>
           </tr>
@@ -1917,8 +1848,6 @@ here rather than encoded differently on each runtime.</p>
     <div class="doc doc-contents ">
 
         <p>Extract the <code>charset=...</code> parameter from a Content-Type header.</p>
-<p>Falls back to <code>"utf-8"</code> when the header is missing or carries no
-charset.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -2013,7 +1942,7 @@ charset.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>HTTP or HTTPS URL, e.g. <code>"http://example.com:8080/path?q=1"</code>.</p>
+                <p>HTTP or HTTPS URL to split.</p>
               </div>
             </td>
             <td>
@@ -2035,21 +1964,11 @@ charset.</p>
       <tbody>
           <tr class="doc-section-item">
             <td>
-                  <code><span title="str">str</span></code>
+                  <code><span title="tuple">tuple</span>[<span title="str">str</span>, <span title="str">str</span>, <span title="int">int</span>, <span title="str">str</span>]</code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>4-tuple <code>(scheme, host, port, path)</code>. <em>path</em> always starts</p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                  <code><span title="str">str</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>with <code>/</code> and includes the query string if present.</p>
+                <p>4-tuple <code>(scheme, host, port, path)</code>; <em>path</em> starts with <code>/</code>.</p>
               </div>
             </td>
           </tr>
@@ -2072,8 +1991,7 @@ charset.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Scheme is not <code>http</code> / <code>https</code>, host is
-missing, or port is not a base-10 integer.</p>
+                <p>Bad scheme, missing host, or non-integer port.</p>
               </div>
             </td>
           </tr>
@@ -2097,10 +2015,6 @@ missing, or port is not a base-10 integer.</p>
     <div class="doc doc-contents ">
 
         <p>Resolve a <code>Location</code> header value against the current request URL.</p>
-<p>Handles the three RFC 7231 §7.1.2 shapes: an absolute URL is returned
-verbatim, an absolute path (leading <code>/</code>) keeps the current scheme,
-host, and port, and a relative path additionally replaces the last
-path segment.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>

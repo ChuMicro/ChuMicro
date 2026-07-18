@@ -1036,19 +1036,8 @@ finishes with an <code>HttpError</code> and its <code>on_done</code> callback fi
     <div class="doc doc-contents first">
 
         <p><code>FakeHttpClient</code> plus low-level fixtures for the client test suite.</p>
-<p>Two layers live here. :class:<code>FakeHttpClient</code> is a scripted in-memory
-stand-in for an :class:<code>HttpClient</code> dependency: it mirrors the verb
-surface (<code>get</code> / <code>post</code> / ... / <code>check</code> / <code>handle</code> / <code>busy</code>)
-but completes each request from a scripted queue instead of opening a
-socket. :func:<code>make_factory</code>, :func:<code>canned_response</code>,
-:func:<code>drive_until_done</code>, and :func:<code>make_client</code> drive a real
-:class:<code>HttpClient</code> against a
-:class:<code>chumicro_sockets.testing.FakeSocket</code>.</p>
-<p>Script responses with :meth:<code>FakeHttpClient.enqueue_response</code> or
-:meth:<code>FakeHttpClient.enqueue_error</code>; each request pops one entry FIFO,
-and the next :meth:<code>FakeHttpClient.handle</code> tick completes the in-flight
-request. An empty queue raises :class:<code>HttpError</code> so a test that forgot
-to enqueue fails clearly.</p>
+<p>Public entry points: :class:<code>FakeHttpClient</code>, :func:<code>make_factory</code>,
+:func:<code>canned_response</code>, :func:<code>make_client</code>, and :func:<code>drive_until_done</code>.</p>
 
 
 
@@ -1085,13 +1074,6 @@ to enqueue fails clearly.</p>
 
 
         <p>In-memory :class:<code>HttpClient</code> stand-in for tests.</p>
-<p>Mirrors the production verb methods (<code>get</code> / <code>post</code> / <code>put</code> /
-<code>patch</code> / <code>delete</code>) and the runner-contract surface (<code>check</code>
-/ <code>handle</code> / <code>busy</code>).  Tests script responses via
-:meth:<code>enqueue_response</code> (success) or :meth:<code>enqueue_error</code>
-(failure); each request pops one entry off the queue head, and
-the next :meth:<code>handle</code> tick completes the in-flight
-:class:<code>RequestHandle</code> and invokes its <code>on_done</code> callback.</p>
 
 
 
@@ -1218,9 +1200,7 @@ the next :meth:<code>handle</code> tick completes the in-flight
             </td>
             <td>
               <div class="doc-md-description">
-                <p><code>dict</code> / <code>CaseInsensitiveDict</code> / iterable of
-<code>(name, value)</code>.  Folded into a
-:class:<code>CaseInsensitiveDict</code> for the response.</p>
+                <p><code>dict</code> / <code>CaseInsensitiveDict</code> / iterable of <code>(name, value)</code>.</p>
               </div>
             </td>
             <td>
@@ -1252,8 +1232,7 @@ the next :meth:<code>handle</code> tick completes the in-flight
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Set the matching flag on the response
-for tests that exercise oversize-policy branches.</p>
+                <p>Set the matching flag on the response.</p>
               </div>
             </td>
             <td>
@@ -1334,8 +1313,6 @@ for tests that exercise oversize-policy branches.</p>
     <div class="doc doc-contents ">
 
         <p>Mirror :meth:<code>HttpClient.post</code> against the scripted queue.</p>
-<p>Passing both <em>body</em> and <em>json</em> raises <code>ValueError</code> to match
-the production validation.</p>
 
 
     </div>
@@ -1390,7 +1367,6 @@ the production validation.</p>
     <div class="doc doc-contents ">
 
         <p>Mirror :meth:<code>HttpClient.delete</code> against the scripted queue.</p>
-<p>DELETE never carries a body in v1, matching HttpClient.</p>
 
 
     </div>
@@ -1427,11 +1403,6 @@ the production validation.</p>
     <div class="doc doc-contents ">
 
         <p>Complete the in-flight request from the scripted outcome.</p>
-<p>Fires the handle's <code>on_done</code> callback (if registered) after
-the fake has returned to idle, matching the production client. A
-streamed request's scripted body is installed as the handle's
-body source, so the code under test drains it via
-<code>read_body_into</code> after this tick.</p>
 
 
     </div>
@@ -1450,9 +1421,6 @@ body source, so the code under test drains it via
     <div class="doc doc-contents ">
 
         <p>Mirror :meth:<code>HttpClient.cancel</code>: fail the in-flight request.</p>
-<p>No-op when idle.  The handle finishes with
-<code>HttpError("request ... cancelled")</code> and its <code>on_done</code>
-fires, matching the production client.</p>
 
 
     </div>
@@ -1497,13 +1465,7 @@ fires, matching the production client.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Return a transport_factory that wraps <em>socket_or_factory</em> in a
-happy-path :class:<code>FakeSocketConnector</code>.</p>
-<p><em>socket_or_factory</em> is either a single :class:<code>FakeSocket</code> (wrapped
-on every call) or a zero-arg callable that builds a fresh socket
-on demand.  The connector script is the shortest happy path:
-<code>dns_ok</code> then <code>tcp_ok</code>.  Tests that need pending/failure
-phases should build the connector directly.</p>
+        <p>Return a transport_factory wrapping <em>socket_or_factory</em> in a :class:<code>FakeSocketConnector</code>.</p>
 
 
     </div>
@@ -1522,8 +1484,6 @@ phases should build the connector directly.</p>
     <div class="doc doc-contents ">
 
         <p>Build an :class:<code>HttpClient</code> against <code>FakeTicks</code> + a <code>FakeSocket</code>.</p>
-<p>Returns <code>(client, ticks, socket)</code>.  <code>kwargs</code> forward to
-<code>HttpClient</code>.</p>
 
 
     </div>
@@ -1542,8 +1502,29 @@ phases should build the connector directly.</p>
     <div class="doc doc-contents ">
 
         <p>Tick <em>client</em> until <em>handle</em> <code>.done</code> flips True.</p>
-<p>Safety-caps at <em>max_ticks</em> iterations and raises
-:class:<code>AssertionError</code> if the handle never completes.</p>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="AssertionError">AssertionError</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The handle never completed within <em>max_ticks</em>.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
 
 
     </div>
