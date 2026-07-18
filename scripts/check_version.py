@@ -33,6 +33,8 @@ non-release-relevant files changed, or when the package is at the
 
 from __future__ import annotations
 
+import ast
+
 from repo_layout import (
     PUBLISHABLE_ROOTS,
     RELEASE_RELEVANT,
@@ -41,9 +43,69 @@ from repo_layout import (
     effective_diff_base,
     read_version,
     release_tags,
+    run_git,
 )
 
 PRE_RELEASE_FLOOR = "0.0.0"
+
+def _strip_docstrings(tree: ast.Module) -> ast.Module:
+    """Drop every bare string-literal statement from *tree* in place.
+
+    Covers module/class/function docstrings and PEP 258 attribute
+    docstrings (a string literal following a constant assignment, which
+    isn't a body's first statement).  A bare string expression is a
+    runtime no-op, so removing it is behavior-preserving; two trees equal
+    after this differ only in docstrings and comments — and comments never
+    reach the AST in the first place.
+    """
+    for node in ast.walk(tree):
+        body = getattr(node, "body", None)
+        if isinstance(body, list):
+            node.body = [
+                statement
+                for statement in body
+                if not (
+                    isinstance(statement, ast.Expr)
+                    and isinstance(statement.value, ast.Constant)
+                    and isinstance(statement.value.value, str)
+                )
+            ]
+    return tree
+
+
+def _code_is_equivalent(old_source: str, new_source: str) -> bool:
+    """Return whether two sources differ only in comments and/or docstrings.
+
+    Compares the docstring-stripped AST dumps (position-free), so
+    whitespace and comment churn that shifts line numbers doesn't count.  A
+    syntax error in either version returns ``False`` — the gate stays
+    conservative and asks for a bump rather than guessing.
+    """
+    try:
+        old_tree = _strip_docstrings(ast.parse(old_source))
+        new_tree = _strip_docstrings(ast.parse(new_source))
+    except SyntaxError:
+        return False
+    return ast.dump(old_tree) == ast.dump(new_tree)
+
+
+def _diff_is_docstring_only(path: str, base_reference: str) -> bool:
+    """Return whether the change to *path* since *base_reference* is limited
+    to comments and/or docstrings (Decision 0113).
+
+    Callers gate on ``path`` being a ``.py`` file.  A file that is new
+    (absent at base) or deleted (absent now) is a real change, not a
+    docstring edit.
+    """
+    base = run_git("show", f"{base_reference}:{path}")
+    if base.returncode != 0:
+        return False  # new file, or unreadable at base — a real change
+    current_path = ROOT / path
+    if not current_path.is_file():
+        return False  # deleted — a real change
+    return _code_is_equivalent(
+        base.stdout, current_path.read_text(encoding="utf-8"),
+    )
 
 
 def _check(base_reference: str) -> int:
@@ -92,6 +154,16 @@ def _check(base_reference: str) -> int:
         # qualifies (len(parts) >= 3 already holds).  For "pyproject.toml",
         # it matches the filename directly at the package root.
         if parts[2] in RELEASE_RELEVANT:
+            # A src/*.py change limited to comments/docstrings ships no
+            # behavior change and no API-reference structure change, so it
+            # doesn't require a VERSION bump (Decision 0113).  pyproject and
+            # non-.py src files (data payloads) are never exempt.
+            if (
+                parts[2] == "src"
+                and path.endswith(".py")
+                and _diff_is_docstring_only(path, base_reference)
+            ):
+                continue
             packages_needing_bump.add(package_id)
 
     # Decision 0038 §6: while a package's VERSION reads 0.0.0, the
