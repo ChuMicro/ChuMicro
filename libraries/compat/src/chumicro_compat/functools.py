@@ -1,20 +1,12 @@
-"""Cross-runtime ``functools.partial`` polyfill.
-
-On CPython this re-exports the built-in ``functools.partial``; on
-MicroPython and CircuitPython, where it is missing, it provides a
-matching pure-Python implementation.
-"""
+"""Cross-runtime ``functools.partial`` polyfill."""
 
 
 class _PurePythonPartial:
-    """Pure-Python ``functools.partial`` for runtimes that lack it."""
-
     def __init__(self, func: object, *args: object, **keywords: object) -> None:
         if not callable(func):
             raise TypeError(f"{func!r} is not callable")
         if isinstance(func, _PurePythonPartial):
-            # Flatten a nested partial like CPython: outer args extend the
-            # inner's and outer keywords win, so introspection matches CPython.
+            # Flatten nested partials like CPython so introspection matches.
             merged_keywords = func.keywords.copy()
             merged_keywords.update(keywords)
             args = func.args + args
@@ -29,8 +21,7 @@ class _PurePythonPartial:
             combined = self.keywords.copy()
             combined.update(keywords)
         else:
-            # No call-time keywords: reuse the frozen dict directly (it is
-            # never mutated) instead of copying it on every call.
+            # self.keywords is never mutated, so skip the per-call copy.
             combined = self.keywords
         return self.func(*self.args, *args, **combined)
 
@@ -44,8 +35,7 @@ class _PurePythonPartial:
 try:
     from functools import partial
 
-    # Some MicroPython builds ship a degraded ``partial`` without the
-    # .func/.args/.keywords attributes, so feature-detect and fall back.
+    # Some MicroPython builds ship a degraded partial without .func/.args/.keywords.
     _probe = partial(int, 0)
     if not (
         hasattr(_probe, "func")

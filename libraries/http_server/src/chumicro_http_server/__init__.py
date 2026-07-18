@@ -1,16 +1,10 @@
 """Non-blocking HTTP/1.1 server for CircuitPython, MicroPython, and CPython.
 
-Tick-based: :meth:`HttpServer.check` reports whether work is pending and
-:meth:`HttpServer.handle` does one slice of progress per call, so the
-caller's loop keeps running other work through a slow or stalled client.
-Keep-alive, chunked request bodies, WebSockets, cookies, and multipart
-upload are not supported.
+The entry point is :class:`HttpServer`.
 """
 
 import gc
 
-# Streamed bodies live in the opt-in ``streaming`` submodule (not
-# re-exported here), so a server that never streams never loads that code.
 from chumicro_http_server._wire import (
     DEFAULT_MAX_CONNECTIONS,
     DEFAULT_MAX_HEADERS_BYTES,
@@ -39,10 +33,9 @@ gc.collect()
 
 
 def __getattr__(name):
-    # Lazy PEP 562 import: a board that only uses the wire helpers never
-    # pins the server module's ~22 KB of compiled code in RAM.
+    # Lazy PEP 562 import: a wire-only board never loads the server module.
     if name in ("HttpServer", "Request", "Response", "build_response", "encode_response"):
-        # Sweep before the big compile (see chumicro_mqtt.__getattr__).
+        # Free the heap before the large import compiles.
         gc.collect()
         import chumicro_http_server.server as _server  # noqa: PLC0415
 

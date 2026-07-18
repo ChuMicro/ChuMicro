@@ -1,11 +1,4 @@
-"""Non-blocking HTTP/1.1 client for CircuitPython, MicroPython, and CPython.
-
-The client is tick-based: :meth:`HttpClient.check` reports whether work
-is pending and :meth:`handle` makes one slice of progress per call, so
-other tasks keep running while a request is in flight. v1 does not do
-keep-alive, gzip, cookies, streaming uploads, or several in-flight
-requests on one client.
-"""
+"""Non-blocking HTTP/1.1 client for CircuitPython, MicroPython, and CPython."""
 
 import gc
 
@@ -29,9 +22,8 @@ gc.collect()
 
 
 def __getattr__(name):
-    # Lazy PEP 562 import: a board that uses only the wire helpers (URL
-    # parsing, header dict, request encoding) never pins the ~25 KB
-    # client module in RAM.
+    # Lazy import keeps the ~25 KB client module out of RAM for boards
+    # that use only the wire helpers.
     if name in ("HttpClient", "RequestHandle", "Response", "WhenOversized"):
         # Pre-compile sweep; rationale in chumicro_mqtt.__getattr__.
         gc.collect()

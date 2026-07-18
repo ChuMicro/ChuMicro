@@ -1,19 +1,7 @@
 """``FakeHttpClient`` plus low-level fixtures for the client test suite.
 
-Two layers live here. :class:`FakeHttpClient` is a scripted in-memory
-stand-in for an :class:`HttpClient` dependency: it mirrors the verb
-surface (``get`` / ``post`` / ... / ``check`` / ``handle`` / ``busy``)
-but completes each request from a scripted queue instead of opening a
-socket. :func:`make_factory`, :func:`canned_response`,
-:func:`drive_until_done`, and :func:`make_client` drive a real
-:class:`HttpClient` against a
-:class:`chumicro_sockets.testing.FakeSocket`.
-
-Script responses with :meth:`FakeHttpClient.enqueue_response` or
-:meth:`FakeHttpClient.enqueue_error`; each request pops one entry FIFO,
-and the next :meth:`FakeHttpClient.handle` tick completes the in-flight
-request. An empty queue raises :class:`HttpError` so a test that forgot
-to enqueue fails clearly.
+Public entry points: :class:`FakeHttpClient`, :func:`make_factory`,
+:func:`canned_response`, :func:`make_client`, and :func:`drive_until_done`.
 """
 
 #: Ships in the source bundle and sdist; never lands on a device.
@@ -46,8 +34,6 @@ class _ScriptedCall:
 
 
 class _ScriptedBodySource:
-    """Serves a scripted body through ``read_body_into`` for streamed fakes."""
-
     def __init__(self, body):
         self._view = memoryview(bytes(body))
         self._offset = 0
@@ -66,28 +52,15 @@ class _ScriptedBodySource:
 
 
 class FakeHttpClient:
-    """In-memory :class:`HttpClient` stand-in for tests.
-
-    Mirrors the production verb methods (``get`` / ``post`` / ``put`` /
-    ``patch`` / ``delete``) and the runner-contract surface (``check``
-    / ``handle`` / ``busy``).  Tests script responses via
-    :meth:`enqueue_response` (success) or :meth:`enqueue_error`
-    (failure); each request pops one entry off the queue head, and
-    the next :meth:`handle` tick completes the in-flight
-    :class:`RequestHandle` and invokes its ``on_done`` callback.
-    """
+    """In-memory :class:`HttpClient` stand-in for tests."""
 
     def __init__(self) -> None:
         self._scripted: list = []
         self._handle: RequestHandle | None = None
         self._url: str | None = None
-        self._pending_outcome = None  # Response or HttpError, set in _start_request
+        self._pending_outcome = None
         self.calls: list[_ScriptedCall] = []
         self.on_oversized = lambda *_args, **_kwargs: None
-
-    # ------------------------------------------------------------------
-    # Test scripting
-    # ------------------------------------------------------------------
 
     def enqueue_response(
         self,
@@ -105,12 +78,9 @@ class FakeHttpClient:
             status: HTTP status code (default 200).
             reason: Reason phrase (default ``"OK"``).
             http_version: Protocol version string (default ``"HTTP/1.1"``).
-            headers: ``dict`` / ``CaseInsensitiveDict`` / iterable of
-                ``(name, value)``.  Folded into a
-                :class:`CaseInsensitiveDict` for the response.
+            headers: ``dict`` / ``CaseInsensitiveDict`` / iterable of ``(name, value)``.
             body: Response body bytes (default empty).
-            oversized_dropped: Set the matching flag on the response
-                for tests that exercise oversize-policy branches.
+            oversized_dropped: Set the matching flag on the response.
         """
         folded = CaseInsensitiveDict()
         if headers is not None:
@@ -133,10 +103,6 @@ class FakeHttpClient:
                 f"enqueue_error expects HttpError, got {type(error).__name__}",
             )
         self._scripted.append(("error", error))
-
-    # ------------------------------------------------------------------
-    # HttpClient surface
-    # ------------------------------------------------------------------
 
     @property
     def busy(self) -> bool:
@@ -192,11 +158,7 @@ class FakeHttpClient:
         on_done: object | None = None,
         stream: bool = False,
     ) -> RequestHandle:
-        """Mirror :meth:`HttpClient.post` against the scripted queue.
-
-        Passing both *body* and *json* raises ``ValueError`` to match
-        the production validation.
-        """
+        """Mirror :meth:`HttpClient.post` against the scripted queue."""
         return self._start_request(
             "POST", url, headers=headers, body=body, json_body=json,
             timeout_ms=timeout_ms, max_redirects=max_redirects,
@@ -251,10 +213,7 @@ class FakeHttpClient:
         on_done: object | None = None,
         stream: bool = False,
     ) -> RequestHandle:
-        """Mirror :meth:`HttpClient.delete` against the scripted queue.
-
-        DELETE never carries a body in v1, matching HttpClient.
-        """
+        """Mirror :meth:`HttpClient.delete` against the scripted queue."""
         return self._start_request(
             "DELETE", url, headers=headers, body=None, json_body=None,
             timeout_ms=timeout_ms, max_redirects=max_redirects,
@@ -266,14 +225,7 @@ class FakeHttpClient:
         return self._handle is not None
 
     def handle(self, now_ms: int) -> None:  # noqa: ARG002 - runner contract
-        """Complete the in-flight request from the scripted outcome.
-
-        Fires the handle's ``on_done`` callback (if registered) after
-        the fake has returned to idle, matching the production client. A
-        streamed request's scripted body is installed as the handle's
-        body source, so the code under test drains it via
-        ``read_body_into`` after this tick.
-        """
+        """Complete the in-flight request from the scripted outcome."""
         if self._handle is None:
             return
         outcome = self._pending_outcome
@@ -295,12 +247,7 @@ class FakeHttpClient:
         finished_handle._invoke_done()  # noqa: SLF001 - internal handoff
 
     def cancel(self) -> None:
-        """Mirror :meth:`HttpClient.cancel`: fail the in-flight request.
-
-        No-op when idle.  The handle finishes with
-        ``HttpError("request ... cancelled")`` and its ``on_done``
-        fires, matching the production client.
-        """
+        """Mirror :meth:`HttpClient.cancel`: fail the in-flight request."""
         if self._handle is None:
             return
         finished_handle = self._handle
@@ -313,15 +260,10 @@ class FakeHttpClient:
         )
         finished_handle._invoke_done()  # noqa: SLF001 - internal handoff
 
-    # ------------------------------------------------------------------
-    # Internal
-    # ------------------------------------------------------------------
-
     def _start_request(
         self, method, url, *, headers, body, json_body,
         timeout_ms, max_redirects, on_done, stream=False,
     ):
-        """Record the call, pop the scripted outcome, return a handle."""
         if body is not None and json_body is not None:
             raise ValueError("pass body= or json= but not both")
         if self._handle is not None:
@@ -343,8 +285,8 @@ class FakeHttpClient:
         kind, payload = self._scripted.pop(0)
         if kind == "response":
             if stream:
-                # Streamed: the Response carries no body; the scripted
-                # bytes drain through read_body_into instead.
+                # Streamed: the Response carries no body; scripted bytes
+                # drain through read_body_into instead.
                 streamed_payload = dict(payload)
                 scripted_body = streamed_payload["body"]
                 streamed_payload["body"] = b""
@@ -361,11 +303,6 @@ class FakeHttpClient:
         return self._handle
 
 
-# ---------------------------------------------------------------------------
-# Low-level fixtures for the real-client test suite
-# ---------------------------------------------------------------------------
-
-
 def canned_response(*, status=200, reason="OK", body=b"", extra_headers=()):
     """Build an HTTP/1.1 response byte-string with ``Content-Length``."""
     lines = [f"HTTP/1.1 {status} {reason}\r\n".encode("ascii")]
@@ -379,15 +316,7 @@ def canned_response(*, status=200, reason="OK", body=b"", extra_headers=()):
 
 
 def make_factory(socket_or_factory):
-    """Return a transport_factory that wraps *socket_or_factory* in a
-    happy-path :class:`FakeSocketConnector`.
-
-    *socket_or_factory* is either a single :class:`FakeSocket` (wrapped
-    on every call) or a zero-arg callable that builds a fresh socket
-    on demand.  The connector script is the shortest happy path:
-    ``dns_ok`` then ``tcp_ok``.  Tests that need pending/failure
-    phases should build the connector directly.
-    """
+    """Return a transport_factory wrapping *socket_or_factory* in a :class:`FakeSocketConnector`."""
     def factory(host, port, use_tls):  # noqa: ARG001 - fake ignores args
         socket = socket_or_factory() if callable(socket_or_factory) else socket_or_factory
         return FakeSocketConnector(actions=["dns_ok", "tcp_ok"], socket=socket)
@@ -396,11 +325,7 @@ def make_factory(socket_or_factory):
 
 
 def make_client(*, socket_or_factory=None, **kwargs):
-    """Build an :class:`HttpClient` against ``FakeTicks`` + a ``FakeSocket``.
-
-    Returns ``(client, ticks, socket)``.  ``kwargs`` forward to
-    ``HttpClient``.
-    """
+    """Build an :class:`HttpClient` against ``FakeTicks`` + a ``FakeSocket``."""
     ticks = FakeTicks()
     socket = socket_or_factory if socket_or_factory is not None else FakeSocket()
     client = HttpClient(
@@ -414,8 +339,8 @@ def make_client(*, socket_or_factory=None, **kwargs):
 def drive_until_done(client, handle, ticks, *, max_ticks=200, advance_ms=1):
     """Tick *client* until *handle*\\ ``.done`` flips True.
 
-    Safety-caps at *max_ticks* iterations and raises
-    :class:`AssertionError` if the handle never completes.
+    Raises:
+        AssertionError: The handle never completed within *max_ticks*.
     """
     for _ in range(max_ticks):
         if handle.done:

@@ -1,9 +1,6 @@
 """Non-blocking WebSocket client and server for CircuitPython, MicroPython, and CPython.
 
-Both :class:`WebSocketClient` and :class:`WebSocketServer` follow the
-runner contract: :meth:`check` reports whether work is pending and
-:meth:`handle` does one slice of progress per call, so an LED can keep
-blinking through the handshake, frame I/O, and close.
+The public entry points are :class:`WebSocketClient` and :class:`WebSocketServer`.
 """
 
 import gc
@@ -42,8 +39,7 @@ gc.collect()
 
 
 def __getattr__(name):
-    # Lazy PEP 562 imports: a client-only app never loads the server half
-    # (and vice versa), so the unused ~20 KB half stays out of RAM.
+    # Lazy PEP 562 import keeps the unused client/server half (~20 KB) out of RAM.
     if name == "WebSocketClient":
         from chumicro_websockets.client import WebSocketClient  # noqa: PLC0415
 

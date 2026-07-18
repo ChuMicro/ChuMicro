@@ -1,20 +1,10 @@
-"""MessagePack serialization for CircuitPython, MicroPython, and CPython.
-
-Implements a strict subset of the `MessagePack spec
-<https://github.com/msgpack/msgpack/blob/master/spec.md>`_: integers in
-``[-2**31, 2**32-1]``, 32-bit floats, and strings, bytes, arrays, and
-maps up to 65 535 elements or bytes. The subset is what fits on a small
-board, but the bytes stay spec-compliant, so any standard MessagePack
-reader decodes them.
-"""
+"""MessagePack serialization for CircuitPython, MicroPython, and CPython."""
 
 import gc
 import sys
 
 _native_loaded = False
 if sys.implementation.name == "circuitpython":
-    # Prefer the native C msgpack module when present; it keeps heap usage
-    # lower than importing the pure-Python encoder.
     try:
         from io import BytesIO
 
@@ -47,8 +37,7 @@ if sys.implementation.name == "circuitpython":
                     the first object.
             """
             buffer = BytesIO(data)
-            # The native decoder raises EOFError on truncation; translate it
-            # to the ValueError our contract (and the pure path) promises.
+            # The native decoder raises EOFError on truncation; our contract promises ValueError.
             try:
                 result = unpack(buffer)
             except EOFError as truncation_error:

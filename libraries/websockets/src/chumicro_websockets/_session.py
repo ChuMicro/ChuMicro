@@ -1,11 +1,3 @@
-"""Shared OPEN/CLOSING/CLOSED machinery for WebSocketClient and Connection.
-
-Everything after the opening handshake lives in :class:`_BaseSession`:
-frame dispatch, oversize policy, control-frame handling, the close
-handshake, the send queue, and the pong watchdog. Subclasses supply
-only the mask direction (clients mask, servers do not).
-"""
-
 import errno
 from collections import deque
 
@@ -36,19 +28,12 @@ from chumicro_websockets._wire import (
     validate_text_payload,
 )
 
-# Cap on consecutive zero-length continuation frames: an unbounded run
-# never completes the message or trips the size cap, a liveness stall.
+# Cap on zero-length continuation frames: an unbounded run is a liveness stall.
 _MAX_EMPTY_FRAGMENT_RUN = 64
 
-# Poll-interest bits for io_interest, mirroring chumicro_runner.IO_READ /
-# IO_WRITE by value; kept as literals to avoid a dependency on the runner.
+# Mirror chumicro_runner.IO_READ / IO_WRITE by value; literals avoid a runner dependency.
 _IO_READ = 1
 _IO_WRITE = 2
-
-
-# ---------------------------------------------------------------------------
-# WhenOversized policy
-# ---------------------------------------------------------------------------
 
 
 class WhenOversized:
@@ -57,18 +42,11 @@ class WhenOversized:
     #: Drop the message silently; stay connected for the next one.
     DROP_SILENT = "drop_silent"
 
-    #: Default.  Drop the message, fire ``on_oversized(reported_length)``,
-    #: and stay connected for the next inbound message.
+    #: Default. Drop the message, fire ``on_oversized(reported_length)``, and stay connected.
     DROP_WITH_EVENT = "drop_with_event"
 
-    #: Close immediately with :data:`CLOSE_TOO_BIG`, for when oversize
-    #: means peer/transport corruption.
+    #: Close immediately with :data:`CLOSE_TOO_BIG` when oversize means peer corruption.
     DISCONNECT = "disconnect"
-
-
-# ---------------------------------------------------------------------------
-# Shared cross-runtime helpers
-# ---------------------------------------------------------------------------
 
 
 def _no_callback(*_args, **_kwargs):
@@ -76,17 +54,15 @@ def _no_callback(*_args, **_kwargs):
 
 
 def _new_tx_queue(maxlen):
-    # MicroPython / CircuitPython take deque(iterable, maxlen, flags);
-    # CPython takes deque(iterable, maxlen).
+    # MicroPython/CircuitPython deque takes a flags arg; CPython's does not.
     try:
         return deque((), maxlen, 1)
-    except TypeError:  # CPython
+    except TypeError:
         return deque((), maxlen)
 
 
 def _force_non_blocking(socket):
-    # The tick-based RX path needs recv_into to raise EAGAIN, never block;
-    # MicroPython sockets start blocking, so enforce it here.
+    # MicroPython sockets start blocking; the tick-based RX path needs non-blocking recv_into.
     setblocking = getattr(socket, "setblocking", None)
     if setblocking is None:
         return
@@ -97,12 +73,7 @@ def _force_non_blocking(socket):
 
 
 class InboundMessage:
-    """A complete inbound WebSocket data message returned by ``next_message``.
-
-    ``is_text`` selects which field carries the payload: a text message
-    holds the decoded ``str`` in ``text`` (``data`` is ``None``); a
-    binary message holds ``bytes`` in ``data`` (``text`` is ``None``).
-    """
+    """A complete inbound WebSocket data message returned by ``next_message``."""
 
     def __init__(self, *, is_text: bool, text: str | None = None, data: bytes | None = None):
         self.is_text = is_text
@@ -116,8 +87,7 @@ class InboundMessage:
 
 
 class _InboundWait:
-    # Wait yielded by next_message while the queue is empty. io_socket is
-    # None because the session already owns the socket's poll interest.
+    # io_socket is None because the session already owns the socket's poll interest.
 
     io_socket = None
 
@@ -125,24 +95,9 @@ class _InboundWait:
 _INBOUND_WAIT = _InboundWait()
 
 
-# ---------------------------------------------------------------------------
-# _BaseSession
-# ---------------------------------------------------------------------------
-
-
 class _BaseSession:
-    """Shared OPEN/CLOSING/CLOSED state machine and framing pipeline.
-
-    Subclasses set :attr:`_peer_label` and :attr:`_inbound_mask_required`,
-    implement :meth:`_outbound_mask` (mask key for clients, ``None`` for
-    servers), and call :meth:`_init_session_state` from their own
-    ``__init__`` once the transport is ready.
-    """
-
     _peer_label: str = ""
     _inbound_mask_required: bool = False
-
-    # -- shared state setup ------------------------------------------------
 
     def _init_session_state(
         self,
@@ -172,38 +127,31 @@ class _BaseSession:
 
         self._ticks = ticks
 
-        # Pre-allocated recv scratch reused every tick to avoid per-handle
-        # heap churn; capped at 512 B, refilled in a loop to honour the budget.
+        # Pre-allocated recv scratch, reused each tick to avoid heap churn; capped at 512 B.
         recv_scratch_size = min(recv_budget_per_tick, 512)
         self._recv_buffer = bytearray(recv_scratch_size)
         self._recv_view = memoryview(self._recv_buffer)
 
         self.state = WebSocketState.CONNECTING
-        # Inbound frame parser; the message cap also bounds per-frame heap.
         self._frame_parser = FrameParser(max_payload_bytes=max_message_bytes)
         self._post_handshake_carry = b""
 
         self._tx_queue = _new_tx_queue(max_tx_queue_size + 8)
-        # Structural bound of the tx deque; internal frames check it
-        # explicitly since deque overflow behavior differs across runtimes.
+        # Internal frames check this bound explicitly: deque overflow differs across runtimes.
         self._tx_queue_hard_cap = max_tx_queue_size + 8
-        self._tx_partial = None  # (bytes, offset) when last send was short.
+        self._tx_partial = None  # (buffer, offset) when a send was short
 
         self._inbound_message_buffer = bytearray()
         self._inbound_message_opcode = None  # TEXT or BINARY when fragmented
         self._inbound_oversized = False
-        # next_message() lazily builds the inbound queue and flips data
-        # delivery from the on_text / on_binary callbacks to the queue.
         self._inbound_queue = None
         self._inbound_to_queue = False
-        # Running peer-reported size of the in-progress message; load-bearing
-        # on tier-3 oversize, where the message buffer never gets the bytes.
+        # Peer-reported size of the in-progress message; load-bearing on tier-3 oversize.
         self._inbound_reported_length = 0
         self._inbound_empty_fragment_run = 0
 
         self._handshake_send_buffer = None
-        # Cached memoryview over _handshake_send_buffer so the per-tick send
-        # slices a zero-copy view; set and dropped alongside the buffer.
+        # memoryview over _handshake_send_buffer for zero-copy per-tick send slices.
         self._handshake_send_view = None
         self._handshake_send_offset = 0
 
@@ -216,8 +164,7 @@ class _BaseSession:
         self.last_close_reason = ""
         self.last_error = None
 
-        # Default callbacks are no-ops so users can store handlers
-        # unconditionally.
+        # No-op defaults let the session call callbacks without a None check.
         self.on_text = _no_callback
         self.on_binary = _no_callback
         self.on_ping = _no_callback
@@ -225,15 +172,9 @@ class _BaseSession:
         self.on_close = _no_callback
         self.on_oversized = _no_callback
 
-    # -- Runner I/O interest (read by ``Runner.wait``) --------------------
-
     @property
     def io_socket(self):
-        """The session's socket-ish object while live, else ``None``.
-
-        ``None`` once the session is CLOSED (``handle()`` no-ops from then
-        on). The runner unwraps any ``.sock`` adapter wrapper at the poller.
-        """
+        """The session's socket-ish object while live, else ``None``."""
         if self._socket is None:
             return None
         if self.state == WebSocketState.CLOSED:
@@ -241,12 +182,7 @@ class _BaseSession:
         return self._socket
 
     def io_interest(self, now_ms):
-        """Poll-interest bitmask (``_IO_READ`` / ``_IO_WRITE``) for the runner.
-
-        OPEN and CLOSING always read and add write interest when the tx
-        queue or a partial send is pending. CONNECTING delegates to the
-        ``_connecting_wants_*`` hooks. CLOSED reports no interest.
-        """
+        """Poll-interest bitmask (``_IO_READ`` / ``_IO_WRITE``) for the runner."""
         if self.state in (WebSocketState.OPEN, WebSocketState.CLOSING):
             interest = _IO_READ
             if bool(self._tx_queue) or self._tx_partial is not None:
@@ -268,12 +204,7 @@ class _BaseSession:
         return False
 
     def next_deadline(self, now_ms):  # noqa: ARG002 - runner contract
-        """Earliest tick at which ``handle()`` must run on a quiet socket.
-
-        Reports the minimum across the handshake timeout, the close
-        timeout, the pending-pong watchdog, and the next auto-ping
-        (client only).  ``None`` when no deadline applies.
-        """
+        """Earliest tick at which ``handle()`` must run on a quiet socket, or ``None``."""
         ticks_diff = self._ticks.ticks_diff
         nearest = None
         for candidate in (
@@ -288,11 +219,12 @@ class _BaseSession:
                 nearest = candidate
         return nearest
 
-    # -- public send / close ----------------------------------------------
-
     def send_text(self, text: str) -> None:
-        """Enqueue a text frame.  Raises :class:`WebSocketStateError`
-        if not OPEN, :class:`WebSocketBackpressureError` if TX is full.
+        """Enqueue a text frame.
+
+        Raises:
+            WebSocketStateError: Not in OPEN state.
+            WebSocketBackpressureError: TX queue is full.
         """
         if self.state != WebSocketState.OPEN:
             raise WebSocketStateError(
@@ -301,9 +233,11 @@ class _BaseSession:
         self._enqueue_user_frame(OPCODE_TEXT, text.encode("utf-8"))
 
     def send_binary(self, data) -> None:
-        """Enqueue a binary frame from ``bytes`` / ``bytearray`` /
-        ``memoryview``.  Raises :class:`WebSocketStateError` if not
-        OPEN, :class:`WebSocketBackpressureError` if TX is full.
+        """Enqueue a binary frame from ``bytes``, ``bytearray``, or ``memoryview``.
+
+        Raises:
+            WebSocketStateError: Not in OPEN state.
+            WebSocketBackpressureError: TX queue is full.
         """
         if self.state != WebSocketState.OPEN:
             raise WebSocketStateError(
@@ -314,15 +248,11 @@ class _BaseSession:
                 f"send_binary() requires bytes, bytearray, or memoryview; "
                 f"got {type(data).__name__}",
             )
-        # No defensive copy: the frame is encoded synchronously here, so a
-        # caller mutating the buffer afterward can't affect the sent frame.
+        # No defensive copy: the frame is encoded synchronously before this returns.
         self._enqueue_user_frame(OPCODE_BINARY, data)
 
     def send_ping(self, payload: bytes = b"") -> None:
-        """Send a PING (peer must echo as PONG per RFC 6455 §5.5.2).
-        Manual :meth:`send_ping` is for application-level ping/pong.
-        Payload is capped at 125 bytes (control-frame limit).
-        """
+        """Send a PING frame the peer must echo as a PONG; payload capped at 125 bytes."""
         if self.state != WebSocketState.OPEN:
             raise WebSocketStateError(
                 f"send_ping() requires OPEN state, was {self.state}",
@@ -331,8 +261,10 @@ class _BaseSession:
         self._arm_pong_deadline()
 
     def close(self, code: int = CLOSE_NORMAL, reason: str = "") -> None:
-        """Initiate a graceful close handshake.  Raises
-        :class:`WebSocketStateError` if already CLOSING/CLOSED.
+        """Initiate a graceful close handshake.
+
+        Raises:
+            WebSocketStateError: Already CLOSING or CLOSED.
         """
         if self.state in (WebSocketState.CLOSING, WebSocketState.CLOSED):
             raise WebSocketStateError(
@@ -343,23 +275,11 @@ class _BaseSession:
     def next_message(self):
         """Suspend until the next inbound data message, then return it.
 
-        Generator for runner-driven receive loops (drive it with
-        ``Runner.add_generator`` alongside the session). The first call
-        switches inbound data delivery from the ``on_text`` / ``on_binary``
-        callbacks to a bounded queue; control frames keep firing their
-        callbacks either way. The queue is bounded by
-        ``max_inbound_queue_size`` and drops the oldest message when full,
-        so a slow consumer loses stale messages rather than growing the heap.
-
         Returns:
-            The next :class:`InboundMessage`, or ``None`` once the session
-            is CLOSED and the queue is drained. On ``None``, read
-            ``last_close_code`` / ``last_close_reason`` / ``last_error`` to
-            learn why the stream ended.
+            The next :class:`InboundMessage`, or ``None`` once the session is CLOSED and drained.
         """
         if self._inbound_queue is None:
-            # 2-arg deque drops the oldest item on append-when-full on every
-            # runtime (the tx queue uses flags=1 to raise for backpressure).
+            # 2-arg deque drops the oldest item on append-when-full on every runtime.
             self._inbound_queue = deque((), self._max_inbound_queue_size)
             self._inbound_to_queue = True
         while True:
@@ -369,12 +289,8 @@ class _BaseSession:
                 return None
             yield _INBOUND_WAIT
 
-    # -- subclass-customizable mask ---------------------------------------
-
     def _outbound_mask(self):  # pragma: no cover - abstract
         raise NotImplementedError
-
-    # -- handshake send (post-direction-specific setup) ------------------
 
     def _send_handshake_chunk(self, now_ms: int) -> None:
         remaining = self._handshake_send_view[self._handshake_send_offset:]
@@ -402,8 +318,6 @@ class _BaseSession:
     def _on_handshake_send_complete(self, now_ms: int) -> None:  # pragma: no cover - abstract
         raise NotImplementedError
 
-    # -- enqueue ----------------------------------------------------------
-
     def _enqueue_user_frame(self, opcode: int, payload: bytes) -> None:
         if len(self._tx_queue) >= self._max_tx_queue_size:
             raise WebSocketBackpressureError(
@@ -414,8 +328,7 @@ class _BaseSession:
         self._tx_queue.append(encoded)
 
     def _enqueue_internal_frame(self, opcode: int, payload: bytes) -> None:
-        # Internal frames use the deque's headroom past the user cap. A
-        # non-CLOSE stops one slot short so a CLOSE handshake always fits.
+        # Reserve one headroom slot for CLOSE: non-CLOSE internal frames stop one short.
         limit = self._tx_queue_hard_cap
         if opcode != OPCODE_CLOSE:
             limit -= 1
@@ -423,8 +336,6 @@ class _BaseSession:
             return
         encoded = encode_frame(opcode, payload, fin=True, mask=self._outbound_mask())
         self._tx_queue.append(encoded)
-
-    # -- inbound drain (post-handshake) -----------------------------------
 
     def _drain_inbound(self, now_ms: int) -> None:
         remaining = self._recv_budget_per_tick
@@ -445,8 +356,7 @@ class _BaseSession:
             remaining -= len(chunk)
 
     def _feed_frame_bytes(self, chunk: bytes, now_ms: int) -> None:
-        # A parser latched in ERROR consumes nothing, so feeding it would
-        # loop forever; drop inbound until the close handshake ends.
+        # A parser latched in ERROR consumes nothing; feeding it would spin forever.
         if self._frame_parser.state == FrameParseState.ERROR:
             return
         offset = 0
@@ -459,17 +369,14 @@ class _BaseSession:
                 self.last_error = protocol_error
                 return
             if consumed == 0:
-                # No progress with bytes still available means the parser
-                # stopped in a terminal state; stop rather than spin.
+                # Zero progress with bytes left means a terminal state; stop rather than spin.
                 return
             offset += consumed
             if self._frame_parser.state == FrameParseState.FRAME_READY:
                 try:
                     self._dispatch_frame(now_ms)
                 finally:
-                    # Reset even if a callback raised, so the parser never
-                    # lingers in FRAME_READY; skip it once CLOSED, where the
-                    # finalize path still wants the frame fields.
+                    # Reset even if a callback raised; skip once CLOSED, where finalize needs the fields.
                     if self.state != WebSocketState.CLOSED:
                         self._frame_parser.reset()
                 if self.state == WebSocketState.CLOSED:
@@ -498,8 +405,7 @@ class _BaseSession:
         if opcode == OPCODE_PONG:
             self._handle_pong_frame(payload)
             return
-        # Reserved opcodes (0xB-0xF) are caught upstream by FrameParser.
-        # Anything that gets here is a data opcode (TEXT, BINARY, or CONT).
+        # Reserved opcodes are rejected upstream by FrameParser; this is a data opcode.
         self._handle_data_frame(opcode, fin, payload, now_ms)
 
     def _handle_data_frame(self, opcode: int, fin: bool, payload: bytes, now_ms: int) -> None:
@@ -513,7 +419,7 @@ class _BaseSession:
                 )
                 return
         else:
-            # TEXT or BINARY: must NOT arrive mid-fragmentation.
+            # TEXT or BINARY must not arrive mid-fragmentation.
             if self._inbound_message_opcode is not None:
                 self._send_close(
                     CLOSE_PROTOCOL_ERROR,
@@ -535,8 +441,7 @@ class _BaseSession:
                 )
                 return
         if frame_parser.oversized:
-            # Tier 3: payload was drained at the frame layer; mark the
-            # message oversized without extending the buffer.
+            # Tier 3: payload was drained at the frame layer; mark oversized, don't buffer.
             self._inbound_oversized = True
         else:
             self._extend_inbound_buffer(payload)
@@ -570,7 +475,7 @@ class _BaseSession:
 
     def _extend_inbound_buffer(self, payload: bytes) -> None:
         if self._inbound_oversized:
-            return  # already over, wait for FIN to finalize
+            return  # already oversized; wait for FIN
         projected = len(self._inbound_message_buffer) + len(payload)
         if projected > self._max_message_bytes:
             self._inbound_oversized = True
@@ -604,20 +509,18 @@ class _BaseSession:
         try:
             code, reason = parse_close_payload(payload)
         except WebSocketProtocolError as parse_error:
-            # Even close frames must be valid.  Respond with protocol error.
             self._send_close(CLOSE_PROTOCOL_ERROR, str(parse_error), now_ms)
             self.last_error = parse_error
             return
 
         if self.state == WebSocketState.CLOSING:
-            # We initiated.  Peer's CLOSE finishes the handshake.
             if self.last_close_code is None:
                 self.last_close_code = code
                 self.last_close_reason = reason
             self._finalize_closed()
             return
 
-        # Peer initiated.  Echo their close code back per RFC 6455 §5.5.1.
+        # Peer initiated: echo the close code back (RFC 6455 §5.5.1).
         self.last_close_code = code
         self.last_close_reason = reason
         self._send_close(code if code is not None else CLOSE_NORMAL, "", now_ms)
@@ -631,16 +534,13 @@ class _BaseSession:
         self._pending_ping_deadline_ticks = None
         self.on_pong(payload)
 
-    # -- outbound drain ---------------------------------------------------
-
     def _drain_outbound(self) -> None:
         budget = self._send_budget_per_tick
         while budget > 0:
             if self._tx_partial is None:
                 if not self._tx_queue:
                     return
-                # Wrap in a memoryview so the per-send slice is a view over
-                # the unsent tail, not a fresh copy each iteration.
+                # memoryview so each send slices the unsent tail without copying.
                 self._tx_partial = (memoryview(self._tx_queue.popleft()), 0)
             buffer, offset = self._tx_partial
             chunk = buffer[offset : offset + budget]
@@ -665,7 +565,6 @@ class _BaseSession:
             budget -= sent
 
     def _recv_chunk(self, max_bytes: int):
-        """Non-blocking recv: ``memoryview`` window, ``b""`` on EOF, or ``None`` on EAGAIN."""
         cap = min(max_bytes, len(self._recv_buffer))
         try:
             received = self._socket.recv_into(self._recv_view, cap)
@@ -684,26 +583,22 @@ class _BaseSession:
             return b""
         return self._recv_view[:received]
 
-    # -- close + finalize -------------------------------------------------
-
     def _send_close(self, code: int, reason: str, now_ms: int | None) -> None:
         if self.state in (WebSocketState.CLOSING, WebSocketState.CLOSED):
             return
         try:
             payload = encode_close_payload(code, reason)
         except WebSocketProtocolError:
-            # Reserved close code or oversize reason: fall back to a
-            # no-body close so we still trigger the handshake.
+            # Reserved code or oversize reason: fall back to a no-body close.
             payload = b""
         self._enqueue_internal_frame(OPCODE_CLOSE, payload)
-        # Record code and reason only if unset, preserving the peer's
-        # values when this is the echo half of a peer-initiated close.
+        # Record only if unset, preserving the peer's values on an echoed close.
         if self.last_close_code is None:
             self.last_close_code = code
             self.last_close_reason = reason
         self.state = WebSocketState.CLOSING
         if now_ms is None:
-            # User-entry callers (close()) run outside a tick; fetch a base.
+            # close() runs outside a tick; fetch a time base.
             now_ms = self._ticks.ticks_ms()
         self._close_deadline_ticks = self._ticks.ticks_add(
             now_ms,
@@ -711,7 +606,7 @@ class _BaseSession:
         )
 
     def _finalize_closed(self) -> None:
-        # Try to flush the CLOSE frame so the peer sees our reply.
+        # Flush the CLOSE frame so the peer sees our reply before we drop TCP.
         if self._tx_queue or self._tx_partial is not None:
             self._drain_outbound()
         try:
@@ -745,10 +640,7 @@ class _BaseSession:
     def _on_finalized(self) -> None:
         """Hook for subclasses to clear additional per-side state on close."""
 
-    # -- timeouts ---------------------------------------------------------
-
     def _check_timeouts(self, now_ms: int) -> bool:
-        """Return ``True`` if a handshake / close / pong deadline just tripped."""
         ticks_diff = self._ticks.ticks_diff
         if (
             self._handshake_deadline_ticks is not None
@@ -764,7 +656,6 @@ class _BaseSession:
             self._close_deadline_ticks is not None
             and ticks_diff(self._close_deadline_ticks, now_ms) <= 0
         ):
-            # Force closed even though peer didn't echo CLOSE.
             self.last_error = WebSocketTimeoutError(
                 f"peer did not send CLOSE within {self._close_timeout_ms} ms",
             )
@@ -786,9 +677,9 @@ class _BaseSession:
         if self._pong_timeout_ms is None:
             return
         if self._pending_ping_deadline_ticks is not None:
-            return  # earlier ping still outstanding, keep its deadline
+            return  # keep the earliest outstanding ping's deadline
         if now_ms is None:
-            # User-entry callers (send_ping) run outside a tick; fetch a base.
+            # send_ping() runs outside a tick; fetch a time base.
             now_ms = self._ticks.ticks_ms()
         self._pending_ping_deadline_ticks = self._ticks.ticks_add(
             now_ms,

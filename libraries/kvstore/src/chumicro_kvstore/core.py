@@ -1,9 +1,4 @@
-"""Core ``KVStore`` class, exception hierarchy, and ``Backend`` ABC.
-
-Backends are lazy-imported so device runtimes never pay for one they
-do not use; the msgpack codec stays at module top since it runs on every
-commit and load.
-"""
+"""Core ``KVStore`` class, exception hierarchy, and ``Backend`` ABC."""
 
 import sys
 
@@ -19,27 +14,11 @@ class KVStoreFull(KVStoreError):
 
 
 class KVStoreCorrupt(KVStoreError):
-    """Persisted state failed its integrity check on load.
-
-    Raised only from an explicit ``reload()``. Auto-load on construction
-    reports corruption through the ``is_corrupt`` property instead and
-    resets the store to empty.
-    """
+    """Persisted state failed its integrity check on load."""
 
 
 class Backend:
-    """Interface that every concrete backend implements.
-
-    A backend is a thin shim over one persistence mechanism (CP NVM slab,
-    MP NVS namespace, MP LittleFS file, in-memory dict) and works only in
-    ``bytes``; the msgpack codec lives in ``KVStore``, so a backend never
-    decodes. ``load()`` returns the persisted payload (``b""`` for a blank
-    substrate) and raises ``KVStoreCorrupt`` on an integrity failure;
-    ``save(payload)`` overwrites it and raises ``KVStoreFull`` when the
-    substrate cannot hold that many bytes. ``KVStore`` checks ``capacity``
-    before calling ``save``, and ``name`` is the identifier surfaced by
-    ``KVStore.backend_name``.
-    """
+    """Interface that every concrete backend implements."""
 
     # A plain class, not typing.Protocol: MicroPython has no typing module.
     name: str = "base"
@@ -65,7 +44,6 @@ def _select_backend() -> Backend:
             return MpLittlefsBackend()
         from chumicro_kvstore._backends.mp_nvs import MpNvsBackend  # noqa: PLC0415
         return MpNvsBackend()
-    # CPython fall-through.
     from chumicro_kvstore._backends.memory import MemoryBackend  # noqa: PLC0415
     return MemoryBackend()
 
@@ -94,9 +72,7 @@ class KVStore:
     """Persisted key-value store with a mapping-style public API.
 
     Args:
-        backend: Backend selection: ``"auto"`` (default, per-runtime
-            choice), ``"memory"``, ``"nvm"``, ``"nvs"``, ``"littlefs"``,
-            or a concrete backend instance for tests.
+        backend: ``"auto"``, ``"memory"``, ``"nvm"``, ``"nvs"``, ``"littlefs"``, or a backend instance.
     """
 
     def __init__(self, backend: Backend | str = "auto") -> None:
@@ -106,15 +82,10 @@ class KVStore:
         self._data: dict[str, object] = {}
         self._last_payload: bytes = b""
         self.is_corrupt: bool = False
-        # Set by the mapping mutators, cleared on persist / (re)load.
         self._dirty: bool = False
         self._auto_load()
 
-    # --- lifecycle -------------------------------------------------
-
     def _auto_load(self) -> None:
-        """Read the backend on construction, resetting to empty on corruption."""
-        # Loading resynchronizes with the backend, so nothing is pending after.
         self._dirty = False
         try:
             payload = self._backend.load()
@@ -130,8 +101,6 @@ class KVStore:
         try:
             loaded = unpackb(payload)
         except ValueError:
-            # Malformed msgpack (unpackb raises ValueError) is treated like a
-            # non-dict payload: mark corrupt, behave empty, never raise here.
             loaded = None
         if not isinstance(loaded, dict):
             self._data = {}
@@ -148,7 +117,7 @@ class KVStore:
             KVStoreCorrupt: Backend payload failed integrity check.
         """
         self._dirty = False
-        payload = self._backend.load()  # may raise KVStoreCorrupt
+        payload = self._backend.load()
         if not payload:
             self._data = {}
             self._last_payload = b""
@@ -175,11 +144,6 @@ class KVStore:
     def commit_if_changed(self) -> bool:
         """Commit only when the encoded payload changed since the last persist.
 
-        This spares flash wear on raw-flash backends. The encode is skipped
-        entirely when no mapping method has run since the last persist, so
-        scheduling it every tick is cheap. A value mutated in place through a
-        nested object (outside the mapping API) is not seen as a change.
-
         Returns:
             ``True`` if a write happened, ``False`` if the commit was skipped.
         """
@@ -193,8 +157,7 @@ class KVStore:
         return True
 
     def _persist(self, payload: bytes) -> None:
-        # capacity <= 0 means unbounded (the Backend base default), so a
-        # backend that leaves it unset is not blocked by a spurious zero cap.
+        # capacity 0 (the Backend default) means unbounded, not a zero limit.
         if 0 < self.capacity < len(payload):
             raise KVStoreFull(
                 f"payload size {len(payload)} exceeds capacity {self.capacity}"
@@ -203,8 +166,6 @@ class KVStore:
         self._last_payload = payload
         self.is_corrupt = False
         self._dirty = False
-
-    # --- mapping-style API -----------------------------------------
 
     def __getitem__(self, key: str) -> object:
         return self._data[key]
@@ -239,10 +200,7 @@ class KVStore:
         return self._data.values()
 
     def pop(self, key: str, *default: object) -> object:
-        """Remove *key* and return its value, or *default* when supplied.
-
-        Like ``dict.pop``: with no *default*, a missing key raises ``KeyError``.
-        """
+        """Remove *key* and return its value, or *default* when supplied."""
         self._dirty = True
         if default:
             return self._data.pop(key, default[0])
@@ -258,13 +216,7 @@ class KVStore:
         self._data.update(other)
         self._dirty = True
 
-    # --- introspection ---------------------------------------------
-
     @property
     def bytes_used(self) -> int:
-        """Encoded size of the current in-memory dict, not the persisted payload.
-
-        Each read runs a full msgpack encode of the dict and is not memoized,
-        so read it sparingly rather than polling it every tick.
-        """
+        """Encoded size of the current in-memory dict, not the persisted payload."""
         return len(packb(self._data))

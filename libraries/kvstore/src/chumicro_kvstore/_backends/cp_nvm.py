@@ -1,18 +1,3 @@
-"""CircuitPython ``microcontroller.nvm`` backend with CRC framing.
-
-Stores one msgpack payload in the NVM byte slab behind a fixed header, so
-a power loss mid-write is caught on the next load instead of read back as
-valid data. The on-slab layout (do not change without an ABI bump) is::
-
-    offset 0:  4 bytes  MAGIC b"CKVS"
-    offset 4:  2 bytes  LEN (little-endian uint16)
-    offset 6:  4 bytes  CRC32 (little-endian uint32, IEEE polynomial)
-    offset 10: LEN bytes  MSGPACK payload
-
-A blank slab (all ``0xFF`` from a flash erase, or all ``0x00`` on some
-chips) loads as empty; a bad magic raises ``KVStoreCorrupt``.
-"""
-
 __chumicro_runtimes__ = ("circuitpython",)
 
 import binascii
@@ -21,12 +6,6 @@ from chumicro_kvstore.core import Backend, KVStoreCorrupt, KVStoreFull
 
 
 class CpNvmBackend(Backend):
-    """CircuitPython NVM backend.
-
-    ``nvm`` defaults to the live ``microcontroller.nvm`` slab; tests pass a
-    plain ``bytearray`` to exercise the framing without hardware.
-    """
-
     HEADER_MAGIC = b"CKVS"
     HEADER_SIZE = 10  # MAGIC(4) + LEN(2) + CRC32(4)
 
@@ -54,16 +33,7 @@ class CpNvmBackend(Backend):
         return microcontroller.nvm  # pragma: no cover - CP runtime path
 
     def load(self) -> bytes:
-        """Read the framed payload from NVM.
-
-        Returns:
-            The msgpack payload bytes, or ``b""`` for a blank slab.
-
-        Raises:
-            KVStoreCorrupt: Magic, length, or CRC failed validation.
-        """
-        # All-0xFF (flash erase) or all-0x00 (some chips power up this way)
-        # is a blank slab, not corruption.
+        # All-0xFF (flash-erased) or all-0x00 (how some chips power up) is a blank slab, not corruption.
         magic = bytes(self._nvm[0 : len(self.HEADER_MAGIC)])
         if magic in (b"\xff\xff\xff\xff", b"\x00\x00\x00\x00"):
             return b""
@@ -86,11 +56,6 @@ class CpNvmBackend(Backend):
         return payload
 
     def save(self, payload: bytes) -> None:
-        """Write the framed payload into NVM.
-
-        Raises:
-            KVStoreFull: Payload exceeds capacity.
-        """
         if len(payload) > self.capacity:
             raise KVStoreFull(
                 f"payload size {len(payload)} exceeds NVM capacity {self.capacity}"
@@ -102,6 +67,5 @@ class CpNvmBackend(Backend):
             + len(payload).to_bytes(2, "little")
             + crc.to_bytes(4, "little")
         )
-        # One slice-assign writes header and payload as a single flash-write
-        # span, shrinking the torn-record window (the CRC rejects a torn record).
+        # Single slice-assign so header+payload land in one flash write, shrinking the torn-record window.
         self._nvm[0 : self.HEADER_SIZE + len(payload)] = header + payload

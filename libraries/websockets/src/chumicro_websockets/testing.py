@@ -1,9 +1,6 @@
 """Test helpers for libraries that depend on chumicro-websockets.
 
-Two in-memory fakes: :class:`FakeConnection` (a bidirectional pipe
-satisfying the TCP client socket shape) and :class:`FakeListener` (a
-stand-in for :func:`chumicro_sockets.listener`). For ticks, use
-:class:`chumicro_timing.testing.FakeTicks` via the ``ticks=`` kwarg.
+The public fakes are :class:`FakeConnection` and :class:`FakeListener`.
 """
 
 __chumicro_test_support__ = True
@@ -13,27 +10,7 @@ import errno
 
 
 class FakeConnection:
-    """Bidirectional in-memory pipe modeling a TCP client socket.
-
-    Inject into :class:`WebSocketClient` via ``transport_factory=lambda
-    *_args, **_kwargs: FakeConnection()``, or hand into a
-    :class:`Connection` directly. Drive the two halves with
-    :meth:`feed_inbound` (bytes the local end will read) and
-    :meth:`read_outbound` (drain what the local end wrote).
-
-    The fake is non-blocking: an empty inbound buffer raises
-    ``OSError(EAGAIN)``, and :meth:`close_inbound` flips that to EOF.
-
-    Error injection:
-
-    * ``raise_on_send`` / ``raise_on_recv``: set to an exception instance
-      and the next :meth:`send` / :meth:`recv_into` raises it, then resets.
-    * ``send_chunk_cap``: cap each :meth:`send` to this many bytes, for
-      exercising partial-send resumption.
-
-    ``closed`` flips ``True`` after :meth:`close`; ``outbound`` /
-    ``inbound`` are the raw buffers (prefer the helper methods).
-    """
+    """Bidirectional in-memory pipe modeling a TCP client socket."""
 
     def __init__(self) -> None:
         self.outbound = bytearray()
@@ -43,10 +20,6 @@ class FakeConnection:
         self.raise_on_send = None
         self.raise_on_recv = None
         self.send_chunk_cap = None
-
-    # ------------------------------------------------------------------
-    # Test helpers
-    # ------------------------------------------------------------------
 
     def feed_inbound(self, data: bytes) -> None:
         """Append *data* to the inbound queue (will be visible to recv_into)."""
@@ -65,10 +38,6 @@ class FakeConnection:
     def close_inbound(self) -> None:
         """Signal peer-EOF: next recv_into returns 0 instead of EAGAIN."""
         self.eof = True
-
-    # ------------------------------------------------------------------
-    # TCP client socket surface
-    # ------------------------------------------------------------------
 
     def setblocking(self, flag: bool) -> None:  # noqa: ARG002 - protocol
         """Accept the call; the fake is always non-blocking."""
@@ -96,13 +65,11 @@ class FakeConnection:
         if not self.inbound:
             if self.eof:
                 return 0
-            # OSError(EAGAIN), not BlockingIOError: MicroPython lacks the
-            # latter, and real adapters raise OSError on every runtime.
+            # OSError(EAGAIN), not BlockingIOError: MicroPython lacks the latter.
             raise OSError(errno.EAGAIN, "no data ready")
         take = min(cap, len(self.inbound))
         buffer[:take] = self.inbound[:take]
-        # CircuitPython doesn't support `del bytearray[start:stop]`.
-        # Slice-rebind works on every runtime.
+        # CircuitPython lacks `del bytearray[start:stop]`; slice-rebind works everywhere.
         self.inbound = bytearray(self.inbound[take:])
         return take
 
@@ -112,15 +79,7 @@ class FakeConnection:
 
 
 class FakeListener:
-    """Stand-in for :func:`chumicro_sockets.listener`.
-
-    Tests call :meth:`queue_accept` to enqueue a peer connection
-    that the next :meth:`accept` call returns; an empty queue
-    raises ``OSError(EAGAIN)`` just like a real non-blocking listener.
-
-    Inject into :class:`WebSocketServer` via the ``listener=``
-    constructor argument.
-    """
+    """Stand-in for :func:`chumicro_sockets.listener`."""
 
     def __init__(self) -> None:
         self._pending = []

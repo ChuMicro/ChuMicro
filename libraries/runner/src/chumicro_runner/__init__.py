@@ -23,8 +23,7 @@ __all__ = [
 
 
 def __getattr__(name: str):
-    # Lazy PEP 562 import: an app that never registers a generator never
-    # loads _generator (the generator-driver classes) into RAM.
+    # Lazy import: an app with no generator never pulls _generator into RAM.
     if name == "GeneratorHandle":
         from chumicro_runner._generator import GeneratorHandle  # noqa: PLC0415
 
