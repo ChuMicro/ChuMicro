@@ -439,17 +439,6 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#chumicro_timing.deadline.Deadline.__init__" class="md-nav__link">
-    <span class="md-ellipsis">
-      <span class="md-typeset">
-        __init__
-      </span>
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#chumicro_timing.deadline.Deadline.expired" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -498,17 +487,6 @@
   
     <nav class="md-nav" aria-label="Rate">
       <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#chumicro_timing.deadline.Rate.__init__" class="md-nav__link">
-    <span class="md-ellipsis">
-      <span class="md-typeset">
-        __init__
-      </span>
-    </span>
-  </a>
-  
-</li>
         
           <li class="md-nav__item">
   <a href="#chumicro_timing.deadline.Rate.due" class="md-nav__link">
@@ -814,17 +792,6 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#chumicro_timing.deadline.Deadline.__init__" class="md-nav__link">
-    <span class="md-ellipsis">
-      <span class="md-typeset">
-        __init__
-      </span>
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#chumicro_timing.deadline.Deadline.expired" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -873,17 +840,6 @@
   
     <nav class="md-nav" aria-label="Rate">
       <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#chumicro_timing.deadline.Rate.__init__" class="md-nav__link">
-    <span class="md-ellipsis">
-      <span class="md-typeset">
-        __init__
-      </span>
-    </span>
-  </a>
-  
-</li>
         
           <li class="md-nav__item">
   <a href="#chumicro_timing.deadline.Rate.due" class="md-nav__link">
@@ -1205,15 +1161,10 @@
 
     <div class="doc doc-contents first">
 
-        <p>Value objects over the ticks substrate: <code>Deadline</code> and <code>Rate</code>.</p>
-<p>These capture the arm / expire / remaining / reduce / re-phase arithmetic
-that consumers otherwise hand-assemble from the free <code>ticks_add</code> /
-<code>ticks_diff</code> functions.  Every method takes a caller-supplied
-<code>now_ms</code> — the objects hold no clock and never read one, so a service
-threads its runner's <code>now_ms</code> through and stays testable with a fake
-clock.  All arithmetic goes through the library's own wrap-safe
-<code>ticks_add</code> / <code>ticks_diff</code>, so <code>now + delta</code> is never written by a
-caller and the 29-bit wrap footgun is unrepresentable.</p>
+        <p>Value objects built on the tick functions: <code>Deadline</code> and <code>Rate</code>.</p>
+<p>Both take a caller-supplied <code>now_ms</code> and hold no clock of their own, so a
+service can thread its runner's <code>now_ms</code> through them and stay testable
+with a fake clock.</p>
 
 
 
@@ -1250,14 +1201,10 @@ caller and the 29-bit wrap footgun is unrepresentable.</p>
 
 
         <p>A single armed deadline: <code>period_ms</code> from the <code>now_ms</code> it was built at.</p>
-<p>Arms at construction via wrap-safe <code>ticks_add</code> — a caller never
-writes <code>now + delta</code>.  <code>expired</code> / <code>remaining</code> read the armed
-due-tick against a supplied <code>now_ms</code>; <code>reset</code> re-arms the same
-period from a fresh <code>now_ms</code>.  One long-lived <code>Deadline</code> field
-per timeout is allocation-free in steady state (armed once, polled
-every tick without allocating); do not build one per tick on a hot
-path — the free <code>ticks_add</code> / <code>ticks_diff</code> stay the right tool
-there.</p>
+<p><code>expired</code> and <code>remaining</code> check the due tick against a supplied
+<code>now_ms</code>, and <code>reset</code> re-arms the same period.  Keep one long-lived
+<code>Deadline</code> per timeout rather than building one each tick on a hot
+path, where the free <code>ticks_add</code> / <code>ticks_diff</code> fit better.</p>
 
 
 
@@ -1279,74 +1226,6 @@ there.</p>
 
 
 
-
-<div class="doc doc-object doc-function">
-
-
-<h4 id="chumicro_timing.deadline.Deadline.__init__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="fm">__init__</span><span class="p">(</span><span class="n">period_ms</span><span class="p">,</span> <span class="n">now_ms</span><span class="p">)</span></code>
-
-<a href="#chumicro_timing.deadline.Deadline.__init__" class="headerlink" title="Permanent link">&para;</a></h4>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Arm a deadline <code>period_ms</code> after <code>now_ms</code>.</p>
-
-
-<p><span class="doc-section-title">Parameters:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Default</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                <code>period_ms</code>
-            </td>
-            <td>
-                  <code><span title="int">int</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Milliseconds from <code>now_ms</code> until the deadline is
-due.  Must stay under <code>TICKS_HALFPERIOD</code>; a larger
-interval raises <code>OverflowError</code> from <code>ticks_add</code>,
-because a gap past half the ring aliases to the wrong sign.</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>now_ms</code>
-            </td>
-            <td>
-                  <code><span title="int">int</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>The current tick the deadline is armed against.</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-    </div>
-
-</div>
 
 <div class="doc doc-object doc-function">
 
@@ -1426,12 +1305,10 @@ because a gap past half the ring aliases to the wrong sign.</p>
 
 
         <p>Fires at most once per <code>period_ms</code>, drift-free and phase-aligned.</p>
-<p>Absorbs the old <code>Heartbeat</code> fixed-cadence poller and the scheduler's
-phase-preserving anchoring: <code>due</code> re-phases by
-advancing the <em>scheduled</em> tick by whole periods, not by re-anchoring
-to <code>now_ms</code>, so fires stay aligned to the original cadence and never
-drift.  A stall longer than one period skips the missed fires instead
-of bursting to catch up.</p>
+<p><code>due</code> advances the scheduled tick by whole periods rather than
+re-anchoring to <code>now_ms</code>, so fires stay on the original cadence.  A
+stall longer than one period skips the missed fires instead of bursting
+to catch up.</p>
 
 
 
@@ -1457,98 +1334,6 @@ of bursting to catch up.</p>
 <div class="doc doc-object doc-function">
 
 
-<h4 id="chumicro_timing.deadline.Rate.__init__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="fm">__init__</span><span class="p">(</span><span class="n">period_ms</span><span class="p">,</span> <span class="n">now_ms</span><span class="p">)</span></code>
-
-<a href="#chumicro_timing.deadline.Rate.__init__" class="headerlink" title="Permanent link">&para;</a></h4>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Build a rate with <code>period_ms</code> cadence; the first fire lands one period after <code>now_ms</code>.</p>
-
-
-<p><span class="doc-section-title">Parameters:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Default</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                <code>period_ms</code>
-            </td>
-            <td>
-                  <code><span title="int">int</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Interval between fires.  Must be greater than zero
-and less than <code>TICKS_HALFPERIOD</code> (half the tick ring); a
-longer interval can never fire, because <code>ticks_diff</code>
-saturates at half the ring.</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>now_ms</code>
-            </td>
-            <td>
-                  <code><span title="int">int</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>The current tick the cadence is anchored against.</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-<p><span class="doc-section-title">Raises:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                  <code><span title="ValueError">ValueError</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>When <code>period_ms</code> is not greater than zero, or is
-at least <code>TICKS_HALFPERIOD</code> (it could never fire).</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
 <h4 id="chumicro_timing.deadline.Rate.due" class="doc doc-heading">
             <code class="highlight language-python"><span class="n">due</span><span class="p">(</span><span class="n">now_ms</span><span class="p">)</span></code>
 
@@ -1558,10 +1343,8 @@ at least <code>TICKS_HALFPERIOD</code> (it could never fire).</p>
     <div class="doc doc-contents ">
 
         <p>Return <code>True</code> once the period has elapsed, re-phasing to the next fire.</p>
-<p>Fires at most once per <code>period_ms</code>.  On a fire, advances the
-scheduled tick by however many whole periods <code>now_ms</code> is behind
-(dropping missed fires) so the cadence stays phase-aligned rather
-than drifting by the polling jitter.</p>
+<p>Fires at most once per <code>period_ms</code>; a fire drops any periods missed
+during a stall rather than firing repeatedly to catch up.</p>
 
 
     </div>
@@ -1617,17 +1400,13 @@ than drifting by the polling jitter.</p>
 
     <div class="doc doc-contents first">
 
-        <p>The fleet's completion-wait vocabulary: <code>Signal</code> + <code>wait_for</code>.</p>
-<p>Opt-in submodule — import explicitly::</p>
+        <p>Completion-wait vocabulary: <code>Signal</code> and <code>wait_for</code>.</p>
+<p>Opt-in submodule, imported explicitly::</p>
 <div class="language-text highlight"><pre><span></span><code>from chumicro_timing.waits import Signal, wait_for
 </code></pre></div>
 <p><code>Signal</code> is a one-slot completion token; <code>wait_for</code> suspends a
-runner-driven generator until the signal is set (or an optional deadline
-elapses).  They connect callback-style services to sequential generator
-flows and live here, on the dependency floor, so runner and every
-networking library share one wait vocabulary rather than re-inventing it.
-The runner-side tick-suspension helper <code>sleep_until</code> stays in
-<code>chumicro_runner.generators</code> — waiting the loop is the runner's verb.</p>
+runner-driven generator until the signal is set, or an optional deadline
+elapses.</p>
 
 
 
@@ -1663,17 +1442,10 @@ The runner-side tick-suspension helper <code>sleep_until</code> stays in
 
 
 
-        <p>One-slot completion token connecting callback-style services to
-generator tasks.</p>
-<p>The completing side calls <code>set(value)</code> — typically from a service
-callback firing inside its own tick.  A generator suspended via
-<code>yield from wait_for(signal)</code> resumes on the following tick and
-receives the stored value.  <code>clear()</code> re-arms the instance, so
-one signal serves many sequential waits; a suspended wait allocates
-nothing per tick.</p>
-<p><code>next_deadline(now_ms)</code> reports the optional timeout as an
-absolute <code>ticks_ms</code> value — <code>wait_for</code> manages it; leave it
-alone when yielding a signal directly.</p>
+        <p>One-slot completion token connecting callback-style services to generator tasks.</p>
+<p>The completing side calls <code>set(value)</code>; a generator suspended via
+<code>yield from wait_for(signal)</code> resumes on the next tick with that value.
+<code>clear()</code> re-arms the token so one signal serves many sequential waits.</p>
 
 
 
@@ -1761,7 +1533,7 @@ alone when yielding a signal directly.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Return whether the waiting generator should resume — True once set.</p>
+        <p>Return whether the waiting generator should resume: <code>True</code> once set.</p>
 
 
     </div>
@@ -1789,17 +1561,6 @@ alone when yielding a signal directly.</p>
     <div class="doc doc-contents ">
 
         <p>Suspend until <em>signal</em> is set; return the value it carries.</p>
-<p>Wire the completing side before suspending — hand <code>signal.set</code>
-(or a small wrapper around it) to the service as its callback —
-then <code>yield from</code>::</p>
-<div class="language-text highlight"><pre><span></span><code>link_up = Signal()
-wifi.on_state_change(lambda old, new: link_up.set(new))
-state = yield from wait_for(link_up)
-</code></pre></div>
-<p>This is for one-time completions a sequential flow genuinely
-blocks on (a link coming up, a handshake finishing).  Reactive
-fan-out — callbacks set once, operations queued fire-and-forget —
-stays callbacks; do not wrap an ack a caller never blocks on.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1822,7 +1583,7 @@ stays callbacks; do not wrap an ack a caller never blocks on.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The signal to wait on.  Not cleared on return — call
+                <p>The signal to wait on.  Not cleared on return; call
 <code>signal.clear()</code> before reusing it for another wait.</p>
               </div>
             </td>
@@ -1840,8 +1601,8 @@ stays callbacks; do not wrap an ack a caller never blocks on.</p>
             <td>
               <div class="doc-md-description">
                 <p>Optional absolute <code>ticks_ms</code> deadline (compute
-via <code>ticks_add(ticks_ms(), timeout_ms)</code>).  <code>None</code>
-waits indefinitely.</p>
+via <code>ticks_add(ticks_ms(), timeout_ms)</code>).  <code>None</code> waits
+indefinitely.</p>
               </div>
             </td>
             <td>
@@ -1913,8 +1674,8 @@ waits indefinitely.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p><code>ETIMEDOUT</code> — <em>deadline_ms</em> elapsed before the
-signal was set.  Raised inside the generator body, so the
+                <p><code>ETIMEDOUT</code> when <em>deadline_ms</em> elapses before the
+signal is set.  Raised inside the generator body, so the
 generator catches it there or lets it end the task.</p>
               </div>
             </td>

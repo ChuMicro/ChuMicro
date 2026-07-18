@@ -425,17 +425,6 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#chumicro_timing.testing.FakeTicks.__init__" class="md-nav__link">
-    <span class="md-ellipsis">
-      <span class="md-typeset">
-        __init__
-      </span>
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#chumicro_timing.testing.FakeTicks.advance" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -604,17 +593,6 @@
   
     <nav class="md-nav" aria-label="FakeTicks">
       <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#chumicro_timing.testing.FakeTicks.__init__" class="md-nav__link">
-    <span class="md-ellipsis">
-      <span class="md-typeset">
-        __init__
-      </span>
-    </span>
-  </a>
-  
-</li>
         
           <li class="md-nav__item">
   <a href="#chumicro_timing.testing.FakeTicks.advance" class="md-nav__link">
@@ -820,24 +798,6 @@
 <div class="doc doc-object doc-function">
 
 
-<h4 id="chumicro_timing.testing.FakeTicks.__init__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="fm">__init__</span><span class="p">(</span><span class="n">start_ms</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span></code>
-
-<a href="#chumicro_timing.testing.FakeTicks.__init__" class="headerlink" title="Permanent link">&para;</a></h4>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Seeds the current reading to <code>start_ms</code>.</p>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
 <h4 id="chumicro_timing.testing.FakeTicks.advance" class="doc doc-heading">
             <code class="highlight language-python"><span class="n">advance</span><span class="p">(</span><span class="n">amount_ms</span><span class="p">)</span></code>
 
@@ -864,15 +824,9 @@
 
     <div class="doc doc-contents ">
 
-        <p>Advances the fake clock by <code>duration_ms</code> instead of sleeping for real.</p>
-<p>An honest stand-in for a runtime <code>time.sleep_ms</code>: in real
-time sleeping makes the clock move, so this moves <code>ticks_ms()</code>
-forward by <code>duration_ms</code> and returns at once.  <code>Runner.wait</code>
-calls this when its socket-less idle path delegates to an
-injected <code>FakeTicks</code>, so a test waits zero wall-clock while the
-fake time it gates on advances by the computed timeout.  Matches
-<code>advance</code>: the bump lands on the unmasked reading and
-<code>ticks_ms()</code> folds it into the wrap-safe range.</p>
+        <p>Advance the fake clock by <code>duration_ms</code> instead of sleeping for real.</p>
+<p>Sleeping in real time moves the clock forward, so this stand-in moves
+<code>ticks_ms()</code> ahead by <code>duration_ms</code> and returns at once.</p>
 
 
     </div>
