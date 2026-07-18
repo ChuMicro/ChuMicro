@@ -823,15 +823,9 @@ Import them the same way:</p>
     <div class="doc doc-contents first">
 
         <p>Test helpers for libraries that consume chumicro-logging.</p>
-<p>The library itself doesn't need fakes — its handlers are already
-trivial to substitute (any object exposing <code>emit(level, name,
-message)</code> works).  This module ships two helpers — <code>RecordingHandler</code>
-and <code>FailingHandler</code> — that are useful when <em>downstream</em> libraries
-want to assert against logger output without writing one-off mocks.
-See <code>docs/testing.md</code> for worked examples.</p>
-<p>The helpers are test-support — the <code>__chumicro_test_support__</code>
-marker below keeps this file out of every bundle and every product /
-app / functional device deploy (the on-device unit sweep stages it).</p>
+<p><code>RecordingHandler</code> captures records for assertions and <code>FailingHandler</code>
+raises on every emit, so downstream libraries can test against logger output
+without writing one-off mocks.</p>
 
 
 
@@ -868,9 +862,6 @@ app / functional device deploy (the on-device unit sweep stages it).</p>
 
 
         <p>Handler that captures records in a list for test assertions.</p>
-<p>Each call to <code>emit</code> appends <code>(level, name, message)</code>.  The
-list is exposed as <code>records</code> and can be inspected, asserted
-against, or cleared via <code>clear()</code>.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -893,8 +884,8 @@ against, or cleared via <code>clear()</code>.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Minimum level captured.  Defaults to <code>0</code> so every
-record passes through regardless of logger threshold.</p>
+                <p>Minimum level captured. Defaults to <code>0</code> so every record
+passes through regardless of the logger threshold.</p>
               </div>
             </td>
             <td>
@@ -1029,10 +1020,7 @@ record passes through regardless of logger threshold.</p>
 
 
 
-        <p>Handler that raises on every <code>emit</code> — used to exercise error paths.</p>
-<p>The Logger's <code>handler_errors</code> counter increments each time this
-fires.  Useful for asserting that a misbehaving handler never
-crashes the application.</p>
+        <p>Handler that raises on every <code>emit</code>, to exercise error paths.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1055,7 +1043,7 @@ crashes the application.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The exception instance to raise.  Defaults to
+                <p>The exception instance to raise. Defaults to
 <code>RuntimeError("handler boom")</code>.</p>
               </div>
             </td>

@@ -355,17 +355,6 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#chumicro_logging--public-api" class="md-nav__link">
-    <span class="md-ellipsis">
-      <span class="md-typeset">
-        Public API
-      </span>
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#chumicro_logging.BufferedHandler" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -707,17 +696,6 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#chumicro_logging--public-api" class="md-nav__link">
-    <span class="md-ellipsis">
-      <span class="md-typeset">
-        Public API
-      </span>
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#chumicro_logging.BufferedHandler" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -1009,26 +987,11 @@
 
     <div class="doc doc-contents first">
 
-        <p>Leveled logging for chumicro libraries — runner-friendly, no chumicro deps.</p>
-<p>A lightweight subset of stdlib <code>logging</code> that runs identically on
-CircuitPython, MicroPython, and CPython: integer levels, named loggers,
-a handler protocol, and a buffered handler that defers I/O to the runner
-tick so emission never blocks a hot path.</p>
-<p>This package has no chumicro dependencies and <strong>no chumicro library
-imports it</strong> — by policy, decoration / observability libraries don't
-appear in another library's dependency graph.  Apps wire it in by
-passing a logger callable to libraries that accept an optional
-<code>logger=</code> parameter, or by attaching their own loggers to runtime
-events.</p>
-<h4 id="chumicro_logging--public-api">Public API<a class="headerlink" href="#chumicro_logging--public-api" title="Permanent link">&para;</a></h4>
-<ul>
-<li>Level constants: <code>DEBUG</code>, <code>INFO</code>, <code>WARNING</code>, <code>ERROR</code>, <code>CRITICAL</code></li>
-<li><code>Logger(name, level, handlers)</code> — emits records to attached handlers</li>
-<li><code>StreamHandler(stream, level, formatter)</code> — synchronous text output</li>
-<li><code>BufferedHandler(downstream, capacity, level)</code> — runner-shaped buffer</li>
-<li><code>default_formatter(level, name, message)</code> — <code>LEVEL:name:message</code></li>
-<li><code>level_name(level)</code> — integer to human name</li>
-</ul>
+        <p>Leveled logging for chumicro libraries, with no chumicro dependencies.</p>
+<p>A lightweight subset of the standard library <code>logging</code> that runs the same on
+CircuitPython, MicroPython, and CPython: integer levels, named loggers, a
+handler protocol, and a buffered handler that defers I/O to the runner tick so
+emission never blocks a hot path.</p>
 
 
 
@@ -1064,17 +1027,11 @@ events.</p>
 
 
 
-        <p>Runner-shaped handler buffering records and flushing on <code>handle</code>.</p>
-<p>Drop-in front of any other handler.  <code>emit</code> is cheap — it appends
-to a bounded buffer — so libraries on a hot tick can log freely
-without paying for I/O.  <code>check(now_ms)</code> returns <code>True</code> when
-the buffer is non-empty; <code>handle(now_ms)</code> drains it to the
-downstream handler.  Wire the buffered handler into a
-<code>chumicro-runner</code> instance for automatic draining.</p>
-<p>When the buffer is full, the <strong>oldest</strong> record is dropped and
-<code>dropped</code> is incremented.  The newest record always wins on the
-assumption the operator wants to see <em>recent</em> activity when the
-rate exceeds the flush cadence.</p>
+        <p>Runner-shaped handler that buffers records and flushes on <code>handle</code>.</p>
+<p><code>emit</code> only appends to a bounded buffer, so a library on a hot tick can
+log without paying for I/O. When the buffer is full the oldest record is
+dropped and <code>dropped</code> is incremented, on the assumption an operator wants
+to see recent activity when the log rate outruns the flush cadence.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1114,7 +1071,7 @@ rate exceeds the flush cadence.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Maximum buffered records.  Must be &gt;= 1.</p>
+                <p>Maximum buffered records. Must be &gt;= 1.</p>
               </div>
             </td>
             <td>
@@ -1130,7 +1087,7 @@ rate exceeds the flush cadence.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Minimum level buffered.  Defaults to <code>DEBUG</code>.</p>
+                <p>Minimum level buffered. Defaults to <code>DEBUG</code>.</p>
               </div>
             </td>
             <td>
@@ -1219,9 +1176,7 @@ rate exceeds the flush cadence.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Maximum buffered records.  Read-only: the deque's <code>maxlen</code>
-is frozen at construction, so a mutable attribute would let the
-drop accounting desync from the actual drop-oldest behavior.</p>
+        <p>Maximum buffered records; read-only.</p>
 
     </div>
 
@@ -1241,7 +1196,7 @@ drop accounting desync from the actual drop-oldest behavior.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Buffer the record.  Drop the oldest if full.</p>
+        <p>Buffer the record. Drop the oldest if full.</p>
 
 
     </div>
@@ -1309,7 +1264,7 @@ runner contract).</p>
 
     <div class="doc doc-contents ">
 
-        <p>Drain the buffer to the downstream handler.  Returns flushed count.</p>
+        <p>Drain the buffer to the downstream handler. Returns flushed count.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1372,15 +1327,9 @@ runner contract).</p>
 
 
         <p>A named logger with a level threshold and a list of handlers.</p>
-<p>Loggers are not registered globally — the caller owns the instance
-and passes it explicitly to subsystems that want to emit.  This
-avoids import-order surprises and keeps the library stateless.</p>
-<p>Records below the configured level are dropped before any handler
-is consulted.  Each handler decides independently whether to emit.</p>
-<p>Handler exceptions and <code>message % args</code> format mismatches never
-escape the logger — they increment <code>handler_errors</code> and are
-otherwise swallowed.  Logging must not crash the application that
-uses it.</p>
+<p>Records below the configured level are dropped before any handler is
+consulted, and a handler that raises never escapes the logger: the failure
+increments <code>handler_errors</code> instead.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1419,7 +1368,7 @@ uses it.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Minimum level emitted.  Defaults to <code>INFO</code>.</p>
+                <p>Minimum level emitted. Defaults to <code>INFO</code>.</p>
               </div>
             </td>
             <td>
@@ -1499,7 +1448,7 @@ uses it.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Attach a handler.  No-op if already attached.</p>
+        <p>Attach a handler. No-op if already attached.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1548,7 +1497,7 @@ uses it.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Detach a handler.  No-op if not attached.</p>
+        <p>Detach a handler. No-op if not attached.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1618,13 +1567,10 @@ record would be dropped anyway.</p>
     <div class="doc doc-contents ">
 
         <p>Emit <em>message</em> at <em>level</em> to every attached handler.</p>
-<p>When <em>args</em> is given the record is built as <code>message % args</code>,
-and only after the level gate — so a dropped record never pays
-the interpolation.  Prefer <code>log.info("x=%d", n)</code> over a
-pre-built f-string (<code>log.info(f"x={n}")</code>) so the formatting
-stays off the hot path when the level is disabled.  A format/arg
-mismatch is caught, rendered as a visible fallback, and counted
-in <code>handler_errors</code> — never raised into the caller.</p>
+<p>With <em>args</em>, the record is built as <code>message % args</code> only after the
+level gate, so a dropped record never pays for the interpolation. A
+format mismatch is caught, rendered as a visible fallback, and counted
+in <code>handler_errors</code> rather than raised into the caller.</p>
 
 
     </div>
@@ -1745,15 +1691,8 @@ in <code>handler_errors</code> — never raised into the caller.</p>
 
 
         <p>Synchronous handler writing formatted records to a writable stream.</p>
-<p>For every emitted record, writes the formatted line and a trailing
-newline as two separate <code>stream.write</code> calls, then <code>stream.flush()</code>
-(when available).  Two writes avoid allocating a concatenated
-<code>line + "\n"</code> string per record.  On microcontrollers the stream
-typically resolves to the serial console via <code>sys.stdout</code>; on
-CPython any file-like object works.</p>
-<p>The handler keeps no buffer of its own — every call to <code>emit</code>
-hits the stream.  Use <code>BufferedHandler</code> to decouple emission
-from a hot path.</p>
+<p>On microcontrollers the stream typically resolves to the serial console
+via <code>sys.stdout</code>; on CPython any file-like object works.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1776,7 +1715,7 @@ from a hot path.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>A writable stream.  Defaults to <code>sys.stdout</code>.</p>
+                <p>A writable stream. Defaults to <code>sys.stdout</code>.</p>
               </div>
             </td>
             <td>
@@ -1792,7 +1731,7 @@ from a hot path.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Minimum level emitted.  Defaults to <code>DEBUG</code>.</p>
+                <p>Minimum level emitted. Defaults to <code>DEBUG</code>.</p>
               </div>
             </td>
             <td>
@@ -1808,8 +1747,8 @@ from a hot path.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Callable rendering <code>(level, name, message)</code> to
-a string.  Defaults to <code>default_formatter</code>.</p>
+                <p>Callable rendering <code>(level, name, message)</code> to a string.
+Defaults to <code>default_formatter</code>.</p>
               </div>
             </td>
             <td>
