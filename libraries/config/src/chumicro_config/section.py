@@ -1,8 +1,7 @@
 """Read the device's runtime config and pull typed sections out of it.
 
-The config is a flat dict with dotted keys like ``"wifi.ssid"``.
 :class:`RuntimeConfig` wraps it for lookups; :func:`load_section` and
-:func:`try_load_section` build typed ``<Name>Config`` objects from it.
+:func:`try_load_section` build typed sections.
 """
 
 
@@ -13,23 +12,15 @@ class ConfigError(Exception):
 class MissingConfigKey(ConfigError):
     """A required config key was not present."""
 
-    # Not a subclass of KeyError: MicroPython rejects multiple inheritance
-    # from Exceptions with different memory layouts. Catch ConfigError.
+    # Not a KeyError subclass: MicroPython forbids multiple Exception inheritance.
 
 
 class InvalidConfigType(ConfigError):
     """A config value had the wrong shape, usually not a dict."""
 
-    # Single inheritance only, same MicroPython reason as MissingConfigKey.
-
 
 class RuntimeConfig:
-    """Dict-like lookup over the deployed runtime config.
-
-    Supports ``config.get(key, default)``, ``config[key]`` and
-    ``config.require(key)`` (both raise :class:`MissingConfigKey` on a
-    missing key), and ``key in config``.
-    """
+    """Dict-like lookup over the deployed runtime config."""
 
     def __init__(self, data: dict | None = None) -> None:
         self._data: dict = data if data is not None else {}
@@ -64,11 +55,6 @@ def load_section(
     optional: dict | None = None,
 ) -> object:
     """Build *target_class* from flat config keys sharing a *prefix*.
-
-    For each name in *required* and *optional*, reads
-    ``config[f"{prefix}.{name}"]`` and passes it to
-    ``target_class(**kwargs)`` under that name. For soft "config not
-    deployed" handling, use :func:`try_load_section` instead.
 
     Args:
         target_class: Class to build from the collected keyword args.
@@ -124,10 +110,6 @@ def try_load_section(
     optional: dict | None = None,
 ) -> object | None:
     """Like :func:`load_section`, but return ``None`` instead of raising.
-
-    Returns ``None`` on the three "section not configured" paths:
-    *config* is ``None``, *config* is the wrong type, or a required key
-    is missing. Errors from constructing *target_class* still propagate.
 
     Args:
         target_class: Class to build from the collected keyword args.

@@ -1,10 +1,4 @@
-"""Non-blocking MQTT 3.1.1 client for CircuitPython, MicroPython, and CPython.
-
-Drive :class:`MQTTClient` from a tick loop: :meth:`MQTTClient.check`
-reports whether work is pending and :meth:`MQTTClient.handle` does one
-slice of progress per call. QoS 0 and QoS 1 are supported; QoS 2 raises
-:class:`UnsupportedQoSError`.
-"""
+"""Non-blocking MQTT 3.1.1 client for CircuitPython, MicroPython, and CPython."""
 
 import gc
 
@@ -21,10 +15,9 @@ gc.collect()
 
 
 def __getattr__(name):
-    # Lazy PEP 562 import: client is the largest module, so a board that
-    # imports chumicro_mqtt but never builds an MQTTClient pays no RAM for it.
     if name in ("InboundPublish", "MQTTClient", "ProtocolState", "WhenOversized"):
-        # Collect first so the big module compiles into a freshly swept heap.
+        # Lazy-import the largest module so boards that never build a client
+        # pay no RAM; collect first so it compiles into a swept heap.
         gc.collect()
         import chumicro_mqtt.client as _client  # noqa: PLC0415
 

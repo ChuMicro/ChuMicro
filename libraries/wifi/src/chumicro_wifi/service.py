@@ -1,9 +1,4 @@
-"""``WifiService``: wifi state machine and reconnect supervisor.
-
-Drives the substrate adapter through connect, monitor, and reconnect,
-advancing a :class:`WifiState` machine from ``check`` / ``handle`` calls
-in the runner's tick loop.
-"""
+"""``WifiService``: wifi state machine and reconnect supervisor."""
 
 import sys
 
@@ -13,12 +8,9 @@ from chumicro_wifi.config import WifiConfig
 
 
 class WifiState:
-    """State-name constants for :class:`WifiService`.
+    """State-name constants for :class:`WifiService`."""
 
-    Plain strings because :mod:`enum` is unavailable on some MicroPython
-    boards. Compare via ``state == WifiState.CONNECTED``.
-    """
-
+    # Plain strings, not an enum: some MicroPython boards lack the enum module.
     DISCONNECTED = "disconnected"
     CONNECTING = "connecting"
     CONNECTED = "connected"
@@ -27,7 +19,7 @@ class WifiState:
 
 
 def _select_adapter():
-    # Lazy-import per runtime so a board only parses the adapter it uses.
+    # Import per runtime so a board only parses the adapter it uses.
     runtime_name = sys.implementation.name
     if runtime_name == "circuitpython":  # pragma: no cover - CP runtime path
         from chumicro_wifi._adapters.cp import CpWifiAdapter
@@ -35,7 +27,6 @@ def _select_adapter():
     if runtime_name == "micropython":  # pragma: no cover - MP runtime path
         from chumicro_wifi._adapters.mp import MpWifiAdapter
         return MpWifiAdapter()
-    # CPython host fallback: testing.py owns the fake.
     from chumicro_wifi.testing import FakeWifiAdapter
     return FakeWifiAdapter()
 
@@ -43,21 +34,10 @@ def _select_adapter():
 class WifiService:
     """Drives a wifi adapter through connect, monitor, and reconnect.
 
-    On CircuitPython the connect step blocks: ``wifi.radio.connect`` has no
-    non-blocking variant, so a connect attempt driven from ``handle()``
-    stalls every co-scheduled runner service for up to
-    ``connect_timeout_ms`` (default 15 s). MicroPython and CPython connect
-    without stalling the loop, so keep ``connect_timeout_ms`` modest on CP.
-
     Args:
         config: A :class:`WifiConfig` with the credentials and tuning knobs.
-        adapter: Optional :class:`WifiAdapter`. When ``None`` (default),
-            :func:`_select_adapter` picks the runtime-appropriate one.
-            Tests inject a :class:`FakeWifiAdapter`.
-        ticks: Optional tick source exposing ``ticks_ms``, ``ticks_diff``,
-            and ``ticks_add`` (the ``chumicro_timing.ticks`` shape).
-            Defaults to that submodule (real clock); tests pass
-            ``FakeTicks`` from ``chumicro_timing.testing``.
+        adapter: Optional :class:`WifiAdapter`; ``None`` (default) selects the runtime-appropriate one.
+        ticks: Optional ``chumicro_timing.ticks``-shaped source; defaults to the real clock.
     """
 
     def __init__(
@@ -76,15 +56,11 @@ class WifiService:
         self._next_attempt_due_ms = self._ticks.ticks_ms()
         self._current_backoff_ms = config.reconnect_backoff_start_ms
         self._reconnect_attempts = 0
-        # Absolute-tick deadline of an in-flight association on a non-blocking
-        # adapter (MicroPython); ``None`` on blocking adapters and between attempts.
+        # Absolute-tick deadline of an in-flight join on a non-blocking adapter; None otherwise.
         self._attempt_deadline_ms = None
         self._state_callbacks = []
 
-        # Apply hostname / power-save / static-IP once via the adapter.
         self.adapter.configure(self._config)
-
-    # --- public state ------------------------------------------------
 
     @property
     def connected(self):
@@ -93,50 +69,32 @@ class WifiService:
 
     @property
     def ip(self):
-        """Assigned IPv4 string, or ``None`` when not connected.
-
-        Allocates on each access (the substrate builds a fresh string or
-        tuple), so read it once after a connect and stash the result rather
-        than polling it inside a tick loop.
-        """
+        """Assigned IPv4 string, or ``None`` when not connected."""
         return self.adapter.ip() if self.connected else None
 
     def on_state_change(self, callback: object) -> None:
         """Register a callback invoked on every state transition.
 
         Args:
-            callback: Called as ``callback(old_state, new_state)``.
-                Multiple callbacks fire in registration order.
+            callback: Called as ``callback(old_state, new_state)`` in registration order.
         """
         self._state_callbacks.append(callback)
 
-    # --- runner integration ------------------------------------------
-
     def check(self, now_ms):
-        """Return ``True`` when the service has work to do this tick.
-
-        Work is due when a connected link has dropped (time to reconnect)
-        or when the backoff timer for the next connect attempt has elapsed.
-        Returns ``False`` in the terminal ``FAILED`` state.
-        """
+        """Return ``True`` when the service has work to do this tick."""
         if self.state == WifiState.FAILED:
             return False
         if self.state == WifiState.CONNECTED:
             return not self.adapter.is_linked()
         if self._attempt_deadline_ms is not None:
-            return True  # in-flight association: poll every tick
+            return True
         return self._ticks.ticks_diff(now_ms, self._next_attempt_due_ms) >= 0
 
     def handle(self, now_ms):
-        """Drive the state machine forward.
-
-        If ``check`` returned ``False`` and ``handle`` is called
-        anyway, returns without changing state.
-        """
+        """Drive the state machine forward."""
         if self.state == WifiState.CONNECTED:
             if not self.adapter.is_linked():
-                # Update scheduling before the transition so a reentrant
-                # callback sees a fresh backoff and due timer, not stale values.
+                # Update scheduling before the transition so a reentrant callback sees fresh values.
                 self._reset_backoff()
                 self._next_attempt_due_ms = now_ms
                 self._attempt_deadline_ms = None
@@ -149,20 +107,14 @@ class WifiService:
         if self.state == WifiState.DISCONNECTED:
             self._transition(WifiState.CONNECTING)
 
-        # An in-flight association (non-blocking adapter) is polled every
-        # tick, independent of the backoff gate.
         if self._attempt_deadline_ms is not None:
             self._poll_in_flight(now_ms)
             return
 
-        # CONNECTING or RECONNECTING: start the next attempt once the
-        # backoff timer is due.
         if self._ticks.ticks_diff(now_ms, self._next_attempt_due_ms) < 0:
-            return  # too early, checked once more next tick
+            return
 
         self._attempt_connect(now_ms)
-
-    # --- internals ---------------------------------------------------
 
     def _attempt_connect(self, now_ms):
         raised = False
@@ -178,21 +130,18 @@ class WifiService:
             return
 
         if raised:
-            # connect() raised, so no join was dispatched: count a settled
-            # failure and back off now rather than waiting out the timeout window.
+            # connect() raised: no join was dispatched, so count a settled failure now.
             self._register_failed_attempt()
             return
 
         if not self.adapter.connect_blocks:
-            # Non-blocking substrate: connect() dispatched but hasn't resolved.
-            # Poll is_linked() over the timeout window before counting a failure.
+            # Non-blocking substrate: join dispatched, poll is_linked() over the timeout window.
             self._attempt_deadline_ms = self._ticks.ticks_add(
                 now_ms, self._config.connect_timeout_ms,
             )
             return
 
-        # Blocking substrate: connect() already waited, so False is a
-        # settled failure.
+        # Blocking substrate: connect() already waited, so False is a settled failure.
         self._register_failed_attempt()
 
     def _poll_in_flight(self, now_ms):
@@ -219,8 +168,7 @@ class WifiService:
             self._transition(WifiState.FAILED)
             return
 
-        # Schedule from the current clock, not a pre-attempt now_ms: a blocking
-        # connect can burn the timeout window and cause back-to-back retries.
+        # Schedule from the current clock, not now_ms: a blocking connect can burn the timeout window.
         self._next_attempt_due_ms = self._ticks.ticks_add(
             self._ticks.ticks_ms(), self._current_backoff_ms,
         )
@@ -235,8 +183,7 @@ class WifiService:
         old_state = self.state
         self.state = new_state
         for callback in self._state_callbacks:
-            # A raising callback must not abort the remaining callbacks
-            # or escape into the runner tick; record it and continue.
+            # A raising callback must not abort the others or escape into the runner tick.
             try:
                 callback(old_state, new_state)
             except Exception as error:  # noqa: BLE001 - callbacks are user code

@@ -8,21 +8,13 @@ __chumicro_test_support__ = True
 
 
 class FakePoller:
-    """Host-test fake for ``select.poll().ipoll``.
-
-    Use as ``Runner(poller=FakePoller())`` so unit tests can drive
-    ``Runner.wait`` without a real OS poller.  Records every ``register``
-    / ``modify`` / ``unregister`` / ``ipoll`` call for assertions;
-    ``set_ready(obj, eventmask)`` queues a pair for the next ``ipoll``.
-    """
+    """Host-test fake for ``select.poll().ipoll``."""
 
     def __init__(self) -> None:
-        # Sock-id => (sock, eventmask) for what is currently registered.
         self.registered: dict = {}
         self.register_calls: list = []
         self.modify_calls: list = []
         self.unregister_calls: list = []
-        # List of ``timeout_ms`` values each ``ipoll`` received.
         self.ipoll_calls: list = []
         self._ready: list = []
 
@@ -51,16 +43,7 @@ class FakePoller:
 
 
 class CallRecorder:
-    """Callable that records each invocation for test assertions.
-
-    Use as a handler passed to ``Runner.add()`` or
-    ``add_periodic()``::
-
-        recorder = CallRecorder()
-        runner.add_periodic(recorder, period_ms=100)
-        runner.tick()
-        assert len(recorder) == 0  # not due yet
-    """
+    """Callable that records each invocation for test assertions."""
 
     def __init__(self) -> None:
         self.calls: list[int] = []

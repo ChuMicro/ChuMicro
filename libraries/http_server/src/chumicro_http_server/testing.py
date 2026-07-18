@@ -1,7 +1,6 @@
 """Test fakes and builders for ``chumicro-http-server``.
 
-Host-only helpers for tests that wire ``HttpServer`` against pre-baked
-HTTP/1.1 request bytes: :class:`FakeListener` and :func:`request_bytes`.
+The entry points are :class:`FakeListener` and :func:`request_bytes`.
 """
 
 __chumicro_test_support__ = True
@@ -11,13 +10,7 @@ import errno
 
 
 class FakeListener:
-    """Listener stub that hands out queued connections on ``accept()``.
-
-    Construct with a list of ``(FakeSocket, peer)`` tuples, the shape a
-    real ``accept()`` returns. Each ``accept()`` pops the next tuple; an
-    empty queue raises ``OSError(errno.EAGAIN, ...)`` so the server's
-    would-block path runs unchanged.
-    """
+    """Listener stub that hands out queued connections on ``accept()``."""
 
     def __init__(self, connections):
         self._queue = list(connections)
@@ -42,12 +35,10 @@ def request_bytes(method="GET", path="/", *, headers=None, body=b""):
         method: Request method (``"GET"``, ``"POST"``, etc.).
         path: Request target including any query string.
         headers: Optional iterable of ``(name, value)`` tuples.
-        body: Optional request body.  When non-empty, a
-            ``Content-Length`` header is prepended automatically.
+        body: Optional request body; a non-empty body auto-adds ``Content-Length``.
 
     Returns:
-        The request as a single ``bytes`` ready to feed to
-        :class:`~chumicro_sockets.testing.FakeSocket.enqueue_recv`.
+        The request as a single ``bytes`` for ``FakeSocket.enqueue_recv``.
     """
     lines = [f"{method} {path} HTTP/1.1\r\n".encode("ascii")]
     if body:

@@ -27,11 +27,7 @@ class FakeTicks:
         self._current_ms += amount_ms
 
     def sleep_ms(self, duration_ms: int) -> None:
-        """Advance the fake clock by ``duration_ms`` instead of sleeping for real.
-
-        Sleeping in real time moves the clock forward, so this stand-in moves
-        ``ticks_ms()`` ahead by ``duration_ms`` and returns at once.
-        """
+        """Advance the fake clock by ``duration_ms`` instead of sleeping for real."""
         self._current_ms += duration_ms
 
     def ticks_ms(self) -> int:

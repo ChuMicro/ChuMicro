@@ -1,7 +1,6 @@
 """Test helpers for libraries that depend on ``chumicro-kvstore``.
 
-``FakeKVStore`` gives downstream libraries a real store to test against
-instead of hand-rolling a mock.
+``FakeKVStore`` gives downstream tests a real store to run against.
 """
 
 __chumicro_test_support__ = True
@@ -13,15 +12,10 @@ from chumicro_kvstore.core import KVStore
 class FakeKVStore(KVStore):
     """In-memory ``KVStore`` with explicit corruption and capacity hooks.
 
-    Wraps ``MemoryBackend`` so downstream tests exercise the real
-    ``KVStore`` API and code path.
-
     Args:
-        capacity: Optional capacity override in bytes, to drive the
-            ``KVStoreFull`` path in downstream tests.
+        capacity: Optional capacity override in bytes, to drive the ``KVStoreFull`` path.
         initial_payload: Optional pre-seeded msgpack payload.
-        record_calls: When ``True``, each public-API call appends an entry
-            to ``self.calls`` for later assertion.
+        record_calls: When ``True``, each public-API call is appended to ``self.calls``.
     """
 
     def __init__(
@@ -38,8 +32,6 @@ class FakeKVStore(KVStore):
         super().__init__(backend=self._memory_backend)
         self.calls: list[tuple[str, tuple[object, ...]]] = []
         self._record = record_calls
-
-    # --- recording-aware overrides ---------------------------------
 
     def __setitem__(self, key: str, value: object) -> None:
         if self._record:
@@ -66,14 +58,8 @@ class FakeKVStore(KVStore):
             self.calls.append(("reload", ()))
         super().reload()
 
-    # --- explicit hooks for tests ----------------------------------
-
     def simulate_corrupt(self) -> None:
-        """Mark the underlying memory backend corrupt.
-
-        The next ``reload()`` surfaces the corruption; in-memory state stays
-        intact until then, mirroring production behavior.
-        """
+        """Mark the underlying memory backend corrupt."""
         self._memory_backend.force_corrupt()
 
     def reset_corrupt(self) -> None:
@@ -81,12 +67,7 @@ class FakeKVStore(KVStore):
         self._memory_backend.reset_corrupt()
 
     def set_capacity(self, capacity: int) -> None:
-        """Adjust the simulated capacity mid-test.
-
-        Updates both the backend and the ``KVStore.capacity`` snapshot taken
-        at construction, so a raised cap takes effect: the store's own
-        pre-check reads that snapshot, not the backend.
-        """
+        """Adjust the simulated capacity mid-test."""
         self._memory_backend.capacity = capacity
         self.capacity = capacity
 

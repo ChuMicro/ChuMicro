@@ -9,16 +9,14 @@ except ImportError:
         return value
 
 
-# 2**29 ms (~6.2 days) matches CircuitPython's supervisor.ticks_ms wrap;
-# normalizing every runtime to it keeps add/diff under 2**30, so boards
-# without big-int support never heap-allocate a long.
+# 2**29 matches CircuitPython's ticks_ms wrap; sub-2**30 add/diff keeps
+# boards without big-int support from heap-allocating a long.
 TICKS_PERIOD = const(1 << 29)
 TICKS_MAX = const(TICKS_PERIOD - 1)
 TICKS_HALFPERIOD = const(TICKS_PERIOD // 2)
 
 
 def _resolve_ticks_ms() -> object:
-    """Return the first available millisecond-tick clock across runtimes."""
     try:
         import supervisor
     except ImportError:
@@ -63,8 +61,8 @@ def ticks_diff(end: int, start: int) -> int:
     """Returns the signed millisecond distance from ``start`` to ``end``.
 
     Returns:
-        Signed value in ``[-TICKS_HALFPERIOD, TICKS_HALFPERIOD)``, accurate only for
-        gaps under ~3.1 days (half the wrap period); larger gaps alias to the wrong sign.
+        Signed value in ``[-TICKS_HALFPERIOD, TICKS_HALFPERIOD)``; gaps over ~3.1 days
+        (half the wrap period) alias to the wrong sign.
     """
     diff = (end - start) & TICKS_MAX
     return ((diff + TICKS_HALFPERIOD) & TICKS_MAX) - TICKS_HALFPERIOD

@@ -1,8 +1,6 @@
 """Test helpers for libraries that consume chumicro-logging.
 
-``RecordingHandler`` captures records for assertions and ``FailingHandler``
-raises on every emit, so downstream libraries can test against logger output
-without writing one-off mocks.
+Provides ``RecordingHandler`` and ``FailingHandler``.
 """
 
 #: Source bundle and sdist only; never lands on a device.
@@ -13,8 +11,7 @@ class RecordingHandler:
     """Handler that captures records in a list for test assertions.
 
     Args:
-        level: Minimum level captured. Defaults to ``0`` so every record
-            passes through regardless of the logger threshold.
+        level: Minimum level captured; defaults to ``0`` so every record passes.
     """
 
     def __init__(self, level: int = 0) -> None:
@@ -50,8 +47,7 @@ class FailingHandler:
     """Handler that raises on every ``emit``, to exercise error paths.
 
     Args:
-        exception: The exception instance to raise. Defaults to
-            ``RuntimeError("handler boom")``.
+        exception: Exception instance to raise; defaults to ``RuntimeError("handler boom")``.
     """
 
     def __init__(self, exception: BaseException | None = None) -> None:

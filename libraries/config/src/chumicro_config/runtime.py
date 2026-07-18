@@ -7,7 +7,7 @@ from chumicro_msgpack import unpackb
 from chumicro_config.section import InvalidConfigType, RuntimeConfig
 
 DEFAULT_RUNTIME_CONFIG_PATH = "/runtime_config.msgpack"
-"""Default on-device location. Changing this is an ABI break."""
+"""Default on-device location of the runtime config file."""
 
 
 def load_runtime_config(path: str | None = None) -> RuntimeConfig:
@@ -51,8 +51,7 @@ def _ensure_config_loaded() -> RuntimeConfig | None:
         try:
             _config_cache = load_runtime_config()
         except OSError as error:
-            # A genuinely-absent file means "no config" (None). A real I/O
-            # failure (EIO, EACCES) must not be masked as absent, so re-raise.
+            # A missing file (ENOENT) means "no config"; other OSErrors surface.
             if error.args and error.args[0] != errno.ENOENT:
                 raise
             _config_cache = None
@@ -61,8 +60,7 @@ def _ensure_config_loaded() -> RuntimeConfig | None:
 
 
 def __getattr__(name: str):
-    # InvalidConfigType (file present but malformed) is deliberately not
-    # caught: corruption is a hard failure, not a silent config = None.
+    # Malformed config (InvalidConfigType) is a hard failure, never a silent None.
     if name == "config":
         return _ensure_config_loaded()
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
