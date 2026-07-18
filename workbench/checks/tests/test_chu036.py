@@ -22,7 +22,7 @@ _BUG = "flag = [False]\nflag.__setitem__(0, True)\n"
 _DEVICE_MARKER = '__chumicro_runtimes__ = ("circuitpython", "micropython")\n'
 
 
-def test_flags_device_library_src(tmp_path: Path):
+def test_flags_device_library_source(tmp_path: Path):
     _write(tmp_path / "libraries" / "mqtt" / "src" / "chumicro_mqtt" / "c.py", _BUG)
     findings = CHU036.check(tmp_path)
     assert len(findings) == 1
