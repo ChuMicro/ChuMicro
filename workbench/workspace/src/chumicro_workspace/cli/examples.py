@@ -221,6 +221,25 @@ class _DeployExamplePaths:
     stem: str
 
 
+def _resolve_library_dir(libraries_root: Path, name: str) -> Path | None:
+    """Resolve a deploy-example library argument to its directory.
+
+    Accepts either the import-name form a workspace lands acquired
+    libraries under (``chumicro_mqtt``) or the bare short name (``mqtt``):
+    a workspace holds ``libraries/chumicro_<name>/`` while the mono-repo
+    uses ``libraries/<name>/``, so both are tried.  Returns the directory,
+    or ``None`` when neither exists.
+    """
+    candidate = libraries_root / name
+    if candidate.is_dir():
+        return candidate
+    if not name.startswith("chumicro_"):
+        prefixed = libraries_root / f"chumicro_{name}"
+        if prefixed.is_dir():
+            return prefixed
+    return None
+
+
 def _resolve_deploy_example_paths(
     libraries_root: Path, args: argparse.Namespace,
 ) -> _DeployExamplePaths:
@@ -237,8 +256,8 @@ def _resolve_deploy_example_paths(
             "example positional required "
             "(use --list <lib> to see available examples).",
         )
-    library_root = libraries_root / args.library
-    if not library_root.is_dir():
+    library_root = _resolve_library_dir(libraries_root, args.library)
+    if library_root is None:
         raise _DeployExampleError(
             DEPLOY_EXAMPLE_EXIT_PRECHECK_FAILED,
             f"library {args.library!r} not found under {libraries_root}.",
