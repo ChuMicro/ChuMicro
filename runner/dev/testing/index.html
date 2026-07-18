@@ -757,13 +757,6 @@
 
 
         <p>Callable that records each invocation for test assertions.</p>
-<p>Use as a handler passed to <code>Runner.add()</code> or
-<code>add_periodic()</code>::</p>
-<div class="language-text highlight"><pre><span></span><code>recorder = CallRecorder()
-runner.add_periodic(recorder, period_ms=100)
-runner.tick()
-assert len(recorder) == 0  # not due yet
-</code></pre></div>
 
 
 

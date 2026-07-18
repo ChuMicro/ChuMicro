@@ -774,10 +774,7 @@
     <div class="doc doc-contents first">
 
         <p>Tick-based scheduler for the ChuMicro libraries.</p>
-<p>Register work with a <code>Runner</code>, then call <code>tick()</code> in a loop; each
-<code>tick()</code> captures the time once and fires the handlers whose gates
-have passed.  The optional <code>Runner.wait(now_ms)</code> companion idles the
-CPU between ticks.  Runs on CPython, MicroPython, and CircuitPython.</p>
+<p>Register work with a <code>Runner</code>, then call <code>tick()</code> in a loop; <code>wait()</code> idles the CPU between ticks.</p>
 
 
 
@@ -816,9 +813,6 @@ CPU between ticks.  Runs on CPython, MicroPython, and CircuitPython.</p>
 
 
         <p>Raised when <code>tick()</code> runs while another <code>tick()</code> is in progress.</p>
-<p>Re-entering the reactor from a handler is framework misuse, so this
-propagates past <code>tick()</code>'s handler-fault isolation instead of being
-counted in <code>handler_errors</code>.  Subclasses <code>RuntimeError</code>.</p>
 
 
 
@@ -848,8 +842,6 @@ counted in <code>handler_errors</code>.  Subclasses <code>RuntimeError</code>.</
 
 
         <p>Handle returned by <code>Runner.add()</code> or <code>add_periodic()</code>.</p>
-<p>Inspect state via the <code>period_ms</code>, <code>run_count</code>, <code>preserve_phase</code>,
-and <code>active</code> attributes.  Mutate via <code>set_period()</code> or <code>remove()</code>.</p>
 
 
 
@@ -884,9 +876,6 @@ and <code>active</code> attributes.  Mutate via <code>set_period()</code> or <co
     <div class="doc doc-contents ">
 
         <p>Add, change, or remove the period for this task.</p>
-<p>Pass <code>None</code> to remove an existing period (task runs every tick).
-A non-None value resets the timer so the next fire is
-<em>period_ms</em> from now.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -909,8 +898,7 @@ A non-None value resets the timer so the next fire is
             </td>
             <td>
               <div class="doc-md-description">
-                <p>New interval in milliseconds, or <code>None</code> to
-clear the period.</p>
+                <p>New interval in milliseconds, or <code>None</code> to clear the period.</p>
               </div>
             </td>
             <td>
@@ -967,10 +955,6 @@ clear the period.</p>
 
 
         <p>Run tasks on a tick-based schedule.</p>
-<p>Captures <code>ticks_ms()</code> once per <code>tick()</code> and passes that shared
-timestamp to every due task.  A handler that raises is isolated and
-counted in <code>handler_errors</code> so one faulting service can't stop the
-reactor.  Registration is documented on <code>add()</code> and <code>add_periodic()</code>.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -993,10 +977,7 @@ reactor.  Registration is documented on <code>add()</code> and <code>add_periodi
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Optional tick source (must have <code>ticks_ms</code>,
-<code>ticks_diff</code>, and <code>ticks_add</code> methods).
-Defaults to the <code>chumicro_timing</code> module-level functions.
-Tests pass <code>FakeTicks</code> from <code>chumicro_timing.testing</code>.</p>
+                <p>Optional source (<code>ticks_ms</code>, <code>ticks_diff</code>, <code>ticks_add</code>); default <code>chumicro_timing</code>.</p>
               </div>
             </td>
             <td>
@@ -1012,13 +993,7 @@ Tests pass <code>FakeTicks</code> from <code>chumicro_timing.testing</code>.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Optional poll-shaped object exposing
-<code>register(obj, eventmask)</code> / <code>modify(obj, eventmask)</code> /
-<code>unregister(obj)</code> / <code>ipoll(timeout_ms)</code>.  Only consulted
-by <code>wait</code>; the default <code>select.poll</code> adapter is built
-lazily on the first <code>wait</code> call that has a socket to
-register.  Tests pass <code>FakePoller</code> from
-<code>chumicro_runner.testing</code>.</p>
+                <p>Optional poll object (register/modify/unregister/ipoll); default <code>select.poll</code> adapter.</p>
               </div>
             </td>
             <td>
@@ -1034,11 +1009,7 @@ register.  Tests pass <code>FakePoller</code> from
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Optional callback
-<code>on_handler_error(handle, exception)</code> invoked when a
-handler raises during <code>tick()</code>.  Lets the app log the fault,
-remove the faulting task, or re-raise to fail fast.  A callback
-that itself raises is swallowed and counted.</p>
+                <p>Optional <code>(handle, exception)</code> callback invoked when a handler raises.</p>
               </div>
             </td>
             <td>
@@ -1081,13 +1052,6 @@ that itself raises is swallowed and counted.</p>
     <div class="doc doc-contents ">
 
         <p>Register a task with the runner.</p>
-<p><strong>Object-based</strong> (task only): <em>task</em> must have
-<code>.check(now_ms) -&gt; bool</code> and <code>.handle(now_ms)</code> methods.</p>
-<p><strong>Callable-based</strong> (task + handler): <em>task</em> is a callable
-<code>check_function(now_ms) -&gt; bool</code> that gates <code>handler(now_ms)</code>.</p>
-<p><strong>Handler-only</strong> (handler, no task): <code>handler(now_ms)</code> fires
-on every tick (or per period if <em>period_ms</em> is set).</p>
-<p>Returns a <code>TaskHandle</code> for runtime mutation.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1110,8 +1074,7 @@ on every tick (or per period if <em>period_ms</em> is set).</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Object with <code>.check()</code> and <code>.handle()</code>.
-Mutually exclusive with <em>handler</em>.</p>
+                <p>Object with <code>.check(now_ms)</code> and <code>.handle(now_ms)</code>; mutually exclusive with <em>handler</em>.</p>
               </div>
             </td>
             <td>
@@ -1127,9 +1090,7 @@ Mutually exclusive with <em>handler</em>.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Callable <code>handler(now_ms)</code> fired on schedule
-(pair with <em>period_ms</em> / <em>run_count</em>).  Mutually
-exclusive with <em>task</em>.</p>
+                <p>Callable <code>handler(now_ms)</code> fired on schedule; mutually exclusive with <em>task</em>.</p>
               </div>
             </td>
             <td>
@@ -1161,9 +1122,7 @@ exclusive with <em>task</em>.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Optional initial delay before the task
-becomes eligible.  Overrides the first period.
-Subsequent fires use <em>period_ms</em> if set.</p>
+                <p>Optional initial delay before the first fire; overrides the first period.</p>
               </div>
             </td>
             <td>
@@ -1179,8 +1138,7 @@ Subsequent fires use <em>period_ms</em> if set.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Optional number of times the handler may fire
-before auto-removing.  <code>None</code> means unlimited.</p>
+                <p>Optional number of fires before auto-removing; <code>None</code> means unlimited.</p>
               </div>
             </td>
             <td>
@@ -1196,19 +1154,34 @@ before auto-removing.  <code>None</code> means unlimited.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>When <code>True</code>, a fired periodic reschedules
-from its previous deadline in whole periods, so fires
-stay aligned to the original schedule even when ticks
-run late; a stall longer than one period skips the
-missed fires rather than bursting.  When <code>False</code>
-(default), the next fire is <em>period_ms</em> after the tick
-that fired it, guaranteeing at least <em>period_ms</em>
-between fires but drifting by the tick's lateness.
-Requires <em>period_ms</em>.</p>
+                <p>When <code>True</code>, fires stay aligned under late ticks; needs <em>period_ms</em>.</p>
               </div>
             </td>
             <td>
                   <code>False</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" href="./#chumicro_runner.core.TaskHandle">TaskHandle</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>A <code>TaskHandle</code> for runtime mutation.</p>
+              </div>
             </td>
           </tr>
       </tbody>
@@ -1231,13 +1204,6 @@ Requires <em>period_ms</em>.</p>
     <div class="doc doc-contents ">
 
         <p>Register a generator-driven service with the runner.</p>
-<p>Pass a freshly constructed generator (call the generator function
-at the call site, e.g. <code>runner.add_generator(echo_run(host, port))</code>,
-but do not advance it): this method primes it to its first
-<code>yield</code>.  The generator suspends by <code>yield</code>-ing a duck-typed
-wait object and resumes via <code>.send(now_ms)</code> once its socket is
-ready or its deadline elapses.  Returns a <code>GeneratorHandle</code>
-carrying <code>.done</code> and <code>.cancel()</code>.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1260,13 +1226,34 @@ carrying <code>.done</code> and <code>.cancel()</code>.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>A freshly constructed generator object that has not been
-advanced.  This method primes it to its first yield
-before returning.</p>
+                <p>A fresh, not-yet-advanced generator; this method primes it to its first yield.</p>
               </div>
             </td>
             <td>
                 <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="GeneratorHandle">GeneratorHandle</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>A <code>GeneratorHandle</code> carrying <code>.done</code> and <code>.cancel()</code>.</p>
+              </div>
             </td>
           </tr>
       </tbody>
@@ -1289,9 +1276,6 @@ before returning.</p>
     <div class="doc doc-contents ">
 
         <p>Register a periodic handler with no check.</p>
-<p>Convenience wrapper around <code>add(handler=..., period_ms=...)</code>
-that requires <em>period_ms</em>.  Returns a <code>TaskHandle</code> for
-runtime mutation.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1346,8 +1330,7 @@ runtime mutation.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Optional initial delay before first fire.
-Overrides the first period.</p>
+                <p>Optional initial delay before the first fire.</p>
               </div>
             </td>
             <td>
@@ -1363,8 +1346,7 @@ Overrides the first period.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Optional number of times the handler may fire
-before auto-removing.  <code>None</code> means unlimited.</p>
+                <p>Optional number of fires before auto-removing; <code>None</code> means unlimited.</p>
               </div>
             </td>
             <td>
@@ -1380,16 +1362,34 @@ before auto-removing.  <code>None</code> means unlimited.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>When <code>True</code>, fires stay aligned to the
-original schedule even when ticks run late (missed
-fires are skipped, never bursted).  When <code>False</code>
-(default), each fire reschedules <em>period_ms</em> from the
-tick that fired it: at least <em>period_ms</em> between fires,
-drifting by the tick's lateness.</p>
+                <p>When <code>True</code>, fires stay aligned under late ticks.</p>
               </div>
             </td>
             <td>
                   <code>False</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" href="./#chumicro_runner.core.TaskHandle">TaskHandle</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>A <code>TaskHandle</code> for runtime mutation.</p>
+              </div>
             </td>
           </tr>
       </tbody>
@@ -1412,16 +1412,6 @@ drifting by the tick's lateness.</p>
     <div class="doc doc-contents ">
 
         <p>Capture time, check tasks, then batch-fire due handlers.</p>
-<p>It runs in three passes: the first checks each entry (period gate,
-then check gate) and collects those whose handlers should fire; the
-second fires them; the third decrements run counts and auto-removes
-exhausted entries.</p>
-<p>A <code>check</code> function must not add or remove runner tasks (the first
-pass walks the entry list in place); mutate the task set from a
-handler instead, which the second pass fires from a separate batched
-list.  A handler that raises is isolated and counted in
-<code>handler_errors</code>; one that re-enters <code>tick()</code> raises
-<code>ReentrantTickError</code> and propagates.</p>
 
 
     <p><span class="doc-section-title">Returns:</span></p>
@@ -1462,8 +1452,7 @@ list.  A handler that raises is isolated and counted in
             </td>
             <td>
               <div class="doc-md-description">
-                <p>A handler called <code>tick()</code> while this
-<code>tick()</code> was already running.</p>
+                <p>A handler called <code>tick()</code> while this <code>tick()</code> was already running.</p>
               </div>
             </td>
           </tr>
@@ -1487,25 +1476,6 @@ list.  A handler that raises is isolated and counted in
     <div class="doc doc-contents ">
 
         <p>Idle until a registered socket is ready or the next deadline arrives.</p>
-<p>Companion to <code>tick()</code>, called right after it so the CPU can
-sleep between events::</p>
-<div class="language-text highlight"><pre><span></span><code>while True:
-    now_ms = runner.tick()
-    runner.wait(now_ms)
-</code></pre></div>
-<p>Each call syncs the poll set from every entry's <code>io_socket</code> /
-<code>io_interest(now_ms)</code>, computes the timeout as the nearest of
-every <code>next_due_ms</code> and every service's <code>next_deadline(now_ms)</code>,
-then blocks in <code>ipoll</code> over the registered sockets (indefinitely
-when no deadline contributes) or sleeps the timeout when no socket
-is registered.  Returns immediately when the nearest deadline is
-already due, or when there is neither a socket nor a deadline to
-wait on.</p>
-<p>For each ipoll event carrying POLLERR or POLLHUP, calls the owning
-service's optional <code>io_error(now_ms, eventmask)</code> hook, isolated
-on the same fault-counting lane as tick handlers.  POLLIN / POLLOUT
-events are wake signals only; <code>check</code> and <code>next_deadline</code>
-decide what actually runs.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1528,8 +1498,7 @@ decide what actually runs.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Current tick, typically the value returned by the
-preceding <code>tick()</code> call.</p>
+                <p>Current tick, typically the value returned by the preceding <code>tick()</code> call.</p>
               </div>
             </td>
             <td>
@@ -1555,14 +1524,7 @@ preceding <code>tick()</code> call.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Drive <code>tick()</code> + <code>wait()</code> until <em>predicate</em> is truthy.</p>
-<p>The one-call form of the standard <code>while ...: tick(); wait()</code>
-loop::</p>
-<div class="language-text highlight"><pre><span></span><code>handle = runner.add_generator(echo_run(...))
-runner.run_until(handle)
-</code></pre></div>
-<p>Ticks once, then loops: checks <em>predicate</em>, checks the timeout,
-then idles in <code>wait()</code> until the next event or deadline.</p>
+        <p>Drive <code>tick()</code> and <code>wait()</code> until <em>predicate</em> is truthy.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1585,12 +1547,7 @@ then idles in <code>wait()</code> until the next event or deadline.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>A generator handle (anything exposing <code>done</code>), in
-which case the loop runs until it finishes and re-raises
-<code>handle.error</code> if the task died; or a zero-argument
-callable checked after each tick, returning <code>True</code> once
-it is truthy.  <code>None</code> never completes on its own (pair
-with <em>timeout_ms</em>).</p>
+                <p>A handle (exposes <code>done</code>), a zero-arg callable checked each tick, or <code>None</code>.</p>
               </div>
             </td>
             <td>
@@ -1606,11 +1563,7 @@ with <em>timeout_ms</em>).</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Optional budget, checked between ticks against the
-tick source.  Best-effort: while parked in <code>wait()</code> on a
-socket with no deadline it is only re-checked on the next
-wake, so give the runner a deadline source when a hard
-bound matters.</p>
+                <p>Optional budget (ms), checked between ticks; best-effort under socket waits.</p>
               </div>
             </td>
             <td>
@@ -1636,17 +1589,7 @@ bound matters.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p><code>True</code> when <em>predicate</em> became truthy (or the handle</p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                  <code><span title="bool">bool</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>finished cleanly), <code>False</code> on timeout.</p>
+                <p><code>True</code> when <em>predicate</em> became truthy or the handle finished cleanly, <code>False</code> on timeout.</p>
               </div>
             </td>
           </tr>
@@ -1669,8 +1612,7 @@ bound matters.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The handle form re-raises <code>handle.error</code>
-when the awaited task died.</p>
+                <p>The handle form re-raises <code>handle.error</code> when the awaited task died.</p>
               </div>
             </td>
           </tr>
