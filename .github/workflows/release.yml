@@ -301,6 +301,9 @@ jobs:
     if: needs.detect.outputs.has_library_releases == 'true' && inputs.dry_run != true
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # The date tag this job mints is the manifest job's correlation key.
+    outputs:
+      date_tag: ${{ steps.circup.outputs.date_tag }}
     env:
       # Filtered to library entries only — workbench packages (Decision
       # 0032 rule 3) skip bundle staging entirely; they have nothing to
@@ -395,6 +398,7 @@ jobs:
             -o .bundle-repo/README.md
 
       - name: Create circup zips
+        id: circup
         run: |
           # finalize-tag pins the staged manifests' dep placeholders to the
           # release tag, so installs resolve deps at the snapshot they were
@@ -404,6 +408,8 @@ jobs:
           # fresh one on identical content (which would orphan the original).
           date_tag=$(python scripts/bundle_manager.py finalize-tag .bundle-repo --reuse-if-clean)
           echo "date_tag=${date_tag}" >> "$GITHUB_ENV"
+          # Also a job output so the manifest job can key on it.
+          echo "date_tag=${date_tag}" >> "$GITHUB_OUTPUT"
 
           repository_name="${{ needs.detect.outputs.bundle_repository }}"
           repository_name="${repository_name##*/}"
@@ -524,6 +530,9 @@ jobs:
     if: needs.detect.outputs.has_library_releases == 'true' && inputs.dry_run != true
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # The snapshot tag this job mints is recorded by the manifest job.
+    outputs:
+      snapshot_tag: ${{ steps.stage.outputs.snapshot_tag }}
     steps:
       - uses: actions/checkout@v6
 
@@ -542,6 +551,7 @@ jobs:
           git clone "git@github.com:${repository}.git" .libraries-repo
 
       - name: Stage and push libraries channel
+        id: stage
         # A UTC timestamp is the snapshot tag.  It's unique per run without
         # querying existing tags (no next-date-tag call — that lives in
         # bundle_manager, which pulls the chumicro_deploy import chain this
@@ -552,9 +562,71 @@ jobs:
         # tag, so the pushed commit always self-describes as its own tag.
         run: |
           snapshot_tag="$(date -u +%Y%m%d.%H%M%S)"
+          # Job output so the manifest job can pair it with the bundle tag.
+          echo "snapshot_tag=${snapshot_tag}" >> "$GITHUB_OUTPUT"
           python scripts/libraries_channel.py \
             --staging-dir .libraries-repo \
             --tag "$snapshot_tag" \
             ${{ needs.detect.outputs.is_experimental == 'true' && '--experimental' || '' }} \
             --push
+
+  # ---------------------------------------------------------------------------
+  # Correlation manifest (Decision 0112).  Records this release's snapshot in
+  # the channel bundle repo's releases.json so a PyPI version, a bundle tag,
+  # and a libraries tag resolve to one another.  Runs after both channel
+  # publishers so it has both snapshot tags; gated on library releases (a
+  # workbench-only release has no bundle/libraries snapshot to correlate).
+  # The bundle repo is the home because it overlays (never wipes), so the
+  # accumulated index survives every future bundle push — the libraries repo
+  # rebuilds its tree each run and would drop it.
+  # ---------------------------------------------------------------------------
+  manifest:
+    name: Publish release manifest
+    needs: [detect, bundle, libraries-channel]
+    if: needs.detect.outputs.has_library_releases == 'true' && inputs.dry_run != true
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      MATRIX_JSON: ${{ needs.detect.outputs.library_matrix }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Configure SSH for bundle repository
+        uses: webfactory/ssh-agent@v0.10.0
+        with:
+          ssh-private-key: ${{ needs.detect.outputs.is_experimental == 'true' && secrets.EXPERIMENTAL_BUNDLE_DEPLOY_KEY || secrets.BUNDLE_DEPLOY_KEY }}
+
+      - name: Clone bundle repository
+        run: |
+          git clone "git@github.com:${{ needs.detect.outputs.bundle_repository }}.git" .bundle-repo
+
+      - name: Record and push releases.json
+        # release_manifest replaces this run's entry in place (keyed by
+        # channel + bundle tag), so a re-run rewrites its row and the push
+        # is a clean no-op when nothing changed — idempotent like the other
+        # legs.  The clone follows the bundle job, so it already carries this
+        # run's bundle tree; only releases.json changes here.
+        run: |
+          published_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          python scripts/release_manifest.py \
+            --index .bundle-repo/releases.json \
+            --channel "${{ needs.detect.outputs.is_experimental == 'true' && 'experimental' || 'stable' }}" \
+            --matrix "$MATRIX_JSON" \
+            --bundle-tag "${{ needs.bundle.outputs.date_tag }}" \
+            --libraries-tag "${{ needs.libraries-channel.outputs.snapshot_tag }}" \
+            --published-at "$published_at"
+          cd .bundle-repo
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- releases.json; then
+            echo "releases.json unchanged — nothing to push."
+          else
+            git add releases.json
+            git commit -m "release manifest: ${{ needs.bundle.outputs.date_tag }}"
+            git push origin HEAD:main
+          fi
 
