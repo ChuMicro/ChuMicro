@@ -1031,34 +1031,14 @@
 
     <div class="doc doc-contents first">
 
-        <p><code>FakeSocket</code> — drives downstream tests without a real network.</p>
-<p>Implements the full TCP client socket surface
-(<code>send</code> / <code>recv_into</code> / <code>close</code> / <code>setblocking</code> / <code>settimeout</code>)
-against in-memory bytearrays.  Three knobs cover almost every test
-pattern downstream libs need:</p>
-<ul>
-<li>:attr:<code>FakeSocket.sent</code> — bytes written via :meth:<code>send</code>.  Tests
-  assert against this to confirm correct wire-format encoding.</li>
-<li>:meth:<code>enqueue_recv</code> — script bytes the next :meth:<code>recv_into</code>
-  call(s) will return.  Multiple chunks queue in FIFO order.</li>
-<li>:meth:<code>enqueue_eagain_for_send</code> / :meth:<code>enqueue_eagain_for_recv</code> —
-  script the next :meth:<code>send</code> or :meth:<code>recv_into</code> to raise
-  <code>OSError(errno.EAGAIN)</code>.  Lets tests exercise non-blocking
-  partial-completion paths.</li>
-</ul>
-<p>Idiom for downstream libs::</p>
-<div class="language-text highlight"><pre><span></span><code>from chumicro_sockets.testing import FakeSocket
-
-sock = FakeSocket()
-sock.enqueue_recv(b&quot;\x20\x02\x00\x00&quot;)  # MQTT CONNACK
-client = MQTTClient(sock)
-client.connect()
-assert sock.sent.startswith(b&quot;\x10&quot;)        # CONNECT packet wire prefix
-</code></pre></div>
-<p>The fake's behavior is deterministic: sends always succeed (modulo
-scripted EAGAINs), recv_into reads from the queue head, and close
-flips a flag so subsequent operations raise the same <code>OSError</code> a
-real closed socket would.</p>
+        <p>In-memory socket test doubles: <code>FakeSocket</code>, <code>FakeUDPSocket</code>, <code>FakeSocketConnector</code>.</p>
+<p>They implement the cross-runtime socket surface against in-memory buffers so
+downstream tests exercise wire-format encoding, non-blocking partial-completion,
+and the multi-tick connect path without a real network. <code>enqueue_recv</code> scripts
+future reads, <code>enqueue_eagain_for_send</code> / <code>enqueue_eagain_for_recv</code> script
+<code>OSError(EAGAIN)</code> raises, and <code>sent</code> records what was written. Behavior is
+deterministic: sends succeed except where an EAGAIN is scripted, reads come from
+the queue head, and <code>close</code> makes later operations raise like a real socket.</p>
 
 
 
@@ -1134,10 +1114,8 @@ real closed socket would.</p>
     <div class="doc doc-contents ">
 
         <p>Append <em>chunk</em> to the recv-side queue.</p>
-<p>Each :meth:<code>recv_into</code> call pops one chunk off the head and
-copies up to <code>nbytes</code> bytes from it.  If <code>nbytes</code> is
-smaller than the chunk, the leftover bytes are pushed back
-on the head — mimics how a real socket fragments reads.</p>
+<p>Each :meth:<code>recv_into</code> pops one chunk off the head; a short read pushes
+the leftover back on the head, mimicking real socket fragmentation.</p>
 
 
     </div>
@@ -1191,13 +1169,10 @@ on the head — mimics how a real socket fragments reads.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Simulate a clean peer FIN — once the recv queue drains,
+        <p>Simulate a clean peer FIN: once the recv queue drains,
 :meth:<code>recv_into</code> returns 0 instead of raising EAGAIN.</p>
-<p>Separate from :meth:<code>close</code> (which models own-side close and
-makes every subsequent operation raise <code>OSError(EBADF)</code>).
-Use this to exercise the broker-graceful-disconnect / peer-FIN
-path without losing the ability to script remaining bytes
-(e.g. a final DISCONNECT packet) before the FIN.</p>
+<p>Separate from :meth:<code>close</code>, which models own-side close and makes every
+later operation raise <code>OSError(EBADF)</code>.</p>
 
 
     </div>
@@ -1233,17 +1208,11 @@ path without losing the ability to script remaining bytes
 
     <div class="doc doc-contents ">
 
-        <p>Pop the queue head, copy into <em>buffer</em>, return bytes written.</p>
-<p>Matches real non-blocking <code>recv_into</code> semantics on CPython,
-MicroPython lwIP, and CircuitPython lwIP:</p>
-<ul>
-<li>Queue non-empty: return <code>min(capacity, chunk_length)</code> bytes.</li>
-<li>Queue empty AND :meth:<code>simulate_peer_close</code> was called: return
-  0 (clean peer FIN).</li>
-<li>Queue empty otherwise: raise <code>OSError(EAGAIN)</code> (no data this
-  tick on a still-connected socket).</li>
-<li>Socket :meth:<code>close</code>'d: raise <code>OSError(EBADF)</code>.</li>
-</ul>
+        <p>Pop the queue head into <em>buffer</em> and return the number of bytes written.</p>
+<p>Matches real non-blocking <code>recv_into</code>: returns the copied count when
+the queue has data, returns 0 once the queue drains after
+:meth:<code>simulate_peer_close</code>, and otherwise raises <code>OSError(EAGAIN)</code>
+(or <code>OSError(EBADF)</code> once closed).</p>
 
 
     </div>
@@ -1292,22 +1261,11 @@ MicroPython lwIP, and CircuitPython lwIP:</p>
 
 
         <p>In-memory UDP socket for tests.</p>
-<p>Datagram-shaped counterpart of :class:<code>FakeSocket</code>.  Exposes the
-cross-runtime UDP surface (<code>sendto</code> / <code>recvfrom_into</code> /
-<code>close</code> / <code>setblocking</code> / <code>settimeout</code> / <code>getsockname</code>);
-plus :meth:<code>enqueue_recv</code> scripts future <code>recvfrom_into</code> returns
-and :attr:<code>sent</code> exposes the byte log of every <code>sendto</code> call as
-<code>(data, host, port)</code> tuples.</p>
-<p>Idiom for downstream tests::</p>
-<div class="language-text highlight"><pre><span></span><code>from chumicro_sockets.testing import FakeUDPSocket
-
-sock = FakeUDPSocket()
-sock.enqueue_recv(b&quot;reply&quot;, host=&quot;10.0.0.5&quot;, port=123)
-client = NTPClient(socket=sock)
-client.send_request(&quot;10.0.0.5&quot;)
-
-assert sock.sent[0] == (b&quot;&lt;48-byte NTP request&gt;&quot;, &quot;10.0.0.5&quot;, 123)
-</code></pre></div>
+<p>The datagram counterpart of :class:<code>FakeSocket</code>. Exposes the cross-runtime
+UDP surface (<code>sendto</code> / <code>recvfrom_into</code> / <code>close</code> / <code>setblocking</code> /
+<code>settimeout</code> / <code>getsockname</code>); :meth:<code>enqueue_recv</code> scripts future
+<code>recvfrom_into</code> returns and :attr:<code>sent</code> records every <code>sendto</code> as a
+<code>(data, host, port)</code> tuple.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1330,8 +1288,8 @@ assert sock.sent[0] == (b&quot;&lt;48-byte NTP request&gt;&quot;, &quot;10.0.0.5
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Reported by :meth:<code>getsockname</code> as the locally-bound
-host.  Defaults to <code>"0.0.0.0"</code>.</p>
+                <p>Reported by :meth:<code>getsockname</code> as the bound host. Defaults
+to <code>"0.0.0.0"</code>.</p>
               </div>
             </td>
             <td>
@@ -1347,9 +1305,8 @@ host.  Defaults to <code>"0.0.0.0"</code>.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Reported by :meth:<code>getsockname</code> as the locally-bound
-port.  Defaults to <code>54321</code> (a stand-in for an OS-assigned
-ephemeral port).</p>
+                <p>Reported by :meth:<code>getsockname</code> as the bound port. Defaults
+to <code>54321</code> (a stand-in for an OS-assigned ephemeral port).</p>
               </div>
             </td>
             <td>
@@ -1392,11 +1349,9 @@ ephemeral port).</p>
     <div class="doc doc-contents ">
 
         <p>Append a datagram to the recv-side queue.</p>
-<p>The next :meth:<code>recvfrom_into</code> call pops it off the head and
-copies up to <code>len(buffer)</code> bytes from it (truncates the rest
-— matches real UDP semantics).  <em>host</em> and <em>port</em> identify the
-sender; tests assert against them when their protocol cares
-who replied.</p>
+<p>The next :meth:<code>recvfrom_into</code> pops it off the head and copies up to
+<code>len(buffer)</code> bytes, truncating the rest as real UDP does. <em>host</em> and
+<em>port</em> identify the sender for tests that assert on who replied.</p>
 
 
     </div>
@@ -1468,14 +1423,10 @@ who replied.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Pop a queued datagram into <em>buffer</em>, return <code>(n, (host, port))</code>.</p>
-<p>Raises <code>OSError(EAGAIN)</code> when the queue is empty, matching a
-real non-blocking UDP socket on CircuitPython / MicroPython: no
-datagram ready is a would-block, not a zero-length read.  A
-genuine zero-length datagram (enqueued via <code>enqueue_recv(b"")</code>)
-still returns <code>0</code>.  Datagrams larger than <code>nbytes</code> (or
-<code>len(buffer)</code> when <code>nbytes=0</code>) are truncated; the unread tail
-is discarded, matching real UDP.</p>
+        <p>Pop a queued datagram into <em>buffer</em> and return <code>(n, (host, port))</code>.</p>
+<p>Raises <code>OSError(EAGAIN)</code> when the queue is empty (a would-block, not a
+zero-length read); a genuine empty datagram still returns <code>0</code>.
+Datagrams larger than the buffer are truncated, matching real UDP.</p>
 
 
     </div>
@@ -1542,34 +1493,22 @@ is discarded, matching real UDP.</p>
 
 
         <p>Scriptable test double for :class:<code>SocketConnector</code>.</p>
-<p>Same observable surface as the real connector — <code>state</code>,
-<code>socket</code>, <code>last_error</code>, <code>io_*</code>, <code>check</code> / <code>handle</code> /
-<code>tick</code> / <code>next_deadline</code> / <code>cancel</code> — but transitions are
-driven by an in-test script instead of real network I/O.</p>
-<p>Construct with a list of step actions; each call to <code>tick</code> (or
-<code>handle</code>) consumes one action.  Actions are short strings:</p>
+<p>Exposes the same observable surface as the real connector (<code>state</code>,
+<code>socket</code>, <code>last_error</code>, the <code>io_*</code> and <code>check</code> / <code>handle</code> /
+<code>tick</code> / <code>next_deadline</code> / <code>cancel</code> methods), but transitions come
+from a scripted list of action strings instead of real I/O. Each <code>tick</code>
+(or <code>handle</code>) consumes one action:</p>
 <ul>
-<li><code>"dns_ok"</code> — <code>awaiting_dns</code> → <code>awaiting_tcp</code>.</li>
-<li><code>"tcp_pending"</code> — stay in <code>awaiting_tcp</code> (simulates an
-  EINPROGRESS round-trip).</li>
-<li><code>"tcp_ok"</code> — <code>awaiting_tcp</code> → <code>awaiting_tls</code> (if <code>tls</code>)
-  or <code>ready</code>.</li>
-<li><code>"tls_pending"</code> — stay in <code>awaiting_tls</code> (simulates a
-  handshake round that wants more data; narrows <code>io_interest</code>
-  to read-only, matching the real connector after a
-  <code>SSLWantReadError</code> step).</li>
-<li><code>"tls_ok"</code> — <code>awaiting_tls</code> → <code>ready</code>.</li>
-<li><code>"fail:&lt;message&gt;"</code> — transition to <code>failed</code> with the given
-  message as <code>last_error</code>.</li>
+<li><code>"dns_ok"</code>: <code>awaiting_dns</code> to <code>awaiting_tcp</code>.</li>
+<li><code>"tcp_pending"</code>: stay in <code>awaiting_tcp</code>.</li>
+<li><code>"tcp_ok"</code>: <code>awaiting_tcp</code> to <code>awaiting_tls</code> (if <code>tls</code>) or <code>ready</code>.</li>
+<li><code>"tls_pending"</code>: stay in <code>awaiting_tls</code> and narrow <code>io_interest</code> to read.</li>
+<li><code>"tls_ok"</code>: <code>awaiting_tls</code> to <code>ready</code>.</li>
+<li><code>"fail:&lt;message&gt;"</code>: transition to <code>failed</code> with <em>message</em> as <code>last_error</code>.</li>
 </ul>
-<p>The fake's <code>socket</code> attribute holds the :class:<code>FakeSocket</code>
-passed in at construction (or a fresh one if none given) from
-<code>awaiting_tcp</code> onward — mirroring the real connector, which
-builds its socket at TCP-connect entry and keeps it live through
-<code>ready</code>.  <code>failed</code> and <code>cancel</code> clear it back to <code>None</code>.</p>
-<p>Use this in consumer-side unit tests (<code>MQTTClient</code> against the
-multi-tick connect path).  Real-network tests live in the adapter
-test files.</p>
+<p>The <code>socket</code> attribute holds the :class:<code>FakeSocket</code> from <code>awaiting_tcp</code>
+onward and clears to <code>None</code> on <code>failed</code> / <code>cancel</code>, mirroring the real
+connector.</p>
 
 
 
@@ -1605,11 +1544,7 @@ test files.</p>
 
     <div class="doc doc-contents ">
 
-        <p>The connector's socket-ish object for <code>Runner.wait</code>, or <code>None</code>.</p>
-<p>Returns :attr:<code>socket</code> as-is once built, matching the real
-connector; the runner unwraps any <code>.sock</code> adapter wrapper at
-the poller.  <code>None</code> at <code>awaiting_dns</code> before the socket
-exists and after <code>failed</code> / <code>cancel</code> clear it.</p>
+        <p>The socket for <code>Runner.wait</code> once built, or <code>None</code> before and after.</p>
 
     </div>
 
@@ -1629,10 +1564,9 @@ exists and after <code>failed</code> / <code>cancel</code> clear it.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Poll-interest bitmask matching the real <code>SocketConnector</code>:
-TLS handshake wants the direction the last step named
-(read+write before the first step), TCP-connect wants write,
-other phases register nothing.</p>
+        <p>Poll-interest bitmask matching the real <code>SocketConnector</code>: the
+handshake direction during <code>awaiting_tls</code>, write during
+<code>awaiting_tcp</code>, nothing else.</p>
 
 
     </div>
