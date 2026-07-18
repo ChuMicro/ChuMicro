@@ -584,17 +584,6 @@
   
 </li>
         
-          <li class="md-nav__item">
-  <a href="#chumicro_http_server.__getattr__" class="md-nav__link">
-    <span class="md-ellipsis">
-      <span class="md-typeset">
-        __getattr__
-      </span>
-    </span>
-  </a>
-  
-</li>
-        
       </ul>
     </nav>
   
@@ -975,17 +964,6 @@
   
 </li>
         
-          <li class="md-nav__item">
-  <a href="#chumicro_http_server.__getattr__" class="md-nav__link">
-    <span class="md-ellipsis">
-      <span class="md-typeset">
-        __getattr__
-      </span>
-    </span>
-  </a>
-  
-</li>
-        
       </ul>
     </nav>
   
@@ -1109,16 +1087,11 @@
     <div class="doc doc-contents first">
 
         <p>Non-blocking HTTP/1.1 server for CircuitPython, MicroPython, and CPython.</p>
-<p>Built on :mod:<code>chumicro_sockets</code> (TCP listener + accepted client
-sockets) and :mod:<code>chumicro_timing</code> (ticks).  Tick-based runner
-contract — :meth:<code>HttpServer.check(now_ms)</code> reports whether work is
-pending and :meth:<code>handle(now_ms)</code> does one slice of progress per
-call, so an LED can keep blinking on the same board even through a
-slow upload or stalled client.</p>
-<p>Not supported: HTTP/1.1 keep-alive or connection pooling (every
-response carries <code>Connection: close</code>); chunked request bodies
-(use <code>Content-Length</code>); WebSockets, sessions / cookies / auth
-helpers, multipart upload, sub-app mounting, async handlers.</p>
+<p>Tick-based: :meth:<code>HttpServer.check</code> reports whether work is pending and
+:meth:<code>HttpServer.handle</code> does one slice of progress per call, so the
+caller's loop keeps running other work through a slow or stalled client.
+Keep-alive, chunked request bodies, WebSockets, cookies, and multipart
+upload are not supported.</p>
 
 
 
@@ -1155,16 +1128,9 @@ helpers, multipart upload, sub-app mounting, async handlers.</p>
 
 
         <p>Header dict whose lookups fold to lowercase.</p>
-<p>HTTP/1.1 §3.2 requires header names to be case-insensitive on
-receipt (servers and clients alike).  We store the original-cased
-name (so callers see <code>Content-Type</code> and not <code>content-type</code>)
-keyed off the lowercased form.</p>
-<p>Multi-value headers (<code>Set-Cookie</code>, <code>Via</code>) join with <code>,</code>
-per RFC 7230 §3.2.2 when the same header arrives twice.</p>
-<p>Implements <code>__getitem__</code> / <code>__setitem__</code> / <code>__contains__</code> /
-<code>__len__</code> / <code>__iter__</code> / <code>get</code> / <code>items</code> — enough for the
-request/response API surface.  Not a full :class:<code>MutableMapping</code>
-to keep the embedded footprint small.</p>
+<p>Stores the original-cased name (callers see <code>Content-Type</code>, not
+<code>content-type</code>) keyed off the lowercased form. A header that arrives
+twice has its values joined with <code>,</code> per RFC 7230 §3.2.2.</p>
 
 
 
@@ -1234,9 +1200,8 @@ to keep the embedded footprint small.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Append <em>value</em> to the existing header, joining with <code>,</code>.</p>
-<p>New keys behave like :meth:<code>__setitem__</code>.  Used by the parser
-for repeated header lines (<code>Set-Cookie</code>, <code>Via</code>).</p>
+        <p>Append <em>value</em> to an existing header, joining with <code>,</code>.</p>
+<p>A new name behaves like :meth:<code>__setitem__</code>.</p>
 
 
     </div>
@@ -1267,33 +1232,10 @@ for repeated header lines (<code>Set-Cookie</code>, <code>Via</code>).</p>
 
 
         <p>Streaming HTTP/1.1 request parser.</p>
-<p>Fed raw bytes via :meth:<code>feed</code>; the state advances as soon as
-enough bytes arrive.  Callers check :attr:<code>state</code> to know whether
-to keep feeding (anything other than <code>DONE</code>/<code>ERROR</code>) or stop.</p>
-<p>Body framing — three tiers chosen by Content-Length against
-the caps set at construction (parallel to
-:class:<code>chumicro_requests._wire.ResponseParser</code>'s shape):</p>
-<ul>
-<li><strong>Steady.</strong>  <code>Content-Length ≤ body_buffer</code> capacity.  Body
-  writes land in the caller-supplied buffer with zero allocation.
-  Available only when the caller pre-allocated a buffer at
-  construction; the default <code>body_buffer=None</code> skips this tier.</li>
-<li><strong>Sized rebind.</strong>  <code>body_buffer</code> capacity &lt; <code>Content-Length
-  ≤ max_body_bytes</code>.  The parser allocates one
-  <code>bytearray(content_length)</code> sized exactly to fit at
-  headers-complete time and slice-assigns body bytes directly
-  into it.  Single allocation per request, freed when the
-  parser is dereferenced.</li>
-<li><strong>413 reject.</strong>  <code>Content-Length &gt; max_body_bytes</code>.  No body
-  allocation.  Parser raises :class:<code>ServerOversizedError</code> and
-  the connection layer responds 413 Payload Too Large.</li>
-</ul>
-<p>Chunked request bodies are not supported, so Content-Length is
-always known when entering <code>BODY</code> state — sized-rebind happens
-at :meth:<code>_enter_body_state</code>, not lazily during body absorption.
-When neither Content-Length nor Transfer-Encoding is present
-the parser assumes a zero-length body and transitions straight
-to <code>DONE</code>.</p>
+<p>Fed raw bytes via :meth:<code>feed</code>; the state advances as soon as enough
+bytes arrive. Callers check :attr:<code>state</code> to know whether to keep
+feeding (anything other than <code>DONE</code> / <code>ERROR</code>) or stop. Chunked
+request bodies are not supported.</p>
 
 
 
@@ -1330,9 +1272,6 @@ to <code>DONE</code>.</p>
     <div class="doc doc-contents ">
 
         <p>Body bytes received so far (final once :attr:<code>state</code> is <code>DONE</code>).</p>
-<p>Reads through the cached <code>_body_view</code> (zero-copy memoryview
-slice) and snapshots one <code>bytes</code> copy for the caller —
-handlers may <code>.decode()</code> the result, which memoryview lacks.</p>
 
     </div>
 
@@ -1375,9 +1314,8 @@ handlers may <code>.decode()</code> the result, which memoryview lacks.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Hard cap on body size.  Bodies bigger than
-this raise :class:<code>ServerOversizedError</code> (413 at the
-connection layer).</p>
+                <p>Hard cap on body size; a bigger body raises
+:class:<code>ServerOversizedError</code> (413).</p>
               </div>
             </td>
             <td>
@@ -1393,12 +1331,9 @@ connection layer).</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Hard cap on the request-line length
-(method + target + version, excluding the trailing
-CRLF).  A request line that reaches this length without
-a CRLF raises :class:<code>ServerRequestLineTooLargeError</code>
-(414 at the connection layer), so a no-CRLF dribble
-can't grow the buffer past the cap.  Default 1024.</p>
+                <p>Hard cap on the request-line length; a
+longer line without a CRLF raises
+:class:<code>ServerRequestLineTooLargeError</code> (414).</p>
               </div>
             </td>
             <td>
@@ -1414,11 +1349,8 @@ can't grow the buffer past the cap.  Default 1024.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Hard cap on the total header-section
-bytes (every header line plus its CRLF, summed across
-the section).  Crossing it raises
-:class:<code>ServerHeadersTooLargeError</code> (431 at the
-connection layer).  Default 4096.</p>
+                <p>Hard cap on the total header-section bytes;
+crossing it raises :class:<code>ServerHeadersTooLargeError</code> (431).</p>
               </div>
             </td>
             <td>
@@ -1434,17 +1366,9 @@ connection layer).  Default 4096.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Optional caller-owned <code>bytearray</code> reused as
-a steady-state body buffer across requests.  Requests
-whose Content-Length fits land in it with zero
-allocation; bigger-but-allowed requests rebind <code>_body</code>
-to a one-shot sized-to-fit buffer for that request only
-and leave the caller's reference unchanged.  <code>None</code>
-(the default) means the parser starts empty and the
-sized-rebind path allocates fresh for every body.  Only
-worth supplying when the buffer's lifetime truly spans
-multiple requests; otherwise a use-once buffer fragments
-worse than allocating sized-to-fit on demand.</p>
+                <p>Optional caller-owned <code>bytearray</code> reused as a
+steady-state body buffer; <code>None</code> allocates a sized-to-fit
+buffer per body.</p>
               </div>
             </td>
             <td>
@@ -1460,10 +1384,8 @@ worse than allocating sized-to-fit on demand.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Pre-cached <code>memoryview(body_buffer)</code>
-supplied by the caller to avoid the parser constructing
-one.  Optional even when <code>body_buffer</code> is provided
-(a view will be made if missing).</p>
+                <p>Pre-cached <code>memoryview(body_buffer)</code>; made
+for you when omitted.</p>
               </div>
             </td>
             <td>
@@ -1490,8 +1412,29 @@ one.  Optional even when <code>body_buffer</code> is provided
     <div class="doc doc-contents ">
 
         <p>Append <em>chunk</em> to the parser's buffer and advance the state.</p>
-<p>Raises :class:<code>ServerProtocolError</code> when the bytes can't be
-reconciled with HTTP/1.1.</p>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" href="./#chumicro_http_server.ServerProtocolError">ServerProtocolError</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The bytes don't conform to HTTP/1.1.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
 
 
     </div>
@@ -1591,10 +1534,6 @@ reconciled with HTTP/1.1.</p>
 
 
         <p>Base class for chumicro-http-server failures.</p>
-<p>Independent of :mod:<code>chumicro_requests</code>'s <code>HttpError</code> so the
-server can ship without the client library.  Callers that run
-both halves on one board and want to catch either side can use
-<code>except (HttpError, ServerError):</code>.</p>
 
 
 
@@ -1625,10 +1564,7 @@ both halves on one board and want to catch either side can use
 
 
 
-        <p>Header section grew past <code>max_headers_bytes</code>.</p>
-<p>Surfaced by the parser while reading headers, counting every header
-line plus its CRLF against the cap.  The connection layer responds
-with 431 Request Header Fields Too Large and closes.</p>
+        <p>Header section grew past <code>max_headers_bytes</code> (431).</p>
 
 
 
@@ -1677,12 +1613,8 @@ with 431 Request Header Fields Too Large and closes.</p>
 
 
         <p>A sender-controlled allocation hit a documented cap.</p>
-<p>Surfaced by the parser before the offending bytes are buffered or
-a body is allocated.  Carries :attr:<code>status_code</code> — the HTTP status
-the connection layer responds with before closing — so the catch
-site maps the failure to a response without hard-coding the code.
-Distinct from :class:<code>ServerProtocolError</code> so the connection can
-choose a precise 413 / 414 / 431 over a generic 400.</p>
+<p>Carries :attr:<code>status_code</code> (the 413 / 414 / 431 the connection layer
+responds with) so the catch site need not hard-code it.</p>
 
 
 
@@ -1730,11 +1662,8 @@ choose a precise 413 / 414 / 431 over a generic 400.</p>
 
 
 
-        <p>Request <code>Content-Length</code> exceeds <code>max_body_bytes</code>.</p>
-<p>Surfaced by the parser at headers-complete time, before any body
-bytes are allocated.  The connection layer responds with 413
-Payload Too Large and closes — the body is never read.</p>
-<p>:attr:<code>reported_length</code> is the value the client declared.</p>
+        <p>Request <code>Content-Length</code> exceeds <code>max_body_bytes</code> (413).</p>
+<p>:attr:<code>reported_length</code> is the length the client declared.</p>
 
 
 
@@ -1782,8 +1711,7 @@ Payload Too Large and closes — the body is never read.</p>
 
 
 
-        <p>Inbound bytes don't conform to HTTP/1.1.</p>
-<p>Connection should be torn down + a 400 returned (best-effort).</p>
+        <p>Inbound bytes don't conform to HTTP/1.1 (the connection returns 400).</p>
 
 
 
@@ -1814,10 +1742,7 @@ Payload Too Large and closes — the body is never read.</p>
 
 
 
-        <p>Request line grew past <code>max_request_line_bytes</code> without a CRLF.</p>
-<p>Surfaced by the parser while still reading the request line, before
-the over-cap bytes drive any further parsing.  The connection layer
-responds with 414 URI Too Long and closes.</p>
+        <p>Request line grew past <code>max_request_line_bytes</code> without a CRLF (414).</p>
 
 
 
@@ -1861,16 +1786,8 @@ responds with 414 URI Too Long and closes.</p>
     <div class="doc doc-contents ">
 
         <p>Extract the <code>charset=...</code> parameter from a Content-Type header.</p>
-<p>Per RFC 7231 §3.1.1.5 the Content-Type value may carry a
-<code>charset</code> parameter — for example <code>text/html; charset=utf-8</code>
-or <code>application/json; charset="ISO-8859-1"</code>.  We tokenize on
-semicolons, look for a <code>charset=</code> token (case-insensitive),
-strip optional surrounding quotes per RFC 7231 §3.1.1.1, and
-fall back to <code>"utf-8"</code> when no charset is present or the
-header itself is missing.</p>
-<p>Defaulting to UTF-8 matches RFC 8259 §8.1 for <code>application/json</code>
-and aligns with current web practice for <code>text/*</code> even though
-historical RFC 2616 defaulted text to ISO-8859-1.</p>
+<p>Falls back to <code>"utf-8"</code> when no charset is present or the header is
+missing.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1919,7 +1836,7 @@ historical RFC 2616 defaulted text to ISO-8859-1.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The detected charset name, or <code>"utf-8"</code> as the safe default.</p>
+                <p>The detected charset name, or <code>"utf-8"</code> as the default.</p>
               </div>
             </td>
           </tr>
@@ -1943,14 +1860,8 @@ historical RFC 2616 defaulted text to ISO-8859-1.</p>
     <div class="doc doc-contents ">
 
         <p>Parse a <code>foo=bar&amp;baz=qux</code> query string into a header-shaped dict.</p>
-<p>Returns a :class:<code>CaseInsensitiveDict</code>, so keys fold to lowercase and
-two keys differing only in case merge into one entry (<code>a=1&amp;A=2</code>
-yields a single <code>a</code> -&gt; <code>1, 2</code>) — a limitation, since URL query
-keys are case-sensitive.  Repeated keys join their values with <code>,</code>
-(comma-space) via :meth:<code>CaseInsensitiveDict.add</code>; a caller splitting
-them back apart uses <code>.split(", ")</code>.  Percent-decoding is <strong>not</strong>
-done; URL-encoded values come through as-is (most embedded REST APIs
-use bare alphanumeric keys + values).</p>
+<p>Keys fold to lowercase (so <code>a=1&amp;A=2</code> merge into one entry) and
+percent-encoding is not decoded. Repeated keys join with <code>,</code>.</p>
 
 
     </div>
@@ -1969,35 +1880,8 @@ use bare alphanumeric keys + values).</p>
     <div class="doc doc-contents ">
 
         <p>Split a request-target into <code>(path, raw_query)</code>.</p>
-<p><em>path</em> always starts with <code>/</code> (matches the request-target shape
-HTTP clients use).  <em>raw_query</em> is everything after the first <code>?</code>
-or <code>""</code> when none is present — caller parses further with
-:func:<code>parse_query</code> if needed.</p>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h3 id="chumicro_http_server.__getattr__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="fm">__getattr__</span><span class="p">(</span><span class="n">name</span><span class="p">)</span></code>
-
-<a href="#chumicro_http_server.__getattr__" class="headerlink" title="Permanent link">&para;</a></h3>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Lazy-load the server half on first access (PEP 562).</p>
-<p><code>server</code> is ~22 KB of source.  A board that imports
-<code>chumicro_http_server</code> for its wire helpers (request parsing,
-header dict, query/target splitting) but never builds an
-<code>HttpServer</code> shouldn't pin the server's compiled code objects in
-RAM; the module loads on the first access to one of its
-symbols.  Constructing the server at startup keeps that one-time
-import cost on a fresh heap (see the guide).</p>
+<p><em>raw_query</em> is everything after the first <code>?</code>, or <code>""</code> when there
+is none.</p>
 
 
     </div>
@@ -2028,26 +1912,12 @@ A server that never streams never loads it.</p>
     <div class="doc doc-contents first">
 
         <p>Streamed response bodies for chumicro-http-server (opt-in submodule).</p>
-<p>Import explicitly, the way <code>chumicro_requests.generators</code> is::</p>
-<div class="language-text highlight"><pre><span></span><code>from chumicro_http_server.streaming import build_streaming_response, SOURCE_EOF
+<p>A handler returns a :class:<code>StreamingResponse</code> carrying a byte source, and
+the server drains it to the client across ticks. Import it explicitly::</p>
+<div class="language-text highlight"><pre><span></span><code>from chumicro_http_server.streaming import build_streaming_response
 </code></pre></div>
-<p>Server-side mirror of <code>chumicro_requests</code>'s streamed <em>response</em> reads:
-a handler returns a :class:<code>StreamingResponse</code> carrying a byte
-<strong>source</strong> — a fill-a-buffer <code>source(buffer) -&gt; int</code> — and the server
-drains it to the client across ticks, framing each fill as
-<code>Content-Length</code> body bytes (total known) or a chunked chunk (total
-unknown), under the buffered path's per-tick send budget, EAGAIN
-backpressure, and request-timeout.  The only new steady-state heap is
-one fixed staging window per streaming connection.</p>
-<p>This is a <em>separate</em> module, not part of the base <code>chumicro_http_server</code>
-import: :class:<code>~chumicro_http_server.HttpServer</code> recognizes a streaming
-response and drives it by duck-typing, so a server that only ever returns
-buffered responses never loads this module's framing bytecode — the same
-pay-for-what-you-use split that keeps <code>chumicro_requests</code> slim when a
-board never streams.  See <code>docs/guide.md</code> for the full guide.</p>
-<p>Chunked framing is allocation-free per chunk: the chunk-size line is
-written into a reserved head region of the staging buffer itself, so a
-whole chunk (<code>&lt;hex&gt;\r\n</code> + body + <code>\r\n</code>) is one contiguous send.</p>
+<p>The base server loads this module only when a handler actually streams, so
+a server that never streams never pays for its framing code.</p>
 
 
 
@@ -2085,14 +1955,10 @@ whole chunk (<code>&lt;hex&gt;\r\n</code> + body + <code>\r\n</code>) is one con
 
         <p>A response whose body a byte source produces incrementally.</p>
 <p>Build one with :func:<code>build_streaming_response</code> and return it from a
-handler to serve a body far larger than the heap — a sensor-log dump,
-a file off storage — without materializing it.  The server drains
-:attr:<code>source</code> across ticks under the buffered path's send budget and
-EAGAIN backpressure, framing each fill as <code>Content-Length</code> body
-bytes (:attr:<code>content_length</code> known) or a chunked chunk (<code>None</code>).</p>
-<p>:class:<code>~chumicro_http_server.HttpServer</code> recognizes it by duck type
-(its :attr:<code>source</code> attribute) — it need not subclass
-:class:<code>~chumicro_http_server.Response</code>.</p>
+handler to serve a body far larger than the heap (a sensor-log dump, a
+file off storage) without materializing it. The server drains
+:attr:<code>source</code> across ticks, framing each fill as <code>Content-Length</code>
+body bytes or a chunked chunk.</p>
 
 
 
@@ -2136,10 +2002,8 @@ bytes (:attr:<code>content_length</code> known) or a chunked chunk (<code>None</
     <div class="doc doc-contents ">
 
         <p>Build a :class:<code>StreamingResponse</code> served from a byte <em>source</em>.</p>
-<p>Return the result from a handler to stream a body too large to
-buffer.  The server pulls one staging-window fill per tick from
-<em>source</em> and frames it — <code>Content-Length</code> when <em>content_length</em> is
-given, chunked otherwise.</p>
+<p>Return the result from a handler to stream a body too large to buffer.
+The server pulls one staging-window fill per tick from <em>source</em>.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -2178,14 +2042,10 @@ given, chunked otherwise.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Fill-a-buffer callable <code>source(buffer) -&gt; int</code>.  Each
-call writes up to <code>len(buffer)</code> body bytes into <em>buffer</em>
-and returns <code>n &gt; 0</code> (wrote <code>buffer[:n]</code>), <code>0</code> (no bytes
-ready this tick, body not finished — the server retries), or
-:data:<code>SOURCE_EOF</code> (<code>-1</code>, end of body).  A log/file
-generator that always has bytes until it ends never returns
-<code>0</code>; return <code>0</code> only for a source that can be empty for a
-tick (an async-sampled sensor).</p>
+                <p>Fill-a-buffer callable <code>source(buffer) -&gt; int</code>. Each call
+writes up to <code>len(buffer)</code> body bytes and returns <code>n &gt; 0</code>
+(wrote <code>buffer[:n]</code>), <code>0</code> (nothing ready this tick, the
+server retries), or :data:<code>SOURCE_EOF</code> (<code>-1</code>, end of body).</p>
               </div>
             </td>
             <td>
@@ -2201,10 +2061,9 @@ tick (an async-sampled sensor).</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Total if known — a <code>Content-Length</code> header,
-body framed raw; the source must then produce exactly this
-many bytes before :data:<code>SOURCE_EOF</code> (a mismatch closes the
-connection).  <code>None</code> (default) frames chunked.</p>
+                <p>Total when known, framed as <code>Content-Length</code>; the
+source must then produce exactly this many bytes before
+:data:<code>SOURCE_EOF</code>. <code>None</code> (default) frames chunked.</p>
               </div>
             </td>
             <td>
@@ -2220,9 +2079,8 @@ connection).  <code>None</code> (default) frames chunked.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Optional extra headers.  Do not set <code>Content-Length</code> /
-<code>Transfer-Encoding</code> / <code>Connection</code> — the server owns
-framing.</p>
+                <p>Optional extra headers. Do not set <code>Content-Length</code> /
+<code>Transfer-Encoding</code> / <code>Connection</code>; the server owns framing.</p>
               </div>
             </td>
             <td>
@@ -2272,13 +2130,33 @@ framing.</p>
     <div class="doc doc-contents ">
 
         <p>Serialize a :class:<code>StreamingResponse</code>'s header block to wire bytes.</p>
-<p>Body-less counterpart of
-:func:<code>~chumicro_http_server.encode_response</code>: status line, the
-framing header (<code>Content-Length</code> when a total was declared,
-<code>Transfer-Encoding: chunked</code> otherwise), <code>Connection: close</code>, the
-caller's headers, terminating CRLF — no body (the source streams it).
-Reuses the same CR / LF / NUL rejection so reflected request data
-can't splice the response.</p>
+<p>Emits the status line, the framing header (<code>Content-Length</code> when a
+total was declared, <code>Transfer-Encoding: chunked</code> otherwise),
+<code>Connection: close</code>, and the caller's headers, but no body.</p>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" href="./#chumicro_http_server.ServerProtocolError">ServerProtocolError</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The reason phrase or a header carries a CR,
+LF, or NUL.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
 
 
     </div>
@@ -2299,9 +2177,8 @@ can't splice the response.</p>
         <p>Encode <em>response</em>'s headers onto <em>conn</em> and arm the source drain.</p>
 <p>The header block flushes through the same <code>_drive_send</code> path as a
 buffered response; once it drains, <code>_drive_send</code> hands off to
-:func:<code>drive_stream_body</code> because <code>conn._stream</code> is set.  An
-unencodable header block (str value, non-ASCII reason) falls back to
-the canned 500 — safe because no body byte was sent yet.</p>
+:func:<code>drive_stream_body</code>. An unencodable header block falls back to
+the canned 500, safe because no body byte was sent yet.</p>
 
 
     </div>
@@ -2321,13 +2198,10 @@ the canned 500 — safe because no body byte was sent yet.</p>
 
         <p>Drain <em>conn</em>'s byte source to its socket, framed, up to
 <code>send_budget</code> bytes this tick.</p>
-<p>The same <code>send_budget_per_tick</code> cap the buffered path uses bounds
-bytes-sent-per-connection-per-tick, so one stream can't starve other
-connections.  Partial sends / EAGAIN park with the framing intact;
-the source is polled for the next fill only once the current one
-fully drains, so a stalled client holds one window.  The
-request-timeout deadline (checked in <code>tick</code>) covers a stalled
-streamed send.</p>
+<p>The per-tick send budget bounds bytes sent per connection, so one
+stream can't starve others. A partial send or EAGAIN parks with the
+framing intact, and the source is polled for the next fill only once
+the current one fully drains.</p>
 
 
     </div>
