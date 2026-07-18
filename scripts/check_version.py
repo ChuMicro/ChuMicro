@@ -51,25 +51,36 @@ PRE_RELEASE_FLOOR = "0.0.0"
 def _strip_docstrings(tree: ast.Module) -> ast.Module:
     """Drop every bare string-literal statement from *tree* in place.
 
-    Covers module/class/function docstrings and PEP 258 attribute
-    docstrings (a string literal following a constant assignment, which
-    isn't a body's first statement).  A bare string expression is a
-    runtime no-op, so removing it is behavior-preserving; two trees equal
-    after this differ only in docstrings and comments — and comments never
-    reach the AST in the first place.
+    Covers module/class/function docstrings, PEP 258 attribute docstrings
+    (a string literal following a constant assignment, which isn't a body's
+    first statement), and bare string statements in any nested block — an
+    ``else`` / ``finally`` / ``except`` body included.  A bare string
+    expression is a runtime no-op, so removing it is behavior-preserving;
+    two trees equal after this differ only in docstrings and comments — and
+    comments never reach the AST in the first place.
+
+    A bare-string ``ast.Expr`` only ever appears in a statement list, never
+    inside an expression (a string argument or list element is the bare
+    ``ast.Constant``, not an ``ast.Expr`` wrapping one), so filtering every
+    list-valued field is safe: it reaches statement positions only.  The
+    earlier ``.body``-only pass missed the ``orelse`` / ``finalbody``
+    branches, leaving those diffs to over-ask for a bump.
     """
     for node in ast.walk(tree):
-        body = getattr(node, "body", None)
-        if isinstance(body, list):
-            node.body = [
+        for field, value in ast.iter_fields(node):
+            if not isinstance(value, list):
+                continue
+            kept = [
                 statement
-                for statement in body
+                for statement in value
                 if not (
                     isinstance(statement, ast.Expr)
                     and isinstance(statement.value, ast.Constant)
                     and isinstance(statement.value.value, str)
                 )
             ]
+            if len(kept) != len(value):
+                setattr(node, field, kept)
     return tree
 
 
