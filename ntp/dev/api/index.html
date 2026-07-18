@@ -705,11 +705,9 @@
     <div class="doc doc-contents first">
 
         <p>Runner-shaped SNTP client for CircuitPython, MicroPython, and CPython.</p>
-<p>Built on the chumicro-sockets UDP surface (<code>sendto</code> /
-<code>recvfrom_into</code> / <code>close</code> / <code>setblocking</code> / <code>settimeout</code> /
-<code>getsockname</code>) — pass any socket matching that shape; tests inject
-:class:<code>FakeUDPSocket</code> and apps reach for the opt-in
-:mod:<code>chumicro_ntp.sockets_factory</code> helper.</p>
+<p>Pass any non-blocking UDP socket that offers <code>sendto</code> /
+<code>recvfrom_into</code> / <code>close</code> / <code>setblocking</code>; the client polls it each
+tick to answer "what time is it?" against an NTP server.</p>
 
 
 
@@ -746,16 +744,10 @@
 
 
         <p>Runner-shaped SNTP client over an injected UDP socket.</p>
-<p>Single in-flight request at a time — calling :meth:<code>query</code> while
-:attr:<code>busy</code> is <code>True</code> raises <code>RuntimeError</code>.  Apps wanting
-parallel queries instantiate multiple clients on distinct sockets.</p>
-<p>The socket is <strong>not owned</strong> by the client — caller passes it in
-and is responsible for closing it.  The <code>sockets_factory</code>
-submodule provides a one-line default wiring against
-<code>chumicro-sockets</code>.</p>
-<p>For config-driven construction, see :meth:<code>from_config</code> —
-one-line factory that reads server / port / timeout from
-<code>runtime_config.msgpack</code> with sensible fall-back defaults.</p>
+<p>Handles one query at a time: calling :meth:<code>query</code> while :attr:<code>busy</code>
+raises <code>RuntimeError</code>. The client does not own the socket; the
+caller creates and closes it. See :meth:<code>from_config</code> to build one
+from <code>runtime_config.msgpack</code>.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -778,25 +770,15 @@ one-line factory that reads server / port / timeout from
             </td>
             <td>
               <div class="doc-md-description">
-                <p>A non-blocking UDP-shaped object.  Must expose:</p>
-<ul>
-<li><code>sendto(payload: bytes, host: str, port: int) -&gt; int</code> —
-  sends the packet to <code>(host, port)</code>.  Raises
-  <code>OSError(EAGAIN | EWOULDBLOCK)</code> when the send buffer is
-  full.</li>
-<li><code>recvfrom_into(buffer) -&gt; (nbytes, address)</code> — reads
-  into <em>buffer</em>, returning the byte count and sender.
-  Raises <code>OSError(EAGAIN | EWOULDBLOCK)</code> on no data.</li>
-<li><code>close() -&gt; None</code></li>
-<li><code>setblocking(flag: bool) -&gt; None</code> — best-effort;
-  absence is tolerated.</li>
-</ul>
-<p>:func:<code>chumicro_sockets.udp_socket</code> is the valid producer.
-A raw stdlib <code>socket.socket(SOCK_DGRAM)</code> does <strong>not</strong> fit:
-its <code>sendto</code> takes <code>(data, address)</code>, not the separated
-<code>(data, host, port)</code> this contract calls, so wrap it in a
-3-line adapter if you must bring your own.  Tests inject
-:class:<code>chumicro_sockets.testing.FakeUDPSocket</code>.</p>
+                <p>A non-blocking UDP-shaped object exposing
+<code>sendto(payload, host, port)</code>, <code>recvfrom_into(buffer)</code>,
+<code>close()</code>, and <code>setblocking(flag)</code>. <code>sendto</code> and
+<code>recvfrom_into</code> raise <code>OSError(EAGAIN | EWOULDBLOCK)</code> when
+the buffer is full or empty. :func:<code>chumicro_sockets.udp_socket</code>
+produces one; tests inject
+:class:<code>chumicro_sockets.testing.FakeUDPSocket</code>. A raw stdlib
+<code>socket.socket(SOCK_DGRAM)</code> does not fit, since its
+<code>sendto</code> takes <code>(data, address)</code> not <code>(data, host, port)</code>.</p>
               </div>
             </td>
             <td>
@@ -812,8 +794,7 @@ its <code>sendto</code> takes <code>(data, address)</code>, not the separated
             </td>
             <td>
               <div class="doc-md-description">
-                <p>NTP server hostname.  Defaults to <code>"pool.ntp.org"</code>.
-Resolution is delegated to the runtime's name resolver.</p>
+                <p>NTP server hostname. Defaults to <code>"pool.ntp.org"</code>.</p>
               </div>
             </td>
             <td>
@@ -829,7 +810,7 @@ Resolution is delegated to the runtime's name resolver.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>NTP server UDP port.  Defaults to <code>123</code>.</p>
+                <p>NTP server UDP port. Defaults to <code>123</code>.</p>
               </div>
             </td>
             <td>
@@ -845,8 +826,8 @@ Resolution is delegated to the runtime's name resolver.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Maximum tick budget for the recv side of the
-exchange.  Defaults to <code>5000</code>.</p>
+                <p>Tick budget for the recv side of the exchange.
+Defaults to <code>5000</code>.</p>
               </div>
             </td>
             <td>
@@ -862,11 +843,9 @@ exchange.  Defaults to <code>5000</code>.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Optional tick source — any object exposing
-<code>ticks_ms</code>, <code>ticks_diff</code>, <code>ticks_add</code> (matches the
-<code>chumicro_timing.ticks</code> submodule shape).  Defaults to
-that submodule (real clock); tests pass <code>FakeTicks</code>
-from <code>chumicro_timing.testing</code>.</p>
+                <p>Optional tick source exposing <code>ticks_ms</code>, <code>ticks_diff</code>,
+and <code>ticks_add</code> (the <code>chumicro_timing.ticks</code> shape).
+Defaults to the real clock; tests pass <code>FakeTicks</code>.</p>
               </div>
             </td>
             <td>
@@ -958,11 +937,10 @@ from <code>chumicro_timing.testing</code>.</p>
     <div class="doc doc-contents ">
 
         <p>Build an :class:<code>NTPClient</code> from runtime config.</p>
-<p>Reads optional <code>ntp.server</code> / <code>ntp.port</code> / <code>ntp.timeout_ms</code>
-— empty <code>config</code> is valid input (defaults to <code>pool.ntp.org</code>
-on port 123).  A <em>socket</em> or <em>transport_factory</em> override bypasses
-the auto-built UDP factory; the auto path defers the open to
-the first <code>query()</code> and sets the socket non-blocking.</p>
+<p>Reads optional <code>ntp.server</code> / <code>ntp.port</code> / <code>ntp.timeout_ms</code>,
+falling back to <code>pool.ntp.org</code> on port 123 when absent (an empty
+<code>config</code> is valid). Passing <em>socket</em> or <em>transport_factory</em>
+overrides the auto-built UDP factory.</p>
 
 
     </div>
@@ -981,11 +959,11 @@ the first <code>query()</code> and sets the socket non-blocking.</p>
     <div class="doc doc-contents ">
 
         <p>Issue a single SNTP query.</p>
-<p>Opens the UDP socket on first use when the client was built
-with <em>transport_factory</em> (construction is side-effect-free).
-Sends the 48-byte client request immediately, then arms the
-runner-shaped recv path.  Subsequent ticks of
-<code>check</code> / <code>handle</code> drain the response from the socket.</p>
+<p>Opens the UDP socket on first use when built with
+<em>transport_factory</em>, sends the 48-byte request, then arms the
+recv path that <code>check</code> / <code>handle</code> drain on later ticks. A
+synchronous <code>sendto</code> failure is not raised: it is delivered on
+the returned result (already <code>done</code> with <code>error</code> set).</p>
 
 
     <p><span class="doc-section-title">Returns:</span></p>
@@ -1009,9 +987,6 @@ runner-shaped recv path.  Subsequent ticks of
           </tr>
       </tbody>
     </table>
-        <p>A synchronous <code>sendto</code> failure is not raised — it is delivered
-on the returned result (<code>result.error</code> is the <code>OSError</code> and
-the result is already <code>done</code>).</p>
 
 
 <p><span class="doc-section-title">Raises:</span></p>
@@ -1053,8 +1028,6 @@ the result is already <code>done</code>).</p>
     <div class="doc doc-contents ">
 
         <p>Return <code>True</code> when the runner should call :meth:<code>handle</code>.</p>
-<p><code>True</code> while a query is in flight — covers both the
-recv-side polling and timeout detection.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1077,7 +1050,7 @@ recv-side polling and timeout detection.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Current tick value (unused; required by runner).</p>
+                <p>Current tick value (unused; required by the runner).</p>
               </div>
             </td>
             <td>
@@ -1104,9 +1077,8 @@ recv-side polling and timeout detection.</p>
     <div class="doc doc-contents ">
 
         <p>Drain one tick of work for the in-flight query.</p>
-<p>Tries to receive an SNTP response; if the socket has no data
-ready, checks whether the timeout has elapsed.  Either way,
-marks the result <code>done</code> once the exchange terminates.</p>
+<p>Tries to receive a response; on no data, checks the timeout.
+Either way marks the result <code>done</code> once the exchange ends.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1129,7 +1101,7 @@ marks the result <code>done</code> once the exchange terminates.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Current tick value used for timeout detection.</p>
+                <p>Current tick value, used for timeout detection.</p>
               </div>
             </td>
             <td>
@@ -1231,10 +1203,6 @@ marks the result <code>done</code> once the exchange terminates.</p>
 
 
         <p>SNTP exchange failed.</p>
-<p>Subclasses <code>OSError</code> so callers that catch <code>except OSError</code>
-(the typical pattern for transport-layer errors) catch it
-automatically.  Distinct subclass so callers who care about NTP
-specifics can <code>except NTPError</code>.</p>
 
 
 
@@ -1264,10 +1232,8 @@ specifics can <code>except NTPError</code>.</p>
 
 
         <p>Handle for a single in-flight SNTP exchange.</p>
-<p>Yielded by :meth:<code>NTPClient.query</code>.  Callers poll :attr:<code>done</code>
-each tick; when <code>True</code> they read :attr:<code>unix_seconds</code> for the
-timestamp or :attr:<code>error</code> for the exception that ended the
-exchange.</p>
+<p>Poll :attr:<code>done</code> each tick; once <code>True</code>, read :attr:<code>unix_seconds</code>
+for the timestamp or :attr:<code>error</code> for the failure that ended it.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1290,8 +1256,8 @@ exchange.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The tick value at which the request was
-issued.  Used by the client to detect timeouts.</p>
+                <p>Tick value when the request was issued, used to
+detect timeouts.</p>
               </div>
             </td>
             <td>
@@ -1353,10 +1319,9 @@ issued.  Used by the client to detect timeouts.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Re-raises the stored :attr:<code>error</code> when the
-exchange failed — an :class:<code>NTPError</code> for a protocol,
-timeout, or cancellation failure, or the raw <code>OSError</code>
-from a failed send / recv.</p>
+                <p>Re-raises the stored :attr:<code>error</code> when the exchange
+failed (an :class:<code>NTPError</code> for a protocol, timeout, or
+cancellation failure, or the raw <code>OSError</code> from send/recv).</p>
               </div>
             </td>
           </tr>
