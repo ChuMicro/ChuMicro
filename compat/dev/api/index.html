@@ -467,19 +467,10 @@
     <div class="doc doc-contents first">
 
         <p>Cross-runtime <code>functools.partial</code> polyfill.</p>
-<p>On CPython, re-exports the C-implemented <code>functools.partial</code> directly.
-On MicroPython and CircuitPython (where <code>functools.partial</code> is absent),
-provides a pure-Python implementation that matches CPython's public API.</p>
+<p>On CPython this re-exports the built-in <code>functools.partial</code>; on
+MicroPython and CircuitPython, where it is missing, it provides a
+matching pure-Python implementation.</p>
 
-
-<details class="example" open>
-  <summary>Example</summary>
-  <div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_compat.functools</span><span class="w"> </span><span class="kn">import</span> <span class="n">partial</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">greet</span> <span class="o">=</span> <span class="n">partial</span><span class="p">(</span><span class="nb">print</span><span class="p">,</span> <span class="s2">&quot;hello&quot;</span><span class="p">)</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">greet</span><span class="p">(</span><span class="s2">&quot;world&quot;</span><span class="p">)</span>  <span class="c1"># prints: hello world</span>
-</span></code></pre></div>
-</details>
 
 
 
