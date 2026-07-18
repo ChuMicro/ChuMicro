@@ -289,6 +289,33 @@ class TestDocstringEquivalence:
         new = 'PATH = "/x"\n"""New attribute doc, longer."""\n'
         assert _code_is_equivalent(old, new)
 
+    def test_bare_string_in_else_branch_is_equivalent(self):
+        # A no-op string in an ``else`` body lives in the If node's
+        # ``orelse``, which the earlier ``.body``-only strip missed.
+        old = (
+            "def f(x):\n    if x:\n        return 1\n"
+            '    else:\n        "note"\n        return 2\n'
+        )
+        new = "def f(x):\n    if x:\n        return 1\n    else:\n        return 2\n"
+        assert _code_is_equivalent(old, new)
+
+    def test_bare_string_in_finally_branch_is_equivalent(self):
+        # A no-op string in a ``finally`` body lives in the Try node's
+        # ``finalbody`` — likewise missed by a ``.body``-only strip.
+        old = (
+            "def f():\n    try:\n        g()\n"
+            '    finally:\n        "cleanup note"\n        h()\n'
+        )
+        new = "def f():\n    try:\n        g()\n    finally:\n        h()\n"
+        assert _code_is_equivalent(old, new)
+
+    def test_real_change_in_else_branch_still_flagged(self):
+        # The completeness fix must not mask a genuine change in ``orelse``.
+        assert not _code_is_equivalent(
+            "def f(x):\n    if x:\n        return 1\n    else:\n        return 2\n",
+            "def f(x):\n    if x:\n        return 1\n    else:\n        return 3\n",
+        )
+
     def test_code_change_is_not_equivalent(self):
         assert not _code_is_equivalent(
             "def f(x):\n    return x + 1\n",
