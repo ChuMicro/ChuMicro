@@ -774,21 +774,10 @@
     <div class="doc doc-contents first">
 
         <p>Tick-based scheduler for the ChuMicro libraries.</p>
-<p>Register work with a <code>Runner</code>, then call <code>tick()</code> in a loop.
-Each <code>tick()</code> captures the current time once, checks every
-registered task, and fires the handlers whose gates have passed.</p>
-<p>Two registration shapes are accepted: object-based (<code>.check</code> +
-<code>.handle</code> methods) and handler-only (fires every tick, or per
-period if one is set).  See <code>Runner.add</code> for signatures.
-<code>add_periodic</code> is the periodic shortcut; <code>add_generator</code> drives
-a linear generator flow.</p>
-<p><code>TaskHandle</code> (returned from registration) carries runtime state
-and supports <code>set_period</code> / <code>remove</code>.</p>
-<p>The optional <code>Runner.wait(now_ms)</code> companion idles the CPU between
-ticks, blocking on a <code>select.poll</code> over each service's exposed
-sockets (or sleeping until the next deadline when no socket is
-registered).  See <code>Runner.wait</code> for the contract.</p>
-<p>Cross-runtime: CPython, MicroPython, CircuitPython.</p>
+<p>Register work with a <code>Runner</code>, then call <code>tick()</code> in a loop; each
+<code>tick()</code> captures the time once and fires the handlers whose gates
+have passed.  The optional <code>Runner.wait(now_ms)</code> companion idles the
+CPU between ticks.  Runs on CPython, MicroPython, and CircuitPython.</p>
 
 
 
@@ -826,14 +815,10 @@ registered).  See <code>Runner.wait</code> for the contract.</p>
 
 
 
-        <p>Raised when <code>tick()</code> runs while a <code>tick()</code> is already in progress.</p>
-<p>A handler that calls <code>runner.tick()</code> re-enters the reactor mid-dispatch
-and would corrupt the shared pending-handler walk.  Re-entering the
-reactor is framework misuse (a structural programming error), not a
-service fault, so it propagates past <code>tick()</code>'s handler-fault
-isolation rather than being counted in <code>handler_errors</code>.  Subclasses
-<code>RuntimeError</code> so callers already catching <code>RuntimeError</code> keep
-working.</p>
+        <p>Raised when <code>tick()</code> runs while another <code>tick()</code> is in progress.</p>
+<p>Re-entering the reactor from a handler is framework misuse, so this
+propagates past <code>tick()</code>'s handler-fault isolation instead of being
+counted in <code>handler_errors</code>.  Subclasses <code>RuntimeError</code>.</p>
 
 
 
@@ -982,16 +967,10 @@ clear the period.</p>
 
 
         <p>Run tasks on a tick-based schedule.</p>
-<p>Captures <code>ticks_ms()</code> once per <code>tick()</code> call and passes the
-shared timestamp to every due component.  Registration paths are
-documented on <code>add()</code> and <code>add_periodic()</code>.  A handler that
-raises <code>Exception</code> is isolated: <code>tick()</code> counts it in
-<code>handler_errors</code>, reports it to the optional <code>on_handler_error</code>
-callback, and keeps firing the other due handlers, so one faulting
-service can't stop the reactor.  A handler that re-enters <code>tick()</code>
-is the exception: it raises <code>ReentrantTickError</code> and propagates,
-since re-entering the reactor is framework misuse, not a service
-fault.</p>
+<p>Captures <code>ticks_ms()</code> once per <code>tick()</code> and passes that shared
+timestamp to every due task.  A handler that raises is isolated and
+counted in <code>handler_errors</code> so one faulting service can't stop the
+reactor.  Registration is documented on <code>add()</code> and <code>add_periodic()</code>.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1057,11 +1036,9 @@ register.  Tests pass <code>FakePoller</code> from
               <div class="doc-md-description">
                 <p>Optional callback
 <code>on_handler_error(handle, exception)</code> invoked when a
-handler raises <code>Exception</code> during <code>tick()</code>.  Lets the
-app log the fault, remove the faulting task via
-<code>handle.remove()</code>, or re-raise to fail fast.  A callback
-that itself raises is swallowed and counted, never
-propagated.</p>
+handler raises during <code>tick()</code>.  Lets the app log the fault,
+remove the faulting task, or re-raise to fail fast.  A callback
+that itself raises is swallowed and counted.</p>
               </div>
             </td>
             <td>
@@ -1254,29 +1231,13 @@ Requires <em>period_ms</em>.</p>
     <div class="doc doc-contents ">
 
         <p>Register a generator-driven service with the runner.</p>
-<p><em>gen</em> is a freshly constructed generator object — call the
-generator function once at the call site so its arguments are
-captured (<code>runner.add_generator(echo_run(host, port, radio))</code>),
-but do not advance it yourself.  This method primes it, sending
-<code>None</code> into its first <code>yield</code>; a generator already advanced
-past that yield would have its first wait silently skipped.</p>
-<p>The generator suspends by <code>yield</code>-ing a duck-typed wait
-object — anything exposing <code>io_socket</code> / <code>io_interest(now_ms)</code>
-/ <code>next_deadline</code>.  The runner reads those
-each <code>wait()</code> to register the socket with ipoll, and resumes
-the generator via <code>.send(now_ms)</code> once the socket is ready or
-the deadline elapses.  Sequential I/O state machines that would
-otherwise need an explicit per-state <code>handle</code> shape collapse
-to a top-to-bottom generator body.</p>
-<p>The returned <code>GeneratorHandle</code> carries <code>.done</code> (False until
-the generator finishes) and <code>.cancel()</code> (stop early, firing
-any <code>finally</code> blocks).  The wrapper self-removes from the
-runner on <code>StopIteration</code> so a finished generator does not
-linger as a dead entry.</p>
-<p>The generator machinery is imported lazily on the first call so
-an app that never registers a generator does not load it.  Make
-that first call at startup rather than mid-loop, so the one-time
-import does not land on a latency-sensitive tick.</p>
+<p>Pass a freshly constructed generator (call the generator function
+at the call site, e.g. <code>runner.add_generator(echo_run(host, port))</code>,
+but do not advance it): this method primes it to its first
+<code>yield</code>.  The generator suspends by <code>yield</code>-ing a duck-typed
+wait object and resumes via <code>.send(now_ms)</code> once its socket is
+ready or its deadline elapses.  Returns a <code>GeneratorHandle</code>
+carrying <code>.done</code> and <code>.cancel()</code>.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1423,8 +1384,8 @@ before auto-removing.  <code>None</code> means unlimited.</p>
 original schedule even when ticks run late (missed
 fires are skipped, never bursted).  When <code>False</code>
 (default), each fire reschedules <em>period_ms</em> from the
-tick that fired it — at least <em>period_ms</em> between
-fires, drifting by the tick's lateness.</p>
+tick that fired it: at least <em>period_ms</em> between fires,
+drifting by the tick's lateness.</p>
               </div>
             </td>
             <td>
@@ -1450,28 +1411,17 @@ fires, drifting by the tick's lateness.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Capture time, check tasks, then batch-fire handlers.</p>
-<ol>
-<li>Check each entry (period gate, then check gate).
-   Collect entries whose handlers should fire.</li>
-<li>Batch-fire all collected handlers.</li>
-<li>Decrement run counts and auto-remove exhausted entries.</li>
-</ol>
-<p>A <code>check</code> function must not add or remove runner tasks: phase 1
-walks the entry list in place, so a task added or removed from
-inside a check is skipped or shifts a neighbor out of this tick's
-scan.  Mutate the task set from a handler instead — phase 2 fires
-handlers off a separate batched list, so <code>add</code> and
-<code>handle.remove()</code> from a handler are safe.</p>
-<p>A handler raising <code>Exception</code> is isolated: the error is
-counted in <code>handler_errors</code>, reported to the optional
-<code>on_handler_error</code> callback, and the remaining due handlers
-still fire this tick.  <code>KeyboardInterrupt</code> / <code>SystemExit</code> /
-<code>GeneratorExit</code> are not <code>Exception</code> subclasses, so they
-still propagate and stop the loop.  A handler that re-enters
-<code>tick()</code> raises <code>ReentrantTickError</code>, which propagates past
-the isolation because re-entering the reactor is framework
-misuse, not a service fault.</p>
+        <p>Capture time, check tasks, then batch-fire due handlers.</p>
+<p>It runs in three passes: the first checks each entry (period gate,
+then check gate) and collects those whose handlers should fire; the
+second fires them; the third decrements run counts and auto-removes
+exhausted entries.</p>
+<p>A <code>check</code> function must not add or remove runner tasks (the first
+pass walks the entry list in place); mutate the task set from a
+handler instead, which the second pass fires from a separate batched
+list.  A handler that raises is isolated and counted in
+<code>handler_errors</code>; one that re-enters <code>tick()</code> raises
+<code>ReentrantTickError</code> and propagates.</p>
 
 
     <p><span class="doc-section-title">Returns:</span></p>
@@ -1537,48 +1487,25 @@ misuse, not a service fault.</p>
     <div class="doc doc-contents ">
 
         <p>Idle until a registered socket is ready or the next deadline arrives.</p>
-<p>Companion to <code>tick()</code>.  The application calls it in its loop
-right after <code>tick()</code> to let the CPU sleep between events::</p>
+<p>Companion to <code>tick()</code>, called right after it so the CPU can
+sleep between events::</p>
 <div class="language-text highlight"><pre><span></span><code>while True:
     now_ms = runner.tick()
     runner.wait(now_ms)
 </code></pre></div>
-<p>On each call <code>wait</code>:</p>
-<ol>
-<li>Re-reads each entry's optional <code>io_socket</code> and
-   <code>io_interest(now_ms)</code> bitmask and syncs the registered poll
-   set on diff (register new sockets, modify changed interest,
-   unregister stale sockets).</li>
-<li>Computes the wait timeout as the minimum of every entry's
-   <code>next_due_ms</code> and every service's
-   <code>next_deadline(now_ms)</code>, minus <em>now_ms</em>.</li>
-<li>Blocks in <code>ipoll(timeout_ms)</code> over the registered poll set
-   if any socket is registered — indefinitely when no entry
-   contributes a deadline, so a purely socket-driven service
-   set parks the CPU until an event fires.  With no sockets
-   registered, sleeps the timeout: the socket-less sleep
-   delegates to the injected tick source's <code>sleep_ms</code> when it
-   has one (so a <code>FakeTicks</code> advances its own clock instead
-   of burning wall time), otherwise the runtime
-   <code>time.sleep_ms</code> / <code>time.sleep</code>.  Returns immediately
-   when the next deadline is already due, or when there is
-   neither a socket nor a deadline to wait on.</li>
-</ol>
-<p>For each ipoll event whose mask carries POLLERR or POLLHUP
-(socket error / hangup), looks up the registered service whose
-<code>io_socket</code> matches the polled object and calls its optional
-<code>io_error(now_ms, eventmask)</code> hook so the service can transition
-cleanly to a failure state.  That delivery runs on the one
-snapshot-iterated, <code>_record_handler_fault</code>-isolated lane the
-tick handlers use, so an <code>io_error</code> that faults (or a generator
-service that lets the throw propagate) is counted and contained,
-never able to escape <code>wait()</code> or corrupt the entry list it
-dispatches over.  Services without <code>io_error</code> receive no
-notification; the runner ignores the error event and <code>check</code>
-re-gates dispatch on the next <code>tick</code> as usual.</p>
-<p>POLLIN / POLLOUT events are wake signals only -- <code>check</code> and
-<code>next_deadline</code> decide what runs.  Waking the loop and
-dispatching handlers stay separate concerns.</p>
+<p>Each call syncs the poll set from every entry's <code>io_socket</code> /
+<code>io_interest(now_ms)</code>, computes the timeout as the nearest of
+every <code>next_due_ms</code> and every service's <code>next_deadline(now_ms)</code>,
+then blocks in <code>ipoll</code> over the registered sockets (indefinitely
+when no deadline contributes) or sleeps the timeout when no socket
+is registered.  Returns immediately when the nearest deadline is
+already due, or when there is neither a socket nor a deadline to
+wait on.</p>
+<p>For each ipoll event carrying POLLERR or POLLHUP, calls the owning
+service's optional <code>io_error(now_ms, eventmask)</code> hook, isolated
+on the same fault-counting lane as tick handlers.  POLLIN / POLLOUT
+events are wake signals only; <code>check</code> and <code>next_deadline</code>
+decide what actually runs.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1630,7 +1557,7 @@ preceding <code>tick()</code> call.</p>
 
         <p>Drive <code>tick()</code> + <code>wait()</code> until <em>predicate</em> is truthy.</p>
 <p>The one-call form of the standard <code>while ...: tick(); wait()</code>
-loop that every demo would otherwise hand-roll::</p>
+loop::</p>
 <div class="language-text highlight"><pre><span></span><code>handle = runner.add_generator(echo_run(...))
 runner.run_until(handle)
 </code></pre></div>
@@ -1658,15 +1585,12 @@ then idles in <code>wait()</code> until the next event or deadline.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Either a generator handle (anything exposing
-<code>done</code>) — the loop runs until it finishes, and if the
-task died (<code>handle.error</code> set) the error is re-raised
-here so a demo fails loudly instead of exiting clean —
-or a zero-argument callable checked after each tick; the
-loop returns <code>True</code> once it is truthy.  <code>None</code> never
-completes on its own (pair with <em>timeout_ms</em>: the
-bare-timeout form reads as "run for this long", e.g. a
-QoS-ack drain window).</p>
+                <p>A generator handle (anything exposing <code>done</code>), in
+which case the loop runs until it finishes and re-raises
+<code>handle.error</code> if the task died; or a zero-argument
+callable checked after each tick, returning <code>True</code> once
+it is truthy.  <code>None</code> never completes on its own (pair
+with <em>timeout_ms</em>).</p>
               </div>
             </td>
             <td>
@@ -1683,11 +1607,10 @@ QoS-ack drain window).</p>
             <td>
               <div class="doc-md-description">
                 <p>Optional budget, checked between ticks against the
-tick source.  Best-effort: if the loop is parked in
-<code>wait()</code> on a socket with no deadline, the timeout is
-only re-checked when an event wakes it, so give the runner
-a deadline source (a periodic task, a connector) when a
-hard bound matters.</p>
+tick source.  Best-effort: while parked in <code>wait()</code> on a
+socket with no deadline it is only re-checked on the next
+wake, so give the runner a deadline source when a hard
+bound matters.</p>
               </div>
             </td>
             <td>
