@@ -854,16 +854,8 @@
     <div class="doc doc-contents first">
 
         <p>Test helpers for libraries that depend on <code>chumicro-kvstore</code>.</p>
-<p><code>FakeKVStore</code> is here for downstream libraries to test against
-instead of hand-rolling a store mock.</p>
-<p>Example::</p>
-<div class="language-text highlight"><pre><span></span><code>from chumicro_kvstore.testing import FakeKVStore
-
-store = FakeKVStore(capacity=256)        # simulate SAMD21 NVM
-store[&quot;boot_count&quot;] = 1
-store.commit()
-store.simulate_corrupt()                 # force is_corrupt next load
-</code></pre></div>
+<p><code>FakeKVStore</code> gives downstream libraries a real store to test against
+instead of hand-rolling a mock.</p>
 
 
 
@@ -901,10 +893,9 @@ store.simulate_corrupt()                 # force is_corrupt next load
 
 
 
-        <p>In-memory <code>KVStore</code> with explicit corruption + capacity hooks.</p>
-<p>Wraps <code>MemoryBackend</code> so every assertion downstream tests write
-against the real <code>KVStore</code> API exercises the same code path the
-production runtime takes.</p>
+        <p>In-memory <code>KVStore</code> with explicit corruption and capacity hooks.</p>
+<p>Wraps <code>MemoryBackend</code> so downstream tests exercise the real
+<code>KVStore</code> API and code path.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -927,8 +918,8 @@ production runtime takes.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Optional capacity override (bytes).  Drives the
-<code>KVStoreFull</code> failure path in downstream tests.</p>
+                <p>Optional capacity override in bytes, to drive the
+<code>KVStoreFull</code> path in downstream tests.</p>
               </div>
             </td>
             <td>
@@ -960,8 +951,8 @@ production runtime takes.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>When <code>True</code>, every public-API call appends an
-entry to <code>self.calls</code> for assertion.</p>
+                <p>When <code>True</code>, each public-API call appends an entry
+to <code>self.calls</code> for later assertion.</p>
               </div>
             </td>
             <td>
@@ -1005,9 +996,7 @@ entry to <code>self.calls</code> for assertion.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Return the raw msgpack bytes currently held by the backend.</p>
-<p>Useful for round-trip assertions without round-tripping through
-the public reload path.</p>
+        <p>Raw msgpack bytes currently held by the backend.</p>
 
     </div>
 
@@ -1028,9 +1017,8 @@ the public reload path.</p>
     <div class="doc doc-contents ">
 
         <p>Mark the underlying memory backend corrupt.</p>
-<p>The next <code>reload()</code> (or <code>KVStore</code> re-construction) will
-surface a corruption event.  In-memory state stays intact
-until explicitly reloaded, mirroring the production behavior.</p>
+<p>The next <code>reload()</code> surfaces the corruption; in-memory state stays
+intact until then, mirroring production behavior.</p>
 
 
     </div>
@@ -1067,11 +1055,9 @@ until explicitly reloaded, mirroring the production behavior.</p>
     <div class="doc doc-contents ">
 
         <p>Adjust the simulated capacity mid-test.</p>
-<p>Lets tests cross the <code>KVStoreFull</code> threshold deterministically
-without manufacturing a giant payload.  Updates both the backend
-and the <code>KVStore.capacity</code> snapshot taken at construction, so
-raising the cap mid-test actually takes effect (the store's own
-pre-check reads its snapshot, not the backend).</p>
+<p>Updates both the backend and the <code>KVStore.capacity</code> snapshot taken
+at construction, so a raised cap takes effect: the store's own
+pre-check reads that snapshot, not the backend.</p>
 
 
     </div>

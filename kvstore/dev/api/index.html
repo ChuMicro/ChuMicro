@@ -744,24 +744,9 @@
     <div class="doc doc-contents first">
 
         <p>Persisted runtime state for CircuitPython, MicroPython, and CPython.</p>
-<p>A tiny mutable key-value store for state that must survive reboot:
-counters, timestamps, tokens, retry budgets.  Not a config system,
-not a database.</p>
-<p>Public API::</p>
-<div class="language-text highlight"><pre><span></span><code>from chumicro_kvstore import KVStore, KVStoreFull, KVStoreCorrupt
-# KVStoreError is the shared base. Catch it for any kvstore failure.
-
-store = KVStore(backend=&quot;auto&quot;)
-store[&quot;boot_count&quot;] = store.get(&quot;boot_count&quot;, 0) + 1
-store.commit()
-</code></pre></div>
-<p>Per-runtime backends ship with the library:</p>
-<ul>
-<li><code>"nvm"</code> — CP <code>microcontroller.nvm</code> byte slab + CRC framing.</li>
-<li><code>"nvs"</code> — MP ESP32 <code>esp32.NVS</code> namespaced K-V.</li>
-<li><code>"littlefs"</code> — MP non-NVS boards; single <code>/_chu_kv.msgpack</code> file.</li>
-<li><code>"memory"</code> — CPython default + <code>FakeKVStore</code> substrate.</li>
-</ul>
+<p>A small mutable key-value store for state that must survive reboot:
+counters, timestamps, tokens, retry budgets. Not a config system, not a
+database. A per-runtime backend is selected automatically.</p>
 
 
 
@@ -820,7 +805,7 @@ store.commit()
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Backend selection — <code>"auto"</code> (default; per-runtime
+                <p>Backend selection: <code>"auto"</code> (default, per-runtime
 choice), <code>"memory"</code>, <code>"nvm"</code>, <code>"nvs"</code>, <code>"littlefs"</code>,
 or a concrete backend instance for tests.</p>
               </div>
@@ -866,11 +851,9 @@ or a concrete backend instance for tests.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Encoded size of the <em>current</em> in-memory dict (not the persisted payload).</p>
-<p>Allocates a full msgpack encode of the dict on every read just to
-measure its length, and is not memoized — so read it sparingly.
-A "how full am I?" gauge polled each tick pays the encode plus a
-transient full-payload allocation on every call.</p>
+        <p>Encoded size of the current in-memory dict, not the persisted payload.</p>
+<p>Each read runs a full msgpack encode of the dict and is not memoized,
+so read it sparingly rather than polling it every tick.</p>
 
     </div>
 
@@ -972,13 +955,34 @@ transient full-payload allocation on every call.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Commit only if the encoded payload differs from last persisted.</p>
-<p>First-line wear defense for raw-flash backends.  Returns
-<code>True</code> when a write happened, <code>False</code> when skipped.  Skips
-the encode entirely when no mapping mutator ran since the last
-persist, so scheduling it every tick costs nothing while the
-data is unchanged.  A nested value mutated in place without a
-mapping call (outside the documented API) won't be seen.</p>
+        <p>Commit only when the encoded payload changed since the last persist.</p>
+<p>This spares flash wear on raw-flash backends. The encode is skipped
+entirely when no mapping method has run since the last persist, so
+scheduling it every tick is cheap. A value mutated in place through a
+nested object (outside the mapping API) is not seen as a change.</p>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p><code>True</code> if a write happened, <code>False</code> if the commit was skipped.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
 
 
     </div>
@@ -996,10 +1000,8 @@ mapping call (outside the documented API) won't be seen.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Remove <em>key</em> and return its value; fall back to <em>default</em> if given.</p>
-<p>The variadic *default lets the caller distinguish "no default
-supplied" (raise <code>KeyError</code> on missing) from "default is
-<code>None</code>"; same idiom as <code>dict.pop</code>.</p>
+        <p>Remove <em>key</em> and return its value, or <em>default</em> when supplied.</p>
+<p>Like <code>dict.pop</code>: with no <em>default</em>, a missing key raises <code>KeyError</code>.</p>
 
 
     </div>
@@ -1067,10 +1069,10 @@ supplied" (raise <code>KeyError</code> on missing) from "default is
 
 
 
-        <p>Persisted state failed integrity check on load.</p>
-<p>Raised from explicit <code>reload()</code> only. Auto-load on construction
-surfaces corruption via the <code>is_corrupt</code> property and resets the
-store to empty so the app can keep running.</p>
+        <p>Persisted state failed its integrity check on load.</p>
+<p>Raised only from an explicit <code>reload()</code>. Auto-load on construction
+reports corruption through the <code>is_corrupt</code> property instead and
+resets the store to empty.</p>
 
 
 
@@ -1132,9 +1134,7 @@ store to empty so the app can keep running.</p>
 
 
 
-        <p>A commit would exceed <code>capacity</code>.</p>
-<p>The store's in-memory state is unchanged; callers that catch this
-typically remove a key and retry.</p>
+        <p>A commit would exceed <code>capacity</code>; the in-memory state is left unchanged.</p>
 
 
 
