@@ -1021,10 +1021,7 @@
     <div class="doc doc-contents first">
 
         <p>Test helpers for libraries that depend on chumicro-websockets.</p>
-<p>Two in-memory fakes: :class:<code>FakeConnection</code> (a bidirectional pipe
-satisfying the TCP client socket shape) and :class:<code>FakeListener</code> (a
-stand-in for :func:<code>chumicro_sockets.listener</code>). For ticks, use
-:class:<code>chumicro_timing.testing.FakeTicks</code> via the <code>ticks=</code> kwarg.</p>
+<p>The public fakes are :class:<code>FakeConnection</code> and :class:<code>FakeListener</code>.</p>
 
 
 
@@ -1061,22 +1058,6 @@ stand-in for :func:<code>chumicro_sockets.listener</code>). For ticks, use
 
 
         <p>Bidirectional in-memory pipe modeling a TCP client socket.</p>
-<p>Inject into :class:<code>WebSocketClient</code> via <code>transport_factory=lambda
-*_args, **_kwargs: FakeConnection()</code>, or hand into a
-:class:<code>Connection</code> directly. Drive the two halves with
-:meth:<code>feed_inbound</code> (bytes the local end will read) and
-:meth:<code>read_outbound</code> (drain what the local end wrote).</p>
-<p>The fake is non-blocking: an empty inbound buffer raises
-<code>OSError(EAGAIN)</code>, and :meth:<code>close_inbound</code> flips that to EOF.</p>
-<p>Error injection:</p>
-<ul>
-<li><code>raise_on_send</code> / <code>raise_on_recv</code>: set to an exception instance
-  and the next :meth:<code>send</code> / :meth:<code>recv_into</code> raises it, then resets.</li>
-<li><code>send_chunk_cap</code>: cap each :meth:<code>send</code> to this many bytes, for
-  exercising partial-send resumption.</li>
-</ul>
-<p><code>closed</code> flips <code>True</code> after :meth:<code>close</code>; <code>outbound</code> /
-<code>inbound</code> are the raw buffers (prefer the helper methods).</p>
 
 
 
@@ -1267,11 +1248,6 @@ stand-in for :func:<code>chumicro_sockets.listener</code>). For ticks, use
 
 
         <p>Stand-in for :func:<code>chumicro_sockets.listener</code>.</p>
-<p>Tests call :meth:<code>queue_accept</code> to enqueue a peer connection
-that the next :meth:<code>accept</code> call returns; an empty queue
-raises <code>OSError(EAGAIN)</code> just like a real non-blocking listener.</p>
-<p>Inject into :class:<code>WebSocketServer</code> via the <code>listener=</code>
-constructor argument.</p>
 
 
 

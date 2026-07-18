@@ -776,10 +776,7 @@
     <div class="doc doc-contents first">
 
         <p>Non-blocking WebSocket client and server for CircuitPython, MicroPython, and CPython.</p>
-<p>Both :class:<code>WebSocketClient</code> and :class:<code>WebSocketServer</code> follow the
-runner contract: :meth:<code>check</code> reports whether work is pending and
-:meth:<code>handle</code> does one slice of progress per call, so an LED can keep
-blinking through the handshake, frame I/O, and close.</p>
+<p>The public entry points are :class:<code>WebSocketClient</code> and :class:<code>WebSocketServer</code>.</p>
 
 
 
@@ -817,8 +814,7 @@ blinking through the handshake, frame I/O, and close.</p>
 
 
 
-        <p>TX queue overflowed (more than <code>max_tx_queue_size</code> outbound
-frames enqueued before the runner could drain them).</p>
+        <p>The TX queue overflowed before the runner could drain it.</p>
 
 
 
@@ -880,9 +876,7 @@ frames enqueued before the runner could drain them).</p>
 
 
 
-        <p>Opening-handshake failed: non-101 status, wrong accept token,
-missing/wrong <code>Upgrade</code>/<code>Connection</code> headers, or malformed
-HTTP/1.1 (server-side: bad method/version/key).</p>
+        <p>The opening handshake failed (bad status, headers, or HTTP framing).</p>
 
 
 
@@ -913,8 +907,7 @@ HTTP/1.1 (server-side: bad method/version/key).</p>
 
 
 
-        <p>Peer sent bytes RFC 6455 requires closing on (close with
-:data:<code>CLOSE_PROTOCOL_ERROR</code>, or :data:<code>CLOSE_BAD_DATA</code> for bad UTF-8).</p>
+        <p>Peer sent bytes that RFC 6455 requires closing the connection on.</p>
 
 
 
@@ -944,8 +937,6 @@ HTTP/1.1 (server-side: bad method/version/key).</p>
 
 
         <p>Lifecycle states for a websocket session.</p>
-<p>Forward-only <code>CONNECTING -&gt; OPEN -&gt; CLOSING -&gt; CLOSED</code>; either
-side may shortcut to <code>CLOSED</code> if the opening handshake fails.</p>
 
 
 
@@ -993,8 +984,7 @@ side may shortcut to <code>CLOSED</code> if the opening handshake fails.</p>
 
 
 
-        <p>Caller invoked an operation that requires a different state
-(e.g., <code>send_text</code> before OPEN, <code>connect</code> after OPEN).</p>
+        <p>Caller invoked an operation that requires a different session state.</p>
 
 
 
@@ -1086,9 +1076,6 @@ side may shortcut to <code>CLOSED</code> if the opening handshake fails.</p>
 
 
         <p>A complete inbound WebSocket data message returned by <code>next_message</code>.</p>
-<p><code>is_text</code> selects which field carries the payload: a text message
-holds the decoded <code>str</code> in <code>text</code> (<code>data</code> is <code>None</code>); a
-binary message holds <code>bytes</code> in <code>data</code> (<code>text</code> is <code>None</code>).</p>
 
 
 
@@ -1178,8 +1165,37 @@ binary message holds <code>bytes</code> in <code>data</code> (<code>text</code> 
     <div class="doc doc-contents ">
 
         <p>Compute <code>Sec-WebSocket-Accept</code> from the client's nonce.</p>
-<p>RFC 6455 §4.2.2: <code>base64(sha1(client_key + WS_MAGIC_GUID))</code>.
-<em>client_key</em> is the verbatim base64 nonce; do not decode it first.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>client_key</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Verbatim base64 nonce; do not decode it first.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
 
 
     </div>
@@ -1197,8 +1213,7 @@ binary message holds <code>bytes</code> in <code>data</code> (<code>text</code> 
 
     <div class="doc doc-contents ">
 
-        <p>Generate a fresh <code>Sec-WebSocket-Key</code> per RFC 6455 §4.1
-(16 random bytes, base64-encoded as ASCII <code>str</code>).</p>
+        <p>Generate a fresh <code>Sec-WebSocket-Key</code> (16 random bytes, base64 ASCII) per RFC 6455 §4.1.</p>
 
 
     </div>
@@ -1217,9 +1232,29 @@ binary message holds <code>bytes</code> in <code>data</code> (<code>text</code> 
     <div class="doc doc-contents ">
 
         <p>Split a <code>ws://</code> or <code>wss://</code> <em>url</em> into <code>(scheme, host, port, path)</code>.</p>
-<p><em>path</em> always starts with <code>/</code> and includes the query string when
-present. Raises :class:<code>WebSocketURLError</code> on a bad scheme, a missing
-host, or an out-of-range port.</p>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" href="./#chumicro_websockets.WebSocketURLError">WebSocketURLError</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Bad scheme, missing host, or out-of-range port.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
 
 
     </div>
