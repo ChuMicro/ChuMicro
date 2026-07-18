@@ -705,9 +705,6 @@
     <div class="doc doc-contents first">
 
         <p>Runner-shaped SNTP client for CircuitPython, MicroPython, and CPython.</p>
-<p>Pass any non-blocking UDP socket that offers <code>sendto</code> /
-<code>recvfrom_into</code> / <code>close</code> / <code>setblocking</code>; the client polls it each
-tick to answer "what time is it?" against an NTP server.</p>
 
 
 
@@ -744,10 +741,6 @@ tick to answer "what time is it?" against an NTP server.</p>
 
 
         <p>Runner-shaped SNTP client over an injected UDP socket.</p>
-<p>Handles one query at a time: calling :meth:<code>query</code> while :attr:<code>busy</code>
-raises <code>RuntimeError</code>. The client does not own the socket; the
-caller creates and closes it. See :meth:<code>from_config</code> to build one
-from <code>runtime_config.msgpack</code>.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -770,15 +763,7 @@ from <code>runtime_config.msgpack</code>.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>A non-blocking UDP-shaped object exposing
-<code>sendto(payload, host, port)</code>, <code>recvfrom_into(buffer)</code>,
-<code>close()</code>, and <code>setblocking(flag)</code>. <code>sendto</code> and
-<code>recvfrom_into</code> raise <code>OSError(EAGAIN | EWOULDBLOCK)</code> when
-the buffer is full or empty. :func:<code>chumicro_sockets.udp_socket</code>
-produces one; tests inject
-:class:<code>chumicro_sockets.testing.FakeUDPSocket</code>. A raw stdlib
-<code>socket.socket(SOCK_DGRAM)</code> does not fit, since its
-<code>sendto</code> takes <code>(data, address)</code> not <code>(data, host, port)</code>.</p>
+                <p>Non-blocking UDP object with sendto/recvfrom_into/close/setblocking.</p>
               </div>
             </td>
             <td>
@@ -826,8 +811,7 @@ produces one; tests inject
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Tick budget for the recv side of the exchange.
-Defaults to <code>5000</code>.</p>
+                <p>Tick budget for the recv side. Defaults to <code>5000</code>.</p>
               </div>
             </td>
             <td>
@@ -843,9 +827,7 @@ Defaults to <code>5000</code>.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Optional tick source exposing <code>ticks_ms</code>, <code>ticks_diff</code>,
-and <code>ticks_add</code> (the <code>chumicro_timing.ticks</code> shape).
-Defaults to the real clock; tests pass <code>FakeTicks</code>.</p>
+                <p>Optional tick source (<code>chumicro_timing.ticks</code> shape); defaults to the real clock.</p>
               </div>
             </td>
             <td>
@@ -937,10 +919,6 @@ Defaults to the real clock; tests pass <code>FakeTicks</code>.</p>
     <div class="doc doc-contents ">
 
         <p>Build an :class:<code>NTPClient</code> from runtime config.</p>
-<p>Reads optional <code>ntp.server</code> / <code>ntp.port</code> / <code>ntp.timeout_ms</code>,
-falling back to <code>pool.ntp.org</code> on port 123 when absent (an empty
-<code>config</code> is valid). Passing <em>socket</em> or <em>transport_factory</em>
-overrides the auto-built UDP factory.</p>
 
 
     </div>
@@ -959,11 +937,6 @@ overrides the auto-built UDP factory.</p>
     <div class="doc doc-contents ">
 
         <p>Issue a single SNTP query.</p>
-<p>Opens the UDP socket on first use when built with
-<em>transport_factory</em>, sends the 48-byte request, then arms the
-recv path that <code>check</code> / <code>handle</code> drain on later ticks. A
-synchronous <code>sendto</code> failure is not raised: it is delivered on
-the returned result (already <code>done</code> with <code>error</code> set).</p>
 
 
     <p><span class="doc-section-title">Returns:</span></p>
@@ -1077,8 +1050,6 @@ the returned result (already <code>done</code> with <code>error</code> set).</p>
     <div class="doc doc-contents ">
 
         <p>Drain one tick of work for the in-flight query.</p>
-<p>Tries to receive a response; on no data, checks the timeout.
-Either way marks the result <code>done</code> once the exchange ends.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1145,27 +1116,7 @@ Either way marks the result <code>done</code> once the exchange ends.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p><code>True</code> if a query was in flight (now marked errored</p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                  <code><span title="bool">bool</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>with <code>NTPError("canceled")</code>); <code>False</code> if the client</p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                  <code><span title="bool">bool</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>was idle.</p>
+                <p><code>True</code> if a query was in flight, <code>False</code> if the client was idle.</p>
               </div>
             </td>
           </tr>
@@ -1232,8 +1183,6 @@ Either way marks the result <code>done</code> once the exchange ends.</p>
 
 
         <p>Handle for a single in-flight SNTP exchange.</p>
-<p>Poll :attr:<code>done</code> each tick; once <code>True</code>, read :attr:<code>unix_seconds</code>
-for the timestamp or :attr:<code>error</code> for the failure that ended it.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1256,8 +1205,7 @@ for the timestamp or :attr:<code>error</code> for the failure that ended it.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Tick value when the request was issued, used to
-detect timeouts.</p>
+                <p>Tick value when the request was issued.</p>
               </div>
             </td>
             <td>
@@ -1319,9 +1267,7 @@ detect timeouts.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Re-raises the stored :attr:<code>error</code> when the exchange
-failed (an :class:<code>NTPError</code> for a protocol, timeout, or
-cancellation failure, or the raw <code>OSError</code> from send/recv).</p>
+                <p>Re-raises the stored :attr:<code>error</code> when the exchange failed.</p>
               </div>
             </td>
           </tr>
