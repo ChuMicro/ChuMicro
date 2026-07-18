@@ -6317,3 +6317,52 @@ class TestResetDevice:
         assert result == 0
         out = capsys.readouterr().out
         assert "auto-detected runtime = micropython" in out
+
+
+class TestDeployExampleLibraryResolution:
+    """deploy-example accepts the short name or the import-name form."""
+
+    def _make_lib(self, root: Path, name: str) -> None:
+        example = root / name / "examples" / "telemetry.py"
+        example.parent.mkdir(parents=True, exist_ok=True)
+        example.write_text("x = 1\n", encoding="utf-8")
+
+    def test_resolves_exact_import_name(self, tmp_path: Path) -> None:
+        from chumicro_workspace.cli.examples import _resolve_library_dir
+
+        self._make_lib(tmp_path, "chumicro_mqtt")
+        assert _resolve_library_dir(tmp_path, "chumicro_mqtt") == (
+            tmp_path / "chumicro_mqtt"
+        )
+
+    def test_resolves_short_name_to_prefixed_dir(self, tmp_path: Path) -> None:
+        # Workspace layout: libraries/chumicro_mqtt/, user types "mqtt".
+        from chumicro_workspace.cli.examples import _resolve_library_dir
+
+        self._make_lib(tmp_path, "chumicro_mqtt")
+        assert _resolve_library_dir(tmp_path, "mqtt") == (
+            tmp_path / "chumicro_mqtt"
+        )
+
+    def test_resolves_mono_repo_short_dir(self, tmp_path: Path) -> None:
+        # Mono-repo layout: libraries/mqtt/, user types "mqtt".
+        from chumicro_workspace.cli.examples import _resolve_library_dir
+
+        self._make_lib(tmp_path, "mqtt")
+        assert _resolve_library_dir(tmp_path, "mqtt") == tmp_path / "mqtt"
+
+    def test_unknown_library_returns_none(self, tmp_path: Path) -> None:
+        from chumicro_workspace.cli.examples import _resolve_library_dir
+
+        assert _resolve_library_dir(tmp_path, "nope") is None
+
+    def test_deploy_example_paths_accepts_short_name(self, tmp_path: Path) -> None:
+        import argparse
+
+        from chumicro_workspace.cli.examples import _resolve_deploy_example_paths
+
+        self._make_lib(tmp_path, "chumicro_mqtt")
+        args = argparse.Namespace(library="mqtt", example_name="telemetry")
+        paths = _resolve_deploy_example_paths(tmp_path, args)
+        assert paths.library_root == tmp_path / "chumicro_mqtt"
+        assert paths.stem == "telemetry"
