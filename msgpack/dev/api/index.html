@@ -711,12 +711,6 @@
     <div class="doc doc-contents first">
 
         <p>MessagePack serialization for CircuitPython, MicroPython, and CPython.</p>
-<p>Implements a strict subset of the <code>MessagePack spec
-&lt;https://github.com/msgpack/msgpack/blob/master/spec.md&gt;</code>_: integers in
-<code>[-2**31, 2**32-1]</code>, 32-bit floats, and strings, bytes, arrays, and
-maps up to 65 535 elements or bytes. The subset is what fits on a small
-board, but the bytes stay spec-compliant, so any standard MessagePack
-reader decodes them.</p>
 
 
 
@@ -815,10 +809,6 @@ reader decodes them.</p>
     <div class="doc doc-contents ">
 
         <p>Unpack a single object from <em>stream</em>.</p>
-<p>Reads the entire stream and decodes it as exactly one object, so
-trailing bytes raise <code>ValueError</code> and it cannot read one record
-from a multi-object or still-open stream. For framed or multi-object
-data, bound a slice yourself and use :func:<code>unpackb</code>.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -986,11 +976,6 @@ data, bound a slice yourself and use :func:<code>unpackb</code>.</p>
     <div class="doc doc-contents ">
 
         <p>Unpack msgpack <em>data</em> to a Python object.</p>
-<p>This decoder trusts the payload's type shape but is safe against
-malformed framing (bad framing and over-deep nesting raise
-<code>ValueError</code>). An array or map length is checked only against the
-remaining buffer, so do not unpack an unbounded peer-supplied blob
-(an MQTT payload, an HTTP body) without first bounding its length.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1062,9 +1047,8 @@ remaining buffer, so do not unpack an unbounded peer-supplied blob
             </td>
             <td>
               <div class="doc-md-description">
-                <p>On truncated or over-length framing, nesting beyond
-the decoder's depth bound, or bytes left over after one
-complete object.</p>
+                <p>On truncated or over-length framing, nesting beyond the
+decoder's depth bound, or bytes left over after one complete object.</p>
               </div>
             </td>
           </tr>
@@ -1098,9 +1082,6 @@ complete object.</p>
     <div class="doc doc-contents first">
 
         <p>Pure-Python msgpack encoder/decoder.</p>
-<p>Selected when the native <code>msgpack</code> C module is not available.
-Supports None, bool, int (32-bit), float (32-bit), str, bytes,
-bytearray, list, tuple, and dict.</p>
 
 
 
@@ -1206,11 +1187,6 @@ bytearray, list, tuple, and dict.</p>
     <div class="doc doc-contents ">
 
         <p>Unpack msgpack <em>data</em> to a Python object.</p>
-<p>This decoder trusts the payload's type shape but is safe against
-malformed framing (bad framing and over-deep nesting raise
-<code>ValueError</code>). An array or map length is checked only against the
-remaining buffer, so do not unpack an unbounded peer-supplied blob
-(an MQTT payload, an HTTP body) without first bounding its length.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1282,9 +1258,8 @@ remaining buffer, so do not unpack an unbounded peer-supplied blob
             </td>
             <td>
               <div class="doc-md-description">
-                <p>On truncated or over-length framing, nesting beyond
-the decoder's depth bound, or bytes left over after one
-complete object.</p>
+                <p>On truncated or over-length framing, nesting beyond the
+decoder's depth bound, or bytes left over after one complete object.</p>
               </div>
             </td>
           </tr>
@@ -1373,10 +1348,6 @@ complete object.</p>
     <div class="doc doc-contents ">
 
         <p>Unpack a single object from <em>stream</em>.</p>
-<p>Reads the entire stream and decodes it as exactly one object, so
-trailing bytes raise <code>ValueError</code> and it cannot read one record
-from a multi-object or still-open stream. For framed or multi-object
-data, bound a slice yourself and use :func:<code>unpackb</code>.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
