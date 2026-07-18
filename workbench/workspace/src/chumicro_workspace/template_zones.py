@@ -43,6 +43,9 @@ TOOL_OWNED_PATHS: frozenset[str] = frozenset({
     "AGENTS.md",  # noqa: CHU006  tool-owned template filename data
     "CONTRIBUTING.md",  # noqa: CHU006  tool-owned template filename data
     "pyproject.toml",
+    # The chumicro tooling manifest `run.py setup` installs in regular mode.
+    # Tool-owned so `update` keeps it in step with the CLI it pins.
+    "requirements.txt",
 })
 
 #: Tool-owned directory prefixes.

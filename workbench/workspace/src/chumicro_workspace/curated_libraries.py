@@ -47,6 +47,14 @@ CURATED_LIBRARIES_MARKER = (
 #: The two PyPI channels a curated library can track.
 VALID_CHANNELS = ("stable", "experimental")
 
+#: Channel a fresh workspace acquires from when the user does not pass
+#: ``--channel``.  Held at ``experimental`` while the stable channel is
+#: still being published: experimental carries the full, current library
+#: set, so a default of ``stable`` would 404 or serve a stale snapshot on a
+#: fresh clone.  Revert to ``stable`` once the stable promotion wave lands
+#: every library and the ``ChuMicro-Bundle`` repo is public.
+DEFAULT_CHANNEL = "experimental"
+
 #: ``version`` value marking a ``--floating`` entry (always-latest).
 HEAD = "HEAD"
 

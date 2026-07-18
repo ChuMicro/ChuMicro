@@ -14,6 +14,7 @@ class TestClassify:
             "AGENTS.md",  # noqa: CHU006  template-payload filename data
             "CONTRIBUTING.md",  # noqa: CHU006  template-payload filename data
             "pyproject.toml",
+            "requirements.txt",
             "projects/_template/project_config.toml",
             "projects/_template/app.py",
             ".github/skills/deploy-and-debug/SKILL.md",
