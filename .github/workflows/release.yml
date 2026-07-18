@@ -622,10 +622,14 @@ jobs:
           cd .bundle-repo
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          if git diff --quiet -- releases.json; then
+          # Stage first, then diff the index: `git diff` alone ignores an
+          # untracked file, so the first-ever run (releases.json absent) would
+          # otherwise read "unchanged" and never push.  --cached sees the new
+          # file, and stays a clean no-op on a byte-identical re-run.
+          git add releases.json
+          if git diff --cached --quiet; then
             echo "releases.json unchanged — nothing to push."
           else
-            git add releases.json
             git commit -m "release manifest: ${{ needs.bundle.outputs.date_tag }}"
             git push origin HEAD:main
           fi
