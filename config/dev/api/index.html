@@ -593,11 +593,8 @@
     <div class="doc doc-contents first">
 
         <p>Runtime-config helpers: section loader and on-device reader.</p>
-<p>Apps import :data:<code>config</code> (the lazily-loaded <code>/runtime_config.msgpack</code>,
-or <code>None</code> when absent) or :func:<code>load_runtime_config</code>. Library authors
-use :func:<code>load_section</code> / :func:<code>try_load_section</code> to build typed
-<code>&lt;Name&gt;Config</code> instances. Patterns and exceptions live in
-<code>docs/guide.md</code>.</p>
+<p>The public entry points are :data:<code>config</code>, :func:<code>load_runtime_config</code>,
+:func:<code>load_section</code>, and :func:<code>try_load_section</code>.</p>
 
 
 
@@ -727,9 +724,6 @@ use :func:<code>load_section</code> / :func:<code>try_load_section</code> to bui
 
 
         <p>Dict-like lookup over the deployed runtime config.</p>
-<p>Supports <code>config.get(key, default)</code>, <code>config[key]</code> and
-<code>config.require(key)</code> (both raise :class:<code>MissingConfigKey</code> on a
-missing key), and <code>key in config</code>.</p>
 
 
 
@@ -773,10 +767,6 @@ missing key), and <code>key in config</code>.</p>
     <div class="doc doc-contents ">
 
         <p>Build <em>target_class</em> from flat config keys sharing a <em>prefix</em>.</p>
-<p>For each name in <em>required</em> and <em>optional</em>, reads
-<code>config[f"{prefix}.{name}"]</code> and passes it to
-<code>target_class(**kwargs)</code> under that name. For soft "config not
-deployed" handling, use :func:<code>try_load_section</code> instead.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -946,9 +936,6 @@ deployed" handling, use :func:<code>try_load_section</code> instead.</p>
     <div class="doc doc-contents ">
 
         <p>Like :func:<code>load_section</code>, but return <code>None</code> instead of raising.</p>
-<p>Returns <code>None</code> on the three "section not configured" paths:
-<em>config</em> is <code>None</code>, <em>config</em> is the wrong type, or a required key
-is missing. Errors from constructing <em>target_class</em> still propagate.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
