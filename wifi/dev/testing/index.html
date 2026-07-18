@@ -1114,25 +1114,9 @@
     <div class="doc doc-contents first">
 
         <p>Test helpers for libraries that depend on <code>chumicro-wifi</code>.</p>
-<p><code>FakeWifi</code> is here for downstream libraries to test against
-instead of hand-rolling a wifi mock.</p>
-<p>Example::</p>
-<div class="language-text highlight"><pre><span></span><code>from chumicro_wifi.testing import FakeWifi
-from chumicro_timing.testing import FakeTicks
-
-fake_ticks = FakeTicks()
-fake_wifi = FakeWifi(fake_ticks)
-fake_wifi.set_connect_outcome(True)
-fake_ticks.advance(0)
-fake_wifi.tick()
-assert fake_wifi.state == &quot;connected&quot;
-</code></pre></div>
-<p>This module hosts the test fakes (<code>FakeWifi</code>,
-<code>FakeWifiAdapter</code>) plus the CPython-default adapter that
-<code>WifiService</code> falls back to when no runtime-specific adapter
-applies.  The <code>__chumicro_test_support__</code> marker below keeps the
-file off device deploys, except for the on-device unit sweep that
-stages it to exercise the fakes on real hardware.</p>
+<p>Hosts the test fakes (:class:<code>FakeWifi</code>, :class:<code>FakeWifiAdapter</code>) that
+downstream libraries drive instead of hand-rolling a wifi mock, plus the
+CPython-default adapter <code>WifiService</code> falls back to off-device.</p>
 
 
 
@@ -1171,30 +1155,15 @@ stages it to exercise the fakes on real hardware.</p>
 
 
         <p>In-memory adapter with explicit hooks for test scenarios.</p>
-<p>The connection lifecycle is driven by:</p>
-<ul>
-<li>:meth:<code>set_connect_outcome</code>: controls what the next
-  :meth:<code>connect</code> returns (<code>True</code> for success, <code>False</code> for
-  a clean refusal, an exception class to raise, or a one-shot
-  sequence via :meth:<code>set_connect_outcomes</code>).</li>
-<li>:meth:<code>drop_link</code>: simulates a link-down event.  The next
-  :meth:<code>is_linked</code> returns <code>False</code>, triggering the service's
-  reconnect path.  :meth:<code>restore_link</code> is its complement — the AP
-  coming back on its own, for modelling a flapping link.</li>
-<li>:meth:<code>set_deferred_link</code>: models a non-blocking (MicroPython)
-  association that dispatches on :meth:<code>connect</code> and reports link-up
-  only after a few :meth:<code>is_linked</code> polls, so tests can exercise
-  the service's in-flight poll window through the real
-  <code>check()</code> / <code>handle()</code> cycle.</li>
-<li><code>self.calls</code>: every adapter call (<code>configure</code>, <code>connect</code>)
-  appends a tuple so tests can assert call ordering and arguments.</li>
-</ul>
-<p><code>connect_blocks</code> defaults to <code>True</code> (a blocking substrate: a
-<code>connect() == False</code> is a settled failure).  Flip it via
-:meth:<code>set_connect_blocks</code> — or implicitly via
-:meth:<code>set_deferred_link</code> — to model the non-blocking MicroPython
-substrate, where <code>connect() == False</code> means "join dispatched,
-still in flight".</p>
+<p>Drive the connection lifecycle with :meth:<code>set_connect_outcome</code> /
+:meth:<code>set_connect_outcomes</code> (what <code>connect</code> returns or raises),
+:meth:<code>drop_link</code> / :meth:<code>restore_link</code> (model a flapping link), and
+:meth:<code>set_deferred_link</code> (model a non-blocking MicroPython join). Every
+adapter call is recorded in <code>self.calls</code> for assertions.</p>
+<p><code>connect_blocks</code> defaults to <code>True</code> (blocking substrate: a
+<code>connect() == False</code> is a settled failure). Flip it with
+:meth:<code>set_connect_blocks</code> or :meth:<code>set_deferred_link</code> to model the
+non-blocking MicroPython substrate.</p>
 
 
 
@@ -1250,7 +1219,7 @@ still in flight".</p>
 
     <div class="doc doc-contents ">
 
-        <p>Control what the next :meth:<code>connect</code> call returns / raises.</p>
+        <p>Control what the next :meth:<code>connect</code> call returns or raises.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1273,8 +1242,8 @@ still in flight".</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p><code>True</code> (success), <code>False</code> (clean refusal),
-or an exception class to raise.</p>
+                <p><code>True</code> (success), <code>False</code> (clean refusal), or an
+exception class to raise.</p>
               </div>
             </td>
             <td>
@@ -1323,10 +1292,9 @@ or an exception class to raise.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Iterable of outcome values consumed in order
-by successive :meth:<code>connect</code> calls.  After the
-queue is drained, falls back to the default set via
-:meth:<code>set_connect_outcome</code>.</p>
+                <p>Iterable of outcome values consumed in order by
+successive :meth:<code>connect</code> calls. After the queue drains,
+falls back to the default from :meth:<code>set_connect_outcome</code>.</p>
               </div>
             </td>
             <td>
@@ -1353,10 +1321,10 @@ queue is drained, falls back to the default set via
     <div class="doc doc-contents ">
 
         <p>Toggle the blocking (CP) vs non-blocking (MP) <code>connect</code> model.</p>
-<p><code>True</code> (default): a <code>connect() == False</code> is a settled
-failure.  <code>False</code>: it means "join dispatched, still in
-flight", so the service polls :meth:<code>is_linked</code> over its
-<code>connect_timeout_ms</code> window before counting a failure.</p>
+<p><code>True</code> (default): a <code>connect() == False</code> is a settled failure.
+<code>False</code>: it means "join dispatched, still in flight", so the
+service polls :meth:<code>is_linked</code> over its <code>connect_timeout_ms</code>
+window before counting a failure.</p>
 
 
     </div>
@@ -1375,11 +1343,11 @@ flight", so the service polls :meth:<code>is_linked</code> over its
     <div class="doc doc-contents ">
 
         <p>Model a non-blocking join that links after <em>link_after</em> polls.</p>
-<p>Puts the adapter in non-blocking mode (<code>connect_blocks =
-False</code>): the next :meth:<code>connect</code> dispatches and returns
-<code>False</code>, and :meth:<code>is_linked</code> reports <code>True</code> on the
-<em>link_after</em>-th poll after it — the shape of a real MicroPython
-<code>wlan.connect()</code> whose association settles over seconds.</p>
+<p>Puts the adapter in non-blocking mode (<code>connect_blocks = False</code>):
+the next :meth:<code>connect</code> dispatches and returns <code>False</code>, and
+:meth:<code>is_linked</code> reports <code>True</code> on the <em>link_after</em>-th poll,
+matching a real MicroPython <code>wlan.connect()</code> that settles over
+seconds.</p>
 
 
     </div>
@@ -1417,8 +1385,7 @@ False</code>): the next :meth:<code>connect</code> dispatches and returns
 
         <p>Simulate the AP coming back on its own (no <code>connect</code> call).</p>
 <p>Complement to :meth:<code>drop_link</code>: flips :meth:<code>is_linked</code> back to
-<code>True</code>, so tests can model a flapping link that bounces up
-between the service's <code>check()</code> and <code>handle()</code>.</p>
+<code>True</code> so tests can model a flapping link.</p>
 
 
     </div>
@@ -1451,10 +1418,9 @@ between the service's <code>check()</code> and <code>handle()</code>.</p>
 
 
         <p><code>WifiService</code> wrapping a :class:<code>FakeWifiAdapter</code> for tests.</p>
-<p>Bundles the service + adapter so tests don't have to wire them
-by hand.  Exposes the adapter's test hooks
-(<code>set_connect_outcome</code>, <code>drop_link</code>, <code>calls</code>) directly on
-the wrapper for ergonomic use in test code.</p>
+<p>Bundles the service and adapter so tests don't wire them by hand, and
+re-exposes the adapter's test hooks (<code>set_connect_outcome</code>,
+<code>drop_link</code>, <code>calls</code>) on the wrapper.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1477,9 +1443,8 @@ the wrapper for ergonomic use in test code.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>A tick source: typically a
-:class:<code>chumicro_timing.testing.FakeTicks</code> instance the
-test owns and advances explicitly.</p>
+                <p>A tick source, typically a
+:class:<code>chumicro_timing.testing.FakeTicks</code> the test advances.</p>
               </div>
             </td>
             <td>
@@ -1495,9 +1460,8 @@ test owns and advances explicitly.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Optional :class:<code>WifiConfig</code>.  When <code>None</code> a
-sensible default is used (ssid="testnet",
-password="password", short backoffs so tests run fast).</p>
+                <p>Optional :class:<code>WifiConfig</code>. When <code>None</code>, a fast-backoff
+default is used (ssid="testnet", password="password").</p>
               </div>
             </td>
             <td>
@@ -1541,7 +1505,7 @@ password="password", short backoffs so tests run fast).</p>
 
     <div class="doc doc-contents ">
 
-        <p>List of recorded adapter calls.  Assertion target for tests.</p>
+        <p>List of recorded adapter calls. Assertion target for tests.</p>
 
     </div>
 
@@ -1670,8 +1634,8 @@ password="password", short backoffs so tests run fast).</p>
     <div class="doc doc-contents ">
 
         <p>Run one runner-style <code>check</code> + <code>handle</code> cycle.</p>
-<p>Equivalent to the inner loop <code>Runner</code> would run, but
-condensed so tests don't need to wire a full <code>Runner</code>.</p>
+<p>Condenses the inner loop a <code>Runner</code> would run so tests don't need
+to wire a full <code>Runner</code>.</p>
 
 
     </div>
