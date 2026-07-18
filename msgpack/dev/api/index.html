@@ -364,28 +364,6 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#chumicro_msgpack--public-api" class="md-nav__link">
-    <span class="md-ellipsis">
-      <span class="md-typeset">
-        Public API
-      </span>
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#chumicro_msgpack--cross-runtime-compatibility" class="md-nav__link">
-    <span class="md-ellipsis">
-      <span class="md-typeset">
-        Cross-runtime compatibility
-      </span>
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#chumicro_msgpack.pack" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -578,28 +556,6 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#chumicro_msgpack--public-api" class="md-nav__link">
-    <span class="md-ellipsis">
-      <span class="md-typeset">
-        Public API
-      </span>
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#chumicro_msgpack--cross-runtime-compatibility" class="md-nav__link">
-    <span class="md-ellipsis">
-      <span class="md-typeset">
-        Cross-runtime compatibility
-      </span>
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#chumicro_msgpack.pack" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -755,40 +711,12 @@
     <div class="doc doc-contents first">
 
         <p>MessagePack serialization for CircuitPython, MicroPython, and CPython.</p>
-<p>Implements a strict 32-bit-int / 16-bit-length subset of the
-<code>MessagePack spec &lt;https://github.com/msgpack/msgpack/blob/master/spec.md&gt;</code>_:</p>
-<ul>
-<li>integers in <code>[-2**31, 2**32-1]</code>  (fixint, <code>int8/16/32</code>, <code>uint8/16/32</code>)</li>
-<li>32-bit floats only  (<code>float32</code>)</li>
-<li>strings, bytes, arrays, and maps up to 65 535 elements / bytes</li>
-</ul>
-<p>The subset is what fits on a small board, but the bytes are
-spec-compliant. Any standard MessagePack reader decodes them.</p>
-<h4 id="chumicro_msgpack--public-api">Public API<a class="headerlink" href="#chumicro_msgpack--public-api" title="Permanent link">&para;</a></h4>
-<ul>
-<li><code>packb(obj)</code> — pack a Python object to msgpack bytes.</li>
-<li><code>unpackb(data)</code> — unpack msgpack bytes to a Python object.</li>
-<li><code>pack(obj, stream)</code> — pack to a writable stream.</li>
-<li><code>unpack(stream)</code> — unpack one object from a readable stream.</li>
-</ul>
-<h4 id="chumicro_msgpack--cross-runtime-compatibility">Cross-runtime compatibility<a class="headerlink" href="#chumicro_msgpack--cross-runtime-compatibility" title="Permanent link">&para;</a></h4>
-<p>On CircuitPython boards that include the native <code>msgpack</code> module,
-all four functions delegate to the C implementation.  The pure-Python
-encoder in <code>_pure</code> is never imported, keeping heap usage lower on
-memory-tight boards.</p>
-<p>On CPython and MicroPython, the implementation is always the pure
-Python <code>_pure</code> encoder.  PyPI's <code>msgpack</code> package implements the
-<em>full</em> spec (<code>float64</code>, <code>int64</code>, <code>*32</code>-length prefixes,
-<code>strict_map_key=True</code> by default), a different contract.  Host code
-that produces bytes for a chumicro device should use
-<code>msgpack.packb(obj, use_single_float=True)</code> and stay inside the size
-limits above.  The resulting bytes are byte-for-byte identical to
-<code>chumicro_msgpack.packb(obj)</code>, pinned by the
-<code>test_byte_identity_with_pypi_msgpack</code> test in this package.</p>
-<p>Out-of-subset bytes encountered on decode (<code>0xcb</code> float64, <code>0xcf</code>
-uint64, <code>0xd3</code> int64, <code>0xc6/0xdb/0xdd/0xdf</code> <code>*32</code>-length tags)
-raise <code>ValueError</code> with a message that names the tag and points at
-the producer-side fix.</p>
+<p>Implements a strict subset of the <code>MessagePack spec
+&lt;https://github.com/msgpack/msgpack/blob/master/spec.md&gt;</code>_: integers in
+<code>[-2**31, 2**32-1]</code>, 32-bit floats, and strings, bytes, arrays, and
+maps up to 65 535 elements or bytes. The subset is what fits on a small
+board, but the bytes stay spec-compliant, so any standard MessagePack
+reader decodes them.</p>
 
 
 
@@ -822,10 +750,6 @@ the producer-side fix.</p>
     <div class="doc doc-contents ">
 
         <p>Pack <em>obj</em> to <em>stream</em> in msgpack format.</p>
-<p>On this pure-Python path the whole object is encoded to a <code>bytes</code>
-first and then written in one call, so it allocates the same as
-<code>packb</code> (plus the write); it is not the lower-allocation option
-the native encoder makes it.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -891,15 +815,10 @@ the native encoder makes it.</p>
     <div class="doc doc-contents ">
 
         <p>Unpack a single object from <em>stream</em>.</p>
-<p>On this pure-Python path the ENTIRE stream is read and decoded as
-exactly one object: trailing bytes past the first object raise
-<code>ValueError</code>, and the read consumes everything (so it can't unpack
-one object from a multi-object or still-open stream, and blocks on a
-live socket until close).  The native CircuitPython decoder instead
-reads incrementally and leaves the rest in the stream — so a
-multi-record stream only works on the native path.  For framed or
-multi-object data, drive :func:<code>unpackb</code> over an explicitly-bounded
-slice instead.</p>
+<p>Reads the entire stream and decodes it as exactly one object, so
+trailing bytes raise <code>ValueError</code> and it cannot read one record
+from a multi-object or still-open stream. For framed or multi-object
+data, bound a slice yourself and use :func:<code>unpackb</code>.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -995,12 +914,6 @@ slice instead.</p>
     <div class="doc doc-contents ">
 
         <p>Pack <em>obj</em> to msgpack bytes.</p>
-<p>Allocates a temporary <code>bytearray</code> that grows during encoding,
-then copies to <code>bytes</code>.  On this pure-Python path <code>pack(obj,
-stream)</code> does not avoid that allocation — it calls <code>packb</code> and
-writes the result — so there is no allocation reason to prefer it
-here; the no-intermediate-buffer property holds only on the native
-CircuitPython encoder.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1073,20 +986,11 @@ CircuitPython encoder.</p>
     <div class="doc doc-contents ">
 
         <p>Unpack msgpack <em>data</em> to a Python object.</p>
-<p>This is a <em>trusting</em> decoder, not a spec validator.  It is safe
-against malformed framing (truncated, over-length, or
-trailing-garbage input, and unbounded nesting, all raise
-<code>ValueError</code> rather than returning a silently-wrong result).
-It does not check that a structurally-valid payload has the type
-shape the caller expects.  Code persisting corruption- or
-attacker-reachable bytes (e.g. flash-backed config) still owns
-type-shape validation of what comes back.  It also owns a size
-bound on attacker-controlled input: an array / map element count
-is checked only against the remaining buffer, so an N-byte payload
-can allocate an N-element container (roughly 8N bytes of pointers
-on a 256 KB board).  Do not <code>unpackb</code> an unbounded peer-supplied
-blob — an MQTT payload, an HTTP body — without first bounding its
-length.</p>
+<p>This decoder trusts the payload's type shape but is safe against
+malformed framing (bad framing and over-deep nesting raise
+<code>ValueError</code>). An array or map length is checked only against the
+remaining buffer, so do not unpack an unbounded peer-supplied blob
+(an MQTT payload, an HTTP body) without first bounding its length.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1158,7 +1062,7 @@ length.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>On truncated / over-length framing, nesting beyond
+                <p>On truncated or over-length framing, nesting beyond
 the decoder's depth bound, or bytes left over after one
 complete object.</p>
               </div>
@@ -1230,12 +1134,6 @@ bytearray, list, tuple, and dict.</p>
     <div class="doc doc-contents ">
 
         <p>Pack <em>obj</em> to msgpack bytes.</p>
-<p>Allocates a temporary <code>bytearray</code> that grows during encoding,
-then copies to <code>bytes</code>.  On this pure-Python path <code>pack(obj,
-stream)</code> does not avoid that allocation — it calls <code>packb</code> and
-writes the result — so there is no allocation reason to prefer it
-here; the no-intermediate-buffer property holds only on the native
-CircuitPython encoder.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1308,20 +1206,11 @@ CircuitPython encoder.</p>
     <div class="doc doc-contents ">
 
         <p>Unpack msgpack <em>data</em> to a Python object.</p>
-<p>This is a <em>trusting</em> decoder, not a spec validator.  It is safe
-against malformed framing (truncated, over-length, or
-trailing-garbage input, and unbounded nesting, all raise
-<code>ValueError</code> rather than returning a silently-wrong result).
-It does not check that a structurally-valid payload has the type
-shape the caller expects.  Code persisting corruption- or
-attacker-reachable bytes (e.g. flash-backed config) still owns
-type-shape validation of what comes back.  It also owns a size
-bound on attacker-controlled input: an array / map element count
-is checked only against the remaining buffer, so an N-byte payload
-can allocate an N-element container (roughly 8N bytes of pointers
-on a 256 KB board).  Do not <code>unpackb</code> an unbounded peer-supplied
-blob — an MQTT payload, an HTTP body — without first bounding its
-length.</p>
+<p>This decoder trusts the payload's type shape but is safe against
+malformed framing (bad framing and over-deep nesting raise
+<code>ValueError</code>). An array or map length is checked only against the
+remaining buffer, so do not unpack an unbounded peer-supplied blob
+(an MQTT payload, an HTTP body) without first bounding its length.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1393,7 +1282,7 @@ length.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>On truncated / over-length framing, nesting beyond
+                <p>On truncated or over-length framing, nesting beyond
 the decoder's depth bound, or bytes left over after one
 complete object.</p>
               </div>
@@ -1419,10 +1308,6 @@ complete object.</p>
     <div class="doc doc-contents ">
 
         <p>Pack <em>obj</em> to <em>stream</em> in msgpack format.</p>
-<p>On this pure-Python path the whole object is encoded to a <code>bytes</code>
-first and then written in one call, so it allocates the same as
-<code>packb</code> (plus the write); it is not the lower-allocation option
-the native encoder makes it.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1488,15 +1373,10 @@ the native encoder makes it.</p>
     <div class="doc doc-contents ">
 
         <p>Unpack a single object from <em>stream</em>.</p>
-<p>On this pure-Python path the ENTIRE stream is read and decoded as
-exactly one object: trailing bytes past the first object raise
-<code>ValueError</code>, and the read consumes everything (so it can't unpack
-one object from a multi-object or still-open stream, and blocks on a
-live socket until close).  The native CircuitPython decoder instead
-reads incrementally and leaves the rest in the stream — so a
-multi-record stream only works on the native path.  For framed or
-multi-object data, drive :func:<code>unpackb</code> over an explicitly-bounded
-slice instead.</p>
+<p>Reads the entire stream and decodes it as exactly one object, so
+trailing bytes raise <code>ValueError</code> and it cannot read one record
+from a multi-object or still-open stream. For framed or multi-object
+data, bound a slice yourself and use :func:<code>unpackb</code>.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
