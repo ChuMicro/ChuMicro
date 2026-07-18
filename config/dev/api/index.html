@@ -418,17 +418,6 @@
   
 </li>
         
-          <li class="md-nav__item">
-  <a href="#chumicro_config.__getattr__" class="md-nav__link">
-    <span class="md-ellipsis">
-      <span class="md-typeset">
-        __getattr__
-      </span>
-    </span>
-  </a>
-  
-</li>
-        
       </ul>
     </nav>
   
@@ -560,17 +549,6 @@
   
 </li>
         
-          <li class="md-nav__item">
-  <a href="#chumicro_config.__getattr__" class="md-nav__link">
-    <span class="md-ellipsis">
-      <span class="md-typeset">
-        __getattr__
-      </span>
-    </span>
-  </a>
-  
-</li>
-        
       </ul>
     </nav>
   
@@ -614,12 +592,12 @@
 
     <div class="doc doc-contents first">
 
-        <p>Runtime-config helpers: section loader + on-device reader.</p>
-<p>Apps import :data:<code>config</code> (lazy-loaded <code>/runtime_config.msgpack</code>,
-or <code>None</code> when absent) or :func:<code>load_runtime_config</code> for the
-explicit read.  Library authors use :func:<code>load_section</code> /
-:func:<code>try_load_section</code> to build typed <code>&lt;Name&gt;Config</code> instances.
-Patterns and exceptions live in <code>docs/guide.md</code>.</p>
+        <p>Runtime-config helpers: section loader and on-device reader.</p>
+<p>Apps import :data:<code>config</code> (the lazily-loaded <code>/runtime_config.msgpack</code>,
+or <code>None</code> when absent) or :func:<code>load_runtime_config</code>. Library authors
+use :func:<code>load_section</code> / :func:<code>try_load_section</code> to build typed
+<code>&lt;Name&gt;Config</code> instances. Patterns and exceptions live in
+<code>docs/guide.md</code>.</p>
 
 
 
@@ -657,7 +635,7 @@ Patterns and exceptions live in <code>docs/guide.md</code>.</p>
 
 
 
-        <p>Base for every <code>chumicro-config</code> failure.</p>
+        <p>Base class for every <code>chumicro-config</code> error.</p>
 
 
 
@@ -688,7 +666,7 @@ Patterns and exceptions live in <code>docs/guide.md</code>.</p>
 
 
 
-        <p>A config value had the wrong shape (typically not a dict).</p>
+        <p>A config value had the wrong shape, usually not a dict.</p>
 
 
 
@@ -719,7 +697,7 @@ Patterns and exceptions live in <code>docs/guide.md</code>.</p>
 
 
 
-        <p>A required config key was missing.</p>
+        <p>A required config key was not present.</p>
 
 
 
@@ -748,10 +726,10 @@ Patterns and exceptions live in <code>docs/guide.md</code>.</p>
 
 
 
-        <p>Flat-key lookup wrapper over the deployed runtime config.</p>
-<p>Supports <code>config.get(key[, default])</code>, <code>config[key]</code> /
-<code>config.require(key)</code> (raises :class:<code>MissingConfigKey</code> on miss),
-and <code>key in config</code>.</p>
+        <p>Dict-like lookup over the deployed runtime config.</p>
+<p>Supports <code>config.get(key, default)</code>, <code>config[key]</code> and
+<code>config.require(key)</code> (both raise :class:<code>MissingConfigKey</code> on a
+missing key), and <code>key in config</code>.</p>
 
 
 
@@ -794,14 +772,162 @@ and <code>key in config</code>.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Build <em>target_class</em> by reading flat keys with a shared <em>prefix</em>.</p>
-<p>For each name in <em>required</em> / <em>optional</em>, reads
-<code>config[f"{prefix}.{name}"]</code> and passes it as the keyword
-argument <em>name</em> to <code>target_class(**kwargs)</code>.  Missing required
-keys raise :class:<code>MissingConfigKey</code>. A <em>config</em> that isn't a
-:class:<code>RuntimeConfig</code> / dict raises :class:<code>InvalidConfigType</code>.
-Soft "config not deployed" handling belongs in
-:func:<code>try_load_section</code>.</p>
+        <p>Build <em>target_class</em> from flat config keys sharing a <em>prefix</em>.</p>
+<p>For each name in <em>required</em> and <em>optional</em>, reads
+<code>config[f"{prefix}.{name}"]</code> and passes it to
+<code>target_class(**kwargs)</code> under that name. For soft "config not
+deployed" handling, use :func:<code>try_load_section</code> instead.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>target_class</code>
+            </td>
+            <td>
+                  <code><span title="type">type</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Class to build from the collected keyword args.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>config</code>
+            </td>
+            <td>
+                  <code><span title="object">object</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>A :class:<code>RuntimeConfig</code> or plain dict to read from.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>prefix</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Dotted prefix shared by this section's keys.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>required</code>
+            </td>
+            <td>
+                  <code><span title="tuple">tuple</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Key names that must be present.</p>
+              </div>
+            </td>
+            <td>
+                  <code>()</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>optional</code>
+            </td>
+            <td>
+                  <code><span title="dict">dict</span> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Key names mapped to the fallback used when absent.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="object">object</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>An instance of <em>target_class</em>.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" href="./#chumicro_config.MissingConfigKey">MissingConfigKey</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>A required key is missing.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" href="./#chumicro_config.InvalidConfigType">InvalidConfigType</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p><em>config</em> is <code>None</code> or not a config/dict.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
 
 
     </div>
@@ -819,35 +945,138 @@ Soft "config not deployed" handling belongs in
 
     <div class="doc doc-contents ">
 
-        <p>Soft-load: return <code>None</code> instead of the <code>ConfigError</code> raises.</p>
-<p>Three skip-paths return <code>None</code>: <em>config</em> is <code>None</code> (no
-runtime config deployed), <em>config</em> is the wrong type, or a required
-key is missing.  Treat the <code>None</code> return as "this section isn't
-configured, skip the feature."  Errors from constructing
-<em>target_class</em> (a <code>TypeError</code> for an unexpected keyword, or the
-class's own validation) are not skip-paths and propagate.</p>
+        <p>Like :func:<code>load_section</code>, but return <code>None</code> instead of raising.</p>
+<p>Returns <code>None</code> on the three "section not configured" paths:
+<em>config</em> is <code>None</code>, <em>config</em> is the wrong type, or a required key
+is missing. Errors from constructing <em>target_class</em> still propagate.</p>
 
 
-    </div>
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>target_class</code>
+            </td>
+            <td>
+                  <code><span title="type">type</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Class to build from the collected keyword args.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>config</code>
+            </td>
+            <td>
+                  <code><span title="object">object</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>A :class:<code>RuntimeConfig</code> or plain dict, or <code>None</code>.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>prefix</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Dotted prefix shared by this section's keys.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>required</code>
+            </td>
+            <td>
+                  <code><span title="tuple">tuple</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Key names that must be present.</p>
+              </div>
+            </td>
+            <td>
+                  <code>()</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>optional</code>
+            </td>
+            <td>
+                  <code><span title="dict">dict</span> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Key names mapped to the fallback used when absent.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
 
-</div>
 
-<div class="doc doc-object doc-function">
-
-
-<h3 id="chumicro_config.__getattr__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="fm">__getattr__</span><span class="p">(</span><span class="n">name</span><span class="p">)</span></code>
-
-<a href="#chumicro_config.__getattr__" class="headerlink" title="Permanent link">&para;</a></h3>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Lazy-load the runtime reader on first access (PEP 562).</p>
-<p><code>runtime</code> imports <code>chumicro_msgpack</code> at module scope, so keeping
-<code>config</code> / <code>load_runtime_config</code> out of the eager import path
-means a library that only uses <code>load_section</code> never drags the
-msgpack decoder into RAM.</p>
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="object">object</span> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>An instance of <em>target_class</em>, or <code>None</code> when the section is</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="object">object</span> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>not configured.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
 
 
     </div>
