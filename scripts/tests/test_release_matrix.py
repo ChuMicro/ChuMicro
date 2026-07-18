@@ -11,9 +11,10 @@ import release_matrix
 
 @pytest.fixture
 def fake_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """Point release_matrix at a temporary root with empty libraries/+workbench/."""
+    """Point release_matrix at a temporary root with empty libraries/, workbench/, support/."""
     (tmp_path / "libraries").mkdir()
     (tmp_path / "workbench").mkdir()
+    (tmp_path / "support").mkdir()
     monkeypatch.setattr(release_matrix, "ROOT", tmp_path)
     monkeypatch.setattr(release_matrix, "_tag_exists", lambda _: False)
     return tmp_path
@@ -63,6 +64,27 @@ class TestCollectEntries:
                 "version": "0.5.0",
                 "tag": "chumicro-deploy-v0.5.0",
                 "kind": "workbench",
+            },
+        ]
+
+    def test_collects_support_entries(self, fake_root: Path) -> None:
+        """Support packages get kind=support and the directory-basename tag.
+
+        chumicro-test-harness is the first support package to carry a
+        VERSION; publishing it is what makes libraries' [test] extra
+        installable from PyPI.
+        """
+        _make_package(fake_root / "support", "test_harness", "0.3.0")
+
+        entries = release_matrix._collect_entries(suffix="", libraries_filter=None)
+
+        assert entries == [
+            {
+                "library_name": "test_harness",
+                "library_dir": "support/test_harness",
+                "version": "0.3.0",
+                "tag": "chumicro-test_harness-v0.3.0",
+                "kind": "support",
             },
         ]
 
@@ -291,6 +313,20 @@ class TestEmitOutputs:
         entries = [
             {"library_name": "deploy", "library_dir": "workbench/deploy",
              "version": "0.1.0", "tag": "chumicro-deploy-v0.1.0", "kind": "workbench"},
+        ]
+
+        payload = release_matrix._emit_outputs(entries)
+
+        assert "has_releases=true" in payload
+        assert "has_library_releases=false" in payload
+        assert 'library_matrix={"include":[]}' in payload
+
+    def test_support_entry_excluded_from_library_matrix(self) -> None:
+        """Support entries flow into matrix but not library_matrix, so a
+        host-only package publishes to PyPI without minting a device bundle."""
+        entries = [
+            {"library_name": "test_harness", "library_dir": "support/test_harness",
+             "version": "0.3.0", "tag": "chumicro-test_harness-v0.3.0", "kind": "support"},
         ]
 
         payload = release_matrix._emit_outputs(entries)
