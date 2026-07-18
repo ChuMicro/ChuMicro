@@ -1,6 +1,6 @@
 """mqtt client: from_config construction."""
 
-from chumicro_mqtt import MQTTClient
+from chumicro_mqtt import MQTTClient, default_client_id
 from chumicro_sockets.testing import FakeSocket, FakeSocketConnector
 
 
@@ -41,7 +41,10 @@ class TestFromConfig:
         client = MQTTClient.from_config(
             {}, transport_factory=self._injected_factory(sock),
         )
-        assert client._client_id == "chumicro-mqtt"  # noqa: SLF001
+        # No mqtt.client_id in config → a stable per-device id, not the old
+        # fixed "chumicro-mqtt" that collided across devices on one broker.
+        assert client._client_id == default_client_id()  # noqa: SLF001
+        assert client._client_id.startswith("chumicro-")  # noqa: SLF001
         assert client._keep_alive_seconds == 60  # noqa: SLF001
         assert client._username is None  # noqa: SLF001
         assert client._password is None  # noqa: SLF001
@@ -80,3 +83,16 @@ class TestFromConfig:
         )
         assert client._client_id == "rc-test"  # noqa: SLF001
         assert client._keep_alive_seconds == 45  # noqa: SLF001
+
+
+class TestDefaultClientId:
+    """default_client_id derives a stable per-device MQTT id."""
+
+    def test_starts_with_prefix_and_is_stable(self) -> None:
+        first = default_client_id()
+        assert first.startswith("chumicro-")
+        # Stable across calls (same host UID), so a persistent session resumes.
+        assert first == default_client_id()
+
+    def test_custom_prefix(self) -> None:
+        assert default_client_id(prefix="dev").startswith("dev-")

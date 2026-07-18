@@ -15,7 +15,13 @@ gc.collect()
 
 
 def __getattr__(name):
-    if name in ("InboundPublish", "MQTTClient", "ProtocolState", "WhenOversized"):
+    if name in (
+        "InboundPublish",
+        "MQTTClient",
+        "ProtocolState",
+        "WhenOversized",
+        "default_client_id",
+    ):
         # Lazy-import the largest module so boards that never build a client
         # pay no RAM; collect first so it compiles into a swept heap.
         gc.collect()
@@ -38,6 +44,7 @@ __all__ = [
     "ProtocolState",
     "UnsupportedQoSError",
     "WhenOversized",
+    "default_client_id",
     "topic_matches",
 ]
 

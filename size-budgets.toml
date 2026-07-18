@@ -56,7 +56,7 @@ mpy = 2652
 
 [mqtt]
 stripped = 59412
-mpy = 20934
+mpy = 21516
 
 [msgpack]
 stripped = 10733

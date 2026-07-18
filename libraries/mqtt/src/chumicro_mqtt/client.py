@@ -141,6 +141,35 @@ def _force_non_blocking(socket):
         pass
 
 
+def default_client_id(prefix="chumicro"):
+    """Return a stable per-device MQTT client id ``<prefix>-<uid-hex>``.
+
+    Unique across devices, stable across reboots (so a persistent session
+    resumes rather than colliding on a shared broker).  The UID comes from
+    ``microcontroller.cpu.uid`` (CircuitPython), ``machine.unique_id()``
+    (MicroPython), or the host MAC via ``uuid.getnode()`` (CPython); each is
+    guarded, and if none works the historical ``<prefix>-mqtt`` is returned.
+    """
+    guarded = (ImportError, AttributeError, OSError, NotImplementedError)
+    uid = None
+    try:
+        import microcontroller  # noqa: PLC0415 - CircuitPython, import-guarded
+        uid = bytes(microcontroller.cpu.uid)
+    except guarded:
+        try:
+            import machine  # noqa: PLC0415 - MicroPython, import-guarded
+            uid = bytes(machine.unique_id())
+        except guarded:
+            try:
+                import uuid  # noqa: PLC0415 - CPython standard library
+                uid = uuid.getnode().to_bytes(6, "big")
+            except guarded:
+                uid = None
+    if not uid:
+        return prefix + "-mqtt"
+    return prefix + "-" + "".join(f"{byte:02x}" for byte in uid)
+
+
 class MQTTClient:
     """Non-blocking MQTT 3.1.1 client (QoS 0 + 1)."""
 
@@ -187,7 +216,7 @@ class MQTTClient:
         return cls(
             socket=socket,
             transport_factory=transport_factory,
-            client_id=config.get("mqtt.client_id", "chumicro-mqtt"),
+            client_id=config.get("mqtt.client_id") or default_client_id(),
             keep_alive_seconds=config.get("mqtt.keep_alive_seconds", 60),
             username=config.get("mqtt.username"),
             password=config.get("mqtt.password"),
