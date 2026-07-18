@@ -693,8 +693,10 @@ class TestPatchExperimental:
         assert "msgpack-experimental" not in patched
         assert "ruamel.yaml-experimental" not in patched
 
-    def test_leaves_optional_dependencies_untouched(self, tmp_path: Path):
-        """The rewrite is scoped to [project].dependencies only."""
+    def test_rewrites_optional_dependencies(self, tmp_path: Path):
+        """Intra-chumicro [test] extras are rewritten too, so
+        `pip install chumicro-<lib>-experimental[test]` resolves against the
+        experimental test tooling.  Non-chumicro extras (pytest) are left."""
         pyproject_content = (
             '[project]\n'
             'name = "chumicro-http-server"\n'
@@ -704,7 +706,9 @@ class TestPatchExperimental:
             '\n'
             '[project.optional-dependencies]\n'
             'test = [\n'
+            '    "pytest",\n'
             '    "chumicro-config",\n'
+            '    "chumicro-test-harness",\n'
             ']\n'
         )
         library_dir = tmp_path / "http_server"
@@ -714,9 +718,13 @@ class TestPatchExperimental:
         patch_experimental(library_dir)
 
         patched = (library_dir / "pyproject.toml").read_text()
-        # The runtime dep is rewritten; the test-extra dep is preserved.
-        assert patched.count('"chumicro-config-experimental"') == 1
-        assert patched.count('"chumicro-config"') == 1
+        # Runtime dep + the test-extra copy of it are both rewritten.
+        assert patched.count('"chumicro-config-experimental"') == 2
+        assert patched.count('"chumicro-config"') == 0
+        assert '"chumicro-test-harness-experimental"' in patched
+        # Non-chumicro extras stay put.
+        assert '"pytest"' in patched
+        assert "experimental-experimental" not in patched
 
     def test_package_with_no_deps(self, tmp_path: Path):
         """A package with no dependencies patches name/URLs and no more."""
@@ -782,8 +790,9 @@ class TestPatchExperimental:
         assert "experimental-experimental" not in patched
 
     def test_single_line_dependencies_array(self, tmp_path: Path):
-        """A one-line dependencies array is rewritten without the span
-        spilling into [project.optional-dependencies]."""
+        """A one-line runtime array and the [test] extra are each rewritten
+        exactly once — the runtime span finder does not spill into the
+        optional-dependencies table, and the optional rewrite handles it."""
         pyproject_content = (
             '[project]\n'
             'name = "chumicro-workspace"\n'
@@ -801,10 +810,10 @@ class TestPatchExperimental:
         patch_experimental(library_dir)
 
         patched = (library_dir / "pyproject.toml").read_text()
-        # The runtime dep is rewritten; the test-extra dep is preserved.
-        assert patched.count('"chumicro-msgpack-experimental>=0.2.0"') == 1
-        assert patched.count('"chumicro-msgpack>=0.2.0"') == 1
-        assert '    "chumicro-msgpack>=0.2.0",' in patched
+        # Both copies (runtime + test extra) rewritten exactly once each.
+        assert patched.count('"chumicro-msgpack-experimental>=0.2.0"') == 2
+        assert patched.count('"chumicro-msgpack>=0.2.0"') == 0
+        assert "experimental-experimental" not in patched
 
     def test_single_line_dependencies_at_end_of_file(self, tmp_path: Path):
         """A one-line array with no later bare ']' line patches instead of

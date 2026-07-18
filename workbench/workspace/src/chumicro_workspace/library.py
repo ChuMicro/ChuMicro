@@ -26,6 +26,7 @@ from collections.abc import Callable
 from enum import Enum
 from pathlib import Path
 
+from chumicro_workspace.curated_libraries import DEFAULT_CHANNEL
 from chumicro_workspace.dep_resolver import (
     chumicro_dependencies,
     transitive_closure,
@@ -210,7 +211,7 @@ def _real_http_get(url: str) -> bytes:
 def fetch_library(
     package: str,
     *,
-    channel: str = "stable",
+    channel: str = DEFAULT_CHANNEL,
     version: str = HEAD,
     workspace_root: Path,
     http_get: Callable[[str], bytes] = _real_http_get,
@@ -233,7 +234,7 @@ def fetch_library(
 def fetch_closure(
     root: str,
     *,
-    channel: str = "stable",
+    channel: str = DEFAULT_CHANNEL,
     version: str = HEAD,
     workspace_root: Path,
     http_get: Callable[[str], bytes] = _real_http_get,

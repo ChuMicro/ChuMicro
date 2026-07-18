@@ -121,7 +121,9 @@ class TestAdd:
         }
         for name in table:
             assert (tmp_path / "libraries" / name / "src").is_dir()
-            assert table[name].channel == "stable"
+            # No --channel passed → records the DEFAULT_CHANNEL (experimental
+            # while the stable wave is still publishing).
+            assert table[name].channel == "experimental"
             assert table[name].version == "0.9.0"
 
     def test_pin_records_version(self, tmp_path: Path):

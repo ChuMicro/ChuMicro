@@ -868,6 +868,85 @@ def _rewrite_experimental_dependencies(
     return content[:open_index] + block + content[close_index:]
 
 
+def _optional_dependencies_span(content: str) -> tuple[int, int] | None:
+    """Return the ``[start, end)`` char slice of the
+    ``[project.optional-dependencies]`` table, or ``None`` when absent.
+
+    The table opens at its header line and runs until the next table header
+    (a line whose first non-space character is ``[``) or end of file.
+    Scoping the rewrite to this block keeps it off the main
+    ``[project].dependencies`` array and every ``[tool.*]`` table.
+
+    Args:
+        content: Raw pyproject.toml text.
+    """
+    offset = 0
+    open_index: int | None = None
+    for line in content.splitlines(keepends=True):
+        stripped = line.strip()
+        if open_index is None:
+            if stripped == "[project.optional-dependencies]":
+                open_index = offset
+        elif stripped.startswith("["):
+            return open_index, offset
+        offset += len(line)
+    if open_index is not None:
+        return open_index, len(content)
+    return None
+
+
+def _rewrite_experimental_optional_dependencies(
+    content: str,
+    optional_dependencies: dict[str, list[str]],
+    pyproject_path: Path,
+) -> str:
+    """Rewrite intra-chumicro ``[project.optional-dependencies]`` entries.
+
+    A library's ``test`` extra pins ``chumicro-test-harness`` /
+    ``chumicro-pytest-device`` / ``chumicro-workspace``; on the pre-release
+    channel the stable projects don't exist, so an unrewritten extra makes
+    ``pip install chumicro-<lib>-experimental[test]`` fail to resolve.  Every
+    ``chumicro-*`` entry across every extra gets ``-experimental`` appended,
+    mirroring :func:`_rewrite_experimental_dependencies` (non-chumicro deps
+    such as ``pytest`` untouched).
+
+    Args:
+        content: Raw pyproject.toml text.
+        optional_dependencies: The parsed ``[project.optional-dependencies]``
+            table (extra name -> dependency list).
+        pyproject_path: Source path, for the error message when the table
+            can't be located.
+    """
+    chumicro_dependencies = [
+        dependency
+        for extra_dependencies in optional_dependencies.values()
+        for dependency in extra_dependencies
+        if strip_pip_dependency_version(dependency).startswith("chumicro-")
+    ]
+    if not chumicro_dependencies:
+        return content
+
+    span = _optional_dependencies_span(content)
+    if span is None:
+        # tomllib parsed chumicro extras but the raw table can't be located
+        # for a scoped rewrite — fail rather than ship an uninstallable
+        # experimental [test] extra.
+        sys.exit(
+            f"Cannot locate [project.optional-dependencies] in {pyproject_path}"
+        )
+
+    open_index, close_index = span
+    block = content[open_index:close_index]
+    for dependency in chumicro_dependencies:
+        experimental = _experimental_dependency(dependency)
+        for quote in ('"', "'"):
+            block = block.replace(
+                f"{quote}{dependency}{quote}",
+                f"{quote}{experimental}{quote}",
+            )
+    return content[:open_index] + block + content[close_index:]
+
+
 def _patch_experimental_readme(readme_path: Path, name: str) -> None:
     """Patch a library's README.md for experimental channel release.
 
@@ -966,6 +1045,14 @@ def patch_experimental(library_dir: Path) -> None:
     #    stable projects (which don't, on the pre-release channel).
     content = _rewrite_experimental_dependencies(
         content, project.get("dependencies", []), pyproject_path,
+    )
+
+    # 2b. Rewrite intra-chumicro optional-dependencies the same way, so
+    #     `pip install chumicro-<lib>-experimental[test]` resolves against
+    #     the experimental test tooling instead of the stable projects that
+    #     don't exist on the pre-release channel.
+    content = _rewrite_experimental_optional_dependencies(
+        content, project.get("optional-dependencies", {}), pyproject_path,
     )
 
     # 3. Point Bundle URL to the experimental bundle repository.

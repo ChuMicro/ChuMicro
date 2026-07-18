@@ -89,9 +89,14 @@ def _collect_entries(
     """
     entries: list[dict[str, str]] = []
     discovered_names: set[str] = set()
+    # support/ packages are host-only infrastructure (Decision 0032 keeps them
+    # out of the device bundle, same as workbench). A support package only
+    # publishes once it carries a VERSION file — chumicro-test-harness is the
+    # first, so the [test] extra libraries declare becomes installable.
     parents: list[tuple[Path, str]] = [
         (ROOT / "libraries", "library"),
         (ROOT / "workbench", "workbench"),
+        (ROOT / "support", "support"),
     ]
     for parent_dir, kind in parents:
         if not parent_dir.is_dir():

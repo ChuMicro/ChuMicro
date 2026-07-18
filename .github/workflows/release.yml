@@ -7,6 +7,10 @@ on:
     paths:
       - "libraries/*/VERSION"
       - "workbench/*/VERSION"
+      # support/ packages publish once they carry a VERSION (Decision 0111);
+      # chumicro-test-harness is the first. Kept out of the device bundle,
+      # same as workbench (Decision 0032).
+      - "support/*/VERSION"
   workflow_dispatch:
     inputs:
       libraries:

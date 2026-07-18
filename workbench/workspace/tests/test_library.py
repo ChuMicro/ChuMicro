@@ -12,6 +12,7 @@ import tarfile
 from pathlib import Path
 
 import pytest
+from chumicro_workspace.curated_libraries import DEFAULT_CHANNEL
 from chumicro_workspace.library import (
     LOCAL_EDIT_SENTINEL,
     LibraryFetchError,
@@ -22,9 +23,12 @@ from chumicro_workspace.library import (
     read_installed_version,
     remove_library,
 )
-from chumicro_workspace.library_channel import index_url, tarball_url
+from chumicro_workspace.library_channel import channel_repo, index_url, tarball_url
 
-_REPO = "ChuMicro/ChuMicro-Libraries"
+# The channel-less fetch_* calls below resolve to DEFAULT_CHANNEL, so the
+# served fixtures must key on that channel's repo (tracks the default
+# through any future stable/experimental flip).
+_REPO = channel_repo(DEFAULT_CHANNEL)
 
 
 def _pyproject(deps: tuple[str, ...]) -> bytes:

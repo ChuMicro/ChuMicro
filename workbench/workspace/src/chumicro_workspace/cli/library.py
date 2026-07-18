@@ -35,6 +35,7 @@ from chumicro_workspace.cli.library_browser import (
     run_library_browser,
 )
 from chumicro_workspace.curated_libraries import (
+    DEFAULT_CHANNEL,
     HEAD,
     VALID_CHANNELS,
     CuratedLibrary,
@@ -522,8 +523,8 @@ def _add_library_parsers(subparsers: argparse._SubParsersAction) -> None:
         help="Interactive catalog browser (TTY only; scripted? use 'add').",
     )
     browse_parser.add_argument(
-        "--channel", choices=VALID_CHANNELS, default="stable",
-        help="Channel to open on (Tab toggles in-app; default: stable).",
+        "--channel", choices=VALID_CHANNELS, default=DEFAULT_CHANNEL,
+        help=f"Channel to open on (Tab toggles in-app; default: {DEFAULT_CHANNEL}).",
     )
     _add_workspace_arg(browse_parser)
     browse_parser.set_defaults(func=_cmd_library_browse)
@@ -533,8 +534,8 @@ def _add_library_parsers(subparsers: argparse._SubParsersAction) -> None:
     )
     add_parser.add_argument("name", help="Import name, e.g. chumicro_mqtt.")
     add_parser.add_argument(
-        "--channel", choices=VALID_CHANNELS, default="stable",
-        help="Release channel (default: stable).",
+        "--channel", choices=VALID_CHANNELS, default=DEFAULT_CHANNEL,
+        help=f"Release channel (default: {DEFAULT_CHANNEL}).",
     )
     add_parser.add_argument(
         "--version", default=None,

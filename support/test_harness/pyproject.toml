@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "chumicro-test-harness"
-version = "0.3.0"
+dynamic = ["version"]
 description = "Minimal cross-runtime test runner for ChuMicro libraries (workspace-internal)."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -15,6 +15,12 @@ authors = [
 
 [tool.setuptools]
 package-dir = {"" = "src"}
+
+# Single source of version truth: the VERSION file the release matrix keys
+# the tag on (mirrors the hatch `[tool.hatch.version] path = "VERSION"` every
+# library uses, expressed for this package's setuptools backend).
+[tool.setuptools.dynamic]
+version = { file = "VERSION" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
