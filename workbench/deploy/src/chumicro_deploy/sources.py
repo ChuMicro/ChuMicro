@@ -65,10 +65,11 @@ class UnresolvedImportError(Exception):
             f"{'s' if len(self.unresolved) != 1 else ''}.\n"
             f"{body}\n"
             "Register the module under a deploy search path, fix the typo, "
-            "or — if it is a genuine runtime built-in — add it to "
-            "DEVICE_BUILTIN_MODULES in chumicro_deploy/import_allowlist.py.  "
-            "An ImportError-guarded import (try/except ImportError) is "
-            "treated as optional and never refused."
+            "or — if it is a genuine runtime built-in — list it in the "
+            "CHUMICRO_DEPLOY_EXTRA_BUILTINS environment variable "
+            "(comma-separated top-level names).  An ImportError-guarded "
+            "import (try/except ImportError) is treated as optional and "
+            "never refused."
         )
 
 

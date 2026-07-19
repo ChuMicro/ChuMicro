@@ -27,9 +27,17 @@ CircuitPython 10.2.0 ``shared-bindings/`` directory names (each directory is
 one importable built-in) plus its stdlib ``MP_REGISTER_EXTENSIBLE_MODULE``
 set.  Maintained by hand: when a runtime adds a built-in a project imports, add
 the name here.
+
+A pip-installed consumer cannot edit this file, so the
+``CHUMICRO_DEPLOY_EXTRA_BUILTINS`` environment variable (comma-separated
+top-level names) extends the set without touching installed source — the
+unblock for a board whose firmware carries a frozen or vendor module this
+list doesn't know.  The durable fix is still adding the name here upstream.
 """
 
 from __future__ import annotations
+
+import os
 
 #: CPython-compatible stdlib both runtimes ship as C built-ins, plus the core
 #: always-present names (``builtins``, ``sys``, ``gc``, ``micropython``).
@@ -195,12 +203,27 @@ DEVICE_BUILTIN_MODULES: frozenset[str] = (
 )
 
 
+#: Environment variable extending the built-in set for pip-installed
+#: consumers: comma-separated top-level module names.
+EXTRA_BUILTINS_ENV = "CHUMICRO_DEPLOY_EXTRA_BUILTINS"
+
+
+def _extra_builtins() -> frozenset[str]:
+    """Consumer-declared built-in names from the environment.
+
+    Read per call so a shell export takes effect without re-importing.
+    """
+    raw = os.environ.get(EXTRA_BUILTINS_ENV, "")
+    return frozenset(name.strip() for name in raw.split(",") if name.strip())
+
+
 def is_device_builtin(module_name: str) -> bool:
     """Return whether *module_name*'s top-level package is a runtime built-in.
 
     A dotted name (``collections.deque``) is a built-in when its first segment
     (``collections``) is on :data:`DEVICE_BUILTIN_MODULES` — a runtime built-in
     package owns its whole subtree, none of which the host can supply as a file.
+    Names listed in :data:`EXTRA_BUILTINS_ENV` count as built-ins too.
     """
     top_level = module_name.split(".", 1)[0]
-    return top_level in DEVICE_BUILTIN_MODULES
+    return top_level in DEVICE_BUILTIN_MODULES or top_level in _extra_builtins()
