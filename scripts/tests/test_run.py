@@ -6,7 +6,9 @@ from pathlib import Path
 
 import pytest
 import run
-from run import _parse_library_filters
+from run_tasks import _dispatch, functional, testing_cpython, testing_crossruntime
+from run_tasks import preflight as preflight_tasks
+from run_tasks.testing_cpython import _parse_library_filters
 
 
 def _make_fake_command(return_value: int = 0):
@@ -191,9 +193,9 @@ class TestMainDispatch:
                 "no_cov": True,
                 "coverage_threshold": None,
                 "elevated_packages": None,
-                "package_workers": run._DEFAULT_PACKAGE_PARALLEL_WORKERS,
+                "package_workers": _dispatch._DEFAULT_PACKAGE_PARALLEL_WORKERS,
                 "quiet": False,
-                "slow_test_threshold_s": run._DEFAULT_SLOW_TEST_THRESHOLD_CPYTHON,
+                "slow_test_threshold_s": _dispatch._DEFAULT_SLOW_TEST_THRESHOLD_CPYTHON,
                 "allow_no_tests": False,
             }),
         ]
@@ -221,9 +223,9 @@ class TestMainDispatch:
                 "no_cov": False,
                 "coverage_threshold": None,
                 "elevated_packages": None,
-                "package_workers": run._DEFAULT_PACKAGE_PARALLEL_WORKERS,
+                "package_workers": _dispatch._DEFAULT_PACKAGE_PARALLEL_WORKERS,
                 "quiet": False,
-                "slow_test_threshold_s": run._DEFAULT_SLOW_TEST_THRESHOLD_CPYTHON,
+                "slow_test_threshold_s": _dispatch._DEFAULT_SLOW_TEST_THRESHOLD_CPYTHON,
                 "allow_no_tests": False,
             }),
         ]
@@ -296,7 +298,7 @@ class TestMainDispatch:
         assert command_calls == [
             ((resolved_packages,), {
                 "serve": True,
-                "package_workers": run._DEFAULT_PACKAGE_PARALLEL_WORKERS,
+                "package_workers": _dispatch._DEFAULT_PACKAGE_PARALLEL_WORKERS,
                 "quiet": False,
             }),
         ]
@@ -405,10 +407,10 @@ class TestMainDispatch:
                     "with_functional": False,
                     "with_device_unit": False,
                     "phase_workers": None,
-                    "package_workers": run._DEFAULT_PACKAGE_PARALLEL_WORKERS,
+                    "package_workers": _dispatch._DEFAULT_PACKAGE_PARALLEL_WORKERS,
                     "quiet": False,
-                    "slow_test_threshold_cpython": run._DEFAULT_SLOW_TEST_THRESHOLD_CPYTHON,
-                    "slow_test_threshold_unix_port": run._DEFAULT_SLOW_TEST_THRESHOLD_UNIX_PORT,
+                    "slow_test_threshold_cpython": _dispatch._DEFAULT_SLOW_TEST_THRESHOLD_CPYTHON,
+                    "slow_test_threshold_unix_port": _dispatch._DEFAULT_SLOW_TEST_THRESHOLD_UNIX_PORT,
                 },
             ),
         ]
@@ -434,7 +436,7 @@ class TestMainDispatch:
         ])
 
         unix_port_kwargs = {
-            "slow_test_threshold_s": run._DEFAULT_SLOW_TEST_THRESHOLD_UNIX_PORT,
+            "slow_test_threshold_s": _dispatch._DEFAULT_SLOW_TEST_THRESHOLD_UNIX_PORT,
         }
         assert micropython_result == 43
         assert circuitpython_result == 47
@@ -462,7 +464,7 @@ class TestMainDispatch:
         assert result == 49
         assert command_calls == [
             ((None, resolved_packages), {
-                "slow_test_threshold_s": run._DEFAULT_SLOW_TEST_THRESHOLD_UNIX_PORT,
+                "slow_test_threshold_s": _dispatch._DEFAULT_SLOW_TEST_THRESHOLD_UNIX_PORT,
             }),
         ]
 
@@ -480,7 +482,7 @@ class TestMainDispatch:
         assert result == 53
         assert command_calls == [
             (("/tmp/mpy", "/tmp/cpy", None), {
-                "slow_test_threshold_s": run._DEFAULT_SLOW_TEST_THRESHOLD_UNIX_PORT,
+                "slow_test_threshold_s": _dispatch._DEFAULT_SLOW_TEST_THRESHOLD_UNIX_PORT,
             }),
         ]
 
@@ -500,7 +502,7 @@ class TestMainDispatch:
         assert result == 57
         assert command_calls == [
             ((None, None, resolved_packages), {
-                "slow_test_threshold_s": run._DEFAULT_SLOW_TEST_THRESHOLD_UNIX_PORT,
+                "slow_test_threshold_s": _dispatch._DEFAULT_SLOW_TEST_THRESHOLD_UNIX_PORT,
             }),
         ]
 
@@ -522,10 +524,10 @@ class TestMainDispatch:
                     "with_functional": True,
                     "with_device_unit": False,
                     "phase_workers": None,
-                    "package_workers": run._DEFAULT_PACKAGE_PARALLEL_WORKERS,
+                    "package_workers": _dispatch._DEFAULT_PACKAGE_PARALLEL_WORKERS,
                     "quiet": False,
-                    "slow_test_threshold_cpython": run._DEFAULT_SLOW_TEST_THRESHOLD_CPYTHON,
-                    "slow_test_threshold_unix_port": run._DEFAULT_SLOW_TEST_THRESHOLD_UNIX_PORT,
+                    "slow_test_threshold_cpython": _dispatch._DEFAULT_SLOW_TEST_THRESHOLD_CPYTHON,
+                    "slow_test_threshold_unix_port": _dispatch._DEFAULT_SLOW_TEST_THRESHOLD_UNIX_PORT,
                 },
             ),
         ]
@@ -796,7 +798,7 @@ class TestPassThroughShims:
 
 
 class TestTestWorkbenchFunctional:
-    """Tests for run.test_workbench_functional — workbench functional-test orchestration."""
+    """Tests for functional.test_workbench_functional — workbench functional-test orchestration."""
 
     def _stub_discovery(self, monkeypatch, tmp_path: Path) -> list[Path]:
         """Build two fake workbench packages and return their paths.
@@ -808,18 +810,18 @@ class TestTestWorkbenchFunctional:
         (alpha / "functional_tests").mkdir(parents=True)
         beta = tmp_path / "beta"
         beta.mkdir()
-        monkeypatch.setattr(run, "discover_workbench_dirs", lambda: [alpha, beta])
+        monkeypatch.setattr(functional, "discover_workbench_dirs", lambda: [alpha, beta])
         return [alpha, beta]
 
     def _record_invocations(self, monkeypatch) -> list[list[str]]:
-        """Replace ``run.run_command`` with a recorder that returns 0."""
+        """Replace ``functional.run_command`` with a recorder that returns 0."""
         invocations: list[list[str]] = []
 
         def fake_run_command(command, **_kwargs):
             invocations.append(command)
             return 0
 
-        monkeypatch.setattr(run, "run_command", fake_run_command)
+        monkeypatch.setattr(functional, "run_command", fake_run_command)
         return invocations
 
     def test_runs_pytest_for_every_workbench_with_functional_tests(
@@ -829,7 +831,7 @@ class TestTestWorkbenchFunctional:
         alpha, _beta = self._stub_discovery(monkeypatch, tmp_path)
         invocations = self._record_invocations(monkeypatch)
 
-        result = run.test_workbench_functional()
+        result = functional.test_workbench_functional()
 
         assert result == 0
         assert len(invocations) == 1
@@ -842,7 +844,7 @@ class TestTestWorkbenchFunctional:
         alpha, _beta = self._stub_discovery(monkeypatch, tmp_path)
         invocations = self._record_invocations(monkeypatch)
 
-        result = run.test_workbench_functional(workbench="alpha")
+        result = functional.test_workbench_functional(workbench="alpha")
 
         assert result == 0
         assert len(invocations) == 1
@@ -853,9 +855,9 @@ class TestTestWorkbenchFunctional:
     ) -> None:
         """--workbench with no matching package errors out."""
         self._stub_discovery(monkeypatch, tmp_path)
-        monkeypatch.setattr(run, "run_command", lambda *_args, **_kwargs: 0)
+        monkeypatch.setattr(functional, "run_command", lambda *_args, **_kwargs: 0)
 
-        result = run.test_workbench_functional(workbench="ghost")
+        result = functional.test_workbench_functional(workbench="ghost")
 
         assert result == 1
         captured = capsys.readouterr()
@@ -868,7 +870,7 @@ class TestTestWorkbenchFunctional:
         self._stub_discovery(monkeypatch, tmp_path)
         invocations = self._record_invocations(monkeypatch)
 
-        result = run.test_workbench_functional(
+        result = functional.test_workbench_functional(
             file_filter="test_deploy_files_hardware",
             function_filter="circuitpython_ram",
         )
@@ -888,12 +890,12 @@ class TestTestWorkbenchFunctional:
         gamma = tmp_path / "gamma"
         (gamma / "functional_tests").mkdir(parents=True)
         monkeypatch.setattr(
-            run, "discover_workbench_dirs", lambda: [alpha, gamma],
+            functional, "discover_workbench_dirs", lambda: [alpha, gamma],
         )
         return_values = iter([5, 0])
-        monkeypatch.setattr(run, "run_command", lambda *_args, **_kwargs: next(return_values))
+        monkeypatch.setattr(functional, "run_command", lambda *_args, **_kwargs: next(return_values))
 
-        result = run.test_workbench_functional()
+        result = functional.test_workbench_functional()
 
         assert result == 5
 
@@ -901,10 +903,10 @@ class TestTestWorkbenchFunctional:
         self, monkeypatch, capsys,
     ) -> None:
         """No workbench package with fn-tests prints a note and returns 0."""
-        monkeypatch.setattr(run, "discover_workbench_dirs", lambda: [])
-        monkeypatch.setattr(run, "run_command", lambda *_args, **_kwargs: 0)
+        monkeypatch.setattr(functional, "discover_workbench_dirs", lambda: [])
+        monkeypatch.setattr(functional, "run_command", lambda *_args, **_kwargs: 0)
 
-        result = run.test_workbench_functional()
+        result = functional.test_workbench_functional()
 
         assert result == 0
         assert "No functional_tests/" in capsys.readouterr().out
@@ -919,9 +921,9 @@ class TestCompositeTestCommands:
         cpython_calls, fake_cpython = _make_fake_command(return_value=0)
         micropython_calls, fake_micropython = _make_fake_command(return_value=0)
         circuitpython_calls, fake_circuitpython = _make_fake_command(return_value=0)
-        monkeypatch.setattr(run, "test_cpython", fake_cpython)
-        monkeypatch.setattr(run, "test_micropython", fake_micropython)
-        monkeypatch.setattr(run, "test_circuitpython", fake_circuitpython)
+        monkeypatch.setattr(testing_crossruntime, "test_cpython", fake_cpython)
+        monkeypatch.setattr(testing_crossruntime, "test_micropython", fake_micropython)
+        monkeypatch.setattr(testing_crossruntime, "test_circuitpython", fake_circuitpython)
 
         result = run.test_all_runtimes(
             "/tmp/mpy", "/tmp/cpy", package_dirs,
@@ -934,11 +936,11 @@ class TestCompositeTestCommands:
         assert len(micropython_calls) == 1
         mpy_args, mpy_kwargs = micropython_calls[0]
         assert mpy_args == ("/tmp/mpy", package_dirs)
-        assert isinstance(mpy_kwargs.get("sink"), run._Sink)
+        assert isinstance(mpy_kwargs.get("sink"), _dispatch._Sink)
         assert len(circuitpython_calls) == 1
         cpy_args, cpy_kwargs = circuitpython_calls[0]
         assert cpy_args == ("/tmp/cpy", package_dirs)
-        assert isinstance(cpy_kwargs.get("sink"), run._Sink)
+        assert isinstance(cpy_kwargs.get("sink"), _dispatch._Sink)
 
     def test_test_functional_runs_libraries_then_workbench(
         self, monkeypatch,
@@ -957,8 +959,8 @@ class TestCompositeTestCommands:
             workbench_calls.append(kwargs)
             return 0
 
-        monkeypatch.setattr(run, "test_libraries_functional", fake_libraries)
-        monkeypatch.setattr(run, "test_workbench_functional", fake_workbench)
+        monkeypatch.setattr(functional, "test_libraries_functional", fake_libraries)
+        monkeypatch.setattr(functional, "test_workbench_functional", fake_workbench)
 
         result = run.test_functional(verbose=True, exit_first=True)
 
@@ -971,13 +973,13 @@ class TestCompositeTestCommands:
     ) -> None:
         """A failing libraries phase should prevent the workbench phase from running."""
         monkeypatch.setattr(
-            run, "test_libraries_functional", lambda: 7,
+            functional, "test_libraries_functional", lambda: 7,
         )
 
         def fail_workbench(**_kwargs) -> int:
             raise AssertionError("workbench phase should not run after libraries fail")
 
-        monkeypatch.setattr(run, "test_workbench_functional", fail_workbench)
+        monkeypatch.setattr(functional, "test_workbench_functional", fail_workbench)
 
         result = run.test_functional()
 
@@ -996,18 +998,18 @@ class TestCompositeTestCommands:
         phases serially in submission order.
         """
         monkeypatch.setattr(
-            run, "_preflight_run_parallel_phases",
+            preflight_tasks, "_preflight_run_parallel_phases",
             lambda phases, **_kwargs: (0, None, []),
         )
-        monkeypatch.setattr(run, "is_ref_reachable", lambda *_args, **_kwargs: True)
+        monkeypatch.setattr(preflight_tasks, "is_ref_reachable", lambda *_args, **_kwargs: True)
 
         functional_calls: list[str] = []
         monkeypatch.setattr(
-            run, "test_libraries_functional",
+            preflight_tasks, "test_libraries_functional",
             lambda: functional_calls.append("libraries") or 0,
         )
         monkeypatch.setattr(
-            run, "test_workbench_functional",
+            preflight_tasks, "test_workbench_functional",
             lambda **_kwargs: functional_calls.append("workbench") or 0,
         )
 
@@ -1042,13 +1044,13 @@ def _make_test_package(tmp_path: Path, name: str) -> Path:
 def fake_root(monkeypatch, tmp_path):
     """Repoint ROOT at a tmp_path so relative_to() works for fake packages.
 
-    Patches both ``run.ROOT`` and ``repo_layout.ROOT`` — ``test_cpython``
+    Patches both ``testing_cpython.ROOT`` and ``repo_layout.ROOT`` — ``test_cpython``
     builds labels off the former while ``coverage_args_for`` resolves
     ``--cov`` paths against the latter.
     """
     import repo_layout
 
-    monkeypatch.setattr(run, "ROOT", tmp_path)
+    monkeypatch.setattr(testing_cpython, "ROOT", tmp_path)
     monkeypatch.setattr(repo_layout, "ROOT", tmp_path)
     return tmp_path
 
@@ -1068,8 +1070,8 @@ class TestTestCpython:
             called.append(command)
             return 0
 
-        monkeypatch.setattr(run, "run_command", fake_run_command)
-        result = run.test_cpython([package_dir])
+        monkeypatch.setattr(testing_cpython, "run_command", fake_run_command)
+        result = testing_cpython.test_cpython([package_dir])
         assert result == 0
         assert called == []
 
@@ -1084,8 +1086,8 @@ class TestTestCpython:
             commands.append(command)
             return 0
 
-        monkeypatch.setattr(run, "_run_pytest_capturing", fake_run_pytest)
-        result = run.test_cpython([package_a, package_b], no_cov=True)
+        monkeypatch.setattr(testing_cpython, "_run_pytest_capturing", fake_run_pytest)
+        result = testing_cpython.test_cpython([package_a, package_b], no_cov=True)
         assert result == 0
         # Two pytest runs (one per package).
         pytest_runs = [
@@ -1097,9 +1099,9 @@ class TestTestCpython:
     def test_unknown_filter_library_returns_one(self, monkeypatch, fake_root):
         """A -k filter referencing an unknown library returns 1 with a clear message."""
         package_dir = _make_test_package(fake_root, "timing")
-        monkeypatch.setattr(run, "discover_package_dirs", lambda: [package_dir])
+        monkeypatch.setattr(testing_cpython, "discover_package_dirs", lambda: [package_dir])
 
-        result = run.test_cpython(
+        result = testing_cpython.test_cpython(
             [package_dir], filter_expression="ghost/test_thing",
         )
         assert result == 1
@@ -1107,15 +1109,15 @@ class TestTestCpython:
     def test_filter_with_missing_test_file_returns_one(self, monkeypatch, fake_root):
         """A file-scoped filter for a nonexistent test file returns 1."""
         package_dir = _make_test_package(fake_root, "timing")
-        monkeypatch.setattr(run, "discover_package_dirs", lambda: [package_dir])
+        monkeypatch.setattr(testing_cpython, "discover_package_dirs", lambda: [package_dir])
 
         commands: list[list[str]] = []
         monkeypatch.setattr(
-            run, "run_command",
+            testing_cpython, "run_command",
             lambda command, **kwargs: (commands.append(command), 0)[1],
         )
 
-        result = run.test_cpython(
+        result = testing_cpython.test_cpython(
             [package_dir], filter_expression="timing/no_such_file/test_thing",
         )
         assert result == 1
@@ -1129,7 +1131,7 @@ class TestTestCpython:
         exercises the exit-5 normalization in isolation.
         """
         package_dir = _make_test_package(fake_root, "timing")
-        monkeypatch.setattr(run, "discover_package_dirs", lambda: [package_dir])
+        monkeypatch.setattr(testing_cpython, "discover_package_dirs", lambda: [package_dir])
 
         # _run_pytest_capturing normalizes pytest exit code 5 ("no tests
         # collected") to 0, mimicking what stream_subprocess + the
@@ -1137,11 +1139,11 @@ class TestTestCpython:
         def fake_stream(command, **_kwargs):
             return 5, ""
 
-        monkeypatch.setattr(run, "stream_subprocess", fake_stream)
+        monkeypatch.setattr(testing_cpython, "stream_subprocess", fake_stream)
         # Coverage post-processing also shells out via run_command;
         # short-circuit it so the test focuses on the exit-code remap.
-        monkeypatch.setattr(run, "run_command", lambda *_a, **_kw: 0)
-        result = run.test_cpython(
+        monkeypatch.setattr(testing_cpython, "run_command", lambda *_a, **_kw: 0)
+        result = testing_cpython.test_cpython(
             [package_dir],
             filter_expression="timing/test_nothing_matches",
             no_cov=True,
@@ -1152,11 +1154,11 @@ class TestTestCpython:
     def test_filter_matching_nothing_fails_by_default(self, monkeypatch, fake_root):
         """A -k filter that selects zero tests fails (the S6 zero-collected floor)."""
         package_dir = _make_test_package(fake_root, "timing")
-        monkeypatch.setattr(run, "discover_package_dirs", lambda: [package_dir])
-        monkeypatch.setattr(run, "stream_subprocess", lambda command, **_kw: (5, ""))
-        monkeypatch.setattr(run, "run_command", lambda *_a, **_kw: 0)
+        monkeypatch.setattr(testing_cpython, "discover_package_dirs", lambda: [package_dir])
+        monkeypatch.setattr(testing_cpython, "stream_subprocess", lambda command, **_kw: (5, ""))
+        monkeypatch.setattr(testing_cpython, "run_command", lambda *_a, **_kw: 0)
 
-        result = run.test_cpython(
+        result = testing_cpython.test_cpython(
             [package_dir],
             filter_expression="timing/test_nothing_matches",
             no_cov=True,
@@ -1166,11 +1168,11 @@ class TestTestCpython:
     def test_allow_no_tests_opts_out_of_floor(self, monkeypatch, fake_root, capsys):
         """--allow-no-tests turns the zero-collected failure back into a pass."""
         package_dir = _make_test_package(fake_root, "timing")
-        monkeypatch.setattr(run, "discover_package_dirs", lambda: [package_dir])
-        monkeypatch.setattr(run, "stream_subprocess", lambda command, **_kw: (5, ""))
-        monkeypatch.setattr(run, "run_command", lambda *_a, **_kw: 0)
+        monkeypatch.setattr(testing_cpython, "discover_package_dirs", lambda: [package_dir])
+        monkeypatch.setattr(testing_cpython, "stream_subprocess", lambda command, **_kw: (5, ""))
+        monkeypatch.setattr(testing_cpython, "run_command", lambda *_a, **_kw: 0)
 
-        result = run.test_cpython(
+        result = testing_cpython.test_cpython(
             [package_dir],
             filter_expression="timing/test_nothing_matches",
             no_cov=True,
@@ -1184,10 +1186,10 @@ class TestTestCpython:
         package_dir = _make_test_package(fake_root, "timing")
 
         monkeypatch.setattr(
-            run, "_run_pytest_capturing",
+            testing_cpython, "_run_pytest_capturing",
             lambda command, environment, sink: 17,
         )
-        result = run.test_cpython([package_dir], no_cov=True)
+        result = testing_cpython.test_cpython([package_dir], no_cov=True)
         assert result == 17
 
     def test_coverage_threshold_passes_through(self, monkeypatch, fake_root):
@@ -1200,8 +1202,8 @@ class TestTestCpython:
             recorded.append(command)
             return 0
 
-        monkeypatch.setattr(run, "_run_pytest_capturing", fake_run_pytest)
-        run.test_cpython([package_dir], coverage_threshold=94)
+        monkeypatch.setattr(testing_cpython, "_run_pytest_capturing", fake_run_pytest)
+        testing_cpython.test_cpython([package_dir], coverage_threshold=94)
 
         pytest_calls = [
             command for command in recorded if "-m" in command and "pytest" in command
@@ -1221,8 +1223,8 @@ class TestTestCpython:
             recorded.append(command)
             return 0
 
-        monkeypatch.setattr(run, "_run_pytest_capturing", fake_run_pytest)
-        run.test_cpython(
+        monkeypatch.setattr(testing_cpython, "_run_pytest_capturing", fake_run_pytest)
+        testing_cpython.test_cpython(
             [package_a, package_b],
             coverage_threshold=94,
             elevated_packages={"alpha"},
@@ -1249,12 +1251,12 @@ class TestTestCpython:
 
         recorded: list[list[str]] = []
         monkeypatch.setattr(
-            run, "_run_pytest_capturing",
+            testing_cpython, "_run_pytest_capturing",
             lambda command, environment, sink: (recorded.append(command), 0)[1],
         )
-        monkeypatch.setattr(run, "run_command", lambda *_a, **_kw: 0)
+        monkeypatch.setattr(testing_cpython, "run_command", lambda *_a, **_kw: 0)
 
-        run.test_cpython([package_dir], no_cov=True)
+        testing_cpython.test_cpython([package_dir], no_cov=True)
         pytest_calls = [command for command in recorded if "-m" in command and "pytest" in command]
         for command in pytest_calls:
             # No --cov= collection target.
@@ -1268,15 +1270,15 @@ class TestTestCpython:
     def test_filter_skips_coverage_gate(self, monkeypatch, fake_root):
         """filter_expression sets cov-fail-under=0 since filters reduce coverage."""
         package_dir = _make_test_package(fake_root, "timing")
-        monkeypatch.setattr(run, "discover_package_dirs", lambda: [package_dir])
+        monkeypatch.setattr(testing_cpython, "discover_package_dirs", lambda: [package_dir])
 
         recorded: list[list[str]] = []
         monkeypatch.setattr(
-            run, "_run_pytest_capturing",
+            testing_cpython, "_run_pytest_capturing",
             lambda command, environment, sink: (recorded.append(command), 0)[1],
         )
 
-        run.test_cpython(
+        testing_cpython.test_cpython(
             [package_dir], filter_expression="timing/test_thing",
         )
         pytest_calls = [
@@ -1289,10 +1291,10 @@ class TestTestCpython:
         package_dir = _make_test_package(fake_root, "timing")
         recorded: list[list[str]] = []
         monkeypatch.setattr(
-            run, "_run_pytest_capturing",
+            testing_cpython, "_run_pytest_capturing",
             lambda command, environment, sink: (recorded.append(command), 0)[1],
         )
-        run.test_cpython([package_dir], exit_first=True, no_cov=True)
+        testing_cpython.test_cpython([package_dir], exit_first=True, no_cov=True)
         pytest_calls = [
             command for command in recorded if "-m" in command and "pytest" in command
         ]
@@ -1303,10 +1305,10 @@ class TestTestCpython:
         package_dir = _make_test_package(fake_root, "timing")
         recorded: list[list[str]] = []
         monkeypatch.setattr(
-            run, "_run_pytest_capturing",
+            testing_cpython, "_run_pytest_capturing",
             lambda command, environment, sink: (recorded.append(command), 0)[1],
         )
-        run.test_cpython([package_dir], verbose=True, no_cov=True)
+        testing_cpython.test_cpython([package_dir], verbose=True, no_cov=True)
         pytest_calls = [
             command for command in recorded if "-m" in command and "pytest" in command
         ]
@@ -1318,14 +1320,14 @@ class TestPytestOutputFilter:
 
     def test_summary_line_is_absorbed(self):
         """The ``=== N passed in Xs ===`` line is consumed, not forwarded."""
-        filter_state = run._PytestOutputFilter()
+        filter_state = testing_cpython._PytestOutputFilter()
         assert filter_state.consume("==== 12 passed in 0.05s ====")
         assert filter_state.passed == 12
         assert filter_state.duration_s == 0.05
 
     def test_summary_line_with_skips(self):
         """Skips parse into the dedicated counter."""
-        filter_state = run._PytestOutputFilter()
+        filter_state = testing_cpython._PytestOutputFilter()
         assert filter_state.consume(
             "==== 654 passed, 2 skipped in 5.42s ====",
         )
@@ -1334,7 +1336,7 @@ class TestPytestOutputFilter:
 
     def test_no_tests_ran_is_absorbed(self):
         """The ``no tests ran in Xs`` line is consumed without bumping counters."""
-        filter_state = run._PytestOutputFilter()
+        filter_state = testing_cpython._PytestOutputFilter()
         assert filter_state.consume("==== no tests ran in 0.01s ====")
         assert filter_state.passed == 0
         assert filter_state.skipped == 0
@@ -1349,7 +1351,7 @@ class TestPytestOutputFilter:
             "\x1b[32m===== \x1b[1m\x1b[32m5 passed\x1b[0m\x1b[32m, "
             "2 deselected in 0.03s\x1b[0m\x1b[32m =====\x1b[0m"
         )
-        filter_state = run._PytestOutputFilter()
+        filter_state = testing_cpython._PytestOutputFilter()
         assert filter_state.consume(colored)
         assert filter_state.passed == 5
         assert filter_state.deselected == 2
@@ -1357,7 +1359,7 @@ class TestPytestOutputFilter:
 
     def test_ansi_colored_durations_header_is_parsed(self):
         """A coloured ``slowest durations`` header still opens the block."""
-        filter_state = run._PytestOutputFilter()
+        filter_state = testing_cpython._PytestOutputFilter()
         assert filter_state.consume(
             "\x1b[1m\x1b[33m===== slowest durations =====\x1b[0m",
         )
@@ -1370,7 +1372,7 @@ class TestPytestOutputFilter:
 
     def test_durations_block_captures_call_phase_only(self):
         """``call`` rows feed slow_tests; setup/teardown rows are absorbed but ignored."""
-        filter_state = run._PytestOutputFilter()
+        filter_state = testing_cpython._PytestOutputFilter()
         assert filter_state.consume(
             "============ slowest durations ============",
         )
@@ -1387,7 +1389,7 @@ class TestPytestOutputFilter:
 
     def test_progress_lines_pass_through(self):
         """Non-summary lines (test progress, tracebacks) are not absorbed."""
-        filter_state = run._PytestOutputFilter()
+        filter_state = testing_cpython._PytestOutputFilter()
         assert not filter_state.consume(
             "libraries/timing/tests/test_x.py ......  [100%]",
         )
@@ -1399,10 +1401,10 @@ class TestFormatPytestPhaseSummary:
 
     def test_single_invocation_omits_library_count_clause(self):
         """A single pytest result skips the ``across N libraries`` clause."""
-        result = run._PytestRunResult(
+        result = testing_cpython._PytestRunResult(
             label="test-micropython", exit_code=0, passed=654, duration_s=5.01,
         )
-        lines = run._format_pytest_phase_summary(
+        lines = testing_cpython._format_pytest_phase_summary(
             "test-micropython", [result], slow_threshold_s=2.0,
         )
         assert lines == [
@@ -1412,14 +1414,14 @@ class TestFormatPytestPhaseSummary:
     def test_multi_library_includes_skips(self):
         """Aggregated skip counts reach the rolled-up summary."""
         results = [
-            run._PytestRunResult(
+            testing_cpython._PytestRunResult(
                 label="a", exit_code=0, passed=10, skipped=1, duration_s=0.1,
             ),
-            run._PytestRunResult(
+            testing_cpython._PytestRunResult(
                 label="b", exit_code=0, passed=20, skipped=1, duration_s=0.2,
             ),
         ]
-        lines = run._format_pytest_phase_summary(
+        lines = testing_cpython._format_pytest_phase_summary(
             "test", results, slow_threshold_s=1.0,
         )
         assert lines == [
@@ -1429,12 +1431,12 @@ class TestFormatPytestPhaseSummary:
     def test_slow_notice_lists_only_tests_above_threshold(self):
         """Tests at or above *slow_threshold_s* appear in the SLOW notice."""
         results = [
-            run._PytestRunResult(
+            testing_cpython._PytestRunResult(
                 label="a", exit_code=0, passed=3, duration_s=2.5,
                 slow_tests=[(2.10, "a::slow"), (0.50, "a::fast")],
             ),
         ]
-        lines = run._format_pytest_phase_summary(
+        lines = testing_cpython._format_pytest_phase_summary(
             "test-micropython", results, slow_threshold_s=2.0,
         )
         assert len(lines) == 2
@@ -1445,12 +1447,12 @@ class TestFormatPytestPhaseSummary:
     def test_no_slow_notice_when_all_under_threshold(self):
         """Only the summary line is emitted when no test crosses the threshold."""
         results = [
-            run._PytestRunResult(
+            testing_cpython._PytestRunResult(
                 label="a", exit_code=0, passed=3, duration_s=0.5,
                 slow_tests=[(0.6, "a::moderate")],
             ),
         ]
-        lines = run._format_pytest_phase_summary(
+        lines = testing_cpython._format_pytest_phase_summary(
             "test", results, slow_threshold_s=1.0,
         )
         assert len(lines) == 1
@@ -1461,7 +1463,7 @@ class TestUnixPortPytestCommand:
 
     def test_durations_threshold_flows_in(self):
         """``--durations=0 --durations-min=<threshold>`` lands on every command."""
-        command = run._pytest_unix_port_command(
+        command = testing_crossruntime._pytest_unix_port_command(
             "micropython", "/tmp/mpy", None,
             slow_test_threshold_s=1.5,
         )
@@ -1470,7 +1472,7 @@ class TestUnixPortPytestCommand:
 
     def test_runtime_binary_forwarded(self):
         """``--{runtime}-binary <path>`` is appended when *binary* is set."""
-        command = run._pytest_unix_port_command(
+        command = testing_crossruntime._pytest_unix_port_command(
             "circuitpython", "/tmp/cpy", None,
             slow_test_threshold_s=2.0,
         )
@@ -1500,9 +1502,9 @@ class TestRunParallelPhases:
             log.append("two")
             return 0
 
-        exit_code, failing_label, _phase_results = run._run_parallel_phases(
+        exit_code, failing_label, _phase_results = _dispatch._run_parallel_phases(
             (("first", phase_one), ("second", phase_two)),
-            dispatcher=run._QuietDispatcher(),
+            dispatcher=_dispatch._QuietDispatcher(),
         )
         assert exit_code == 0
         assert failing_label is None
@@ -1519,9 +1521,9 @@ class TestRunParallelPhases:
             sink.line("from phase two")
             return 0
 
-        run._run_parallel_phases(
+        _dispatch._run_parallel_phases(
             (("first", phase_one), ("second", phase_two)),
-            dispatcher=run._QuietDispatcher(),
+            dispatcher=_dispatch._QuietDispatcher(),
         )
         out = capsys.readouterr().out
         # Output order matches submission order regardless of scheduling.
@@ -1533,24 +1535,24 @@ class TestRunParallelPhases:
 
     def test_first_failure_short_circuits_return_value(self):
         """A failing phase's exit code becomes the run's return value."""
-        exit_code, failing_label, _phase_results = run._run_parallel_phases(
+        exit_code, failing_label, _phase_results = _dispatch._run_parallel_phases(
             (
                 ("succeeded", lambda sink: 0),
                 ("failed", lambda sink: 7),
             ),
-            dispatcher=run._QuietDispatcher(),
+            dispatcher=_dispatch._QuietDispatcher(),
         )
         assert exit_code == 7
         assert failing_label == "failed"
 
     def test_first_failure_in_submission_order(self):
         """When two phases fail, the first one in submission order wins."""
-        exit_code, failing_label, _phase_results = run._run_parallel_phases(
+        exit_code, failing_label, _phase_results = _dispatch._run_parallel_phases(
             (
                 ("a", lambda sink: 11),
                 ("b", lambda sink: 13),
             ),
-            dispatcher=run._QuietDispatcher(),
+            dispatcher=_dispatch._QuietDispatcher(),
         )
         assert exit_code == 11
         assert failing_label == "a"
@@ -1560,9 +1562,9 @@ class TestRunParallelPhases:
         def phase_crashes(sink) -> int:
             raise RuntimeError("oh no")
 
-        exit_code, failing_label, _phase_results = run._run_parallel_phases(
+        exit_code, failing_label, _phase_results = _dispatch._run_parallel_phases(
             (("crashy", phase_crashes),),
-            dispatcher=run._QuietDispatcher(),
+            dispatcher=_dispatch._QuietDispatcher(),
         )
         assert exit_code == 1
         assert failing_label == "crashy"
@@ -1583,13 +1585,13 @@ class TestRunParallelPhases:
             sink.line("actual error: the thing the user needs to see")
             return 1
 
-        run._run_parallel_phases(
+        _dispatch._run_parallel_phases(
             (
                 ("phase_a", passing),
                 ("phase_b", failing),
                 ("phase_c", passing),
             ),
-            dispatcher=run._QuietDispatcher(),
+            dispatcher=_dispatch._QuietDispatcher(),
         )
         out = capsys.readouterr().out
         # Failing phase shows full output + (failed) marker.
@@ -1607,12 +1609,12 @@ class TestRunParallelPhases:
             sink.line("useful log line")
             return 0
 
-        run._run_parallel_phases(
+        _dispatch._run_parallel_phases(
             (
                 ("phase_a", chatty),
                 ("phase_b", chatty),
             ),
-            dispatcher=run._QuietDispatcher(),
+            dispatcher=_dispatch._QuietDispatcher(),
         )
         out = capsys.readouterr().out
         assert "== phase_a ==" in out
@@ -1624,71 +1626,71 @@ class TestPickDispatcher:
     """Tests for the TTY + env-var-based dispatcher selection."""
 
     def _clear_dispatcher_environment(self, monkeypatch):
-        monkeypatch.delenv(run._RAW_OUTPUT_ENV_VAR, raising=False)
-        monkeypatch.delenv(run._OUTPUT_MODE_ENV_VAR, raising=False)
+        monkeypatch.delenv(_dispatch._RAW_OUTPUT_ENV_VAR, raising=False)
+        monkeypatch.delenv(_dispatch._OUTPUT_MODE_ENV_VAR, raising=False)
         monkeypatch.delenv("PYCHARM_HOSTED", raising=False)
 
     def test_quiet_flag_picks_quiet_dispatcher(self, monkeypatch):
         self._clear_dispatcher_environment(monkeypatch)
-        dispatcher = run._pick_dispatcher(quiet=True)
-        assert isinstance(dispatcher, run._QuietDispatcher)
+        dispatcher = _dispatch._pick_dispatcher(quiet=True)
+        assert isinstance(dispatcher, _dispatch._QuietDispatcher)
 
     def test_raw_env_var_overrides_quiet_flag(self, monkeypatch):
         self._clear_dispatcher_environment(monkeypatch)
-        monkeypatch.setenv(run._RAW_OUTPUT_ENV_VAR, "1")
-        dispatcher = run._pick_dispatcher(quiet=True)
-        assert isinstance(dispatcher, run._RawDispatcher)
+        monkeypatch.setenv(_dispatch._RAW_OUTPUT_ENV_VAR, "1")
+        dispatcher = _dispatch._pick_dispatcher(quiet=True)
+        assert isinstance(dispatcher, _dispatch._RawDispatcher)
 
     def test_non_tty_picks_interleave_dispatcher(self, monkeypatch):
         self._clear_dispatcher_environment(monkeypatch)
-        monkeypatch.setattr(run.sys.stdout, "isatty", lambda: False)
-        dispatcher = run._pick_dispatcher(quiet=False)
-        assert isinstance(dispatcher, run._InterleaveDispatcher)
+        monkeypatch.setattr(_dispatch.sys.stdout, "isatty", lambda: False)
+        dispatcher = _dispatch._pick_dispatcher(quiet=False)
+        assert isinstance(dispatcher, _dispatch._InterleaveDispatcher)
 
     def test_tty_picks_status_dispatcher(self, monkeypatch):
         self._clear_dispatcher_environment(monkeypatch)
-        monkeypatch.setattr(run.sys.stdout, "isatty", lambda: True)
-        dispatcher = run._pick_dispatcher(quiet=False)
-        assert isinstance(dispatcher, run._StatusDispatcher)
+        monkeypatch.setattr(_dispatch.sys.stdout, "isatty", lambda: True)
+        dispatcher = _dispatch._pick_dispatcher(quiet=False)
+        assert isinstance(dispatcher, _dispatch._StatusDispatcher)
 
     def test_pycharm_env_var_picks_status_even_without_tty(self, monkeypatch):
         """PyCharm Run-config console isn't a TTY but should get status mode."""
         self._clear_dispatcher_environment(monkeypatch)
-        monkeypatch.setattr(run.sys.stdout, "isatty", lambda: False)
+        monkeypatch.setattr(_dispatch.sys.stdout, "isatty", lambda: False)
         monkeypatch.setenv("PYCHARM_HOSTED", "1")
-        dispatcher = run._pick_dispatcher(quiet=False)
-        assert isinstance(dispatcher, run._StatusDispatcher)
+        dispatcher = _dispatch._pick_dispatcher(quiet=False)
+        assert isinstance(dispatcher, _dispatch._StatusDispatcher)
 
     def test_output_mode_env_var_overrides_tty(self, monkeypatch):
         """CHUMICRO_OUTPUT_MODE=interleave forces interleave even in a TTY."""
         self._clear_dispatcher_environment(monkeypatch)
-        monkeypatch.setattr(run.sys.stdout, "isatty", lambda: True)
-        monkeypatch.setenv(run._OUTPUT_MODE_ENV_VAR, "interleave")
-        dispatcher = run._pick_dispatcher(quiet=False)
-        assert isinstance(dispatcher, run._InterleaveDispatcher)
+        monkeypatch.setattr(_dispatch.sys.stdout, "isatty", lambda: True)
+        monkeypatch.setenv(_dispatch._OUTPUT_MODE_ENV_VAR, "interleave")
+        dispatcher = _dispatch._pick_dispatcher(quiet=False)
+        assert isinstance(dispatcher, _dispatch._InterleaveDispatcher)
 
     def test_output_mode_env_var_picks_status_in_pipe(self, monkeypatch):
         """CHUMICRO_OUTPUT_MODE=status forces status even when piped."""
         self._clear_dispatcher_environment(monkeypatch)
-        monkeypatch.setattr(run.sys.stdout, "isatty", lambda: False)
-        monkeypatch.setenv(run._OUTPUT_MODE_ENV_VAR, "status")
-        dispatcher = run._pick_dispatcher(quiet=False)
-        assert isinstance(dispatcher, run._StatusDispatcher)
+        monkeypatch.setattr(_dispatch.sys.stdout, "isatty", lambda: False)
+        monkeypatch.setenv(_dispatch._OUTPUT_MODE_ENV_VAR, "status")
+        dispatcher = _dispatch._pick_dispatcher(quiet=False)
+        assert isinstance(dispatcher, _dispatch._StatusDispatcher)
 
     def test_output_mode_env_var_unknown_value_falls_through(self, monkeypatch):
         """An unrecognized CHUMICRO_OUTPUT_MODE silently falls through to TTY logic."""
         self._clear_dispatcher_environment(monkeypatch)
-        monkeypatch.setattr(run.sys.stdout, "isatty", lambda: True)
-        monkeypatch.setenv(run._OUTPUT_MODE_ENV_VAR, "nonsense")
-        dispatcher = run._pick_dispatcher(quiet=False)
-        assert isinstance(dispatcher, run._StatusDispatcher)
+        monkeypatch.setattr(_dispatch.sys.stdout, "isatty", lambda: True)
+        monkeypatch.setenv(_dispatch._OUTPUT_MODE_ENV_VAR, "nonsense")
+        dispatcher = _dispatch._pick_dispatcher(quiet=False)
+        assert isinstance(dispatcher, _dispatch._StatusDispatcher)
 
     def test_quiet_flag_beats_output_mode_env_var(self, monkeypatch):
         """--quiet wins over CHUMICRO_OUTPUT_MODE=status (explicit user intent)."""
         self._clear_dispatcher_environment(monkeypatch)
-        monkeypatch.setenv(run._OUTPUT_MODE_ENV_VAR, "status")
-        dispatcher = run._pick_dispatcher(quiet=True)
-        assert isinstance(dispatcher, run._QuietDispatcher)
+        monkeypatch.setenv(_dispatch._OUTPUT_MODE_ENV_VAR, "status")
+        dispatcher = _dispatch._pick_dispatcher(quiet=True)
+        assert isinstance(dispatcher, _dispatch._QuietDispatcher)
 
 
 # ---------------------------------------------------------------------------
@@ -1711,17 +1713,17 @@ class TestSubcommandPhaseFactory:
             on_line("hello stderr")
             return 0, "hello stdout\nhello stderr\n"
 
-        monkeypatch.setattr(run, "stream_subprocess", fake_stream)
+        monkeypatch.setattr(_dispatch, "stream_subprocess", fake_stream)
 
-        factory = run._subcommand_phase_factory("lint", ["lint"])
-        sink = run._Sink(run._QuietDispatcher(), "lint")
+        factory = _dispatch._subcommand_phase_factory("lint", ["lint"])
+        sink = _dispatch._Sink(_dispatch._QuietDispatcher(), "lint")
         exit_code = factory(sink)
 
         assert exit_code == 0
         assert captured["command"][1:] == ["scripts/run.py", "lint"]
-        assert captured["cwd"] == run.ROOT
+        assert captured["cwd"] == _dispatch.ROOT
         # Child runs with CHUMICRO_RAW_OUTPUT=1 so its dispatcher is raw.
-        assert captured["environment"][run._RAW_OUTPUT_ENV_VAR] == "1"
+        assert captured["environment"][_dispatch._RAW_OUTPUT_ENV_VAR] == "1"
         # Banner + every line flow through the sink.
         lines = sink.captured.splitlines()
         assert lines[0].startswith("+ ")
@@ -1732,13 +1734,13 @@ class TestSubcommandPhaseFactory:
     def test_appends_failure_banner_on_nonzero_exit(self, monkeypatch):
         """A non-zero exit code produces a ``Phase failed: <label>`` line."""
         monkeypatch.setattr(
-            run, "stream_subprocess",
+            _dispatch, "stream_subprocess",
             lambda *_a, **_kw: (7, ""),
         )
-        factory = run._subcommand_phase_factory(
+        factory = _dispatch._subcommand_phase_factory(
             "test (python 3.13)", ["test", "--all"],
         )
-        sink = run._Sink(run._QuietDispatcher(), "test (python 3.13)")
+        sink = _dispatch._Sink(_dispatch._QuietDispatcher(), "test (python 3.13)")
         exit_code = factory(sink)
 
         assert exit_code == 7
@@ -1752,11 +1754,11 @@ class TestSubcommandPhaseFactory:
             seen_command.extend(command)
             return 0, ""
 
-        monkeypatch.setattr(run, "stream_subprocess", fake_stream)
-        factory = run._subcommand_phase_factory(
+        monkeypatch.setattr(_dispatch, "stream_subprocess", fake_stream)
+        factory = _dispatch._subcommand_phase_factory(
             "test", ["test", "--all", "--coverage-threshold", "94"],
         )
-        sink = run._Sink(run._QuietDispatcher(), "test")
+        sink = _dispatch._Sink(_dispatch._QuietDispatcher(), "test")
         factory(sink)
 
         # The first element is the running interpreter; the rest is
@@ -1773,7 +1775,7 @@ class TestPreflightParallelDispatch:
         self, monkeypatch, capsys,
     ):
         """check-version + check-api skip when origin/main is unreachable."""
-        monkeypatch.setattr(run, "is_ref_reachable", lambda *_a, **_kw: False)
+        monkeypatch.setattr(preflight_tasks, "is_ref_reachable", lambda *_a, **_kw: False)
 
         captured_phases: list[list[str]] = []
 
@@ -1781,7 +1783,7 @@ class TestPreflightParallelDispatch:
             captured_phases.extend([label for label, _ in phases])
             return 0, None, []
 
-        monkeypatch.setattr(run, "_preflight_run_parallel_phases", fake_run)
+        monkeypatch.setattr(preflight_tasks, "_preflight_run_parallel_phases", fake_run)
 
         result = run.preflight()
         assert result == 0
@@ -1803,7 +1805,7 @@ class TestPreflightParallelDispatch:
 
     def test_includes_diff_phases_when_origin_main_reachable(self, monkeypatch):
         """All 13 phases dispatch when origin/main is reachable."""
-        monkeypatch.setattr(run, "is_ref_reachable", lambda *_a, **_kw: True)
+        monkeypatch.setattr(preflight_tasks, "is_ref_reachable", lambda *_a, **_kw: True)
 
         captured_labels: list[str] = []
 
@@ -1811,7 +1813,7 @@ class TestPreflightParallelDispatch:
             captured_labels.extend([label for label, _ in phases])
             return 0, None, []
 
-        monkeypatch.setattr(run, "_preflight_run_parallel_phases", fake_run)
+        monkeypatch.setattr(preflight_tasks, "_preflight_run_parallel_phases", fake_run)
 
         result = run.preflight()
         assert result == 0
@@ -1828,7 +1830,7 @@ class TestPreflightParallelDispatch:
 
     def test_coverage_threshold_flows_to_test_phase_args(self, monkeypatch):
         """--coverage-threshold becomes a flag on the test subcommand args."""
-        monkeypatch.setattr(run, "is_ref_reachable", lambda *_a, **_kw: True)
+        monkeypatch.setattr(preflight_tasks, "is_ref_reachable", lambda *_a, **_kw: True)
 
         seen: list[list[str]] = []
 
@@ -1837,10 +1839,10 @@ class TestPreflightParallelDispatch:
             return lambda sink: 0
 
         monkeypatch.setattr(
-            run, "_subcommand_phase_factory", capturing_factory,
+            preflight_tasks, "_subcommand_phase_factory", capturing_factory,
         )
         monkeypatch.setattr(
-            run, "_preflight_run_parallel_phases",
+            preflight_tasks, "_preflight_run_parallel_phases",
             lambda phases, **_kwargs: (0, None, []),
         )
 
@@ -1855,7 +1857,7 @@ class TestPreflightParallelDispatch:
 
     def test_binary_overrides_flow_to_runtime_phases(self, monkeypatch):
         """--micropython-binary / --circuitpython-binary flow to the right phases."""
-        monkeypatch.setattr(run, "is_ref_reachable", lambda *_a, **_kw: True)
+        monkeypatch.setattr(preflight_tasks, "is_ref_reachable", lambda *_a, **_kw: True)
 
         seen: list[list[str]] = []
 
@@ -1864,10 +1866,10 @@ class TestPreflightParallelDispatch:
             return lambda sink: 0
 
         monkeypatch.setattr(
-            run, "_subcommand_phase_factory", capturing_factory,
+            preflight_tasks, "_subcommand_phase_factory", capturing_factory,
         )
         monkeypatch.setattr(
-            run, "_preflight_run_parallel_phases",
+            preflight_tasks, "_preflight_run_parallel_phases",
             lambda phases, **_kwargs: (0, None, []),
         )
 
@@ -1891,9 +1893,9 @@ class TestPreflightParallelDispatch:
         """A failing parallel block short-circuits before the functional tail
         and surfaces the failing phase label in the tail message — survives
         interleaved-output schedulers where the [FAIL] line scrolls past."""
-        monkeypatch.setattr(run, "is_ref_reachable", lambda *_a, **_kw: True)
+        monkeypatch.setattr(preflight_tasks, "is_ref_reachable", lambda *_a, **_kw: True)
         monkeypatch.setattr(
-            run, "_preflight_run_parallel_phases",
+            preflight_tasks, "_preflight_run_parallel_phases",
             lambda phases, **_kwargs: (13, "test-micropython", []),
         )
 
@@ -1903,7 +1905,7 @@ class TestPreflightParallelDispatch:
             functional_calls.append("libraries")
             return 0
 
-        monkeypatch.setattr(run, "test_libraries_functional", fail_libraries)
+        monkeypatch.setattr(preflight_tasks, "test_libraries_functional", fail_libraries)
 
         result = run.preflight(with_functional=True)
         assert result == 13
@@ -1924,11 +1926,11 @@ class TestPreflightPhaseTable:
             ("test-micropython", ["test-micropython"]),
         ]
         results = [
-            run._PhaseResult("lint", 0, 1.2, "ok\n"),
-            run._PhaseResult("build", 0, 3.4, "ok\n"),
-            run._PhaseResult("test-micropython", 1, 5.6, "boom\n"),
+            _dispatch._PhaseResult("lint", 0, 1.2, "ok\n"),
+            _dispatch._PhaseResult("build", 0, 3.4, "ok\n"),
+            _dispatch._PhaseResult("test-micropython", 1, 5.6, "boom\n"),
         ]
-        lines = run._format_preflight_phase_table(specs, results)
+        lines = preflight_tasks._format_preflight_phase_table(specs, results)
         text = "\n".join(lines)
         assert "lint" in text and "PASS" in text and "1.2s" in text
         assert "FAIL" in text and "5.6s" in text
@@ -1939,8 +1941,8 @@ class TestPreflightPhaseTable:
     def test_skipped_spec_renders_skip_row(self):
         """A spec with None args (origin/main unreachable) shows SKIP."""
         specs = [("check-version", None), ("lint", ["lint"])]
-        results = [run._PhaseResult("lint", 0, 0.1, "")]
-        lines = run._format_preflight_phase_table(specs, results)
+        results = [_dispatch._PhaseResult("lint", 0, 0.1, "")]
+        lines = preflight_tasks._format_preflight_phase_table(specs, results)
         text = "\n".join(lines)
         assert "check-version" in text
         assert "SKIP" in text
@@ -1953,10 +1955,10 @@ class TestPreflightFailureRecap:
         """The recap pulls the failing phase's trailing lines to EOF."""
         captured = "\n".join(f"line {index}" for index in range(100)) + "\n"
         results = [
-            run._PhaseResult("test", 1, 2.0, captured),
-            run._PhaseResult("lint", 0, 0.5, "lint ok\n"),
+            _dispatch._PhaseResult("test", 1, 2.0, captured),
+            _dispatch._PhaseResult("lint", 0, 0.5, "lint ok\n"),
         ]
-        lines = run._format_preflight_failure_recap("test", results)
+        lines = preflight_tasks._format_preflight_failure_recap("test", results)
         text = "\n".join(lines)
         assert "test (failed)" in text
         # Last line present, an early line beyond the recap window absent.
@@ -1967,12 +1969,12 @@ class TestPreflightFailureRecap:
 
     def test_recap_empty_when_no_failing_label(self):
         """No failing label means no recap lines."""
-        assert run._format_preflight_failure_recap(None, []) == []
+        assert preflight_tasks._format_preflight_failure_recap(None, []) == []
 
     def test_preflight_prints_table_and_recap_on_failure(self, monkeypatch, capsys):
         """A failing preflight prints the phase table then the failing recap."""
-        monkeypatch.setattr(run, "is_ref_reachable", lambda *_a, **_kw: True)
-        failing = run._PhaseResult(
+        monkeypatch.setattr(preflight_tasks, "is_ref_reachable", lambda *_a, **_kw: True)
+        failing = _dispatch._PhaseResult(
             "test (python 3.14)", 1, 2.0,
             "ERROR: support/test_harness coverage 87% < fail-under=94%\n",
         )
@@ -1980,7 +1982,7 @@ class TestPreflightFailureRecap:
         def fake_run(phases, **_kwargs):
             return 1, "test (python 3.14)", [failing]
 
-        monkeypatch.setattr(run, "_preflight_run_parallel_phases", fake_run)
+        monkeypatch.setattr(preflight_tasks, "_preflight_run_parallel_phases", fake_run)
 
         result = run.preflight(coverage_threshold=94)
         assert result == 1
@@ -1997,7 +1999,7 @@ class TestCoverageFailureAttribution:
 
     def test_filter_captures_coverage_failure_percentages(self):
         """pytest-cov's unlabeled gate line is parsed and suppressed."""
-        filter_state = run._PytestOutputFilter()
+        filter_state = testing_cpython._PytestOutputFilter()
         absorbed = filter_state.consume(
             "ERROR: Coverage failure: total of 87 is less than fail-under=94",
         )
@@ -2007,10 +2009,10 @@ class TestCoverageFailureAttribution:
     def test_phase_summary_names_failing_run(self):
         """A non-zero run gets its own FAILED attribution line."""
         results = [
-            run._PytestRunResult("libraries/timing/tests", 0, passed=10),
-            run._PytestRunResult("support/test_harness/tests", 1, passed=5),
+            testing_cpython._PytestRunResult("libraries/timing/tests", 0, passed=10),
+            testing_cpython._PytestRunResult("support/test_harness/tests", 1, passed=5),
         ]
-        lines = run._format_pytest_phase_summary(
+        lines = testing_cpython._format_pytest_phase_summary(
             "test", results, slow_threshold_s=1.0,
         )
         text = "\n".join(lines)
@@ -2018,8 +2020,8 @@ class TestCoverageFailureAttribution:
 
     def test_phase_summary_reports_deselected_count(self):
         """A deselected count surfaces in the rolled-up summary."""
-        results = [run._PytestRunResult("lib/tests", 0, passed=3, deselected=7)]
-        lines = run._format_pytest_phase_summary(
+        results = [testing_cpython._PytestRunResult("lib/tests", 0, passed=3, deselected=7)]
+        lines = testing_cpython._format_pytest_phase_summary(
             "test", results, slow_threshold_s=1.0,
         )
         assert "7 deselected" in lines[0]
@@ -2030,7 +2032,7 @@ class TestCoverageGateArgs:
 
     def test_package_uses_threshold(self):
         """A package gets the elevated threshold as an explicit flag."""
-        args = run._coverage_gate_args(
+        args = testing_cpython._coverage_gate_args(
             "timing",
             skip_coverage_gate=False,
             coverage_threshold=94,
@@ -2040,7 +2042,7 @@ class TestCoverageGateArgs:
 
     def test_skip_gate_forces_zero(self):
         """skip_coverage_gate overrides every threshold with --cov-fail-under=0."""
-        args = run._coverage_gate_args(
+        args = testing_cpython._coverage_gate_args(
             "timing",
             skip_coverage_gate=True,
             coverage_threshold=94,
@@ -2050,7 +2052,7 @@ class TestCoverageGateArgs:
 
     def test_none_threshold_adds_no_flag(self):
         """With no threshold the package falls back to the pyproject default (no flag)."""
-        args = run._coverage_gate_args(
+        args = testing_cpython._coverage_gate_args(
             "timing",
             skip_coverage_gate=False,
             coverage_threshold=None,
@@ -2060,7 +2062,7 @@ class TestCoverageGateArgs:
 
     def test_unelevated_package_falls_back_to_default(self):
         """A package outside elevated_packages gets no explicit flag."""
-        args = run._coverage_gate_args(
+        args = testing_cpython._coverage_gate_args(
             "timing",
             skip_coverage_gate=False,
             coverage_threshold=94,
@@ -2070,7 +2072,7 @@ class TestCoverageGateArgs:
 
     def test_elevated_package_gets_threshold(self):
         """A package inside elevated_packages gets the threshold flag."""
-        args = run._coverage_gate_args(
+        args = testing_cpython._coverage_gate_args(
             "sockets",
             skip_coverage_gate=False,
             coverage_threshold=94,
@@ -2092,11 +2094,11 @@ class TestInertCoverageGuard:
         (package_dir / "src" / "chumicro_ghost").mkdir(parents=True)
 
         monkeypatch.setattr(
-            run, "_run_pytest_capturing",
+            testing_cpython, "_run_pytest_capturing",
             lambda *_a, **_kw: pytest.fail("pytest must not run"),
         )
 
-        result = run.test_cpython([package_dir], coverage_threshold=94)
+        result = testing_cpython.test_cpython([package_dir], coverage_threshold=94)
         assert result == 1
         out = capsys.readouterr().out
         assert "no resolvable coverage source" in out
@@ -2109,12 +2111,12 @@ class TestInertCoverageGuard:
 
         recorded: list[list[str]] = []
         monkeypatch.setattr(
-            run, "_run_pytest_capturing",
+            testing_cpython, "_run_pytest_capturing",
             lambda command, environment, sink: (recorded.append(command), 0)[1],
         )
-        monkeypatch.setattr(run, "run_command", lambda *_a, **_kw: 0)
+        monkeypatch.setattr(testing_cpython, "run_command", lambda *_a, **_kw: 0)
 
-        result = run.test_cpython([package_dir], no_cov=True)
+        result = testing_cpython.test_cpython([package_dir], no_cov=True)
         assert result == 0
         assert recorded  # pytest ran
 
@@ -2125,9 +2127,9 @@ class TestDuplicatePhaseLabels:
     def test_run_parallel_rejects_duplicate_labels(self):
         """Identical labels raise rather than silently clobber dispatcher state."""
         with pytest.raises(ValueError, match="Duplicate phase label"):
-            run._run_parallel_phases(
+            _dispatch._run_parallel_phases(
                 (("dup", lambda sink: 0), ("dup", lambda sink: 0)),
-                dispatcher=run._QuietDispatcher(),
+                dispatcher=_dispatch._QuietDispatcher(),
             )
 
     def test_same_file_scoped_filters_get_distinct_labels(
@@ -2139,9 +2141,9 @@ class TestDuplicatePhaseLabels:
             "def test_a():\n    assert True\n"
             "def test_b():\n    assert True\n",
         )
-        monkeypatch.setattr(run, "discover_package_dirs", lambda: [package_dir])
+        monkeypatch.setattr(testing_cpython, "discover_package_dirs", lambda: [package_dir])
         monkeypatch.setattr(
-            run, "_run_pytest_capturing",
+            testing_cpython, "_run_pytest_capturing",
             lambda command, environment, sink: 0,
         )
 
@@ -2151,9 +2153,9 @@ class TestDuplicatePhaseLabels:
             captured_labels.extend(label for label, _ in phases)
             return 0, None, []
 
-        monkeypatch.setattr(run, "_run_parallel_phases", capture_phases)
+        monkeypatch.setattr(testing_cpython, "_run_parallel_phases", capture_phases)
         # Two file-scoped entries naming the same file.
-        run.test_cpython(
+        testing_cpython.test_cpython(
             [package_dir],
             filter_expression="timing/test_ticks/test_a,timing/test_ticks/test_b",
         )
@@ -2177,15 +2179,15 @@ class TestInterruptCleanup:
             def terminate_all(self):
                 terminated.append("terminated")
 
-        monkeypatch.setattr(run, "_ProcessRegistry", _FakeRegistry)
+        monkeypatch.setattr(_dispatch, "_ProcessRegistry", _FakeRegistry)
 
         def interrupting_phase(sink):
             raise KeyboardInterrupt
 
         with pytest.raises(KeyboardInterrupt):
-            run._run_parallel_phases(
+            _dispatch._run_parallel_phases(
                 (("phase", interrupting_phase),),
-                dispatcher=run._QuietDispatcher(),
+                dispatcher=_dispatch._QuietDispatcher(),
             )
         assert terminated == ["terminated"]
 
@@ -2204,16 +2206,16 @@ class TestInterruptCleanup:
             def wait(self, timeout=None):
                 raise subprocess_module.TimeoutExpired(cmd="x", timeout=timeout)
 
-        monkeypatch.setattr(run.os, "getpgid", lambda _pid: 4242)
+        monkeypatch.setattr(_dispatch.os, "getpgid", lambda _pid: 4242)
         monkeypatch.setattr(
-            run.os, "killpg", lambda _pgid, sig: signals.append(sig),
+            _dispatch.os, "killpg", lambda _pgid, sig: signals.append(sig),
         )
 
-        registry = run._ProcessRegistry()
+        registry = _dispatch._ProcessRegistry()
         registry.add(_StubProcess())
         registry.terminate_all()
-        assert run.signal.SIGTERM in signals
-        assert run.signal.SIGKILL in signals
+        assert _dispatch.signal.SIGTERM in signals
+        assert _dispatch.signal.SIGKILL in signals
 
 
 class TestRawDispatcherLocking:
@@ -2221,7 +2223,7 @@ class TestRawDispatcherLocking:
 
     def test_raw_dispatcher_holds_a_lock(self):
         """_RawDispatcher carries a lock so concurrent phase_line can't tear."""
-        dispatcher = run._RawDispatcher()
+        dispatcher = _dispatch._RawDispatcher()
         # The lock attribute exists and is a usable context manager.
         with dispatcher._lock:
             pass
@@ -2257,7 +2259,7 @@ class TestUnitOnDeviceSweep:
         sockets = self._make_library(tmp_path, "sockets", ships_data_file=True)
 
         monkeypatch.setattr(
-            run, "discover_library_dirs", lambda: [ntp, sockets],
+            functional, "discover_library_dirs", lambda: [ntp, sockets],
         )
         monkeypatch.setattr(
             chumicro_deploy, "load_device_registry",
@@ -2280,9 +2282,9 @@ class TestUnitOnDeviceSweep:
             commands.append(command)
             return 0
 
-        monkeypatch.setattr(run, "run_command", _fake_run_command)
+        monkeypatch.setattr(functional, "run_command", _fake_run_command)
 
-        result = run.test_unit_on_device(runtime="circuitpython")
+        result = functional.test_unit_on_device(runtime="circuitpython")
 
         assert result == 0
         # ntp (clean own-src) → ram session; sockets (own-src ships
@@ -2309,7 +2311,7 @@ class TestUnitOnDeviceSweep:
         import chumicro_deploy
 
         ntp = self._make_library(tmp_path, "ntp", ships_data_file=False)
-        monkeypatch.setattr(run, "discover_library_dirs", lambda: [ntp])
+        monkeypatch.setattr(functional, "discover_library_dirs", lambda: [ntp])
         monkeypatch.setattr(
             chumicro_deploy, "load_device_registry",
             lambda **_kwargs: (
@@ -2317,11 +2319,11 @@ class TestUnitOnDeviceSweep:
             ),
         )
         monkeypatch.setattr(
-            run, "run_command",
+            functional, "run_command",
             lambda *_a, **_k: pytest.fail("must not run pytest"),
         )
 
-        result = run.test_unit_on_device(runtime="circuitpython")
+        result = functional.test_unit_on_device(runtime="circuitpython")
 
         assert result == 0
         assert "No circuitpython device configured" in capsys.readouterr().out
@@ -2385,10 +2387,10 @@ class TestSweepDevices:
         ])
         commands: list[list[str]] = []
         monkeypatch.setattr(
-            run, "stream_subprocess",
+            functional, "stream_subprocess",
             lambda command, **_kwargs: (commands.append(command) or (0, "")),
         )
-        monkeypatch.setattr(run, "test_workbench_functional", lambda *args, **kwargs: 0)
+        monkeypatch.setattr(functional, "test_workbench_functional", lambda *args, **kwargs: 0)
 
         result = run.sweep_devices()
 
@@ -2412,10 +2414,10 @@ class TestSweepDevices:
         # (1, "") — a non-cold-start failure (empty transcript carries no
         # WIFI_OK-timeout signature), so it fails without a retry.
         monkeypatch.setattr(
-            run, "stream_subprocess",
+            functional, "stream_subprocess",
             lambda command, **_kwargs: (1, "") if "mp-board" in command else (0, ""),
         )
-        monkeypatch.setattr(run, "test_workbench_functional", lambda *args, **kwargs: 0)
+        monkeypatch.setattr(functional, "test_workbench_functional", lambda *args, **kwargs: 0)
 
         result = run.sweep_devices()
 
@@ -2449,8 +2451,8 @@ class TestSweepDevices:
             sequence = responses[command[-1]]
             return sequence.pop(0) if len(sequence) > 1 else sequence[0]
 
-        monkeypatch.setattr(run, "stream_subprocess", fake_stream)
-        monkeypatch.setattr(run, "test_workbench_functional", lambda *args, **kwargs: 0)
+        monkeypatch.setattr(functional, "stream_subprocess", fake_stream)
+        monkeypatch.setattr(functional, "test_workbench_functional", lambda *args, **kwargs: 0)
 
         result = run.sweep_devices()
 
@@ -2476,10 +2478,10 @@ class TestSweepDevices:
         )
         calls: list[list[str]] = []
         monkeypatch.setattr(
-            run, "stream_subprocess",
+            functional, "stream_subprocess",
             lambda command, **_kwargs: (calls.append(command) or (3, timeout_line)),
         )
-        monkeypatch.setattr(run, "test_workbench_functional", lambda *args, **kwargs: 0)
+        monkeypatch.setattr(functional, "test_workbench_functional", lambda *args, **kwargs: 0)
 
         result = run.sweep_devices()
 
@@ -2499,14 +2501,14 @@ class TestSweepDevices:
         ])
         calls: list[list[str]] = []
         monkeypatch.setattr(
-            run, "stream_subprocess",
+            functional, "stream_subprocess",
             lambda command, **_kwargs: (
                 calls.append(command)
                 or (3, "driver: Timed out after 30.000s waiting for marker "
                        "'DEMO_COMPLETE'\n")
             ),
         )
-        monkeypatch.setattr(run, "test_workbench_functional", lambda *args, **kwargs: 0)
+        monkeypatch.setattr(functional, "test_workbench_functional", lambda *args, **kwargs: 0)
 
         result = run.sweep_devices()
 
@@ -2526,8 +2528,8 @@ class TestSweepDevices:
             self._entry("cp-board", "circuitpython"),
         ])
         calls, fake_functional = _make_fake_command(return_value=0)
-        monkeypatch.setattr(run, "test_libraries_functional", fake_functional)
-        monkeypatch.setattr(run, "test_workbench_functional", lambda *args, **kwargs: 0)
+        monkeypatch.setattr(functional, "test_libraries_functional", fake_functional)
+        monkeypatch.setattr(functional, "test_workbench_functional", lambda *args, **kwargs: 0)
 
         result = run.sweep_devices(
             skip_demo=True, functional=True, library="sockets",
@@ -2559,7 +2561,7 @@ class TestSweepDevices:
         ])
         events: list[str] = []
         monkeypatch.setattr(
-            run, "stream_subprocess",
+            functional, "stream_subprocess",
             lambda command, **_kwargs: (events.append(command[-1]) or (0, "")),
         )
         workbench_calls: list[tuple[tuple, dict]] = []
@@ -2569,7 +2571,7 @@ class TestSweepDevices:
             workbench_calls.append((args, kwargs))
             return 0
 
-        monkeypatch.setattr(run, "test_workbench_functional", fake_workbench)
+        monkeypatch.setattr(functional, "test_workbench_functional", fake_workbench)
 
         result = run.sweep_devices()
 
@@ -2592,9 +2594,9 @@ class TestSweepDevices:
             self._entry("cp-board", "circuitpython"),
         ])
         monkeypatch.setattr(
-            run, "stream_subprocess", lambda command, **_kwargs: (0, ""),
+            functional, "stream_subprocess", lambda command, **_kwargs: (0, ""),
         )
-        monkeypatch.setattr(run, "test_workbench_functional", lambda *args, **kwargs: 1)
+        monkeypatch.setattr(functional, "test_workbench_functional", lambda *args, **kwargs: 1)
 
         result = run.sweep_devices()
 
@@ -2612,10 +2614,10 @@ class TestSweepDevices:
             self._entry("mp-board", "micropython"),
         ])
         monkeypatch.setattr(
-            run, "stream_subprocess", lambda command, **_kwargs: (0, ""),
+            functional, "stream_subprocess", lambda command, **_kwargs: (0, ""),
         )
         calls, fake_workbench = _make_fake_command(return_value=0)
-        monkeypatch.setattr(run, "test_workbench_functional", fake_workbench)
+        monkeypatch.setattr(functional, "test_workbench_functional", fake_workbench)
 
         result = run.sweep_devices(skip_workbench=True)
 
@@ -2633,10 +2635,10 @@ class TestSweepDevices:
         ])
         commands: list[list[str]] = []
         monkeypatch.setattr(
-            run, "stream_subprocess",
+            functional, "stream_subprocess",
             lambda command, **_kwargs: (commands.append(command) or (0, "")),
         )
-        monkeypatch.setattr(run, "test_workbench_functional", lambda *args, **kwargs: 0)
+        monkeypatch.setattr(functional, "test_workbench_functional", lambda *args, **kwargs: 0)
 
         result = run.sweep_devices(device_ids=["cp-board"])
 
@@ -2676,11 +2678,11 @@ class TestSweepDevices:
         ])
         demo_commands: list[list[str]] = []
         monkeypatch.setattr(
-            run, "stream_subprocess",
+            functional, "stream_subprocess",
             lambda command, **_kwargs: (demo_commands.append(command) or (0, "")),
         )
         calls, fake_workbench = _make_fake_command(return_value=0)
-        monkeypatch.setattr(run, "test_workbench_functional", fake_workbench)
+        monkeypatch.setattr(functional, "test_workbench_functional", fake_workbench)
 
         result = run.sweep_devices(skip_demo=True)
 
@@ -2732,32 +2734,32 @@ class TestFirstAssociationGrace:
 
     def test_detector_matches_wifi_ok_timeout(self) -> None:
         text = "driver: Timed out after 45.000s waiting for marker 'WIFI_OK'\n"
-        assert run._demo_output_shows_first_association_timeout(text)
+        assert functional._demo_output_shows_first_association_timeout(text)
 
     def test_detector_ignores_other_marker_timeouts(self) -> None:
         text = "driver: Timed out after 30.000s waiting for marker 'DEMO_COMPLETE'\n"
-        assert not run._demo_output_shows_first_association_timeout(text)
+        assert not functional._demo_output_shows_first_association_timeout(text)
 
     def test_detector_ignores_empty_output(self) -> None:
-        assert not run._demo_output_shows_first_association_timeout("")
+        assert not functional._demo_output_shows_first_association_timeout("")
 
     def test_cell_passes_first_try_without_retry(self, monkeypatch) -> None:
         calls: list[list[str]] = []
         monkeypatch.setattr(
-            run, "stream_subprocess",
+            functional, "stream_subprocess",
             lambda command, **_kw: (calls.append(command) or (0, "")),
         )
-        cell, note = run._run_demo_cell(Path("driver.py"), "cp-board")
+        cell, note = functional._run_demo_cell(Path("driver.py"), "cp-board")
         assert (cell, note) == ("PASS", None)
         assert len(calls) == 1
 
     def test_cell_non_cold_start_failure_is_not_retried(self, monkeypatch) -> None:
         calls: list[list[str]] = []
         monkeypatch.setattr(
-            run, "stream_subprocess",
+            functional, "stream_subprocess",
             lambda command, **_kw: (calls.append(command) or (2, "boom")),
         )
-        cell, note = run._run_demo_cell(Path("driver.py"), "cp-board")
+        cell, note = functional._run_demo_cell(Path("driver.py"), "cp-board")
         assert cell == "FAIL"
         assert note is None
         assert len(calls) == 1
@@ -2768,9 +2770,9 @@ class TestFirstAssociationGrace:
             (0, ""),
         ]
         monkeypatch.setattr(
-            run, "stream_subprocess",
+            functional, "stream_subprocess",
             lambda command, **_kw: sequence.pop(0),
         )
-        cell, note = run._run_demo_cell(Path("driver.py"), "cp-board")
+        cell, note = functional._run_demo_cell(Path("driver.py"), "cp-board")
         assert cell == "PASS*"
         assert note == "cp-board: demo passed on retry (cold-start grace)"
