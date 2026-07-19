@@ -146,7 +146,57 @@ The stable promotion wave ran to completion: all 19 active publishable packages 
 
 **Decision 0111 support-package publishing FINISHED (commit `f764efc9`).**  The decision (support packages publish as `kind=support`, PyPI-only, once they carry a VERSION) was half-landed: `release_matrix.py` already walked `support/` and release.yml's trigger already watched `support/*/VERSION`, but the discovery and promote sides were never updated, so `chumicro-test-harness` could not be promoted and its docstrings still claimed support was never published.  Finished the wiring: `find_publishable_packages` and `PUBLISHABLE_ROOTS` and `promote_validate._locate_package` now cover `support/`; `install_editable` dedupes the package that now appears in both discovery lists.  A second latent issue surfaced: test-harness was the workspace's one `setuptools` package, and the build phase runs `python -m build --no-isolation` against the dev env's hatchling, so its build broke the moment `support/` entered the publish set.  Migrated it to hatchling like every sibling, which forced a `0.3.1 → 0.3.2` bump.  Pushing auto-released `chumicro-test-harness-experimental` 0.3.2 through release.yml (the first support package to travel the fabric), then it promoted to stable as `chumicro-test-harness` 0.3.2.  `pip install chumicro-<lib>[test]` now resolves on stable (verified `--dry-run`: pulls test-harness 0.3.2 alongside config/msgpack/pytest).  This closes the Verdict's last KNOWN-deferred item above.
 
-**Remaining, user go/no-go (launch flips):** revert `DEFAULT_CHANNEL` in `curated_libraries.py` and the template `requirements.txt` back to stable (Decision 0111's explicit launch-window revert), and revoke the PyPI bootstrap token + delete `~/.pypirc` now that no more creations are pending.
+**Launch flips LANDED 2026-07-19 (user go).**  Decision 0111's explicit launch-window revert, executed once the user confirmed:
+
+- **Provenance audit first (user asked "workflows are actually working?"):** every current version on both channels checked against PyPI's PEP 740 attestation records.  All 19 stable packages attest to `promote.yml @ ChuMicro/ChuMicro` (env `pypi`), all 19 experimental latests attest to `release.yml`, GitHub shows exactly 19 successful promote runs (one per package), and all 19 stable git tags exist on origin.  Zero token uploads anywhere current — the bootstrap token's only use was project seeding, never artifacts at shipped versions.
+- **`DEFAULT_CHANNEL` → `stable`** in `curated_libraries.py` (commit `0d0e94d6`, workspace `0.50.1 → 0.51.0`, 1021 workspace tests green); released experimental and promoted stable the same hour, both attested.
+- **Template `requirements.txt` → stable names** (template repo `73db190`): all five suffixes dropped, workspace floor raised to `>=0.51.0` so the CLI's channel default matches the file's names; pushed only after 0.51.0 was live on stable, and the full closure verified resolving (`pip --dry-run` pulls workspace 0.51.0 / pytest-device 0.17.8 / repl 0.4.2 / test-harness 0.3.2 / checks 0.19.1, no `-experimental` anywhere).
+- **Bootstrap token revoked + `~/.pypirc` deleted** ("claudebot", all-projects scope, created Jul 5): removed via the pypi.org web UI (password steps by the user), local file deleted by the user.  Publishing is now OIDC-only end to end — nothing can upload outside the two workflows.
+- The pytest-device `0.17.8` echo-fixture trim release rode the same window as a live end-to-end re-proof: organic VERSION-bump → release.yml → promote_wave → promote.yml, all green.
+
+The docs half of the launch window (the flip list below) stays with the GA docs pass.
+
+## GA docs flip list (2026-07-19 docs pass)
+
+Every documentation line that flips in the same window as the
+`DEFAULT_CHANNEL` / `requirements.txt` launch reverts, collected by the
+GA docs pass so launch day is one mechanical sweep.  Reference by file
+and content, not line number; the docs pass moved lines.
+
+Template repo (`ChuMicro-Workspace-Template`):
+
+- `requirements.txt`: drop the `-experimental` suffix on all five
+  package lines (workspace, repl, pytest-device, test-harness, checks);
+  the header note already says to re-cut the template afterwards.
+- `README.md`: the hosted-docs `workspace/experimental/` path and its
+  "the `stable/` path goes live with the first stable release wave"
+  parenthetical; the worked example's "default channel is experimental
+  while the first stable release wave is still publishing (pass
+  `--channel stable` once it's live)" comment; the air-gapped details
+  block's `ChuMicro-Bundle-Experimental` circup/mip commands and its
+  "experimental bundle is the one that's published today" closing note.
+- `CONTRIBUTING.md`: the hosted-docs `workspace/experimental/` link;
+  the issue-routing paragraph's "the main ChuMicro repository isn't
+  public yet" (flips when the mono-repo goes public, same window).
+- `AGENTS.md`: the hosted-docs `workspace/experimental/` link; the
+  `library add` row's "experimental channel by default while the stable
+  release wave publishes".
+- `CHANGELOG.md`: the "Tooling pinned to the experimental release
+  channel while the first stable wave publishes" entry gets a successor
+  entry recording the flip (do not rewrite history).
+
+Mono-repo:
+
+- `workbench/workspace/src/chumicro_workspace/curated_libraries.py`:
+  `DEFAULT_CHANNEL` revert (the code flip the prose above describes).
+- Library `pyproject.toml` descriptions: sweep the em-dashes out of
+  every package `description` (they render on the docs landing page
+  cards and PyPI).  Deferred from the docs pass because pyproject edits
+  force VERSION bumps; fold into the first post-launch release wave as
+  patch bumps.
+- gh-pages: prune the stale 0.1.x mike version dirs (timing 6,
+  msgpack 5, compat 3, runner 2) from the version selectors.  One-time
+  `mike delete` run; outward-facing, so it rides the launch window.
 
 ## Sequence
 
