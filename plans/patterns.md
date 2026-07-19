@@ -1226,3 +1226,26 @@ use fake nows everywhere, or (b) construct with the real clock and drive
 construction path must forward the `ticks=` seam — `from_config` gained it
 2026-07-05 after its absence forced (b) on a test that wanted (a); a factory
 that swallows the clock seam reintroduces this bug class for its callers.
+
+## Canonical library README Contributing block
+
+Every `libraries/*/README.md` ends its Contributing section with the same
+paragraph, and `chumicro_workspace.scaffold` (`contributing_intro`,
+chumicro branding) generates the identical text for new libraries:
+
+> Issues, bug reports, and pull requests are welcome, and so is "I ran
+> it on this board and here's what happened", some of the most useful
+> feedback a hardware project can get.  Development happens in the
+> [ChuMicro repository](https://github.com/ChuMicro/ChuMicro), whose
+> contributing guide covers setup and the test workflow.
+
+Two constraints shaped it (2026-07-19 GA docs pass):
+
+- CHU006 flags the literal filenames `CONTRIBUTING.md` / `AGENTS.md`
+  anywhere in a publishable tree, including inside a URL, so the block
+  says "contributing guide" and links only the repository root.
+- No "mono-repo" noun, no `functional_tests/` or `devices.yml`
+  instructions: those mean nothing to a PyPI reader.
+
+Change the wording in one place and sweep the other fifteen (14 READMEs
+plus the scaffold string); the scaffold is the piece audits forget.
