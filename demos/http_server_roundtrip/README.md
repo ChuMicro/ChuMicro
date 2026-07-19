@@ -1,14 +1,14 @@
-# http_server_roundtrip — board serves, host drives
+# http_server_roundtrip: board serves, host drives
 
 End-to-end demo of `chumicro_http_server` running on a real board,
 with a host-side script firing HTTP requests against it. You see
-three round trips on your terminal in one command — no curl in
+three round trips on your terminal in one command: no curl in
 another window, no IP discovery.
 
 ## What it shows
 
 - `chumicro_wifi.WifiService` + `chumicro_http_server.HttpServer`
-  sharing one `while True:` loop on the board — same shape as the
+  sharing one `while True:` loop on the board, same shape as the
   README's "Now drop a network request in next to it" walkthrough.
 - Three registered routes (`GET /hello`, `GET /uptime`,
   `POST /echo`) with a `@server.route(...)` decorator.
@@ -29,9 +29,9 @@ Defaults: targets the first CircuitPython device in `devices.yml`.
 
 Override:
 
-- `--device <id>` — a specific device id from `devices.yml`.
-- `--runtime micropython` — pick the first MicroPython device.
-- `--ready-timeout-s <n>` — how long to wait for `SERVER_READY`
+- `--device <id>`: a specific device id from `devices.yml`.
+- `--runtime micropython`: pick the first MicroPython device.
+- `--ready-timeout-s <n>`: how long to wait for `SERVER_READY`
   (default 60 s; ESP32-S2 CP cold-boot + wifi can be slow).
 
 ## Expected output

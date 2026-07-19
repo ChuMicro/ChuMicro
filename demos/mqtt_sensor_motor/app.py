@@ -4,7 +4,7 @@ Reads the on-chip temperature, publishes it as JSON telemetry every
 two seconds, and drives a PWM "motor" (a fan/pump ESC input) from
 speed commands the broker delivers.  Wires ``chumicro_wifi.WifiService``
 + ``chumicro_mqtt.MQTTClient`` into one ``chumicro_runner.Runner`` and
-drives them with ``runner.run_until(...)`` — no async, no threads.
+drives them with ``runner.run_until(...)`` (no async, no threads).
 
 It reads like a mainstream MQTT device sketch (paho / Adafruit
 MiniMQTT): set a Last Will, set the callbacks once, connect, let the
@@ -17,7 +17,7 @@ reimplementing it:
   CONNACK (the default ``when_disconnected="queue"`` policy), so the
   telemetry cadence never has to state-check the client.
 * **Declarative subscribe.**  The command subscription is declared once
-  at startup with ``subscribe()`` — before ``connect()`` — not inside
+  at startup with ``subscribe()`` (before ``connect()``), not inside
   ``on_connect``.  The client records it in its desired set, puts it on
   the wire on the first CONNACK, and replays it on every self-heal
   reconnect, so the app carries no reconnect bookkeeping.
@@ -25,12 +25,12 @@ reimplementing it:
   broker publishes if the board drops uncleanly, paired with a retained
   ``"online"`` sent on connect.  A clean shutdown suppresses the will,
   so the shutdown path publishes ``"offline"`` explicitly.
-* **Self-heal.**  No reconnect code — the socket-factory transport
+* **Self-heal.**  No reconnect code: the socket-factory transport
   rebuilds the connection after a wifi drop on its own.
 
 Command path: an inbound speed (int 0-100) is clamped, applied to the
 motor PWM (and mirrored onto the onboard LED so the bench shows speed),
-then echoed back retained on ``motor/state`` — the closed loop.
+then echoed back retained on ``motor/state`` (the closed loop).
 
 Marker lines (``SENSOR_SOURCE``, ``MOTOR_READY``, ``WIFI_OK``,
 ``MQTT_CONNECTED``, ``TELEMETRY_SENT``, ``MOTOR_APPLIED``,
@@ -54,7 +54,7 @@ from chumicro_wifi import WifiConfig, WifiService, WifiState
 _MOTOR_GPIO = 16
 _PWM_FREQUENCY_HZ = 1_000
 #: 16-bit full scale shared by CircuitPython ``duty_cycle``, MicroPython
-#: ``duty_u16``, and the rp2 ADC's ``read_u16`` — one honest constant.
+#: ``duty_u16``, and the rp2 ADC's ``read_u16`` (one honest constant).
 _U16_FULL_SCALE = 65_535
 
 _TELEMETRY_INTERVAL_MS = 2_000
@@ -114,7 +114,7 @@ if _impl_name == "circuitpython":
     except (TypeError, ValueError, RuntimeError):
         # Pico W's LED hangs off the wifi coprocessor (a CywPin, which
         # pwmio rejects with TypeError; other non-PWM pins raise
-        # ValueError/RuntimeError) — digital on/off only.
+        # ValueError/RuntimeError).  Digital on/off only.
         import digitalio
 
         _led_out = digitalio.DigitalInOut(board.LED)
@@ -143,7 +143,7 @@ elif _impl_name == "micropython":
             return 27.0 - (volts - 0.706) / 0.001721
 
         SENSOR_SOURCE = "real"
-        # Pico W's LED is on the CYW43 chip — digital only.
+        # Pico W's LED is on the CYW43 chip: digital only.
         _led_pin = machine.Pin("LED", machine.Pin.OUT)
 
         def set_led(fraction):
@@ -198,12 +198,12 @@ mqtt.set_will(availability_topic, b"offline", qos=1, retain=True)
 
 # Declarative subscription: subscribe() before connect() records the
 # command topic in the client's desired set.  The first CONNACK puts it
-# on the wire, and every self-heal reconnect replays it — so the app
+# on the wire, and every self-heal reconnect replays it, so the app
 # declares its inbound shape once here, with no on_connect bookkeeping.
 mqtt.subscribe(command_topic, qos=1)
 
 # Progress state at module scope so the callbacks read and write it
-# without ceremony — small enough that a class would only add noise.
+# without ceremony.  Small enough that a class would only add noise.
 telemetry_sent = 0
 commands_applied = 0
 current_speed = 0
@@ -212,7 +212,7 @@ current_speed = 0
 def on_connect():
     """Connect-time setup, fired once the broker session is up.
 
-    Announces presence with a retained "online" — a genuinely
+    Announces presence with a retained "online", a genuinely
     connect-time publish (it pairs with the Last Will).  The command
     subscription is declared once at startup, not here; the client
     replays it on every reconnect on its own.

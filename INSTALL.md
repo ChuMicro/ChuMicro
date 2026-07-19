@@ -90,7 +90,7 @@ pip install chumicro-timing-experimental
 
 ## Project workspaces
 
-For a real project (multiple libraries, deploy automation, no live editing on a fragile CIRCUITPY drive), use the [ChuMicro-Workspace-Template](https://github.com/ChuMicro/ChuMicro-Workspace-Template).  `python3 run.py setup` bootstraps the venv and installs the tooling; `python run.py new my_project` scaffolds a project; `python run.py deploy my_project` ships it to your board with verified flash deploys by default (rsync plus a post-write checksum, and no filesystem wear from save-on-every-keystroke editing).
+For a real project (multiple libraries, deploy automation, no live editing on a fragile CIRCUITPY drive), use the [ChuMicro-Workspace-Template](https://github.com/ChuMicro/ChuMicro-Workspace-Template).  `python3 run.py setup` bootstraps the venv and installs the tooling; `python3 run.py new my_project` scaffolds a project; `python3 run.py deploy my_project` ships it to your board with verified flash deploys by default (rsync plus a post-write checksum, and no filesystem wear from save-on-every-keystroke editing).
 
 Recommended even for a single project on a single board.
 
@@ -111,3 +111,5 @@ A few libraries have per-board restrictions.  Each library README's "Platform su
 - **`mpremote mip install` hangs.**  The board needs network connectivity; mip downloads from GitHub through the device's wifi.  Bring wifi up first, or download the package on your laptop and `mpremote cp` it over.
 - **`pip install` says "no matching distribution found".**  Check the spelling against the library table in the [README](README.md).  If the name is right, the library may not have a stable release yet, in which case the experimental package name (`chumicro-timing-experimental`) will have it.
 - **`ImportError` after install on a board.**  Verify the files actually landed: `mpremote ls /lib/` on MicroPython, or look for `/lib/chumicro_timing/` on the CIRCUITPY drive.  circup and mip don't always report partial installs cleanly.
+
+For anything beyond install problems (board not found, firmware, WiFi, TLS, memory), [`docs/troubleshooting/`](docs/troubleshooting/) starts from the symptom and walks to the fix.

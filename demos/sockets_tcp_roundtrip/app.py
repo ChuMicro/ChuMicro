@@ -1,8 +1,8 @@
-"""Board-side of the sockets_tcp_roundtrip demo — one-shot TCP.
+"""Board-side of the sockets_tcp_roundtrip demo: one-shot TCP.
 
 Brings wifi up via ``chumicro_wifi.WifiService`` driven by
 ``chumicro_runner.Runner``, then dials the driver's echo server with
-``chumicro_sockets.connector`` — the one connect state machine — and
+``chumicro_sockets.connector`` (the one connect state machine) and
 lets ``runner.run_until`` drive it to a terminal state.  Once the
 socket is ready the app uses it synchronously (``send`` /
 ``recv_into`` / ``close``).
@@ -47,7 +47,7 @@ runner.add(wifi)
 # Drive the runner until wifi is up.
 runner.run_until(lambda: wifi.state == WifiState.CONNECTED)
 
-# Wifi is up — dial the echo server.  The connector is a runner
+# Wifi is up.  Dial the echo server.  The connector is a runner
 # service: register it raw and run until it reaches a terminal state.
 marker("CONNECTING", host=echo_host, port=echo_port)
 dial = connector(echo_host, echo_port, radio=wifi.adapter.radio)

@@ -239,11 +239,13 @@ Command-line tools that run on your laptop, not the board.  They're what make th
 
 This repository is built so an agent can actually drive it.  The CLIs answer the questions an agent needs answered (`chumicro-deploy probe` reports what runtime and version a board is running), and when something fails, the tools classify the failure into a message that names the fix (drive not mounted, board in bootloader mode, port held by another process) instead of leaving a bare stack trace to guess at.
 
-The practical effect: you can plug in a board you know nothing about and tell your agent "get this onto CircuitPython and blink an LED," and the agent has real commands for every step — probe the port, flash the right firmware, deploy an example, tail the serial output, and read back what happened.  [`AGENTS.md`](AGENTS.md) is the agent's operating manual for working in this repo; the [workspace template](https://github.com/ChuMicro/ChuMicro-Workspace-Template) carries its own, plus step-by-step skill files for board registration, firmware, and deploy-and-debug.
+The practical effect: you can plug in a board you know nothing about and tell your agent "get this onto CircuitPython and blink an LED," and the agent has real commands for every step: probe the port, flash the right firmware, deploy an example, tail the serial output, and read back what happened.  [`AGENTS.md`](AGENTS.md) is the agent's operating manual for working in this repo; the [workspace template](https://github.com/ChuMicro/ChuMicro-Workspace-Template) carries its own, plus step-by-step skill files for board registration, firmware, and deploy-and-debug.
 
 ## Documentation
 
 📖 **[chumicro.github.io/ChuMicro](https://chumicro.github.io/ChuMicro/)**: hosted guides and API reference for every library, with a version selector for stable and experimental.
+
+When something fails on your bench, [`docs/troubleshooting/`](docs/troubleshooting/) starts from the symptom (board not found, deploy wiped my files, WiFi won't connect, TLS errors, out of memory) and walks to the fix.
 
 ## Contributing
 

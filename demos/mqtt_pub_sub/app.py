@@ -6,11 +6,11 @@ one ``chumicro_runner.Runner`` and drives them with
 
 Reads like a mainstream MQTT quickstart (paho / Adafruit MiniMQTT): set
 a Last Will, set the callbacks once, connect, let the loop run.  The
-periodic publisher just calls ``publish`` — a publish issued before the
+periodic publisher just calls ``publish``.  A publish issued before the
 broker session is up buffers in the client's pre-connect queue and
 flushes on CONNACK (``when_disconnected="queue"``, the default), so no
-state guard is needed.  Connect-time setup — publish presence, subscribe
-to commands — happens in ``on_connect``, fire-and-forget, with no
+state guard is needed.  Connect-time setup (publish presence, subscribe
+to commands) happens in ``on_connect``, fire-and-forget, with no
 callback chain and no waiting on QoS 1 acks (the client tracks PUBACK /
 SUBACK internally; the app never needs to).
 
@@ -74,7 +74,7 @@ def on_connect():
 def on_subscribe(topic, granted_qos):
     """SUBACK arrived: the subscription is live at the broker.
 
-    The marker fires here, not at the subscribe() call — the host
+    The marker fires here, not at the subscribe() call.  The host
     driver gates its command publish on SUBSCRIBED, and a marker
     printed at enqueue time races the broker (a command published
     before the broker processes the SUBSCRIBE is dropped unseen).

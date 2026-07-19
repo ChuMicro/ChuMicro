@@ -1,8 +1,8 @@
-# mqtt_sensor_motor — a temperature-controlled fan node
+# mqtt_sensor_motor: a temperature-controlled fan node
 
 The canonical IoT round trip on `chumicro_mqtt`: a board reads its
 on-chip temperature, publishes it as JSON telemetry, and drives a PWM
-"motor" (fan/pump) from speed commands the broker delivers — with a
+"motor" (fan/pump) from speed commands the broker delivers, with a
 local Mosquitto broker bridging the board to a CPython-side
 counterparty, in one command, no broker setup beyond
 `brew install mosquitto`.
@@ -18,7 +18,7 @@ The board is a fan node. Every two seconds it samples temperature and
 publishes `{"celsius", "speed", "seq"}` telemetry. When a controller
 publishes a speed (`0`-`100`) to the node's `motor/set` topic, the
 board clamps it, applies it to the motor PWM, and echoes the applied
-value back on a retained `motor/state` topic — a closed command loop.
+value back on a retained `motor/state` topic, a closed command loop.
 Presence is a retained `online`/`offline` pair.
 
 ## Wiring (for a real motor)
@@ -27,13 +27,13 @@ The demo runs with nothing attached, but to drive a real load:
 
 - **Motor signal** → **GPIO16** (Pico W header `GP16`, Lolin S2 mini
   header `IO16` / `D4`). Wire this to the PWM/signal input of a motor
-  driver or ESC — never straight to a motor. A ~1 kHz PWM duty of
+  driver or ESC, never straight to a motor. A ~1 kHz PWM duty of
   0-100% comes out here.
 - **Motor power** → the driver/ESC's own supply and ground, with its
   ground tied to the board's ground. The GPIO carries signal only.
 - **Onboard LED** mirrors the duty automatically (brightness = speed on
   the Lolin S2 mini; on/off on the Pico W, whose LED lives on the wifi
-  coprocessor and can't PWM) — a wiring-free speed indicator.
+  coprocessor and can't PWM), a wiring-free speed indicator.
 
 ## Topics
 
@@ -47,16 +47,16 @@ driver (`chumicro-sensor-motor-board`).
 | `…/motor/set` | broker → board | 1 | no | integer speed `0`-`100` |
 | `…/motor/state` | board → broker | 1 | yes | applied speed, echoed back |
 
-## What it shows — library behavior the demo leans on
+## What it shows: library behavior the demo leans on
 
 The board code is short because it reimplements none of this:
 
 - **Pre-connect queue.** Telemetry calls `publish()` with no CONNECTED
   guard. Samples produced before the broker session is up buffer in the
   client's bounded pre-connect queue and flush on CONNACK (the default
-  `when_disconnected="queue"` policy) — the cadence never state-checks.
+  `when_disconnected="queue"` policy).  The cadence never state-checks.
 - **Declarative subscribe.** The `motor/set` subscription is declared
-  once at startup with `subscribe()`, before `connect()` — not inside
+  once at startup with `subscribe()`, before `connect()`, not inside
   `on_connect`. The client records it in its desired set, sends it on
   the first CONNACK, and replays it on every self-heal reconnect, so
   there is no reconnect bookkeeping. (`on_connect` keeps only the
@@ -65,7 +65,7 @@ The board code is short because it reimplements none of this:
   publishes if the board drops uncleanly, paired with a retained
   `online` on connect. A clean shutdown suppresses the will, so the
   shutdown path publishes `offline` explicitly.
-- **Wifi-drop self-heal.** No reconnect code at all — the
+- **Wifi-drop self-heal.** No reconnect code at all: the
   socket-factory transport rebuilds the connection after a wifi drop
   on its own.
 - **Runner composition.** `WifiService` and `MQTTClient` added with
@@ -82,9 +82,9 @@ Defaults: targets the first CircuitPython device in `devices.yml`.
 
 Override:
 
-- `--device <id>` — a specific device id from `devices.yml`.
-- `--runtime micropython` — pick the first MicroPython device.
-- `--connect-timeout-s <n>` — how long to wait for the board's
+- `--device <id>`: a specific device id from `devices.yml`.
+- `--runtime micropython`: pick the first MicroPython device.
+- `--connect-timeout-s <n>`: how long to wait for the board's
   `MQTT_CONNECTED` marker (default 60 s; ESP32-S2 cold-boot + wifi can
   be slow).
 

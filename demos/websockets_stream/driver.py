@@ -1,7 +1,7 @@
 """Host-side driver for the websockets_stream demo.
 
 Runs a WebSocket server on the host's LAN IP that, on each connection,
-streams a few text messages then closes — built on
+streams a few text messages then closes, built on
 ``chumicro_websockets.WebSocketServer`` itself (CPython), so the demo
 exercises both ends of the library.  Deploys the board's ``app.py`` via
 :func:`chumicro_workspace.deploy_api.deploy_project` with the server URL
@@ -44,7 +44,7 @@ def _start_stream_server(bind_host: str):
     Each accepted connection gets ``_STREAM_MESSAGE_COUNT`` text
     messages followed by a clean close.  The server is driven by a
     plain tick loop on a daemon thread (host-side, so a 10 ms poll is
-    fine — the board uses the efficient ``runner.wait`` path).
+    fine).  The board uses the efficient ``runner.wait`` path.
     """
     listener = make_listener(bind_host, 0)
     port = listener.getsockname()[1]
@@ -135,7 +135,7 @@ def main(argv: list[str] | None = None) -> int:
 
         # Wait on the terminal STREAM_CLOSED marker (it carries the count,
         # which proves the messages arrived) rather than the intermediate
-        # WS_OPEN / MESSAGE markers — a single corrupted serial line on a
+        # WS_OPEN / MESSAGE markers: a single corrupted serial line on a
         # non-terminal marker shouldn't fail an otherwise-clean run.
         closed_marker = session.wait_for(
             "STREAM_CLOSED", timeout_s=args.completion_timeout_s,

@@ -17,6 +17,7 @@ There are several ways to be part of this project, and writing code is only one 
 | Get the short version | [Contributor Cheat Sheet](docs/contributing/cheat-sheet.md) |
 | Find something to work on | [Good first contributions](#good-first-contributions) below |
 | Set up your environment | [Setting up](#setting-up) below |
+| Configure your editor | [PyCharm](docs/contributing/development-pycharm.md), [VS Code](docs/contributing/development-vscode.md), or [other editors](docs/contributing/development-other-editors.md) |
 | Make your first change, end to end | [Your first change](#your-first-change-a-worked-example) below |
 | Understand the test layers | [Testing](#testing) below |
 | Run tests on a real board | [Device Testing](docs/contributing/device-testing.md) |
@@ -24,10 +25,10 @@ There are several ways to be part of this project, and writing code is only one 
 | Learn the code style | [Style Guide](docs/contributing/style-guide.md) |
 | Open a pull request | [Creating a Pull Request](docs/contributing/pull-requests.md) |
 | Add a new library | [Adding a New Library](docs/contributing/new-library.md) |
-| Adopt one library into an existing codebase | [Standalone integration](docs/contributing/standalone-integration.md) |
+| Adopt one library into an existing codebase | [Standalone integration](docs/contributing/standalone-integration.md), then [Slimming your deploy](docs/contributing/slimming-your-deploy.md) |
 | Add a host-only tool | [Adding a Workbench Package](docs/contributing/workbench.md) |
 | Understand releases | [Releases and Promotion](docs/contributing/releases.md) |
-| Work with an AI coding agent | [Working with Agents](docs/contributing/working-with-agents.md) |
+| Work with an AI coding agent | [Working with Agents](docs/contributing/working-with-agents.md), plus the [agent style guide](docs/contributing/agent-style-guide.md) for prose tone |
 | Recover from a broken state | [Troubleshooting](docs/troubleshooting/) |
 
 Each page stands on its own.  Read the ones that match what you're doing and skip the rest.

@@ -85,7 +85,7 @@ def main(argv: list[str] | None = None) -> int:
                 extra_runtime_config={
                     "sockets.echo.host": echo_host,
                     "sockets.echo.port": echo_port,
-                    # PEM bytes ship as a str over msgpack — the board
+                    # PEM bytes ship as a str over msgpack.  The board
                     # encodes back to bytes before passing to
                     # ssl_context_with_ca.
                     "sockets.echo.ca_pem": ca_pem_bytes.decode("ascii"),

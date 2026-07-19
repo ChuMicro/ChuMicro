@@ -64,7 +64,7 @@ def _resolve_broker() -> tuple[subprocess.Popen[bytes], Path, str, int]:
     lan_ip = detect_lan_ip()
     if lan_ip is None:
         raise SystemExit(
-            "driver: couldn't detect a LAN IP — the board needs an "
+            "driver: couldn't detect a LAN IP: the board needs an "
             "address it can reach over wifi.  Check that the host is "
             "connected to the same network the board will join.",
         )
@@ -145,7 +145,7 @@ def main(argv: list[str] | None = None) -> int:
         "--runtime", default=None,
         choices=("circuitpython", "micropython"),
         help=(
-            "runtime filter — when --device isn't given, picks the "
+            "runtime filter: when --device isn't given, picks the "
             "first matching device (default: circuitpython)"
         ),
     )
@@ -264,7 +264,7 @@ def main(argv: list[str] | None = None) -> int:
 
         # Wait for the board's retained publish so a fresh wildcard
         # subscriber sees the retained payload on SUBACK (the state
-        # subscribe below deliberately happens AFTER this marker — it
+        # subscribe below deliberately happens AFTER this marker: it
         # pins retained-delivery-on-SUBACK semantics).
         _await_marker_while_driving_host(
             session, host_client, "RETAINED_STATE_SENT", timeout_s=15.0,
@@ -316,7 +316,7 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 6
         print(
-            f"driver: host published cmd to {command_topic} (qos=1) — PUBACK in",
+            f"driver: host published cmd to {command_topic} (qos=1), PUBACK in",
         )
 
         # The board's on_message fires when the command lands.
@@ -369,7 +369,7 @@ def main(argv: list[str] | None = None) -> int:
                 )
             except Exception as disconnect_error:
                 print(
-                    f"driver: warning — host MQTT disconnect raised "
+                    f"driver: warning, host MQTT disconnect raised "
                     f"{type(disconnect_error).__name__}: {disconnect_error}",
                     file=sys.stderr,
                 )

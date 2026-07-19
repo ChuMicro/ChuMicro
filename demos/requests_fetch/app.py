@@ -1,4 +1,4 @@
-"""Board-side of the requests_fetch demo — one-shot HTTP GET via a generator.
+"""Board-side of the requests_fetch demo: one-shot HTTP GET via a generator.
 
 ``fetch_run`` expresses the whole lifecycle top-to-bottom: wait for the
 wifi link with ``wait_for``, build the connector factory, then

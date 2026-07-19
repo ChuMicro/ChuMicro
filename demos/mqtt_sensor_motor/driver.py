@@ -7,7 +7,7 @@ CPython-side :class:`MQTTClient` as the counterparty.
 
 The host subscribes to the board's wildcard topics
 (``demo/+/availability``, ``demo/+/telemetry``, ``demo/+/motor/state``)
-*before* the board reaches the broker — the board's first telemetry
+*before* the board reaches the broker: the board's first telemetry
 samples drain from its pre-connect queue at CONNACK, and a late
 subscriber misses them.  Then it drives the round trip:
 
@@ -86,7 +86,7 @@ def _resolve_broker() -> tuple[subprocess.Popen[bytes], Path, str, int]:
     lan_ip = detect_lan_ip()
     if lan_ip is None:
         raise SystemExit(
-            "driver: couldn't detect a LAN IP — the board needs an "
+            "driver: couldn't detect a LAN IP: the board needs an "
             "address it can reach over wifi.  Check that the host is "
             "connected to the same network the board will join.",
         )
@@ -132,7 +132,7 @@ def _await_marker_while_driving_host(
     """Wait for *marker_name* while keeping the host MQTT client ticking.
 
     ``MarkerQueue.poll`` checks without blocking, so the loop ticks the
-    host client between polls — if it stalled, the board's inbound
+    host client between polls.  If it stalled, the board's inbound
     stream (its QoS-1 telemetry) would back up and get missed.
     """
     deadline = time.monotonic() + timeout_s
@@ -200,7 +200,7 @@ def main(argv: list[str] | None = None) -> int:
         "--runtime", default=None,
         choices=("circuitpython", "micropython"),
         help=(
-            "runtime filter — when --device isn't given, picks the "
+            "runtime filter: when --device isn't given, picks the "
             "first matching device (default: circuitpython)"
         ),
     )
@@ -460,7 +460,7 @@ def main(argv: list[str] | None = None) -> int:
                 )
             except Exception as disconnect_error:  # noqa: BLE001
                 print(
-                    f"driver: warning — host MQTT disconnect raised "
+                    f"driver: warning, host MQTT disconnect raised "
                     f"{type(disconnect_error).__name__}: {disconnect_error}",
                     file=sys.stderr,
                 )

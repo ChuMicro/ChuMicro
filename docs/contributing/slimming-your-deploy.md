@@ -1,10 +1,10 @@
 # Slimming your deploy
 
-When you deploy a project, `chumicro-workspace` copies every chumicro library that anything in your project imports onto the board — including the small helper each library uses to build its default transport (typically a `chumicro_sockets` socket).
+When you deploy a project, `chumicro-workspace` copies every chumicro library that anything in your project imports onto the board, including the small helper each library uses to build its default transport (typically a `chumicro_sockets` socket).
 
-Most of the time that's fine.  But if you're passing your own socket into a library — say `MQTTClient(transport_factory=my_factory, ...)` — the default-builder helper is dead code on your board, and so is `chumicro_sockets` underneath it.  The deployer can't tell at deploy time which path your code will take at runtime, so it ships both.
+Most of the time that's fine.  But if you're passing your own socket into a library (say `MQTTClient(transport_factory=my_factory, ...)`), the default-builder helper is dead code on your board, and so is `chumicro_sockets` underneath it.  The deployer can't tell at deploy time which path your code will take at runtime, so it ships both.
 
-[Decision 0062](../../plans/decisions/0062-entrypoint-factory-skip.md) lets you say "skip the default builder; I'm bringing my own."  Add one line to your `app.py` (or `code.py` — whichever your project's entrypoint is):
+[Decision 0062](../../plans/decisions/0062-entrypoint-factory-skip.md) lets you say "skip the default builder; I'm bringing my own."  Add one line to your `app.py` (or `code.py`, whichever your project's entrypoint is):
 
 ```python
 __chumicro_skip_factories__ = ("sockets_factory",)
@@ -19,8 +19,8 @@ The skip constant accepts two entry shapes, mix freely:
 ```python
 # app.py
 __chumicro_skip_factories__ = (
-    "sockets_factory",                       # family — skip every <library>.sockets_factory
-    "chumicro_websockets.tls_factory",       # exact — skip just this one
+    "sockets_factory",                       # family: skip every <library>.sockets_factory
+    "chumicro_websockets.tls_factory",       # exact: skip just this one
 )
 ```
 
@@ -46,7 +46,7 @@ RuntimeError: chumicro_sockets.sockets_factory not available
 pass transport_factory= or socket= explicitly.
 ```
 
-The five library `from_config` methods that lazy-import a factory submodule — mqtt, requests, websockets, ntp, http_server — all emit this message with their own bypass-kwarg names.  The "not on the board" half of the message covers manual `circup` / `mip` installs that selected the library but omitted its factory submodule — the failure mode is the same loud `RuntimeError` either way.
+The five library `from_config` methods that lazy-import a factory submodule (mqtt, requests, websockets, ntp, http_server) all emit this message with their own bypass-kwarg names.  The "not on the board" half of the message covers manual `circup` / `mip` installs that selected the library but omitted its factory submodule: the failure mode is the same loud `RuntimeError` either way.
 
 ## Two informational warnings via `source.skip_factories_warnings()`
 
@@ -59,7 +59,7 @@ __chumicro_skip_factories__ names 'chumicro_sockets.sockets_factory' but
 the entrypoint imports it directly; shipping it anyway.
 ```
 
-This catches the contradiction between "I want to skip this" and "I'm using it directly" without forcing you to pick — the explicit import wins.
+This catches the contradiction between "I want to skip this" and "I'm using it directly" without forcing you to pick: the explicit import wins.
 
 **Dead skip.**  If a user-written entry matches discovered modules, but none of their parent libraries are imported anywhere in the deploy:
 
@@ -73,7 +73,7 @@ The `sockets_factory` family entry now resolves to the single shared `chumicro_s
 
 ## When this matters (and when it doesn't)
 
-The skip mechanism only fires under the `chumicro-workspace` deploy path (`chumicro-workspace deploy <project>`).  `circup` and `mip` install the on-device libraries through their own dep-graph resolution — they read each package's pyproject.toml dependencies and install transitively with no `--no-deps` flag.  See [Decision 0042](../../plans/decisions/0042-library-dependency-policy.md) for the why; the bench evidence is recorded in the body of [Decision 0062](../../plans/decisions/0062-entrypoint-factory-skip.md).
+The skip mechanism only fires under the `chumicro-workspace` deploy path (`chumicro-workspace deploy <project>`).  `circup` and `mip` install the on-device libraries through their own dep-graph resolution: they read each package's pyproject.toml dependencies and install transitively with no `--no-deps` flag.  See [Decision 0042](../../plans/decisions/0042-library-dependency-policy.md) for the why; the bench evidence is recorded in the body of [Decision 0062](../../plans/decisions/0062-entrypoint-factory-skip.md).
 
 You'll feel the difference if and only if:
 
@@ -85,7 +85,7 @@ If any of those three is false, the skip constant is a no-op and the dead-skip w
 
 ## Compatibility with on-device library curation
 
-The `chumicro-workspace library` CLI (`add` / `list` / `update` / `remove` / `switch-channel`) is the on-device library host: it pulls a chumicro library *and the chumicro libraries it transitively needs* from PyPI into the workspace's `libraries/` folder, where the deploy walker treats them like local libraries.  `library add` resolves the transitive set from each fetched library's `pyproject.toml`, so dropping a library also drops the deps only it reached.  The skip-factories constant is the entrypoint-shape annotation that decides which factory submodules — and therefore which transitive deps — are actually needed; the same constant works for both deploy paths.
+The `chumicro-workspace library` CLI (`add` / `list` / `update` / `remove` / `switch-channel`) is the on-device library host: it pulls a chumicro library *and the chumicro libraries it transitively needs* from PyPI into the workspace's `libraries/` folder, where the deploy walker treats them like local libraries.  `library add` resolves the transitive set from each fetched library's `pyproject.toml`, so dropping a library also drops the deps only it reached.  The skip-factories constant is the entrypoint-shape annotation that decides which factory submodules (and therefore which transitive deps) are actually needed; the same constant works for both deploy paths.
 
 ## For library authors: how the convention works
 

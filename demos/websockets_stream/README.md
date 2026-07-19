@@ -1,7 +1,7 @@
-# websockets_stream — receive a message stream with `yield from`
+# websockets_stream: receive a message stream with `yield from`
 
 End-to-end demo of the `chumicro_websockets` receive-stream API on a
-real board.  The driver runs a WebSocket server on the host's LAN IP —
+real board.  The driver runs a WebSocket server on the host's LAN IP,
 built on `chumicro_websockets.WebSocketServer` itself, so both ends of
 the library run in one demo.  On each connection the server streams a
 few text messages then closes; the board receives them with a linear
@@ -23,7 +23,7 @@ runner.add_generator(receive_stream(ws))    # drains the messages
 
 - **Receive stream as a generator.** `ws.next_message()` suspends until
   the next inbound message and returns it, or `None` once the stream
-  closes — wait-process-wait instead of an `on_text` / `on_binary`
+  closes: wait-process-wait instead of an `on_text` / `on_binary`
   callback.
 - **Session + consumer split.** The `WebSocketClient` is registered with
   `runner.add(...)` (it does the recv + frame parse each tick); the
@@ -43,8 +43,8 @@ Defaults: targets the first CircuitPython device in `devices.yml`.
 
 Override:
 
-- `--device <id>` — a specific device id from `devices.yml`.
-- `--runtime micropython` — pick the first MicroPython device.
+- `--device <id>`: a specific device id from `devices.yml`.
+- `--runtime micropython`: pick the first MicroPython device.
 
 ## Expected output
 

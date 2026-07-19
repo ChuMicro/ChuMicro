@@ -2,7 +2,7 @@
 
 <img src="../../support/docs/chumicro_tip.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
-This guide is for developers using editors other than PyCharm and VS Code — Neovim, Zed, Emacs, Sublime Text, Fleet, or anything else with a terminal.  You don't need IDE-specific configuration to work in this project.
+This guide is for developers using editors other than PyCharm and VS Code: Neovim, Zed, Emacs, Sublime Text, Fleet, or anything else with a terminal.  You don't need IDE-specific configuration to work in this project.
 
 <br clear="left">
 
@@ -17,7 +17,7 @@ python scripts/prepare_workspace.py
 
 This auto-detects or creates `.venv`, installs dependencies, runs **editable installs** (`pip install -e`) for every library and support package, then runs lint + host tests to verify the install. Look for `Workspace is ready` at the end.
 
-After the first run, `python scripts/run.py setup` is what refreshes the workspace day-to-day — same install + IDE sync + starter device-config generation.
+After the first run, `python scripts/run.py setup` is what refreshes the workspace day-to-day: same install + IDE sync + starter device-config generation.
 
 Activate the venv before opening your editor so it picks up the right interpreter:
 
@@ -29,11 +29,11 @@ source .venv/bin/activate
 
 The workspace setup does two things that make imports resolve in any editor:
 
-1. **Editable installs** — `prepare_workspace.py` runs `pip install -e` for every library. This registers each package with Python's import system, so `from chumicro_timing import ticks_ms` works in any tool that uses the venv's interpreter — debuggers, REPLs, linters, test runners, and language servers. (PyCharm uses source-root configuration instead of relying on editable installs; for most other editors, the editable installs are what make imports work.)
+1. **Editable installs:** `prepare_workspace.py` runs `pip install -e` for every library. This registers each package with Python's import system, so `from chumicro_timing import ticks_ms` works in any tool that uses the venv's interpreter: debuggers, REPLs, linters, test runners, and language servers. (PyCharm uses source-root configuration instead of relying on editable installs; for most other editors, the editable installs are what make imports work.)
 
-2. **`pyrightconfig.json`** — sits at the project root with `extraPaths` pointing to every library's `src/` directory. Any editor that uses [Pyright](https://github.com/microsoft/pyright) as its language server (directly or via [basedpyright](https://github.com/DetachHead/basedpyright), [pylsp](https://github.com/python-lsp/python-lsp-server), etc.) picks this up automatically.
+2. **`pyrightconfig.json`**: sits at the project root with `extraPaths` pointing to every library's `src/` directory. Any editor that uses [Pyright](https://github.com/microsoft/pyright) as its language server (directly or via [basedpyright](https://github.com/DetachHead/basedpyright), [pylsp](https://github.com/python-lsp/python-lsp-server), etc.) picks this up automatically.
 
-If your editor uses a different language server (e.g., Jedi), the editable installs are sufficient — Jedi resolves imports through the Python environment, not `pyrightconfig.json`.
+If your editor uses a different language server (e.g., Jedi), the editable installs are sufficient.  Jedi resolves imports through the Python environment, not `pyrightconfig.json`.
 
 ## Running tasks
 
@@ -84,7 +84,7 @@ require("lspconfig").pyright.setup({
 })
 ```
 
-No additional `extraPaths` configuration is needed — the root `pyrightconfig.json` handles it.
+No additional `extraPaths` configuration is needed.  The root `pyrightconfig.json` handles it.
 
 ### Zed
 
@@ -100,21 +100,13 @@ Install `LSP-pyright` via Package Control. It reads `pyrightconfig.json` automat
 
 ### Any other editor
 
-If your editor has a terminal, you're ready. The CLI workflow is the primary path — the PyCharm and VS Code guides are convenience wrappers around the same `scripts/run.py` commands.
+If your editor has a terminal, you're ready. The CLI workflow is the primary path.  The PyCharm and VS Code guides are convenience wrappers around the same `scripts/run.py` commands.
 
 ## Browsing coverage reports
 
-After running tests, a `.coverage` data file is left at the repository root. Generate an HTML report for line-by-line browsing:
+After running tests, a `.coverage` data file is left at the repository root. For the HTML report and the rest of the coverage workflow, see [Browsing coverage](style-guide.md#browsing-coverage) in the Style Guide.
 
-```bash
-pytest libraries/timing/tests/
-python -m coverage html
-open htmlcov/index.html    # macOS — use xdg-open on Linux
-```
-
-The report highlights covered lines in green and missed lines in red. Click any file to see exactly which branches need tests. `htmlcov/` is gitignored.
-
-Some editors also have coverage gutter plugins that read coverage data directly — check your editor's plugin ecosystem for "coverage" integrations. Most read either `.coverage` (SQLite) or `coverage.xml` (generate with `python -m coverage xml`).
+Many editors also have coverage-gutter plugins that read the data directly; check your editor's plugin ecosystem for a "coverage" integration. Most read either `.coverage` (SQLite) or `coverage.xml` (generate with `python -m coverage xml`).
 
 ## When a new library is added
 

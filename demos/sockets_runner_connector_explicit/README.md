@@ -1,13 +1,13 @@
-# sockets_runner_connector_explicit — sockets via runner with a user-defined service
+# sockets_runner_connector_explicit: sockets via runner with a user-defined service
 
 The explicit `check` / `handle` expansion of
 [`sockets_runner_connector`](../sockets_runner_connector/): the same
 TCP echo round trip written as a hand-rolled runner-service instead of
 a generator.  Read it to see what the `connect` / `send_all` /
-`recv_until` generator helpers collapse — for new custom-protocol code,
+`recv_until` generator helpers collapse.  For new custom-protocol code,
 reach for the generator demo first.
 
-`EchoService` here writes it all out — a short state machine (`idle` →
+`EchoService` here writes it all out: a short state machine (`idle` →
 `connecting` → `sending` → `receiving` → `done`) plus the runner-ABI
 surface (`io_socket` / `io_interest(now_ms)`) that
 let the runner sleep on socket-ready events instead of polling.  Only
@@ -17,7 +17,7 @@ changes for a real custom protocol.
 ## What it shows
 
 - **User-defined runner-service.**  `runner.add(echo)` where `echo`
-  is the user's `EchoService` class — same registration shape as
+  is the user's `EchoService` class, same registration shape as
   `runner.add(wifi)` / `runner.add(mqtt)`.  The class is local to
   the app; no library scaffolding involved.
 - **The service drives its own connector.**  `EchoService.start()`
@@ -33,11 +33,11 @@ changes for a real custom protocol.
   describe the send and receive phases.  The connector goes inert
   (terminal state, `io_interest` returns `0`) and the runner ignores it.
 - **Real send loop, not a one-shot.**  `_handle_sending` loops on
-  `send()` and tracks `_send_offset` so a short return — including
-  `EAGAIN` — resumes from the right byte on the next wake.  The
+  `send()` and tracks `_send_offset` so a short return (including
+  `EAGAIN`) resumes from the right byte on the next wake.  The
   shape any custom-protocol service uses for outbound bytes.
 - **Single `while not echo.done` loop at the end.**  Everything else
-  is declarative — services register before the loop, and the loop
+  is declarative: services register before the loop, and the loop
   is just `now_ms = runner.tick(); runner.wait(now_ms)`.
 
 ## Run it
@@ -50,10 +50,10 @@ Defaults: targets the first CircuitPython device in `devices.yml`.
 
 Override:
 
-- `--device <id>` — a specific device id from `devices.yml`.
-- `--runtime micropython` — pick the first MicroPython device.
-- `--wifi-timeout-s <n>` — how long to wait for `WIFI_OK` (default 45 s).
-- `--connect-timeout-s <n>` — how long to wait for `CONNECTED` after
+- `--device <id>`: a specific device id from `devices.yml`.
+- `--runtime micropython`: pick the first MicroPython device.
+- `--wifi-timeout-s <n>`: how long to wait for `WIFI_OK` (default 45 s).
+- `--connect-timeout-s <n>`: how long to wait for `CONNECTED` after
   `CONNECTING` (default 15 s).
 
 ## Expected output
@@ -73,7 +73,7 @@ driver: demo completed cleanly.
 
 - A board registered in `devices.yml`.
 - `secrets.toml` at the repo root with `wifi.ssid` + `wifi.password`.
-- A reachable wifi network the board can join — the board needs to
+- A reachable wifi network the board can join: the board needs to
   reach the host's LAN IP that the echo server binds to.
 
 ## When to use this pattern
@@ -85,33 +85,33 @@ driver: demo completed cleanly.
   with wifi management, an LED blink, sensor reads, etc.
 
 If your protocol IS one of HTTP / MQTT / WebSockets, use those
-libraries instead — they own the wire-format codec and the runner
+libraries instead: they own the wire-format codec and the runner
 integration for you.  See `demos/mqtt_pub_sub` for the
 already-built-in-client equivalent.
 
-One-shot by design — this demo exits after one round trip.  For
+One-shot by design: this demo exits after one round trip.  For
 reconnect-capable adapters (wifi-up / wifi-down cycles), add a small
 `reset()` to clear `connector` / `_socket` / buffers back to `idle`
 and call it from the wifi `DISCONNECTED` callback.
 
 ## Substrate honesty for the connect phase
 
-- **CPython** (host pytest, sim runs) — truly non-blocking via
+- **CPython** (host pytest, sim runs): truly non-blocking via
   `BlockingIOError`(EINPROGRESS) + `select.select(POLLOUT)` + `SO_ERROR`.
-- **MicroPython rp2 / esp32** — truly non-blocking via
+- **MicroPython rp2 / esp32**: truly non-blocking via
   `OSError(EINPROGRESS)` + `select.poll(POLLOUT)`.
-- **CircuitPython** — `socketpool` does not expose a non-blocking
+- **CircuitPython**: `socketpool` does not expose a non-blocking
   connect, so the TCP step blocks for the handshake duration.
   Honest documented compromise on CP; other runner tasks pause for
   the duration of that one call.
 
 ## Related
 
-- [`sockets_tcp_roundtrip`](../sockets_tcp_roundtrip/) — synchronous
+- [`sockets_tcp_roundtrip`](../sockets_tcp_roundtrip/): synchronous
   TCP, no runner-driven connect, no custom service.  Simpler app
   code; blocks for the full TCP handshake.
-- [`sockets_tls_roundtrip`](../sockets_tls_roundtrip/) — TLS variant
+- [`sockets_tls_roundtrip`](../sockets_tls_roundtrip/): TLS variant
   of the synchronous demo with a custom-CA trust anchor.
-- [`mqtt_pub_sub`](../mqtt_pub_sub/) — the same `runner.add(service)`
+- [`mqtt_pub_sub`](../mqtt_pub_sub/): the same `runner.add(service)`
   shape but with the protocol absorbed into `MQTTClient` (no
   user-defined service needed).

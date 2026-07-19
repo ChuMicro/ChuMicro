@@ -1,12 +1,12 @@
-# requests_fetch — one-shot HTTP GET as a generator
+# requests_fetch: one-shot HTTP GET as a generator
 
 End-to-end demo of `chumicro_requests` generator API on a real board.
 The driver runs a stdlib HTTP server on the host's LAN IP; the board
 joins the same wifi and fetches one URL from it with a single
 `yield from`.
 
-The board reads top-to-bottom — connect, send, receive, return the
-response — instead of polling a request handle or wiring an `on_done`
+The board reads top-to-bottom (connect, send, receive, return the
+response) instead of polling a request handle or wiring an `on_done`
 callback:
 
 ```python
@@ -38,8 +38,8 @@ Defaults: targets the first CircuitPython device in `devices.yml`.
 
 Override:
 
-- `--device <id>` — a specific device id from `devices.yml`.
-- `--runtime micropython` — pick the first MicroPython device.
+- `--device <id>`: a specific device id from `devices.yml`.
+- `--runtime micropython`: pick the first MicroPython device.
 
 ## Expected output
 

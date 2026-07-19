@@ -2,7 +2,7 @@
 
 Brings WiFi up with ``chumicro_wifi.WifiService`` and serves three
 routes with ``chumicro_http_server.HttpServer``.  Both services
-share one cooperative ``while True:`` loop — no async, no threads —
+share one cooperative ``while True:`` loop (no async, no threads),
 which is the same shape the README's "Now drop a network request in
 next to it" walkthrough uses.
 
