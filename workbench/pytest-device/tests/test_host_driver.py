@@ -56,7 +56,10 @@ def in_process_http_server():
     server = http.server.HTTPServer(("127.0.0.1", 0), _OkHandler)
     port = server.server_port
     server_thread = threading.Thread(
-        target=server.serve_forever, name="test-http-server", daemon=True,
+        # poll_interval bounds how long shutdown() blocks: serve_forever only
+        # notices the stop flag once per poll, and the stdlib default is 0.5s.
+        target=lambda: server.serve_forever(poll_interval=0.01),
+        name="test-http-server", daemon=True,
     )
     server_thread.start()
     try:
@@ -139,7 +142,7 @@ class TestBindToAgainstRealHttpServer:
         try:
             hit = bind_to(runner)
             with pytest.raises(MarkerTimeoutError, match=r"SERVER_READY"):
-                hit("/", timeout_s=0.2)
+                hit("/", timeout_s=0.05)
         finally:
             runner.wait_for_completion(timeout_s=2.0)
             runner.shutdown()

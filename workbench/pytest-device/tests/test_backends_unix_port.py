@@ -293,7 +293,7 @@ class TestExecuteTimeout:
     ) -> None:
         """A file that exceeds the timeout raises, naming the file and ceiling.
 
-        The worker script sleeps far longer than the 0.5 s timeout, so
+        The worker script sleeps far longer than the 0.2 s timeout, so
         ``subprocess.run`` kills it and the backend surfaces a
         ``BackendExecuteError`` naming the file — one wedged file fails
         cleanly instead of stalling the lane.
@@ -305,13 +305,13 @@ class TestExecuteTimeout:
         backend = UnixPortBackend(
             workspace,
             binaries={"micropython": sys.executable},
-            execute_timeout_seconds=0.5,
+            execute_timeout_seconds=0.2,
         )
 
         with pytest.raises(BackendExecuteError, match="timed out") as excinfo:
             backend.execute(_item_for(test_file), _unix_port_target())
         assert "test_hang.py" in str(excinfo.value)
-        assert "0.5s" in str(excinfo.value)
+        assert "0.2s" in str(excinfo.value)
 
     def test_fast_file_under_the_timeout_returns_output(
         self, tmp_path: Path,

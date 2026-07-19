@@ -26,7 +26,7 @@ def test_wait_until_listening_returns_false_when_nothing_is_listening():
     # Pick a port we know is free, but don't bind a listener — the
     # poll should time out and return False without raising.
     port = find_free_port("127.0.0.1")
-    assert wait_until_listening("127.0.0.1", port, deadline_seconds=0.2) is False
+    assert wait_until_listening("127.0.0.1", port, deadline_seconds=0.05) is False
 
 
 def test_wait_until_listening_returns_true_when_listener_is_up():
