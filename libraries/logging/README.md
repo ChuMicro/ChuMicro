@@ -3,13 +3,15 @@
 <img src="https://raw.githubusercontent.com/ChuMicro/ChuMicro/main/support/docs/chumicro_tip.png"
 align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
-**Standalone, stdlib-shaped levels, ChuMicro-shaped I/O.**
+**Buffer log lines off the hot path so logging never stalls your control loop.**
 
-Stdlib-compatible level constants (`DEBUG` / `INFO` / `WARNING` / `ERROR` / `CRITICAL`) and per-logger thresholds — familiar shape for code that already speaks `logging`.  The runner-friendly bit lives in `BufferedHandler`, which buffers raw records on the hot path and runs both formatting and I/O at drain time on the runner tick, so log lines never stall your control loop.
+Stdlib-compatible level constants (`DEBUG` / `INFO` / `WARNING` / `ERROR` / `CRITICAL`) and per-logger thresholds give you a familiar shape for code that already speaks `logging`.  The runner-friendly piece lives in `BufferedHandler`, which buffers raw records on the hot path and defers both formatting and I/O to drain time on the runner tick.
 
 <br clear="left">
 
-> Part of the [ChuMicro](https://github.com/ChuMicro/ChuMicro) family — small, focused Python libraries for microcontrollers and laptops. [Browse all libraries.](https://github.com/ChuMicro/ChuMicro/tree/main/libraries)
+**Status: parked.**  chumicro-logging works as documented and stays published, but it is not under active development and no other ChuMicro library integrates with it.  Adopt it as a standalone buffered logger, or skip it.
+
+> Part of the [ChuMicro](https://github.com/ChuMicro/ChuMicro) family: small, focused Python libraries for microcontrollers and laptops. [Browse all libraries.](https://github.com/ChuMicro/ChuMicro/tree/main/libraries)
 
 ## Install
 
@@ -45,10 +47,10 @@ stream = StreamHandler()
 buffered = BufferedHandler(downstream=stream, capacity=32)
 logger = Logger("sensor", level=DEBUG, handlers=[buffered])
 
-# hot path — no I/O
+# hot path, no I/O
 logger.info("reading 1")
 
-# runner tick — drains the buffer
+# runner tick: drains the buffer
 if buffered.check(now_ms):
     buffered.handle(now_ms)
 ```
@@ -69,11 +71,11 @@ Test helpers in `chumicro_logging.testing`:
 | Symbol | Purpose |
 |---|---|
 | `RecordingHandler` | Captures records in a list for assertions. |
-| `FailingHandler` | Raises on every `emit` — exercises error paths. |
+| `FailingHandler` | Raises on every `emit` to exercise error paths. |
 
 ## Where this fits
 
-Leaf — no upstream ChuMicro deps, and by policy no other ChuMicro library imports `chumicro-logging` (decoration / observability libraries stay out of each other's dependency graphs).  Apps wire it in by passing a logger to libraries that accept an optional `logger=` parameter.
+A leaf library: no upstream ChuMicro deps, and by policy no other ChuMicro library imports `chumicro-logging` (decoration / observability libraries stay out of each other's dependency graphs).  Apps build a `Logger`, attach handlers, and call its level methods (`debug`, `info`, `warning`, `error`, `critical`) directly, or hand the logger to their own modules.
 
 ## Platform support
 
@@ -88,15 +90,7 @@ Pure-Python; runs identically on CPython, MicroPython, and CircuitPython.
 
 ## Contributing
 
-Working on `chumicro-logging` itself?  Clone the [mono-repo](https://github.com/ChuMicro/ChuMicro) if you haven't already — the rest of the workflow assumes you're inside that workspace.
-
-```bash
-pip install -e .[test]
-pytest tests/                  # host-side tests
-pytest functional_tests/       # on-device tests (needs a board registered in devices.yml)
-```
-
-Register a board before running functional tests: `chumicro-workspace add-device <id> --address <port>`.
+Issues, bug reports, and pull requests are welcome, and so is "I ran it on this board and here's what happened", some of the most useful feedback a hardware project can get.  Development happens in the [ChuMicro repository](https://github.com/ChuMicro/ChuMicro), whose contributing guide covers setup and the test workflow.
 
 ## Docs
 

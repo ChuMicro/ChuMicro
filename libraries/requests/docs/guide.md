@@ -2,7 +2,7 @@
 
 ## Overview
 
-`chumicro-requests` is a non-blocking HTTP/1.1 client built on `chumicro-sockets`.  `HttpClient` is the single entry point for every verb — its `check(now_ms)` / `handle(now_ms)` methods drive the request forward one tick at a time.  An LED keeps blinking on the same board while a request is in flight or mid-timeout against a stalled peer.  Two connect phases are the exception: the DNS lookup, and on MicroPython / CircuitPython the TLS handshake, each block the reactor for their duration (see *Bring your own transport*).  The library is single-in-flight today — a second `client.get(...)` while another request is running raises `HttpBusyError`.
+`chumicro-requests` is a non-blocking HTTP/1.1 client built on `chumicro-sockets`.  `HttpClient` is the single entry point for every verb.  Its `check(now_ms)` / `handle(now_ms)` methods drive the request forward one tick at a time.  An LED keeps blinking on the same board while a request is in flight or mid-timeout against a stalled peer.  Two connect phases are the exception: the DNS lookup, and on MicroPython / CircuitPython the TLS handshake, each block the reactor for their duration (see *Bring your own transport*).  The library is single-in-flight today: a second `client.get(...)` while another request is running raises `HttpBusyError`.
 
 ## Getting started with generators
 
@@ -64,14 +64,14 @@ or a Python object that gets JSON-encoded:
 handle = client.post("http://api/widgets", body=b"<custom-bytes>")
 handle = client.post("http://api/widgets", body="text/plain payload")
 
-# JSON helper — auto-encodes + sets Content-Type: application/json
+# JSON helper, auto-encodes + sets Content-Type: application/json
 handle = client.post("http://api/widgets", json={"name": "thing", "qty": 3})
 
 # PUT / PATCH share the same body / json semantics
 handle = client.put("http://api/widgets/42", json={"name": "renamed"})
 handle = client.patch("http://api/widgets/42", body=b"diff-bytes")
 
-# DELETE is intransitive in v1 — no body parameter
+# DELETE is intransitive in v1, no body parameter
 handle = client.delete("http://api/widgets/42")
 ```
 
@@ -114,11 +114,12 @@ shapes are resolved against the current URL.
 
 `HttpClient` accepts three RFC 7230 body framings transparently:
 
-- **`Content-Length: N`** — read exactly N bytes (most common case).
-- **`Transfer-Encoding: chunked`** — RFC 7230 §4.1 chunked decode.
-  Chunk-extensions and trailer headers are accepted and discarded.
-  `Content-Length` is ignored when chunked is present per §3.3.3.
-- **Neither header** — read until the peer closes the connection
+- **`Content-Length: N`** reads exactly N bytes (most common case).
+- **`Transfer-Encoding: chunked`** selects RFC 7230 §4.1 chunked
+  decoding.  Chunk-extensions and trailer headers are accepted and
+  discarded.  `Content-Length` is ignored when chunked is present per
+  §3.3.3.
+- **Neither header** reads until the peer closes the connection
   (HTTP/1.0-style framing).
 
 In all cases `response.body` returns the decoded bytes (chunks
@@ -127,13 +128,13 @@ concatenated for chunked responses).  `response.text` and
 
 Other `Transfer-Encoding` values (`gzip`, `deflate`, `identity`
 stacked with chunked, etc.) are rejected with `HttpProtocolError`
-in v1 — the caller would otherwise silently get garbled bytes.
+in v1, since the caller would otherwise silently get garbled bytes.
 
 ## Streaming large bodies
 
 By default the whole body is buffered in RAM, capped at
-`max_body_bytes` (64 KB).  Pass `stream=True` — on any verb, or on the
-generic `client.request(method, url, ...)` — to consume the body
+`max_body_bytes` (64 KB).  Pass `stream=True` (on any verb, or on the
+generic `client.request(method, url, ...)`) to consume the body
 incrementally instead: firmware images, log pulls, and any payload
 bigger than the heap become readable at a fixed RAM cost (the
 `stream_buffer_size` staging window, default 1024 bytes, plus your own
@@ -145,7 +146,7 @@ handle = client.get("http://host/firmware.bin", stream=True,
 buffer = bytearray(512)
 view = memoryview(buffer)
 
-# Inside your service's handle(now_ms) — one slice per tick:
+# Inside your service's handle(now_ms), one slice per tick:
 if handle.done and handle.error is not None:
     report(handle.error)                    # failed mid-transfer
 elif handle.response is not None:           # headers are in
@@ -158,8 +159,8 @@ elif handle.response is not None:           # headers are in
 
 The contract:
 
-- `handle.response` is set as soon as the final hop's headers arrive —
-  before `handle.done` — so you can branch on `status_code` /
+- `handle.response` is set as soon as the final hop's headers arrive
+  (before `handle.done`), so you can branch on `status_code` /
   `headers` first.  Its `body` is `b""` and `streamed` is `True`;
   `.text` / `.json()` raise `HttpError`.
 - `handle.read_body_into(buffer)` copies decoded body bytes into your
@@ -169,9 +170,9 @@ The contract:
   client stops reading the socket (and reports no poll interest, so a
   runner parks instead of spinning) until you drain it.
 - `max_body_bytes` and `WhenOversized` do not apply to streamed
-  bodies — the staging window is the RAM bound.  To enforce your own
+  bodies; the staging window is the RAM bound.  To enforce your own
   ceiling, count what you read and call `client.cancel()`.
-- `timeout_ms` covers the whole transfer, your reads included — size
+- `timeout_ms` covers the whole transfer, your reads included, so size
   it for the download, not the round-trip.
 - `client.cancel()` aborts the request immediately (the handle fails
   with `HttpError`), for early exits that shouldn't wait out the
@@ -217,7 +218,7 @@ print(response.text)
 so charset overrides apply to JSON responses too.
 
 The `transport_factory` argument is a callable
-`(host, port, use_tls) -> SocketConnector` — a tick-driven connector,
+`(host, port, use_tls) -> SocketConnector`, a tick-driven connector,
 not a ready socket (see [Bring your own transport](#bring-your-own-transport)
 below for the connector contract). The bundled
 `chumicro_sockets.sockets_factory.connector_factory(radio=..., ssl_context=...)`
@@ -229,7 +230,7 @@ submodule so users with a custom transport never trigger the
 
 ## Bring your own transport
 
-`HttpClient` does not care which library produces its sockets.  The `transport_factory` you pass is a callable of shape `(host: str, port: int, use_tls: bool) -> SocketConnector`.  The connector advances the TCP connect one tick at a time, but the DNS lookup and, on MicroPython / CircuitPython, the TLS handshake block the reactor for their duration — on a slow or unreachable host that can be seconds, freezing every other runner service, so connect before starting time-critical work.  Once `connector.state == "ready"`, the underlying socket must expose the four-method contract:
+`HttpClient` does not care which library produces its sockets.  The `transport_factory` you pass is a callable of shape `(host: str, port: int, use_tls: bool) -> SocketConnector`.  The connector advances the TCP connect one tick at a time, but the DNS lookup and, on MicroPython / CircuitPython, the TLS handshake block the reactor for their duration.  On a slow or unreachable host that can be seconds, freezing every other runner service, so connect before starting time-critical work.  Once `connector.state == "ready"`, the underlying socket must expose the four-method contract:
 
 | Method | Contract |
 |---|---|
@@ -238,7 +239,7 @@ submodule so users with a custom transport never trigger the
 | `close() -> None` | Releases the connection. |
 | `setblocking(flag) -> None` | Best-effort.  Absence is tolerated. |
 
-`chumicro_sockets.connector` is one producer.  See `chumicro_sockets._connector.SocketConnector` for the connector contract (`tick(now_ms)`, `state`, `socket`, `io_*`, `next_deadline`, `cancel`) — any tick-driven state machine with that surface works as a custom factory.
+`chumicro_sockets.connector` is one producer.  See `chumicro_sockets._connector.SocketConnector` for the connector contract (`tick(now_ms)`, `state`, `socket`, `io_*`, `next_deadline`, `cancel`).  Any tick-driven state machine with that surface works as a custom factory.
 
 If you supply your own factory and want `chumicro_sockets` dropped from the deploy, add a module-level constant to your entrypoint and the chumicro-workspace deployer will filter the default factory out of the import graph:
 
@@ -247,9 +248,9 @@ If you supply your own factory and want `chumicro_sockets` dropped from the depl
 __chumicro_skip_factories__ = ("sockets_factory",)
 ```
 
-The constant accepts a family form (the bare stem, matches every `chumicro_*.sockets_factory`) or an exact dotted path (`chumicro_sockets.sockets_factory`).  An unmatched entry fails the deploy with a typo message rather than silently shipping the default.  Calling `HttpClient.from_config(...)` when `chumicro_sockets.sockets_factory` is missing — either skipped at deploy time or not installed by `circup` / `mip` — raises `RuntimeError` naming the bypass kwarg.
+The constant accepts a family form (the bare stem, matches every `chumicro_*.sockets_factory`) or an exact dotted path (`chumicro_sockets.sockets_factory`).  An unmatched entry fails the deploy with a typo message rather than silently shipping the default.  Calling `HttpClient.from_config(...)` when `chumicro_sockets.sockets_factory` is missing (either skipped at deploy time or not installed by `circup` / `mip`) raises `RuntimeError` naming the bypass kwarg.
 
-For the full single-library adoption recipe — your transport, your `ticks=`, the runner-less drive loop, and host tests with no board — see [Standalone integration](https://github.com/ChuMicro/ChuMicro/blob/main/docs/contributing/standalone-integration.md).
+Adopting `chumicro-requests` on its own needs nothing from the rest of the family: pass your own `transport_factory` (and, if you want, your own `ticks=` clock), drive the client from a plain `while` loop as in [Getting started with a service](#getting-started-with-a-service), and run host tests with a factory returning a `chumicro_sockets.testing.FakeSocketConnector`, no board required.
 
 ## Runner pattern
 
@@ -273,10 +274,10 @@ while True:
 The default 64 KB `max_body_bytes` cap is sized for the minimum
 supported board class (256 KB MCU RAM). Bump it for larger boards if needed; the `Response.body`
 buffer grows up to that cap. The default 1024-byte `recv_budget_per_tick`
-matches `chumicro-mqtt`'s — bytes drained per tick are bounded so concurrent
+matches `chumicro-mqtt`'s; bytes drained per tick are bounded so concurrent
 runner tasks (LED blink, control loop) keep getting CPU time even mid-large-body.
 For bodies that shouldn't (or can't) sit in RAM at all, use
-`stream=True` — see [Streaming large bodies](#streaming-large-bodies):
+`stream=True` (see [Streaming large bodies](#streaming-large-bodies)):
 the per-request cost drops to the `stream_buffer_size` staging window
 (default 1024 bytes) regardless of body size.
 
@@ -290,7 +291,7 @@ pattern as plain HTTP.
 
 ### HTTPS heap headroom on minimum-class boards
 
-mbedTLS handshake costs heap — bench-tested on Pi Pico W MP with a
+mbedTLS handshake costs heap.  Bench-tested on Pi Pico W MP with a
 raw-stdlib `ssl.wrap_socket()` against `letsencrypt.org:443`, the
 handshake consumed about 25 KB of heap on top of whatever the app
 already had loaded.  Headroom matters: an app that's loaded a lot
@@ -302,29 +303,29 @@ switch to flash deploy mode (chumicro-deploy `--mode flash`) so the
 library bootstrap lives on flash and the heap is free for the
 handshake.
 
-### TLS context — bring your own CA
+### TLS context: bring your own CA
 
 `chumicro_sockets.sockets_factory.connector_factory(ssl_context=...)`
 accepts an SSL context built via `chumicro_sockets.ssl_context_with_ca(pem)`.
 CA-pinning is required
-on both supported embedded runtimes — but for different reasons:
+on both supported embedded runtimes, but for different reasons:
 
 - **MicroPython** doesn't have `ssl.create_default_context()` at all;
   every TLS context must be built explicitly.
 - **CircuitPython** has `ssl.create_default_context()` (and it builds
-  cheaply — ~80 bytes of heap on a Pi Pico W), but the returned context
-  carries no CAs and has `check_hostname=False` — handshake against any
-  real cert would fail.
+  cheaply, ~80 bytes of heap on a Pi Pico W), but the returned context
+  carries no CAs and has `check_hostname=False`, so a handshake against
+  any real cert would fail.
 
 So on both runtimes, pass a context with a CA loaded. The CPython "default
-context loads a 100-200 KB system trust store" intuition doesn't apply —
+context loads a 100-200 KB system trust store" intuition doesn't apply:
 neither MP nor CP bundles a trust store, by design.
 
 ### Device RTC must be set before TLS
 
 mbedTLS `CERT_REQUIRED` checks the cert validity window against the device
 clock. A board with no RTC battery and no NTP boots at 2021-01-01 (or epoch),
-which is "before" every modern cert's `not_valid_before` field — handshake
+which is "before" every modern cert's `not_valid_before` field, so the handshake
 fails with `ValueError("certificate validity starts in the future")`.
 Use [`chumicro-ntp`](https://chumicro.github.io/ChuMicro/ntp/stable/) to set the device clock from a public NTP server before the TLS handshake.  Cross-runtime, non-blocking, takes a UDP socket you provide.
 
@@ -332,7 +333,7 @@ Use [`chumicro-ntp`](https://chumicro.github.io/ChuMicro/ntp/stable/) to set the
 
 | Example | What it shows |
 |---|---|
-| `periodic_get.py` | Periodic GET on a real CP/MP board — wifi up, hits a configured URL every N seconds, drives an LED-blink counter to verify the request never blocks the loop.  Cross-runtime (CP + MP). |
+| `periodic_get.py` | Periodic GET on a real CP/MP board: wifi up, hits a configured URL every N seconds, drives an LED-blink counter to verify the request never blocks the loop.  Cross-runtime (CP + MP). |
 
 ---
 

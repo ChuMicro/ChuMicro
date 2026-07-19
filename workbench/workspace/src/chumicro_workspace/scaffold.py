@@ -289,9 +289,12 @@ def _branded_fragments(
             f"guide]({branding.install_guide_url}).\n\n"
         ),
         "contributing_intro": (
-            f"Working on `{distribution}` itself?  Clone the "
-            f"[mono-repo]({branding.repo_url}) if you haven't already — the "
-            "rest of the workflow assumes you're inside that workspace."
+            "Issues, bug reports, and pull requests are welcome, and so is "
+            '"I ran it on this board and here\'s what happened", some of '
+            "the most useful feedback a hardware project can get.  "
+            f"Development happens in the [ChuMicro repository]"
+            f"({branding.repo_url}), whose contributing guide covers setup "
+            "and the test workflow."
         ),
         "docs_section": (
             "## Docs\n\n"

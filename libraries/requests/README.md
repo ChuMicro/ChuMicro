@@ -3,13 +3,13 @@
 <img src="https://raw.githubusercontent.com/ChuMicro/ChuMicro/main/support/docs/chumicro_tip.png"
 align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
-**A non-blocking HTTP/1.1 client — your LED keeps blinking through a TLS handshake.**
+**A non-blocking HTTP/1.1 client that keeps your LED blinking through a TLS handshake.**
 
-A `requests`-flavored surface that advances one chunk per runner tick — connect, send, recv, parse — so your control loop never stalls waiting for a peer.  Plain HTTP, HTTPS (live-verified on real boards), POST / PUT / PATCH / DELETE, JSON helper, redirect handling, `Transfer-Encoding: chunked` decode, and `stream=True` for bodies bigger than RAM — read a firmware image into a 512-byte buffer, chunk by chunk.
+A `requests`-flavored surface that advances one chunk per runner tick (connect, send, recv, parse), so your control loop never stalls waiting for a peer.  It covers plain HTTP and HTTPS (live-verified on real boards), the POST / PUT / PATCH / DELETE verbs with a JSON helper, redirect handling, and `Transfer-Encoding: chunked` decode.  For bodies bigger than RAM, `stream=True` reads a firmware image into a 512-byte buffer one chunk at a time.
 
 <br clear="left">
 
-> Part of the [ChuMicro](https://github.com/ChuMicro/ChuMicro) family — small, focused Python libraries for microcontrollers and laptops. [Browse all libraries.](https://github.com/ChuMicro/ChuMicro/tree/main/libraries)
+> Part of the [ChuMicro](https://github.com/ChuMicro/ChuMicro) family: small, focused Python libraries for microcontrollers and laptops. [Browse all libraries.](https://github.com/ChuMicro/ChuMicro/tree/main/libraries)
 
 ## Install
 
@@ -72,7 +72,7 @@ Depends on [`chumicro-sockets`](https://github.com/ChuMicro/ChuMicro/tree/main/l
 
 ## Platform support
 
-Works on CPython, MicroPython, and CircuitPython.  Pure Python — no native extensions.
+Works on CPython, MicroPython, and CircuitPython.  Pure Python, no native extensions.
 
 ## Examples
 
@@ -80,21 +80,17 @@ Works on CPython, MicroPython, and CircuitPython.  Pure Python — no native ext
 |---|---|
 | `periodic_get.py` | Periodic GET on a real CP/MP board.  Brings wifi up, hits a configured URL every N seconds, prints status + body length, drives an LED-blink counter to verify the request never blocks the loop.  Reads wifi + target URL from `runtime_config.msgpack` (chumicro-workspace) with a constants fallback.  Cross-runtime (CP + MP). |
 
-## Wiring wifi credentials for examples and functional tests
+## Wiring wifi credentials for examples
 
-The hardware-prefixed examples + real-network suites in `functional_tests/test_real_*.py` need wifi credentials.  See [`docs/wiring-wifi-credentials.md`](https://github.com/ChuMicro/ChuMicro/blob/main/docs/wiring-wifi-credentials.md) for the workspace-based and raw single-file paths.  The library itself never reads TOML — it takes a `transport_factory` and goes; config wiring is application-layer.
+The board-side examples need wifi credentials to reach the network.  `periodic_get.py` reads them (and its target URL) from a `runtime_config.msgpack` written by `chumicro-workspace`, and falls back to in-file placeholder constants you edit directly when no config file is deployed.  The library itself never reads config: it takes a `transport_factory` and goes, so credential and config wiring stay in your application.
 
 ## Contributing
 
-Working on `chumicro-requests` itself?  Clone the [mono-repo](https://github.com/ChuMicro/ChuMicro) if you haven't already — the rest of the workflow assumes you're inside that workspace.
-
-```bash
-pip install -e .[test]
-pytest tests/                  # host-side tests
-pytest functional_tests/       # on-device tests (needs a board registered in devices.yml)
-```
-
-Register a board before running functional tests: `chumicro-workspace add-device <id> --address <port>`.
+Issues, bug reports, and pull requests are welcome, and so is "I ran
+it on this board and here's what happened", some of the most useful
+feedback a hardware project can get.  Development happens in the
+[ChuMicro repository](https://github.com/ChuMicro/ChuMicro), whose
+contributing guide covers setup and the test workflow.
 
 ## Docs
 

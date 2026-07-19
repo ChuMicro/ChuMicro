@@ -4,9 +4,9 @@
 
 `chumicro-ntp` is a small Simple Network Time Protocol (SNTP) client
 that runs identically on CircuitPython, MicroPython, and CPython.  It
-implements the wire format from RFC 4330 — enough to ask any
+implements the wire format from RFC 4330 (enough to ask any
 standard NTP server "what time is it?" and parse the answer into
-Unix-epoch seconds — and skips full NTP's stratum / dispersion /
+Unix-epoch seconds) and skips full NTP's stratum / dispersion /
 round-trip-delay tracking (out of scope for embedded).
 
 The client is **runner-shaped**: `query()` issues a request and
@@ -15,7 +15,7 @@ the recv side once per tick; `result.done` becomes `True` when the
 exchange terminates.  Single in-flight query at a time, mirroring
 `chumicro_requests.HttpClient.busy` semantics.
 
-The UDP socket is **injected** — `NTPClient(socket=...)` accepts any
+The UDP socket is **injected**: `NTPClient(socket=...)` accepts any
 object satisfying the duck-typed UDP contract below (`sendto` /
 `recvfrom_into` / `close` / `setblocking`).  Tests inject
 `FakeUDPSocket` from `chumicro_sockets.testing`; apps inject a real
@@ -23,9 +23,9 @@ socket directly from `chumicro_sockets.udp_socket`.
 
 A few notes on dependencies:
 
-- `chumicro-sockets` is a hard dependency — `pip install chumicro-ntp` brings the whole stack.
+- `chumicro-sockets` is a hard dependency: `pip install chumicro-ntp` brings the whole stack.
 - `NTPClient.from_config` builds the default UDP wiring through the shared `chumicro_sockets.sockets_factory` module, imported lazily.  Apps that supply their own UDP socket never trigger that import, so `chumicro-sockets` doesn't get deployed to the device for those apps.
-- No `chumicro-logging` dep.  The library exposes no callbacks — the result handle returned by `query()` is the observation surface.
+- No `chumicro-logging` dep.  The library exposes no callbacks: the result handle returned by `query()` is the observation surface.
 
 ## Getting started
 
@@ -54,7 +54,7 @@ sock.close()
 ```
 
 `request.unix_seconds` is the server's transmit-timestamp converted
-to Unix-epoch seconds — feed it into `time.gmtime` (CPython) /
+to Unix-epoch seconds.  Feed it into `time.gmtime` (CPython) /
 `utime.localtime` (MP/CP) for date components.
 
 ## Bring your own transport
@@ -68,7 +68,7 @@ to Unix-epoch seconds — feed it into `time.gmtime` (CPython) /
 | `close() -> None` | Releases the socket. |
 | `setblocking(flag) -> None` | Best-effort.  Absence is tolerated. |
 
-`chumicro_sockets.udp_socket` is the built-in producer; `chumicro_sockets.testing.FakeUDPSocket` is the test double.  A raw stdlib `socket.socket(AF_INET, SOCK_DGRAM)` does **not** fit directly — its `sendto` takes `(data, address)`, not the separated `(data, host, port)` this contract calls — so wrap it in a small adapter if you must:
+`chumicro_sockets.udp_socket` is the built-in producer; `chumicro_sockets.testing.FakeUDPSocket` is the test double.  A raw stdlib `socket.socket(AF_INET, SOCK_DGRAM)` does **not** fit directly (its `sendto` takes `(data, address)`, not the separated `(data, host, port)` this contract calls), so wrap it in a small adapter if you must:
 
 ```python
 import socket as stdlib_socket
@@ -97,13 +97,11 @@ If you supply your own transport and want `chumicro_sockets` dropped from the de
 __chumicro_skip_factories__ = ("sockets_factory",)
 ```
 
-Family form (the bare stem) or exact path (`"chumicro_sockets.sockets_factory"`).  An unmatched entry fails the deploy with a typo message rather than silently shipping the default.  Calling `NTPClient.from_config(...)` when `chumicro_sockets.sockets_factory` is missing — either skipped at deploy time or not installed by `circup` / `mip` — raises `RuntimeError` naming the bypass kwargs.
-
-For the full single-library adoption recipe — your transport, your `ticks=`, the runner-less drive loop, and host tests with no board — see [Standalone integration](https://github.com/ChuMicro/ChuMicro/blob/main/docs/contributing/standalone-integration.md).
+Family form (the bare stem) or exact path (`"chumicro_sockets.sockets_factory"`).  An unmatched entry fails the deploy with a typo message rather than silently shipping the default.  Calling `NTPClient.from_config(...)` when `chumicro_sockets.sockets_factory` is missing, whether skipped at deploy time or not installed by `circup` / `mip`, raises `RuntimeError` naming the bypass kwargs.
 
 ## Runner pattern
 
-`NTPClient` already implements the runner contract — register the
+`NTPClient` already implements the runner contract.  Register the
 client with a `chumicro-runner.Runner` and the runner drives the
 recv side automatically:
 
@@ -118,7 +116,7 @@ if request.done:
     use(request.unix_seconds)
 ```
 
-Single in-flight query — `client.busy` is `True` between `query()`
+Single in-flight query: `client.busy` is `True` between `query()`
 and `request.done`.  Calling `query()` again raises `RuntimeError`.
 Cancel with `client.cancel()` to abort and free the slot.
 
@@ -127,15 +125,15 @@ Cancel with `client.cancel()` to abort and free the slot.
 `NTPClient` pre-allocates a 48-byte `bytearray` for the recv buffer
 in `__init__` so `handle` doesn't allocate on the hot path.  The
 client request is a 48-byte module-level `bytes` constant, sent
-directly each `query()` — no per-call packet construction.  The
+directly each `query()`, with no per-call packet construction.  The
 parse step reads through a `memoryview` window into the recv
 buffer, so the success path doesn't copy bytes either.
 
-`NTPResult` is a tiny holder — a handful of integer / object fields.
+`NTPResult` is a tiny holder: a handful of integer / object fields.
 
 ## Platform notes
 
-Runs identically on CPython, MicroPython, and CircuitPython.  The default tick source is the `chumicro_timing.ticks` submodule — an object that exposes `ticks_ms` / `ticks_diff` / `ticks_add`, each picking the right underlying primitive per runtime (`supervisor.ticks_ms` on CircuitPython, `time.ticks_ms` on MicroPython, `time.monotonic_ns` on CPython).  Inject a custom source via the `ticks=` constructor kwarg if you have your own — must expose those same three names.  All UDP work goes through the injected socket, so `chumicro-sockets` hides the per-runtime adapter chase.
+Runs identically on CPython, MicroPython, and CircuitPython.  The default tick source is the `chumicro_timing.ticks` submodule, an object that exposes `ticks_ms` / `ticks_diff` / `ticks_add`, each picking the right underlying primitive per runtime (`supervisor.ticks_ms` on CircuitPython, `time.ticks_ms` on MicroPython, `time.monotonic_ns` on CPython).  Inject a custom source via the `ticks=` constructor kwarg if you have your own, which must expose those same three names.  All UDP work goes through the injected socket, so `chumicro-sockets` hides the per-runtime adapter chase.
 
 Tested on real CircuitPython and MicroPython boards with live `pool.ntp.org` queries before each release; returned timestamps validated against a 2024-2030 plausibility window.
 

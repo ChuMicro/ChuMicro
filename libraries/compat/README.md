@@ -9,7 +9,7 @@ Import from `chumicro_compat` instead of the stdlib and your code works everywhe
 
 <br clear="left">
 
-> Part of the [ChuMicro](https://github.com/ChuMicro/ChuMicro) family — small, focused Python libraries for microcontrollers and laptops. [Browse all libraries.](https://github.com/ChuMicro/ChuMicro/tree/main/libraries)
+> Part of the [ChuMicro](https://github.com/ChuMicro/ChuMicro) family: small, focused Python libraries for microcontrollers and laptops. [Browse all libraries.](https://github.com/ChuMicro/ChuMicro/tree/main/libraries)
 
 ## Install
 
@@ -52,19 +52,19 @@ set_status_led(100)  # pin 13 → 100%
 | `partial.args` | Frozen positional arguments (tuple) |
 | `partial.keywords` | Frozen keyword arguments (dict) |
 
+## Where this fits
+
+Leaf: no upstream ChuMicro deps.  It is a standalone polyfill that no chumicro library currently requires; reach for it in your own code when you want stdlib features (`functools.partial`, …) missing from CircuitPython / MicroPython.
+
 ## Platform support
 
 | Runtime | What happens |
 |---|---|
-| CPython | Uses the built-in `functools.partial` directly — zero overhead |
+| CPython | Uses the built-in `functools.partial` directly, zero overhead |
 | MicroPython | Lightweight pure-Python replacement |
 | CircuitPython | Lightweight pure-Python replacement |
 
 The public API (`.func`, `.args`, `.keywords`, `__call__`, `__repr__`) is identical across all runtimes.
-
-## Where this fits
-
-Leaf: no upstream ChuMicro deps.  It is a standalone polyfill that no chumicro library currently requires; reach for it in your own code when you want stdlib features (`functools.partial`, …) missing from CircuitPython / MicroPython.
 
 ## Examples
 
@@ -76,15 +76,7 @@ Leaf: no upstream ChuMicro deps.  It is a standalone polyfill that no chumicro l
 
 ## Contributing
 
-Working on `chumicro-compat` itself?  Clone the [mono-repo](https://github.com/ChuMicro/ChuMicro) if you haven't already — the rest of the workflow assumes you're inside that workspace.
-
-```bash
-pip install -e .[test]
-pytest tests/                  # host-side tests
-pytest functional_tests/       # on-device tests (needs a board registered in devices.yml)
-```
-
-Register a board before running functional tests: `chumicro-workspace add-device <id> --address <port>`.
+Issues, bug reports, and pull requests are welcome, and so is "I ran it on this board and here's what happened", some of the most useful feedback a hardware project can get.  Development happens in the [ChuMicro repository](https://github.com/ChuMicro/ChuMicro), whose contributing guide covers setup and the test workflow.
 
 ## Docs
 
