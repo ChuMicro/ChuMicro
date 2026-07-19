@@ -88,3 +88,7 @@ ADRs capture *decision and reasoning*.  They are not living status dashboards.  
 - **Future-work checklists or implementation TODO lists** → `plans/next-up.md` or `plans/open-questions.md` with a one-line pointer back from the ADR if needed.
 - **Worked examples, how-to walkthroughs, contributor expectations** → `docs/contributing/<name>.md`.
 - **Postmortem-style debugging writeups, shell-command recovery chains, code-block-heavy design docs** → `docs/troubleshooting/<topic>.md` or `plans/patterns.md`.
+
+## The evidence bar for new rules
+
+Decision records are for structural tradeoffs only.  A new lint rule or process artifact is not a structural tradeoff, and it does not earn a record on the strength of a good argument alone.  It lands only after demonstrated, shipped drift: a concrete case already in the tree where the missing rule let a mistake through.  This is the [Decision 0074](0074-drift-mechanization-as-project-policy.md) evidence bar, and it applies before the rule is written, not after.  A rule proposed to forbid a mistake nobody has made yet waits until the drift is real and pointable.
