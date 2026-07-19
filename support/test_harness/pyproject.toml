@@ -1,6 +1,6 @@
 [build-system]
-requires = ["setuptools>=69", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
 name = "chumicro-test-harness"
@@ -14,14 +14,16 @@ authors = [
     { name = "ChuMicro" },
 ]
 
-[tool.setuptools]
-package-dir = {"" = "src"}
-
 # Single source of version truth: the VERSION file the release matrix keys
-# the tag on (mirrors the hatch `[tool.hatch.version] path = "VERSION"` every
-# library uses, expressed for this package's setuptools backend).
-[tool.setuptools.dynamic]
-version = { file = "VERSION" }
+# the tag on, read the same way every library reads it.  This package uses
+# the workspace's hatchling backend like every other published package.
+[tool.hatch.version]
+path = "VERSION"
+pattern = "(?P<version>\\S+)"
 
-[tool.setuptools.packages.find]
-where = ["src"]
+[tool.hatch.build.targets.sdist]
+only-include = ["src/", "VERSION", "README.md", "tests/"]
+exclude = [".gitignore"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/chumicro_test_harness"]

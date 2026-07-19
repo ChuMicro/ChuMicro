@@ -553,9 +553,16 @@ def find_publishable_packages(*, include_parked: bool = False) -> list[str]:
     provides the release version) and a ``pyproject.toml`` (which
     defines build metadata).  Publishable packages live under
     ``libraries/`` (device libraries that ship to PyPI and the
-    CircuitPython bundle) or ``workbench/`` (host-only tools that ship
-    to PyPI only; Decision 0032).  Support packages under ``support/``
-    are workspace-internal and are never published.
+    CircuitPython bundle), ``workbench/`` (host-only tools that ship
+    to PyPI only; Decision 0032), or ``support/`` (host-only
+    infrastructure that ships to PyPI only, no device bundle).  A
+    support package stays unpublished until it gains a ``VERSION`` file,
+    at which point it joins the publish set as PyPI-only (Decision
+    0111); ``chumicro-test-harness`` is the first, which is what makes
+    the ``[test]`` extra every library declares installable.  Because
+    this enumeration keys on the ``VERSION`` file, a VERSION-less
+    support package is skipped here while staying editable-installed via
+    :func:`find_support_packages`.
 
     Parked libraries (those carrying a :data:`PARKED_MARKER`; Decision
     0107) are excluded by default — they stay in-tree and maintained
@@ -569,7 +576,7 @@ def find_publishable_packages(*, include_parked: bool = False) -> list[str]:
             alongside the rest.  Defaults to False (publish semantics).
     """
     packages = []
-    for publishable_root in (ROOT / "libraries", ROOT / "workbench"):
+    for publishable_root in (ROOT / "libraries", ROOT / "workbench", ROOT / "support"):
         if not publishable_root.is_dir():
             continue
         for version_file in sorted(publishable_root.rglob("VERSION")):
@@ -722,10 +729,12 @@ def pythonpath_environment() -> dict[str, str]:
 #: the package root.  See ``plans/decisions/0002-per-library-version-files.md``.
 RELEASE_RELEVANT = {"src", "pyproject.toml"}
 
-#: Workspace directories that hold publishable packages.  Both feed the
-#: same VERSION + check-api gate (Decision 0032: workbench packages
-#: follow the same release lifecycle as libraries minus bundle staging).
-PUBLISHABLE_ROOTS = ("libraries", "workbench")
+#: Workspace directories that hold publishable packages.  All three feed
+#: the same VERSION + check-api gate: workbench packages follow the same
+#: release lifecycle as libraries minus bundle staging (Decision 0032),
+#: and support packages do the same once they carry a VERSION file
+#: (Decision 0111 — PyPI-only, no bundle).
+PUBLISHABLE_ROOTS = ("libraries", "workbench", "support")
 
 
 def changed_files(base_reference: str) -> list[str]:
@@ -770,10 +779,11 @@ def effective_diff_base(base_reference: str) -> str:
 def changed_publishable_packages(base_reference: str) -> set[tuple[str, str]]:
     """Return ``(parent, name)`` pairs for packages with release-relevant changes.
 
-    Covers both ``libraries/`` and ``workbench/`` (Decision 0032: the
+    Covers ``libraries/``, ``workbench/``, and ``support/`` (the
     pre-merge VERSION + API gates apply uniformly to every publishable
-    package).  Returning the parent directory alongside the name lets
-    callers construct paths and messages without a second lookup.
+    package; Decisions 0032 and 0111).  Returning the parent directory
+    alongside the name lets callers construct paths and messages without
+    a second lookup.
 
     parts[2] is checked against :data:`RELEASE_RELEVANT`:
     ``"src"`` acts as a directory prefix (any file under ``src/``

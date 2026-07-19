@@ -76,22 +76,25 @@ def _parse_tag(tag: str) -> dict[str, str]:
 
 
 def _locate_package(library_name: str) -> dict[str, str]:
-    """Return library_dir + package_kind for the package being promoted."""
-    library_path = ROOT / "libraries" / library_name
-    workbench_path = ROOT / "workbench" / library_name
+    """Return library_dir + package_kind for the package being promoted.
 
-    if library_path.is_dir():
-        return {
-            "library_dir": f"libraries/{library_name}",
-            "package_kind": "library",
-        }
-    if workbench_path.is_dir():
-        return {
-            "library_dir": f"workbench/{library_name}",
-            "package_kind": "workbench",
-        }
+    Support packages (``support/``) promote as ``kind=support``: PyPI
+    only, no device bundle, the same shape as workbench (Decision 0111).
+    The bundle, libraries-channel, and mip-validate jobs gate on
+    ``package_kind == 'library'``, so a non-library kind skips them.
+    """
+    for parent, kind in (
+        ("libraries", "library"),
+        ("workbench", "workbench"),
+        ("support", "support"),
+    ):
+        if (ROOT / parent / library_name).is_dir():
+            return {
+                "library_dir": f"{parent}/{library_name}",
+                "package_kind": kind,
+            }
     raise PromoteValidationError(
-        f"No package found at libraries/{library_name}/ or workbench/{library_name}/.",
+        f"No package found at libraries/, workbench/, or support/ for {library_name!r}.",
     )
 
 
