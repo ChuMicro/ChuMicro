@@ -199,19 +199,27 @@ class MQTTClient:
             # Lazy import so callers who pass their own socket/transport_factory
             # never pull chumicro_sockets into the deploy graph.
             try:
-                from chumicro_mqtt.sockets_factory import (  # noqa: PLC0415 - lazy
-                    chumicro_sockets_connector_factory,
+                from chumicro_sockets.sockets_factory import (  # noqa: PLC0415 - lazy
+                    fixed_connector_factory,
                 )
             except ImportError as exception:
                 raise RuntimeError(
-                    "chumicro_mqtt.sockets_factory not available "
+                    "chumicro_sockets.sockets_factory not available "
                     "(excluded via __chumicro_skip_factories__ or "
                     "not on the board); pass transport_factory= or "
                     "socket= explicitly.",
                 ) from exception
 
-            transport_factory = chumicro_sockets_connector_factory(
-                config, radio=radio, ssl_context=ssl_context,
+            from chumicro_config import MissingConfigKey  # noqa: PLC0415 - lazy
+
+            for required_key in ("mqtt.broker.host", "mqtt.broker.port"):
+                if required_key not in config:
+                    raise MissingConfigKey(
+                        f"required config key {required_key!r} is missing",
+                    )
+            transport_factory = fixed_connector_factory(
+                config["mqtt.broker.host"], config["mqtt.broker.port"],
+                radio=radio, ssl_context=ssl_context,
             )
         return cls(
             socket=socket,

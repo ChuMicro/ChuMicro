@@ -105,10 +105,12 @@ config["mqtt.client_id"] = CLIENT_ID
 
 # Build the connector factory ourselves so we can pass the buffer-tuning
 # kwargs the bench needs.  from_config doesn't expose them.
-from chumicro_mqtt.sockets_factory import chumicro_sockets_connector_factory  # noqa: E402
+from chumicro_sockets.sockets_factory import fixed_connector_factory  # noqa: E402
 
 mqtt = MQTTClient(
-    transport_factory=chumicro_sockets_connector_factory(config, radio=radio),
+    transport_factory=fixed_connector_factory(
+        config["mqtt.broker.host"], config["mqtt.broker.port"], radio=radio,
+    ),
     client_id=CLIENT_ID,
     keep_alive_seconds=30,
     rx_buffer_size=RX_BUFFER_SIZE,
