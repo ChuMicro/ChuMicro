@@ -9,6 +9,7 @@ description = "Host-side runtime for ChuMicro project workspaces — config merg
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
+license-files = ["LICENSE"]
 authors = [
     { name = "ChuMicro" },
 ]

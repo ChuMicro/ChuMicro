@@ -11,9 +11,12 @@ and actually run the shipped tests.
 Shipping the directories and declaring the extra are two independent
 contracts a future edit could silently break (drop a line from
 ``[tool.hatch.build.targets.sdist].only-include``, delete the
-``[project.optional-dependencies]`` block).  This guard runs after
-``scripts/run.py build`` and fails the build if either regresses, so the
-break is caught before it reaches PyPI.
+``[project.optional-dependencies]`` block).  A third contract rides
+along: every package declares ``License: MIT``, so its dir carries a
+byte-identical copy of the repo root ``LICENSE`` and the built sdist
+ships it (wheels land it in ``.dist-info/licenses/``).  This guard runs
+after ``scripts/run.py build`` and fails the build if any of the three
+regresses, so the break is caught before it reaches PyPI.
 """
 
 from __future__ import annotations
@@ -67,14 +70,23 @@ def _sdist_distribution_name(pyproject: dict) -> str:
     return normalized
 
 
-def check_library_sdist(library_dir: Path) -> list[str]:
+def check_library_sdist(
+    library_dir: Path,
+    *,
+    canonical_license: Path | None = None,
+) -> list[str]:
     """Return a list of human-readable problems with one library's sdist.
 
     Empty list means the library's freshly built sdist carries every
-    required directory and its ``pyproject.toml`` still declares the
-    ``[test]`` extra.  Each returned string names the library and the
-    specific contract that regressed.
+    required directory plus the license text, and its ``pyproject.toml``
+    still declares the ``[test]`` extra.  Each returned string names the
+    library and the specific contract that regressed.
+
+    *canonical_license* is the license file every package copy must match
+    byte-for-byte; ``None`` resolves to the repo root ``LICENSE``.
     """
+    from repo_layout import ROOT
+
     name = library_dir.name
     pyproject_path = library_dir / "pyproject.toml"
     if not pyproject_path.is_file():
@@ -86,6 +98,25 @@ def check_library_sdist(library_dir: Path) -> list[str]:
     sdist_path = library_dir / "dist" / f"{distribution}-{version}.tar.gz"
 
     problems: list[str] = []
+
+    # Every published artifact declares License: MIT, so it must carry
+    # the actual text (PyPI wheels land it in .dist-info/licenses/).
+    # The per-package copy exists for the build; the root file is the
+    # single source of truth, so drift fails the build loudly.
+    if canonical_license is None:
+        canonical_license = ROOT / "LICENSE"
+    license_path = library_dir / "LICENSE"
+    if not license_path.is_file():
+        problems.append(
+            f"{name}: no LICENSE file — copy the repo root LICENSE into "
+            "the package dir (published artifacts must carry the text "
+            "they declare)"
+        )
+    elif license_path.read_bytes() != canonical_license.read_bytes():
+        problems.append(
+            f"{name}: LICENSE differs from the repo root LICENSE — the "
+            "root file is canonical; re-copy it"
+        )
 
     test_extra = (
         pyproject.get("project", {})
@@ -123,6 +154,12 @@ def check_library_sdist(library_dir: Path) -> list[str]:
                 "— extend [tool.hatch.build.targets.sdist].only-include"
             )
 
+    if f"{base}/LICENSE" not in members:
+        problems.append(
+            f"{name}: sdist {sdist_path.name} is missing LICENSE — keep "
+            '[project] license-files = ["LICENSE"] and the package-dir copy'
+        )
+
     # Each declared __chumicro_data_files__ sibling (e.g. a bundled .der)
     # must ride along in the sdist too: a curated consumer's deploy walker
     # reads it from the unpacked tree, and a sdist config that narrows
@@ -141,9 +178,17 @@ def check_library_sdist(library_dir: Path) -> list[str]:
     return problems
 
 
-def check_all_library_sdists(library_dirs: list[Path]) -> list[str]:
+def check_all_library_sdists(
+    library_dirs: list[Path],
+    *,
+    canonical_license: Path | None = None,
+) -> list[str]:
     """Aggregate :func:`check_library_sdist` problems across libraries."""
     problems: list[str] = []
     for library_dir in library_dirs:
-        problems.extend(check_library_sdist(library_dir))
+        problems.extend(
+            check_library_sdist(
+                library_dir, canonical_license=canonical_license,
+            ),
+        )
     return problems

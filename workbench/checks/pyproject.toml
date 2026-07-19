@@ -9,6 +9,7 @@ description = "Workspace-internal lint rules (CHU0NN) shared between the chumicr
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
+license-files = ["LICENSE"]
 authors = [
     { name = "ChuMicro" },
 ]

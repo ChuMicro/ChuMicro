@@ -9,6 +9,7 @@ description = "Tick-based task runner for CircuitPython, MicroPython, and CPytho
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
+license-files = ["LICENSE"]
 authors = [
     { name = "ChuMicro" },
 ]
