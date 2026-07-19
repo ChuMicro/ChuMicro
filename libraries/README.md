@@ -17,7 +17,6 @@ Small, focused libraries for microcontrollers and laptops.  Every library instal
 | **[timing](timing/)** | Timers that don't freeze your code.  Your loop keeps running while the clock runs down; no `time.sleep()` locking everything up. |
 | **[runner](runner/)** | The task scheduler.  Register your services, call `runner.tick()` in your loop, everyone gets a turn.  No async needed. |
 | **[compat](compat/)** | Standard-library features that CircuitPython and MicroPython are missing (like `functools.partial`). |
-| **[logging](logging/)** | Leveled logging that never blocks your loop.  Per-logger levels with hierarchy resolution, zero chumicro deps.  *Parked: maintained and tested in-tree, not currently published.* |
 | **[msgpack](msgpack/)** | Compact binary serialization, smaller than JSON for typical payloads.  Good for settings and sensor data.  Wire-compatible with PyPI `msgpack(use_single_float=True)`. |
 | **[config](config/)** | Type-checked runtime config with a shared dotted-key shape (`wifi.ssid`, `mqtt.broker.host`); each library reads its settings via `<Name>Config.from_config(...)`. |
 | **[kvstore](kvstore/)** | Tiny persistent key-value store for counters, timestamps, and tokens.  Picks the right backend (NVM / NVS / LittleFS) for your board. |
@@ -41,7 +40,7 @@ Each library's own README has a one-line install command for that library.
 
 The stack runs roughly bottom-up:
 
-- **Primitives:** `timing`, `runner`, `compat`, `logging`.  Depended on by most others.
+- **Primitives:** `timing`, `runner`.  Depended on by most others.
 - **Persistence and serialization:** `msgpack`, `config`, `kvstore`.
 - **Networking transport and protocols:** `wifi` (link), `sockets` (TCP / TLS / UDP), then the app protocols `ntp`, `requests`, `http_server`, `websockets`, and `mqtt`.
 
@@ -65,6 +64,5 @@ The SVG is regenerated from each library's pyproject.toml by [`scripts/render_de
 - **"I need to expose HTTP routes on the device"** → [http_server](http_server/)
 - **"I need an MQTT client that doesn't freeze my loop"** → [mqtt](mqtt/)
 - **"I need a WebSocket client or server"** → [websockets](websockets/)
-- **"I want leveled logging that doesn't pull in chumicro deps"** → [logging](logging/)
 - **"I want my app to react when WiFi connects or drops"** → [wifi](wifi/)'s guide covers state-change callbacks and signals
 - **"`functools.partial` doesn't exist on my board"** → [compat](compat/)

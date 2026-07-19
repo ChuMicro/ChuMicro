@@ -64,7 +64,7 @@ The public API (`.func`, `.args`, `.keywords`, `__call__`, `__repr__`) is identi
 
 ## Where this fits
 
-Leaf — no upstream ChuMicro deps.  Used directly by any library or app that wants stdlib features (`functools.partial`, …) missing from CircuitPython / MicroPython.
+Leaf: no upstream ChuMicro deps.  It is a standalone polyfill that no chumicro library currently requires; reach for it in your own code when you want stdlib features (`functools.partial`, …) missing from CircuitPython / MicroPython.
 
 ## Examples
 
