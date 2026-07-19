@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+      <url>
+        <loc>https://chumicro.github.io/ChuMicro/kvstore/0.3.1/</loc>
+      </url>
+      <url>
+        <loc>https://chumicro.github.io/ChuMicro/kvstore/0.3.1/guide/</loc>
+      </url>
+      <url>
+        <loc>https://chumicro.github.io/ChuMicro/kvstore/0.3.1/api/</loc>
+      </url>
+      <url>
+        <loc>https://chumicro.github.io/ChuMicro/kvstore/0.3.1/testing/</loc>
+      </url>
+</urlset>
