@@ -588,25 +588,25 @@
 <h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
 <p><code>chumicro-ntp</code> is a small Simple Network Time Protocol (SNTP) client
 that runs identically on CircuitPython, MicroPython, and CPython.  It
-implements the wire format from RFC 4330 — enough to ask any
+implements the wire format from RFC 4330 (enough to ask any
 standard NTP server "what time is it?" and parse the answer into
-Unix-epoch seconds — and skips full NTP's stratum / dispersion /
+Unix-epoch seconds) and skips full NTP's stratum / dispersion /
 round-trip-delay tracking (out of scope for embedded).</p>
 <p>The client is <strong>runner-shaped</strong>: <code>query()</code> issues a request and
 returns a result handle; <code>check(now_ms)</code> and <code>handle(now_ms)</code> drive
 the recv side once per tick; <code>result.done</code> becomes <code>True</code> when the
 exchange terminates.  Single in-flight query at a time, mirroring
 <code>chumicro_requests.HttpClient.busy</code> semantics.</p>
-<p>The UDP socket is <strong>injected</strong> — <code>NTPClient(socket=...)</code> accepts any
+<p>The UDP socket is <strong>injected</strong>: <code>NTPClient(socket=...)</code> accepts any
 object satisfying the duck-typed UDP contract below (<code>sendto</code> /
 <code>recvfrom_into</code> / <code>close</code> / <code>setblocking</code>).  Tests inject
 <code>FakeUDPSocket</code> from <code>chumicro_sockets.testing</code>; apps inject a real
 socket directly from <code>chumicro_sockets.udp_socket</code>.</p>
 <p>A few notes on dependencies:</p>
 <ul>
-<li><code>chumicro-sockets</code> is a hard dependency — <code>pip install chumicro-ntp</code> brings the whole stack.</li>
+<li><code>chumicro-sockets</code> is a hard dependency: <code>pip install chumicro-ntp</code> brings the whole stack.</li>
 <li><code>NTPClient.from_config</code> builds the default UDP wiring through the shared <code>chumicro_sockets.sockets_factory</code> module, imported lazily.  Apps that supply their own UDP socket never trigger that import, so <code>chumicro-sockets</code> doesn't get deployed to the device for those apps.</li>
-<li>No <code>chumicro-logging</code> dep.  The library exposes no callbacks — the result handle returned by <code>query()</code> is the observation surface.</li>
+<li>No <code>chumicro-logging</code> dep.  The library exposes no callbacks: the result handle returned by <code>query()</code> is the observation surface.</li>
 </ul>
 <h2 id="getting-started">Getting started<a class="headerlink" href="#getting-started" title="Permanent link">&para;</a></h2>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_ntp</span><span class="w"> </span><span class="kn">import</span> <span class="n">NTPClient</span>
@@ -632,7 +632,7 @@ socket directly from <code>chumicro_sockets.udp_socket</code>.</p>
 </span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="n">sock</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
 </span></code></pre></div>
 <p><code>request.unix_seconds</code> is the server's transmit-timestamp converted
-to Unix-epoch seconds — feed it into <code>time.gmtime</code> (CPython) /
+to Unix-epoch seconds.  Feed it into <code>time.gmtime</code> (CPython) /
 <code>utime.localtime</code> (MP/CP) for date components.</p>
 <h2 id="bring-your-own-transport">Bring your own transport<a class="headerlink" href="#bring-your-own-transport" title="Permanent link">&para;</a></h2>
 <p><code>NTPClient</code> doesn't care which library produces its UDP socket.  The <code>socket=</code> (or <code>transport_factory=</code>) you pass returns any object exposing the four-method UDP contract:</p>
@@ -662,7 +662,7 @@ to Unix-epoch seconds — feed it into <code>time.gmtime</code> (CPython) /
 </tr>
 </tbody>
 </table>
-<p><code>chumicro_sockets.udp_socket</code> is the built-in producer; <code>chumicro_sockets.testing.FakeUDPSocket</code> is the test double.  A raw stdlib <code>socket.socket(AF_INET, SOCK_DGRAM)</code> does <strong>not</strong> fit directly — its <code>sendto</code> takes <code>(data, address)</code>, not the separated <code>(data, host, port)</code> this contract calls — so wrap it in a small adapter if you must:</p>
+<p><code>chumicro_sockets.udp_socket</code> is the built-in producer; <code>chumicro_sockets.testing.FakeUDPSocket</code> is the test double.  A raw stdlib <code>socket.socket(AF_INET, SOCK_DGRAM)</code> does <strong>not</strong> fit directly (its <code>sendto</code> takes <code>(data, address)</code>, not the separated <code>(data, host, port)</code> this contract calls), so wrap it in a small adapter if you must:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">socket</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">stdlib_socket</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="k">class</span><span class="w"> </span><span class="nc">_StdlibUdpAdapter</span><span class="p">:</span>
@@ -685,10 +685,9 @@ to Unix-epoch seconds — feed it into <code>time.gmtime</code> (CPython) /
 <div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># code.py / app.py</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">__chumicro_skip_factories__</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;sockets_factory&quot;</span><span class="p">,)</span>
 </span></code></pre></div>
-<p>Family form (the bare stem) or exact path (<code>"chumicro_sockets.sockets_factory"</code>).  An unmatched entry fails the deploy with a typo message rather than silently shipping the default.  Calling <code>NTPClient.from_config(...)</code> when <code>chumicro_sockets.sockets_factory</code> is missing — either skipped at deploy time or not installed by <code>circup</code> / <code>mip</code> — raises <code>RuntimeError</code> naming the bypass kwargs.</p>
-<p>For the full single-library adoption recipe — your transport, your <code>ticks=</code>, the runner-less drive loop, and host tests with no board — see <a href="https://github.com/ChuMicro/ChuMicro/blob/main/docs/contributing/standalone-integration.md">Standalone integration</a>.</p>
+<p>Family form (the bare stem) or exact path (<code>"chumicro_sockets.sockets_factory"</code>).  An unmatched entry fails the deploy with a typo message rather than silently shipping the default.  Calling <code>NTPClient.from_config(...)</code> when <code>chumicro_sockets.sockets_factory</code> is missing, whether skipped at deploy time or not installed by <code>circup</code> / <code>mip</code>, raises <code>RuntimeError</code> naming the bypass kwargs.</p>
 <h2 id="runner-pattern">Runner pattern<a class="headerlink" href="#runner-pattern" title="Permanent link">&para;</a></h2>
-<p><code>NTPClient</code> already implements the runner contract — register the
+<p><code>NTPClient</code> already implements the runner contract.  Register the
 client with a <code>chumicro-runner.Runner</code> and the runner drives the
 recv side automatically:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_runner</span><span class="w"> </span><span class="kn">import</span> <span class="n">Runner</span>
@@ -700,19 +699,19 @@ recv side automatically:</p>
 </span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="k">if</span> <span class="n">request</span><span class="o">.</span><span class="n">done</span><span class="p">:</span>
 </span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>    <span class="n">use</span><span class="p">(</span><span class="n">request</span><span class="o">.</span><span class="n">unix_seconds</span><span class="p">)</span>
 </span></code></pre></div>
-<p>Single in-flight query — <code>client.busy</code> is <code>True</code> between <code>query()</code>
+<p>Single in-flight query: <code>client.busy</code> is <code>True</code> between <code>query()</code>
 and <code>request.done</code>.  Calling <code>query()</code> again raises <code>RuntimeError</code>.
 Cancel with <code>client.cancel()</code> to abort and free the slot.</p>
 <h2 id="memory-notes">Memory notes<a class="headerlink" href="#memory-notes" title="Permanent link">&para;</a></h2>
 <p><code>NTPClient</code> pre-allocates a 48-byte <code>bytearray</code> for the recv buffer
 in <code>__init__</code> so <code>handle</code> doesn't allocate on the hot path.  The
 client request is a 48-byte module-level <code>bytes</code> constant, sent
-directly each <code>query()</code> — no per-call packet construction.  The
+directly each <code>query()</code>, with no per-call packet construction.  The
 parse step reads through a <code>memoryview</code> window into the recv
 buffer, so the success path doesn't copy bytes either.</p>
-<p><code>NTPResult</code> is a tiny holder — a handful of integer / object fields.</p>
+<p><code>NTPResult</code> is a tiny holder: a handful of integer / object fields.</p>
 <h2 id="platform-notes">Platform notes<a class="headerlink" href="#platform-notes" title="Permanent link">&para;</a></h2>
-<p>Runs identically on CPython, MicroPython, and CircuitPython.  The default tick source is the <code>chumicro_timing.ticks</code> submodule — an object that exposes <code>ticks_ms</code> / <code>ticks_diff</code> / <code>ticks_add</code>, each picking the right underlying primitive per runtime (<code>supervisor.ticks_ms</code> on CircuitPython, <code>time.ticks_ms</code> on MicroPython, <code>time.monotonic_ns</code> on CPython).  Inject a custom source via the <code>ticks=</code> constructor kwarg if you have your own — must expose those same three names.  All UDP work goes through the injected socket, so <code>chumicro-sockets</code> hides the per-runtime adapter chase.</p>
+<p>Runs identically on CPython, MicroPython, and CircuitPython.  The default tick source is the <code>chumicro_timing.ticks</code> submodule, an object that exposes <code>ticks_ms</code> / <code>ticks_diff</code> / <code>ticks_add</code>, each picking the right underlying primitive per runtime (<code>supervisor.ticks_ms</code> on CircuitPython, <code>time.ticks_ms</code> on MicroPython, <code>time.monotonic_ns</code> on CPython).  Inject a custom source via the <code>ticks=</code> constructor kwarg if you have your own, which must expose those same three names.  All UDP work goes through the injected socket, so <code>chumicro-sockets</code> hides the per-runtime adapter chase.</p>
 <p>Tested on real CircuitPython and MicroPython boards with live <code>pool.ntp.org</code> queries before each release; returned timestamps validated against a 2024-2030 plausibility window.</p>
 <h2 id="failure-modes">Failure modes<a class="headerlink" href="#failure-modes" title="Permanent link">&para;</a></h2>
 <p><code>NTPResult.error</code> carries the failure when the exchange ends badly:</p>
