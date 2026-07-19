@@ -17,7 +17,7 @@ import chumicro_sockets
 from chumicro_http_server import HttpServer
 from chumicro_http_server.streaming import SOURCE_EOF, build_streaming_response
 from chumicro_requests.generators import get
-from chumicro_requests.sockets_factory import chumicro_sockets_connector_factory
+from chumicro_sockets.sockets_factory import connector_factory
 from chumicro_runner import Runner
 from chumicro_timing import Rate, ticks_add, ticks_diff, ticks_ms
 
@@ -90,7 +90,7 @@ def main() -> None:
     print("laptop_roundtrip: one fetch in flight, LED blinking on the same loop\n")
 
     # add_generator primes the fetch (prints its GET line) once the header is out.
-    request = runner.add_generator(fetch(chumicro_sockets_connector_factory(), url))
+    request = runner.add_generator(fetch(connector_factory(), url))
 
     blink = Rate(BLINK_MS, ticks_ms())
     lit = False
