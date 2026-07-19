@@ -167,6 +167,37 @@ Every networked library in ChuMicro (`wifi`, `sockets`, `requests`, `http_server
 
 `chumicro_runner.testing.FakePoller` is the test stand-in — see [Testing tasks](#testing-tasks).
 
+## The service contract
+
+A service is any object you hand to `runner.add(service)`.  The runner reads six members off it: two are required, the rest optional, each optional member carrying a coherence rule the dispatch relies on.
+
+| Member | Required | When the runner reads it | For |
+|---|---|---|---|
+| `check(now_ms) -> bool` | yes | each `tick`, subject to any period gate | deciding whether `handle` runs this tick |
+| `handle(now_ms)` | yes | each `tick`, when `check` returned `True` | one tick of work |
+| `io_socket` | no | each `wait`, as an attribute (the socket, or `None`) | the socket to poll |
+| `io_interest(now_ms) -> int` | no | each `wait` | OR-ing `IO_READ` / `IO_WRITE` into the poll set for `io_socket` |
+| `next_deadline(now_ms) -> int \| None` | no | each `wait` | bounding the idle timeout so the service still runs on time with no I/O |
+| `io_error(now_ms, eventmask)` | no | on `wait`, when `io_socket` reports `POLLERR` / `POLLHUP` | transitioning cleanly to a failure state |
+
+The coherence rules, as the dispatch enforces them:
+
+- **`check` and `handle` are both required.**  `Runner.add` reads both off the object at registration, so a service missing either cannot register.
+- **`io_socket` and `io_interest` come as a pair.**  The poll sync reaches the socket through `io_interest`; one member without the other never reaches the poller.
+- **`io_error` requires `io_socket`.**  It is dispatched only when that socket reports a poll error.
+
+`chumicro_runner.testing.validate_service(service)` checks exactly these rules and raises `ValueError` naming the offending member.  It validates shape, never behavior, so drop it into a consumer library's test suite to catch a malformed service before it reaches a live runner:
+
+```python
+from chumicro_runner.testing import validate_service
+
+
+def test_my_service_is_a_valid_runner_service():
+    validate_service(MySensorService(...))
+```
+
+Work runs on the runner in two shapes: services, the contract above, and generators registered with `runner.add_generator`.  This section is the service side; the generator side is its own surface with its own helpers, and there is no third shape.
+
 ## Registration patterns
 
 ### Object-based
