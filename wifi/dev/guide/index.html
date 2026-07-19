@@ -713,10 +713,10 @@
 
 <h1 id="user-guide">User Guide<a class="headerlink" href="#user-guide" title="Permanent link">&para;</a></h1>
 <h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
-<p><code>chumicro-wifi</code> is a single wifi service that works the same way on CircuitPython, MicroPython-on-ESP32, MicroPython-on-Pi-Pico-W, and CPython.  Construct it once, hand it to the runner, and it brings the link up, watches for drops, and reconnects on its own — no <code>CIRCUITPY_WIFI_*</code> keys, no firmware-level auto-reconnect, no <code>boot.py</code> that connects before user code runs.  Owning the radio in one place eliminates a class of "two systems both think they own the radio" bugs.</p>
+<p><code>chumicro-wifi</code> is a single wifi service that works the same way on CircuitPython, MicroPython-on-ESP32, MicroPython-on-Pi-Pico-W, and CPython.  Construct it once, hand it to the runner, and it brings the link up, watches for drops, and reconnects on its own: no <code>CIRCUITPY_WIFI_*</code> keys, no firmware-level auto-reconnect, no <code>boot.py</code> that connects before user code runs.  Owning the radio in one place eliminates a class of "two systems both think they own the radio" bugs.</p>
 <p>Public surface: <code>WifiConfig</code> (typed settings), <code>WifiService</code> (the supervisor), <code>WifiState</code> (the five-value state machine), plus <code>chumicro_wifi.testing.FakeWifi</code> for downstream library tests.</p>
 <h2 id="getting-started">Getting started<a class="headerlink" href="#getting-started" title="Permanent link">&para;</a></h2>
-<p>Typical wiring — config loaded from the deployed runtime-config file, service registered with the runner, ready in a few lines of app code:</p>
+<p>Typical wiring, with config loaded from the deployed runtime-config file, the service registered with the runner, ready in a few lines of app code:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_config</span><span class="w"> </span><span class="kn">import</span> <span class="n">load_runtime_config</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_runner</span><span class="w"> </span><span class="kn">import</span> <span class="n">Runner</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_wifi</span><span class="w"> </span><span class="kn">import</span> <span class="n">WifiConfig</span><span class="p">,</span> <span class="n">WifiService</span>
@@ -733,7 +733,7 @@
 </span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>        <span class="c1"># do whatever needs the network</span>
 </span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>        <span class="k">pass</span>
 </span></code></pre></div>
-<p><code>WifiService</code> calls into the right per-runtime adapter automatically — no platform branches in your app.</p>
+<p><code>WifiService</code> calls into the right per-runtime adapter automatically.  No platform branches in your app.</p>
 <h2 id="state-machine">State machine<a class="headerlink" href="#state-machine" title="Permanent link">&para;</a></h2>
 <p><code>WifiState</code> has five string-sentinel values:</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>DISCONNECTED -&gt; CONNECTING -&gt; CONNECTED
@@ -748,17 +748,17 @@
 <div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">if</span> <span class="n">wifi</span><span class="o">.</span><span class="n">state</span> <span class="o">==</span> <span class="n">WifiState</span><span class="o">.</span><span class="n">CONNECTED</span><span class="p">:</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="o">...</span>
 </span></code></pre></div>
-<p>(Plain string comparison — <code>enum.Enum</code> is unavailable on some MicroPython boards, so the sentinels are bare strings.)</p>
+<p>(Plain string comparison: <code>enum.Enum</code> is unavailable on some MicroPython boards, so the sentinels are bare strings.)</p>
 <p><code>wifi.connected</code> is shorthand for <code>state == CONNECTED</code>.</p>
 <h2 id="reading-ip-and-errors">Reading IP and errors<a class="headerlink" href="#reading-ip-and-errors" title="Permanent link">&para;</a></h2>
 <p>After the supervisor reaches <code>CONNECTED</code>:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">wifi</span><span class="o">.</span><span class="n">ip</span>            <span class="c1"># &quot;192.168.1.42&quot; or None</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">wifi</span><span class="o">.</span><span class="n">last_error</span>    <span class="c1"># last exception caught, if any</span>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">wifi</span><span class="o">.</span><span class="n">adapter</span><span class="o">.</span><span class="n">name</span>  <span class="c1"># &quot;cp&quot; / &quot;mp_esp32&quot; / &quot;mp_rp2&quot; / &quot;fake&quot; — useful for logging</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">wifi</span><span class="o">.</span><span class="n">adapter</span><span class="o">.</span><span class="n">name</span>  <span class="c1"># &quot;cp&quot; / &quot;mp_esp32&quot; / &quot;mp_rp2&quot; / &quot;fake&quot;, useful for logging</span>
 </span></code></pre></div>
-<p><code>last_error</code> is most informative on MicroPython-ESP32, where the wifi driver raises <code>OSError("Wifi Internal State Error")</code> on unreachable AP — the service captures it and surfaces it here.  On CircuitPython, the substrate raises <code>TimeoutError</code> / <code>ConnectionError</code> (both <code>OSError</code> subclasses) but <code>CpWifiAdapter.connect</code> catches them and returns <code>False</code>, so <code>last_error</code> typically stays <code>None</code> for unreachable-AP cases — only non-<code>OSError</code> failures (e.g. programmer errors) bubble up.  On MicroPython-CYW43 (Pi Pico W) the driver silently leaves <code>isconnected()</code> False with no exception, so <code>last_error</code> is <code>None</code> even though the supervisor is in <code>RECONNECTING</code> (see Platform notes).</p>
+<p><code>last_error</code> is most informative on MicroPython-ESP32, where the wifi driver raises <code>OSError("Wifi Internal State Error")</code> on unreachable AP: the service captures it and surfaces it here.  On CircuitPython, the substrate raises <code>TimeoutError</code> / <code>ConnectionError</code> (both <code>OSError</code> subclasses) but <code>CpWifiAdapter.connect</code> catches them and returns <code>False</code>, so <code>last_error</code> typically stays <code>None</code> for unreachable-AP cases.  Only non-<code>OSError</code> failures (e.g. programmer errors) bubble up.  On MicroPython-CYW43 (Pi Pico W) the driver silently leaves <code>isconnected()</code> False with no exception, so <code>last_error</code> is <code>None</code> even though the supervisor is in <code>RECONNECTING</code> (see Platform notes).</p>
 <h2 id="state-change-notifications">State-change notifications<a class="headerlink" href="#state-change-notifications" title="Permanent link">&para;</a></h2>
-<p><code>on_state_change(callback)</code> appends <em>callback</em> to the transition-listener list — every registered callback fires on every transition, in registration order:</p>
+<p><code>on_state_change(callback)</code> appends <em>callback</em> to the transition-listener list, and every registered callback fires on every transition, in registration order:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">log_transition</span><span class="p">(</span><span class="n">old_state</span><span class="p">,</span> <span class="n">new_state</span><span class="p">):</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;wifi: </span><span class="si">{</span><span class="n">old_state</span><span class="si">}</span><span class="s2"> -&gt; </span><span class="si">{</span><span class="n">new_state</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
@@ -768,8 +768,8 @@
 <div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">wifi</span><span class="o">.</span><span class="n">on_state_change</span><span class="p">(</span><span class="n">status_led</span><span class="o">.</span><span class="n">on_wifi_state</span><span class="p">)</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">wifi</span><span class="o">.</span><span class="n">on_state_change</span><span class="p">(</span><span class="n">telemetry</span><span class="o">.</span><span class="n">on_wifi_state</span><span class="p">)</span>
 </span></code></pre></div>
-<p>To let a generator task <em>block</em> on a one-time transition — the first time the link comes up, say — bridge the callback to a <code>Signal</code> and <code>yield from wait_for(...)</code> (both in <code>chumicro_runner.generators</code>; see the <code>chumicro-runner</code> guide) rather than polling <code>wifi.state</code>:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_runner.generators</span><span class="w"> </span><span class="kn">import</span> <span class="n">Signal</span><span class="p">,</span> <span class="n">wait_for</span>
+<p>To let a generator task <em>block</em> on a one-time transition (the first time the link comes up, say), bridge the callback to a <code>Signal</code> and <code>yield from wait_for(...)</code> (both in <code>chumicro_timing.waits</code>; see the <code>chumicro-timing</code> guide) rather than polling <code>wifi.state</code>:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_timing.waits</span><span class="w"> </span><span class="kn">import</span> <span class="n">Signal</span><span class="p">,</span> <span class="n">wait_for</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">link_up</span> <span class="o">=</span> <span class="n">Signal</span><span class="p">()</span>
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="n">wifi</span><span class="o">.</span><span class="n">on_state_change</span><span class="p">(</span><span class="k">lambda</span> <span class="n">old</span><span class="p">,</span> <span class="n">new</span><span class="p">:</span> <span class="n">link_up</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="n">new</span><span class="p">))</span>
@@ -794,13 +794,13 @@
 <tr>
 <td><code>ssid</code></td>
 <td>✅</td>
-<td>—</td>
+<td>none</td>
 <td>AP SSID.</td>
 </tr>
 <tr>
 <td><code>password</code></td>
 <td>✅</td>
-<td>—</td>
+<td>none</td>
 <td>WPA passphrase.</td>
 </tr>
 <tr>
@@ -813,7 +813,7 @@
 <td><code>connect_timeout_ms</code></td>
 <td></td>
 <td><code>15_000</code></td>
-<td>Per-attempt connect deadline — a blocking wait on CircuitPython, the in-flight association poll window on MicroPython.</td>
+<td>Per-attempt connect deadline: a blocking wait on CircuitPython, the in-flight association poll window on MicroPython.</td>
 </tr>
 <tr>
 <td><code>reconnect_backoff_start_ms</code></td>
@@ -831,7 +831,7 @@
 <td><code>reconnect_max</code></td>
 <td></td>
 <td><code>None</code> (unlimited)</td>
-<td>Consecutive failed attempts (initial connect + reconnects) before the terminal <code>FAILED</code> state. Leave <code>None</code> for always-on devices — see below.</td>
+<td>Consecutive failed attempts (initial connect + reconnects) before the terminal <code>FAILED</code> state. Leave <code>None</code> for always-on devices (see below).</td>
 </tr>
 <tr>
 <td><code>power_save</code></td>
@@ -855,16 +855,16 @@
 </span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="n">power_save</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span><span class="w">                  </span><span class="c1"># default; eliminates ~30-100 ms tick spikes</span>
 </span></code></pre></div>
 <p>The <code>power_save = false</code> default matters on Pi Pico W: the CYW43 chip's idle power-save mode introduces 30–100 ms tick stalls, which visibly stutter LED-blink rhythms and can break sub-second control loops.</p>
-<p><code>tx_power_dbm</code> exists for boards that are unreliable at full transmit power. The canonical case is Unexpected Maker's P4-revision ESP32-S3 boards, which are <a href="https://help.unexpectedmaker.com/docs/boards/wifi-stability-issues/">vendor-documented unstable</a> at full 20 dBm — dropping to <code>tx_power_dbm = 15</code> (~75 %) restores a clean join. This knowledge lives in your deploy config, not in the library: <code>chumicro-wifi</code> never inspects the board, it only applies the value you set and leaves the radio at its firmware default when the key is absent.</p>
+<p><code>tx_power_dbm</code> exists for boards that are unreliable at full transmit power. The canonical case is Unexpected Maker's P4-revision ESP32-S3 boards, which are <a href="https://help.unexpectedmaker.com/docs/boards/wifi-stability-issues/">vendor-documented unstable</a> at full 20 dBm.  Dropping to <code>tx_power_dbm = 15</code> (~75 %) restores a clean join. This knowledge lives in your deploy config, not in the library: <code>chumicro-wifi</code> never inspects the board, it only applies the value you set and leaves the radio at its firmware default when the key is absent.</p>
 <h3 id="reconnect_max-and-the-never-restart-guarantee"><code>reconnect_max</code> and the never-restart guarantee<a class="headerlink" href="#reconnect_max-and-the-never-restart-guarantee" title="Permanent link">&para;</a></h3>
-<p>Leaving <code>reconnect_max</code> at its <code>None</code> default is what lets an unattended device ride out an outage without a reboot: the supervisor retries forever with backoff capped at <code>reconnect_backoff_max_ms</code>, so a link that comes back after minutes, hours, or a whole-house power blip is re-established on its own. <code>FAILED</code> is a <strong>terminal</strong> state — nothing in the service leaves it — so set a finite <code>reconnect_max</code> only when a caller <em>wants</em> exhaustion to escalate (e.g. to a hardware watchdog reset or deep-sleep), and remember the count includes the initial connect: a low cap can fail permanently in the power-restore race where the board boots faster than the router. For always-on devices, keep it <code>None</code>.</p>
+<p>Leaving <code>reconnect_max</code> at its <code>None</code> default is what lets an unattended device ride out an outage without a reboot: the supervisor retries forever with backoff capped at <code>reconnect_backoff_max_ms</code>, so a link that comes back after minutes, hours, or a whole-house power blip is re-established on its own. <code>FAILED</code> is a <strong>terminal</strong> state (nothing in the service leaves it), so set a finite <code>reconnect_max</code> only when a caller <em>wants</em> exhaustion to escalate (e.g. to a hardware watchdog reset or deep-sleep), and remember the count includes the initial connect: a low cap can fail permanently in the power-restore race where the board boots faster than the router. For always-on devices, keep it <code>None</code>.</p>
 <h2 id="runner-integration">Runner integration<a class="headerlink" href="#runner-integration" title="Permanent link">&para;</a></h2>
 <p><code>WifiService</code> implements the <code>chumicro-runner</code> <code>check(now_ms)</code> / <code>handle(now_ms)</code> contract:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="n">runner</span> <span class="o">=</span> <span class="n">Runner</span><span class="p">()</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="n">runner</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">wifi</span><span class="p">)</span>
 </span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="n">runner</span><span class="o">.</span><span class="n">tick</span><span class="p">()</span>             <span class="c1"># advances every registered service one step</span>
 </span></code></pre></div>
-<p><code>check</code> is cheap (state inspection); <code>handle</code> performs at most one wifi-driver call per tick.  On MicroPython that call is non-blocking — association happens in the background and <code>handle()</code> returns immediately, so other services keep their tick budget.  On CircuitPython the substrate-level <code>wifi.radio.connect()</code> is itself blocking, so <code>handle()</code> stalls for up to <code>connect_timeout_ms</code> (default 15 000 ms) while in <code>CONNECTING</code> / <code>RECONNECTING</code> — other services in the same <code>Runner</code> (LED heartbeat, an in-flight HTTP request, MQTT keep-alives) pause for that window.  Once <code>CONNECTED</code>, every tick is cheap on both runtimes — and connection failures land in <code>RECONNECTING</code>, with the next backoff window resuming naturally.</p>
+<p><code>check</code> is cheap (state inspection); <code>handle</code> performs at most one wifi-driver call per tick.  On MicroPython that call is non-blocking: association happens in the background and <code>handle()</code> returns immediately, so other services keep their tick budget.  On CircuitPython the substrate-level <code>wifi.radio.connect()</code> is itself blocking, so <code>handle()</code> stalls for up to <code>connect_timeout_ms</code> (default 15 000 ms) while in <code>CONNECTING</code> / <code>RECONNECTING</code>.  Other services in the same <code>Runner</code> (LED heartbeat, an in-flight HTTP request, MQTT keep-alives) pause for that window.  Once <code>CONNECTED</code>, every tick is cheap on both runtimes, and connection failures land in <code>RECONNECTING</code>, with the next backoff window resuming naturally.</p>
 <h2 id="adapter-detection">Adapter detection<a class="headerlink" href="#adapter-detection" title="Permanent link">&para;</a></h2>
 <p><code>WifiService</code> picks the right adapter at construction time based on <code>sys.implementation.name</code>:</p>
 <table>
@@ -895,7 +895,7 @@
 </table>
 <p>The <code>MpWifiAdapter</code> auto-detects ESP-IDF vs CYW43 by matching <code>sys.implementation._machine</code> against a positive whitelist of known CYW43 boards (<code>CYW43_MACHINES</code> in <code>_adapters/mp.py</code>); anything outside the whitelist falls through to ESP-IDF.  It then applies the right <code>wlan.config(...)</code> knobs:</p>
 <ul>
-<li><strong>ESP-IDF</strong>: <code>config(reconnects=0)</code> after first link, to disable the firmware-level auto-reconnect supervisor — <code>chumicro-wifi</code> owns reconnect logic itself.</li>
+<li><strong>ESP-IDF</strong>: <code>config(reconnects=0)</code> after first link, to disable the firmware-level auto-reconnect supervisor: <code>chumicro-wifi</code> owns reconnect logic itself.</li>
 <li><strong>CYW43</strong>: <code>config(pm=0xa11140)</code> at configure time, to disable idle power-save when <code>power_save=False</code>.</li>
 </ul>
 <p>The underlying MicroPython <code>network.WLAN</code> API (<code>active</code>, <code>connect</code>, <code>isconnected</code>, <code>ifconfig</code>) is identical across both wifi chips, so a single adapter handles both.</p>
@@ -924,7 +924,7 @@
 </tbody>
 </table>
 <p>The supervisor handles all three honestly: each adapter checks <code>isconnected()</code> after a connect attempt rather than trusting that a non-raising <code>connect()</code> succeeded.</p>
-<p>On the ESP32-S3, a failed or timed-out <code>wifi.radio.connect()</code> leaves the station half-open; re-issuing <code>connect()</code> without clearing it makes the retry slow-fail for the whole <code>connect_timeout_ms</code> (surfacing as <code>ConnectionError: Unknown failure 205</code>) instead of the ~4 s a clean attempt takes, so a single transient RF glitch cascades past the connect budget.  <code>CpWifiAdapter.connect</code> therefore calls <code>wifi.radio.stop_station()</code> before each fresh attempt (and short-circuits when the radio already reports linked), keeping every attempt independent.  This is an intermittent, RF-marginal failure mode — the chip connects in seconds when the station is clean.</p>
+<p>On the ESP32-S3, a failed or timed-out <code>wifi.radio.connect()</code> leaves the station half-open; re-issuing <code>connect()</code> without clearing it makes the retry slow-fail for the whole <code>connect_timeout_ms</code> (surfacing as <code>ConnectionError: Unknown failure 205</code>) instead of the ~4 s a clean attempt takes, so a single transient RF glitch cascades past the connect budget.  <code>CpWifiAdapter.connect</code> therefore calls <code>wifi.radio.stop_station()</code> before each fresh attempt (and short-circuits when the radio already reports linked), keeping every attempt independent.  This is an intermittent, RF-marginal failure mode.  The chip connects in seconds when the station is clean.</p>
 <h2 id="testing-with-fakewifi">Testing with <code>FakeWifi</code><a class="headerlink" href="#testing-with-fakewifi" title="Permanent link">&para;</a></h2>
 <p>For downstream libraries' tests, <a href="../testing/"><code>chumicro_wifi.testing.FakeWifi</code></a> is a drop-in <code>WifiService</code> wrapping a <code>FakeWifiAdapter</code> with <code>set_connect_outcome</code>, <code>drop_link</code>, and <code>calls</code> hooks.</p>
 <h2 id="examples">Examples<a class="headerlink" href="#examples" title="Permanent link">&para;</a></h2>
@@ -938,7 +938,7 @@
 <tbody>
 <tr>
 <td><a href="https://github.com/ChuMicro/ChuMicro/tree/main/libraries/wifi/examples/connect_to_ap.py"><code>examples/connect_to_ap.py</code></a></td>
-<td>Connect to a real AP, print state transitions, observe IP — reads <code>wifi.ssid</code> / <code>wifi.password</code> from <code>runtime_config.msgpack</code>.</td>
+<td>Connect to a real AP, print state transitions, observe IP, reading <code>wifi.ssid</code> / <code>wifi.password</code> from <code>runtime_config.msgpack</code>.</td>
 </tr>
 </tbody>
 </table>
