@@ -9,7 +9,7 @@ RFC 6455 framing and masking, opening + closing handshakes, text + binary + ping
 
 <br clear="left">
 
-> Part of the [ChuMicro](https://github.com/ChuMicro/ChuMicro) family — small, focused Python libraries for microcontrollers and laptops. [Browse all libraries.](https://github.com/ChuMicro/ChuMicro/tree/main/libraries)
+> Part of the [ChuMicro](https://github.com/ChuMicro/ChuMicro) family: small, focused Python libraries for microcontrollers and laptops. [Browse all libraries.](https://github.com/ChuMicro/ChuMicro/tree/main/libraries)
 
 ## Install
 
@@ -91,20 +91,12 @@ Works on CPython, MicroPython, and CircuitPython.
 
 | Example | What it shows |
 |---|---|
-| [`client.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/websockets/examples/client.py) | WebSocket client on real CP/MP hardware — brings wifi up via the bundled `helpers`, connects to a configured echo server, prints every inbound message while a counter ticks alongside. |
-| [`server.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/websockets/examples/server.py) | WebSocket echo server on real CP/MP hardware — accepts inbound connections on the configured host/port and echoes every frame back. |
+| [`client.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/websockets/examples/client.py) | WebSocket client on real CP/MP hardware: brings wifi up via the bundled `helpers`, connects to a configured echo server, prints every inbound message while a counter ticks alongside. |
+| [`server.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/websockets/examples/server.py) | WebSocket echo server on real CP/MP hardware: accepts inbound connections on the configured host/port and echoes every frame back. |
 
 ## Contributing
 
-Working on `chumicro-websockets` itself?  Clone the [mono-repo](https://github.com/ChuMicro/ChuMicro) if you haven't already — the rest of the workflow assumes you're inside that workspace.
-
-```bash
-pip install -e .[test]
-pytest tests/                  # host-side tests
-pytest functional_tests/       # on-device tests (needs a board registered in devices.yml)
-```
-
-Register a board before running functional tests: `chumicro-workspace add-device <id> --address <port>`.
+Issues, bug reports, and pull requests are welcome, and so is "I ran it on this board and here's what happened", some of the most useful feedback a hardware project can get.  Development happens in the [ChuMicro repository](https://github.com/ChuMicro/ChuMicro), whose contributing guide covers setup and the test workflow.
 
 ## Docs
 

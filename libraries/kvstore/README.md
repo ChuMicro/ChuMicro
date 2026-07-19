@@ -5,11 +5,11 @@ align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
 **A persistent dict for counters, timestamps, and tokens that need to survive a reboot.**
 
-A dict-shaped store with `commit()` semantics.  Auto-detects the right backend per runtime (NVM on CircuitPython, NVS on ESP32 MicroPython, LittleFS elsewhere, in-memory for tests), bounds writes with `commit_if_changed()` so unchanged state doesn't wear the flash, and surfaces capacity and corruption honestly.  Not a config system — for declarative settings see [`chumicro-config`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/config).
+A dict-shaped store with `commit()` semantics.  Auto-detects the right backend per runtime (NVM on CircuitPython, NVS on ESP32 MicroPython, LittleFS elsewhere, in-memory for tests), bounds writes with `commit_if_changed()` so unchanged state doesn't wear the flash, and surfaces capacity and corruption honestly.
 
 <br clear="left">
 
-> Part of the [ChuMicro](https://github.com/ChuMicro/ChuMicro) family — small, focused Python libraries for microcontrollers and laptops. [Browse all libraries.](https://github.com/ChuMicro/ChuMicro/tree/main/libraries)
+> Part of the [ChuMicro](https://github.com/ChuMicro/ChuMicro) family: small, focused Python libraries for microcontrollers and laptops. [Browse all libraries.](https://github.com/ChuMicro/ChuMicro/tree/main/libraries)
 
 ## Install
 
@@ -54,7 +54,7 @@ print(store["boot_count"])             # → 1, 2, 3, … across power cycles
 
 ## Where this fits
 
-Leaf — no upstream ChuMicro deps.  Used directly in app code; no other ChuMicro library depends on it.
+Leaf, with no upstream ChuMicro deps.  Used directly in app code; no other ChuMicro library depends on it.
 
 ## Platform support
 
@@ -68,15 +68,7 @@ Works on CPython, MicroPython, and CircuitPython.
 
 ## Contributing
 
-Working on `chumicro-kvstore` itself?  Clone the [mono-repo](https://github.com/ChuMicro/ChuMicro) if you haven't already — the rest of the workflow assumes you're inside that workspace.
-
-```bash
-pip install -e .[test]
-pytest tests/                  # host-side tests
-pytest functional_tests/       # on-device tests (needs a board registered in devices.yml)
-```
-
-Register a board before running functional tests: `chumicro-workspace add-device <id> --address <port>`.
+Issues, bug reports, and pull requests are welcome, and so is "I ran it on this board and here's what happened", some of the most useful feedback a hardware project can get.  Development happens in the [ChuMicro repository](https://github.com/ChuMicro/ChuMicro), whose contributing guide covers setup and the test workflow.
 
 ## Docs
 

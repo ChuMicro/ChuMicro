@@ -3,13 +3,13 @@
 <img src="https://raw.githubusercontent.com/ChuMicro/ChuMicro/main/support/docs/chumicro_tip.png"
 align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
-**Binary serialization that's typically 30–50 % smaller than JSON.**
+**Compact binary serialization for settings and config, smaller than JSON.**
 
-The subset of [MessagePack](https://msgpack.org) that fits on a 256 KB board — 32-bit ints, single-precision floats, 16-bit lengths.  Wire-compatible with the PyPI `msgpack` library when it's configured for the same subset (`use_single_float=True`); on CircuitPython firmware that ships the native `msgpack` C module, encoding and decoding delegate to the C path automatically.
+The subset of [MessagePack](https://msgpack.org) that fits on a 256 KB board: 32-bit ints, single-precision floats, 16-bit lengths.  Wire-compatible with the PyPI `msgpack` library when it's configured for the same subset (`use_single_float=True`); on CircuitPython firmware that ships the native `msgpack` C module, encoding and decoding delegate to the C path automatically.
 
 <br clear="left">
 
-> Part of the [ChuMicro](https://github.com/ChuMicro/ChuMicro) family — small, focused Python libraries for microcontrollers and laptops. [Browse all libraries.](https://github.com/ChuMicro/ChuMicro/tree/main/libraries)
+> Part of the [ChuMicro](https://github.com/ChuMicro/ChuMicro) family: small, focused Python libraries for microcontrollers and laptops. [Browse all libraries.](https://github.com/ChuMicro/ChuMicro/tree/main/libraries)
 
 ## Install
 
@@ -62,8 +62,8 @@ Use `pack`/`unpack` when writing to files, sockets, or NVM.  Use `packb`/`unpack
 
 | Python type | msgpack format | Limit |
 |---|---|---|
-| `None` | nil | — |
-| `True` / `False` | bool | — |
+| `None` | nil | none |
+| `True` / `False` | bool | none |
 | `int` | fixint, int8/16/32, uint8/16/32 | `-2^31 ≤ value ≤ 2^32 − 1` |
 | `float` | float32 | single precision (~7 decimal digits) |
 | `str` | fixstr, str8, str16 | up to 65 535 bytes UTF-8 |
@@ -73,7 +73,7 @@ Use `pack`/`unpack` when writing to files, sockets, or NVM.  Use `packb`/`unpack
 
 Values outside these limits raise `OverflowError` on encode. Tags outside the subset (`float64` `0xcb`, `int64` `0xd3`, `uint64` `0xcf`, the `*32`-length variants) raise a descriptive `ValueError` on decode that names the offending tag.
 
-`tuple` decodes back as `list` — msgpack has no tuple type. `dict` keys may be any supported type, including `int` (no `strict_map_key` enforcement). Ext types (timestamps, custom classes) are not supported in either direction.
+`tuple` decodes back as `list`, since msgpack has no tuple type. `dict` keys may be any supported type, including `int` (no `strict_map_key` enforcement). Ext types (timestamps, custom classes) are not supported in either direction.
 
 ## Cross-runtime compatibility
 
@@ -84,7 +84,7 @@ Values outside these limits raise `OverflowError` on encode. Tags outside the su
 | Host writes with PyPI `msgpack` → chumicro device reads | ✓ if host stays in subset | See recipe below |
 | Host writes default PyPI `msgpack` → chumicro device reads | ✗ | PyPI defaults to `float64`, decodes raise on device |
 
-**Host-side recipe** — when a host script needs to produce bytes a chumicro device will read:
+**Host-side recipe**, when a host script needs to produce bytes a chumicro device will read:
 
 ```python
 import msgpack  # standard PyPI library
@@ -92,11 +92,11 @@ data = msgpack.packb(obj, use_single_float=True)
 # Caller's job: keep ints in [-2**31, 2**32-1] and lengths under 65 536.
 ```
 
-`use_single_float=True` switches PyPI msgpack from `float64` to `float32`, matching what chumicro reads.  This is what [`chumicro-workspace`](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/workspace) uses to write `runtime_config.msgpack` for the device.
+`use_single_float=True` switches PyPI msgpack from `float64` to `float32`, matching what chumicro reads.  This is what `chumicro-workspace` does when it writes `runtime_config.msgpack` for the device.
 
 ## Where this fits
 
-Leaf — no upstream ChuMicro deps.  Used directly by [`chumicro-config`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/config) to decode `/runtime_config.msgpack` on the device, and by host-side workspace tooling to write it.
+Leaf, no upstream ChuMicro deps.  Used directly by [`chumicro-config`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/config) to decode `/runtime_config.msgpack` on the device, and by host-side workspace tooling to write it.
 
 ## Platform support
 
@@ -113,21 +113,13 @@ Leaf — no upstream ChuMicro deps.  Used directly by [`chumicro-config`](https:
 | Example | What it shows |
 |---|---|
 | `packb_basic.py` | Pack and unpack a settings dict |
-| `packb_size_comparison.py` | Compare msgpack vs JSON size for the same dict |
+| `packb_size_comparison.py` | Compare msgpack vs JSON size for the same dict (packs a five-field settings dict to 78 bytes where JSON needs 109, about 28 % smaller; integer keys instead of strings widen the gap further) |
 | `stream_roundtrip.py` | Use the stream-based `pack` / `unpack` API with `BytesIO` |
 | `circuitpython_nvm_settings.py` | Store and load settings in non-volatile memory (hardware) |
 
 ## Contributing
 
-Working on `chumicro-msgpack` itself?  Clone the [mono-repo](https://github.com/ChuMicro/ChuMicro) if you haven't already — the rest of the workflow assumes you're inside that workspace.
-
-```bash
-pip install -e .[test]
-pytest tests/                  # host-side tests
-pytest functional_tests/       # on-device tests (needs a board registered in devices.yml)
-```
-
-Register a board before running functional tests: `chumicro-workspace add-device <id> --address <port>`.
+Issues, bug reports, and pull requests are welcome, and so is "I ran it on this board and here's what happened", some of the most useful feedback a hardware project can get.  Development happens in the [ChuMicro repository](https://github.com/ChuMicro/ChuMicro), whose contributing guide covers setup and the test workflow.
 
 ## Docs
 

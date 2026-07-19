@@ -2,7 +2,7 @@
 
 ## Overview
 
-`chumicro-mqtt` is a non-blocking MQTT 3.1.1 client (QoS 0 + 1) for CircuitPython, MicroPython, and CPython.  Built on `chumicro-sockets` and `chumicro-timing`; no `async`, no threads, no blocking on network I/O.  An LED keeps blinking on the same board while a publish or subscribe is in flight, because `client.check(now_ms)` / `client.handle(now_ms)` do at most one tick of work per call.
+`chumicro-mqtt` is a non-blocking MQTT 3.1.1 client (QoS 0 + 1) for CircuitPython, MicroPython, and CPython.  MQTT is the lightweight publish/subscribe protocol most IoT brokers speak.  Built on `chumicro-sockets` and `chumicro-timing`; no `async`, no threads, no blocking on network I/O.  An LED keeps blinking on the same board while a publish or subscribe is in flight, because `client.check(now_ms)` / `client.handle(now_ms)` do at most one tick of work per call.
 
 QoS 2 raises `UnsupportedQoSError`.  Last-will, retained messages, wildcard topic matching, and a structured oversized-message policy are built in.
 
@@ -58,7 +58,7 @@ client = MQTTClient.from_config(
 
 client.on_message = lambda topic, payload: print(topic, payload)
 
-# subscribe() is a declaration — call it before connect().  The client
+# subscribe() is a declaration: call it before connect().  The client
 # records the topic and sends the SUBSCRIBE on the first CONNACK, and
 # replays it after any self-heal reconnect.  Declaring in on_connect is
 # equally valid, just no longer required.
@@ -67,10 +67,10 @@ client.connect()
 
 # publish() can be called straight away: before CONNECTED it buffers in
 # a small pre-connect queue and flushes on CONNACK (the default
-# when_disconnected="queue" policy — no state guard needed).
+# when_disconnected="queue" policy, no state guard needed).
 client.publish("status/online", b"true", retain=True)
 
-# Drive from your tick loop — no threads, no async.
+# Drive from your tick loop, no threads, no async.
 while True:
     now = ticks_ms()
     if client.check(now):
@@ -79,17 +79,17 @@ while True:
 
 Build your client at startup. The first `MQTTClient` reference imports the client module, so let that one-time cost land on a fresh heap.
 
-`connect()` queues the CONNECT packet; the first few `handle()` calls drive it through CONNECTING → CONNECTED.  `publish()` called before then buffers into a bounded pre-connect queue and flushes on CONNACK — the default `when_disconnected="queue"` policy (`"raise"` restores the raise-if-not-connected behavior).  `subscribe()` and `unsubscribe()` are declarations valid in any state: call them before `connect()` and the first CONNACK puts them on the wire (a self-heal reconnect replays them). Calling `subscribe()` while already CONNECTED still sends immediately, and placing it in `on_connect` is equally valid — just no longer required.
+`connect()` queues the CONNECT packet; the first few `handle()` calls drive it through CONNECTING → CONNECTED.  `publish()` called before then buffers into a bounded pre-connect queue and flushes on CONNACK, the default `when_disconnected="queue"` policy (`"raise"` restores the raise-if-not-connected behavior).  `subscribe()` and `unsubscribe()` are declarations valid in any state: call them before `connect()` and the first CONNACK puts them on the wire (a self-heal reconnect replays them). Calling `subscribe()` while already CONNECTED still sends immediately, and placing it in `on_connect` is equally valid, just no longer required.
 
-`MQTTClient` actually enforces non-blocking mode on every socket it acquires (force-`setblocking(False)`), so the explicit `sock.setblocking(False)` line above is belt-and-suspenders.  Don't omit it — MP plain TCP defaults to blocking, and a blocking `recv` against a silent peer (broker that's hung mid-handshake, network blackholing returning packets) stalls the tick loop indefinitely on Pi Pico W RP2.  Bench-tested with a stalled TCP listener: recv was still blocked at the 3-minute mark, with no TCP keepalive timeout fired within that window.  Whole-app freeze, not a recoverable hiccup.
+`MQTTClient` actually enforces non-blocking mode on every socket it acquires (force-`setblocking(False)`), so the explicit `sock.setblocking(False)` line above is belt-and-suspenders.  Don't omit it.  MP plain TCP defaults to blocking, and a blocking `recv` against a silent peer (broker that's hung mid-handshake, network blackholing returning packets) stalls the tick loop indefinitely on Pi Pico W RP2.  Bench-tested with a stalled TCP listener: recv was still blocked at the 3-minute mark, with no TCP keepalive timeout fired within that window.  Whole-app freeze, not a recoverable hiccup.
 
 ## Publishing
 
 ```python
-# QoS 0 — fire-and-forget
+# QoS 0, fire-and-forget
 client.publish("sensors/temp", b"21.5", qos=0)
 
-# QoS 1 — at-least-once with PUBACK round-trip
+# QoS 1, at-least-once with PUBACK round-trip
 def acked(topic, payload):
     print("publish acked:", topic, payload)
 
@@ -99,7 +99,7 @@ client.publish("sensors/temp", b"21.5", qos=1, on_publish=acked)
 client.publish("status/online", b"true", retain=True)
 ```
 
-The `on_publish=` callback is invoked as `on_publish(topic, payload_bytes)` — the same topic and payload passed to `publish()`.  For QoS 1 it fires once the broker's PUBACK lands; for QoS 0 it fires once the bytes hit the wire.  `chumicro-mqtt` tracks every in-flight QoS-1 packet by `packet_id` so re-deliveries (from `publish_retry_max`-driven retransmits) don't double-fire callbacks.
+The `on_publish=` callback is invoked as `on_publish(topic, payload_bytes)`, the same topic and payload passed to `publish()`.  For QoS 1 it fires once the broker's PUBACK lands; for QoS 0 it fires once the bytes hit the wire.  `chumicro-mqtt` tracks every in-flight QoS-1 packet by `packet_id` so re-deliveries (from `publish_retry_max`-driven retransmits) don't double-fire callbacks.
 
 ### Publishing before connected
 
@@ -107,10 +107,10 @@ Connect is asynchronous, so `publish()` can be called while the client is still 
 
 | `when_disconnected` | Before CONNECTED |
 |---|---|
-| `"queue"` (default) | Buffer in a bounded pre-connect queue (`pre_connect_queue_size`, default 8), drained on CONNACK in receipt order ahead of any publish `on_connect` issues.  A full queue raises `MQTTBackpressureError` — the same signal a full tx queue gives. |
-| `"raise"` | Raise `MQTTError` immediately — the strict "must be connected" behavior. |
+| `"queue"` (default) | Buffer in a bounded pre-connect queue (`pre_connect_queue_size`, default 8), drained on CONNACK in receipt order ahead of any publish `on_connect` issues.  A full queue raises `MQTTBackpressureError`, the same signal a full tx queue gives. |
+| `"raise"` | Raise `MQTTError` immediately, the strict "must be connected" behavior. |
 
-Queued publishes preserve their `qos` / `retain` and fire their `on_publish` callback when they eventually reach the wire.  `subscribe()` / `unsubscribe()` don't use this queue — they are declarations recorded in the subscription set and (re)sent on CONNACK (see [Subscribing and routing](#subscribing-and-routing)).
+Queued publishes preserve their `qos` / `retain` and fire their `on_publish` callback when they eventually reach the wire.  `subscribe()` / `unsubscribe()` don't use this queue; they are declarations recorded in the subscription set and (re)sent on CONNACK (see [Subscribing and routing](#subscribing-and-routing)).
 
 ## Subscribing and routing
 
@@ -122,9 +122,9 @@ client.subscribe("commands/+")             # MQTT wildcard
 client.subscribe("status/#", qos=1)        # multi-level wildcard
 ```
 
-`subscribe()` is a declaration valid in any state — call it before `connect()`, inside `on_connect`, or any time while CONNECTED. It records the topic in the client's subscription set; the SUBSCRIBE goes on the wire immediately when already CONNECTED, otherwise on the first CONNACK. Either way the `on_subscribe(topic, granted_qos)` callback fires once, on the SUBACK that grants the topic. A self-heal reconnect replays the set to restore the inbound stream, without re-firing `on_subscribe`. `unsubscribe()` mirrors this: it retracts the declaration in any state and sends the UNSUBSCRIBE when CONNECTED.
+`subscribe()` is a declaration valid in any state: call it before `connect()`, inside `on_connect`, or any time while CONNECTED. It records the topic in the client's subscription set; the SUBSCRIBE goes on the wire immediately when already CONNECTED, otherwise on the first CONNACK. Either way the `on_subscribe(topic, granted_qos)` callback fires once, on the SUBACK that grants the topic. A self-heal reconnect replays the set to restore the inbound stream, without re-firing `on_subscribe`. `unsubscribe()` mirrors this: it retracts the declaration in any state and sends the UNSUBSCRIBE when CONNECTED.
 
-For structured routing, branch inside `on_message` with the public `topic_matches(topic, pattern)` matcher — `+` matches one segment, `#` matches the trailing tail:
+For structured routing, branch inside `on_message` with the public `topic_matches(topic, pattern)` matcher: `+` matches one segment, `#` matches the trailing tail:
 
 ```python
 from chumicro_mqtt import topic_matches
@@ -139,11 +139,11 @@ client.on_message = route
 client.subscribe("commands/+")             # one wire-level subscribe covers both
 ```
 
-`on_message` + `topic_matches` and `next_message()` (below) are the two inbound surfaces — pick one per client.
+`on_message` + `topic_matches` and `next_message()` (below) are the two inbound surfaces; pick one per client.
 
 ### Receive stream (`next_message`)
 
-For a single-subscription consumer, `next_message()` reads inbound messages as a linear generator loop instead of a callback — register the client (it does the I/O each tick) and the consumer generator side by side:
+For a single-subscription consumer, `next_message()` reads inbound messages as a linear generator loop instead of a callback.  Register the client (it does the I/O each tick) and the consumer generator side by side:
 
 ```python
 runner.add(client)
@@ -158,7 +158,7 @@ def consume(client):
 runner.add_generator(consume(client))
 ```
 
-The first `next_message()` call switches inbound data delivery from the `on_message` callback to a bounded queue the generator drains (16 messages, drop-oldest — a slow consumer loses the oldest messages rather than growing the heap).  Lifecycle callbacks (`on_connect`, `on_disconnect`, `on_oversized`) keep firing either way.  Pick one inbound surface per client: the stream for a linear single-topic consumer, `on_message` for multi-topic fan-out.  See `examples/receive_stream.py`.
+The first `next_message()` call switches inbound data delivery from the `on_message` callback to a bounded queue the generator drains (16 messages, drop-oldest; a slow consumer loses the oldest messages rather than growing the heap).  Lifecycle callbacks (`on_connect`, `on_disconnect`, `on_oversized`) keep firing either way.  Pick one inbound surface per client: the stream for a linear single-topic consumer, `on_message` for multi-topic fan-out.  See `examples/receive_stream.py`.
 
 ## Last-will
 
@@ -184,7 +184,7 @@ client.set_will("status/online", b"offline", qos=1, retain=True)
 # Next CONNECT (or self-heal reconnect) carries the new will.
 ```
 
-`set_will(topic=None)` disables the will entirely.  The change applies to the next CONNECT packet — the broker already has the will from the in-flight session and can't be modified mid-connection.
+`set_will(topic=None)` disables the will entirely.  The change applies to the next CONNECT packet.  The broker already has the will from the in-flight session and can't be modified mid-connection.
 
 ## TLS connections
 
@@ -206,8 +206,8 @@ client = MQTTClient.from_config(
 
 A few platform realities:
 
-* On MP rp2 (Pi Pico W), `chumicro-sockets` automatically converts PEM to DER for `load_verify_locations` — the rp2 firmware ships without `MBEDTLS_PEM_PARSE_C`.
-* **The TLS handshake blocks the whole reactor, not just this client.** It runs synchronously inside `wrap_socket(...)`, so for its full duration every other runner-registered service — a sensor sample, a watchdog feed, an LED heartbeat — gets no tick. Bench-tested against `test.mosquitto.org:8883`: 2–3 ms on Lolin S2 CP and 10–11 ms on Pi Pico W CP on a good link, but tens of ms — or seconds against a slow or unreachable broker — on a high-latency uplink. Connect before you start time-critical services, or budget for the stall.
+* On MP rp2 (Pi Pico W), `chumicro-sockets` automatically converts PEM to DER for `load_verify_locations`, because the rp2 firmware ships without `MBEDTLS_PEM_PARSE_C`.
+* **The TLS handshake blocks the whole reactor, not just this client.** It runs synchronously inside `wrap_socket(...)`, so for its full duration every other runner-registered service (a sensor sample, a watchdog feed, an LED heartbeat) gets no tick. Bench-tested against `test.mosquitto.org:8883`: 2–3 ms on Lolin S2 CP and 10–11 ms on Pi Pico W CP on a good link, but tens of ms (or seconds against a slow or unreachable broker) on a high-latency uplink. Connect before you start time-critical services, or budget for the stall.
 * **DNS resolution also blocks the reactor.** The connector's `awaiting_dns` phase calls a synchronous `getaddrinfo`, which hangs for the resolver's own timeout when DNS is slow or down. Pre-resolve and pass an IP if a stall there is unacceptable.
 * For server-side TLS handshake heap sizes per board, see the `chumicro-http-server` guide's TLS-server table.
 
@@ -228,7 +228,7 @@ client.connect()
 # drive a fresh connector through DNS / TCP / TLS one phase per tick.
 ```
 
-Reconnects are paced by exponential backoff: the first retry after a fresh failure fires immediately, then each subsequent attempt doubles its wait from 1 s up to a 60 s ceiling, so a persistent outage doesn't storm the broker or drain the battery. A successful `CONNACK` resets the schedule. Rejections that reconnecting can't fix — `CONNACK` return codes 1, 2, 4, and 5 (unacceptable protocol version, identifier rejected, bad username/password, not authorized) — latch the client `FAILED` and stop self-heal until the next explicit `connect()`. Return code 3 (server unavailable) stays transient and keeps retrying. A `SUBACK` rejection (granted QoS `0x80`) evicts that filter from the client's subscription set before it faults, so the reconnect's subscription replay doesn't re-issue the rejected topic and re-earn the same rejection forever.
+Reconnects are paced by exponential backoff: the first retry after a fresh failure fires immediately, then each subsequent attempt doubles its wait from 1 s up to a 60 s ceiling, so a persistent outage doesn't storm the broker or drain the battery. A successful `CONNACK` resets the schedule. Rejections that reconnecting can't fix, namely `CONNACK` return codes 1, 2, 4, and 5 (unacceptable protocol version, identifier rejected, bad username/password, not authorized), latch the client `FAILED` and stop self-heal until the next explicit `connect()`. Return code 3 (server unavailable) stays transient and keeps retrying. A `SUBACK` rejection (granted QoS `0x80`) evicts that filter from the client's subscription set before it faults, so the reconnect's subscription replay doesn't re-issue the rejected topic and re-earn the same rejection forever.
 
 Without a factory the client transitions to `FAILED` on socket death and stays there until the caller manually tears down + reconstructs.
 
@@ -238,15 +238,15 @@ The factory is also the recommended way to wire up the **initial** connect: the 
 
 `connect()` means "be connected", acting on it now.  It is safe to call in any state and does the least-surprising thing for the one it finds:
 
-- **DISCONNECTED** — starts the connect sequence (as above).
-- **FAILED** — reconnects **immediately**, short-circuiting any remaining self-heal backoff.  It fires the same reconnect the timer would — queued / in-flight / clean-session fate is identical — it just skips the wait.  Call it whenever you KNOW the link is back rather than letting the client sit out residual backoff.
-- **CONNECTED / CONNECTING / AWAITING_TRANSPORT** — idempotent no-op.  The intent is already being satisfied, so nothing is disturbed and no second dial races the one in flight.
+- **DISCONNECTED**: starts the connect sequence (as above).
+- **FAILED**: reconnects **immediately**, short-circuiting any remaining self-heal backoff.  It fires the same reconnect the timer would (queued, in-flight, and clean-session fate are identical); it just skips the wait.  Call it whenever you KNOW the link is back rather than letting the client sit out residual backoff.
+- **CONNECTED / CONNECTING / AWAITING_TRANSPORT**: idempotent no-op.  The intent is already being satisfied, so nothing is disturbed and no second dial races the one in flight.
 
 So re-issuing `mqtt.connect()` on wifi-recovery is not just safe, it is the recommended wiring: it dials the moment the link returns instead of waiting out the backoff.
 
-The symmetric primitive is **`hold()`**.  When your app KNOWS the link is down — its wifi service just reported the radio dropped — call `mqtt.hold()` to suspend the self-heal timer so it stops dialing into a dead radio (on ESP-IDF those doomed dials can even contend with the radio's own re-association).  While held, the client stays `FAILED` with `last_error` intact, publishes still buffer per `when_disconnected`, and the runner parks cleanly instead of spinning on retries.  `connect()` releases the hold and dials.
+The symmetric primitive is **`hold()`**.  When your app KNOWS the link is down (its wifi service just reported the radio dropped), call `mqtt.hold()` to suspend the self-heal timer so it stops dialing into a dead radio (on ESP-IDF those doomed dials can even contend with the radio's own re-association).  While held, the client stays `FAILED` with `last_error` intact, publishes still buffer per `when_disconnected`, and the runner parks cleanly instead of spinning on retries.  `connect()` releases the hold and dials.
 
-`MQTTClient` never watches wifi itself — it runs on hosts with no radio, and it stays transport-agnostic — so the app that owns both services composes them.  The canonical `chumicro-wifi` wiring is one line each way:
+`MQTTClient` never watches wifi itself (it runs on hosts with no radio, and it stays transport-agnostic), so the app that owns both services composes them.  The canonical `chumicro-wifi` wiring is one line each way:
 
 ```python
 from chumicro_wifi import WifiState
@@ -260,14 +260,14 @@ def on_wifi_state(old, new):
 wifi.on_state_change(on_wifi_state)
 ```
 
-You can still wire the callback to nothing and let self-heal reconnect on its own — `hold()` / `connect()` only *tighten* the timing when the app has better information than the timer does.
+You can still wire the callback to nothing and let self-heal reconnect on its own; `hold()` / `connect()` only *tighten* the timing when the app has better information than the timer does.
 
 What happens to publishes issued during the outage depends on the state the client is in when `publish()` runs, and this is worth understanding because it decides which publishes survive a wifi drop:
 
-- Issued while still `CONNECTED` — the link is physically down but the client hasn't detected it yet (detection lags by up to `ack_timeout_seconds`, longer if a blocked reactor starves its ticks) — a QoS-1 publish opens an in-flight entry sent on the doomed socket.  It is never acked, and with the default `clean_session=True` the self-heal reconnect resets the in-flight table, so that publish is **dropped**.  This is ordinary clean-session semantics (the broker forgets the session too); set `clean_session=False` for a persistent broker to have these redelivered with `DUP=1` instead.
-- Issued once the client is `FAILED` / `AWAITING_TRANSPORT` — after the drop is detected — the publish buffers into the bounded pre-connect queue and **flushes** on the reconnect `CONNACK`, oldest first.
+- Issued while still `CONNECTED`, when the link is physically down but the client hasn't detected it yet (detection lags by up to `ack_timeout_seconds`, longer if a blocked reactor starves its ticks): a QoS-1 publish opens an in-flight entry sent on the doomed socket.  It is never acked, and with the default `clean_session=True` the self-heal reconnect resets the in-flight table, so that publish is **dropped**.  This is ordinary clean-session semantics (the broker forgets the session too); set `clean_session=False` for a persistent broker to have these redelivered with `DUP=1` instead.
+- Issued once the client is `FAILED` / `AWAITING_TRANSPORT` (after the drop is detected), the publish buffers into the bounded pre-connect queue and **flushes** on the reconnect `CONNACK`, oldest first.
 
-So a wifi outage can lose the last publish or two that raced the drop-detection window while flushing everything queued after it — not a bug, but a reason to keep the reactor tick-healthy (a substrate call that blocks the loop widens the raced-and-dropped window) and to choose `clean_session` deliberately.
+So a wifi outage can lose the last publish or two that raced the drop-detection window while flushing everything queued after it.  That is not a bug, but a reason to keep the reactor tick-healthy (a substrate call that blocks the loop widens the raced-and-dropped window) and to choose `clean_session` deliberately.
 
 ## Bring your own transport
 
@@ -292,9 +292,9 @@ sock.setblocking(False)
 client = MQTTClient(sock, client_id="desktop-demo")
 ```
 
-This pre-built-socket form is the right shape for one-shot scripts or tests where the caller already owns the connect.  The runner-shape (no synchronous network I/O from a tick) only matters when the client lives inside a runner — and there the `transport_factory` form above is what you want.
+This pre-built-socket form is the right shape for one-shot scripts or tests where the caller already owns the connect.  The runner-shape (no synchronous network I/O from a tick) only matters when the client lives inside a runner, and there the `transport_factory` form above is what you want.
 
-The library has no `isinstance` checks against `chumicro_sockets` types — the contract is the four methods above.  Runtime errors surface at first call, not at construction time, so a misshaped object fails on the first `recv_into` / `send` rather than silently misbehaving.
+The library has no `isinstance` checks against `chumicro_sockets` types; the contract is the four methods above.  Runtime errors surface at first call, not at construction time, so a misshaped object fails on the first `recv_into` / `send` rather than silently misbehaving.
 
 If you supply your own transport and never want `chumicro_sockets` to land on the device, add a module-level constant to your entrypoint and the chumicro-workspace deployer will filter the default factory out of the import graph:
 
@@ -305,17 +305,17 @@ __chumicro_skip_factories__ = ("sockets_factory",)
 
 The constant accepts a family form (the bare stem, matches every `chumicro_*.sockets_factory`) or an exact dotted path (`chumicro_sockets.sockets_factory`).  An unmatched entry fails the deploy with a typo message rather than silently shipping the default.  Calling `MQTTClient.from_config(...)` when `chumicro_sockets.sockets_factory` is missing (skipped at deploy time, or not installed by `circup` / `mip`) raises `RuntimeError` naming the bypass kwarg, so the failure mode is loud rather than mysterious.
 
-For the full single-library adoption recipe — your transport, your `ticks=`, the runner-less drive loop, and host tests with no board — see [Standalone integration](https://github.com/ChuMicro/ChuMicro/blob/main/docs/contributing/standalone-integration.md).
+The pieces of the runner-less, single-library path are all above: your own transport (the four-method contract), your own `ticks=`, and driving `check()` / `handle()` from a plain loop, which is the same shape host tests use with no board.
 
 ## Tuning for tick-latency vs throughput
 
-`handle()` does exactly one `recv_into` and one packet `send` per tick, so each call yields back to the runner after a bounded slice of socket work.  (On ticks that dispatched inbound QoS-1 publishes there is one extra send: the tick's PUBACKs coalesce into a single batch flushed ahead of — and without consuming — the packet budget, so the ack rate always keeps up with the inbound rate.  If the socket can't take the batch, the client stops reading until it lands; the unread bytes throttle the broker through the TCP window.)  Three constructor knobs let you tune the trade-off:
+`handle()` does exactly one `recv_into` and one packet `send` per tick, so each call yields back to the runner after a bounded slice of socket work.  (On ticks that dispatched inbound QoS-1 publishes there is one extra send: the tick's PUBACKs coalesce into a single batch flushed ahead of the packet budget without consuming it, so the ack rate always keeps up with the inbound rate.  If the socket can't take the batch, the client stops reading until it lands; the unread bytes throttle the broker through the TCP window.)  Three constructor knobs let you tune the trade-off:
 
 | Knob | Default | What it bounds |
 |---|---|---|
-| `recv_budget_per_tick` | `1024` (bytes) | Cap on the single per-tick `recv_into` call — the inbound pacing lever.  It bounds tick latency on a multi-KB inbound PUBLISH (the payload arrives across several ticks instead of monopolizing one), how many packets one tick can dispatch, and the size of the per-tick PUBACK batch.  Raise for faster ingestion at the cost of per-tick latency. |
+| `recv_budget_per_tick` | `1024` (bytes) | Cap on the single per-tick `recv_into` call, the inbound pacing lever.  It bounds tick latency on a multi-KB inbound PUBLISH (the payload arrives across several ticks instead of monopolizing one), how many packets one tick can dispatch, and the size of the per-tick PUBACK batch.  Raise for faster ingestion at the cost of per-tick latency. |
 | `max_tx_queue_size` | `20` packets | Hard cap on pending outbound packets.  Sized for the runner-shaped sensor profile (publish every N seconds; queue stays near zero).  Appending past the cap raises `MQTTBackpressureError`; protocol-internal traffic (PUBACK responses, retransmits, PINGREQ) bypasses the cap so QoS-1 / keepalive contracts hold.  Failed QoS-1 publishes roll back the `packet_id` allocation cleanly so the id pool isn't leaked on backpressure.  Raise for bursty publishers; each slot pins ~8 bytes long-lived on MP / CP. |
-| `send_timeout_seconds` | inherits `ack_timeout_seconds` (5 s) | Maximum time the socket can stay non-writable with a packet queued before the client transitions to `FAILED` and self-heal fires.  Re-arms on every successful send -- a steady drip never trips it, only a stalled socket does.  Catches NAT-style silent-drops on the outbound path that would otherwise let the queue grow until `MQTTBackpressureError`. |
+| `send_timeout_seconds` | inherits `ack_timeout_seconds` (5 s) | Maximum time the socket can stay non-writable with a packet queued before the client transitions to `FAILED` and self-heal fires.  Re-arms on every successful send: a steady drip never trips it, only a stalled socket does.  Catches NAT-style silent-drops on the outbound path that would otherwise let the queue grow until `MQTTBackpressureError`. |
 
 ```python
 client = MQTTClient(
@@ -334,9 +334,9 @@ client = MQTTClient(
 | Tier | Condition | What happens |
 |---|---|---|
 | **Steady** | `total_length ≤ rx_buffer_size` (default 256 B) | Parsed inline from the pre-allocated RX buffer; no per-message allocation.  `on_message` fires with the full payload. |
-| **Oversized** | `total_length > rx_buffer_size` | `WhenOversized` policy applies (see below).  Payload drains via rolling discard through the RX buffer — no payload-sized heap allocation, so the heap cost is constant regardless of the inbound size. |
+| **Oversized** | `total_length > rx_buffer_size` | `WhenOversized` policy applies (see below).  Payload drains via rolling discard through the RX buffer, with no payload-sized heap allocation, so the heap cost is constant regardless of the inbound size. |
 
-To receive a larger PUBLISH intact, size `rx_buffer_size` up to cover it (a few hundred bytes for sensor readings, a few KB for JSON config blobs).  Anything larger than the steady buffer is oversized and its payload is dropped — the anti-OOM guarantee.
+To receive a larger PUBLISH intact, size `rx_buffer_size` up to cover it (a few hundred bytes for sensor readings, a few KB for JSON config blobs).  Anything larger than the steady buffer is oversized and its payload is dropped: the anti-OOM guarantee.
 
 ## Oversized-message policy
 
@@ -359,9 +359,9 @@ Three policies:
 |---|---|
 | `DROP_SILENT` | Drain via rolling discard, no event, stay connected. |
 | `DROP_WITH_EVENT` (default) | Drain via rolling discard, fire `on_oversized(reported_length, topic)` for telemetry, stay connected.  `topic` is `None` when the topic itself was too long to parse from the RX buffer. |
-| `DISCONNECT` | Raise `MQTTProtocolError`, transition to `FAILED` — appropriate when oversized inputs indicate a misconfiguration.  Socket-factory self-heal kicks in if configured. |
+| `DISCONNECT` | Raise `MQTTProtocolError`, transition to `FAILED`, appropriate when oversized inputs indicate a misconfiguration.  Socket-factory self-heal kicks in if configured. |
 
-No payload bytes survive the oversized tier — the bytes drain through the RX buffer without any payload-sized allocation.  Diagnostic information (`reported_length` + `topic`) is enough for application-side reaction; if you need the actual bytes, raise `rx_buffer_size` so the message parses inline in the steady tier instead.
+No payload bytes survive the oversized tier: the bytes drain through the RX buffer without any payload-sized allocation.  Diagnostic information (`reported_length` + `topic`) is enough for application-side reaction; if you need the actual bytes, raise `rx_buffer_size` so the message parses inline in the steady tier instead.
 
 ## Backpressure
 
@@ -398,45 +398,45 @@ The client actively manages its memory footprint with four caps tunable at const
 
 | Cap | Default | What it bounds |
 |---|---|---|
-| `recv_budget_per_tick` | `1024` bytes | Per-tick read ceiling — see [Tuning](#tuning-for-tick-latency-vs-throughput). |
+| `recv_budget_per_tick` | `1024` bytes | Per-tick read ceiling.  See [Tuning](#tuning-for-tick-latency-vs-throughput). |
 | `rx_buffer_size` | `256` bytes | Pre-allocated steady-state RX buffer, and the steady/oversized boundary.  Inbound PUBLISHes at or below this size parse inline and deliver intact with no further allocation; above it, the [`WhenOversized` policy](#oversized-message-policy) applies and the payload drains without a payload-sized allocation. |
-| `pre_connect_queue_size` | `8` packets | Bound on the pre-connect publish queue (the `when_disconnected="queue"` buffer) — see [Publishing](#publishing). |
-| `max_tx_queue_size` | `20` packets | Outbound packet queue cap — see [Backpressure](#backpressure). |
+| `pre_connect_queue_size` | `8` packets | Bound on the pre-connect publish queue (the `when_disconnected="queue"` buffer).  See [Publishing](#publishing). |
+| `max_tx_queue_size` | `20` packets | Outbound packet queue cap.  See [Backpressure](#backpressure). |
 
-The QoS-1 in-flight table (keyed by `packet_id`, one entry per outstanding QoS-1 PUBLISH waiting for PUBACK) grows with your usage — it has no hard cap.  On memory-tight boards, keep `rx_buffer_size` at your actual largest expected broker payload — anything bigger routes through the oversized tier where it can't blow the heap.
+The QoS-1 in-flight table (keyed by `packet_id`, one entry per outstanding QoS-1 PUBLISH waiting for PUBACK) grows with your usage and has no hard cap.  On memory-tight boards, keep `rx_buffer_size` at your actual largest expected broker payload; anything bigger routes through the oversized tier where it can't blow the heap.
 
 ### What fits in the 256 B steady-state buffer
 
-The decoder sees the whole MQTT packet, not just the payload — `1` (fixed byte) `+ 1–2` (varlen) `+ 2` (topic-length field) `+ len(topic)` `+ 0/2` (packet_id when QoS 1) `+ len(payload)`.  At a glance:
+The decoder sees the whole MQTT packet, not just the payload: `1` (fixed byte) `+ 1–2` (varlen) `+ 2` (topic-length field) `+ len(topic)` `+ 0/2` (packet_id when QoS 1) `+ len(payload)`.  At a glance:
 
 | Use case | Wire size | Tier |
 |---|---|---|
-| Plain sensor reading — `home/livingroom/temp` `21.3` | ~30 B | steady |
-| Small JSON sensor — `home/livingroom/sensor` `{"t":21.3,"h":45}` | ~45 B | steady |
-| Device-prefixed status — `livingRoom/mainLightSwitch/online` `false` | ~45 B | steady |
-| Multi-field JSON — `home/livingroom/env` `{"temp":21.3,"hum":45,"pressure":1013,"co2":412}` | ~75 B | steady |
+| Plain sensor reading: `home/livingroom/temp` `21.3` | ~30 B | steady |
+| Small JSON sensor: `home/livingroom/sensor` `{"t":21.3,"h":45}` | ~45 B | steady |
+| Device-prefixed status: `livingRoom/mainLightSwitch/online` `false` | ~45 B | steady |
+| Multi-field JSON: `home/livingroom/env` `{"temp":21.3,"hum":45,"pressure":1013,"co2":412}` | ~75 B | steady |
 | Verbose JSON sensor (~150 B payload, 20 B topic) | ~175 B | steady (default rx) |
 | HomeAssistant discovery (`homeassistant/.../config` + ~300 B JSON) | ~350 B | steady at `rx_buffer_size=512` |
 | AWS IoT Core shadow `update/accepted` (~250–600 B JSON) | ~300–700 B | steady at `rx_buffer_size=1024` |
 
-So **plain sensor data, small-to-medium JSON readings (payload ≤ ~200 B on a ≤ 40 B topic), and device-prefixed status messages all parse inline at the 256 B default with zero per-message allocation.**  Structured-config workloads — HomeAssistant discovery descriptors, AWS IoT shadow documents, MQTT-SN gateway state — deliver intact once `rx_buffer_size` is sized to cover them: the buffer is allocated once at construction, not per message.  If your typical PUBLISH is consistently above ~250 B, bump `rx_buffer_size` (e.g. `512` or `1024`) so it stays in the steady tier; anything above the buffer routes through the oversized tier and its payload is dropped.
+So **plain sensor data, small-to-medium JSON readings (payload ≤ ~200 B on a ≤ 40 B topic), and device-prefixed status messages all parse inline at the 256 B default with zero per-message allocation.**  Structured-config workloads (HomeAssistant discovery descriptors, AWS IoT shadow documents, MQTT-SN gateway state) deliver intact once `rx_buffer_size` is sized to cover them: the buffer is allocated once at construction, not per message.  If your typical PUBLISH is consistently above ~250 B, bump `rx_buffer_size` (e.g. `512` or `1024`) so it stays in the steady tier; anything above the buffer routes through the oversized tier and its payload is dropped.
 
 ## Platform notes
 
 | Runtime | TCP | TLS | Notes |
 |---|---|---|---|
-| CPython | ✅ | ✅ | Reference runtime — works against any broker. |
+| CPython | ✅ | ✅ | Reference runtime; works against any broker. |
 | MicroPython | ✅ | ✅ | mbedTLS PEM→DER conversion on rp2 (handled by `chumicro-sockets`). |
-| CircuitPython | ✅ (requires `radio=wifi.radio`) | ✅ | TLS handshake is synchronous — bench-tested under 15 ms on both Lolin S2 and Pi Pico W against `test.mosquitto.org:8883` over a good wifi link. |
+| CircuitPython | ✅ (requires `radio=wifi.radio`) | ✅ | TLS handshake is synchronous, bench-tested under 15 ms on both Lolin S2 and Pi Pico W against `test.mosquitto.org:8883` over a good wifi link. |
 
-`MQTTClient` enforces non-blocking mode on every socket it acquires.  MicroPython plain TCP defaults to blocking, and a blocking `recv` against a silent peer on a Pi Pico W stalls the tick loop indefinitely — set `sock.setblocking(False)` explicitly so the contract is visible at the call site.
+`MQTTClient` enforces non-blocking mode on every socket it acquires.  MicroPython plain TCP defaults to blocking, and a blocking `recv` against a silent peer on a Pi Pico W stalls the tick loop indefinitely, so set `sock.setblocking(False)` explicitly to make the contract visible at the call site.
 
 ## Examples
 
 | Example | What it shows |
 |---|---|
 | [`examples/telemetry.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/mqtt/examples/telemetry.py) | Periodic QoS-1 publish on a real CP/MP board.  Brings wifi up, connects to a broker, subscribes to a command topic, publishes a synthetic reading every N seconds while an LED-blink counter verifies the publish never blocks waiting for PUBACK.  Cross-runtime (CP + MP). |
-| [`examples/bench.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/mqtt/examples/bench.py) | Self-driving validation bench — deploy + watch serial.  Runs the scenarios (steady inline, oversized drain, oversize-topic, QoS-1 round-trip, sustained burst, keepalive) against a real broker and prints a pass/fail summary with per-scenario heap deltas + tick latency.  Companion [`examples/bench_host.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/mqtt/examples/bench_host.py) captures the verdict from the broker and can publish a 64 KB hostile payload for extra oversized-tier stress (host-side, needs `pip install paho-mqtt`). |
+| [`examples/bench.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/mqtt/examples/bench.py) | Self-driving validation bench: deploy and watch serial.  Runs the scenarios (steady inline, oversized drain, oversize-topic, QoS-1 round-trip, sustained burst, keepalive) against a real broker and prints a pass/fail summary with per-scenario heap deltas + tick latency.  Companion [`examples/bench_host.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/mqtt/examples/bench_host.py) captures the verdict from the broker and can publish a 64 KB hostile payload for extra oversized-tier stress (host-side, needs `pip install paho-mqtt`). |
 
 ---
 

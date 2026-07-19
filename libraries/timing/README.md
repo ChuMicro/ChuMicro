@@ -5,11 +5,11 @@ align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
 **Timers that don't block. Your loop keeps ticking.**
 
-Capture `ticks_ms()` once per loop pass, hand it to a `Rate` or a `Deadline`, and you've got clean drift-free timing on CircuitPython, MicroPython, or CPython. Tick-source detection is automatic, wraparound is handled, and there are no dependencies on anything else in ChuMicro — it's where every other library starts.
+Capture `ticks_ms()` once per loop pass, hand it to a `Rate` or a `Deadline`, and you've got clean drift-free timing on CircuitPython, MicroPython, or CPython.  Tick-source detection is automatic, wraparound is handled, and there are no dependencies on anything else in ChuMicro.  It's where every other library starts.
 
 <br clear="left">
 
-> Part of the [ChuMicro](https://github.com/ChuMicro/ChuMicro) family — small, focused Python libraries for microcontrollers and laptops. [Browse all libraries.](https://github.com/ChuMicro/ChuMicro/tree/main/libraries)
+> Part of the [ChuMicro](https://github.com/ChuMicro/ChuMicro) family: small, focused Python libraries for microcontrollers and laptops. [Browse all libraries.](https://github.com/ChuMicro/ChuMicro/tree/main/libraries)
 
 ## Install
 
@@ -46,7 +46,7 @@ while True:
 
 | Symbol | Description |
 |---|---|
-| `ticks_ms()` | Current time in milliseconds — keeps counting even when it wraps around |
+| `ticks_ms()` | Current time in milliseconds (keeps counting even when it wraps around) |
 | `ticks_diff(end, start)` | Time elapsed between two tick values (handles wraparound correctly) |
 | `ticks_add(ticks, delta)` | Add milliseconds to a tick value (handles wraparound correctly) |
 
@@ -54,16 +54,16 @@ while True:
 
 | Symbol | Description |
 |---|---|
-| `Deadline(period_ms, now_ms)` | A single armed timeout — `expired(now)` / `remaining(now)` / `reset(now)` |
+| `Deadline(period_ms, now_ms)` | A single armed timeout: `expired(now)` / `remaining(now)` / `reset(now)` |
 | `Rate(period_ms, now_ms)` | Drift-free periodic cadence; `due(now)` fires at most once per period |
 
 ### Wait vocabulary (`chumicro_timing.waits`)
 
-Opt-in completion-wait vocabulary for generator flows — import explicitly.
+Opt-in completion-wait vocabulary for generator flows.  Import it explicitly.
 
 | Symbol | Description |
 |---|---|
-| `Signal()` | A completion flag — `set(value)` / `clear()` / `ready(now)` |
+| `Signal()` | A completion flag: `set(value)` / `clear()` / `ready(now)` |
 | `wait_for(signal, deadline_ms=None)` | Generator suspension helper: `yield from wait_for(signal)` |
 
 ### Testing
@@ -75,11 +75,11 @@ Opt-in completion-wait vocabulary for generator flows — import explicitly.
 
 ## Where this fits
 
-Leaf — no upstream ChuMicro deps.  Everything in ChuMicro that owns time depends on it: [`runner`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner), [`sockets`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/sockets), [`ntp`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/ntp), [`requests`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/requests), [`http_server`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/http_server), [`mqtt`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/mqtt), [`websockets`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/websockets).
+Leaf: no upstream ChuMicro deps.  Everything in ChuMicro that owns time depends on it: [`runner`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner), [`sockets`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/sockets), [`ntp`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/ntp), [`requests`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/requests), [`http_server`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/http_server), [`mqtt`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/mqtt), [`websockets`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/websockets).
 
 ## Platform support
 
-You don't need to pick a tick source — the library picks the best one available on your runtime. Behavior is identical regardless of which source is used.
+You don't need to pick a tick source.  The library picks the best one available on your runtime.  Behavior is identical regardless of which source is used.
 
 | Source | Runtime |
 |---|---|
@@ -99,7 +99,7 @@ All sources are masked to a 2²⁹ ms period (~6.2 days). `ticks_diff` and `tick
 
 ## Testing your code
 
-The `chumicro_timing.testing` module provides `FakeTicks` for deterministic host-side tests — no wall-clock waits:
+The `chumicro_timing.testing` module provides `FakeTicks` for deterministic host-side tests with no wall-clock waits:
 
 ```python
 from chumicro_timing import Rate
@@ -123,7 +123,7 @@ assert rate.due(fake.ticks_ms()) is True
 | `timeout_check.py` | One-shot deadline check using `ticks_diff` |
 | `debounce.py` | Simulated button debounce |
 | `periodic_tick.py` | Manual periodic loop (the same logic `Rate` wraps internally) |
-| `phase_locked_tick.py` | Drift-free deadline carrier — same period across late loops |
+| `phase_locked_tick.py` | Drift-free deadline carrier, same period across late loops |
 | `circuitpython_blink.py` | LED blink on CircuitPython hardware |
 | `circuitpython_debounce.py` | GPIO button debounce on CircuitPython |
 | `micropython_blink.py` | LED blink on MicroPython hardware |
@@ -131,15 +131,7 @@ assert rate.due(fake.ticks_ms()) is True
 
 ## Contributing
 
-Working on `chumicro-timing` itself?  Clone the [mono-repo](https://github.com/ChuMicro/ChuMicro) if you haven't already — the rest of the workflow assumes you're inside that workspace.
-
-```bash
-pip install -e .[test]
-pytest tests/                  # host-side tests
-pytest functional_tests/       # on-device tests (needs a board registered in devices.yml)
-```
-
-Register a board before running functional tests: `chumicro-workspace add-device <id> --address <port>`.
+Issues, bug reports, and pull requests are welcome, and so is "I ran it on this board and here's what happened", some of the most useful feedback a hardware project can get.  Development happens in the [ChuMicro repository](https://github.com/ChuMicro/ChuMicro), whose contributing guide covers setup and the test workflow.
 
 ## Docs
 

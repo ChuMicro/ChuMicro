@@ -2,6 +2,8 @@
 
 ## Overview
 
+**Status: parked.**  chumicro-logging works as documented and stays published, but it is not under active development and no other ChuMicro library integrates with it.  Adopt it as a standalone buffered logger, or skip it.
+
 `chumicro-logging` is a small leveled logger that runs identically on
 CircuitPython, MicroPython, and CPython.  It exposes the familiar
 stdlib-`logging` shape (level integers, named loggers, attached
@@ -14,7 +16,7 @@ of handlers) and `StreamHandler` (synchronous text output to a
 writable stream).  `BufferedHandler` is a runner-shaped front-end that
 batches records and flushes them on `handle(now_ms)`.
 
-No other ChuMicro library imports this one.  An app builds a `Logger`, registers handlers on it, and calls its `debug` / `info` / … methods directly from its own code (or hands the logger to its own modules); no ChuMicro library currently accepts a `logger=` parameter.
+An app builds a `Logger`, registers handlers on it, and calls its level methods (`debug`, `info`, `warning`, `error`, `critical`) directly from its own code, or hands the logger to its own modules.
 
 ## Getting started
 
@@ -29,7 +31,7 @@ logger.debug("invisible")  # below threshold; dropped silently
 ```
 
 `Logger` is *not* registered globally.  Every call to `Logger("foo")`
-returns a fresh instance — the caller owns and stores the reference.
+returns a fresh instance.  The caller owns and stores the reference.
 This avoids import-order surprises and keeps the library stateless.
 
 Switch threshold at runtime by assigning to `logger.level`:
@@ -41,7 +43,7 @@ logger.level = DEBUG
 logger.debug("now visible")
 ```
 
-Handler exceptions never escape the logger — they increment
+Handler exceptions never escape the logger.  They increment
 `logger.handler_errors` and are otherwise swallowed.  A misbehaving
 handler can never crash the application that uses it.
 
@@ -60,11 +62,11 @@ stream = StreamHandler()
 buffered = BufferedHandler(downstream=stream, capacity=32)
 logger = Logger("sensor", level=DEBUG, handlers=[buffered])
 
-# Hot loop — cheap, no I/O.
+# Hot loop, cheap, no I/O.
 for index in range(100):
     logger.info(f"sample {index}")
 
-# Runner tick — drains the buffer.  now_ms comes from your tick source
+# Runner tick: drains the buffer.  now_ms comes from your tick source
 # (ticks_ms(), or the value the runner passes into handle()).
 now_ms = 0
 if buffered.check(now_ms):
@@ -76,7 +78,7 @@ When the rate exceeds the flush cadence and the buffer fills,
 incremented.  Newest data wins on the assumption the operator wants
 to see *recent* activity rather than ancient backlog.
 
-Wiring into a `chumicro-runner.Runner` is direct — `BufferedHandler`
+Wiring into a `chumicro-runner.Runner` is direct.  `BufferedHandler`
 already implements the `check(now_ms) -> bool` + `handle(now_ms)`
 contract.
 
@@ -85,13 +87,13 @@ contract.
 `BufferedHandler` keeps a bounded buffer of `(level, name, message)`
 tuples up to `capacity` deep.  At the default capacity of 32, expect
 roughly `32 × (sizeof tuple + sizeof message)` bytes resident.  Tune
-`capacity` to your environment — small enough to bound the memory
+`capacity` to your environment: small enough to bound the memory
 budget, large enough to absorb the worst-case rate between runner
 ticks.
 
 `StreamHandler` allocates a fresh string per record (the formatter
 output) and immediately writes it; it keeps no internal buffer.  On
-embedded runtimes the per-record allocation is the dominant cost —
+embedded runtimes the per-record allocation is the dominant cost, so
 prefer `BufferedHandler` in front of it for hot paths.
 
 `Logger` itself stores a reference to each handler in a list and an

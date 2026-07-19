@@ -3,13 +3,13 @@
 <img src="https://raw.githubusercontent.com/ChuMicro/ChuMicro/main/support/docs/chumicro_tip.png"
 align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
-**An SNTP client that runs in your tick loop without blocking it.**
+**An SNTP (Simple Network Time Protocol) client that runs in your tick loop without blocking it.**
 
-Polls one server, advances on each runner tick, and gives you the unix seconds when the response lands.  Pure Python, no compiled module, no `time.sleep()` — your LED keeps blinking through the network hop.  UDP transport is injected so apps with a custom socket layer don't drag `chumicro-sockets` into the device deploy.
+Polls one server, advances on each runner tick, and gives you the unix seconds when the response lands.  Pure Python, no compiled module, no `time.sleep()`.  Your LED keeps blinking through the network hop.  UDP transport is injected so apps with a custom socket layer don't drag `chumicro-sockets` into the device deploy.
 
 <br clear="left">
 
-> Part of the [ChuMicro](https://github.com/ChuMicro/ChuMicro) family — small, focused Python libraries for microcontrollers and laptops. [Browse all libraries.](https://github.com/ChuMicro/ChuMicro/tree/main/libraries)
+> Part of the [ChuMicro](https://github.com/ChuMicro/ChuMicro) family: small, focused Python libraries for microcontrollers and laptops. [Browse all libraries.](https://github.com/ChuMicro/ChuMicro/tree/main/libraries)
 
 ## Install
 
@@ -35,7 +35,7 @@ from chumicro_timing import ticks_ms
 
 # On CircuitPython pass radio=wifi.radio; the kwarg is ignored on MP / CPython.
 sock = udp_socket(radio=None)
-sock.setblocking(False)                     # required — a blocking recv wedges on packet loss
+sock.setblocking(False)                     # required: a blocking recv wedges on packet loss
 client = NTPClient(socket=sock, server="pool.ntp.org")
 request = client.query()
 while not request.done:
@@ -44,7 +44,7 @@ while not request.done:
 print("unix seconds:", request.unix_seconds)
 ```
 
-`chumicro_sockets.udp_socket` builds the default bound UDP socket.  Pass any object satisfying the `sendto` / `recvfrom_into` / `close` / `setblocking` contract (see `NTPClient`'s docstring) to `NTPClient(socket=...)` — `chumicro_sockets.udp_socket` and `chumicro_sockets.testing.FakeUDPSocket` are the built-in producers.  `NTPClient.from_config` wires that default itself through the shared `chumicro_sockets.sockets_factory` module, imported lazily, so apps with a custom UDP transport keep `chumicro-sockets` out of their device deploy.
+`chumicro_sockets.udp_socket` builds the default bound UDP socket.  Pass any object satisfying the `sendto` / `recvfrom_into` / `close` / `setblocking` contract (see `NTPClient`'s docstring) to `NTPClient(socket=...)`.  `chumicro_sockets.udp_socket` and `chumicro_sockets.testing.FakeUDPSocket` are the built-in producers.  `NTPClient.from_config` wires that default itself through the shared `chumicro_sockets.sockets_factory` module, imported lazily, so apps with a custom UDP transport keep `chumicro-sockets` out of their device deploy.
 
 ## What's included
 
@@ -52,7 +52,7 @@ print("unix seconds:", request.unix_seconds)
 |---|---|
 | `NTPClient(socket, *, server="pool.ntp.org", port=123, timeout_ms=5000, ticks=None)` | Runner-shaped SNTP client.  Single in-flight query at a time; mirrors `HttpClient.busy`. |
 | `NTPClient.query()` | Send a request; returns a `NTPResult` to poll. |
-| `NTPClient.check(now_ms)` / `handle(now_ms)` | Runner contract — handle drains the recv socket and detects timeouts. |
+| `NTPClient.check(now_ms)` / `handle(now_ms)` | Runner contract: handle drains the recv socket and detects timeouts. |
 | `NTPClient.cancel()` | Abort an in-flight query. |
 | `NTPResult` | Per-query handle.  `done`, `unix_seconds`, `error`. |
 | `NTPError` | OSError subclass raised on protocol-level failures (short/malformed response, kiss-of-death, timeout, cancel). |
@@ -70,19 +70,11 @@ Pure-Python; runs identically on CPython, MicroPython, and CircuitPython.
 
 | Example | What it shows |
 |---|---|
-| [`examples/ntp_query.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/ntp/examples/ntp_query.py) | Real query against `pool.ntp.org` — wifi up, UDP socket via factory, runner-shaped poll loop.  Cross-runtime (CP + MP). |
+| [`examples/ntp_query.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/ntp/examples/ntp_query.py) | Real query against `pool.ntp.org`: wifi up, UDP socket via factory, runner-shaped poll loop.  Cross-runtime (CP + MP). |
 
 ## Contributing
 
-Working on `chumicro-ntp` itself?  Clone the [mono-repo](https://github.com/ChuMicro/ChuMicro) if you haven't already — the rest of the workflow assumes you're inside that workspace.
-
-```bash
-pip install -e .[test]
-pytest tests/                  # host-side tests
-pytest functional_tests/       # on-device tests (needs a board registered in devices.yml)
-```
-
-Register a board before running functional tests: `chumicro-workspace add-device <id> --address <port>`.
+Issues, bug reports, and pull requests are welcome, and so is "I ran it on this board and here's what happened", some of the most useful feedback a hardware project can get.  Development happens in the [ChuMicro repository](https://github.com/ChuMicro/ChuMicro), whose contributing guide covers setup and the test workflow.
 
 ## Docs
 

@@ -9,7 +9,7 @@ Each library exposes a `<Name>Config.from_config()` factory that reads its own d
 
 <br clear="left">
 
-> Part of the [ChuMicro](https://github.com/ChuMicro/ChuMicro) family — small, focused Python libraries for microcontrollers and laptops. [Browse all libraries.](https://github.com/ChuMicro/ChuMicro/tree/main/libraries)
+> Part of the [ChuMicro](https://github.com/ChuMicro/ChuMicro) family: small, focused Python libraries for microcontrollers and laptops. [Browse all libraries.](https://github.com/ChuMicro/ChuMicro/tree/main/libraries)
 
 ## Install
 
@@ -38,7 +38,7 @@ config = load_runtime_config()                          # reads /runtime_config.
 wifi = WifiService(WifiConfig.from_config(config))      # reads + types the wifi.* keys
 ```
 
-Library-side pattern (`load_section` builds a typed config from the flat-key payload — used today by `chumicro-wifi`):
+Library-side pattern (`load_section` builds a typed config from the flat-key payload, used today by `chumicro-wifi`):
 
 ```python
 from chumicro_config import load_section
@@ -61,11 +61,11 @@ class WifiConfig:
 | Symbol | What it does |
 |---|---|
 | `load_runtime_config(path=…)` | Read + decode `/runtime_config.msgpack` into a flat-key `RuntimeConfig` (dict-shaped) |
-| `config` | Lazily-loaded module attribute — the deployed `RuntimeConfig`, or `None` when the file is absent.  First attribute access reads the file once and caches the result |
-| `RuntimeConfig` | Lookup wrapper over the flat-key payload — `get(key[, default])`, `[key]` / `require(key)`, `in` check |
+| `config` | Lazily-loaded module attribute: the deployed `RuntimeConfig`, or `None` when the file is absent.  First attribute access reads the file once and caches the result |
+| `RuntimeConfig` | Lookup wrapper over the flat-key payload: `get(key[, default])`, `[key]` / `require(key)`, `in` check |
 | `load_section(cls, config, *, prefix, required=…, optional=…)` | Build `cls(**kwargs)` by reading flat-prefix keys.  Used today by `chumicro-wifi`'s `WifiConfig.from_config`; available to any library whose constructor signature maps 1:1 to its config subkeys |
-| `try_load_section(...)` | Soft variant — returns `None` instead of raising when `config` is `None`, the wrong type, or missing a required key |
-| `MissingConfigKey` / `InvalidConfigType` / `ConfigError` | Targeted exceptions — single-inheritance from `ConfigError` (MicroPython forbids multi-parent layouts) |
+| `try_load_section(...)` | Soft variant: returns `None` instead of raising when `config` is `None`, the wrong type, or missing a required key |
+| `MissingConfigKey` / `InvalidConfigType` / `ConfigError` | Targeted exceptions: single-inheritance from `ConfigError` (MicroPython forbids multi-parent layouts) |
 
 ## Where this fits
 
@@ -81,15 +81,7 @@ Works on CPython, MicroPython, and CircuitPython.
 
 ## Contributing
 
-Working on `chumicro-config` itself?  Clone the [mono-repo](https://github.com/ChuMicro/ChuMicro) if you haven't already — the rest of the workflow assumes you're inside that workspace.
-
-```bash
-pip install -e .[test]
-pytest tests/                  # host-side tests
-pytest functional_tests/       # on-device tests (needs a board registered in devices.yml)
-```
-
-Register a board before running functional tests: `chumicro-workspace add-device <id> --address <port>`.
+Issues, bug reports, and pull requests are welcome, and so is "I ran it on this board and here's what happened", some of the most useful feedback a hardware project can get.  Development happens in the [ChuMicro repository](https://github.com/ChuMicro/ChuMicro), whose contributing guide covers setup and the test workflow.
 
 ## Docs
 

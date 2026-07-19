@@ -5,11 +5,11 @@ align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
 **One TCP / TLS / UDP socket surface across CircuitPython, MicroPython, and CPython.**
 
-One entry per socket shape (`connector`, `listener`, `udp_socket`) hides the per-runtime adapter selection; TLS is a `tls=` flag on each.  Custom-CA TLS, server-side certs, and an in-memory `FakeSocket` for downstream library tests are all included.
+One entry per socket shape (`connector`, `listener`, `udp_socket`) hides the per-runtime adapter selection; TLS is a `tls=` flag on each.  Custom-CA TLS and server-side certificates work the same way on every runtime.
 
 <br clear="left">
 
-> Part of the [ChuMicro](https://github.com/ChuMicro/ChuMicro) family — small, focused Python libraries for microcontrollers and laptops. [Browse all libraries.](https://github.com/ChuMicro/ChuMicro/tree/main/libraries)
+> Part of the [ChuMicro](https://github.com/ChuMicro/ChuMicro) family: small, focused Python libraries for microcontrollers and laptops. [Browse all libraries.](https://github.com/ChuMicro/ChuMicro/tree/main/libraries)
 
 ## Install
 
@@ -47,7 +47,7 @@ nbytes = sock.recv_into(buffer, 128)
 print(bytes(buffer[:nbytes]))
 sock.close()
 
-# TLS is a flag — `tls=True` verifies the cert chain on every runtime.
+# TLS is a flag: `tls=True` verifies the cert chain on every runtime.
 # Each runtime gets its trust roots from the right place:
 # CircuitPython's firmware bundle, CPython's OS trust store,
 # MicroPython's library-shipped bundle (override via
@@ -56,22 +56,22 @@ sock.close()
 dial = connector("api.example.com", 443, tls=True)
 ```
 
-> **CircuitPython** always needs an explicit `radio=` — the socketpool is built from it (`socketpool.SocketPool(radio)`).  Pass `wifi.radio`, or whatever radio object your board exposes.  MicroPython and CPython ignore the kwarg.
+> **CircuitPython** always needs an explicit `radio=`.  The socketpool is built from it (`socketpool.SocketPool(radio)`).  Pass `wifi.radio`, or whatever radio object your board exposes.  MicroPython and CPython ignore the kwarg.
 
 For tests, `chumicro_sockets.testing.FakeSocket` implements the same
-protocol against in-memory bytearrays so downstream libraries
-(`chumicro-mqtt`, future `chumicro-requests`) can reach 94 % coverage
-without hitting the network.
+protocol against in-memory bytearrays, so downstream libraries
+(`chumicro-mqtt`, `chumicro-requests`) can exercise their protocol
+handling without hitting the network.
 
 ## What's included
 
 | Symbol | Purpose |
 |---|---|
-| `connector(host, port, *, tls=False, context=None, radio=None)` | Non-blocking tick-driven TCP/TLS connect — the one connect state machine.  Register it with a runner or drive `tick()` to terminal inline. |
+| `connector(host, port, *, tls=False, context=None, radio=None)` | Non-blocking tick-driven TCP/TLS connect, the one connect state machine.  Register it with a runner or drive `tick()` to terminal inline. |
 | `listener(host, port, *, tls=False, context=None, backlog=4, radio=None)` | Open a non-blocking TCP or TLS listening socket. |
 | `udp_socket(bind_host="0.0.0.0", bind_port=0, *, radio=None, broadcast=False)` | Open a UDP datagram socket; default args bind ephemeral. |
 | `ssl_context_with_ca(ca_pem)` | Build an `ssl.SSLContext` trusting only the supplied CA(s).  Works on every supported runtime. |
-| `ssl_context_no_verify()` | Build an `ssl.SSLContext` that **skips** certificate verification.  Explicit opt-out — named so a reviewer can grep for it. |
+| `ssl_context_no_verify()` | Build an `ssl.SSLContext` that **skips** certificate verification.  Explicit opt-out, named so a reviewer can grep for it. |
 | `set_default_ca_bundle(pem_bytes)` | Replace the CA bundle used by `connector(tls=True, context=None)` on MicroPython.  No-op on CP / CPython.  Pass `None` to revert to the library-shipped bundle. |
 | `ssl_context_with_cert_and_key_paths(cert_path, key_path)` | Server-side `ssl.SSLContext` from PEM file paths.  CP-portable shape. |
 | TCP socket surface (duck-typed) | `send`, `recv_into`, `close`, `setblocking`, `settimeout`.  Any object exposing these works; no named Protocol class is exported. |
@@ -93,19 +93,15 @@ Works on CPython, MicroPython, and CircuitPython.
 |---|---|
 | [`tcp_roundtrip.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/sockets/examples/tcp_roundtrip.py) | Real TCP connect → send → recv → close.  Same shape on every runtime; pass `radio=wifi.radio` on CircuitPython. |
 | [`tls_with_custom_ca.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/sockets/examples/tls_with_custom_ca.py) | Custom-CA TLS via `ssl_context_with_ca`.  Documents the substrate quirks observed on Pi Pico W mbedTLS in the docstring. |
-| [`udp_echo_client.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/sockets/examples/udp_echo_client.py) | Board-side UDP echo client — wifi up, send datagram to a host echo server, read echo back, non-blocking.  Cross-runtime (CP + MP). |
+| [`udp_echo_client.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/sockets/examples/udp_echo_client.py) | Board-side UDP echo client: wifi up, send datagram to a host echo server, read echo back, non-blocking.  Cross-runtime (CP + MP). |
 
 ## Contributing
 
-Working on `chumicro-sockets` itself?  Clone the [mono-repo](https://github.com/ChuMicro/ChuMicro) if you haven't already — the rest of the workflow assumes you're inside that workspace.
-
-```bash
-pip install -e .[test]
-pytest tests/                  # host-side tests
-pytest functional_tests/       # on-device tests (needs a board registered in devices.yml)
-```
-
-Register a board before running functional tests: `chumicro-workspace add-device <id> --address <port>`.
+Issues, bug reports, and pull requests are welcome, and so is "I ran
+it on this board and here's what happened", some of the most useful
+feedback a hardware project can get.  Development happens in the
+[ChuMicro repository](https://github.com/ChuMicro/ChuMicro), whose
+contributing guide covers setup and the test workflow.
 
 ## Docs
 

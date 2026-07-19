@@ -2,7 +2,7 @@
 
 ## Overview
 
-`chumicro-websockets` is a non-blocking WebSocket (RFC 6455) client + server built on `chumicro-sockets` and `chumicro-timing`.  Two top-level classes — `WebSocketClient` for outbound `ws://` / `wss://` connections, and `WebSocketServer` for inbound.  Both follow the runner pattern from `chumicro-runner` (`check(now_ms)` / `handle(now_ms)`), so an LED can keep blinking through the opening handshake, frame I/O, control-frame interleave, and the close handshake.
+`chumicro-websockets` is a non-blocking WebSocket (RFC 6455) client + server built on `chumicro-sockets` and `chumicro-timing`.  Two top-level classes: `WebSocketClient` for outbound `ws://` / `wss://` connections, and `WebSocketServer` for inbound.  Both follow the runner pattern from `chumicro-runner` (`check(now_ms)` / `handle(now_ms)`), so an LED can keep blinking through the opening handshake, frame I/O, control-frame interleave, and the close handshake.
 
 ## Getting started with generators
 
@@ -86,7 +86,7 @@ while True:
 
 ## Runner pattern
 
-Both `WebSocketClient` and `WebSocketServer` implement the runner contract (`check(now_ms)` / `handle(now_ms)`) — register them with `chumicro_runner.Runner` and they get ticked alongside your other services:
+Both `WebSocketClient` and `WebSocketServer` implement the runner contract (`check(now_ms)` / `handle(now_ms)`).  Register them with `chumicro_runner.Runner` and they get ticked alongside your other services:
 
 ```python
 from chumicro_runner import Runner
@@ -106,7 +106,7 @@ does at most one tick of progress, capped by `recv_budget_per_tick` and
 
 ## Callbacks
 
-All callbacks default to no-op functions and fire from inside `handle()` —
+All callbacks default to no-op functions and fire from inside `handle()`,
 never from a thread or interrupt.
 
 ### Client (`WebSocketClient`)
@@ -147,7 +147,7 @@ Same shape as the client's callbacks; semantically identical.
 | `close() -> None` | Releases the connection. |
 | `setblocking(flag) -> None` | Best-effort.  Absence is tolerated. |
 
-`chumicro_sockets.connector` is one valid producer.  See `chumicro_sockets._connector.SocketConnector` for the connector contract (`tick(now_ms)`, `state`, `socket`, `io_*`, `next_deadline`, `cancel`) — any tick-driven state machine with that surface works as a custom factory.
+`chumicro_sockets.connector` is one valid producer.  See `chumicro_sockets._connector.SocketConnector` for the connector contract (`tick(now_ms)`, `state`, `socket`, `io_*`, `next_deadline`, `cancel`).  Any tick-driven state machine with that surface works as a custom factory.
 
 If you supply your own factory and want `chumicro_sockets` dropped from the deploy entirely, add a module-level constant to your entrypoint and the chumicro-workspace deployer will filter the default factory out of the import graph:
 
@@ -156,9 +156,9 @@ If you supply your own factory and want `chumicro_sockets` dropped from the depl
 __chumicro_skip_factories__ = ("sockets_factory",)
 ```
 
-Family form (`"sockets_factory"`, matches every `chumicro_*.sockets_factory`) or exact path (`"chumicro_sockets.sockets_factory"`).  An unmatched entry fails the deploy with a typo message rather than silently shipping the default.  Calling `WebSocketClient.from_config(...)` when `chumicro_sockets.sockets_factory` is missing — either skipped at deploy time or not installed by `circup` / `mip` — raises `RuntimeError` naming the bypass kwarg.
+Family form (`"sockets_factory"`, matches every `chumicro_*.sockets_factory`) or exact path (`"chumicro_sockets.sockets_factory"`).  An unmatched entry fails the deploy with a typo message rather than silently shipping the default.  Calling `WebSocketClient.from_config(...)` when `chumicro_sockets.sockets_factory` is missing (either skipped at deploy time or not installed by `circup` / `mip`) raises `RuntimeError` naming the bypass kwarg.
 
-For the full single-library adoption recipe — your transport, your `ticks=`, the runner-less drive loop, and host tests with no board — see [Standalone integration](https://github.com/ChuMicro/ChuMicro/blob/main/docs/contributing/standalone-integration.md).
+`chumicro-websockets` adopts cleanly on its own: pass your own `transport_factory` (client) or `listener` (server), set `ticks=` to your clock, drive it from a plain `while` loop instead of `chumicro_runner`, and run host tests through an injected transport with no board attached.
 
 ## Memory notes
 
@@ -168,13 +168,13 @@ MCU RAM, 2 MB physical / ~800 KB usable flash):
 - `max_message_bytes` defaults to `16384` (16 KB).  Inbound messages
   larger than this trigger `WhenOversized` policy.  The parser runs
   a three-tier inbound size model (mirrors `chumicro-mqtt`):
-  - Tier 1, frames ≤ `payload_buffer_size` (256 B) — reuse the
+  - Tier 1, frames ≤ `payload_buffer_size` (256 B): reuse the
     steady-state parse buffer; delivery still materializes one `bytes`
     snapshot of the payload per frame.
   - Tier 2, frames between `payload_buffer_size` and
-    `max_payload_bytes` — one-shot `bytearray(payload_length)`,
+    `max_payload_bytes`: one-shot `bytearray(payload_length)`,
     freed after delivery.
-  - Tier 3, frames > `max_payload_bytes` — rolling discard, no
+  - Tier 3, frames > `max_payload_bytes`: rolling discard, no
     allocation beyond the steady-state buffer.  The bytes are gone
     but `reported_length` is surfaced.  `WhenOversized` policy
     decides whether to stay connected (`DROP_SILENT` /
@@ -190,13 +190,27 @@ MCU RAM, 2 MB physical / ~800 KB usable flash):
 - `send_budget_per_tick` defaults to `1024` bytes.
   `recv_budget_per_tick` also defaults to `1024`.  A single `recv_into`
   fills a 512 B scratch buffer, so a tick reads the budget in 512-byte
-  chunks — 1024 B/tick at the default — until the budget is spent or the
+  chunks (1024 B/tick at the default) until the budget is spent or the
   socket has no more data; a 16 KB message takes ~16 ticks to drain
   end-to-end, well within LED-blink latency.
 - The frame parser is one-shot per frame: parsed payload moves
   out of the parser into the message reassembly buffer in the
   client / connection, then the parser resets to header-reading.
   No held references to old frame bytes.
+
+## Per-tick knobs
+
+| Knob | Default | Why |
+|---|---|---|
+| `recv_budget_per_tick` | `1024` | LED-friendly inbound drain. |
+| `send_budget_per_tick` | `1024` | LED-friendly outbound drain. |
+| `max_message_bytes` | `16384` | 16 KB cap on assembled inbound messages. |
+| `max_tx_queue_size` | `8` | Bounded TX queue. |
+| `when_oversized` | `WhenOversized.DROP_WITH_EVENT` | Drop the oversized message, fire `on_oversized(reported_length)`, stay connected.  `DISCONNECT` closes with 1009 instead. |
+| `ping_interval_ms` | `None` (disabled) | Optional client-side keep-alive ping cadence. |
+| `pong_timeout_ms` | `30000` | Close after 30 s without PONG to a PING. |
+| `handshake_timeout_ms` | `10000` | Total opening-handshake budget. |
+| `close_timeout_ms` | `5000` | Wait window for peer's CLOSE before forcing TCP teardown. |
 
 ## Platform notes
 
@@ -213,21 +227,7 @@ MCU RAM, 2 MB physical / ~800 KB usable flash):
 
 - **Device RTC must be set before `wss://`.**  mbedTLS rejects every cert as "validity starts in the future" if the RTC is at boot default.  Use [`chumicro-ntp`](https://chumicro.github.io/ChuMicro/ntp/stable/) to set the clock first.
 - **CA pinning is required.**  Build the `ssl_context` with `chumicro_sockets.ssl_context_with_ca(pem)` and pass it through `connector_factory(radio=..., ssl_context=ctx)`.
-- **Pi Pico W needs flash deploy mode for `wss://`** — RAM-mode leaves <50 KB free for the mbedTLS handshake.
-
-## Per-tick knobs
-
-| Knob | Default | Why |
-|---|---|---|
-| `recv_budget_per_tick` | `1024` | LED-friendly inbound drain. |
-| `send_budget_per_tick` | `1024` | LED-friendly outbound drain. |
-| `max_message_bytes` | `16384` | 16 KB cap on assembled inbound messages. |
-| `max_tx_queue_size` | `8` | Bounded TX queue. |
-| `when_oversized` | `WhenOversized.DROP_WITH_EVENT` | Drop the oversized message, fire `on_oversized(reported_length)`, stay connected.  `DISCONNECT` closes with 1009 instead. |
-| `ping_interval_ms` | `None` (disabled) | Optional client-side keep-alive ping cadence. |
-| `pong_timeout_ms` | `30000` | Close after 30 s without PONG to a PING. |
-| `handshake_timeout_ms` | `10000` | Total opening-handshake budget. |
-| `close_timeout_ms` | `5000` | Wait window for peer's CLOSE before forcing TCP teardown. |
+- **Pi Pico W needs flash deploy mode for `wss://`**: RAM-mode leaves <50 KB free for the mbedTLS handshake.
 
 ## Examples
 
