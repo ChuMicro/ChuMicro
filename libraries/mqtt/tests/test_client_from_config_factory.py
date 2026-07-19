@@ -146,7 +146,7 @@ class TestFromConfigFactory:
             MQTTClient.from_config({"mqtt.broker.host": "10.0.0.42"})
 
     def test_skipped_factory_module_raises_runtime_error(self) -> None:
-        """When ``chumicro_mqtt.sockets_factory`` is excluded via
+        """When ``chumicro_sockets.sockets_factory`` is excluded via
         ``__chumicro_skip_factories__``, the default branch of
         ``from_config`` raises ``RuntimeError`` naming the bypass
         kwarg instead of leaking ``ImportError``.
@@ -165,8 +165,8 @@ class TestFromConfigFactory:
         if sys.implementation.name != "cpython":
             skip("sys.modules None-sentinel is CPython-specific")
 
-        original = sys.modules.get("chumicro_mqtt.sockets_factory")
-        sys.modules["chumicro_mqtt.sockets_factory"] = None
+        original = sys.modules.get("chumicro_sockets.sockets_factory")
+        sys.modules["chumicro_sockets.sockets_factory"] = None
         try:
             try:
                 MQTTClient.from_config(
@@ -179,6 +179,6 @@ class TestFromConfigFactory:
                 raise AssertionError("expected RuntimeError")
         finally:
             if original is None:
-                sys.modules.pop("chumicro_mqtt.sockets_factory", None)
+                sys.modules.pop("chumicro_sockets.sockets_factory", None)
             else:
-                sys.modules["chumicro_mqtt.sockets_factory"] = original
+                sys.modules["chumicro_sockets.sockets_factory"] = original
