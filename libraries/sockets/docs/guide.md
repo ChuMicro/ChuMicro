@@ -69,6 +69,8 @@ dial = connector("api.example.com", 443, tls=True, context=context, radio=None)
 
 Without a Runner, drive the same machine yourself: call `connector.tick(now_ms)` from your own loop and read `connector.socket` once `connector.state == "ready"`, then call the connected socket's `recv_into` / `send` as usual.  `OSError(errno.EAGAIN)` is the cross-runtime "would block" signal — re-loop, don't re-raise.
 
+The socket read/write waits a generator yields (`ReadWait` / `WriteWait` from `chumicro_sockets.waits`) sit alongside the timer and completion waits in one place: the timing guide's [Choosing a wait](https://chumicro.github.io/ChuMicro/timing/stable/guide/#choosing-a-wait) table maps each question to its primitive.
+
 ## Memory notes
 
 The socket itself doesn't allocate — the protocol surface is `recv_into(buffer, nbytes)` and `send(bytes_or_memoryview)` so callers control buffer lifetimes.  Pre-allocate one `bytearray` per connection and reuse it:
