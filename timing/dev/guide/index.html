@@ -399,6 +399,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#choosing-a-wait" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Choosing a wait
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#using-ticks-directly" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -667,6 +678,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#choosing-a-wait" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Choosing a wait
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#using-ticks-directly" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -834,6 +856,50 @@
 </span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="n">left</span> <span class="o">=</span> <span class="n">deadline</span><span class="o">.</span><span class="n">remaining</span><span class="p">(</span><span class="n">ticks_ms</span><span class="p">())</span>  <span class="c1"># ms until due, clamped at 0</span>
 </span></code></pre></div>
 <p><code>expired(now)</code> reports whether the deadline has passed; <code>remaining(now)</code> returns the milliseconds left (clamped at <code>0</code>). <code>reset(now)</code> re-arms the same period from a new moment.</p>
+<h2 id="choosing-a-wait">Choosing a wait<a class="headerlink" href="#choosing-a-wait" title="Permanent link">&para;</a></h2>
+<p>Every ChuMicro wait answers one question.  Pick by the question, not the type.</p>
+<table>
+<thead>
+<tr>
+<th>You want</th>
+<th>Reach for</th>
+<th>Lives in</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>"run this every N ms"</td>
+<td><code>Rate</code></td>
+<td><code>chumicro_timing</code></td>
+</tr>
+<tr>
+<td>"give up after N ms"</td>
+<td><code>Deadline</code></td>
+<td><code>chumicro_timing</code></td>
+</tr>
+<tr>
+<td>"a flag one place sets, another awaits"</td>
+<td><code>Signal</code> + <code>wait_for</code></td>
+<td><code>chumicro_timing</code></td>
+</tr>
+<tr>
+<td>"pause this generator until the socket is readable/writable"</td>
+<td><code>ReadWait</code> / <code>WriteWait</code></td>
+<td><code>chumicro_sockets</code></td>
+</tr>
+<tr>
+<td>"tell the runner when my service next needs the CPU"</td>
+<td><code>next_deadline</code> / <code>io_interest</code> on your service</td>
+<td>the runner service contract</td>
+</tr>
+<tr>
+<td>"block the loop until a task finishes, with a timeout"</td>
+<td><code>runner.run_until</code></td>
+<td><code>chumicro_runner</code></td>
+</tr>
+</tbody>
+</table>
+<p><code>Signal</code> and <code>wait_for</code> live in the opt-in <code>chumicro_timing.waits</code> submodule; <code>ReadWait</code> and <code>WriteWait</code> in <code>chumicro_sockets.waits</code>.  A service reports <code>next_deadline</code> and <code>io_interest</code> as methods the runner reads each tick, not something you import.</p>
 <h2 id="using-ticks-directly">Using ticks directly<a class="headerlink" href="#using-ticks-directly" title="Permanent link">&para;</a></h2>
 <p>For custom timing logic, you can use the tick functions directly:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_timing</span><span class="w"> </span><span class="kn">import</span> <span class="n">ticks_ms</span><span class="p">,</span> <span class="n">ticks_diff</span><span class="p">,</span> <span class="n">ticks_add</span>
