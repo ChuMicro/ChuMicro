@@ -353,7 +353,7 @@
   <a href="#pattern-a-value-object-load_section" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
-        Pattern A — value-object (<code>load_section</code>)
+        Pattern A, value-object (<code>load_section</code>)
       </span>
     </span>
   </a>
@@ -364,7 +364,7 @@
   <a href="#pattern-b-client-with-injection-direct-configget" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
-        Pattern B — client-with-injection (direct <code>config.get</code>)
+        Pattern B, client-with-injection (direct <code>config.get</code>)
       </span>
     </span>
   </a>
@@ -561,7 +561,7 @@
   <a href="#pattern-a-value-object-load_section" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
-        Pattern A — value-object (<code>load_section</code>)
+        Pattern A, value-object (<code>load_section</code>)
       </span>
     </span>
   </a>
@@ -572,7 +572,7 @@
   <a href="#pattern-b-client-with-injection-direct-configget" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
-        Pattern B — client-with-injection (direct <code>config.get</code>)
+        Pattern B, client-with-injection (direct <code>config.get</code>)
       </span>
     </span>
   </a>
@@ -676,8 +676,8 @@
 
 <h1 id="user-guide">User Guide<a class="headerlink" href="#user-guide" title="Permanent link">&para;</a></h1>
 <h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
-<p><code>chumicro-config</code> is how ChuMicro libraries read their settings on a device.  Apps read the deployed <code>runtime_config.msgpack</code> once with <code>load_runtime_config()</code>, then hand the whole config to each consuming library — each library pulls its own prefix's keys (<code>wifi.*</code>, <code>mqtt.broker.*</code>, …) off the shared dict.</p>
-<p>Most consumer libraries (mqtt, ntp, requests, websockets, http_server) read their slice with plain <code>config.get("&lt;prefix&gt;.&lt;key&gt;", &lt;default&gt;)</code> calls inside their <code>&lt;Name&gt;Config.from_config</code> classmethod.  When a library's constructor signature maps 1:1 onto a flat-prefix subkey set, <code>load_section</code> packages the boilerplate — <code>chumicro-wifi</code> uses it today.</p>
+<p><code>chumicro-config</code> is how ChuMicro libraries read their settings on a device.  Apps read the deployed <code>runtime_config.msgpack</code> once with <code>load_runtime_config()</code>, then hand the whole config to each consuming library.  Each library pulls its own prefix's keys (<code>wifi.*</code>, <code>mqtt.broker.*</code>, …) off the shared dict.</p>
+<p>Most consumer libraries (mqtt, ntp, requests, websockets, http_server) read their slice with plain <code>config.get("&lt;prefix&gt;.&lt;key&gt;", &lt;default&gt;)</code> calls inside their <code>&lt;Name&gt;Config.from_config</code> classmethod.  When a library's constructor signature maps 1:1 onto a flat-prefix subkey set, <code>load_section</code> packages the boilerplate; <code>chumicro-wifi</code> uses it today.</p>
 <p>Every library reads its keys using the same <code>&lt;prefix&gt;.&lt;subkey&gt;</code> dotted-key layout, so the on-wire shape stays uniform regardless of which API a library uses to parse it.</p>
 <h2 id="getting-started">Getting started<a class="headerlink" href="#getting-started" title="Permanent link">&para;</a></h2>
 <p>In an app, the read is one line:</p>
@@ -687,15 +687,15 @@
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">config</span> <span class="o">=</span> <span class="n">load_runtime_config</span><span class="p">()</span>                       <span class="c1"># /runtime_config.msgpack</span>
 </span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="n">wifi</span> <span class="o">=</span> <span class="n">WifiService</span><span class="p">(</span><span class="n">WifiConfig</span><span class="o">.</span><span class="n">from_config</span><span class="p">(</span><span class="n">config</span><span class="p">))</span>   <span class="c1"># reads + types wifi.* keys</span>
 </span></code></pre></div>
-<p><code>load_runtime_config()</code> opens <code>/runtime_config.msgpack</code> (the default path, <code>chumicro_config.runtime.DEFAULT_RUNTIME_CONFIG_PATH</code>), msgpack-decodes it, and returns a <code>RuntimeConfig</code> — a thin lookup wrapper over the flat-key payload.  Every chumicro library reads its own prefix's keys (<code>wifi.ssid</code>, <code>mqtt.broker.host</code>, …) from that one object.</p>
+<p><code>load_runtime_config()</code> opens <code>/runtime_config.msgpack</code> (the default path, <code>chumicro_config.runtime.DEFAULT_RUNTIME_CONFIG_PATH</code>), msgpack-decodes it, and returns a <code>RuntimeConfig</code>, a thin lookup wrapper over the flat-key payload.  Every chumicro library reads its own prefix's keys (<code>wifi.ssid</code>, <code>mqtt.broker.host</code>, …) from that one object.</p>
 <h2 id="writing-a-from_config-for-your-own-library">Writing a <code>from_config</code> for your own library<a class="headerlink" href="#writing-a-from_config-for-your-own-library" title="Permanent link">&para;</a></h2>
 <p>Two shapes, picked by what's being constructed.  The picker rule:</p>
 <ul>
-<li><strong>Pattern A — value-object</strong> — if every <code>__init__</code> kwarg maps 1:1 from a flat-prefix subkey <em>and</em> nothing else is injected at construction time, use <code>load_section</code>.  This is the WifiConfig shape.</li>
-<li><strong>Pattern B — client-with-injection</strong> — if <code>__init__</code> mixes config-derived kwargs with <strong>non-config injectables</strong> (sockets, radios, TLS contexts, listeners, factories, event handlers) or has <strong>call-site logic</strong> (mode-conditional sub-key reads, broker-required guards, half-TLS guards, computed defaults), skip <code>load_section</code> and read keys directly with <code>config.get</code> / <code>config.require</code>.  This is the shape used by mqtt, ntp, requests, websockets, http_server.</li>
+<li><strong>Pattern A, value-object.</strong>  When every <code>__init__</code> kwarg maps 1:1 from a flat-prefix subkey <em>and</em> nothing else is injected at construction time, use <code>load_section</code>.  This is the WifiConfig shape.</li>
+<li><strong>Pattern B, client-with-injection.</strong>  When <code>__init__</code> mixes config-derived kwargs with <strong>non-config injectables</strong> (sockets, radios, TLS contexts, listeners, factories, event handlers) or has <strong>call-site logic</strong> (mode-conditional sub-key reads, broker-required guards, half-TLS guards, computed defaults), skip <code>load_section</code> and read keys directly with <code>config.get</code> / <code>config.require</code>.  This is the shape used by mqtt, ntp, requests, websockets, http_server.</li>
 </ul>
 <p>Reading both <code>__init__</code> and the planned <code>from_config</code> side-by-side usually settles which shape applies.  When in doubt, start with Pattern A; if you find yourself adding non-config kwargs or call-site <code>if</code>s, that's the signal to flip to Pattern B.</p>
-<h3 id="pattern-a-value-object-load_section">Pattern A — value-object (<code>load_section</code>)<a class="headerlink" href="#pattern-a-value-object-load_section" title="Permanent link">&para;</a></h3>
+<h3 id="pattern-a-value-object-load_section">Pattern A, value-object (<code>load_section</code>)<a class="headerlink" href="#pattern-a-value-object-load_section" title="Permanent link">&para;</a></h3>
 <p>When the constructor's keyword arguments line up exactly with a flat-prefix subkey set, <code>load_section</code> cuts the boilerplate down to ~10 lines:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_config</span><span class="w"> </span><span class="kn">import</span> <span class="n">load_section</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
@@ -719,15 +719,15 @@
 </span></code></pre></div>
 <p><code>load_section</code> does four things:</p>
 <ol>
-<li>Asserts <code>config</code> is a <code>RuntimeConfig</code> or plain dict — raises <code>InvalidConfigType</code> otherwise.</li>
-<li>For each <code>required</code> subkey, pulls <code>config[f"{prefix}.{subkey}"]</code> — raises <code>MissingConfigKey</code> if any is absent.</li>
+<li>Asserts <code>config</code> is a <code>RuntimeConfig</code> or plain dict, raising <code>InvalidConfigType</code> otherwise.</li>
+<li>For each <code>required</code> subkey, pulls <code>config[f"{prefix}.{subkey}"]</code>, raising <code>MissingConfigKey</code> if any is absent.</li>
 <li>For each <code>optional</code> subkey, pulls <code>config[f"{prefix}.{subkey}"]</code> if present, else uses the default.</li>
 <li>Calls <code>cls(**kwargs)</code> and returns the instance.  Each kwarg name is the bare subkey (no prefix), so <code>WifiConfig</code> gets <code>ssid=…</code>, <code>password=…</code>, etc.</li>
 </ol>
-<p>Unknown keys are <strong>ignored</strong> — that's deliberate forward-compat.  An older library version reads a config file that has newer libraries' keys in it without exploding on the unfamiliar prefixes.</p>
+<p>Unknown keys are <strong>ignored</strong>, which is deliberate forward-compat.  An older library version reads a config file that has newer libraries' keys in it without exploding on the unfamiliar prefixes.</p>
 <p>There is no type coercion.  <code>"1883"</code> stays a string; the <code>__init__</code> does any conversion the library wants.</p>
-<h3 id="pattern-b-client-with-injection-direct-configget">Pattern B — client-with-injection (direct <code>config.get</code>)<a class="headerlink" href="#pattern-b-client-with-injection-direct-configget" title="Permanent link">&para;</a></h3>
-<p>When the class being constructed is a runner / client / service that takes both config-derived fields and non-config injectables (or has per-class guards), don't wrap <code>load_section</code> — it has no slot for the injectables and no hook for the guards.  Read keys directly:</p>
+<h3 id="pattern-b-client-with-injection-direct-configget">Pattern B, client-with-injection (direct <code>config.get</code>)<a class="headerlink" href="#pattern-b-client-with-injection-direct-configget" title="Permanent link">&para;</a></h3>
+<p>When the class being constructed is a runner / client / service that takes both config-derived fields and non-config injectables (or has per-class guards), don't wrap <code>load_section</code>; it has no slot for the injectables and no hook for the guards.  Read keys directly:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">NTPClient</span><span class="p">:</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="nd">@classmethod</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">from_config</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">socket</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">ticks</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
@@ -739,10 +739,10 @@
 </span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>            <span class="n">socket</span><span class="o">=</span><span class="n">socket</span><span class="p">,</span> <span class="n">ticks</span><span class="o">=</span><span class="n">ticks</span><span class="p">,</span>
 </span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>        <span class="p">)</span>
 </span></code></pre></div>
-<p>No upfront <code>isinstance</code> / "config-like" guard.  A <code>None</code> / <code>str</code> / <code>int</code> passed for <em>config</em> fails on the first <code>.get(...)</code> with <code>AttributeError</code> — clear enough at the call site to diagnose, without flash cost in every Pattern B factory for a check the caller almost never trips.</p>
-<p>Pattern B's freedom to mix is exactly its point — <code>MQTTClient.from_config</code> reads <code>mqtt.broker.host</code> <em>and</em> takes an injectable <code>socket</code> factory <em>and</em> enforces a broker-required guard; trying to express any of that through <code>load_section</code>'s <code>required</code> / <code>optional</code> mapping bends it into a less-readable shape than the inline reads.</p>
+<p>No upfront <code>isinstance</code> / "config-like" guard.  A <code>None</code> / <code>str</code> / <code>int</code> passed for <em>config</em> fails on the first <code>.get(...)</code> with <code>AttributeError</code>, clear enough at the call site to diagnose, without flash cost in every Pattern B factory for a check the caller almost never trips.</p>
+<p>Pattern B's freedom to mix is exactly its point: <code>MQTTClient.from_config</code> reads <code>mqtt.broker.host</code> <em>and</em> takes an injectable <code>socket</code> factory <em>and</em> enforces a broker-required guard; trying to express any of that through <code>load_section</code>'s <code>required</code> / <code>optional</code> mapping bends it into a less-readable shape than the inline reads.</p>
 <h2 id="soft-loading-with-try_load_section">Soft loading with <code>try_load_section</code><a class="headerlink" href="#soft-loading-with-try_load_section" title="Permanent link">&para;</a></h2>
-<p><code>load_section</code> raises when required keys are missing — the strict path most libraries want.  When a section is genuinely optional (e.g. an MQTT section the user may not configure if the app doesn't publish), use <code>try_load_section</code>:</p>
+<p><code>load_section</code> raises when required keys are missing, the strict path most libraries want.  When a section is genuinely optional (e.g. an MQTT section the user may not configure if the app doesn't publish), use <code>try_load_section</code>:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_config</span><span class="w"> </span><span class="kn">import</span> <span class="n">try_load_section</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
@@ -756,7 +756,7 @@
 </span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>        <span class="n">optional</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;port&quot;</span><span class="p">:</span> <span class="mi">1883</span><span class="p">,</span> <span class="s2">&quot;client_id&quot;</span><span class="p">:</span> <span class="kc">None</span><span class="p">},</span>
 </span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>    <span class="p">)</span>
 </span></code></pre></div>
-<p><code>try_load_section</code> returns <code>None</code> whenever <code>load_section</code> would raise — <code>config</code> is <code>None</code>, <code>config</code> is the wrong type, <em>or</em> any required key is absent.  Treat a <code>None</code> return as "this section wasn't configured; skip the feature."  Callers that want to distinguish "no config at all" from "partial config with a missing key" call <code>load_section</code> directly and catch <code>MissingConfigKey</code>.</p>
+<p><code>try_load_section</code> returns <code>None</code> whenever <code>load_section</code> would raise: <code>config</code> is <code>None</code>, <code>config</code> is the wrong type, <em>or</em> any required key is absent.  Treat a <code>None</code> return as "this section wasn't configured; skip the feature."  Callers that want to distinguish "no config at all" from "partial config with a missing key" call <code>load_section</code> directly and catch <code>MissingConfigKey</code>.</p>
 <h2 id="exception-handling">Exception handling<a class="headerlink" href="#exception-handling" title="Permanent link">&para;</a></h2>
 <p>Three classes, one base:</p>
 <table>
@@ -769,7 +769,7 @@
 <tbody>
 <tr>
 <td><code>ConfigError</code></td>
-<td>Base — catch this to handle every config failure uniformly.</td>
+<td>Base; catch this to handle every config failure uniformly.</td>
 </tr>
 <tr>
 <td><code>MissingConfigKey</code></td>
@@ -791,23 +791,23 @@
 </span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="k">except</span> <span class="n">ConfigError</span><span class="p">:</span>
 </span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>    <span class="k">raise</span>  <span class="c1"># let it propagate; logs higher up</span>
 </span></code></pre></div>
-<p><code>MissingConfigKey</code> and <code>InvalidConfigType</code> are <strong>single-inheritance only</strong> — they do not also subclass <code>KeyError</code> or <code>TypeError</code>.  MicroPython rejects multiple inheritance from <code>Exception</code> subclasses with differing memory layouts, so the natural CPython idiom (<code>class MissingConfigKey(ConfigError, KeyError)</code>) doesn't load on device.  Catch via <code>ConfigError</code> if you want broad handling.</p>
+<p><code>MissingConfigKey</code> and <code>InvalidConfigType</code> are <strong>single-inheritance only</strong>.  They do not also subclass <code>KeyError</code> or <code>TypeError</code>.  MicroPython rejects multiple inheritance from <code>Exception</code> subclasses with differing memory layouts, so the natural CPython idiom (<code>class MissingConfigKey(ConfigError, KeyError)</code>) doesn't load on device.  Catch via <code>ConfigError</code> if you want broad handling.</p>
 <h2 id="on-device-config-shape">On-device config shape<a class="headerlink" href="#on-device-config-shape" title="Permanent link">&para;</a></h2>
-<p>The runtime config is one msgpack file at <code>/runtime_config.msgpack</code>.  Its on-device shape is <strong>flat with dotted keys</strong> — one entry per <code>&lt;prefix&gt;.&lt;subkey&gt;</code>:</p>
+<p>The runtime config is one msgpack file at <code>/runtime_config.msgpack</code>.  Its on-device shape is <strong>flat with dotted keys</strong>, one entry per <code>&lt;prefix&gt;.&lt;subkey&gt;</code>:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="p">{</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>    <span class="s2">&quot;wifi.ssid&quot;</span><span class="p">:</span> <span class="s2">&quot;HomeNet&quot;</span><span class="p">,</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>    <span class="s2">&quot;wifi.password&quot;</span><span class="p">:</span> <span class="s2">&quot;secret&quot;</span><span class="p">,</span>
 </span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>    <span class="s2">&quot;wifi.hostname&quot;</span><span class="p">:</span> <span class="s2">&quot;back-porch&quot;</span><span class="p">,</span>
 </span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>    <span class="s2">&quot;mqtt.broker.host&quot;</span><span class="p">:</span> <span class="s2">&quot;mqtt.local&quot;</span><span class="p">,</span>
 </span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>    <span class="s2">&quot;mqtt.broker.port&quot;</span><span class="p">:</span> <span class="mi">1883</span><span class="p">,</span>
-</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>    <span class="s2">&quot;ntp.servers&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;pool.ntp.org&quot;</span><span class="p">],</span>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>    <span class="s2">&quot;ntp.server&quot;</span><span class="p">:</span> <span class="s2">&quot;pool.ntp.org&quot;</span><span class="p">,</span>
 </span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>    <span class="s2">&quot;app.sample_period_ms&quot;</span><span class="p">:</span> <span class="mi">5000</span><span class="p">,</span>
 </span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="p">}</span>
 </span></code></pre></div>
-<p>On device, <code>load_runtime_config()</code> reads this file back and returns a <code>RuntimeConfig</code> that behaves like a flat dict — <code>config["wifi.ssid"]</code>, <code>"mqtt.broker.host" in config</code>, etc.</p>
+<p>On device, <code>load_runtime_config()</code> reads this file back and returns a <code>RuntimeConfig</code> that behaves like a flat dict: <code>config["wifi.ssid"]</code>, <code>"mqtt.broker.host" in config</code>, etc.</p>
 <h3 id="how-the-workspace-tool-produces-it">How the workspace tool produces it<a class="headerlink" href="#how-the-workspace-tool-produces-it" title="Permanent link">&para;</a></h3>
 <p>You can ignore this section if you're building the msgpack file yourself.  If you're using <a href="https://chumicro.github.io/ChuMicro/workspace/stable/"><code>chumicro-workspace</code></a>, it composes the file from per-library TOML templates whose <strong>source shape is nested</strong> for human readability:</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># project_config.toml — what the user edits.</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># project_config.toml, what the user edits.</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="k">[wifi]</span>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">ssid</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;HomeNet&quot;</span>
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="n">password</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;secret&quot;</span>
@@ -818,7 +818,7 @@
 </span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="n">port</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1883</span>
 </span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>
 </span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="k">[ntp]</span>
-</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="n">servers</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;pool.ntp.org&quot;</span><span class="p">]</span>
+</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="n">server</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;pool.ntp.org&quot;</span>
 </span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a>
 </span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="k">[app]</span>
 </span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="n">sample_period_ms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">5000</span>
@@ -837,7 +837,7 @@
 <tbody>
 <tr>
 <td><a href="https://github.com/ChuMicro/ChuMicro/tree/main/libraries/config/examples/end_to_end.py"><code>examples/end_to_end.py</code></a></td>
-<td>Both patterns — <code>&lt;Name&gt;Config.from_config()</code> for library authors, multi-section app wiring for users — plus <code>MissingConfigKey</code> / <code>InvalidConfigType</code> error handling.  Runs on every runtime; no device or <code>runtime_config.msgpack</code> needed.</td>
+<td>Both patterns (<code>&lt;Name&gt;Config.from_config()</code> for library authors, multi-section app wiring for users) plus <code>MissingConfigKey</code> / <code>InvalidConfigType</code> error handling.  Runs on every runtime; no device or <code>runtime_config.msgpack</code> needed.</td>
 </tr>
 </tbody>
 </table>
