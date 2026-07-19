@@ -4,7 +4,38 @@
 
 `chumicro-websockets` is a non-blocking WebSocket (RFC 6455) client + server built on `chumicro-sockets` and `chumicro-timing`.  Two top-level classes — `WebSocketClient` for outbound `ws://` / `wss://` connections, and `WebSocketServer` for inbound.  Both follow the runner pattern from `chumicro-runner` (`check(now_ms)` / `handle(now_ms)`), so an LED can keep blinking through the opening handshake, frame I/O, control-frame interleave, and the close handshake.
 
-## Getting started — client
+## Getting started with generators
+
+The receive-stream surface reads inbound messages as a linear loop: `message = yield from client.next_message()` waits for the next message, hands it back, and loops until the session closes.  Register the client (it does the frame I/O each tick) and the consumer generator side by side.
+
+```python
+from chumicro_runner import Runner
+from chumicro_sockets.sockets_factory import connector_factory
+from chumicro_websockets import WebSocketClient
+
+client = WebSocketClient(transport_factory=connector_factory(radio=wifi.adapter.radio))
+client.connect("ws://api.example.com/stream", timeout_ms=10_000)
+
+
+def receive():
+    while True:
+        message = yield from client.next_message()   # InboundMessage
+        if message is None:
+            break                                    # session closed
+        print(message.text if message.is_text else message.data)
+
+
+runner = Runner()
+runner.add(client)
+handle = runner.add_generator(receive())
+runner.run_until(handle)
+```
+
+The first `next_message()` call switches inbound delivery from the `on_text` / `on_binary` callbacks to a bounded queue the generator drains (drop-oldest); pick one inbound surface per client.  See `examples/receive_stream.py`.
+
+## Getting started with a service (client)
+
+The `check` / `handle` service shape suits callback-style consumers and any client you drive from your own tick loop.
 
 ```python
 from chumicro_websockets import WebSocketClient, WebSocketState
@@ -28,7 +59,7 @@ while client.state != WebSocketState.CLOSED:
         want_to_send_now = False
 ```
 
-## Getting started — server
+## Getting started with a service (server)
 
 ```python
 from chumicro_websockets import WebSocketServer
