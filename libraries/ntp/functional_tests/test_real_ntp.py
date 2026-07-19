@@ -2,11 +2,10 @@
 
 Category 2 — public endpoint, `pool.ntp.org` interop.
 
-Brings wifi up, opens a UDP socket via the chumicro_sockets factory,
+Brings wifi up, opens a UDP socket via `chumicro_sockets.udp_socket`,
 queries a public NTP server, asserts the returned Unix-epoch seconds
 is plausibly close to the host clock. Exercises chumicro-ntp's SNTP
-wire format, chumicro-sockets' UDP path, and the `sockets_factory`
-submodule end-to-end on real hardware.
+wire format and chumicro-sockets' UDP path end-to-end on real hardware.
 
 Why public endpoint? Our own controlled SNTP responder would be the
 chumicro-ntp encoder talking to the chumicro-ntp decoder — green
@@ -20,7 +19,7 @@ Skipped at collection time when wifi credentials are missing.
 import time
 
 from chumicro_ntp import NTPClient
-from chumicro_ntp.sockets_factory import chumicro_sockets_factory
+from chumicro_sockets import udp_socket
 from chumicro_test_harness.network import runtime_config, wifi_up
 from chumicro_timing import ticks_ms
 
@@ -58,7 +57,7 @@ def test_real_ntp_query_returns_plausible_timestamp() -> None:
     radio, ip = wifi_up(ssid, password)
     print(f"WIFI_OK ip={ip}")
 
-    sock = chumicro_sockets_factory(radio=radio)
+    sock = udp_socket(radio=radio)
     sock.setblocking(False)
     print(f"UDP_OK bound={sock.getsockname()}")
 

@@ -116,19 +116,21 @@ class NTPClient:
         """Build an :class:`NTPClient` from runtime config."""
         if socket is None and transport_factory is None:
             try:
-                from chumicro_ntp.sockets_factory import (  # noqa: PLC0415
-                    chumicro_sockets_factory,
+                from chumicro_sockets.sockets_factory import (  # noqa: PLC0415
+                    udp_socket_factory,
                 )
             except ImportError as exception:
                 raise RuntimeError(
-                    "chumicro_ntp.sockets_factory not available "
+                    "chumicro_sockets.sockets_factory not available "
                     "(excluded via __chumicro_skip_factories__ or "
                     "not on the board), pass socket= or "
                     "transport_factory= explicitly.",
                 ) from exception
 
+            base_factory = udp_socket_factory(radio=radio)
+
             def transport_factory():
-                udp_socket = chumicro_sockets_factory(radio=radio)
+                udp_socket = base_factory()
                 udp_socket.setblocking(False)
                 return udp_socket
 

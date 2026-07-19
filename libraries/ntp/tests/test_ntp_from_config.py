@@ -112,30 +112,39 @@ class TestFromConfig:
         assert client.timeout_ms == 999
         assert client.port == 123  # default
 
-    def test_default_factory_invokes_chumicro_sockets_factory(self) -> None:
+    def test_default_factory_invokes_udp_socket_factory(self) -> None:
         """When neither *socket* nor *transport_factory* is passed,
-        ``from_config`` builds a factory that calls
-        ``chumicro_ntp.sockets_factory.chumicro_sockets_factory(radio=...)``
-        on the first query and sets the resulting socket non-blocking."""
+        ``from_config`` builds its transport off
+        ``chumicro_sockets.sockets_factory.udp_socket_factory(radio=...)``.
+        The ``radio`` binds at construction, but the socket only opens on
+        the first query and comes out non-blocking."""
         captured: dict = {}
+        opened: dict = {}
         sock = FakeUDPSocket()
 
-        def fake_chumicro_sockets_factory(*, radio=None):
+        def fake_udp_socket_factory(*, radio=None):
             captured["radio"] = radio
-            return sock
 
-        import chumicro_ntp.sockets_factory as sf  # noqa: PLC0415
+            def _open():
+                opened["socket"] = sock
+                return sock
 
-        original = sf.chumicro_sockets_factory
-        sf.chumicro_sockets_factory = fake_chumicro_sockets_factory
+            return _open
+
+        import chumicro_sockets.sockets_factory as sf  # noqa: PLC0415
+
+        original = sf.udp_socket_factory
+        sf.udp_socket_factory = fake_udp_socket_factory
         try:
             client = NTPClient.from_config({}, radio="fake-radio")
-            assert captured == {}  # deferred: nothing opened yet
+            # radio binds at construction; the socket stays deferred.
+            assert captured == {"radio": "fake-radio"}
+            assert opened == {}
             client.query()
         finally:
-            sf.chumicro_sockets_factory = original
+            sf.udp_socket_factory = original
 
-        assert captured == {"radio": "fake-radio"}
+        assert opened == {"socket": sock}
         assert client.socket is sock
         # Non-blocking was applied — FakeUDPSocket records setblocking calls.
         assert sock.blocking is False
@@ -149,23 +158,23 @@ class TestFromConfig:
         """
         sock = FakeUDPSocket()
 
-        def fake_chumicro_sockets_factory(*, radio=None):
-            return sock
+        def fake_udp_socket_factory(*, radio=None):
+            return lambda: sock
 
-        import chumicro_ntp.sockets_factory as sf  # noqa: PLC0415
+        import chumicro_sockets.sockets_factory as sf  # noqa: PLC0415
 
-        original = sf.chumicro_sockets_factory
-        sf.chumicro_sockets_factory = fake_chumicro_sockets_factory
+        original = sf.udp_socket_factory
+        sf.udp_socket_factory = fake_udp_socket_factory
         try:
             # No raise: empty config + no socket override is fine.
             client = NTPClient.from_config({})
         finally:
-            sf.chumicro_sockets_factory = original
+            sf.udp_socket_factory = original
 
         assert client.server == "pool.ntp.org"
 
     def test_skipped_factory_module_raises_runtime_error(self) -> None:
-        """When ``chumicro_ntp.sockets_factory`` is excluded via
+        """When ``chumicro_sockets.sockets_factory`` is excluded via
         ``__chumicro_skip_factories__``, the default branch of
         ``from_config`` raises ``RuntimeError`` naming the bypass
         kwargs instead of leaking ``ImportError``.  CPython-only —
@@ -179,8 +188,8 @@ class TestFromConfig:
         if sys.implementation.name != "cpython":
             skip("sys.modules None-sentinel is CPython-specific")
 
-        original = sys.modules.get("chumicro_ntp.sockets_factory")
-        sys.modules["chumicro_ntp.sockets_factory"] = None
+        original = sys.modules.get("chumicro_sockets.sockets_factory")
+        sys.modules["chumicro_sockets.sockets_factory"] = None
         try:
             try:
                 NTPClient.from_config({})
@@ -192,9 +201,9 @@ class TestFromConfig:
                 raise AssertionError("expected RuntimeError")
         finally:
             if original is None:
-                sys.modules.pop("chumicro_ntp.sockets_factory", None)
+                sys.modules.pop("chumicro_sockets.sockets_factory", None)
             else:
-                sys.modules["chumicro_ntp.sockets_factory"] = original
+                sys.modules["chumicro_sockets.sockets_factory"] = original
 
 
 def test_transport_factory_defers_open_to_first_query():
@@ -228,5 +237,5 @@ def test_socket_and_factory_are_mutually_exclusive():
         NTPClient()
 
 
-# sockets_factory submodule lives in test_ntp_pytest.py
+# udp_socket_factory socket-binding coverage lives in test_ntp_pytest.py
 # (CPython-only; see that file's docstring for why).

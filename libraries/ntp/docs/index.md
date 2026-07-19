@@ -8,10 +8,10 @@ Pure-Python, takes a UDP socket you provide, returns the server's transmit times
 
 ```python
 from chumicro_ntp import NTPClient
-from chumicro_ntp.sockets_factory import chumicro_sockets_factory
+from chumicro_sockets import udp_socket
 from chumicro_timing import ticks_ms
 
-sock = chumicro_sockets_factory(radio=wifi.adapter.radio)
+sock = udp_socket(radio=wifi.adapter.radio)
 client = NTPClient(socket=sock, server="pool.ntp.org")
 request = client.query()
 while not request.done:

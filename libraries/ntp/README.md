@@ -30,11 +30,11 @@ For bundle setup, pre-compiled `.mpy` bundles, the experimental channel, and det
 
 ```python
 from chumicro_ntp import NTPClient
-from chumicro_ntp.sockets_factory import chumicro_sockets_factory
+from chumicro_sockets import udp_socket
 from chumicro_timing import ticks_ms
 
 # On CircuitPython pass radio=wifi.radio; the kwarg is ignored on MP / CPython.
-sock = chumicro_sockets_factory(radio=None)
+sock = udp_socket(radio=None)
 sock.setblocking(False)                     # required — a blocking recv wedges on packet loss
 client = NTPClient(socket=sock, server="pool.ntp.org")
 request = client.query()
@@ -44,7 +44,7 @@ while not request.done:
 print("unix seconds:", request.unix_seconds)
 ```
 
-`chumicro_sockets_factory` lives in its own submodule so apps with a custom UDP transport don't pull `chumicro-sockets` into their device deploy.  Pass any object satisfying the `sendto` / `recvfrom_into` / `close` / `setblocking` contract (see `NTPClient`'s docstring) to `NTPClient(socket=...)` — `chumicro_sockets.udp_socket` and `chumicro_sockets.testing.FakeUDPSocket` are the built-in producers.
+`chumicro_sockets.udp_socket` builds the default bound UDP socket.  Pass any object satisfying the `sendto` / `recvfrom_into` / `close` / `setblocking` contract (see `NTPClient`'s docstring) to `NTPClient(socket=...)` — `chumicro_sockets.udp_socket` and `chumicro_sockets.testing.FakeUDPSocket` are the built-in producers.  `NTPClient.from_config` wires that default itself through the shared `chumicro_sockets.sockets_factory` module, imported lazily, so apps with a custom UDP transport keep `chumicro-sockets` out of their device deploy.
 
 ## What's included
 
@@ -56,7 +56,7 @@ print("unix seconds:", request.unix_seconds)
 | `NTPClient.cancel()` | Abort an in-flight query. |
 | `NTPResult` | Per-query handle.  `done`, `unix_seconds`, `error`. |
 | `NTPError` | OSError subclass raised on protocol-level failures (short/malformed response, kiss-of-death, timeout, cancel). |
-| `chumicro_ntp.sockets_factory.chumicro_sockets_factory(radio=None)` | One-line default UDP socket wired through `chumicro-sockets`.  Importable separately so the deploy graph doesn't pull `chumicro-sockets` for apps with a custom transport. |
+| `chumicro_sockets.udp_socket(radio=None)` | Built-in bound UDP socket for `NTPClient(socket=...)`.  `NTPClient.from_config` reaches it through the shared `chumicro_sockets.sockets_factory`; a custom transport skips that import and keeps `chumicro-sockets` out of the deploy. |
 
 ## Where this fits
 
