@@ -535,12 +535,6 @@ def verify_demos() -> int:
     return _verify()
 
 
-def validate_picker() -> int:
-    """Gate the shared picker tool: static markup/CSS/JS-namespace checks plus a headless smoke."""
-    from validate_picker import validate_picker as _validate
-    return _validate()
-
-
 def new_library(name: str, *, workbench: bool = False) -> int:
     """Scaffold a new device library (or host-only workbench tool)."""
     from new_library_scaffold import new_library as _new_library
@@ -3938,10 +3932,6 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     subparsers.add_parser("verify-examples", parents=[scope], help="import-check examples")
     subparsers.add_parser("verify-demos", help="compile-check the demos/ tree")
-    subparsers.add_parser(
-        "validate-picker",
-        help="gate the shared picker tool (static markup/CSS/JS-namespace + headless smoke)",
-    )
 
     docs_parser = subparsers.add_parser("docs", parents=[scope], help="build library docs")
     docs_parser.add_argument(
@@ -4065,9 +4055,6 @@ def main(argv: list[str]) -> int:
 
     if args.task == "verify-demos":
         return verify_demos()
-
-    if args.task == "validate-picker":
-        return validate_picker()
 
     if args.task == "docs":
         return docs(
