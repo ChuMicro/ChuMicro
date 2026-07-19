@@ -237,7 +237,7 @@ class TestClientFromConfig:
         assert client._transport_factory is factory  # noqa: SLF001
 
     def test_skipped_factory_module_raises_runtime_error(self) -> None:
-        """When ``chumicro_websockets.sockets_factory`` is excluded via
+        """When ``chumicro_sockets.sockets_factory`` is excluded via
         ``__chumicro_skip_factories__``, the default branch of
         ``from_config`` raises ``RuntimeError`` naming the bypass
         kwarg instead of leaking ``ImportError``.  CPython-only —
@@ -251,8 +251,8 @@ class TestClientFromConfig:
         if sys.implementation.name != "cpython":
             skip("sys.modules None-sentinel is CPython-specific")
 
-        original = sys.modules.get("chumicro_websockets.sockets_factory")
-        sys.modules["chumicro_websockets.sockets_factory"] = None
+        original = sys.modules.get("chumicro_sockets.sockets_factory")
+        sys.modules["chumicro_sockets.sockets_factory"] = None
         try:
             try:
                 WebSocketClient.from_config({})
@@ -263,32 +263,32 @@ class TestClientFromConfig:
                 raise AssertionError("expected RuntimeError")
         finally:
             if original is None:
-                sys.modules.pop("chumicro_websockets.sockets_factory", None)
+                sys.modules.pop("chumicro_sockets.sockets_factory", None)
             else:
-                sys.modules["chumicro_websockets.sockets_factory"] = original
+                sys.modules["chumicro_sockets.sockets_factory"] = original
 
     def test_default_factory_threads_radio_and_ssl_context(self) -> None:
         """When no transport_factory is passed, ``from_config`` builds
-        one via ``chumicro_websockets.sockets_factory.chumicro_sockets_connector_factory``
+        one via ``chumicro_sockets.sockets_factory.connector_factory``
         with the radio + ssl_context kwargs threaded through."""
-        import chumicro_websockets.sockets_factory as sf
+        import chumicro_sockets.sockets_factory as sf
 
         captured: dict = {}
         sentinel_factory = lambda host, port, use_tls: FakeSocket()  # noqa: ARG005,E731
 
-        def fake_chumicro_sockets_connector_factory(*, radio=None, ssl_context=None):
+        def fake_connector_factory(*, radio=None, ssl_context=None):
             captured["radio"] = radio
             captured["ssl_context"] = ssl_context
             return sentinel_factory
 
-        original = sf.chumicro_sockets_connector_factory
-        sf.chumicro_sockets_connector_factory = fake_chumicro_sockets_connector_factory
+        original = sf.connector_factory
+        sf.connector_factory = fake_connector_factory
         try:
             client = WebSocketClient.from_config(
                 {}, radio="fake-radio", ssl_context="fake-ctx",
             )
         finally:
-            sf.chumicro_sockets_connector_factory = original
+            sf.connector_factory = original
 
         assert captured == {"radio": "fake-radio", "ssl_context": "fake-ctx"}
         assert client._transport_factory is sentinel_factory  # noqa: SLF001
