@@ -432,6 +432,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#per-tick-knobs" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Per-tick knobs
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#platform-notes" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -456,17 +467,6 @@
         
       </ul>
     </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#per-tick-knobs" class="md-nav__link">
-    <span class="md-ellipsis">
-      <span class="md-typeset">
-        Per-tick knobs
-      </span>
-    </span>
-  </a>
   
 </li>
       
@@ -700,6 +700,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#per-tick-knobs" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Per-tick knobs
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#platform-notes" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -724,17 +735,6 @@
         
       </ul>
     </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#per-tick-knobs" class="md-nav__link">
-    <span class="md-ellipsis">
-      <span class="md-typeset">
-        Per-tick knobs
-      </span>
-    </span>
-  </a>
   
 </li>
       
@@ -769,7 +769,7 @@
 
 <h1 id="user-guide">User Guide<a class="headerlink" href="#user-guide" title="Permanent link">&para;</a></h1>
 <h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
-<p><code>chumicro-websockets</code> is a non-blocking WebSocket (RFC 6455) client + server built on <code>chumicro-sockets</code> and <code>chumicro-timing</code>.  Two top-level classes — <code>WebSocketClient</code> for outbound <code>ws://</code> / <code>wss://</code> connections, and <code>WebSocketServer</code> for inbound.  Both follow the runner pattern from <code>chumicro-runner</code> (<code>check(now_ms)</code> / <code>handle(now_ms)</code>), so an LED can keep blinking through the opening handshake, frame I/O, control-frame interleave, and the close handshake.</p>
+<p><code>chumicro-websockets</code> is a non-blocking WebSocket (RFC 6455) client + server built on <code>chumicro-sockets</code> and <code>chumicro-timing</code>.  Two top-level classes: <code>WebSocketClient</code> for outbound <code>ws://</code> / <code>wss://</code> connections, and <code>WebSocketServer</code> for inbound.  Both follow the runner pattern from <code>chumicro-runner</code> (<code>check(now_ms)</code> / <code>handle(now_ms)</code>), so an LED can keep blinking through the opening handshake, frame I/O, control-frame interleave, and the close handshake.</p>
 <h2 id="getting-started-with-generators">Getting started with generators<a class="headerlink" href="#getting-started-with-generators" title="Permanent link">&para;</a></h2>
 <p>The receive-stream surface reads inbound messages as a linear loop: <code>message = yield from client.next_message()</code> waits for the next message, hands it back, and loops until the session closes.  Register the client (it does the frame I/O each tick) and the consumer generator side by side.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_runner</span><span class="w"> </span><span class="kn">import</span> <span class="n">Runner</span>
@@ -839,7 +839,7 @@
 </span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a>        <span class="n">server</span><span class="o">.</span><span class="n">handle</span><span class="p">(</span><span class="n">now</span><span class="p">)</span>
 </span></code></pre></div>
 <h2 id="runner-pattern">Runner pattern<a class="headerlink" href="#runner-pattern" title="Permanent link">&para;</a></h2>
-<p>Both <code>WebSocketClient</code> and <code>WebSocketServer</code> implement the runner contract (<code>check(now_ms)</code> / <code>handle(now_ms)</code>) — register them with <code>chumicro_runner.Runner</code> and they get ticked alongside your other services:</p>
+<p>Both <code>WebSocketClient</code> and <code>WebSocketServer</code> implement the runner contract (<code>check(now_ms)</code> / <code>handle(now_ms)</code>).  Register them with <code>chumicro_runner.Runner</code> and they get ticked alongside your other services:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_runner</span><span class="w"> </span><span class="kn">import</span> <span class="n">Runner</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">runner</span> <span class="o">=</span> <span class="n">Runner</span><span class="p">()</span>
@@ -854,7 +854,7 @@
 does at most one tick of progress, capped by <code>recv_budget_per_tick</code> and
 <code>send_budget_per_tick</code>.</p>
 <h2 id="callbacks">Callbacks<a class="headerlink" href="#callbacks" title="Permanent link">&para;</a></h2>
-<p>All callbacks default to no-op functions and fire from inside <code>handle()</code> —
+<p>All callbacks default to no-op functions and fire from inside <code>handle()</code>,
 never from a thread or interrupt.</p>
 <h3 id="client-websocketclient">Client (<code>WebSocketClient</code>)<a class="headerlink" href="#client-websocketclient" title="Permanent link">&para;</a></h3>
 <table>
@@ -933,13 +933,13 @@ once per accepted connection at the moment its handshake completes:</p>
 </tr>
 </tbody>
 </table>
-<p><code>chumicro_sockets.connector</code> is one valid producer.  See <code>chumicro_sockets._connector.SocketConnector</code> for the connector contract (<code>tick(now_ms)</code>, <code>state</code>, <code>socket</code>, <code>io_*</code>, <code>next_deadline</code>, <code>cancel</code>) — any tick-driven state machine with that surface works as a custom factory.</p>
+<p><code>chumicro_sockets.connector</code> is one valid producer.  See <code>chumicro_sockets._connector.SocketConnector</code> for the connector contract (<code>tick(now_ms)</code>, <code>state</code>, <code>socket</code>, <code>io_*</code>, <code>next_deadline</code>, <code>cancel</code>).  Any tick-driven state machine with that surface works as a custom factory.</p>
 <p>If you supply your own factory and want <code>chumicro_sockets</code> dropped from the deploy entirely, add a module-level constant to your entrypoint and the chumicro-workspace deployer will filter the default factory out of the import graph:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># code.py / app.py</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">__chumicro_skip_factories__</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;sockets_factory&quot;</span><span class="p">,)</span>
 </span></code></pre></div>
-<p>Family form (<code>"sockets_factory"</code>, matches every <code>chumicro_*.sockets_factory</code>) or exact path (<code>"chumicro_sockets.sockets_factory"</code>).  An unmatched entry fails the deploy with a typo message rather than silently shipping the default.  Calling <code>WebSocketClient.from_config(...)</code> when <code>chumicro_sockets.sockets_factory</code> is missing — either skipped at deploy time or not installed by <code>circup</code> / <code>mip</code> — raises <code>RuntimeError</code> naming the bypass kwarg.</p>
-<p>For the full single-library adoption recipe — your transport, your <code>ticks=</code>, the runner-less drive loop, and host tests with no board — see <a href="https://github.com/ChuMicro/ChuMicro/blob/main/docs/contributing/standalone-integration.md">Standalone integration</a>.</p>
+<p>Family form (<code>"sockets_factory"</code>, matches every <code>chumicro_*.sockets_factory</code>) or exact path (<code>"chumicro_sockets.sockets_factory"</code>).  An unmatched entry fails the deploy with a typo message rather than silently shipping the default.  Calling <code>WebSocketClient.from_config(...)</code> when <code>chumicro_sockets.sockets_factory</code> is missing (either skipped at deploy time or not installed by <code>circup</code> / <code>mip</code>) raises <code>RuntimeError</code> naming the bypass kwarg.</p>
+<p><code>chumicro-websockets</code> adopts cleanly on its own: pass your own <code>transport_factory</code> (client) or <code>listener</code> (server), set <code>ticks=</code> to your clock, drive it from a plain <code>while</code> loop instead of <code>chumicro_runner</code>, and run host tests through an injected transport with no board attached.</p>
 <h2 id="memory-notes">Memory notes<a class="headerlink" href="#memory-notes" title="Permanent link">&para;</a></h2>
 <p>The library is sized for the minimum supported board class (256 KB
 MCU RAM, 2 MB physical / ~800 KB usable flash):</p>
@@ -947,13 +947,13 @@ MCU RAM, 2 MB physical / ~800 KB usable flash):</p>
 <li><code>max_message_bytes</code> defaults to <code>16384</code> (16 KB).  Inbound messages
   larger than this trigger <code>WhenOversized</code> policy.  The parser runs
   a three-tier inbound size model (mirrors <code>chumicro-mqtt</code>):</li>
-<li>Tier 1, frames ≤ <code>payload_buffer_size</code> (256 B) — reuse the
+<li>Tier 1, frames ≤ <code>payload_buffer_size</code> (256 B): reuse the
     steady-state parse buffer; delivery still materializes one <code>bytes</code>
     snapshot of the payload per frame.</li>
 <li>Tier 2, frames between <code>payload_buffer_size</code> and
-    <code>max_payload_bytes</code> — one-shot <code>bytearray(payload_length)</code>,
+    <code>max_payload_bytes</code>: one-shot <code>bytearray(payload_length)</code>,
     freed after delivery.</li>
-<li>Tier 3, frames &gt; <code>max_payload_bytes</code> — rolling discard, no
+<li>Tier 3, frames &gt; <code>max_payload_bytes</code>: rolling discard, no
     allocation beyond the steady-state buffer.  The bytes are gone
     but <code>reported_length</code> is surfaced.  <code>WhenOversized</code> policy
     decides whether to stay connected (<code>DROP_SILENT</code> /
@@ -969,57 +969,13 @@ MCU RAM, 2 MB physical / ~800 KB usable flash):</p>
 <li><code>send_budget_per_tick</code> defaults to <code>1024</code> bytes.
   <code>recv_budget_per_tick</code> also defaults to <code>1024</code>.  A single <code>recv_into</code>
   fills a 512 B scratch buffer, so a tick reads the budget in 512-byte
-  chunks — 1024 B/tick at the default — until the budget is spent or the
+  chunks (1024 B/tick at the default) until the budget is spent or the
   socket has no more data; a 16 KB message takes ~16 ticks to drain
   end-to-end, well within LED-blink latency.</li>
 <li>The frame parser is one-shot per frame: parsed payload moves
   out of the parser into the message reassembly buffer in the
   client / connection, then the parser resets to header-reading.
   No held references to old frame bytes.</li>
-</ul>
-<h2 id="platform-notes">Platform notes<a class="headerlink" href="#platform-notes" title="Permanent link">&para;</a></h2>
-<table>
-<thead>
-<tr>
-<th>Runtime</th>
-<th>Client (<code>ws://</code> + <code>wss://</code>)</th>
-<th>Server (<code>ws://</code>)</th>
-<th>Server (<code>wss://</code>)</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>CPython</td>
-<td>✅</td>
-<td>✅</td>
-<td>✅</td>
-</tr>
-<tr>
-<td>MicroPython</td>
-<td>✅</td>
-<td>✅</td>
-<td>✅</td>
-</tr>
-<tr>
-<td>CircuitPython on ESP32 family (S2 / S3)</td>
-<td>✅</td>
-<td>✅</td>
-<td>✅</td>
-</tr>
-<tr>
-<td>CircuitPython on Pi Pico W (rp2)</td>
-<td>✅</td>
-<td>✅</td>
-<td>❌ (raises <code>UnsupportedSSLConfigError</code>)</td>
-</tr>
-</tbody>
-</table>
-<h3 id="tls-wss">TLS (<code>wss://</code>)<a class="headerlink" href="#tls-wss" title="Permanent link">&para;</a></h3>
-<p><code>wss://</code> client connections reuse <code>chumicro_sockets.connector(tls=True)</code> + <code>chumicro_sockets.ssl_context_with_ca</code>, with the same live-board constraints HTTPS clients have:</p>
-<ul>
-<li><strong>Device RTC must be set before <code>wss://</code>.</strong>  mbedTLS rejects every cert as "validity starts in the future" if the RTC is at boot default.  Use <a href="https://chumicro.github.io/ChuMicro/ntp/stable/"><code>chumicro-ntp</code></a> to set the clock first.</li>
-<li><strong>CA pinning is required.</strong>  Build the <code>ssl_context</code> with <code>chumicro_sockets.ssl_context_with_ca(pem)</code> and pass it through <code>connector_factory(radio=..., ssl_context=ctx)</code>.</li>
-<li><strong>Pi Pico W needs flash deploy mode for <code>wss://</code></strong> — RAM-mode leaves &lt;50 KB free for the mbedTLS handshake.</li>
 </ul>
 <h2 id="per-tick-knobs">Per-tick knobs<a class="headerlink" href="#per-tick-knobs" title="Permanent link">&para;</a></h2>
 <table>
@@ -1078,6 +1034,50 @@ MCU RAM, 2 MB physical / ~800 KB usable flash):</p>
 </tr>
 </tbody>
 </table>
+<h2 id="platform-notes">Platform notes<a class="headerlink" href="#platform-notes" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Runtime</th>
+<th>Client (<code>ws://</code> + <code>wss://</code>)</th>
+<th>Server (<code>ws://</code>)</th>
+<th>Server (<code>wss://</code>)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CPython</td>
+<td>✅</td>
+<td>✅</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>MicroPython</td>
+<td>✅</td>
+<td>✅</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>CircuitPython on ESP32 family (S2 / S3)</td>
+<td>✅</td>
+<td>✅</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>CircuitPython on Pi Pico W (rp2)</td>
+<td>✅</td>
+<td>✅</td>
+<td>❌ (raises <code>UnsupportedSSLConfigError</code>)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="tls-wss">TLS (<code>wss://</code>)<a class="headerlink" href="#tls-wss" title="Permanent link">&para;</a></h3>
+<p><code>wss://</code> client connections reuse <code>chumicro_sockets.connector(tls=True)</code> + <code>chumicro_sockets.ssl_context_with_ca</code>, with the same live-board constraints HTTPS clients have:</p>
+<ul>
+<li><strong>Device RTC must be set before <code>wss://</code>.</strong>  mbedTLS rejects every cert as "validity starts in the future" if the RTC is at boot default.  Use <a href="https://chumicro.github.io/ChuMicro/ntp/stable/"><code>chumicro-ntp</code></a> to set the clock first.</li>
+<li><strong>CA pinning is required.</strong>  Build the <code>ssl_context</code> with <code>chumicro_sockets.ssl_context_with_ca(pem)</code> and pass it through <code>connector_factory(radio=..., ssl_context=ctx)</code>.</li>
+<li><strong>Pi Pico W needs flash deploy mode for <code>wss://</code></strong>: RAM-mode leaves &lt;50 KB free for the mbedTLS handshake.</li>
+</ul>
 <h2 id="examples">Examples<a class="headerlink" href="#examples" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
