@@ -244,6 +244,8 @@ def _cmd_update(args: argparse.Namespace) -> int:
     )
     for path, action in report:
         print(f"  {action:>11}  {path}")
+    for path in report.dependency_preserved_paths:
+        print(f"update: preserved your added dependencies in {path}")
     return 0
 
 
