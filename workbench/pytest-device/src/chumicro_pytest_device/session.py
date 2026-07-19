@@ -3,9 +3,11 @@
 ``getattr``-style readers over the dynamic attributes that
 :func:`chumicro_pytest_device.plugin.pytest_sessionstart` stashes on
 the pytest ``Session`` (transport cache, target list, backend,
-PR-summary collector).  Also exports the test-file path predicates,
-the ``--target`` flag readers, and the runtime-config encode-plus-cache
-helper used at stage time.
+PR-summary collector).  Also exports the library- and project-tree
+test-file path predicates (``_is_library_functional_test``,
+``_is_project_functional_test`` and the project-targeting /
+project-name helpers), the ``--target`` flag readers, and the
+runtime-config encode-plus-cache helper used at stage time.
 
 This is a leaf module: it must not import :mod:`plugin` or
 :mod:`collection`, so they can both depend on it.
@@ -84,14 +86,72 @@ def _workspace_root(session: pytest.Session) -> Path:
 
 
 def _harness_source_dir(session: pytest.Session) -> Path:
-    """Return ``support/test_harness/src`` for the on-device test harness.
+    """Return the source dir for the on-device test harness.
 
     The plugin stages a lightweight test harness alongside library
     sources so ``import chumicro_test_harness`` resolves on the device.
-    Workspaces without this directory won't run harness-shaped
-    functional tests.
+    Prefers the mono-repo ``support/test_harness/src`` tree; when that
+    directory is absent (a standalone workspace, where the harness is a
+    pip-installed dependency), falls back to
+    :func:`_installed_harness_source_dir`.
     """
-    return _workspace_root(session) / "support" / "test_harness" / "src"
+    mono_repo_source = (
+        _workspace_root(session) / "support" / "test_harness" / "src"
+    )
+    if mono_repo_source.is_dir():
+        return mono_repo_source
+    return _installed_harness_source_dir(session.config)
+
+
+def _installed_harness_source_dir(config: pytest.Config) -> Path:
+    """Return a source dir that stages the pip-installed test harness.
+
+    Locates the installed ``chumicro_test_harness`` package via
+    :func:`importlib.util.find_spec` and returns a directory the
+    transports can stage.  The transports copy *every* package under
+    whatever dir they are handed, so the returned directory must contain
+    the harness package and nothing else.
+
+    Two installed layouts resolve differently:
+
+    * Source checkout / editable install: the package sits at
+      ``.../src/chumicro_test_harness``, whose parent ``src`` holds only
+      the harness package.  Return that ``src`` directory directly.
+    * Wheel install: the package sits in ``site-packages`` next to every
+      other installed distribution.  Returning ``site-packages`` would
+      stage the whole environment, so the package is copied into a
+      private per-run staging dir under the pytest cache and that dir is
+      returned instead.
+
+    Raises:
+        pytest.UsageError: When ``chumicro_test_harness`` isn't
+            importable (neither a mono-repo ``support/test_harness/`` tree
+            nor a pip install provides it).
+    """
+    import importlib.util  # noqa: PLC0415
+    import shutil  # noqa: PLC0415
+
+    spec = importlib.util.find_spec("chumicro_test_harness")
+    if spec is None or spec.origin is None:
+        raise pytest.UsageError(
+            "functional tests need the on-device test harness; "
+            "pip install chumicro-test-harness (or run in a workspace "
+            "with support/test_harness/)",
+        )
+    package_directory = Path(spec.origin).parent
+    if package_directory.parent.name == "src":
+        return package_directory.parent
+
+    staging_root = Path(config.cache.mkdir("chumicro_device_harness"))
+    staged_package = staging_root / "chumicro_test_harness"
+    if staged_package.exists():
+        shutil.rmtree(staged_package)
+    shutil.copytree(
+        package_directory,
+        staged_package,
+        ignore=shutil.ignore_patterns("__pycache__"),
+    )
+    return staging_root
 
 
 def _libraries_root(session: pytest.Session) -> Path:
@@ -167,6 +227,124 @@ def _is_library_functional_test(file_path: Path) -> bool:
         and parts[index - 2] == "libraries"
         for index, component in enumerate(parts)
     )
+
+
+def _is_project_functional_test(file_path: Path) -> bool:
+    """Return ``True`` for ``projects/<name>/functional_tests/test_*.py`` paths.
+
+    A workspace project's functional tests live under a ``projects``
+    directory; this routes them to a board the way library functional
+    tests are routed.  Ownership is decided by the *nearest* marker while
+    walking up from each ``functional_tests`` component: a checkout under
+    a directory literally named ``projects``
+    (``~/projects/chumicro/libraries/kvstore/functional_tests/``) hits
+    ``libraries`` before ``projects``, so it stays a LIBRARY test.  Only
+    when ``projects`` is the nearer marker is the file project-owned.
+    Projects may be nested (``projects/garage/heater/functional_tests/``),
+    so any number of segments may sit between ``projects`` and
+    ``functional_tests``.
+    """
+    if not (
+        file_path.suffix == ".py"
+        and file_path.name.startswith("test_")
+        and "functional_tests" in file_path.parts
+    ):
+        return False
+    parts = file_path.parts
+    for index, component in enumerate(parts):
+        if component != "functional_tests":
+            continue
+        for preceding in reversed(parts[:index]):
+            if preceding == "libraries":
+                break
+            if preceding == "projects":
+                return True
+    return False
+
+
+def _project_functional_tests_dir(file_path: Path) -> Path:
+    """Return the ``functional_tests`` directory owning a project test file.
+
+    The deepest ``functional_tests`` component that classified as
+    project-owned (nearest marker walking up is ``projects``, not
+    ``libraries``).  Only meaningful for a *file_path* that
+    :func:`_is_project_functional_test` already accepted.
+    """
+    parts = file_path.parts
+    owning_index: int | None = None
+    for index, component in enumerate(parts):
+        if component != "functional_tests":
+            continue
+        for preceding in reversed(parts[:index]):
+            if preceding == "libraries":
+                break
+            if preceding == "projects":
+                owning_index = index
+                break
+    assert owning_index is not None, (
+        "_project_functional_tests_dir requires a project functional test path"
+    )
+    return Path(*parts[: owning_index + 1])
+
+
+def _project_functional_test_targeted(
+    config: pytest.Config, file_path: Path,
+) -> bool:
+    """Return ``True`` when the invocation explicitly targeted this tree.
+
+    Reads ``config.invocation_params.args`` (the literal command line).
+    Each entry that isn't an option (doesn't start with ``-``) is treated
+    as a path: any ``::nodeid`` suffix is stripped, a relative path is
+    resolved against ``config.invocation_params.dir``, and the result is
+    compared to the file's owning ``functional_tests`` directory (from
+    :func:`_project_functional_tests_dir`).  A match means the directory
+    itself or a file inside it was named.
+
+    Targeting an *ancestor* (``projects/example_sensor`` or a bare
+    workspace sweep) does not count: project functional tests fire only
+    when their tree is named directly, so a sweep leaves them deselected.
+
+    Option values that happen not to start with ``-`` (``ram`` after
+    ``--deploy-mode``) resolve to nonexistent paths and simply never
+    match, so they need no special handling.
+    """
+    tests_dir = _project_functional_tests_dir(file_path).resolve()
+    invocation_dir = Path(config.invocation_params.dir)
+    for argument in config.invocation_params.args:
+        if argument.startswith("-"):
+            continue
+        path_part = argument.split("::", 1)[0]
+        candidate = Path(path_part)
+        if not candidate.is_absolute():
+            candidate = invocation_dir / candidate
+        candidate = candidate.resolve()
+        if candidate == tests_dir or candidate.is_relative_to(tests_dir):
+            return True
+    return False
+
+
+def _project_unit_name(test_file: Path) -> str:
+    """Return the slash-form project name for display and config scoping.
+
+    Takes the project directory (``test_file.parent.parent``), finds the
+    LAST ``projects`` component in its parts, and joins everything after
+    it with ``/`` (``projects/garage/heater/...`` yields ``garage/heater``).
+    Falls back to the project directory's own name when nothing follows
+    the marker.  A slash-form name keeps batch cache keys unique across
+    same-named nested projects and gives runtime-config scoping a stable
+    key.
+    """
+    project_directory = test_file.parent.parent
+    parts = project_directory.parts
+    last_projects_index: int | None = None
+    for index, component in enumerate(parts):
+        if component == "projects":
+            last_projects_index = index
+    if last_projects_index is not None:
+        tail = parts[last_projects_index + 1 :]
+        if tail:
+            return "/".join(tail)
+    return project_directory.name
 
 
 def _is_library_unit_test(file_path: Path) -> bool:

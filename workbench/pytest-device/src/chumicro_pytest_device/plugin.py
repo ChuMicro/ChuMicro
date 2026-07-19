@@ -5,7 +5,10 @@ this plugin intercepts it and wraps each ``test_*`` function as a
 :class:`DeviceTestItem`.  Instead of importing and running the test
 locally, the item stages source code on a connected board, executes
 the test via the device transport, and parses the harness output to
-report pass/fail to pytest.
+report pass/fail to pytest.  A ``libraries/<name>/functional_tests/``
+tree is always routed; a ``projects/<name>/functional_tests/`` tree is
+routed only when the invocation explicitly targets it (a bare workspace
+sweep leaves project functional tests deselected).
 
 **No environment variable setup is required.**  The plugin reads
 ``devices.yml`` to find the target device(s).  A top-level
@@ -66,6 +69,7 @@ from .collection import (
     _session_effective_deploy_mode,
     pytest_collect_file,  # noqa: F401, re-export for pytest11 entry-point discovery
     pytest_collection_modifyitems,  # noqa: F401, same
+    pytest_ignore_collect,  # noqa: F401, same
     pytest_pycollect_makemodule,  # noqa: F401, same
 )
 from .device_backend import DeviceBackend

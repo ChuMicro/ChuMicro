@@ -36,6 +36,7 @@ from chumicro_deploy import DeviceEntry
 from . import collection as _collection
 from . import device_backend as _device_backend
 from . import transport_cache as _transport_cache
+from .session import _is_project_functional_test, _project_unit_name
 
 if TYPE_CHECKING:
     from .collection import (
@@ -141,7 +142,11 @@ def _init_runtime_item(
     item.test_file = test_file
     item.target_device = device
     item.library_dir = test_file.parent.parent
-    item.library_name = item.library_dir.name
+    item.library_name = (
+        _project_unit_name(test_file)
+        if _is_project_functional_test(test_file)
+        else item.library_dir.name
+    )
     item.reported_duration = None
     item.reported_test_total_duration = None
 

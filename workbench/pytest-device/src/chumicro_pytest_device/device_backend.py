@@ -21,19 +21,18 @@ from chumicro_deploy import DeviceEntry, TransportProtocol
 from chumicro_workspace.device_orchestration import (
     build_device_bootstrap,
     execute_device_bootstrap,
-    resolve_library_source_dirs,
 )
 
 from .backends import BackendExecuteError, BackendPrepareError
 from .collection import (
     _bulk_stage_for_device,
+    _item_source_dirs,
     _session_effective_deploy_mode,
     _sibling_extra_modules,
 )
 from .session import (
     _encode_runtime_config_extra_files,
     _harness_source_dir,
-    _libraries_root,
     _session_cache,
     _session_per_file,
 )
@@ -136,21 +135,17 @@ def _stage_one_item(
     """Stage one ``DeviceRuntimeItem``'s library closure + test file.
 
     The per-file staging shape shared by the RAM/mount path and the
-    ``--per-file`` flash path: resolve the library's source closure
-    (intra-workspace dependency walk), call ``transport.stage()``
-    with the single test file, harness, runtime-config extras, and
-    the device-unit support flag.  Underscore-prefixed sibling modules
-    in the test file's ``tests/`` directory
-    (:func:`_sibling_extra_modules`) ride along as ``extra_modules`` so
-    a ``from _socket_stubs import ...`` line resolves on the device.
-    Bulk per-library staging uses :func:`_bulk_stage_for_device`
-    instead.
+    ``--per-file`` flash path: resolve the tested unit's source
+    closure (project-aware; see :func:`_item_source_dirs`), call
+    ``transport.stage()`` with the single test file, harness,
+    runtime-config extras, and the device-unit support flag.
+    Underscore-prefixed sibling modules in the test file's ``tests/``
+    directory (:func:`_sibling_extra_modules`) ride along as
+    ``extra_modules`` so a ``from _socket_stubs import ...`` line
+    resolves on the device.  Bulk per-library staging uses
+    :func:`_bulk_stage_for_device` instead.
     """
-    source_dirs = resolve_library_source_dirs(
-        item.library_dir,
-        libraries_root=_libraries_root(session),
-        test_files=[item.test_file],
-    )
+    source_dirs = _item_source_dirs(session, item)
     transport.stage(
         source_dirs,
         [item.test_file],
