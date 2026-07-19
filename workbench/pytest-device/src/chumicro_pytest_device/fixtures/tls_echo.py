@@ -102,7 +102,7 @@ def start_tls_echo_server(
     listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     listener.bind((bind_host, 0))
     listener.listen(4)
-    listener.settimeout(0.25)
+    listener.settimeout(0.05)
     host, port = listener.getsockname()
     stop = threading.Event()
 
@@ -112,9 +112,9 @@ def start_tls_echo_server(
                 raw, _peer = listener.accept()
             except (TimeoutError, OSError):
                 continue
-            # The accepted socket inherits the listener's 0.25 s accept
-            # timeout — enough to drop a connection 250 ms after its
-            # last byte.  Give the echo conversation its own budget.
+            # The accepted socket would inherit the listener's 50 ms
+            # stop-poll timeout; the TLS handshake and echo conversation
+            # get their own budget.
             raw.settimeout(5.0)
             try:
                 tls_sock = context.wrap_socket(raw, server_side=True)

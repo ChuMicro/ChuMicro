@@ -22,13 +22,13 @@ _MAX_DATAGRAM = 1500
 def start_udp_echo_server(bind_host: str) -> tuple[str, int, threading.Event]:
     """Bind a UDP echo socket on `bind_host`; return `(host, port, stop_event)`.
 
-    The echo thread loops on `recvfrom` with a 250 ms timeout so it
+    The echo thread loops on `recvfrom` with a 50 ms timeout so it
     can poll the stop event between datagrams. Sends are best-effort —
     OSError on send (peer rebooted etc.) is silently dropped.
     """
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.bind((bind_host, 0))
-    sock.settimeout(0.25)
+    sock.settimeout(0.05)
     host, port = sock.getsockname()
     stop = threading.Event()
 

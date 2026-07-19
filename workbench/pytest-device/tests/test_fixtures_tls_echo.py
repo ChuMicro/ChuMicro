@@ -37,7 +37,7 @@ def test_start_tls_echo_server_returns_handle_with_listening_port(tmp_path):
         assert not stop.is_set()
     finally:
         stop.set()
-        time.sleep(0.3)
+        time.sleep(0.1)
 
 
 def _client_context(cert_path) -> ssl.SSLContext:
@@ -64,7 +64,7 @@ def test_tls_echo_server_echoes_plaintext_back_over_the_tunnel(tmp_path):
         tls.close()
     finally:
         stop.set()
-        time.sleep(0.3)
+        time.sleep(0.1)
 
 
 def test_tls_echo_server_rejects_a_handshake_with_a_wrong_cert(tmp_path):
@@ -90,4 +90,4 @@ def test_tls_echo_server_rejects_a_handshake_with_a_wrong_cert(tmp_path):
             raw.close()
     finally:
         stop.set()
-        time.sleep(0.3)
+        time.sleep(0.1)
