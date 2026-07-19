@@ -222,6 +222,17 @@ mpremote connect /dev/cu.usbmodem1101 mip install \
 
 `circup` uses hyphens (`chumicro-wifi`); `mip` uses the underscore import name (`chumicro_wifi`).  Swap `ChuMicro-Bundle` for `ChuMicro-Bundle-Experimental` to track the pre-release channel.  Files land at `/lib/chumicro_<name>/` either way, the same place `deploy --import-graph` writes them, so a project deployed afterward finds its imports.  Full install matrix, pre-compiled `.mpy` bytecode, and pip-on-CPython: [INSTALL.md](https://github.com/ChuMicro/ChuMicro/blob/main/INSTALL.md).
 
+### Pointing the library channel at a mirror
+
+`library add`, `browse`, and `update` fetch from GitHub by default.  Two environment variables move the channel to any server that carries the same tree layout, over `https`, `http`, or `file`:
+
+```bash
+export CHUMICRO_CHANNEL_FILES_BASE="https://mirror.example"     # replaces raw.githubusercontent.com
+export CHUMICRO_CHANNEL_TARBALLS_BASE="https://mirror.example"  # replaces codeload.github.com
+```
+
+The URL paths keep the GitHub shapes (`<owner>/<repo>/<ref>/<path>` for raw files, `<owner>/<repo>/tar.gz/refs/tags/<tag>` for snapshot tarballs), so a mirror is a plain directory tree.  `python -m http.server` and a `file://` base both work.  The same seam exercises the acquisition path against a locally staged channel before any live repo exists.
+
 ### Single project, boot-shim layout
 
 ```bash

@@ -20,14 +20,25 @@ Every network read goes through a single injected
 an in-memory fixture.  Failures raise the shared
 :class:`~chumicro_workspace.library.LibraryFetchError` with a
 closed-set kind.
+
+The GitHub hosts are a default, not a hard requirement: the
+``CHUMICRO_CHANNEL_FILES_BASE`` and
+``CHUMICRO_CHANNEL_TARBALLS_BASE`` environment variables replace
+the raw-file and tarball hosts while keeping the GitHub path
+shapes, so a mirror is just a directory tree laid out like the
+GitHub paths, served over ``https``, ``http``, or ``file``.
+That is the consumer-facing way to integration-test the channel
+(or run it off GitHub entirely) without touching this code.
 """
 
 from __future__ import annotations
 
 import io
 import json
+import os
 import tarfile
 import urllib.error
+import urllib.parse
 import urllib.request
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -48,11 +59,42 @@ CHANNEL_REPOS = {
 
 _DEFAULT_TIMEOUT_SECONDS = 30
 
+#: Environment variables that redirect the channel off the GitHub hosts.
+#: Overrides keep the GitHub *path* shapes (see the URL builders), so a
+#: mirror serves the same tree layout from a different base.
+FILES_BASE_ENV = "CHUMICRO_CHANNEL_FILES_BASE"
+TARBALLS_BASE_ENV = "CHUMICRO_CHANNEL_TARBALLS_BASE"
+
+_DEFAULT_FILES_BASE = "https://raw.githubusercontent.com"
+_DEFAULT_TARBALLS_BASE = "https://codeload.github.com"
+
+#: Schemes the transport will fetch.  ``http`` and ``file`` exist for
+#: overridden bases (a localhost mirror or an on-disk tree); the
+#: defaults are https-only.
+_ALLOWED_URL_SCHEMES = frozenset({"https", "http", "file"})
+
+
+def _files_base() -> str:
+    """Raw-file base URL: the env override or the GitHub default."""
+    return os.environ.get(FILES_BASE_ENV, _DEFAULT_FILES_BASE).rstrip("/")
+
+
+def _tarballs_base() -> str:
+    """Tarball base URL: the env override or the GitHub default."""
+    return os.environ.get(TARBALLS_BASE_ENV, _DEFAULT_TARBALLS_BASE).rstrip("/")
+
 
 def _real_http_get(url: str) -> bytes:
     """GET *url*, returning the body bytes."""
+    scheme = urllib.parse.urlsplit(url).scheme
+    if scheme not in _ALLOWED_URL_SCHEMES:
+        raise LibraryFetchError(
+            LibraryFetchFailureKind.NETWORK,
+            f"unsupported URL scheme {scheme!r} in {url!r} "
+            f"(expected {', '.join(sorted(_ALLOWED_URL_SCHEMES))})",
+        )
     try:
-        with urllib.request.urlopen(  # noqa: S310 - https GitHub URLs only
+        with urllib.request.urlopen(  # noqa: S310 - scheme-gated above
             url, timeout=_DEFAULT_TIMEOUT_SECONDS,
         ) as response:
             return response.read()
@@ -118,8 +160,12 @@ def channel_repo(channel: str) -> str:
 
 
 def raw_file_url(repo: str, reference: str, path: str) -> str:
-    """Raw URL for *path* in *repo* at a git *reference* (tag/branch)."""
-    return f"https://raw.githubusercontent.com/{repo}/{reference}/{path}"
+    """Raw URL for *path* in *repo* at a git *reference* (tag/branch).
+
+    The host comes from :data:`FILES_BASE_ENV` when set; the
+    ``<repo>/<reference>/<path>`` shape is fixed either way.
+    """
+    return f"{_files_base()}/{repo}/{reference}/{path}"
 
 
 def index_url(repo: str, reference: str) -> str:
@@ -128,8 +174,12 @@ def index_url(repo: str, reference: str) -> str:
 
 
 def tarball_url(repo: str, tag: str) -> str:
-    """GitHub source tarball URL for *repo* at *tag*."""
-    return f"https://codeload.github.com/{repo}/tar.gz/refs/tags/{tag}"
+    """Source tarball URL for *repo* at *tag*.
+
+    The host comes from :data:`TARBALLS_BASE_ENV` when set; the
+    ``<repo>/tar.gz/refs/tags/<tag>`` shape is fixed either way.
+    """
+    return f"{_tarballs_base()}/{repo}/tar.gz/refs/tags/{tag}"
 
 
 def _parse_index(channel: str, raw: bytes) -> ChannelSnapshot:
