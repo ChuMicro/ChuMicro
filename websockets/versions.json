@@ -5,5 +5,12 @@
     "aliases": [
       "experimental"
     ]
+  },
+  {
+    "version": "0.25.0",
+    "title": "0.25.0",
+    "aliases": [
+      "stable"
+    ]
   }
 ]
