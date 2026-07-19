@@ -1,4 +1,4 @@
-"""Board-side echo demo — sockets via runner, generator shape.
+"""Board-side echo demo: sockets via runner, generator shape.
 
 ``echo_run`` expresses the full lifecycle top-to-bottom: wait for the
 wifi link with ``wait_for``, build a ``SocketConnector``, drive it to
@@ -8,7 +8,7 @@ across ticks; the wait-tokens the helpers yield gate ipoll wake-ups
 on the right socket events, and the ``Signal`` set from the wifi
 state-change callback resumes the generator once the link is up.
 
-Compare with ``demos/sockets_runner_connector_explicit/app.py`` —
+Compare with ``demos/sockets_runner_connector_explicit/app.py``:
 the same wire behaviour expressed as an explicit ``check`` / ``handle``
 state machine.  Read that one to see what the generator helpers
 collapse.

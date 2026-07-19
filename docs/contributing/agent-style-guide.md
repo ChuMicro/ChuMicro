@@ -2,7 +2,7 @@
 
 Audience: AI agents writing prose, code comments, docstrings, commit messages, and markdown docs in this repo.  Humans should read [style-guide.md](style-guide.md) instead, which covers Python style, naming, imports, type annotations, and lint.
 
-This guide is the long-form home for tone, phrasing, and writing-discipline rules.  AGENTS.md keeps the everyday firing rules at top-of-mind.  This file carries the detail, worked examples, and the nuanced cases that don't belong inline in the operating manual.
+This guide is the long-form home for tone, phrasing, and writing-discipline rules.  AGENTS.md keeps the everyday firing rules at top-of-mind.  This file carries the detail, worked examples, and the nuanced cases that don't belong inline in the operating manual.  For how humans and agents collaborate here (what to expect from an agent, how to frame a task, what to do when a session feels off), see [Working with Agents](working-with-agents.md).
 
 ## Why an agent-specific guide
 
@@ -14,19 +14,20 @@ Read each sentence the way you'd say it out loud to a colleague, and write it th
 
 The framing is load-bearing, because the find-replace reflex degrades prose.  Swapping a flagged phrase on sight, without reading the result aloud, trades a real sentence for a worse one and calls it a fix.  *"This is a required gate, not a soft check"* once became the flatter *"The gate is required, not a soft check"* exactly that way, a ban applied against the ear.  When a flagged phrase reads fine out loud, keep it.
 
-The only non-negotiable rules are lint-backed: a check enforces them, so the agent's opinion is not part of the gate.  The CHU-code ban (`CHU006`) is one; anything marked "Enforced by CHU" is another.  Everything else answers to the ear — the article tests, the "canonical X" framing, the connective-tissue punctuation, the empty adjectives, all of it.  Some shapes fail the read-aloud test most of the time (the empty adjectives in [§ Empty adjectives](#empty-adjectives) and the connective-tissue punctuation in [§ Sentence form](#sentence-form)) and most of the time you can fix them quickly; even those go through the read-aloud check, because a deleted em-dash that leaves a worse sentence is a regression, not a fix.  The structural rule below is the most important shape to listen for.
+Two kinds of rule are non-negotiable.  Lint-backed ones a check enforces, so the agent's opinion is not part of the gate: the CHU-code ban (`CHU006`) is one, and anything marked "Enforced by CHU" is another.  The em-dash ban is the other kind: the project rules it absolute (see [§ Sentence form](#sentence-form)), even though no lint catches it.  Everything else answers to the ear: the article tests, the "canonical X" framing, the semicolons and arrows, the empty adjectives, all of it.  Some shapes fail the read-aloud test most of the time (the empty adjectives in [§ Empty adjectives](#empty-adjectives) and the loose connectors in [§ Sentence form](#sentence-form)) and most of the time you can fix them quickly; even those go through the read-aloud check, because a swap that leaves a worse sentence is a regression, not a fix.  The structural rule below is the most important shape to listen for.
 
 ## Sentence form
 
-Write in sentences.  Em-dashes, semicolons, and arrows are suspects, not bans — they often paper over missing connective tissue, in which case two sentences or a comma-and-connector reads better.  When the connective tissue is there and the sentence reads well out loud, keep them.  Applies to code comments, docstrings, and all markdown prose.
+Write in sentences.  Em-dashes are banned outright: never use one, in code comments, docstrings, or any markdown prose.  Replace each with a period, a comma, a colon, or parentheses (an em-dash introducing a definition is usually a colon or a `which` clause in disguise), rewriting the sentence so it reads naturally.  A bare hyphen dropped in where the em-dash was is not a fix.  This is the project's ruling, set in [style-guide.md § Voice](style-guide.md#voice) and the repo's CLAUDE.md.  No em-dash earns its way out of it.
+
+Semicolons and arrows are the suspects that do answer to the ear.  They often paper over missing connective tissue, in which case two sentences or a comma-and-connector reads better.  When the connective tissue is there and the line reads well out loud, keep them.  Applies to code comments, docstrings, and all markdown prose.
 
 Specific shapes that usually fail the read-aloud test:
 
-- An em-dash introducing a definition is usually a colon or a `which` clause in disguise.
 - A semicolon joining two clauses is usually two sentences.
 - An arrow (→) is usually rendering a flow that wants verbs and a sentence.
 
-Em-dashes that earn their place — pacing a parenthetical so a comma would mis-pace, or connecting two real ideas where a sentence break would be choppy — stay.  Read aloud, then decide.
+Read aloud, then decide.
 
 ## Concrete subject, real verb (the structural rule)
 
@@ -115,7 +116,7 @@ Hard to spot because each half reads fine alone.  Catch it by asking whether the
 
 Watch for adjectives that don't carry information.  The standing list: `comprehensive`, `robust`, `seamless` / `seamlessly`, `cutting-edge`, `best-in-class`, `first-class`, `one-stop`, `out of the box`, `effortless`, `painless`, `intuitive`, `elegant`, `streamlined`, `battle-tested`, `magic`, `powerful`, and marketing phrasings like `got you covered`.
 
-If you'd reach for `comprehensive`, list what it covers.  If you'd reach for `robust`, name what it survives.  If you'd reach for `first-class`, name the commands that make a workflow first-class.  These almost always fail the read-aloud test, but they still go through it — when the word carries real content in context (`first-class` describing a citizenship the API genuinely confers), keep it.
+If you'd reach for `comprehensive`, list what it covers.  If you'd reach for `robust`, name what it survives.  If you'd reach for `first-class`, name the commands that make a workflow first-class.  These almost always fail the read-aloud test, but they still go through it: when the word carries real content in context (`first-class` describing a citizenship the API genuinely confers), keep it.
 
 ### Filler verbs and abstract-property claims
 

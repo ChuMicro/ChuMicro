@@ -1,7 +1,7 @@
-"""Board-side echo demo — sockets via runner.
+"""Board-side echo demo: sockets via runner.
 
-``EchoService`` runs one TCP round trip — connect, send a probe,
-read the echo, exit — under ``chumicro_runner``.  It stays dormant
+``EchoService`` runs one TCP round trip (connect, send a probe,
+read the echo, exit) under ``chumicro_runner``.  It stays dormant
 until the wifi link is up, then ``start()`` builds the
 ``SocketConnector`` and the service drives it through DNS / TCP /
 TLS inside its own ``handle``.  Once the connector reaches
@@ -117,7 +117,7 @@ class EchoService:
                 self._buffer, self.RECV_BUFFER_SIZE,
             )
         except OSError as error:
-            # EAGAIN means no bytes yet — wait for the next read-ready tick.
+            # EAGAIN means no bytes yet: wait for the next read-ready tick.
             if error.args[0] != errno.EAGAIN:
                 marker("RECV_FAILED", error=type(error).__name__)
                 print(f"  detail: {error!r}")
@@ -174,7 +174,7 @@ runner = Runner(on_handler_error=lambda entry, error: print("SERVICE_FAULT", ent
 def on_wifi_state(_old, new):
     if new == WifiState.CONNECTED:
         marker("WIFI_OK", ip=wifi.ip)
-        # Link is up — kick off the round trip.
+        # Link is up.  Kick off the round trip.
         echo.start()
 
 

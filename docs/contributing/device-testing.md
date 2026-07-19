@@ -18,9 +18,9 @@ Host-side `tests/` still run through normal CPython pytest. Real-board validatio
 
 `python scripts/run.py setup` creates three gitignored files at the repo root when they do not already exist:
 
-- `devices.yml` — your local board registry and default target selection
-- `workspace.yml` — host-side machinery (library_sources, deploy_targets, quality knobs); not a credentials file
-- `secrets.toml` — workspace-wide credentials + device-bound defaults (wifi SSID/password, broker host/port/auth) that flow into `runtime_config.msgpack` at deploy time.  Per-library `functional_tests/config.toml` overrides land on top via deep-merge.
+- `devices.yml`: your local board registry and default target selection
+- `workspace.yml`: host-side machinery (library_sources, deploy_targets, quality knobs); not a credentials file
+- `secrets.toml`: workspace-wide credentials + device-bound defaults (wifi SSID/password, broker host/port/auth) that flow into `runtime_config.msgpack` at deploy time.  Per-library `functional_tests/config.toml` overrides land on top via deep-merge.
 
 Full per-file detail (shape, purpose, who edits what) lives in [config-files.md](config-files.md).  The split lands per [Decision 0057](../../plans/decisions/0057-two-file-config.md).
 
@@ -46,22 +46,22 @@ Pass `--runtime` if you want to skip the auto-detect probe (faster), or `--descr
 
 ### Re-probing, replacing, and deleting entries
 
-Three verbs cover an entry's later life — they differ by how much they keep:
+Three verbs cover an entry's later life, differing by how much they keep:
 
-- `chumicro-workspace add-device <id> --force` — **update.** Re-probes and refreshes the address + hardware-once fields, but keeps everything you typed (description, deploy_mode). The everyday "this board moved ports / I reflashed it" path.
-- `chumicro-workspace reset-device <id> --yes` — **replace.** Re-probes the connected board and rebuilds the entry from silicon, dropping accumulated hand edits (description, deploy_mode, serial_baudrate) and re-deriving the hardware identity. The id and its `defaults.<runtime>` binding survive. Use it when an entry has drifted and you want it rebuilt from truth. The board must be connected; a probe failure points you back here.
-- `chumicro-workspace remove-device <id> --yes` — **delete.** Drops the entry and nulls any `defaults:` pointer to it so the file stays loadable. No board needed.
+- `chumicro-workspace add-device <id> --force`: **update.** Re-probes and refreshes the address + hardware-once fields, but keeps everything you typed (description, deploy_mode). The everyday "this board moved ports / I reflashed it" path.
+- `chumicro-workspace reset-device <id> --yes`: **replace.** Re-probes the connected board and rebuilds the entry from silicon, dropping accumulated hand edits (description, deploy_mode, serial_baudrate) and re-deriving the hardware identity. The id and its `defaults.<runtime>` binding survive. Use it when an entry has drifted and you want it rebuilt from truth. The board must be connected; a probe failure points you back here.
+- `chumicro-workspace remove-device <id> --yes`: **delete.** Drops the entry and nulls any `defaults:` pointer to it so the file stays loadable. No board needed.
 
 `reset-device` and `remove-device` are `--yes`-gated because they discard user-owned metadata a probe cannot regenerate.
 
 ## Tune `devices.yml` if you need to
 
-`add-device` writes a complete, usable entry on every registration — id, runtime, address, probed hardware identity, and (on first registration of each runtime) the matching `defaults.<runtime>` pointer.  The day-to-day flow doesn't require hand-editing.
+`add-device` writes a complete, usable entry on every registration: id, runtime, address, probed hardware identity, and (on first registration of each runtime) the matching `defaults.<runtime>` pointer.  The day-to-day flow doesn't require hand-editing.
 
 Read on if you want to override per-device deploy mode, change the `defaults.ide_runtime`, or just understand the shape of what's on disk.
 
 <details>
-<summary>defaults: block — fields and behavior (click to expand)</summary>
+<summary>defaults: block, fields and behavior (click to expand)</summary>
 
 `defaults:` controls what happens when you run `python scripts/run.py test-libraries-functional` with no board-selection flags, and what the IDE play button targets for `functional_tests/`.
 
@@ -90,7 +90,7 @@ Notes:
 </details>
 
 <details>
-<summary>devices: entries — fields and per-device overrides (click to expand)</summary>
+<summary>devices: entries, fields and per-device overrides (click to expand)</summary>
 
 Each device entry must define:
 
@@ -125,7 +125,7 @@ Supported fields today:
 | `description` | no | Free-form label for humans |
 | `connection_type` | no | Currently `serial` |
 | `deploy_mode` | no | Per-device *preference* override for `ram` or `flash` |
-| `supports_ram_mode` | no | Board *capability* (default `true`). Set `false` only for a board that cannot run RAM mode at all; a requested `ram` deploy then switches to `flash` with a message. Distinct from `deploy_mode`: preference is what you want, capability is what's possible. A board where RAM is merely tight (Pi Pico W's 256 KB) stays `true` — tightness is handled per-library via `requires_flash`, not by disabling the board |
+| `supports_ram_mode` | no | Board *capability* (default `true`). Set `false` only for a board that cannot run RAM mode at all; a requested `ram` deploy then switches to `flash` with a message. Distinct from `deploy_mode`: preference is what you want, capability is what's possible. A board where RAM is merely tight (Pi Pico W's 256 KB) stays `true`: tightness is handled per-library via `requires_flash`, not by disabling the board |
 
 </details>
 
@@ -140,7 +140,7 @@ Use `ram` for day-to-day functional-test iteration. Use `flash` when a board can
 
 #### When you must use `flash`
 
-`ram` is fine for single-library unit-style functional tests — no chumicro deps beyond the library under test, no runtime-config file.
+`ram` is fine for single-library unit-style functional tests: no chumicro deps beyond the library under test, no runtime-config file.
 
 `flash` is **required** when a test exercises:
 
@@ -149,13 +149,13 @@ Use `ram` for day-to-day functional-test iteration. Use `flash` when a board can
 - full `deploy → wifi → mqtt` chains
 - `extra_files` staging on CircuitPython (CP RAM-mode deploy doesn't support `extra_files`, see [Decision 0056](../../plans/decisions/0056-transport-extra-files-staging.md))
 
-If a multi-stack test fails under `ram`, switch the device's `deploy_mode` to `flash` rather than chasing fallback paths like staging files via `/remote/` — they don't exist on CP RAM mode for a reason.
+If a multi-stack test fails under `ram`, switch the device's `deploy_mode` to `flash` rather than chasing fallback paths like staging files via `/remote/`.  They don't exist on CP RAM mode for a reason.
 
-You usually don't have to switch by hand for the common cases: a requested `ram` deploy automatically falls back to `flash`, with a printed explanation, when the staged set contains a non-`.py` data file, when any library in the dependency closure declares `requires_flash`, or when the device sets `supports_ram_mode: false`. The run continues in `flash` — it is never silently mis-deployed. Hand-setting `deploy_mode: flash` is still the right move when you simply know a board can't hold the RAM payload.
+You usually don't have to switch by hand for the common cases: a requested `ram` deploy automatically falls back to `flash`, with a printed explanation, when the staged set contains a non-`.py` data file, when any library in the dependency closure declares `requires_flash`, or when the device sets `supports_ram_mode: false`. The run continues in `flash`.  It is never silently mis-deployed. Hand-setting `deploy_mode: flash` is still the right move when you simply know a board can't hold the RAM payload.
 
 ## On-device unit sweep (`test-unit-on-device`)
 
-The *functional* tests above (`libraries/<name>/functional_tests/`) exercise real I/O on a board. The **on-device unit sweep** is different: it runs each library's *cross-runtime unit suite* (`libraries/<name>/tests/`) — the same suite that runs on the unix ports — on real silicon, to catch behaviour that only differs on a real MCU's MicroPython / CircuitPython.
+The *functional* tests above (`libraries/<name>/functional_tests/`) exercise real I/O on a board. The **on-device unit sweep** is different: it runs each library's *cross-runtime unit suite* (`libraries/<name>/tests/`), the same suite that runs on the unix ports, on real silicon, to catch behaviour that only differs on a real MCU's MicroPython / CircuitPython.
 
 ```bash
 python scripts/run.py test-unit-on-device                 # both runtimes, all libraries
@@ -165,43 +165,30 @@ python scripts/run.py test-unit-on-device --runtime micropython
 
 It is **not** part of the default `preflight`. Opt in with `python scripts/run.py preflight --with-device-unit` (parallel to `--with-functional`). When no board is configured for a runtime, that runtime is skipped cleanly rather than failing.
 
-**Per-library mode resolution, RAM-preferred.** The sweep exists to validate RAM-capable libraries on silicon, so its last-resort preference is `ram` (not the `flash` default the functional path uses). Each library is resolved through the one shared deploy-mode policy with **own-source** scoping: a library that declares `requires_flash`, or ships a non-`.py` data file, switches to `flash` — but only *that* library, not the whole sweep. A library is not poisoned by a dependency's data file: `chumicro_ntp` depends on `chumicro_sockets` (which ships `_ca_bundle.der`) yet stays in the RAM group, because its own source has no data file and a pure unit test never reaches the dependency's bundle path.
+**Per-library mode resolution, RAM-preferred.** The sweep exists to validate RAM-capable libraries on silicon, so its last-resort preference is `ram` (not the `flash` default the functional path uses). Each library is resolved through the one shared deploy-mode policy with **own-source** scoping: a library that declares `requires_flash`, or ships a non-`.py` data file, switches to `flash`, but only *that* library, not the whole sweep. A library is not poisoned by a dependency's data file: `chumicro_ntp` depends on `chumicro_sockets` (which ships `_ca_bundle.der`) yet stays in the RAM group, because its own source has no data file and a pure unit test never reaches the dependency's bundle path.
 
-**Mode grouping.** Libraries are grouped by resolved mode and each group runs as one single-mode session per runtime (the flash group first). A `ram`-preferred run on a RAM-capable board therefore becomes a fast RAM session over the light libraries plus a flash session over the `requires_flash` / data-file ones — no per-library transport churn.
+**Mode grouping.** Libraries are grouped by resolved mode and each group runs as one single-mode session per runtime (the flash group first). A `ram`-preferred run on a RAM-capable board therefore becomes a fast RAM session over the light libraries plus a flash session over the `requires_flash` / data-file ones, with no per-library transport churn.
 
-**Behavioral pass/fail only.** `coverage.py` cannot trace MicroPython / CircuitPython bytecode, so the sweep takes no `--coverage-threshold`; the per-library coverage gate stays a unix-port / CPython concern. A per-library failure *on silicon* is the sweep's **output**, not a `preflight`-gating quality check — the run completes and reports rather than turning `preflight` red. "Output, not a gate" governs how the sweep *runs*; it does not make the finding acceptable. A `MemoryError` from a large module on the Pi Pico W is a tracked defect to fix by splitting (see below), not an accepted end-state.
+**Behavioral pass/fail only.** `coverage.py` cannot trace MicroPython / CircuitPython bytecode, so the sweep takes no `--coverage-threshold`; the per-library coverage gate stays a unix-port / CPython concern. A per-library failure *on silicon* is the sweep's **output**, not a `preflight`-gating quality check: the run completes and reports rather than turning `preflight` red. "Output, not a gate" governs how the sweep *runs*; it does not make the finding acceptable. A `MemoryError` from a large module on the Pi Pico W is a tracked defect to fix by splitting (see below), not an accepted end-state.
 
 ### Every test file must run green on a freshly-reset Pi Pico W (CP + MP)
 
-The on-device unit sweep runs each cross-runtime test *file* through one device interpreter. On the 264 KB Pi Pico W a very large class-organized module — the library it imports, plus that file's full set of test classes resident at once — can exhaust RAM with a `MemoryError` even on a freshly reset board running that file alone. PSRAM boards (Lolin S2) mask this; the Pico W under **both** CircuitPython and MicroPython is a distinct memory HAL, and it is the board class these libraries exist for.
+The on-device unit sweep runs each cross-runtime test *file* through one device interpreter. On the 264 KB Pi Pico W a very large class-organized module (the library it imports, plus that file's full set of test classes resident at once) can exhaust RAM with a `MemoryError` even on a freshly reset board running that file alone. PSRAM boards (Lolin S2) mask this; the Pico W under **both** CircuitPython and MicroPython is a distinct memory HAL, and it is the board class these libraries exist for.
 
-**Requirement, per [Decision 0072](../../plans/decisions/0072-large-test-modules-on-constrained-boards.md):** every cross-runtime test file must run green on a freshly-reset Pi Pico W on CP **and** MP. A file that OOMs there even with `--per-file` is a tracked defect, fixed by splitting — not left to run on PSRAM only.
+**Requirement, per [Decision 0072](../../plans/decisions/0072-large-test-modules-on-constrained-boards.md):** every cross-runtime test file must run green on a freshly-reset Pi Pico W on CP **and** MP. A file that OOMs there even with `--per-file` is a tracked defect, fixed by splitting, not left to run on PSRAM only.
 
 - `scripts/run.py test-unit-on-device --per-file` (or `pytest ... --per-file`) soft-resets the interpreter before *each* test file, not just each library, so a file never inherits a sibling's resident state. This is the mechanism the requirement runs on; it adds a reboot per file, so the default per-library reset stays the fast path for PSRAM boards and small libraries.
-- A file still `MemoryError`-ing alone on a fresh Pico W **must be split** until each sub-file fits — mirroring source modules where one exists, then mechanically (lossless: test bodies stay byte-identical). There is no fixed tests-per-file cap: the ceiling is library-weight-dependent and differs CP vs MP, so the target is found empirically per library on the bench — split until that library's files all run green on a freshly-reset Pico W on both runtimes.
+- A file still `MemoryError`-ing alone on a fresh Pico W **must be split** until each sub-file fits, mirroring source modules where one exists, then mechanically (lossless: test bodies stay byte-identical). There is no fixed tests-per-file cap: the ceiling is library-weight-dependent and differs CP vs MP, so the target is found empirically per library on the bench: split until that library's files all run green on a freshly-reset Pico W on both runtimes.
 
 ## Configure `secrets.toml`
 
-Credentials and device-bound defaults that every functional test inherits at deploy time, in one gitignored file.  Materialized by `setup` with placeholder values for `wifi.ssid` and `mqtt.broker.host`.
+Credentials and device-bound defaults that every functional test inherits at deploy time, in one gitignored file.  `setup` materializes it with placeholder values for `wifi.ssid` and `mqtt.broker.host`.
 
-Edit `secrets.toml` once per clone — fill in your wifi credentials + your broker host (the mqtt library refuses to silently dial a third-party broker, so this is required for mqtt-touching tests):
+Edit `secrets.toml` once per clone, filling in your wifi credentials and your broker host.  The mqtt library refuses to silently dial a third-party broker, so the broker host is required for mqtt-touching tests.  For the file's shape and the full field list, see [secrets.toml](config-files.md#secretstoml-runtime-credentials-for-on-device-code) in the config-files guide.
 
-```toml
-[wifi]
-ssid = "my-actual-network"
-password = "my-real-wifi-password"
+Per-library `functional_tests/config.toml` files override `secrets.toml` at deploy time: both layers share the same section-namespaced shape, and per-library configs win at any nesting depth.  The merged result is flattened to dotted keys (`wifi.ssid`, `mqtt.broker.host`) and msgpack-encoded into `/runtime_config.msgpack`; on-device tests read it via `chumicro_config.load_runtime_config()`, the same API user code uses.
 
-[mqtt.broker]
-host = "10.0.0.5"  # a broker you control — a LAN Mosquitto, a private cloud broker, etc.
-port = 1883
-# [mqtt.broker.auth]
-# username = "my-user"
-# password = "my-mqtt-password"
-```
-
-Per-library `functional_tests/config.toml` files override `secrets.toml` at deploy time — both layers share the same section-namespaced shape, and per-library configs win at any nesting depth.  The merged result is flattened to dotted keys (`wifi.ssid`, `mqtt.broker.host`) and msgpack-encoded into `/runtime_config.msgpack`; on-device tests read it via `chumicro_config.load_runtime_config()` — the same API user code uses.
-
-When `secrets.toml` is missing or still carries the placeholder SSID, tests skip cleanly rather than running with empty credentials — fresh clones stay green by default.
+When `secrets.toml` is missing or still carries the placeholder SSID, tests skip cleanly rather than running with empty credentials, so fresh clones stay green by default.
 
 <details>
 <summary>How the runtime-config staging works (click to expand)</summary>
@@ -261,17 +248,17 @@ python scripts/run.py test-libraries-functional --library timing --deploy-mode f
 
 **Scoping flags:**
 
-- `--library <name>` — restrict to one library.
-- `--file <substring>` — match test file names (not function names).
-- `--function <substring>` — match test function names (not file names).
+- `--library <name>`: restrict to one library.
+- `--file <substring>`: match test file names (not function names).
+- `--function <substring>`: match test function names (not file names).
 - Flags compose as AND: `--library timing --file test_heartbeat --function fires_on_interval` runs only `fires_on_interval` inside `test_heartbeat.py` in `timing/`.
 - Any filter that matches nothing exits 2 so typos don't silently pass.
 
-`devices.yml` is always resolved at `<workspace_root>/devices.yml` — CI environments or unusual local layouts just need to drop a `devices.yml` at the workspace root before running tests.
+`devices.yml` is always resolved at `<workspace_root>/devices.yml`.  CI environments or unusual local layouts just need to drop a `devices.yml` at the workspace root before running tests.
 
 ## Run functional tests via pytest directly
 
-`scripts/run.py test-libraries-functional` is a thin wrapper over pytest — it runs `pytest libraries/<name>/functional_tests/` with the `--chumicro-*` flags the device plugin exposes.  Invoking pytest directly is useful when you want pytest-native UX (a specific folder, file, or method) without going through `scripts/run.py`.
+`scripts/run.py test-libraries-functional` is a thin wrapper over pytest.  It runs `pytest libraries/<name>/functional_tests/` with the `--chumicro-*` flags the device plugin exposes.  Invoking pytest directly is useful when you want pytest-native UX (a specific folder, file, or method) without going through `scripts/run.py`.
 
 ```bash
 # Whole directory
@@ -296,7 +283,7 @@ Driving pytest directly gives you access to the same overrides `test-libraries-f
 | Flag | Purpose |
 |---|---|
 | `--target {device,unix-port}` | Pick the execution backend.  Default `device` (real board via `chumicro-deploy`).  `unix-port` runs each test file in a MicroPython / CircuitPython unix-port subprocess instead. |
-| `--runtime {micropython,circuitpython,both}` | Under `--target device`: override `defaults.ide_runtime` from `devices.yml`.  Under `--target unix-port`: pick which runtime(s) to spawn — defaults to `both`. |
+| `--runtime {micropython,circuitpython,both}` | Under `--target device`: override `defaults.ide_runtime` from `devices.yml`.  Under `--target unix-port`: pick which runtime(s) to spawn, defaults to `both`. |
 | `--micropython-device <id>` | Override `defaults.micropython` for this run (device target only). |
 | `--circuitpython-device <id>` | Override `defaults.circuitpython` for this run (device target only). |
 | `--micropython-binary <path>` | Unix-port MicroPython binary override (unix-port target only).  Otherwise resolved via `.tools/micropython.path` then `PATH`. |
@@ -320,11 +307,11 @@ pytest libraries/timing/tests/test_heartbeat.py --target unix-port --runtime bot
 pytest libraries/timing/tests/test_heartbeat.py::test_heartbeat_fires_on_real_clock --target unix-port --runtime circuitpython
 ```
 
-IDE play buttons that target `libraries/<name>/tests/` files go through CPython pytest by default.  To click play and get the unix-port path instead, add a dedicated run configuration that passes `--target unix-port --runtime <X>` (and `--no-cov`, since coverage isn't collected through a subprocess).  The `--target` flag is opt-in by design — the default `pytest libraries/timing/tests/` invocation is unchanged.
+IDE play buttons that target `libraries/<name>/tests/` files go through CPython pytest by default.  To click play and get the unix-port path instead, add a dedicated run configuration that passes `--target unix-port --runtime <X>` (and `--no-cov`, since coverage isn't collected through a subprocess).  The `--target` flag is opt-in by design.  The default `pytest libraries/timing/tests/` invocation is unchanged.
 
 ## Run workbench functional tests
 
-Workbench packages (`workbench/<name>/`, Decision 0032) can ship their own `functional_tests/` directories.  Unlike library functional tests, these run host-side — the workbench tool is the project *driving* a connected board through its public API rather than code that ships onto the device.
+Workbench packages (`workbench/<name>/`, Decision 0032) can ship their own `functional_tests/` directories.  Unlike library functional tests, these run host-side.  The workbench tool is the project *driving* a connected board through its public API rather than code that ships onto the device.
 
 ```bash
 # Run every workbench's functional_tests/ suite.
@@ -337,7 +324,7 @@ python scripts/run.py test-workbench-functional --workbench deploy
 python scripts/run.py test-workbench-functional --file test_deploy_files_hardware --function circuitpython_ram -v
 ```
 
-Device selection lives inside each suite's own `conftest.py` (typically by reading `devices.yml` defaults), so `test-workbench-functional` itself exposes no runtime / device flags — change the target board via `devices.yml` defaults or by editing the suite's fixtures.  Suites skip cleanly when `devices.yml` is missing or no matching board is configured.
+Device selection lives inside each suite's own `conftest.py` (typically by reading `devices.yml` defaults), so `test-workbench-functional` itself exposes no runtime / device flags.  Change the target board via `devices.yml` defaults or by editing the suite's fixtures.  Suites skip cleanly when `devices.yml` is missing or no matching board is configured.
 
 ## Run `functional_tests/` from an IDE
 
@@ -374,8 +361,8 @@ A dedicated live end-to-end VS Code validation pass remains on `plans/next-up.md
 
 ## Wiping a board's filesystem
 
-Functional-test runs accumulate stage residue on the device filesystem
-— `mpremote fs cp -r` (and `circup install`) are append-only, nothing
+Functional-test runs accumulate stage residue on the device filesystem.
+`mpremote fs cp -r` (and `circup install`) are append-only, nothing
 pre-cleans.  Pi Pico W MP boards in particular fill up over time
 because the LittleFS partition is only ~850 KB; lolin-s2-mp is
 better-off at 2 MB but still eventually hits the wall.  When this
@@ -388,7 +375,7 @@ Two ways to wipe a board:
 # Wipe + redeploy in one step.
 chumicro-workspace deploy --wipe <project> [--device <id>]
 
-# Wipe only — leave the board idle, no follow-up deploy.
+# Wipe only, leave the board idle, no follow-up deploy.
 # --yes is required; no flag = exit 2 + safety message.
 chumicro-workspace reset-board --device <id> --yes
 ```
@@ -397,7 +384,7 @@ Both routes share one implementation.  Per-runtime recipe matrix:
 
 | Runtime / board family | Recipe |
 |---|---|
-| **CircuitPython** (any board) | `import storage; storage.erase_filesystem()` — reformats FAT, hard-resets the board, host re-enumerates USB-CDC |
+| **CircuitPython** (any board) | `import storage; storage.erase_filesystem()`: reformats FAT, hard-resets the board, host re-enumerates USB-CDC |
 | **MicroPython on rp2** (Pi Pico W) | `os.umount('/'); os.VfsLfs2.mkfs(rp2.Flash()); machine.soft_reset()` |
 | **MicroPython on esp32** (Lolin S2 family) | `os.umount('/'); os.VfsLfs2.mkfs(esp32.Partition.find(TYPE_DATA, label='vfs')[0]); machine.soft_reset()` |
 | Other MicroPython substrates | `RuntimeError` until a verified recipe lands |
@@ -409,12 +396,12 @@ hit `ENOSPC` mid-deploy after a non-mkfs "wipe."  `mkfs` recovers
 the full block budget every time.  Verified on hardware
 (pi-pico-w-mp, lolin-s2-mp).
 
-Destructive on every runtime — wipes both managed scope (`/lib/*`,
+Destructive on every runtime: wipes both managed scope (`/lib/*`,
 `/code.py` / `/main.py`, `runtime_config.msgpack`) **and** out-of-scope
 files (`settings.toml`, hand-edited `boot.py`, uploaded assets).
 Firmware partitions are untouched.
 
-RAM / mount mode is a no-op (printed) — those modes never wrote to
+RAM / mount mode is a no-op (printed).  Those modes never wrote to
 flash so there's nothing persistent to wipe.
 
 ## Troubleshooting
@@ -426,9 +413,9 @@ flash so there's nothing persistent to wipe.
 | CircuitPython RAM-mode run fails before tests start | Inline payload is too large for available heap | Re-run with `--deploy-mode flash` or set that board's `deploy_mode: flash` |
 | Flash mode cannot find CIRCUITPY | Host has no `CIRCUITPY*` mount visible | Replug the board's USB cable and confirm Finder / `mount` shows the drive; see [docs/troubleshooting/macos-circuitpy.md](../troubleshooting/macos-circuitpy.md) |
 | A normal `python scripts/run.py test` run ignores `functional_tests/` | Expected behavior | Use `test-libraries-functional` or explicitly target the `functional_tests/` path from your IDE |
-| `mpremote: cp: ...: No space left on device` mid-deploy | LittleFS partition full of stage residue from prior runs | `chumicro-workspace reset-board --device <id> --yes` — see "Wiping a board's filesystem" above |
-| Lolin S2 CircuitPython deploys take 30–60 s per example | The board's flash write speed is the floor — not a recovery or retry signal | Expected; use Pi Pico W as the faster CP development target when iterating. Lolin S2 CP rsync slowness is a baseline characteristic, not a regression |
-| CIRCUITPY drive visible but every write fails with `Read-only file system` | Drive is mounted RO — either the device-side FS flipped read-only, or FSKit handed the mount up with the RO flag.  Distinct from the FSKit wedge, where the drive never appears at all | `chumicro-workspace reset-board --device <id> --yes` or unplug-and-replug; see [docs/troubleshooting/macos-circuitpy.md](../troubleshooting/macos-circuitpy.md) |
+| `mpremote: cp: ...: No space left on device` mid-deploy | LittleFS partition full of stage residue from prior runs | `chumicro-workspace reset-board --device <id> --yes` (see "Wiping a board's filesystem" above) |
+| Lolin S2 CircuitPython deploys take 30–60 s per example | The board's flash write speed is the floor, not a recovery or retry signal | Expected; use Pi Pico W as the faster CP development target when iterating. Lolin S2 CP rsync slowness is a baseline characteristic, not a regression |
+| CIRCUITPY drive visible but every write fails with `Read-only file system` | Drive is mounted RO: either the device-side FS flipped read-only, or FSKit handed the mount up with the RO flag.  Distinct from the FSKit wedge, where the drive never appears at all | `chumicro-workspace reset-board --device <id> --yes` or unplug-and-replug; see [docs/troubleshooting/macos-circuitpy.md](../troubleshooting/macos-circuitpy.md) |
 
 ## Related guides
 

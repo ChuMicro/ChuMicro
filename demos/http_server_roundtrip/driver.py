@@ -2,8 +2,8 @@
 
 Picks a registered device, deploys ``app.py`` via
 :func:`chumicro_workspace.deploy_api.deploy_project`, and fires HTTP
-requests against the routes the board advertises — ``GET /hello``,
-``GET /uptime``, ``POST /echo`` — printing each response as it lands.
+requests against the routes the board advertises (``GET /hello``,
+``GET /uptime``, ``POST /echo``), printing each response as it lands.
 
 Run: ``.venv/bin/python demos/http_server_roundtrip/driver.py``
 By default targets the first CircuitPython device in ``devices.yml``;
@@ -34,7 +34,7 @@ _REPO_ROOT = _DEMO_DIR.parents[1]
 
 
 def _format_body(body: bytes) -> str:
-    """Pretty-print the response body — JSON when valid, repr otherwise."""
+    """Pretty-print the response body: JSON when valid, repr otherwise."""
     try:
         parsed = json.loads(body)
     except ValueError:
@@ -56,7 +56,7 @@ def main(argv: list[str] | None = None) -> int:
         "--runtime", default=None,
         choices=("circuitpython", "micropython"),
         help=(
-            "runtime filter — when --device isn't given, picks the "
+            "runtime filter: when --device isn't given, picks the "
             "first matching device (default: circuitpython)"
         ),
     )
@@ -102,7 +102,7 @@ def main(argv: list[str] | None = None) -> int:
         except MarkerTimeoutError as marker_error:
             print(
                 f"driver: SERVER_READY didn't arrive within "
-                f"{args.ready_timeout_s}s — the board may still be booting, "
+                f"{args.ready_timeout_s}s.  The board may still be booting, "
                 f"wifi credentials in secrets.toml may be wrong, or the "
                 f"board can't reach the AP.  Detail: {marker_error}",
                 file=sys.stderr,
@@ -136,7 +136,7 @@ def main(argv: list[str] | None = None) -> int:
         except TimeoutError as completion_error:
             print(
                 f"driver: board didn't print DEMO_COMPLETE within "
-                f"{args.completion_timeout_s}s — {completion_error}",
+                f"{args.completion_timeout_s}s: {completion_error}",
                 file=sys.stderr,
             )
             return 3
@@ -144,7 +144,7 @@ def main(argv: list[str] | None = None) -> int:
             print("driver: demo completed cleanly.")
             return 0
         print(
-            "driver: bootstrap returned without DEMO_COMPLETE — "
+            "driver: bootstrap returned without DEMO_COMPLETE: "
             "check the captured stdout below.",
             file=sys.stderr,
         )

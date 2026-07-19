@@ -4,7 +4,8 @@ End-to-end first-impression artifacts that show ChuMicro libraries
 working as a system, not just as code. Run a demo and the full round
 trip lands on your screen in one command: no curl in another terminal,
 no IP discovery, no setup beyond `secrets.toml` and a registered board
-(`python scripts/run.py add-device`).
+(`python scripts/run.py add-device`). One demo,
+[`laptop_roundtrip`](laptop_roundtrip/), needs no board at all.
 
 ## What demos are (and aren't)
 
@@ -17,6 +18,10 @@ A demo is a self-contained directory under `demos/<name>/` with:
   prints the round trip, and exits. Run with
   `python demos/<name>/driver.py`.
 - `README.md`: what this demo shows, how to run it, what to expect.
+
+`laptop_roundtrip` is the exception to the pair: its `app.py` runs
+entirely on the host (`python app.py` from its directory), so there is
+no `driver.py` and no board in the loop. Its README explains the split.
 
 **Demos break the examples' import rule on purpose.** A demo's
 `driver.py` is allowed to reach into `workbench/`,
@@ -38,7 +43,7 @@ library working end-to-end against real hardware.
 | Location | `libraries/<lib>/examples/` | `demos/<name>/` (root) |
 | Spans libraries | No, one library at a time | Often: wifi + http_server + msgpack ... |
 | Imports allowed | Just the library being demoed | Anything in the mono-repo |
-| Runs on | Board (host just tails serial) | Board + host (host orchestrates) |
+| Runs on | Board (host just tails serial) | Board + host (`laptop_roundtrip`: host only) |
 | Shipped to PyPI | Yes, with the library | No, mono-repo only |
 
 ## When to add a demo vs. just enhance an example docstring
@@ -59,6 +64,9 @@ have to compose any of it.
 
 ```bash
 .venv/bin/python demos/<demo_name>/driver.py
+
+# laptop_roundtrip has no driver.py; run its app directly:
+cd demos/laptop_roundtrip && ../../.venv/bin/python app.py
 ```
 
 Each demo's `driver.py --help` documents its options (which device

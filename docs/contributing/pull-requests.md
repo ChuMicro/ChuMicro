@@ -2,7 +2,7 @@
 
 <img src="../../support/docs/chumicro_tip.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
-This guide covers what happens once you have changes ready to submit. For environment setup and running tasks, see [CONTRIBUTING.md](../../CONTRIBUTING.md) and your [development environment guide](../../CONTRIBUTING.md#setting-up-your-development-environment).
+This guide covers what happens once you have changes ready to submit. For environment setup and running tasks, see [CONTRIBUTING.md](../../CONTRIBUTING.md) and its [Setting up](../../CONTRIBUTING.md#setting-up) section.
 
 <br clear="left">
 
@@ -11,8 +11,8 @@ This guide covers what happens once you have changes ready to submit. For enviro
 Make sure you've:
 
 1. Forked and cloned the repository
-2. Set up your development environment (see [Setting up your development environment](../../CONTRIBUTING.md#setting-up-your-development-environment))
-3. Created a branch (see [Branching](../../CONTRIBUTING.md#branching))
+2. Set up your development environment (see [Setting up](../../CONTRIBUTING.md#setting-up))
+3. Created a branch (see [Your first change](../../CONTRIBUTING.md#your-first-change-a-worked-example), which walks the branch-off-main steps)
 4. Made your changes and validated them
 
 > **Trivial docs fix?** GitHub's web editor (the pencil icon on any file) + the PR template is a legitimate path for typos, broken links, and one-line clarifications. You skip the local setup entirely; CI still runs the checks. Save the full local workflow for changes that need preflight.
@@ -26,17 +26,19 @@ python scripts/run.py preflight
 Expected:
 
 ```
-Preflight passed — required CI checks should pass.
+Preflight passed.  Required CI checks should pass.
 ```
 
 ## Commit your changes
 
-Stage and commit. Git opens your default editor for the message:
+Stage the files you changed, then commit. Git opens your default editor for the message:
 
 ```bash
-git add -A
+git add <changed files>
 git commit
 ```
+
+Stage explicit paths rather than `git add -A`, so unrelated changes lying around in your tree don't ride along into the commit.
 
 Write a message like:
 
@@ -48,9 +50,9 @@ Verifies that ticks_add(x, 0) returns x unchanged.
 Affects: timing
 ```
 
-Use imperative mood in the subject — "Add test", not "Added" or "Adds". Name affected libraries in the body.
+Use imperative mood in the subject: "Add test", not "Added" or "Adds". Name affected libraries in the body.
 
-> **Working with an AI agent?** Strip any default agent-authorship trailer (e.g. `Co-Authored-By: Claude …`) before committing.  Commits in this repo are authored by the human running the agent — see the AGENTS.md non-negotiable rules and the `git-commit` skill.  Most agent harnesses add the trailer automatically; strip it from your commit message before invoking `git commit`.
+> **Working with an AI agent?** Strip any default agent-authorship trailer (e.g. `Co-Authored-By: Claude …`) before committing.  Commits in this repo are authored by the human running the agent.  See the AGENTS.md non-negotiable rules and the `git-commit` skill.  Most agent harnesses add the trailer automatically; strip it from your commit message before invoking `git commit`.
 
 ## Push and open the PR
 
@@ -58,9 +60,9 @@ Use imperative mood in the subject — "Add test", not "Added" or "Adds". Name a
 git push -u origin fix/my-first-change
 ```
 
-Go to your fork on GitHub (`github.com/<your-username>/ChuMicro`). You'll see a banner: "fix/my-first-change had recent pushes — Compare & pull request." Click it.
+Go to your fork on GitHub (`github.com/<your-username>/ChuMicro`). You'll see a banner noting that `fix/my-first-change` had recent pushes, with a "Compare & pull request" button. Click it.
 
-GitHub knows your fork came from the original repository, so it automatically sets up the PR to merge your branch into `ChuMicro/ChuMicro`'s `main`. Verify the header reads **base repository: ChuMicro/ChuMicro** and **base: main** — if it points at your own fork instead, change the base repository dropdown.
+GitHub knows your fork came from the original repository, so it automatically sets up the PR to merge your branch into `ChuMicro/ChuMicro`'s `main`. Verify the header reads **base repository: ChuMicro/ChuMicro** and **base: main**.  If it points at your own fork instead, change the base repository dropdown.
 
 GitHub loads the PR template automatically. Fill in each section:
 
@@ -81,17 +83,17 @@ Fix wraparound bug in ticks_diff when end is near zero and start is near max.
 
 ## Changes
 
-- `libraries/timing/src/chumicro_timing/ticks.py` — fix boundary comparison in `ticks_diff`
-- `libraries/timing/tests/test_ticks.py` — add wraparound boundary tests
-- `libraries/timing/VERSION` — patch bump 0.1.15 → 0.1.16
+- `libraries/timing/src/chumicro_timing/ticks.py`: fix boundary comparison in `ticks_diff`
+- `libraries/timing/tests/test_ticks.py`: add wraparound boundary tests
+- `libraries/timing/VERSION`: patch bump 0.1.15 → 0.1.16
 
 ## How to verify
 
-Run `pytest libraries/timing/tests/` — new tests in `test_ticks.py` cover the boundary case.
+Run `pytest libraries/timing/tests/`.  New tests in `test_ticks.py` cover the boundary case.
 
 ## Device testing
 
-N/A — pure arithmetic fix with full test coverage.
+N/A, pure arithmetic fix with full test coverage.
 
 ## Version impact
 
@@ -104,15 +106,15 @@ None
 
 </details>
 
-> **Prefer the GitHub UI** — it loads the PR template automatically so reviewers get the context they need. If you prefer the CLI, use `gh pr create --template .github/PULL_REQUEST_TEMPLATE.md` to include the template.
+> **Prefer the GitHub UI.**  It loads the PR template automatically so reviewers get the context they need. If you prefer the CLI, use `gh pr create --template .github/PULL_REQUEST_TEMPLATE.md` to include the template.
 
 ## Device testing
 
-CI runs your code under unix-port builds of CircuitPython and MicroPython, which catches most cross-runtime issues. Device testing is **optional** — it provides extra confidence but is never required to open a PR.
+CI runs your code under unix-port builds of CircuitPython and MicroPython, which catches most cross-runtime issues. Device testing is **optional**.  It provides extra confidence but is never required to open a PR.
 
 ### When device testing helps
 
-If your change could behave differently on a real board than in tests — timing-sensitive code, platform-specific branches, hardware I/O — device testing evidence is appreciated. If you're not sure, submit the PR without it and note that in the description. A reviewer will tell you if it's needed.
+If your change could behave differently on a real board than in tests (timing-sensitive code, platform-specific branches, hardware I/O), device testing evidence is appreciated. If you're not sure, submit the PR without it and note that in the description. A reviewer will tell you if it's needed.
 
 ### What doesn't need device testing
 
@@ -122,10 +124,10 @@ If your change could behave differently on a real board than in tests — timing
 
 ### What to include (when you do test)
 
-1. **Console output** from running the library on a device (scrub any PII — WiFi passwords, IP addresses)
+1. **Console output** from running the library on a device (scrub any PII: WiFi passwords, IP addresses)
 2. **Board name** (e.g., "Adafruit QT Py ESP32-S3")
 3. **Runtime and version** (e.g., "CircuitPython 10.2.0" or "MicroPython v1.26.0")
-4. **What was tested** — which examples or functional tests you ran, and their results
+4. **What was tested:** which examples or functional tests you ran, and their results
 
 Paste the output directly in the PR description or as a comment.
 
@@ -140,7 +142,7 @@ python scripts/run.py test-libraries-functional --runtime both --library timing
 
 ### Don't have a device?
 
-Say so in the PR. A maintainer can help test on available hardware. This won't block your contribution — it just means the merge may take a bit longer while someone verifies on-device.
+Say so in the PR. A maintainer can help test on available hardware. This won't block your contribution.  It just means the merge may take a bit longer while someone verifies on-device.
 
 ## CI checks
 
@@ -148,20 +150,11 @@ After you open the PR, GitHub Actions runs the full CI suite. If something fails
 
 1. Click the failed check to see the log
 2. Fix the issue locally
-3. Push again — CI re-runs automatically
+3. Push again, and CI re-runs automatically
 
-Common failures:
+Each failing check names its cause in the log.  [The development loop](../../CONTRIBUTING.md#the-development-loop) in the contributing guide covers how to read the common ones (coverage gaps, lint violations, docstring warnings, a missed VERSION bump, cross-runtime breaks) and how to reproduce each locally.  The CI-only checks are `check-api` (bump VERSION to the next minor or major when you remove or rename a public function) and `validate-mpy` (build the bundle with `python scripts/run.py build` and read the failing library out of the job log).
 
-| Check | Typical cause | Fix |
-|---|---|---|
-| `test` | Coverage below threshold | Follow the hint below the FAIL line — it points to the uncovered lines |
-| `lint` | Formatting issue, banned name, or one of the workspace's `CHU0NN` checks | Run `python scripts/run.py lint` locally — the [Style Guide](style-guide.md#lint) lists every rule the linter enforces |
-| `check-version` | Changed source without bumping VERSION | Edit `libraries/<name>/VERSION` |
-| `check-api` | Removed or renamed a public function | Bump VERSION to next minor/major |
-| `validate-mpy` | mpy-cross failed to compile a library, or the staged bundle's `package.json` is broken | Build the bundle locally (`python scripts/run.py build`) and check the validate-mpy job log for the failing library |
-| `cross-runtime-tests` (MicroPython / CircuitPython) | Test fails under the unix-port build of one runtime | Reproduce locally with `pytest libraries/<name>/tests --target unix-port --runtime <X>` |
-
-For detailed output examples (success and failure), see your [development environment guide](../../CONTRIBUTING.md#setting-up-your-development-environment).
+For detailed output examples (success and failure), see your [development environment guide](../../CONTRIBUTING.md#setting-up).
 
 ## Review and merge
 
@@ -175,7 +168,7 @@ After merge, your change is on `main`. If you bumped a VERSION file, an experime
 
 ## Keeping your fork up to date
 
-Your fork doesn't update automatically. Before starting new work, sync it with the original repository. See [Keeping your fork in sync](../../CONTRIBUTING.md#keeping-your-fork-in-sync) in the contributing guide for full instructions, including how to rebase your branch if `main` moves while you're working.
+Your fork doesn't update automatically. Before starting new work, sync it with the original repository. The closing steps of [Your first change](../../CONTRIBUTING.md#your-first-change-a-worked-example) in the contributing guide cover keeping your fork in sync, including how to rebase your branch if `main` moves while you're working.
 
 The short version:
 
@@ -194,6 +187,6 @@ git checkout -b fix/next-change
 | Run tests | `pytest libraries/<name>/tests/` |
 | Run lint | `python scripts/run.py lint` |
 | Full check | `python scripts/run.py preflight` |
-| Commit | `git add -A && git commit` |
+| Commit | `git add <changed files> && git commit` |
 | Push | `git push -u origin <branch>` |
-| Open PR | GitHub UI — click "Compare & pull request" on your fork |
+| Open PR | GitHub UI: click "Compare & pull request" on your fork |

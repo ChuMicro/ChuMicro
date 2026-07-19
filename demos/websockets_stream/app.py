@@ -1,4 +1,4 @@
-"""Board-side of the websockets_stream demo — receive a message stream.
+"""Board-side of the websockets_stream demo: receive a message stream.
 
 ``receive_stream`` expresses the whole lifecycle top-to-bottom: wait
 for the wifi link with ``wait_for``, connect the ``WebSocketClient``,
@@ -8,7 +8,7 @@ print it, wait for the next, until the server closes the stream.  The
 generator once the link is up.
 
 The session and the receive generator are both registered with the
-runner — the session does the frame I/O each tick, the generator drains
+runner: the session does the frame I/O each tick, the generator drains
 the messages.  Compare with the callback form (``ws.on_text`` /
 ``ws.on_binary``): the generator loop reads wait-process-wait
 top-to-bottom instead of dispatching into a handler.

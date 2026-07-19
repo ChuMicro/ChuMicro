@@ -1,11 +1,11 @@
-"""Board-side of the sockets_tls_roundtrip demo — one-shot TLS with custom CA.
+"""Board-side of the sockets_tls_roundtrip demo: one-shot TLS with custom CA.
 
 Brings wifi up via ``chumicro_wifi.WifiService`` driven by
 ``chumicro_runner.Runner``, builds an ``ssl.SSLContext`` whose only
 trust anchor is the cert the driver embedded in runtime config, then
 dials the driver's TLS echo server with
-``chumicro_sockets.connector(tls=True)`` — the one connect state
-machine — and lets ``runner.run_until`` drive it to a terminal state.
+``chumicro_sockets.connector(tls=True)`` (the one connect state
+machine) and lets ``runner.run_until`` drive it to a terminal state.
 
 This is the entry-level TLS pattern: ``ssl_context_with_ca`` builds a
 trust anchor from PEM bytes; the connector is registered with the
@@ -52,7 +52,7 @@ runner.add(wifi)
 
 runner.run_until(lambda: wifi.state == WifiState.CONNECTED)
 
-# Wifi is up — dial the TLS echo server with the custom-CA anchor.
+# Wifi is up.  Dial the TLS echo server with the custom-CA anchor.
 # The connector is a runner service: register it raw and run until it
 # reaches a terminal state.
 context = ssl_context_with_ca(ca_pem)
@@ -77,7 +77,7 @@ marker("SENT", bytes=len(_PROBE_PAYLOAD))
 # One byte per read: rp2's mbedTLS blocks a bulk read until the FULL
 # requested size arrives (or EOF), so a 256-byte read on a 19-byte
 # reply stalls forever.  Delimiter-framed blocking TLS reads on
-# MicroPython silicon must read exact sizes — here, one byte at a time.
+# MicroPython silicon must read exact sizes: here, one byte at a time.
 buffer = bytearray(1)
 received = bytearray()
 while b"\n" not in received:

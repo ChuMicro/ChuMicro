@@ -15,7 +15,7 @@ When your PR merges to `main` with a `VERSION` bump, an **experimental release**
 3. A git tag is created (e.g., `chumicro-timing-v0.2.0-experimental`)
 4. Experimental docs are deployed
 
-No manual steps — it just happens on merge.
+No manual steps: it just happens on merge.
 
 **Stable promotion** is separate. A maintainer runs `promote.yml` to republish an experimental release to the stable channel. The source archive ensures stable contains the exact code that was tested as experimental.
 
@@ -28,7 +28,7 @@ No manual steps — it just happens on merge.
 | **Git tag** | `chumicro-timing-v0.2.0-experimental` | `chumicro-timing-v0.2.0` |
 | **Import path** | `chumicro_timing` | `chumicro_timing` |
 
-Import paths are identical across channels — switching from experimental to stable is a drop-in replacement. No code changes needed on the device.
+Import paths are identical across channels: switching from experimental to stable is a drop-in replacement. No code changes needed on the device.
 
 ### Installing from experimental
 
@@ -84,7 +84,7 @@ python scripts/promote_wave.py <experimental-tag> [<experimental-tag> ...]
 
 ## Versioning
 
-See [VERSION bumps](../../CONTRIBUTING.md#version-bumps-and-publishing) in the contributing guide for when and how to bump. Libraries version independently — bumping one has no effect on others.
+See [VERSION bumps](../../CONTRIBUTING.md#version-bumps-and-publishing) in the contributing guide for when and how to bump. Libraries version independently: bumping one has no effect on others.
 
 ## FAQ
 
@@ -98,4 +98,4 @@ No release happens until the PR merges. Fix CI and push again.
 The release will fire on merge. It's not harmful (the package just gets a new version), but it's unnecessary. Only bump VERSION when source code under `src/` changes.
 
 **Q: What about hotfixes to older stable versions?**
-A maintainer creates a short-lived release branch from the stable tag, applies the fix, and runs `release.yml` manually. This is rare — most fixes go directly to `main`.
+A maintainer creates a short-lived release branch from the stable tag, applies the fix, and runs `release.yml` manually. This is rare: most fixes go directly to `main`.

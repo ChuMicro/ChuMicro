@@ -1,4 +1,4 @@
-# sockets_runner_connector — sockets via runner with a generator
+# sockets_runner_connector: sockets via runner with a generator
 
 End-to-end demo of the canonical pattern for **custom TCP protocols
 under runner**: write a generator that yields wait-tokens between
@@ -7,13 +7,13 @@ runner schedule it across ticks.  Drop-in template for any TCP
 protocol not covered by `HttpClient` / `MQTTClient` /
 `WebSocketClient`.
 
-`echo_run` here is the template — a 14-line function that calls
+`echo_run` here is the template, a 14-line function that calls
 `connect` / `send_all` / `recv_until` in straight-line order.  The
 runner ticks the underlying socket events; the generator body reads
 top-to-bottom.  For the same wire behaviour expressed as an
 explicit `check` / `handle` state machine, see
-[`sockets_runner_connector_explicit`](../sockets_runner_connector_explicit/)
-— useful when you want to see what the helpers collapse, or when
+[`sockets_runner_connector_explicit`](../sockets_runner_connector_explicit/):
+useful when you want to see what the helpers collapse, or when
 your protocol has state the generator shape doesn't fit (parallel
 fan-out, complex error recovery, long-lived multi-phase sessions).
 
@@ -21,7 +21,7 @@ fan-out, complex error recovery, long-lived multi-phase sessions).
 
 - **One generator, one `runner.add_generator(echo_run(...))`.**  The
   generator waits for the wifi link with `yield from wait_for(link_up)`
-  — a `Signal` the wifi state-change callback sets — then connects,
+  (a `Signal` the wifi state-change callback sets), then connects,
   sends, and receives top-to-bottom, returning when the round trip
   completes.  No user-defined class, no `io_*` plumbing, no
   callback-set module global.
@@ -32,7 +32,7 @@ fan-out, complex error recovery, long-lived multi-phase sessions).
   hands the connected socket back via `sock = yield from connect(...)`.
 - **`send_all` and `recv_until` carry their own EAGAIN loops.**  Each
   caches its wait-token outside the EAGAIN retry path so the
-  steady-state allocation is zero — the helpers are safe for hot
+  steady-state allocation is zero: the helpers are safe for hot
   loops on a 256 KB device.
 - **`try / finally` for cleanup.**  `sock.close()` in the finally
   runs whether the generator returns normally, raises, or gets
@@ -52,10 +52,10 @@ Defaults: targets the first CircuitPython device in `devices.yml`.
 
 Override:
 
-- `--device <id>` — a specific device id from `devices.yml`.
-- `--runtime micropython` — pick the first MicroPython device.
-- `--wifi-timeout-s <n>` — how long to wait for `WIFI_OK` (default 45 s).
-- `--connect-timeout-s <n>` — how long to wait for `CONNECTED` after
+- `--device <id>`: a specific device id from `devices.yml`.
+- `--runtime micropython`: pick the first MicroPython device.
+- `--wifi-timeout-s <n>`: how long to wait for `WIFI_OK` (default 45 s).
+- `--connect-timeout-s <n>`: how long to wait for `CONNECTED` after
   `CONNECTING` (default 15 s).
 
 ## Expected output
@@ -75,7 +75,7 @@ driver: demo completed cleanly.
 
 - A board registered in `devices.yml`.
 - `secrets.toml` at the repo root with `wifi.ssid` + `wifi.password`.
-- A reachable wifi network the board can join — the board needs to
+- A reachable wifi network the board can join: the board needs to
   reach the host's LAN IP that the echo server binds to.
 
 ## When to use this pattern
@@ -85,43 +85,43 @@ driver: demo completed cleanly.
   WebSockets.
 - **You need it under a runner** because you're sharing the loop
   with wifi management, an LED blink, sensor reads, etc.
-- **The work is naturally sequential** — one connect, one (or a
+- **The work is naturally sequential.**  One connect, one (or a
   small number of) send/recv pairs, then done.  For long-lived
   reactive protocols (subscribe-and-route, broker-like multiplexers),
   the explicit `check` / `handle` shape composes better; reach for
   it via `runner.add(service)`.
 
 If your protocol IS one of HTTP / MQTT / WebSockets, use those
-libraries instead — they own the wire-format codec and the runner
+libraries instead: they own the wire-format codec and the runner
 integration for you.  See `demos/mqtt_pub_sub` for the
 already-built-in-client equivalent.
 
-One-shot by design — this demo exits after one round trip.  For
+One-shot by design: this demo exits after one round trip.  For
 reconnect-capable services, register a new generator from the wifi
 `DISCONNECTED` / `CONNECTED` callback each time the link comes back.
 
 ## Substrate honesty for the connect phase
 
-- **CPython** (host pytest, sim runs) — truly non-blocking via
+- **CPython** (host pytest, sim runs): truly non-blocking via
   `BlockingIOError`(EINPROGRESS) + `select.select(POLLOUT)` + `SO_ERROR`.
-- **MicroPython rp2 / esp32** — truly non-blocking via
+- **MicroPython rp2 / esp32**: truly non-blocking via
   `OSError(EINPROGRESS)` + `select.poll(POLLOUT)`.
-- **CircuitPython** — `socketpool` does not expose a non-blocking
+- **CircuitPython**: `socketpool` does not expose a non-blocking
   connect, so the TCP step blocks for the handshake duration.
   Honest documented compromise on CP; other runner tasks pause for
   the duration of that one call.
 
 ## Related
 
-- [`sockets_runner_connector_explicit`](../sockets_runner_connector_explicit/) —
+- [`sockets_runner_connector_explicit`](../sockets_runner_connector_explicit/):
   the same wire behaviour, written as an explicit per-state
   `check` / `handle` service.  Read it for the teaching version of
   what `connect` / `send_all` / `recv_until` do under the hood.
-- [`sockets_tcp_roundtrip`](../sockets_tcp_roundtrip/) — synchronous
+- [`sockets_tcp_roundtrip`](../sockets_tcp_roundtrip/): synchronous
   TCP, no runner-driven connect.  Simpler app code; blocks for the
   full TCP handshake.
-- [`sockets_tls_roundtrip`](../sockets_tls_roundtrip/) — TLS variant
+- [`sockets_tls_roundtrip`](../sockets_tls_roundtrip/): TLS variant
   of the synchronous demo with a custom-CA trust anchor.
-- [`mqtt_pub_sub`](../mqtt_pub_sub/) — the same `runner.add(service)`
+- [`mqtt_pub_sub`](../mqtt_pub_sub/): the same `runner.add(service)`
   shape but with the protocol absorbed into `MQTTClient` (no
   user-defined service or generator needed).
