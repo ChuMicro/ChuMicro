@@ -327,10 +327,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#when-to-use-msgpack-vs-struct" class="md-nav__link">
+  <a href="#getting-started" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
-        When to use msgpack vs <code>struct</code>
+        Getting started
       </span>
     </span>
   </a>
@@ -338,10 +338,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#getting-started" class="md-nav__link">
+  <a href="#when-to-use-msgpack-vs-struct" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
-        Getting started
+        When to use msgpack vs <code>struct</code>
       </span>
     </span>
   </a>
@@ -447,6 +447,17 @@
     <span class="md-ellipsis">
       <span class="md-typeset">
         Wire-format compatibility with PyPI <code>msgpack</code>
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Examples
       </span>
     </span>
   </a>
@@ -540,10 +551,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#when-to-use-msgpack-vs-struct" class="md-nav__link">
+  <a href="#getting-started" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
-        When to use msgpack vs <code>struct</code>
+        Getting started
       </span>
     </span>
   </a>
@@ -551,10 +562,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#getting-started" class="md-nav__link">
+  <a href="#when-to-use-msgpack-vs-struct" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
-        Getting started
+        When to use msgpack vs <code>struct</code>
       </span>
     </span>
   </a>
@@ -666,6 +677,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Examples
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -687,7 +709,16 @@
 <h1 id="user-guide">User Guide<a class="headerlink" href="#user-guide" title="Permanent link">&para;</a></h1>
 <h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
 <p><code>chumicro-msgpack</code> serializes Python objects to compact binary bytes using the <a href="https://msgpack.org">MessagePack</a> format and deserializes them back.  It covers the subset of msgpack needed on microcontrollers: integers up to 32-bit, 32-bit floats, strings, bytes, booleans, None, lists, tuples, and dicts.</p>
-<p>The library exposes four functions: <code>packb</code> and <code>unpackb</code> for bytes-based encoding/decoding, and <code>pack</code> and <code>unpack</code> for stream-based I/O.  On CircuitPython boards with the native C <code>msgpack</code> module, all four delegate to the built-in — the pure-Python encoder is never loaded.</p>
+<p>The library exposes four functions: <code>packb</code> and <code>unpackb</code> for bytes-based encoding/decoding, and <code>pack</code> and <code>unpack</code> for stream-based I/O.  On CircuitPython boards with the native C <code>msgpack</code> module, all four delegate to the built-in; the pure-Python encoder is never loaded.</p>
+<h2 id="getting-started">Getting started<a class="headerlink" href="#getting-started" title="Permanent link">&para;</a></h2>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_msgpack</span><span class="w"> </span><span class="kn">import</span> <span class="n">packb</span><span class="p">,</span> <span class="n">unpackb</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">data</span> <span class="o">=</span> <span class="n">packb</span><span class="p">({</span><span class="s2">&quot;ssid&quot;</span><span class="p">:</span> <span class="s2">&quot;MyNetwork&quot;</span><span class="p">,</span> <span class="s2">&quot;configured&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">})</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="nb">print</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>          <span class="c1"># compact binary bytes</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="n">restored</span> <span class="o">=</span> <span class="n">unpackb</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="nb">print</span><span class="p">(</span><span class="n">restored</span><span class="p">)</span>      <span class="c1"># {&#39;ssid&#39;: &#39;MyNetwork&#39;, &#39;configured&#39;: True}</span>
+</span></code></pre></div>
 <h2 id="when-to-use-msgpack-vs-struct">When to use msgpack vs <code>struct</code><a class="headerlink" href="#when-to-use-msgpack-vs-struct" title="Permanent link">&para;</a></h2>
 <p>Python's <code>struct</code> module and msgpack both produce compact binary data, but they solve different problems:</p>
 <table>
@@ -701,8 +732,8 @@
 <tbody>
 <tr>
 <td><strong>Schema</strong></td>
-<td>Fixed layout — both sides must agree on a format string (e.g., <code>"&gt;HBf"</code>)</td>
-<td>Self-describing — types are encoded in the data</td>
+<td>Fixed layout: both sides must agree on a format string (e.g., <code>"&gt;HBf"</code>)</td>
+<td>Self-describing: types are encoded in the data</td>
 </tr>
 <tr>
 <td><strong>Flexibility</strong></td>
@@ -722,15 +753,6 @@
 </tbody>
 </table>
 <p><strong>Use <code>struct</code></strong> when the data layout is fixed and both sides are compiled together (e.g., a sensor reading struct that never changes).  <strong>Use msgpack</strong> when the data is dict-like, may evolve over time, or when you want to inspect the data without knowing the schema.</p>
-<h2 id="getting-started">Getting started<a class="headerlink" href="#getting-started" title="Permanent link">&para;</a></h2>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_msgpack</span><span class="w"> </span><span class="kn">import</span> <span class="n">packb</span><span class="p">,</span> <span class="n">unpackb</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">data</span> <span class="o">=</span> <span class="n">packb</span><span class="p">({</span><span class="s2">&quot;ssid&quot;</span><span class="p">:</span> <span class="s2">&quot;MyNetwork&quot;</span><span class="p">,</span> <span class="s2">&quot;configured&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">})</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="nb">print</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>          <span class="c1"># compact binary bytes</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="n">restored</span> <span class="o">=</span> <span class="n">unpackb</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="nb">print</span><span class="p">(</span><span class="n">restored</span><span class="p">)</span>      <span class="c1"># {&#39;ssid&#39;: &#39;MyNetwork&#39;, &#39;configured&#39;: True}</span>
-</span></code></pre></div>
 <h2 id="stream-based-api-preferred-on-microcontrollers">Stream-based API (preferred on microcontrollers)<a class="headerlink" href="#stream-based-api-preferred-on-microcontrollers" title="Permanent link">&para;</a></h2>
 <p><code>pack</code> and <code>unpack</code> write to and read from stream objects (anything with <code>.write()</code> or <code>.read()</code>).  This matches CircuitPython's native <code>msgpack</code> API.</p>
 <p>When writing to a file, socket, or NVM wrapper, <code>pack(obj, stream)</code> reads cleaner than <code>packb</code> + write.  On CircuitPython's native encoder it also writes directly to the destination without an intermediate <code>bytes</code> object; on the pure-Python path (MicroPython, CPython) <code>pack</code> encodes to <code>bytes</code> first and then writes, so it is not a RAM saving there.</p>
@@ -745,7 +767,7 @@
 </span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="nb">print</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>  <span class="c1"># {&#39;key&#39;: [1, 2, 3]}</span>
 </span></code></pre></div>
 <h2 id="bytes-based-api">Bytes-based API<a class="headerlink" href="#bytes-based-api" title="Permanent link">&para;</a></h2>
-<p><code>packb</code> and <code>unpackb</code> work with <code>bytes</code> objects directly.  They are convenient when you need the encoded data in memory — for example, to measure its length before writing it with a framing header, or to pass it to an API that expects <code>bytes</code>.</p>
+<p><code>packb</code> and <code>unpackb</code> work with <code>bytes</code> objects directly.  They are convenient when you need the encoded data in memory, for example to measure its length before writing it with a framing header, or to pass it to an API that expects <code>bytes</code>.</p>
 <p>On microcontrollers, be aware that <code>packb</code> allocates a temporary <code>bytearray</code>, grows it during encoding, then copies it to <code>bytes</code>.  For small payloads (typical settings dicts) this is fine.  On the pure-Python path <code>pack</code> calls <code>packb</code> internally, so it does not reduce this allocation; only the native CircuitPython encoder streams without the intermediate buffer.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_msgpack</span><span class="w"> </span><span class="kn">import</span> <span class="n">packb</span><span class="p">,</span> <span class="n">unpackb</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
@@ -758,12 +780,12 @@
 </span></code></pre></div>
 <p><code>unpackb</code> accepts <code>bytes</code>, <code>bytearray</code>, and <code>memoryview</code>, so you can decode directly from a pre-allocated buffer without copying.</p>
 <h2 id="decoding-corrupt-or-untrusted-input">Decoding corrupt or untrusted input<a class="headerlink" href="#decoding-corrupt-or-untrusted-input" title="Permanent link">&para;</a></h2>
-<p><code>unpackb</code> is a <em>trusting</em> decoder, not a spec validator. It is safe against malformed <em>framing</em> — truncated, over-length, or trailing-garbage input, and nesting deeper than 8 levels, all raise <code>ValueError</code> instead of returning a silently-wrong value. <code>packb</code> enforces the same depth bound on encode, so anything it accepts round-trips. This matters for flash-backed config and kvstore, where a power-loss-truncated payload must fail loudly rather than decode as a structurally-valid wrong dict.</p>
-<p>What it does <strong>not</strong> do is check that a structurally-valid payload has the type shape you expect — a packed <code>{"port": "80"}</code> decodes fine when your code wants <code>{"port": 80}</code>. Code persisting corruption- or attacker-reachable bytes still owns type-shape validation of what comes back.</p>
+<p><code>unpackb</code> is a <em>trusting</em> decoder, not a spec validator. It is safe against malformed <em>framing</em>: truncated, over-length, or trailing-garbage input, and nesting deeper than 8 levels, all raise <code>ValueError</code> instead of returning a silently-wrong value. <code>packb</code> enforces the same depth bound on encode, so anything it accepts round-trips. This matters for flash-backed config and kvstore, where a power-loss-truncated payload must fail loudly rather than decode as a structurally-valid wrong dict.</p>
+<p>What it does <strong>not</strong> do is check that a structurally-valid payload has the type shape you expect: a packed <code>{"port": "80"}</code> decodes fine when your code wants <code>{"port": 80}</code>. Code persisting corruption- or attacker-reachable bytes still owns type-shape validation of what comes back.</p>
 <p>Two boundary notes:</p>
 <ul>
 <li>The hardening lives in the pure-Python decoder, which is what runs on CPython, MicroPython, and CircuitPython boards <em>without</em> the native <code>msgpack</code> module. On CircuitPython boards that ship the native C <code>msgpack</code>, decoding goes through the firmware's decoder, whose framing behavior is its own.</li>
-<li>Truncation that lands on a fixed-width primitive or a length prefix surfaces as <code>ValueError("buffer too small")</code> (from <code>struct</code>) rather than the framing message — still loud, still never a silent short read.</li>
+<li>Truncation that lands on a fixed-width primitive or a length prefix raises the same framing message: the pure decoder catches the short <code>struct</code> read and re-raises it as <code>ValueError("malformed msgpack: truncated or over-length framing")</code>, so the failure stays loud and never returns a silent short read.</li>
 </ul>
 <h2 id="integer-keys-for-compact-storage">Integer keys for compact storage<a class="headerlink" href="#integer-keys-for-compact-storage" title="Permanent link">&para;</a></h2>
 <p>When storing settings in NVM or sleep memory, use integer keys instead of strings.  Integer keys encode in 1 byte (vs. multiple bytes for quoted strings), saving space on every entry:</p>
@@ -820,9 +842,9 @@
 </table>
 <p>Unsupported types raise <code>TypeError</code>.  Integers outside the 32-bit range raise <code>OverflowError</code>.</p>
 <h2 id="memory-notes">Memory notes<a class="headerlink" href="#memory-notes" title="Permanent link">&para;</a></h2>
-<p><code>unpackb</code> accepts <code>bytes</code>, <code>bytearray</code>, and <code>memoryview</code>, so you can decode directly from a pre-allocated buffer without copying.  Internally the decoder treats the input as a <code>memoryview</code> end-to-end — slices stay as views; only the final <code>bytes</code> / <code>str</code> results are heap allocations.</p>
+<p><code>unpackb</code> accepts <code>bytes</code>, <code>bytearray</code>, and <code>memoryview</code>, so you can decode directly from a pre-allocated buffer without copying.  Internally the decoder treats the input as a <code>memoryview</code> end-to-end: slices stay as views; only the final <code>bytes</code> / <code>str</code> results are heap allocations.</p>
 <p><code>packb</code> builds a <code>bytearray</code> that grows as encoding proceeds, then copies to <code>bytes</code> once at the end.  MicroPython extends a bytearray with exact-fit reallocations (an <code>append</code> adds 8 bytes of slack), so the realloc count scales with the number of tokens written rather than a fixed geometric series.</p>
-<p><code>pack</code> and <code>unpack</code> (stream-based) match the signatures CircuitPython's native C <code>msgpack</code> module exposes and delegate to it on hardware that ships it.  On every other runtime — MicroPython, CPython, CircuitPython unix-port — <code>pack</code> calls <code>packb</code> and writes the result to the stream in one shot; it does <strong>not</strong> stream incrementally.  If you need true streaming on those runtimes, write your own loop around <code>packb</code> per element.</p>
+<p><code>pack</code> and <code>unpack</code> (stream-based) match the signatures CircuitPython's native C <code>msgpack</code> module exposes and delegate to it on hardware that ships it.  On every other runtime (MicroPython, CPython, CircuitPython unix-port), <code>pack</code> calls <code>packb</code> and writes the result to the stream in one shot; it does <strong>not</strong> stream incrementally.  If you need true streaming on those runtimes, write your own loop around <code>packb</code> per element.</p>
 <h3 id="allocation-profile-micropython-126-unix-port-gc-disabled">Allocation profile (MicroPython 1.26 unix-port, GC disabled)<a class="headerlink" href="#allocation-profile-micropython-126-unix-port-gc-disabled" title="Permanent link">&para;</a></h3>
 <p>Useful when budgeting heap for a tick.  Measured by wrapping each call in <code>gc.collect(); gc.disable(); base = gc.mem_alloc()</code> and reading the delta after 100 iterations.</p>
 <table>
@@ -856,12 +878,12 @@
 </tr>
 <tr>
 <td><code>import chumicro_msgpack</code> (one-time)</td>
-<td>—</td>
+<td>n/a</td>
 <td style="text-align: right;">~15.4 KB</td>
 </tr>
 </tbody>
 </table>
-<p>The numbers shift across firmware versions and payload shapes — they're a sanity baseline, not a contract.</p>
+<p>The numbers shift across firmware versions and payload shapes; they're a sanity baseline, not a contract.</p>
 <h2 id="platform-notes">Platform notes<a class="headerlink" href="#platform-notes" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -889,9 +911,9 @@
 </tr>
 </tbody>
 </table>
-<p>The wire format is identical regardless of which implementation is used — data packed on one runtime can be unpacked on any other.</p>
+<p>The wire format is identical regardless of which implementation is used: data packed on one runtime can be unpacked on any other.</p>
 <h2 id="wire-format-compatibility-with-pypi-msgpack">Wire-format compatibility with PyPI <code>msgpack</code><a class="headerlink" href="#wire-format-compatibility-with-pypi-msgpack" title="Permanent link">&para;</a></h2>
-<p><code>chumicro_msgpack.packb(obj)</code> produces bytes byte-for-byte identical to <code>msgpack.packb(obj, use_single_float=True)</code> for any subset-conforming input.  This lets a host-side tool encode with PyPI <code>msgpack</code> while the device decodes with <code>chumicro_msgpack</code> — same wire format, no conversion step.</p>
+<p><code>chumicro_msgpack.packb(obj)</code> produces bytes byte-for-byte identical to <code>msgpack.packb(obj, use_single_float=True)</code> for any subset-conforming input.  This lets a host-side tool encode with PyPI <code>msgpack</code> while the device decodes with <code>chumicro_msgpack</code>: same wire format, no conversion step.</p>
 <p>The subset is:</p>
 <ul>
 <li>Integers in <code>[-2**31, 2**32 - 1]</code>.</li>
@@ -900,11 +922,40 @@
 <li>Strings, bytes, arrays, and maps with sizes under <code>65_536</code>.</li>
 <li>No ext types.</li>
 </ul>
-<p>The decoder names the offending tag in its <code>ValueError</code> if a stricter encoder produces something outside the subset — for example, <code>"float64 (0xcb) not in chumicro msgpack subset; encode with msgpack.packb(obj, use_single_float=True)"</code>.  Two sharp edges this avoids:</p>
+<p>The decoder names the offending tag in its <code>ValueError</code> if a stricter encoder produces something outside the subset, for example <code>"float64 (0xcb) not in chumicro msgpack subset; encode with msgpack.packb(obj, use_single_float=True)"</code>.  Two sharp edges this avoids:</p>
 <ol>
 <li><strong>PyPI's default float encoding is float64.</strong>  Without <code>use_single_float=True</code>, <code>msgpack.packb(0.5)</code> emits <code>0xcb</code> + 8 bytes, which <code>chumicro_msgpack.unpackb</code> rejects.</li>
-<li><strong>Native delegation is gated to CircuitPython only.</strong>  On CPython, <code>import msgpack</code> would resolve to the PyPI package (with a different contract — float64, int64, <code>strict_map_key</code>), so <code>chumicro_msgpack</code> only delegates to the native C module when <code>sys.implementation.name == "circuitpython"</code>.  Other runtimes use the pure-Python encoder bundled in <code>_pure.py</code>.</li>
+<li><strong>Native delegation is gated to CircuitPython only.</strong>  On CPython, <code>import msgpack</code> would resolve to the PyPI package (with a different contract: float64, int64, <code>strict_map_key</code>), so <code>chumicro_msgpack</code> only delegates to the native C module when <code>sys.implementation.name == "circuitpython"</code>.  Other runtimes use the pure-Python encoder bundled in <code>_pure.py</code>.</li>
 </ol>
+<h2 id="examples">Examples<a class="headerlink" href="#examples" title="Permanent link">&para;</a></h2>
+<p>The <a href="https://github.com/ChuMicro/ChuMicro/tree/main/libraries/msgpack/examples">examples</a> directory contains complete runnable scripts:</p>
+<table>
+<thead>
+<tr>
+<th>Example</th>
+<th>What it shows</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>packb_basic.py</code></td>
+<td>Pack and unpack a settings dict with the bytes-based API</td>
+</tr>
+<tr>
+<td><code>packb_size_comparison.py</code></td>
+<td>Compare msgpack and JSON size for the same dict</td>
+</tr>
+<tr>
+<td><code>stream_roundtrip.py</code></td>
+<td>Use the stream-based <code>pack</code> / <code>unpack</code> API with <code>BytesIO</code></td>
+</tr>
+<tr>
+<td><code>circuitpython_nvm_settings.py</code></td>
+<td>Store and load settings in non-volatile memory behind a 2-byte length header (CircuitPython hardware)</td>
+</tr>
+</tbody>
+</table>
+<p><code>packb_basic.py</code>, <code>packb_size_comparison.py</code>, and <code>stream_roundtrip.py</code> run on CPython, MicroPython, and CircuitPython.  <code>circuitpython_nvm_settings.py</code> needs a real CircuitPython board with NVM; save it as <code>code.py</code> on the CIRCUITPY drive.</p>
 <hr />
 <div class="chumicro-footer">
 <p><a href="../">← Home</a></p>
