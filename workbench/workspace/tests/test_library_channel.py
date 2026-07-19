@@ -288,6 +288,21 @@ class TestFetchSnapshotTarball:
         assert calls == [tarball_url(repo, "20260519")]
 
 
+class TestFetchTextFile:
+    def test_fetches_and_decodes_leniently(self):
+        from chumicro_workspace.library_channel import fetch_text_file
+
+        url = raw_file_url(
+            "ChuMicro/ChuMicro-Libraries", "20260101", "mqtt/README.md",
+        )
+        # Invalid UTF-8 byte decodes to U+FFFD instead of aborting.
+        http_get = _serving({url: b"# mqtt\n\xff"})
+        text = fetch_text_file(
+            "stable", "20260101", "mqtt/README.md", http_get=http_get,
+        )
+        assert text == "# mqtt\n�"
+
+
 class TestRealHttpGet:
     def test_file_scheme_serves_an_on_disk_mirror(self, tmp_path: Path):
         body = _index_bytes("20260101", {})

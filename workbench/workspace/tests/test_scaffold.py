@@ -104,6 +104,18 @@ class TestScaffoldLibrary:
             scaffold_library(tmp_path / "libraries", "gpio")
         assert "gpio" in str(caught.value)
 
+    def test_unknown_package_kind_raises(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError, match="package_kind"):
+            scaffold_library(
+                tmp_path / "libraries", "gpio", package_kind="firmware",
+            )
+
+    def test_missing_template_names_the_path(self) -> None:
+        from chumicro_workspace.scaffold import _load_template
+
+        with pytest.raises(FileNotFoundError, match="not-a-template"):
+            _load_template("not-a-template.template")
+
     def test_workbench_kind_scaffolds_workbench_flavored_docs(
         self, tmp_path: Path,
     ) -> None:
