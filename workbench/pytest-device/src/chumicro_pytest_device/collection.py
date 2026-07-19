@@ -1,7 +1,9 @@
 """Collection-time machinery: AST-based test discovery and pytest items.
 
 The pytest hooks here intercept files under
-``libraries/<name>/functional_tests/`` (always) and
+``libraries/<name>/functional_tests/`` (always),
+``projects/<name>/functional_tests/`` (only when explicitly targeted —
+:func:`pytest_ignore_collect` drops them on a bare sweep), and
 ``libraries/<name>/tests/`` (under ``--target unix-port`` /
 ``--target device-unit``), returning a :class:`DeviceTestFile` so
 the host never imports a file that top-level imports a device-only
@@ -35,6 +37,7 @@ from chumicro_deploy.runtime_marker import is_host_only_test, read_runtime_marke
 from chumicro_workspace.device_orchestration import (
     resolve_effective_deploy_mode,
     resolve_library_source_dirs,
+    resolve_project_source_dirs,
 )
 
 from .backends import BackendExecuteError, BackendPrepareError
@@ -52,7 +55,10 @@ from .session import (
     _harness_source_dir,
     _is_library_functional_test,
     _is_library_unit_test,
+    _is_project_functional_test,
     _libraries_root,
+    _project_functional_test_targeted,
+    _project_unit_name,
     _session_backend,
     _session_cache,
     _session_targets,
@@ -218,15 +224,19 @@ def _parse_test_functions(filepath: Path) -> list[str]:
 
 
 def _resolve_library_dir(test_file: Path) -> Path:
-    """Derive the library root directory from a functional test file path.
+    """Derive the owning root directory from a functional test file path.
 
     Expects the pattern ``libraries/<name>/functional_tests/test_*.py``.
+    The same ``parent.parent`` shape holds for a project functional test
+    (``projects/<name>/functional_tests/test_*.py``), where it yields the
+    project directory instead of a library root.
 
     Args:
         test_file: Path to a test file inside ``functional_tests/``.
 
     Returns:
-        The library root directory (e.g. ``libraries/timing``).
+        The library root directory (e.g. ``libraries/timing``), or the
+        project directory for a project functional test.
     """
     return test_file.parent.parent
 
@@ -306,13 +316,40 @@ def _device_items(
         yield item
 
 
+def _item_source_dirs(
+    session: pytest.Session, item: DeviceRuntimeItem,
+) -> list[Path]:
+    """Source-dir closure for one item — the project-aware split point.
+
+    Project functional tests resolve through the workspace's
+    acquisition surfaces (:func:`resolve_project_source_dirs`:
+    ``workspace.yml`` ``library_sources:`` overrides plus
+    ``libraries/<name>/src`` trees); library tests keep the
+    libraries-root dependency walk
+    (:func:`resolve_library_source_dirs`).  Every consumer of an
+    item's closure — deploy-mode resolution and both staging paths —
+    must route through here so the two lanes can't drift apart.
+    """
+    if _is_project_functional_test(item.test_file):
+        return resolve_project_source_dirs(
+            item.library_dir,
+            workspace_root=_workspace_root(session),
+            test_files=[item.test_file],
+        )
+    return resolve_library_source_dirs(
+        item.library_dir,
+        libraries_root=_libraries_root(session),
+        test_files=[item.test_file],
+    )
+
+
 def _device_closure_source_dirs(
     session: pytest.Session, device_entry: DeviceEntry,
 ) -> list[Path]:
     """Union of every test's library source closure for one device.
 
     Walks the same dependency closure the staging path uses
-    (:func:`resolve_library_source_dirs`) for every ``DeviceTestItem``
+    (:func:`_item_source_dirs`) for every ``DeviceTestItem``
     targeting *device_entry*, deduplicated.  Deploy mode is
     session-scoped (one cached transport per device), so the resolver
     must see the whole device's closure up front. A functional test
@@ -321,11 +358,7 @@ def _device_closure_source_dirs(
     """
     closure: list[Path] = []
     for item in _device_items(session, device_entry):
-        for source_dir in resolve_library_source_dirs(
-            item.library_dir,
-            libraries_root=_libraries_root(session),
-            test_files=[item.test_file],
-        ):
+        for source_dir in _item_source_dirs(session, item):
             if source_dir not in closure:
                 closure.append(source_dir)
     return closure
@@ -578,7 +611,15 @@ class DeviceRuntimeItem(pytest.Item):
         self.test_file = test_file
         self.target_device: DeviceEntry | None = target_device
         self.library_dir: Path = _resolve_library_dir(test_file)
-        self.library_name = self.library_dir.name
+        # A project functional test scopes by its slash-form project name
+        # (``garage/heater``) so same-named nested projects keep distinct
+        # batch cache keys and runtime-config scopes; a library test keeps
+        # its directory name.
+        self.library_name = (
+            _project_unit_name(test_file)
+            if _is_project_functional_test(test_file)
+            else self.library_dir.name
+        )
         self.reported_duration: float | None = None
         self.reported_test_total_duration: float | None = None
 
@@ -825,15 +866,46 @@ class _NoImportModule(pytest.Module):
         return iter([])
 
 
+def pytest_ignore_collect(
+    collection_path: Path, config: pytest.Config,
+) -> bool | None:
+    """Ignore untargeted project functional tests entirely.
+
+    A ``projects/<name>/functional_tests/test_*.py`` file runs on a board
+    only when its ``functional_tests`` tree is explicitly named on the
+    command line.  On a bare workspace sweep it is ignored here — neither
+    host-imported as plain pytest nor routed to the device backend — so a
+    board-facing project acceptance test never runs its assertions
+    against the host's stand-in backend.
+
+    Returns ``True`` (ignore) for a project functional test that is not a
+    library functional test and whose tree wasn't targeted.  Library
+    functional tests and targeted project files return ``None`` so their
+    normal routing runs.  The ``not _is_library_functional_test`` guard
+    is belt-and-suspenders: a checkout under a directory named
+    ``projects`` that also holds ``libraries/`` already classifies as a
+    library test, never a project one.
+    """
+    if (
+        _is_project_functional_test(collection_path)
+        and not _is_library_functional_test(collection_path)
+        and not _project_functional_test_targeted(config, collection_path)
+    ):
+        return True
+    return None
+
+
 def pytest_pycollect_makemodule(
     module_path: Path, parent: pytest.Collector,
 ) -> pytest.Module | None:
     """Suppress default Module collection for plugin-owned paths.
 
-    Always claims ``libraries/<name>/functional_tests/`` files. The
-    default Module factory would import them on the host, which fails
-    for runtime-restricted files that ``import microcontroller`` /
-    ``import wifi`` at top level.
+    Always claims ``libraries/<name>/functional_tests/`` and targeted
+    ``projects/<name>/functional_tests/`` files. The default Module
+    factory would import them on the host, which fails for runtime-
+    restricted files that ``import microcontroller`` / ``import wifi`` at
+    top level.  Untargeted project functional tests never reach this hook
+    — :func:`pytest_ignore_collect` drops them before collection.
 
     Under ``--target unix-port`` *or* ``--target device-unit`` we also
     claim ``libraries/<name>/tests/`` files so the harness backend
@@ -859,7 +931,10 @@ def pytest_pycollect_makemodule(
     Returning ``None`` here lets pytest's default Module factory
     import it as ordinary host-side pytest.
     """
-    if _is_library_functional_test(module_path) and not is_host_only_test(module_path):
+    if (
+        _is_library_functional_test(module_path)
+        or _is_project_functional_test(module_path)
+    ) and not is_host_only_test(module_path):
         return _NoImportModule.from_parent(  # pyright: ignore[reportUnknownMemberType]
             parent, path=module_path,
         )
@@ -878,10 +953,15 @@ def pytest_collect_file(
 ) -> DeviceTestFile | None:
     """Collect harness-shaped test files as runtime test items.
 
-    Two activation paths:
+    Three activation paths:
 
     - ``libraries/<name>/functional_tests/test_*.py``: always claimed,
       runs through the device-transport backend.
+    - ``projects/<name>/functional_tests/test_*.py``: claimed only when
+      the tree was explicitly targeted (:func:`pytest_ignore_collect`
+      drops it on a bare sweep before this hook runs, so reaching here
+      means the invocation named it).  Runs through the same device-
+      transport backend.
     - ``libraries/<name>/tests/test_*.py``: claimed under
       ``--target unix-port`` (unix-port subprocess backend) and
       ``--target device-unit`` (device transport backend, the
@@ -914,6 +994,10 @@ def pytest_collect_file(
         if is_host_only_test(file_path):
             return None
         return DeviceTestFile.from_parent(parent, path=file_path)  # pyright: ignore[reportUnknownMemberType]
+    if _is_project_functional_test(file_path):
+        if is_host_only_test(file_path):
+            return None
+        return DeviceTestFile.from_parent(parent, path=file_path)  # pyright: ignore[reportUnknownMemberType]
     if (
         _is_library_unit_test(file_path)
         and _collect_unit_tests_on_device_backend(parent.config)
@@ -932,13 +1016,14 @@ def pytest_collection_modifyitems(
     """Three passes:
 
     1. Belt-and-suspenders: deselect any non-device items under
-       functional tests UNLESS the file is marked
+       library or project functional tests UNLESS the file is marked
        ``__chumicro_host_only__ = True`` (the Category 1 host-driver
        shape).  The :func:`pytest_pycollect_makemodule` hook already
        prevents the default Module factory from importing
-       device-target files under ``libraries/<name>/functional_tests/``,
-       so duplicate items for those should never be produced in
-       practice.  A host-only file is a regular pytest test that
+       device-target files under ``libraries/<name>/functional_tests/``
+       and targeted ``projects/<name>/functional_tests/``, so duplicate
+       items for those should never be produced in practice.  A host-only
+       file is a regular pytest test that
        drives a paired board file via fixtures — its
        :class:`pytest.Function` items are exactly the right shape and
        must survive this sweep.
@@ -964,10 +1049,14 @@ def pytest_collection_modifyitems(
     deselected: list[pytest.Item] = []
     selected: list[pytest.Item] = []
     for item in items:
+        item_path = Path(str(item.fspath))
         if (
-            _is_library_functional_test(Path(str(item.fspath)))
+            (
+                _is_library_functional_test(item_path)
+                or _is_project_functional_test(item_path)
+            )
             and not isinstance(item, DeviceRuntimeItem)
-            and not is_host_only_test(Path(str(item.fspath)))
+            and not is_host_only_test(item_path)
         ):
             deselected.append(item)
         else:
@@ -1242,15 +1331,16 @@ def _bulk_stage_for_device(
         target = item.target_device
         if target is None or target.identifier != device_entry.identifier:
             continue
-        if library_filter is not None and item.library_dir.name != library_filter:
+        # Match on ``library_name`` (not ``library_dir.name``): the two
+        # are identical for library items, but a nested project's name
+        # is slash-form (``garage/heater``) while its dir name is just
+        # the leaf — and the caller passes ``item.library_name``.
+        if library_filter is not None and item.library_name != library_filter:
             continue
 
-        # Collect source dirs for this item's library.
-        for source_dir in resolve_library_source_dirs(
-            item.library_dir,
-            libraries_root=_libraries_root(session),
-            test_files=[item.test_file],
-        ):
+        # Collect source dirs for this item's tested unit
+        # (project-aware; see _item_source_dirs).
+        for source_dir in _item_source_dirs(session, item):
             if source_dir not in seen_source_dirs:
                 seen_source_dirs.append(source_dir)
 

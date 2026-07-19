@@ -1191,8 +1191,8 @@ class TestEnsurePrepared:
         transport = FakeTransport(mode="ram")
         prime_transport_cache(hot_path_cache, device, transport)
 
-        monkeypatch.setattr(device_backend, "resolve_library_source_dirs",
-            lambda library_dir, *, libraries_root=None, test_files=None: [library_dir / "src"],
+        monkeypatch.setattr(device_backend, "_item_source_dirs",
+            lambda session, item: [item.library_dir / "src"],
         )
 
         test_file_a = _make_functional_test_file(tmp_path, "alpha")
@@ -1296,9 +1296,9 @@ class TestPerFileReset:
         monkeypatch.setattr(device_backend, "_bulk_stage_for_device",
             lambda *args, **kwargs: bulk_calls.append(1),
         )
-        monkeypatch.setattr(device_backend, "resolve_library_source_dirs",
-            lambda library_dir, *, libraries_root=None, test_files=None: [
-                library_dir / "src",
+        monkeypatch.setattr(device_backend, "_item_source_dirs",
+            lambda session, item: [
+                item.library_dir / "src",
             ],
         )
 
@@ -1347,8 +1347,8 @@ class TestEnsureBatchResult:
         transport = FakeTransport(mode="ram", outputs=[_PASS_OUTPUT])
         prime_transport_cache(hot_path_cache, device, transport)
 
-        monkeypatch.setattr(device_backend, "resolve_library_source_dirs",
-            lambda library_dir, *, libraries_root=None, test_files=None: [library_dir / "src"],
+        monkeypatch.setattr(device_backend, "_item_source_dirs",
+            lambda session, item: [item.library_dir / "src"],
         )
 
         test_file = _make_functional_test_file(tmp_path, "alpha")
@@ -1374,8 +1374,8 @@ class TestEnsureBatchResult:
         transport = FakeTransport(mode="ram", outputs=[_PASS_OUTPUT])
         prime_transport_cache(hot_path_cache, device, transport)
 
-        monkeypatch.setattr(device_backend, "resolve_library_source_dirs",
-            lambda library_dir, *, libraries_root=None, test_files=None: [library_dir / "src"],
+        monkeypatch.setattr(device_backend, "_item_source_dirs",
+            lambda session, item: [item.library_dir / "src"],
         )
 
         test_file = _make_functional_test_file(tmp_path, "alpha")
@@ -1403,8 +1403,8 @@ class TestEnsureBatchResult:
         )
         prime_transport_cache(hot_path_cache, device, transport)
 
-        monkeypatch.setattr(device_backend, "resolve_library_source_dirs",
-            lambda library_dir, *, libraries_root=None, test_files=None: [library_dir / "src"],
+        monkeypatch.setattr(device_backend, "_item_source_dirs",
+            lambda session, item: [item.library_dir / "src"],
         )
 
         test_file = _make_functional_test_file(tmp_path, "alpha")
@@ -1440,8 +1440,8 @@ class TestEnsureBatchResult:
         )
         prime_transport_cache(hot_path_cache, device, transport)
 
-        monkeypatch.setattr(device_backend, "resolve_library_source_dirs",
-            lambda library_dir, *, libraries_root=None, test_files=None: [library_dir / "src"],
+        monkeypatch.setattr(device_backend, "_item_source_dirs",
+            lambda session, item: [item.library_dir / "src"],
         )
 
         test_file = _make_functional_test_file(tmp_path, "alpha")
@@ -1489,8 +1489,8 @@ class TestDeviceRunFileItemRuntest:
         device = hot_path_device()
         transport = FakeTransport(mode="ram", outputs=[_PASS_OUTPUT])
         prime_transport_cache(hot_path_cache, device, transport)
-        monkeypatch.setattr(device_backend, "resolve_library_source_dirs",
-            lambda library_dir, *, libraries_root=None, test_files=None: [library_dir / "src"],
+        monkeypatch.setattr(device_backend, "_item_source_dirs",
+            lambda session, item: [item.library_dir / "src"],
         )
 
         test_file = _make_functional_test_file(tmp_path, "alpha")
@@ -1529,8 +1529,8 @@ class TestDeviceTestItemRuntest:
         device = hot_path_device()
         transport = FakeTransport(mode="ram", outputs=[_PASS_OUTPUT])
         prime_transport_cache(hot_path_cache, device, transport)
-        monkeypatch.setattr(device_backend, "resolve_library_source_dirs",
-            lambda library_dir, *, libraries_root=None, test_files=None: [library_dir / "src"],
+        monkeypatch.setattr(device_backend, "_item_source_dirs",
+            lambda session, item: [item.library_dir / "src"],
         )
 
         test_file = _make_functional_test_file(tmp_path, "alpha")
@@ -1548,8 +1548,8 @@ class TestDeviceTestItemRuntest:
         device = hot_path_device()
         transport = FakeTransport(mode="ram", outputs=[_TWO_TESTS_OUTPUT])
         prime_transport_cache(hot_path_cache, device, transport)
-        monkeypatch.setattr(device_backend, "resolve_library_source_dirs",
-            lambda library_dir, *, libraries_root=None, test_files=None: [library_dir / "src"],
+        monkeypatch.setattr(device_backend, "_item_source_dirs",
+            lambda session, item: [item.library_dir / "src"],
         )
 
         test_file = _make_functional_test_file(tmp_path, "alpha")
@@ -1570,8 +1570,8 @@ class TestDeviceTestItemRuntest:
         device = hot_path_device()
         transport = FakeTransport(mode="ram", outputs=[_PASS_OUTPUT])
         prime_transport_cache(hot_path_cache, device, transport)
-        monkeypatch.setattr(device_backend, "resolve_library_source_dirs",
-            lambda library_dir, *, libraries_root=None, test_files=None: [library_dir / "src"],
+        monkeypatch.setattr(device_backend, "_item_source_dirs",
+            lambda session, item: [item.library_dir / "src"],
         )
 
         test_file = _make_functional_test_file(tmp_path, "alpha")
@@ -1595,8 +1595,8 @@ class TestDeviceTestItemRuntest:
         device = hot_path_device()
         transport = FakeTransport(mode="ram", outputs=[_TWO_TESTS_OUTPUT])
         prime_transport_cache(hot_path_cache, device, transport)
-        monkeypatch.setattr(device_backend, "resolve_library_source_dirs",
-            lambda library_dir, *, libraries_root=None, test_files=None: [library_dir / "src"],
+        monkeypatch.setattr(device_backend, "_item_source_dirs",
+            lambda session, item: [item.library_dir / "src"],
         )
 
         test_file = _make_functional_test_file(tmp_path, "alpha")

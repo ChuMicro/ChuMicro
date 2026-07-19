@@ -51,12 +51,23 @@ _REQUIRED_KEYS_KEY: pytest.StashKey[dict[str, tuple[str, ...]]] = pytest.StashKe
 
 
 def _library_scope_from_path(path: Path) -> str | None:
-    """Return the library name for a ``libraries/<name>/functional_tests`` path.
+    """Return the scope key for a functional-test conftest path.
 
     Recognizes the ``libraries/<name>/functional_tests/...`` layout and
-    returns ``<name>`` — the same string a ``DeviceRuntimeItem`` carries
-    as ``library_name`` — so a conftest's registration and its library's
-    items resolve to one scope key.  Any other path returns ``None``.
+    returns ``<name>``, and the ``projects/<name>/functional_tests/...``
+    layout (possibly nested, ``projects/garage/heater/functional_tests/``)
+    and returns the slash-form project name (``garage/heater``).  Either
+    is the same string a ``DeviceRuntimeItem`` carries as
+    ``library_name``, so a conftest's registration and its items resolve
+    to one scope key and a project's ``functional_tests/conftest.py``
+    scopes its ``set_runtime_config`` to its own project.  Any other path
+    returns ``None``.
+
+    The project path-shape walk mirrors
+    ``session._is_project_functional_test`` and
+    ``session._project_unit_name`` — duplicated here (as the library-name
+    walk already is) to keep this module a leaf that ``session`` imports,
+    never the reverse.
     """
     parts = path.parts
     for index, component in enumerate(parts):
@@ -66,6 +77,43 @@ def _library_scope_from_path(path: Path) -> str | None:
             and parts[index - 2] == "libraries"
         ):
             return parts[index - 1]
+    return _project_scope_from_path(parts)
+
+
+def _project_scope_from_path(parts: tuple[str, ...]) -> str | None:
+    """Return the slash-form project name for a project functional-test path.
+
+    Ownership is the nearest marker walking up from a ``functional_tests``
+    component: ``projects`` (not ``libraries``) makes the tree
+    project-owned.  The name is the components between the LAST
+    ``projects`` marker and ``functional_tests``, joined with ``/``,
+    falling back to the immediate parent's name when nothing sits
+    between.  Returns ``None`` for a path no ``functional_tests``
+    component classifies as project-owned.
+    """
+    for index, component in enumerate(parts):
+        if component != "functional_tests":
+            continue
+        preceding = parts[:index]
+        owner_is_project = False
+        for candidate in reversed(preceding):
+            if candidate == "libraries":
+                break
+            if candidate == "projects":
+                owner_is_project = True
+                break
+        if not owner_is_project:
+            continue
+        last_projects_index: int | None = None
+        for inner_index, inner_component in enumerate(preceding):
+            if inner_component == "projects":
+                last_projects_index = inner_index
+        if last_projects_index is not None:
+            tail = preceding[last_projects_index + 1 :]
+            if tail:
+                return "/".join(tail)
+            if preceding:
+                return preceding[-1]
     return None
 
 

@@ -223,6 +223,184 @@ def resolve_library_source_dirs(
     return dependency_dirs
 
 
+def _chumicro_dependency_import_names(pyproject_file: Path) -> list[str]:
+    """Return the ``chumicro_*`` import names in a pyproject's dependencies.
+
+    Reads ``[project].dependencies`` and maps each ``chumicro-*`` entry to
+    its import name (``chumicro-kvstore`` -> ``chumicro_kvstore``).  A
+    missing file or missing dependencies list yields ``[]``.
+    """
+    if not pyproject_file.is_file():
+        return []
+    with pyproject_file.open("rb") as toml_file:
+        data: dict[str, Any] = tomllib.load(toml_file)
+    dependencies: list[str] = data.get("project", {}).get("dependencies", [])
+    import_names: list[str] = []
+    for dependency in dependencies:
+        library_name = _library_name_from_pip_dependency(dependency)
+        if library_name is not None:
+            import_names.append(f"chumicro_{library_name}")
+    return import_names
+
+
+def _importable_package_name(child: Path) -> str | None:
+    """Return the import name a top-level ``src`` child provides, or ``None``.
+
+    A directory with an ``__init__.py`` imports under its own name; a
+    bare ``*.py`` file imports under its stem.  Anything else (a data
+    file, a ``__pycache__`` directory, a namespace-package directory with
+    no ``__init__.py``) contributes no import name.
+    """
+    if child.is_dir():
+        if (child / "__init__.py").is_file():
+            return child.name
+        return None
+    if child.suffix == ".py":
+        return child.stem
+    return None
+
+
+def _project_library_source_map(workspace_root: Path) -> dict[str, Path]:
+    """Map each importable package name to the source dir that provides it.
+
+    Covers a workspace's two library-acquisition surfaces:
+
+    * ``workspace.yml``'s ``library_sources:`` block (dev mode — an
+      explicit ``{import_name: directory}`` override).  Relative values
+      resolve against *workspace_root*; entries whose directory is absent
+      are skipped.
+    * ``libraries/<name>/src`` trees (regular mode — populated by
+      ``chumicro-workspace library add``).  Each top-level importable
+      child of a ``src`` directory maps to that directory.
+
+    ``library_sources:`` overrides win: they populate the map first, and
+    the ``libraries/`` scan uses ``setdefault``.
+    """
+    from chumicro_workspace.import_graph import read_library_sources  # noqa: PLC0415
+
+    source_map: dict[str, Path] = {}
+    for package_name, raw_path in read_library_sources(
+        workspace_root / "workspace.yml",
+    ).items():
+        source_directory = (
+            raw_path if raw_path.is_absolute() else workspace_root / raw_path
+        )
+        if source_directory.is_dir():
+            source_map[package_name] = source_directory
+
+    libraries_root = workspace_root / "libraries"
+    if libraries_root.is_dir():
+        for library_dir in sorted(libraries_root.iterdir()):
+            source_directory = library_dir / "src"
+            if not source_directory.is_dir():
+                continue
+            for child in sorted(source_directory.iterdir()):
+                import_name = _importable_package_name(child)
+                if import_name is not None:
+                    source_map.setdefault(import_name, source_directory)
+    return source_map
+
+
+def _accumulate_project_source_dir(
+    import_name: str,
+    source_map: dict[str, Path],
+    resolved: list[Path],
+    visited_import_names: set[str],
+) -> None:
+    """Add *import_name*'s source dir plus its chumicro deps, dependency-first.
+
+    Looks *import_name* up in *source_map*.  An unresolvable name is
+    skipped silently — the on-device ``ImportError`` names the missing
+    library, matching how :func:`resolve_library_source_dirs` treats an
+    absent dependency directory.  For a resolved directory, its sibling
+    ``pyproject.toml`` ``[project].dependencies`` are walked first so a
+    dependency's ``src`` lands before the dependent's.
+    *visited_import_names* guards against cycles and repeated work.
+    """
+    if import_name in visited_import_names:
+        return
+    visited_import_names.add(import_name)
+    source_directory = source_map.get(import_name)
+    if source_directory is None:
+        return
+    for dependency_import_name in _chumicro_dependency_import_names(
+        source_directory.parent / "pyproject.toml",
+    ):
+        _accumulate_project_source_dir(
+            dependency_import_name,
+            source_map,
+            resolved,
+            visited_import_names,
+        )
+    if source_directory not in resolved:
+        resolved.append(source_directory)
+
+
+def resolve_project_source_dirs(
+    project_dir: Path,
+    *,
+    workspace_root: Path,
+    test_files: list[Path],
+) -> list[Path]:
+    """Return source dirs for the chumicro libraries a project's tests need.
+
+    The project-tree sibling of :func:`resolve_library_source_dirs`,
+    aware of a workspace's library-acquisition surfaces.  Where the
+    library resolver walks a library's own ``pyproject.toml`` and
+    ``src``, this one resolves the imports a workspace project's
+    functional tests make against the libraries the workspace has
+    acquired:
+
+    * Dev mode: ``workspace.yml``'s ``library_sources:`` map points each
+      import name at an external checkout (typically a relative path into
+      a sibling mono-repo).
+    * Regular mode: ``chumicro-workspace library add`` materialises each
+      library under ``libraries/<name>/src``.
+
+    Seeds from the project's own ``pyproject.toml``
+    ``[project].dependencies`` (best-effort — a workspace project need not
+    carry one) and from every ``chumicro_*`` import in *test_files*, then
+    walks the transitive ``chumicro-*`` dependency closure via each
+    resolved library's sibling ``pyproject.toml``.  Dependency-first
+    ordering (a dependency's ``src`` precedes its dependent's), cycle-
+    guarded and de-duplicated.
+
+    An import that resolves to no acquired library is skipped silently:
+    the on-device ``ImportError`` names it, the same contract the library
+    resolver keeps for an absent dependency directory.
+
+    Args:
+        project_dir: The ``projects/<name>/`` directory whose functional
+            tests are being resolved.  Its own ``pyproject.toml``
+            dependencies seed the closure when present.
+        workspace_root: Workspace root holding ``workspace.yml`` and any
+            ``libraries/`` directory.
+        test_files: Functional test files whose ``chumicro_*`` imports
+            seed the closure.
+
+    Returns:
+        Dependency-first ordered, de-duplicated list of ``src``
+        directories to stage.
+    """
+    source_map = _project_library_source_map(workspace_root)
+    resolved: list[Path] = []
+    visited_import_names: set[str] = set()
+
+    seed_import_names: list[str] = list(
+        _chumicro_dependency_import_names(project_dir / "pyproject.toml"),
+    )
+    for library_name in _resolve_test_imported_library_names(test_files):
+        import_name = f"chumicro_{library_name}"
+        if import_name not in seed_import_names:
+            seed_import_names.append(import_name)
+
+    for import_name in seed_import_names:
+        _accumulate_project_source_dir(
+            import_name, source_map, resolved, visited_import_names,
+        )
+    return resolved
+
+
 def resolve_effective_deploy_mode(
     device_entry: DeviceEntry,
     deploy_mode_override: str | None,

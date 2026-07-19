@@ -776,3 +776,190 @@ class TestResolveEffectiveDeployMode:
         )
         object.__setattr__(device, "deploy_mode", "")
         assert device_testing.resolve_effective_deploy_mode(device, None) == "flash"
+
+
+def _make_project_functional_test(
+    project_dir: Path, imports: list[str],
+) -> Path:
+    """Create ``<project_dir>/functional_tests/test_acceptance.py`` and return it.
+
+    Writes one ``import chumicro_<name>`` line per *imports* entry so the
+    test-import seed of ``resolve_project_source_dirs`` has something to
+    walk, plus a single passing test.
+    """
+    functional_dir = project_dir / "functional_tests"
+    functional_dir.mkdir(parents=True)
+    import_lines = "\n".join(f"import chumicro_{name}" for name in imports)
+    test_file = functional_dir / "test_acceptance.py"
+    test_file.write_text(
+        f"{import_lines}\n\ndef test_acceptance() -> None:\n    pass\n",
+    )
+    return test_file
+
+
+class TestResolveProjectSourceDirs:
+    """``resolve_project_source_dirs`` against synthetic workspaces.
+
+    Materializes a workspace under ``tmp_path`` — a project tree plus the
+    library-acquisition surfaces (``libraries/<name>/src`` for regular
+    mode, a ``workspace.yml`` ``library_sources:`` map for dev mode) — so
+    the resolution stays independent of any on-disk layout.
+    """
+
+    def test_regular_mode_resolves_a_library_added_source(
+        self, tmp_path: Path,
+    ) -> None:
+        """A ``library add`` src dir resolves from a test's ``chumicro_`` import."""
+        workspace_root = tmp_path
+        _make_synthetic_library(workspace_root / "libraries", "foo")
+        project_dir = workspace_root / "projects" / "sensor"
+        test_file = _make_project_functional_test(project_dir, ["foo"])
+
+        result = device_testing.resolve_project_source_dirs(
+            project_dir,
+            workspace_root=workspace_root,
+            test_files=[test_file],
+        )
+
+        assert result == [workspace_root / "libraries" / "foo" / "src"]
+
+    def test_dev_mode_resolves_library_sources_relative_path(
+        self, tmp_path: Path,
+    ) -> None:
+        """A ``library_sources:`` relative path resolves against the workspace root."""
+        workspace_root = tmp_path
+        external_source = workspace_root / "external" / "wifi" / "src"
+        (external_source / "chumicro_wifi").mkdir(parents=True)
+        (external_source / "chumicro_wifi" / "__init__.py").touch()
+        (workspace_root / "external" / "wifi" / "pyproject.toml").write_text(
+            '[project]\nname = "chumicro-wifi"\n',
+        )
+        (workspace_root / "workspace.yml").write_text(
+            "library_sources:\n  chumicro_wifi: external/wifi/src\n",
+        )
+        project_dir = workspace_root / "projects" / "sensor"
+        test_file = _make_project_functional_test(project_dir, ["wifi"])
+
+        result = device_testing.resolve_project_source_dirs(
+            project_dir,
+            workspace_root=workspace_root,
+            test_files=[test_file],
+        )
+
+        assert result == [external_source]
+
+    def test_transitive_dependency_precedes_dependent(
+        self, tmp_path: Path,
+    ) -> None:
+        """A sibling-pyproject dependency stages before the library that needs it."""
+        workspace_root = tmp_path
+        _make_synthetic_library(workspace_root / "libraries", "bar")
+        _make_synthetic_library(
+            workspace_root / "libraries", "foo", deps=["bar"],
+        )
+        project_dir = workspace_root / "projects" / "sensor"
+        test_file = _make_project_functional_test(project_dir, ["foo"])
+
+        result = device_testing.resolve_project_source_dirs(
+            project_dir,
+            workspace_root=workspace_root,
+            test_files=[test_file],
+        )
+
+        bar_source = workspace_root / "libraries" / "bar" / "src"
+        foo_source = workspace_root / "libraries" / "foo" / "src"
+        assert result.index(bar_source) < result.index(foo_source)
+
+    def test_unresolvable_import_is_skipped(self, tmp_path: Path) -> None:
+        """An import for a library the workspace never acquired is dropped silently."""
+        workspace_root = tmp_path
+        _make_synthetic_library(workspace_root / "libraries", "foo")
+        project_dir = workspace_root / "projects" / "sensor"
+        test_file = _make_project_functional_test(project_dir, ["absent"])
+
+        result = device_testing.resolve_project_source_dirs(
+            project_dir,
+            workspace_root=workspace_root,
+            test_files=[test_file],
+        )
+
+        assert result == []
+
+    def test_diamond_dependencies_are_deduplicated(
+        self, tmp_path: Path,
+    ) -> None:
+        """A shared leaf reachable two ways appears exactly once."""
+        workspace_root = tmp_path
+        _make_synthetic_library(workspace_root / "libraries", "leaf")
+        _make_synthetic_library(
+            workspace_root / "libraries", "left", deps=["leaf"],
+        )
+        _make_synthetic_library(
+            workspace_root / "libraries", "right", deps=["leaf"],
+        )
+        _make_synthetic_library(
+            workspace_root / "libraries", "top", deps=["left", "right"],
+        )
+        project_dir = workspace_root / "projects" / "sensor"
+        test_file = _make_project_functional_test(project_dir, ["top"])
+
+        result = device_testing.resolve_project_source_dirs(
+            project_dir,
+            workspace_root=workspace_root,
+            test_files=[test_file],
+        )
+
+        leaf_source = workspace_root / "libraries" / "leaf" / "src"
+        assert len(result) == len(set(result))
+        assert result.count(leaf_source) == 1
+
+    def test_dependency_cycle_terminates(self, tmp_path: Path) -> None:
+        """Mutually-dependent libraries resolve without infinite recursion."""
+        workspace_root = tmp_path
+        _make_synthetic_library(
+            workspace_root / "libraries", "foo", deps=["bar"],
+        )
+        _make_synthetic_library(
+            workspace_root / "libraries", "bar", deps=["foo"],
+        )
+        project_dir = workspace_root / "projects" / "sensor"
+        test_file = _make_project_functional_test(project_dir, ["foo"])
+
+        result = device_testing.resolve_project_source_dirs(
+            project_dir,
+            workspace_root=workspace_root,
+            test_files=[test_file],
+        )
+
+        foo_source = workspace_root / "libraries" / "foo" / "src"
+        bar_source = workspace_root / "libraries" / "bar" / "src"
+        assert set(result) == {foo_source, bar_source}
+
+    def test_project_pyproject_dependency_is_seeded(
+        self, tmp_path: Path,
+    ) -> None:
+        """A project's own ``pyproject`` chumicro dep seeds the closure.
+
+        A workspace project need not carry a ``pyproject.toml``; when it
+        does, its ``[project].dependencies`` seed resolution even for a
+        library the functional test never imports directly.
+        """
+        workspace_root = tmp_path
+        _make_synthetic_library(workspace_root / "libraries", "foo")
+        project_dir = workspace_root / "projects" / "sensor"
+        project_dir.mkdir(parents=True)
+        (project_dir / "pyproject.toml").write_text(
+            '[project]\nname = "sensor"\ndependencies = ["chumicro-foo"]\n',
+        )
+        functional_dir = project_dir / "functional_tests"
+        functional_dir.mkdir()
+        test_file = functional_dir / "test_acceptance.py"
+        test_file.write_text("def test_acceptance() -> None:\n    pass\n")
+
+        result = device_testing.resolve_project_source_dirs(
+            project_dir,
+            workspace_root=workspace_root,
+            test_files=[test_file],
+        )
+
+        assert result == [workspace_root / "libraries" / "foo" / "src"]
