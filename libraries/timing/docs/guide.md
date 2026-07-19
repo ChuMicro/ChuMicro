@@ -90,6 +90,21 @@ left = deadline.remaining(ticks_ms())  # ms until due, clamped at 0
 
 `expired(now)` reports whether the deadline has passed; `remaining(now)` returns the milliseconds left (clamped at `0`). `reset(now)` re-arms the same period from a new moment.
 
+## Choosing a wait
+
+Every ChuMicro wait answers one question.  Pick by the question, not the type.
+
+| You want | Reach for | Lives in |
+|---|---|---|
+| "run this every N ms" | `Rate` | `chumicro_timing` |
+| "give up after N ms" | `Deadline` | `chumicro_timing` |
+| "a flag one place sets, another awaits" | `Signal` + `wait_for` | `chumicro_timing` |
+| "pause this generator until the socket is readable/writable" | `ReadWait` / `WriteWait` | `chumicro_sockets` |
+| "tell the runner when my service next needs the CPU" | `next_deadline` / `io_interest` on your service | the runner service contract |
+| "block the loop until a task finishes, with a timeout" | `runner.run_until` | `chumicro_runner` |
+
+`Signal` and `wait_for` live in the opt-in `chumicro_timing.waits` submodule; `ReadWait` and `WriteWait` in `chumicro_sockets.waits`.  A service reports `next_deadline` and `io_interest` as methods the runner reads each tick, not something you import.
+
 ## Using ticks directly
 
 For custom timing logic, you can use the tick functions directly:
