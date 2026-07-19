@@ -1,9 +1,10 @@
 # Decision 0093: One transport-factory contract, local copies
 
-Status: `accepted`
+Status: `superseded`
 Date: `2026-07-03`
 Summary: One factory contract for the networking libraries: side-effect-free construction, transports open on first use, lazy adapter import, from_config stays a classmethod; copies stay local.
 Related: Decision 0062 (skip-factories deploy mechanism), Decision 0089 (generator surfaces), Decision 0092 (enabled the ntp break)
+Superseded by: [Decision 0115](0115-shared-sockets-factories.md)
 
 ## Context
 
