@@ -14,6 +14,9 @@ from pathlib import Path
 import generate_landing_page
 import pytest
 from generate_landing_page import (
+    LIBRARY_ORDER,
+    WORKBENCH_ORDER,
+    _curated_sort,
     _discover_packages,
     _library_card,
     _render_section,
@@ -172,6 +175,29 @@ class TestDiscoverPackages:
         library_names = {entry["name"] for entry in libraries}
         assert "lib_a" not in library_names
         assert "lib_b" in library_names
+
+
+class TestCuratedSort:
+    """Tests for the curated landing-page card order."""
+
+    def test_curated_names_lead_unknown_names_follow_alphabetically(self):
+        """Curated names keep tuple order; unlisted names sort after them."""
+        cards = [
+            {"name": "zeta"},
+            {"name": "compat"},
+            {"name": "timing"},
+            {"name": "alpha"},
+        ]
+        ordered = _curated_sort(cards, ("timing", "compat"))
+        assert [card["name"] for card in ordered] == [
+            "timing", "compat", "alpha", "zeta",
+        ]
+
+    def test_shipped_orders_lead_with_the_readme_front_doors(self):
+        """The first card (and install snippet) is timing for libraries and
+        workspace for workbench, matching the root README's teaching order."""
+        assert LIBRARY_ORDER[0] == "timing"
+        assert WORKBENCH_ORDER[0] == "workspace"
 
 
 class TestGenerate:

@@ -28,6 +28,39 @@ from string import Template
 from repo_layout import discover_doc_dirs, is_parked, read_pyproject_description
 from shared import TEMPLATES_DIR
 
+#: Landing-page card order: the root README's library-table order, so the
+#: first card and the install snippet lead with the library the README
+#: teaches first (timing) instead of the alphabetically-first package.
+#: Names missing from the tuple sort after the curated set, alphabetically,
+#: so a newly added library appears without editing this file.
+LIBRARY_ORDER = (
+    "timing", "runner", "wifi", "requests", "http_server", "mqtt",
+    "websockets", "sockets", "ntp", "config", "kvstore", "msgpack",
+    "compat",
+)
+
+#: Workbench card order: the root README's bench-tools order, front door
+#: (workspace) first.  Same after-the-curated-set rule as LIBRARY_ORDER.
+WORKBENCH_ORDER = ("workspace", "deploy", "repl", "pytest-device", "checks")
+
+
+def _curated_sort(cards: list[dict], order: tuple[str, ...]) -> list[dict]:
+    """Return *cards* sorted by position in *order*, unknown names last.
+
+    Args:
+        cards: Package metadata dicts carrying a ``name`` key.
+        order: Curated package-name order.
+
+    Returns:
+        New list; curated names in tuple order, then the rest alphabetically.
+    """
+    def sort_key(card: dict) -> tuple[int, str]:
+        name = card["name"]
+        if name in order:
+            return (order.index(name), name)
+        return (len(order), name)
+    return sorted(cards, key=sort_key)
+
 
 def _package_metadata(package_dir: Path) -> dict:
     """Return the dict consumed by :func:`_library_card`.
@@ -72,7 +105,10 @@ def _discover_packages() -> tuple[list[dict], list[dict]]:
             libraries.append(metadata)
         elif parent_name == "workbench":
             workbench.append(metadata)
-    return libraries, workbench
+    return (
+        _curated_sort(libraries, LIBRARY_ORDER),
+        _curated_sort(workbench, WORKBENCH_ORDER),
+    )
 
 
 def _library_card(library: dict) -> str:
@@ -138,7 +174,7 @@ def _render_library_install(first_library: dict) -> str:
         "Library packages run on devices and ship through three channels:"
     )
     return f"""    <div class="install">
-      <h2>Install &mdash; libraries</h2>
+      <h2>Install: libraries</h2>
       <p class="section-description">{description}</p>
       <div class="install-block">
         <h3>pip (CPython, host-side use)</h3>
@@ -174,7 +210,7 @@ def _render_release_channels() -> str:
         "to switch between stable, experimental, and pinned versions."
     )
     return f"""    <div class="channels">
-      <h2>Release channels &mdash; libraries</h2>
+      <h2>Release channels: libraries</h2>
       <p class="section-description">{scope_note}</p>
       <table>
         <thead>
@@ -184,12 +220,12 @@ def _render_release_channels() -> str:
           <tr>
             <td><strong>Stable</strong></td>
             <td><a href="https://github.com/ChuMicro/ChuMicro-Bundle">ChuMicro-Bundle</a></td>
-            <td>Released, tested versions &mdash; recommended for production</td>
+            <td>Released, tested versions, recommended for production</td>
           </tr>
           <tr>
             <td><strong>Experimental</strong></td>
             <td><a href="https://github.com/ChuMicro/ChuMicro-Bundle-Experimental">ChuMicro-Bundle-Experimental</a></td>
-            <td>Pre-release &mdash; latest features, may contain breaking changes</td>
+            <td>Pre-release: latest features, may contain breaking changes</td>
           </tr>
         </tbody>
       </table>
@@ -211,7 +247,7 @@ def _render_workbench_install(first_workbench: dict) -> str:
         "CPython only:"
     )
     return f"""    <div class="install">
-      <h2>Install &mdash; workbench</h2>
+      <h2>Install: workbench</h2>
       <p class="section-description">{description}</p>
       <div class="install-block">
         <h3>pip (CPython)</h3>
