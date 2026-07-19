@@ -116,120 +116,18 @@
       <p class="section-description">Cross-runtime Python libraries for CircuitPython, MicroPython, and CPython.</p>
       <div class="libraries">
       <div class="card">
-        <h2><a href="compat/stable/">chumicro-compat</a></h2>
-        <p>Cross-runtime compatibility polyfills for CircuitPython, MicroPython, and CPython — functools.partial and more.</p>
+        <h2><a href="timing/stable/">chumicro-timing</a></h2>
+        <p>Wraparound-safe millisecond tick helpers plus wait value objects (deadlines, rates, signals) for CircuitPython, MicroPython, and CPython.</p>
         <div class="card-links">
-          <a href="compat/stable/guide/">Guide</a>
+          <a href="timing/stable/guide/">Guide</a>
           <span class="sep">&middot;</span>
-          <a href="compat/stable/api/">API</a>
+          <a href="timing/stable/api/">API</a>
           <span class="sep">&middot;</span>
-          <a href="compat/experimental/">Experimental</a>
+          <a href="timing/stable/testing/">Testing</a>
           <span class="sep">&middot;</span>
-          <a href="https://github.com/ChuMicro/ChuMicro/tree/main/libraries/compat">Source</a>
-        </div>
-      </div>
-
-      <div class="card">
-        <h2><a href="config/stable/">chumicro-config</a></h2>
-        <p>Standardized runtime-config helpers for ChuMicro libraries — section loader + on-device runtime-config reader.</p>
-        <div class="card-links">
-          <a href="config/stable/guide/">Guide</a>
+          <a href="timing/experimental/">Experimental</a>
           <span class="sep">&middot;</span>
-          <a href="config/stable/api/">API</a>
-          <span class="sep">&middot;</span>
-          <a href="config/experimental/">Experimental</a>
-          <span class="sep">&middot;</span>
-          <a href="https://github.com/ChuMicro/ChuMicro/tree/main/libraries/config">Source</a>
-        </div>
-      </div>
-
-      <div class="card">
-        <h2><a href="http_server/stable/">chumicro-http_server</a></h2>
-        <p>Non-blocking HTTP/1.1 server for CircuitPython, MicroPython, and CPython.</p>
-        <div class="card-links">
-          <a href="http_server/stable/guide/">Guide</a>
-          <span class="sep">&middot;</span>
-          <a href="http_server/stable/api/">API</a>
-          <span class="sep">&middot;</span>
-          <a href="http_server/experimental/">Experimental</a>
-          <span class="sep">&middot;</span>
-          <a href="https://github.com/ChuMicro/ChuMicro/tree/main/libraries/http_server">Source</a>
-        </div>
-      </div>
-
-      <div class="card">
-        <h2><a href="kvstore/stable/">chumicro-kvstore</a></h2>
-        <p>Tiny mutable key-value store for persisted runtime state — counters, timestamps, tokens — across CircuitPython, MicroPython, and CPython.</p>
-        <div class="card-links">
-          <a href="kvstore/stable/guide/">Guide</a>
-          <span class="sep">&middot;</span>
-          <a href="kvstore/stable/api/">API</a>
-          <span class="sep">&middot;</span>
-          <a href="kvstore/stable/testing/">Testing</a>
-          <span class="sep">&middot;</span>
-          <a href="kvstore/experimental/">Experimental</a>
-          <span class="sep">&middot;</span>
-          <a href="https://github.com/ChuMicro/ChuMicro/tree/main/libraries/kvstore">Source</a>
-        </div>
-      </div>
-
-      <div class="card">
-        <h2><a href="mqtt/stable/">chumicro-mqtt</a></h2>
-        <p>Non-blocking MQTT 3.1.1 client (QoS 0+1) for CircuitPython, MicroPython, and CPython.</p>
-        <div class="card-links">
-          <a href="mqtt/stable/guide/">Guide</a>
-          <span class="sep">&middot;</span>
-          <a href="mqtt/stable/api/">API</a>
-          <span class="sep">&middot;</span>
-          <a href="mqtt/stable/testing/">Testing</a>
-          <span class="sep">&middot;</span>
-          <a href="mqtt/experimental/">Experimental</a>
-          <span class="sep">&middot;</span>
-          <a href="https://github.com/ChuMicro/ChuMicro/tree/main/libraries/mqtt">Source</a>
-        </div>
-      </div>
-
-      <div class="card">
-        <h2><a href="msgpack/stable/">chumicro-msgpack</a></h2>
-        <p>Compact MessagePack serialization for CircuitPython, MicroPython, and CPython — delegates to the native C module when available.</p>
-        <div class="card-links">
-          <a href="msgpack/stable/guide/">Guide</a>
-          <span class="sep">&middot;</span>
-          <a href="msgpack/stable/api/">API</a>
-          <span class="sep">&middot;</span>
-          <a href="msgpack/experimental/">Experimental</a>
-          <span class="sep">&middot;</span>
-          <a href="https://github.com/ChuMicro/ChuMicro/tree/main/libraries/msgpack">Source</a>
-        </div>
-      </div>
-
-      <div class="card">
-        <h2><a href="ntp/stable/">chumicro-ntp</a></h2>
-        <p>Runner-shaped SNTP client over an injected UDP socket — pure-Python, cross-runtime.</p>
-        <div class="card-links">
-          <a href="ntp/stable/guide/">Guide</a>
-          <span class="sep">&middot;</span>
-          <a href="ntp/stable/api/">API</a>
-          <span class="sep">&middot;</span>
-          <a href="ntp/experimental/">Experimental</a>
-          <span class="sep">&middot;</span>
-          <a href="https://github.com/ChuMicro/ChuMicro/tree/main/libraries/ntp">Source</a>
-        </div>
-      </div>
-
-      <div class="card">
-        <h2><a href="requests/stable/">chumicro-requests</a></h2>
-        <p>Non-blocking HTTP/1.1 client for CircuitPython, MicroPython, and CPython.</p>
-        <div class="card-links">
-          <a href="requests/stable/guide/">Guide</a>
-          <span class="sep">&middot;</span>
-          <a href="requests/stable/api/">API</a>
-          <span class="sep">&middot;</span>
-          <a href="requests/stable/testing/">Testing</a>
-          <span class="sep">&middot;</span>
-          <a href="requests/experimental/">Experimental</a>
-          <span class="sep">&middot;</span>
-          <a href="https://github.com/ChuMicro/ChuMicro/tree/main/libraries/requests">Source</a>
+          <a href="https://github.com/ChuMicro/ChuMicro/tree/main/libraries/timing">Source</a>
         </div>
       </div>
 
@@ -250,34 +148,64 @@
       </div>
 
       <div class="card">
-        <h2><a href="sockets/stable/">chumicro-sockets</a></h2>
-        <p>Cross-runtime TCP + TLS sockets for CircuitPython, MicroPython, and CPython.</p>
+        <h2><a href="wifi/stable/">chumicro-wifi</a></h2>
+        <p>Unified wifi supervisor across CircuitPython, MicroPython, and CPython — sole-supervisor model with reconnect, state machine, and per-runtime adapters.</p>
         <div class="card-links">
-          <a href="sockets/stable/guide/">Guide</a>
+          <a href="wifi/stable/guide/">Guide</a>
           <span class="sep">&middot;</span>
-          <a href="sockets/stable/api/">API</a>
+          <a href="wifi/stable/api/">API</a>
           <span class="sep">&middot;</span>
-          <a href="sockets/stable/testing/">Testing</a>
+          <a href="wifi/stable/testing/">Testing</a>
           <span class="sep">&middot;</span>
-          <a href="sockets/experimental/">Experimental</a>
+          <a href="wifi/experimental/">Experimental</a>
           <span class="sep">&middot;</span>
-          <a href="https://github.com/ChuMicro/ChuMicro/tree/main/libraries/sockets">Source</a>
+          <a href="https://github.com/ChuMicro/ChuMicro/tree/main/libraries/wifi">Source</a>
         </div>
       </div>
 
       <div class="card">
-        <h2><a href="timing/stable/">chumicro-timing</a></h2>
-        <p>Wraparound-safe millisecond tick helpers plus wait value objects (deadlines, rates, signals) for CircuitPython, MicroPython, and CPython.</p>
+        <h2><a href="requests/stable/">chumicro-requests</a></h2>
+        <p>Non-blocking HTTP/1.1 client for CircuitPython, MicroPython, and CPython.</p>
         <div class="card-links">
-          <a href="timing/stable/guide/">Guide</a>
+          <a href="requests/stable/guide/">Guide</a>
           <span class="sep">&middot;</span>
-          <a href="timing/stable/api/">API</a>
+          <a href="requests/stable/api/">API</a>
           <span class="sep">&middot;</span>
-          <a href="timing/stable/testing/">Testing</a>
+          <a href="requests/stable/testing/">Testing</a>
           <span class="sep">&middot;</span>
-          <a href="timing/experimental/">Experimental</a>
+          <a href="requests/experimental/">Experimental</a>
           <span class="sep">&middot;</span>
-          <a href="https://github.com/ChuMicro/ChuMicro/tree/main/libraries/timing">Source</a>
+          <a href="https://github.com/ChuMicro/ChuMicro/tree/main/libraries/requests">Source</a>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2><a href="http_server/stable/">chumicro-http_server</a></h2>
+        <p>Non-blocking HTTP/1.1 server for CircuitPython, MicroPython, and CPython.</p>
+        <div class="card-links">
+          <a href="http_server/stable/guide/">Guide</a>
+          <span class="sep">&middot;</span>
+          <a href="http_server/stable/api/">API</a>
+          <span class="sep">&middot;</span>
+          <a href="http_server/experimental/">Experimental</a>
+          <span class="sep">&middot;</span>
+          <a href="https://github.com/ChuMicro/ChuMicro/tree/main/libraries/http_server">Source</a>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2><a href="mqtt/stable/">chumicro-mqtt</a></h2>
+        <p>Non-blocking MQTT 3.1.1 client (QoS 0+1) for CircuitPython, MicroPython, and CPython.</p>
+        <div class="card-links">
+          <a href="mqtt/stable/guide/">Guide</a>
+          <span class="sep">&middot;</span>
+          <a href="mqtt/stable/api/">API</a>
+          <span class="sep">&middot;</span>
+          <a href="mqtt/stable/testing/">Testing</a>
+          <span class="sep">&middot;</span>
+          <a href="mqtt/experimental/">Experimental</a>
+          <span class="sep">&middot;</span>
+          <a href="https://github.com/ChuMicro/ChuMicro/tree/main/libraries/mqtt">Source</a>
         </div>
       </div>
 
@@ -298,43 +226,115 @@
       </div>
 
       <div class="card">
-        <h2><a href="wifi/stable/">chumicro-wifi</a></h2>
-        <p>Unified wifi supervisor across CircuitPython, MicroPython, and CPython — sole-supervisor model with reconnect, state machine, and per-runtime adapters.</p>
+        <h2><a href="sockets/stable/">chumicro-sockets</a></h2>
+        <p>Cross-runtime TCP + TLS sockets for CircuitPython, MicroPython, and CPython.</p>
         <div class="card-links">
-          <a href="wifi/stable/guide/">Guide</a>
+          <a href="sockets/stable/guide/">Guide</a>
           <span class="sep">&middot;</span>
-          <a href="wifi/stable/api/">API</a>
+          <a href="sockets/stable/api/">API</a>
           <span class="sep">&middot;</span>
-          <a href="wifi/stable/testing/">Testing</a>
+          <a href="sockets/stable/testing/">Testing</a>
           <span class="sep">&middot;</span>
-          <a href="wifi/experimental/">Experimental</a>
+          <a href="sockets/experimental/">Experimental</a>
           <span class="sep">&middot;</span>
-          <a href="https://github.com/ChuMicro/ChuMicro/tree/main/libraries/wifi">Source</a>
+          <a href="https://github.com/ChuMicro/ChuMicro/tree/main/libraries/sockets">Source</a>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2><a href="ntp/stable/">chumicro-ntp</a></h2>
+        <p>Runner-shaped SNTP client over an injected UDP socket — pure-Python, cross-runtime.</p>
+        <div class="card-links">
+          <a href="ntp/stable/guide/">Guide</a>
+          <span class="sep">&middot;</span>
+          <a href="ntp/stable/api/">API</a>
+          <span class="sep">&middot;</span>
+          <a href="ntp/experimental/">Experimental</a>
+          <span class="sep">&middot;</span>
+          <a href="https://github.com/ChuMicro/ChuMicro/tree/main/libraries/ntp">Source</a>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2><a href="config/stable/">chumicro-config</a></h2>
+        <p>Standardized runtime-config helpers for ChuMicro libraries — section loader + on-device runtime-config reader.</p>
+        <div class="card-links">
+          <a href="config/stable/guide/">Guide</a>
+          <span class="sep">&middot;</span>
+          <a href="config/stable/api/">API</a>
+          <span class="sep">&middot;</span>
+          <a href="config/experimental/">Experimental</a>
+          <span class="sep">&middot;</span>
+          <a href="https://github.com/ChuMicro/ChuMicro/tree/main/libraries/config">Source</a>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2><a href="kvstore/stable/">chumicro-kvstore</a></h2>
+        <p>Tiny mutable key-value store for persisted runtime state — counters, timestamps, tokens — across CircuitPython, MicroPython, and CPython.</p>
+        <div class="card-links">
+          <a href="kvstore/stable/guide/">Guide</a>
+          <span class="sep">&middot;</span>
+          <a href="kvstore/stable/api/">API</a>
+          <span class="sep">&middot;</span>
+          <a href="kvstore/stable/testing/">Testing</a>
+          <span class="sep">&middot;</span>
+          <a href="kvstore/experimental/">Experimental</a>
+          <span class="sep">&middot;</span>
+          <a href="https://github.com/ChuMicro/ChuMicro/tree/main/libraries/kvstore">Source</a>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2><a href="msgpack/stable/">chumicro-msgpack</a></h2>
+        <p>Compact MessagePack serialization for CircuitPython, MicroPython, and CPython — delegates to the native C module when available.</p>
+        <div class="card-links">
+          <a href="msgpack/stable/guide/">Guide</a>
+          <span class="sep">&middot;</span>
+          <a href="msgpack/stable/api/">API</a>
+          <span class="sep">&middot;</span>
+          <a href="msgpack/experimental/">Experimental</a>
+          <span class="sep">&middot;</span>
+          <a href="https://github.com/ChuMicro/ChuMicro/tree/main/libraries/msgpack">Source</a>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2><a href="compat/stable/">chumicro-compat</a></h2>
+        <p>Cross-runtime compatibility polyfills for CircuitPython, MicroPython, and CPython — functools.partial and more.</p>
+        <div class="card-links">
+          <a href="compat/stable/guide/">Guide</a>
+          <span class="sep">&middot;</span>
+          <a href="compat/stable/api/">API</a>
+          <span class="sep">&middot;</span>
+          <a href="compat/experimental/">Experimental</a>
+          <span class="sep">&middot;</span>
+          <a href="https://github.com/ChuMicro/ChuMicro/tree/main/libraries/compat">Source</a>
         </div>
       </div>
       </div>
     </section>
 
     <div class="install">
-      <h2>Install &mdash; libraries</h2>
+      <h2>Install: libraries</h2>
       <p class="section-description">Library packages run on devices and ship through three channels:</p>
       <div class="install-block">
         <h3>pip (CPython, host-side use)</h3>
-        <pre>pip install chumicro-compat</pre>
+        <pre>pip install chumicro-timing</pre>
       </div>
       <div class="install-block">
         <h3>circup (CircuitPython)</h3>
         <pre>circup bundle-add ChuMicro/ChuMicro-Bundle
-circup install chumicro_compat</pre>
+circup install chumicro_timing</pre>
       </div>
       <div class="install-block">
         <h3>mip (MicroPython)</h3>
-        <pre>mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_compat</pre>
+        <pre>mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_timing</pre>
       </div>
     </div>
 
     <div class="channels">
-      <h2>Release channels &mdash; libraries</h2>
+      <h2>Release channels: libraries</h2>
       <p class="section-description">The CircuitPython bundle is the distribution path for library code.  Workbench packages ship to PyPI only and don't appear in the bundle.</p>
       <table>
         <thead>
@@ -344,12 +344,12 @@ circup install chumicro_compat</pre>
           <tr>
             <td><strong>Stable</strong></td>
             <td><a href="https://github.com/ChuMicro/ChuMicro-Bundle">ChuMicro-Bundle</a></td>
-            <td>Released, tested versions &mdash; recommended for production</td>
+            <td>Released, tested versions, recommended for production</td>
           </tr>
           <tr>
             <td><strong>Experimental</strong></td>
             <td><a href="https://github.com/ChuMicro/ChuMicro-Bundle-Experimental">ChuMicro-Bundle-Experimental</a></td>
-            <td>Pre-release &mdash; latest features, may contain breaking changes</td>
+            <td>Pre-release: latest features, may contain breaking changes</td>
           </tr>
         </tbody>
       </table>
@@ -362,6 +362,20 @@ circup install chumicro_compat</pre>
       <h2 class="section-heading">Workbench</h2>
       <p class="section-description">Host-only CPython tools for deploying, probing, and flashing devices.</p>
       <div class="libraries">
+      <div class="card">
+        <h2><a href="workspace/stable/">chumicro-workspace</a></h2>
+        <p>Host-side runtime for ChuMicro project workspaces — config merge, secrets resolution, deploy orchestration, command dispatch.</p>
+        <div class="card-links">
+          <a href="workspace/stable/guide/">Guide</a>
+          <span class="sep">&middot;</span>
+          <a href="workspace/stable/api/">API</a>
+          <span class="sep">&middot;</span>
+          <a href="workspace/experimental/">Experimental</a>
+          <span class="sep">&middot;</span>
+          <a href="https://github.com/ChuMicro/ChuMicro/tree/main/workbench/workspace">Source</a>
+        </div>
+      </div>
+
       <div class="card">
         <h2><a href="deploy/stable/">chumicro-deploy</a></h2>
         <p>Host-side device transports and deploy tooling for CircuitPython and MicroPython boards.</p>
@@ -391,29 +405,15 @@ circup install chumicro_compat</pre>
           <a href="https://github.com/ChuMicro/ChuMicro/tree/main/workbench/repl">Source</a>
         </div>
       </div>
-
-      <div class="card">
-        <h2><a href="workspace/stable/">chumicro-workspace</a></h2>
-        <p>Host-side runtime for ChuMicro project workspaces — config merge, secrets resolution, deploy orchestration, command dispatch.</p>
-        <div class="card-links">
-          <a href="workspace/stable/guide/">Guide</a>
-          <span class="sep">&middot;</span>
-          <a href="workspace/stable/api/">API</a>
-          <span class="sep">&middot;</span>
-          <a href="workspace/experimental/">Experimental</a>
-          <span class="sep">&middot;</span>
-          <a href="https://github.com/ChuMicro/ChuMicro/tree/main/workbench/workspace">Source</a>
-        </div>
-      </div>
       </div>
     </section>
 
     <div class="install">
-      <h2>Install &mdash; workbench</h2>
+      <h2>Install: workbench</h2>
       <p class="section-description">Workbench tools run on your laptop, not on a device.  CPython only:</p>
       <div class="install-block">
         <h3>pip (CPython)</h3>
-        <pre>pip install chumicro-deploy</pre>
+        <pre>pip install chumicro-workspace</pre>
       </div>
     </div>
 
