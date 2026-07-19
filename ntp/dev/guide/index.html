@@ -601,20 +601,19 @@ exchange terminates.  Single in-flight query at a time, mirroring
 object satisfying the duck-typed UDP contract below (<code>sendto</code> /
 <code>recvfrom_into</code> / <code>close</code> / <code>setblocking</code>).  Tests inject
 <code>FakeUDPSocket</code> from <code>chumicro_sockets.testing</code>; apps inject a real
-socket either directly (<code>chumicro_sockets.udp_socket</code>) or via the
-<code>chumicro_ntp.sockets_factory.chumicro_sockets_factory()</code> helper.</p>
+socket directly from <code>chumicro_sockets.udp_socket</code>.</p>
 <p>A few notes on dependencies:</p>
 <ul>
 <li><code>chumicro-sockets</code> is a hard dependency — <code>pip install chumicro-ntp</code> brings the whole stack.</li>
-<li>The default-wiring helper lives in a separate submodule (<code>chumicro_ntp.sockets_factory</code>).  Apps that supply their own UDP socket don't import the helper, so <code>chumicro-sockets</code> doesn't get deployed to the device for those apps.</li>
+<li><code>NTPClient.from_config</code> builds the default UDP wiring through the shared <code>chumicro_sockets.sockets_factory</code> module, imported lazily.  Apps that supply their own UDP socket never trigger that import, so <code>chumicro-sockets</code> doesn't get deployed to the device for those apps.</li>
 <li>No <code>chumicro-logging</code> dep.  The library exposes no callbacks — the result handle returned by <code>query()</code> is the observation surface.</li>
 </ul>
 <h2 id="getting-started">Getting started<a class="headerlink" href="#getting-started" title="Permanent link">&para;</a></h2>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_ntp</span><span class="w"> </span><span class="kn">import</span> <span class="n">NTPClient</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_ntp.sockets_factory</span><span class="w"> </span><span class="kn">import</span> <span class="n">chumicro_sockets_factory</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_sockets</span><span class="w"> </span><span class="kn">import</span> <span class="n">udp_socket</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_timing</span><span class="w"> </span><span class="kn">import</span> <span class="n">ticks_ms</span>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="n">sock</span> <span class="o">=</span> <span class="n">chumicro_sockets_factory</span><span class="p">(</span><span class="n">radio</span><span class="o">=</span><span class="n">wifi</span><span class="o">.</span><span class="n">adapter</span><span class="o">.</span><span class="n">radio</span><span class="p">)</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="n">sock</span> <span class="o">=</span> <span class="n">udp_socket</span><span class="p">(</span><span class="n">radio</span><span class="o">=</span><span class="n">wifi</span><span class="o">.</span><span class="n">adapter</span><span class="o">.</span><span class="n">radio</span><span class="p">)</span>
 </span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="n">sock</span><span class="o">.</span><span class="n">setblocking</span><span class="p">(</span><span class="kc">False</span><span class="p">)</span>
 </span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>
 </span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="n">client</span> <span class="o">=</span> <span class="n">NTPClient</span><span class="p">(</span><span class="n">socket</span><span class="o">=</span><span class="n">sock</span><span class="p">,</span> <span class="n">server</span><span class="o">=</span><span class="s2">&quot;pool.ntp.org&quot;</span><span class="p">)</span>
@@ -686,7 +685,7 @@ to Unix-epoch seconds — feed it into <code>time.gmtime</code> (CPython) /
 <div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># code.py / app.py</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">__chumicro_skip_factories__</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;sockets_factory&quot;</span><span class="p">,)</span>
 </span></code></pre></div>
-<p>Family form (the bare stem) or exact path (<code>"chumicro_ntp.sockets_factory"</code>).  An unmatched entry fails the deploy with a typo message rather than silently shipping the default.  Calling <code>NTPClient.from_config(...)</code> when <code>chumicro_ntp.sockets_factory</code> is missing — either skipped at deploy time or not installed by <code>circup</code> / <code>mip</code> — raises <code>RuntimeError</code> naming the bypass kwargs.</p>
+<p>Family form (the bare stem) or exact path (<code>"chumicro_sockets.sockets_factory"</code>).  An unmatched entry fails the deploy with a typo message rather than silently shipping the default.  Calling <code>NTPClient.from_config(...)</code> when <code>chumicro_sockets.sockets_factory</code> is missing — either skipped at deploy time or not installed by <code>circup</code> / <code>mip</code> — raises <code>RuntimeError</code> naming the bypass kwargs.</p>
 <p>For the full single-library adoption recipe — your transport, your <code>ticks=</code>, the runner-less drive loop, and host tests with no board — see <a href="https://github.com/ChuMicro/ChuMicro/blob/main/docs/contributing/standalone-integration.md">Standalone integration</a>.</p>
 <h2 id="runner-pattern">Runner pattern<a class="headerlink" href="#runner-pattern" title="Permanent link">&para;</a></h2>
 <p><code>NTPClient</code> already implements the runner contract — register the
