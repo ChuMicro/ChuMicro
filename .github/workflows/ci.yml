@@ -41,7 +41,7 @@ jobs:
       # to self-heal.  Still exactly one cache action per path — separate
       # cache actions on the same path corrupt each other.  This job
       # produces all three toolsets → tools-full-.
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         id: tools-cache
         with:
           path: .tools
@@ -136,7 +136,7 @@ jobs:
 
       # tools-mp-mpy-: this job builds only mpy-cross + micropython — see
       # the preflight cache comment for why keys are split per toolset.
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         id: tools-cache
         with:
           path: .tools
