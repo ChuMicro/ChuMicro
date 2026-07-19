@@ -45,7 +45,7 @@ Every networked client takes its transport through the constructor instead of im
 * **`socket=<a connected socket>`** — you already own a connected, non-blocking socket.  The library takes ownership and drives I/O on it.  Simplest for one-shot scripts and desktop code.
 * **`transport_factory=<callable>`** — you hand over a factory the library calls to build (and, after a drop, *re*build) its own non-blocking connect state machine.  This is the form that gets you self-heal reconnect.
 
-The factory's shape depends on the transport role (the two arities are fixed by [Decision 0093](../../plans/decisions/0093-transport-factory-contract.md)):
+The factory's shape depends on the transport role (the two arities are fixed by [Decision 0115](../../plans/decisions/0115-shared-sockets-factories.md)):
 
 | Library | `transport_factory` signature | returns |
 |---|---|---|
