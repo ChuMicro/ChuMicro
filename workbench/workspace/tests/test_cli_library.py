@@ -480,3 +480,181 @@ class TestBrowse:
         )
         assert code == 1
         assert "library browse:" in capsys.readouterr().err
+
+
+def _read_extra_paths(tmp_path: Path) -> list[str]:
+    """Return the ``extraPaths`` list from the workspace pyrightconfig."""
+    document = json.loads(
+        (tmp_path / "pyrightconfig.json").read_text(encoding="utf-8"),
+    )
+    return document["extraPaths"]
+
+
+class TestPyrightExtraPaths:
+    """``library`` maintains ``pyrightconfig.json`` extraPaths."""
+
+    def test_add_registers_source_dirs_and_notes(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
+    ):
+        seed_workspace(tmp_path)
+        code = _run(
+            [
+                "library", "add", "chumicro_mqtt",
+                "--workspace-dir", str(tmp_path), "--non-interactive",
+            ],
+            _Channel(),
+        )
+        assert code == 0
+        # Every acquired library's src dir lands, appended sorted.
+        assert _read_extra_paths(tmp_path) == [
+            "libraries/chumicro_mqtt/src",
+            "libraries/chumicro_sockets/src",
+            "libraries/chumicro_timing/src",
+        ]
+        assert "Updated pyrightconfig.json" in capsys.readouterr().out
+
+    def test_missing_file_is_created(self, tmp_path: Path):
+        seed_workspace(tmp_path)
+        assert not (tmp_path / "pyrightconfig.json").exists()
+        _run(
+            [
+                "library", "add", "chumicro_timing",
+                "--workspace-dir", str(tmp_path), "--non-interactive",
+            ],
+            _Channel(),
+        )
+        text = (tmp_path / "pyrightconfig.json").read_text(encoding="utf-8")
+        # 2-space indent, trailing newline, just the extraPaths key.
+        assert text == (
+            '{\n  "extraPaths": [\n'
+            '    "libraries/chumicro_timing/src"\n  ]\n}\n'
+        )
+
+    def test_re_add_is_idempotent(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
+    ):
+        seed_workspace(tmp_path)
+        runner = _Channel()
+        _run(
+            [
+                "library", "add", "chumicro_timing",
+                "--workspace-dir", str(tmp_path), "--non-interactive",
+            ],
+            runner,
+        )
+        capsys.readouterr()
+        _run(
+            [
+                "library", "add", "chumicro_timing",
+                "--workspace-dir", str(tmp_path), "--non-interactive",
+            ],
+            runner,
+        )
+        # No duplicate entry, and the idempotent re-add prints no pyright note.
+        assert _read_extra_paths(tmp_path) == [
+            "libraries/chumicro_timing/src",
+        ]
+        assert "Updated pyrightconfig.json" not in capsys.readouterr().out
+
+    def test_unrelated_entries_and_keys_preserved(self, tmp_path: Path):
+        seed_workspace(tmp_path)
+        (tmp_path / "pyrightconfig.json").write_text(
+            json.dumps(
+                {"include": ["projects"], "extraPaths": ["shared"]},
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        _run(
+            [
+                "library", "add", "chumicro_timing",
+                "--workspace-dir", str(tmp_path), "--non-interactive",
+            ],
+            _Channel(),
+        )
+        document = json.loads(
+            (tmp_path / "pyrightconfig.json").read_text(encoding="utf-8"),
+        )
+        # "shared" kept first; new entry appended after it.
+        assert document["extraPaths"] == [
+            "shared", "libraries/chumicro_timing/src",
+        ]
+        # Unrelated top-level key untouched.
+        assert document["include"] == ["projects"]
+
+    def test_remove_drops_entry_and_keeps_others(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
+    ):
+        seed_workspace(tmp_path)
+        (tmp_path / "pyrightconfig.json").write_text(
+            '{\n  "extraPaths": [\n    "shared"\n  ]\n}\n',
+            encoding="utf-8",
+        )
+        runner = _Channel()
+        _run(
+            [
+                "library", "add", "chumicro_timing",
+                "--workspace-dir", str(tmp_path), "--non-interactive",
+            ],
+            runner,
+        )
+        assert _read_extra_paths(tmp_path) == [
+            "shared", "libraries/chumicro_timing/src",
+        ]
+        capsys.readouterr()
+        _run(
+            [
+                "library", "remove", "chumicro_timing",
+                "--workspace-dir", str(tmp_path), "--non-interactive",
+            ],
+            runner,
+        )
+        # Library entry dropped; unrelated "shared" preserved.
+        assert _read_extra_paths(tmp_path) == ["shared"]
+        assert "Updated pyrightconfig.json" in capsys.readouterr().out
+
+    def test_forget_drops_entry(self, tmp_path: Path):
+        seed_workspace(tmp_path)
+        runner = _Channel()
+        _run(
+            [
+                "library", "add", "chumicro_timing",
+                "--workspace-dir", str(tmp_path), "--non-interactive",
+            ],
+            runner,
+        )
+        _run(
+            [
+                "library", "forget", "chumicro_timing",
+                "--workspace-dir", str(tmp_path), "--non-interactive",
+            ],
+            runner,
+        )
+        assert _read_extra_paths(tmp_path) == []
+
+    def test_invalid_json_warns_but_add_succeeds(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
+    ):
+        seed_workspace(tmp_path)
+        (tmp_path / "pyrightconfig.json").write_text(
+            "{ not valid json", encoding="utf-8",
+        )
+        code = _run(
+            [
+                "library", "add", "chumicro_timing",
+                "--workspace-dir", str(tmp_path), "--non-interactive",
+            ],
+            _Channel(),
+        )
+        # Acquisition still succeeds even though the config can't be updated.
+        assert code == 0
+        table = read_curated_libraries(tmp_path / "workspace.yml")
+        assert "chumicro_timing" in table
+        assert (tmp_path / "libraries" / "chumicro_timing" / "src").is_dir()
+        out = capsys.readouterr().out
+        assert "pyrightconfig.json is not valid JSON" in out
+        # The broken file is left exactly as it was.
+        assert (tmp_path / "pyrightconfig.json").read_text(
+            encoding="utf-8",
+        ) == "{ not valid json"
