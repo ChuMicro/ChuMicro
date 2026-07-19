@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import tomllib
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -85,6 +86,23 @@ def _clone_template(template_repo: Path, target: Path) -> None:
          cwd=target.parent)
     shutil.rmtree(target / ".git")
     _git("init", "-b", "main", cwd=target)
+
+
+def _template_repo_with_pyproject(parent: Path, pyproject_text: str) -> Path:
+    """Build a one-file template git repo carrying *pyproject_text*.
+
+    The repo tracks only ``pyproject.toml`` (tool-owned), which is all
+    the dependency-preservation carve-out needs to exercise.  Returns
+    the repo path, suitable as a ``template_url=str(path)`` argument.
+    """
+    repo = parent / "fake-template"
+    repo.mkdir()
+    (repo / "pyproject.toml").write_text(pyproject_text)
+    _git("init", "-b", "main", cwd=repo)
+    _git("add", "-A", cwd=repo)
+    _git("-c", "user.email=test@example.com", "-c", "user.name=Test",
+         "commit", "-m", "initial", cwd=repo)
+    return repo
 
 
 def _files(report_iter: Iterable[tuple[str, str]]) -> dict[str, str]:
@@ -238,3 +256,151 @@ class TestMaterializeWorkspaceTemplates:
         actions_second = _files(second)
         assert actions_second["devices.yml"] == ApplyAction.UNCHANGED
         assert actions_second["workspace.yml"] == ApplyAction.UNCHANGED
+
+
+class TestUpdatePreservesPyprojectDependencies:
+    """`update` re-flows ``pyproject.toml`` but keeps user-added
+    ``[project].dependencies`` entries instead of clobbering them."""
+
+    def test_reapplies_user_added_dependency_onto_upstream(
+        self, tmp_path: Path,
+    ) -> None:
+        # Upstream evolved (ships tomlkit); the workspace file adds the
+        # user's own requests dep.  After update both must be present.
+        upstream = (
+            '[project]\n'
+            'name = "my-workspace"\n'
+            'dependencies = [\n'
+            '  # add your own host-side dependencies below this line\n'
+            '  "tomlkit>=0.13",\n'
+            ']\n'
+        )
+        incumbent = (
+            '[project]\n'
+            'name = "my-workspace"\n'
+            'dependencies = [\n'
+            '  # add your own host-side dependencies below this line\n'
+            '  "requests>=2.31",\n'
+            ']\n'
+        )
+        repo = _template_repo_with_pyproject(tmp_path, upstream)
+        target = tmp_path / "my-house"
+        _clone_template(repo, target)
+        (target / "pyproject.toml").write_text(incumbent)
+
+        report = update(target, template_url=str(repo))
+
+        actions = _files(report)
+        assert actions["pyproject.toml"] == ApplyAction.REFRESHED
+        assert "pyproject.toml" in report.dependency_preserved_paths
+        dependencies = tomllib.loads(
+            (target / "pyproject.toml").read_text(),
+        )["project"]["dependencies"]
+        # User addition carried across; upstream's own dep flowed in.
+        assert "requests>=2.31" in dependencies
+        assert "tomlkit>=0.13" in dependencies
+
+    def test_byte_identical_pyproject_stays_a_noop(
+        self, tmp_path: Path,
+    ) -> None:
+        # Fresh clone leaves pyproject.toml byte-identical to upstream,
+        # so the carve-out must not perturb it into a REFRESHED write.
+        upstream = (
+            '[project]\n'
+            'name = "my-workspace"\n'
+            'dependencies = [\n'
+            '  # add your own host-side dependencies below this line\n'
+            ']\n'
+        )
+        repo = _template_repo_with_pyproject(tmp_path, upstream)
+        target = tmp_path / "my-house"
+        _clone_template(repo, target)
+
+        report = update(target, template_url=str(repo))
+
+        actions = _files(report)
+        assert actions["pyproject.toml"] == ApplyAction.UNCHANGED
+        assert report.dependency_preserved_paths == []
+
+    def test_unparseable_incumbent_falls_back_to_overwrite(
+        self, tmp_path: Path,
+    ) -> None:
+        # A workspace file that isn't valid TOML can't be diffed, so the
+        # plain overwrite stands and nothing is reported as preserved.
+        upstream = (
+            '[project]\n'
+            'name = "my-workspace"\n'
+            'dependencies = [\n'
+            '  "tomlkit>=0.13",\n'
+            ']\n'
+        )
+        repo = _template_repo_with_pyproject(tmp_path, upstream)
+        target = tmp_path / "my-house"
+        _clone_template(repo, target)
+        (target / "pyproject.toml").write_text("this is not = valid = toml [[[\n")
+
+        report = update(target, template_url=str(repo))
+
+        actions = _files(report)
+        assert actions["pyproject.toml"] == ApplyAction.REFRESHED
+        assert (target / "pyproject.toml").read_text() == upstream
+        assert "pyproject.toml" not in report.dependency_preserved_paths
+
+    def test_incoming_without_project_table_falls_back_to_overwrite(
+        self, tmp_path: Path,
+    ) -> None:
+        # Upstream carries no [project] table, so there is no array to
+        # append into: overwrite plainly rather than crash.
+        upstream = '[build-system]\nrequires = ["setuptools"]\n'
+        incumbent = (
+            '[project]\n'
+            'name = "my-workspace"\n'
+            'dependencies = [\n'
+            '  "requests>=2.31",\n'
+            ']\n'
+        )
+        repo = _template_repo_with_pyproject(tmp_path, upstream)
+        target = tmp_path / "my-house"
+        _clone_template(repo, target)
+        (target / "pyproject.toml").write_text(incumbent)
+
+        report = update(target, template_url=str(repo))
+
+        actions = _files(report)
+        assert actions["pyproject.toml"] == ApplyAction.REFRESHED
+        assert (target / "pyproject.toml").read_text() == upstream
+        assert "pyproject.toml" not in report.dependency_preserved_paths
+
+    def test_preserved_output_is_valid_toml_and_keeps_upstream_comment(
+        self, tmp_path: Path,
+    ) -> None:
+        # The style-preserving re-flow keeps upstream's marker comment
+        # and the user dep, and the result round-trips through tomllib.
+        upstream = (
+            '[project]\n'
+            'name = "my-workspace"\n'
+            'dependencies = [\n'
+            '  # keep upstream deps; add your own below this marker\n'
+            '  "tomlkit>=0.13",\n'
+            ']\n'
+        )
+        incumbent = (
+            '[project]\n'
+            'name = "my-workspace"\n'
+            'dependencies = [\n'
+            '  # keep upstream deps; add your own below this marker\n'
+            '  "requests>=2.31",\n'
+            ']\n'
+        )
+        repo = _template_repo_with_pyproject(tmp_path, upstream)
+        target = tmp_path / "my-house"
+        _clone_template(repo, target)
+        (target / "pyproject.toml").write_text(incumbent)
+
+        update(target, template_url=str(repo))
+
+        written = (target / "pyproject.toml").read_text()
+        assert "keep upstream deps; add your own below this marker" in written
+        assert "requests>=2.31" in written
+        dependencies = tomllib.loads(written)["project"]["dependencies"]
+        assert dependencies == ["tomlkit>=0.13", "requests>=2.31"]
