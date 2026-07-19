@@ -691,8 +691,8 @@
 
 <h1 id="user-guide">User Guide<a class="headerlink" href="#user-guide" title="Permanent link">&para;</a></h1>
 <h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
-<p><code>chumicro-kvstore</code> is a tiny mutable key-value store for runtime state that needs to survive a reboot — boot counters, last-seen timestamps, retry budgets, refreshed access tokens.  It exposes a familiar <code>dict</code>-shaped API (<code>store[key] = value</code>, <code>del store[key]</code>, <code>"key" in store</code>, iteration) plus three explicit lifecycle methods: <code>commit</code>, <code>commit_if_changed</code>, <code>reload</code>.</p>
-<p>It is <strong>not</strong> a config system.  Config is read-only at deploy time, structured by section, and lives at <code>/runtime_config.msgpack</code> (<a href="https://github.com/ChuMicro/ChuMicro/tree/main/libraries/config"><code>chumicro-config</code></a>).  KVStore is read-write at runtime, flat, and lives in the right per-runtime persistent backend (CP NVM with CRC framing, MP NVS, MP LittleFS, or in-memory).</p>
+<p><code>chumicro-kvstore</code> is a tiny mutable key-value store for runtime state that needs to survive a reboot (boot counters, last-seen timestamps, retry budgets, refreshed access tokens).  It exposes a familiar <code>dict</code>-shaped API (<code>store[key] = value</code>, <code>del store[key]</code>, <code>"key" in store</code>, iteration) plus three explicit lifecycle methods: <code>commit</code>, <code>commit_if_changed</code>, <code>reload</code>.</p>
+<p>State is read-write at runtime, flat, and lives in the right per-runtime persistent backend (CP NVM with CRC framing, MP NVS, MP LittleFS, or in-memory).  You write to the in-memory dict as you go and call a <code>commit*</code> method when you want the change to survive the next reboot.</p>
 <h2 id="getting-started">Getting started<a class="headerlink" href="#getting-started" title="Permanent link">&para;</a></h2>
 <p>The "boot counter that survives reboot" pattern in five lines:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_kvstore</span><span class="w"> </span><span class="kn">import</span> <span class="n">KVStore</span>
@@ -703,7 +703,7 @@
 </span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="n">store</span><span class="p">[</span><span class="s2">&quot;last_seen_ms&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">ticks_ms</span><span class="p">()</span>
 </span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="n">store</span><span class="o">.</span><span class="n">commit_if_changed</span><span class="p">()</span>
 </span></code></pre></div>
-<p><code>backend="auto"</code> picks the right backend per runtime (see below).  Reads are pure-memory after the constructor's auto-load — no I/O on the hot path.  Writes update the in-memory dict immediately; persistence happens on the next <code>commit*</code> call.</p>
+<p><code>backend="auto"</code> picks the right backend per runtime (see below).  Reads are pure-memory after the constructor's auto-load, with no I/O on the hot path.  Writes update the in-memory dict immediately; persistence happens on the next <code>commit*</code> call.</p>
 <h2 id="backends-and-auto-selection">Backends and <code>auto</code> selection<a class="headerlink" href="#backends-and-auto-selection" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -731,7 +731,7 @@
 </tr>
 <tr>
 <td><code>memory</code></td>
-<td>In-process <code>bytes</code> — does <strong>not</strong> survive process exit</td>
+<td>In-process <code>bytes</code> that does <strong>not</strong> survive process exit</td>
 <td>CPython default, plus <code>FakeKVStore</code> for tests</td>
 </tr>
 </tbody>
@@ -750,7 +750,7 @@
 </span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>            <span class="k">return</span> <span class="n">MpLittlefsBackend</span><span class="p">()</span>
 </span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>    <span class="k">return</span> <span class="n">MemoryBackend</span><span class="p">()</span>        <span class="c1"># CPython</span>
 </span></code></pre></div>
-<p>If you want a specific backend regardless of runtime — for tests, or to force <code>littlefs</code> on an ESP32 with NVS issues — pass it by name:</p>
+<p>If you want a specific backend regardless of runtime (for tests, or to force <code>littlefs</code> on an ESP32 with NVS issues), pass it by name:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">store</span> <span class="o">=</span> <span class="n">KVStore</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">&quot;littlefs&quot;</span><span class="p">)</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">store</span> <span class="o">=</span> <span class="n">KVStore</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">&quot;memory&quot;</span><span class="p">)</span>
 </span></code></pre></div>
@@ -774,37 +774,37 @@
 <tr>
 <td><code>commit_if_changed()</code></td>
 <td>Re-encode; skip the write if bytes match the last persisted payload.</td>
-<td>Hot loops or once-per-tick "save current state" calls — first-line defense against flash wear on the raw NVM backend.</td>
+<td>Hot loops or once-per-tick "save current state" calls, the first-line defense against flash wear on the raw NVM backend.</td>
 </tr>
 <tr>
 <td><code>reload()</code></td>
 <td>Discard in-memory state, reread from backend, raise on corruption.</td>
-<td>Recovery — explicit re-read after suspicion of external write or corruption.</td>
+<td>Recovery: explicit re-read after suspicion of external write or corruption.</td>
 </tr>
 </tbody>
 </table>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Safe to call every tick — only writes when something actually changed.</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Safe to call every tick; only writes when something actually changed.</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">runner</span><span class="o">.</span><span class="n">add_periodic</span><span class="p">(</span><span class="n">store</span><span class="o">.</span><span class="n">commit_if_changed</span><span class="p">,</span> <span class="n">period_ms</span><span class="o">=</span><span class="mi">1000</span><span class="p">)</span>
 </span></code></pre></div>
 <h2 id="sizing-and-full-store-handling">Sizing and full-store handling<a class="headerlink" href="#sizing-and-full-store-handling" title="Permanent link">&para;</a></h2>
 <p>Each backend exposes a <code>capacity</code> (bytes-of-encoded-payload).  <code>KVStore.bytes_used</code> reports the current encoded size; <code>KVStore.capacity</code> reports the backend's limit.</p>
-<p>CP NVM is the smallest — typically 256 bytes on SAMD21 boards, ~4 KB on RP2040 (the reference Pi Pico W), and 8 KB on SAMD51 / ESP32 boards (it's per-chip; check your board's <code>microcontroller.nvm</code>).  After CRC framing overhead (10 bytes), you have your usable budget.  <code>commit()</code> raises <code>KVStoreFull</code> if the encoded payload won't fit; the in-memory dict is unchanged so you can drop a key and retry:</p>
+<p>CP NVM is the smallest, typically 256 bytes on SAMD21 boards, ~4 KB on RP2040 (the reference Pi Pico W), and 8 KB on SAMD51 / ESP32 boards (it's per-chip; check your board's <code>microcontroller.nvm</code>).  After CRC framing overhead (10 bytes), you have your usable budget.  <code>commit()</code> raises <code>KVStoreFull</code> if the encoded payload won't fit; the in-memory dict is unchanged so you can drop a key and retry:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">try</span><span class="p">:</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>    <span class="n">store</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="k">except</span> <span class="n">KVStoreFull</span><span class="p">:</span>
 </span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>    <span class="k">del</span> <span class="n">store</span><span class="p">[</span><span class="s2">&quot;debug_log&quot;</span><span class="p">]</span>
 </span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>    <span class="n">store</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
 </span></code></pre></div>
-<p>A few keys with short string / int values (boot counters, timestamps, simple flags) easily fit in 256 B.  Larger state — captured sensor traces, queued telemetry — wants the LittleFS or NVS backend, which give you tens of KB.</p>
+<p>A few keys with short string / int values (boot counters, timestamps, simple flags) easily fit in 256 B.  Larger state (captured sensor traces, queued telemetry) wants the LittleFS or NVS backend, which give you tens of KB.</p>
 <h2 id="corruption-handling">Corruption handling<a class="headerlink" href="#corruption-handling" title="Permanent link">&para;</a></h2>
 <p>The CP NVM backend is the only one with explicit framing (magic <code>b"CKVS"</code> + length + CRC32 + payload).  A blank slab from <code>storage.erase_filesystem()</code> reads as empty.  A bad-magic or CRC-mismatch reads as corrupt.</p>
-<p>Construction never raises on corruption — the store resets to empty and reports the event via <code>is_corrupt</code>:</p>
+<p>Construction never raises on corruption; the store resets to empty and reports the event via <code>is_corrupt</code>:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">store</span> <span class="o">=</span> <span class="n">KVStore</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">)</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="k">if</span> <span class="n">store</span><span class="o">.</span><span class="n">is_corrupt</span><span class="p">:</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>    <span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;kvstore was corrupt; starting fresh&quot;</span><span class="p">)</span>
 </span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>    <span class="c1"># store[&quot;boot_count&quot;] etc. starts at 0</span>
 </span></code></pre></div>
-<p><code>reload()</code> is the explicit form that <em>does</em> raise (<code>KVStoreCorrupt</code>) — use it when you want to surface the failure rather than silently reset.</p>
+<p><code>reload()</code> is the explicit form that <em>does</em> raise (<code>KVStoreCorrupt</code>); use it when you want to surface the failure rather than silently reset.</p>
 <p>NVS is atomic-on-commit at the backend level (no CRC needed).  LittleFS uses tmp-file + rename for atomicity (no CRC needed).  Memory backend can't corrupt.</p>
 <h2 id="iteration-and-update">Iteration and update<a class="headerlink" href="#iteration-and-update" title="Permanent link">&para;</a></h2>
 <p>Standard mapping API works:</p>
@@ -814,7 +814,7 @@
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="n">store</span><span class="o">.</span><span class="n">update</span><span class="p">({</span><span class="s2">&quot;counter_a&quot;</span><span class="p">:</span> <span class="mi">42</span><span class="p">,</span> <span class="s2">&quot;counter_b&quot;</span><span class="p">:</span> <span class="mi">99</span><span class="p">})</span>
 </span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="n">store</span><span class="o">.</span><span class="n">commit_if_changed</span><span class="p">()</span>
 </span></code></pre></div>
-<p><code>clear()</code>, <code>pop(key, default)</code>, <code>keys()</code>, <code>values()</code>, <code>items()</code> follow <code>dict</code> semantics.  <code>commit</code> is <strong>not</strong> implied by mutating methods — you call it explicitly when you want the change persisted.</p>
+<p><code>clear()</code>, <code>pop(key, default)</code>, <code>keys()</code>, <code>values()</code>, <code>items()</code> follow <code>dict</code> semantics.  <code>commit</code> is <strong>not</strong> implied by mutating methods; you call it explicitly when you want the change persisted.</p>
 <h2 id="value-types">Value types<a class="headerlink" href="#value-types" title="Permanent link">&para;</a></h2>
 <p>Values are stored via msgpack in the chumicro subset: <code>None</code>, <code>bool</code>, <code>int</code> (32-bit), <code>str</code>, <code>bytes</code>, and nested <code>list</code> / <code>dict</code> up to 8 levels deep.  Floats encode as <strong>32-bit</strong> (<code>float32</code>), so a value like a <code>time.time()</code> timestamp loses precision through a commit / reload round-trip (e.g. <code>1751414400.5</code> reads back as <code>1751414400.0</code>).  Store timestamps and durations as integer milliseconds or seconds, not floats.</p>
 <h2 id="platform-notes">Platform notes<a class="headerlink" href="#platform-notes" title="Permanent link">&para;</a></h2>
@@ -835,12 +835,12 @@
 <tr>
 <td>MicroPython on ESP32-family</td>
 <td><code>nvs</code> (single blob in <code>chu_kv</code> namespace)</td>
-<td>512 B default; pass <code>capacity=N</code> for larger (~24 KB partition headroom)</td>
+<td>512 B default; raise it with <code>KVStore(backend=MpNvsBackend(capacity=N))</code> (~24 KB partition headroom)</td>
 </tr>
 <tr>
 <td>MicroPython on Pi Pico W (rp2)</td>
 <td><code>littlefs</code> (atomic file at <code>/_chu_kv.msgpack</code>)</td>
-<td>16 KB default; pass <code>capacity=N</code> for larger (then filesystem-bounded)</td>
+<td>16 KB default; raise it with <code>KVStore(backend=MpLittlefsBackend(capacity=N))</code> (then filesystem-bounded)</td>
 </tr>
 <tr>
 <td>CPython</td>
@@ -849,9 +849,9 @@
 </tr>
 </tbody>
 </table>
-<p><code>MemoryBackend</code> is <strong>lazy-imported</strong> — device runtimes that resolve <code>auto</code> to <code>nvm</code> / <code>nvs</code> / <code>littlefs</code> never pay the ~700 B import cost.</p>
+<p><code>MemoryBackend</code> is <strong>lazy-imported</strong>, so device runtimes that resolve <code>auto</code> to <code>nvm</code> / <code>nvs</code> / <code>littlefs</code> never pay the ~700 B import cost.</p>
 <h3 id="usb-msc-read-only-window-circuitpython">USB-MSC read-only window (CircuitPython)<a class="headerlink" href="#usb-msc-read-only-window-circuitpython" title="Permanent link">&para;</a></h3>
-<p>While the host has CIRCUITPY mounted, the device can't <code>storage.remount(readonly=False)</code> to write to flash.  The default <code>nvm</code> backend on CircuitPython writes to NVM (not the FAT volume) so it's unaffected — the boot-counter pattern continues to persist across reboots even with the drive mounted.</p>
+<p>While the host has CIRCUITPY mounted, the device can't <code>storage.remount(readonly=False)</code> to write to flash.  The default <code>nvm</code> backend on CircuitPython writes to NVM (not the FAT volume) so it's unaffected; the boot-counter pattern continues to persist across reboots even with the drive mounted.</p>
 <h2 id="examples">Examples<a class="headerlink" href="#examples" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
