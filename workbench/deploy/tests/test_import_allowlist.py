@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import pytest
 from chumicro_deploy.import_allowlist import (
     DEVICE_BUILTIN_MODULES,
+    EXTRA_BUILTINS_ENV,
     is_device_builtin,
 )
 
@@ -47,3 +49,27 @@ def test_allowlist_names_are_lowercase_top_level() -> None:
     for name in DEVICE_BUILTIN_MODULES:
         assert "." not in name
         assert name == name.strip()
+
+
+def test_extra_builtins_env_extends_the_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A pip-installed consumer extends the allowlist via the environment.
+
+    Comma-separated, whitespace-tolerant, read per call so a shell export
+    takes effect without re-importing.  Dotted names resolve through the
+    extras like they do through the built-in set.
+    """
+    assert not is_device_builtin("vendor_radio")
+    monkeypatch.setenv(EXTRA_BUILTINS_ENV, "vendor_radio, frozen_ui")
+    assert is_device_builtin("vendor_radio")
+    assert is_device_builtin("frozen_ui.widgets")
+    assert not is_device_builtin("still_unknown")
+
+
+def test_extra_builtins_env_empty_entries_ignored(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(EXTRA_BUILTINS_ENV, " , ,")
+    assert not is_device_builtin("")
+    assert not is_device_builtin("anything")

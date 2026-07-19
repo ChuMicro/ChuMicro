@@ -191,8 +191,10 @@ PLANS: dict[DeployFailureKind, RecoveryPlan] = {
             "paths (its package needs to live under one of them).",
             "If it's a typo, fix the import statement.",
             "If the module is a genuine MicroPython / CircuitPython runtime "
-            "built-in the walker doesn't yet know about, add its name to "
-            "DEVICE_BUILTIN_MODULES in chumicro_deploy/import_allowlist.py.",
+            "built-in the walker doesn't yet know about, list it in the "
+            "CHUMICRO_DEPLOY_EXTRA_BUILTINS environment variable "
+            "(comma-separated top-level names); the durable fix is adding "
+            "it to the allowlist upstream.",
             "If the import is a deliberate optional fallback, wrap it in "
             "`try: import foo` / `except ImportError:` — the walker treats "
             "ImportError-guarded imports as optional and does not refuse "
