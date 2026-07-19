@@ -63,7 +63,8 @@ def synthetic_workspace(tmp_path: Path, monkeypatch):
     * ``workbench/tool_x/`` — pyproject + ``src/chumicro_tool_x/`` +
       ``VERSION`` (``0.5.0``) + ``mkdocs.yml``
     * ``support/helper/`` — pyproject + ``src/chumicro_helper/`` (no
-      VERSION; support packages aren't published)
+      VERSION; a support package is held out of the publish set until it
+      carries one, Decision 0111 — so ``helper`` stays editable-only)
 
     Clears ``repo_layout._package_dirs_cache`` so the cached real-workspace
     discovery from a prior test (or other code path) doesn't bleed in.
@@ -334,18 +335,27 @@ class TestResolveNamedPackages:
 class TestFindPublishablePackages:
     """Tests for find_publishable_packages."""
 
-    def test_returns_only_libraries_and_workbench_paths(
+    def test_versionless_support_package_excluded(
         self, synthetic_workspace,
     ):
-        """Returns relative paths to publishable packages under
-        ``libraries/`` or ``workbench/``; excludes ``support/``."""
+        """A support package without a VERSION is held out of the publish
+        set (Decision 0111): ``support/helper`` has none, so it is absent
+        while every returned path lives under a publishable root."""
         packages = find_publishable_packages()
         assert len(packages) > 0
         assert all(
-            package.startswith(("libraries/", "workbench/"))
+            package.startswith(("libraries/", "workbench/", "support/"))
             for package in packages
         )
-        assert not any(package.startswith("support/") for package in packages)
+        assert "support/helper" not in packages
+
+    def test_support_package_with_version_included(
+        self, synthetic_workspace,
+    ):
+        """A support package publishes once it carries a VERSION
+        (Decision 0111): give ``support/helper`` one and it joins the set."""
+        (synthetic_workspace / "support" / "helper" / "VERSION").write_text("0.3.0\n")
+        assert "support/helper" in find_publishable_packages()
 
     def test_every_publishable_package_has_version(
         self, synthetic_workspace,
@@ -521,8 +531,9 @@ class TestChangedPublishablePackages:
         result = changed_publishable_packages("origin/main")
         assert result == {("libraries", "syn_lib"), ("workbench", "syn_tool")}
 
-    def test_support_paths_ignored(self, monkeypatch):
-        """Paths under support/ are not publishable and are ignored."""
+    def test_support_src_change_detected(self, monkeypatch):
+        """support/ is publishable (Decision 0111), so a src change there
+        is release-relevant; non-package paths are still ignored."""
         monkeypatch.setattr(
             "repo_layout.changed_files",
             lambda _base: [
@@ -532,7 +543,7 @@ class TestChangedPublishablePackages:
             ],
         )
         result = changed_publishable_packages("origin/main")
-        assert result == set()
+        assert result == {("support", "syn_helper")}
 
 
 class TestReleaseRelevant:
@@ -547,8 +558,8 @@ class TestPublishableRoots:
     """Verify the PUBLISHABLE_ROOTS constant."""
 
     def test_expected_entries(self):
-        """PUBLISHABLE_ROOTS covers libraries/ and workbench/."""
-        assert PUBLISHABLE_ROOTS == ("libraries", "workbench")
+        """PUBLISHABLE_ROOTS covers libraries/, workbench/, and support/."""
+        assert PUBLISHABLE_ROOTS == ("libraries", "workbench", "support")
 
 
 class TestDetectChangedPackages:

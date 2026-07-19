@@ -168,7 +168,15 @@ def install_editable(python: str | Path | None = None) -> int:
     Returns:
         Process exit code (0 on success).
     """
-    packages = find_publishable_packages(include_parked=True) + find_support_packages()
+    # A support package with a VERSION file is now in both lists
+    # (publishable + support); dedupe so it is not installed twice.  A
+    # VERSION-less support package appears only in find_support_packages
+    # — editable-installed for its tests, never published (Decision 0111).
+    packages = list(
+        dict.fromkeys(
+            find_publishable_packages(include_parked=True) + find_support_packages()
+        )
+    )
     if not packages:
         return 0
 

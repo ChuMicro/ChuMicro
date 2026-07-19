@@ -28,9 +28,10 @@ def _stub_tag_tree_docs(
 
 @pytest.fixture
 def fake_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """Point promote_validate at a temporary root with empty libraries/+workbench/."""
+    """Point promote_validate at a temp root with empty publishable roots."""
     (tmp_path / "libraries").mkdir()
     (tmp_path / "workbench").mkdir()
+    (tmp_path / "support").mkdir()
     monkeypatch.setattr(promote_validate, "ROOT", tmp_path)
     return tmp_path
 
@@ -121,6 +122,18 @@ class TestLocatePackage:
         assert result == {
             "library_dir": "workbench/deploy",
             "package_kind": "workbench",
+        }
+
+    def test_finds_support(self, fake_root: Path) -> None:
+        """Packages under support/ are returned with kind=support
+        (Decision 0111: PyPI-only, the bundle/channel/mip jobs skip them)."""
+        (fake_root / "support" / "test_harness").mkdir()
+
+        result = promote_validate._locate_package("test_harness")
+
+        assert result == {
+            "library_dir": "support/test_harness",
+            "package_kind": "support",
         }
 
     def test_raises_when_missing(self, fake_root: Path) -> None:

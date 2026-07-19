@@ -157,6 +157,30 @@ class TestInstallEditable:
         assert install_editable() == 0
         assert recorded["include_parked"] is True
 
+    def test_dedupes_support_package_in_both_lists(self, monkeypatch):
+        """A VERSION'd support package appears in both find_publishable_packages
+        and find_support_packages (Decision 0111); install_editable installs
+        it once, not twice."""
+        recorded: dict[str, list[str]] = {}
+
+        def _capture(command):
+            recorded["cmd"] = command
+            return 0
+
+        monkeypatch.setattr(
+            shared,
+            "find_publishable_packages",
+            lambda *, include_parked=False: ["libraries/timing", "support/test_harness"],
+        )
+        monkeypatch.setattr(
+            shared, "find_support_packages", lambda: ["support/test_harness"],
+        )
+        monkeypatch.setattr(shared, "run_command", _capture)
+        monkeypatch.setattr(shared, "install_command", lambda python: ["pip", "install"])
+
+        assert install_editable() == 0
+        assert recorded["cmd"].count("support/test_harness") == 1
+
 
 class TestRunningOnNativeWindows:
     """Tests for running_on_native_windows."""
