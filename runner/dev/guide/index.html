@@ -1134,11 +1134,11 @@
 <p>A shared <code>Runner</code> captures time once per tick, checks each service, and batch-fires all due handlers.  This replaces ad-hoc polling loops with a single standard contract.</p>
 <h2 id="the-pattern">The pattern<a class="headerlink" href="#the-pattern" title="Permanent link">&para;</a></h2>
 <ol>
-<li><strong>Services</strong> implement <code>check(now_ms) -&gt; bool</code> — they check a condition and return whether the handler should fire.</li>
-<li><strong>Handlers</strong> implement <code>handle(now_ms)</code> — they react when the service says "go".</li>
+<li><strong>Services</strong> implement <code>check(now_ms) -&gt; bool</code>: they check a condition and return whether the handler should fire.</li>
+<li><strong>Handlers</strong> implement <code>handle(now_ms)</code>: they react when the service says "go".</li>
 <li><strong>Runner</strong> ties it together: capture time → check all services → batch-fire all due handlers.</li>
 </ol>
-<p>Services are objects with <code>.check()</code> and <code>.handle()</code> methods, or plain handler callables that fire every tick or on a period — one shape per registration, never both.</p>
+<p>Services are objects with <code>.check()</code> and <code>.handle()</code> methods, or plain handler callables that fire every tick or on a period: one shape per registration, never both.</p>
 <h2 id="getting-started">Getting started<a class="headerlink" href="#getting-started" title="Permanent link">&para;</a></h2>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_runner</span><span class="w"> </span><span class="kn">import</span> <span class="n">Runner</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
@@ -1154,7 +1154,7 @@
 </span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_last_reading</span> <span class="o">=</span> <span class="mf">0.0</span>
 </span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>
 </span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">read_temperature</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
-</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Read from hardware — fast I2C or ADC operation.&quot;&quot;&quot;</span>
+</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Read from hardware: fast I2C or ADC operation.&quot;&quot;&quot;</span>
 </span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>        <span class="c1"># On a real board: return self._i2c_device.temperature</span>
 </span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_last_reading</span>
 </span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>
@@ -1203,14 +1203,14 @@
 </span></code></pre></div>
 <p>Each call to <code>wait</code>:</p>
 <ol>
-<li><strong>Syncs the poll set</strong> from each service's optional <code>io_socket</code> and <code>io_interest(now_ms)</code> bitmask — register newly wanted sockets, modify changed interest, unregister sockets that have gone away.  Idempotent: a no-change loop touches the poller zero times.</li>
+<li><strong>Syncs the poll set</strong> from each service's optional <code>io_socket</code> and <code>io_interest(now_ms)</code> bitmask (register newly wanted sockets, modify changed interest, unregister sockets that have gone away).  Idempotent: a no-change loop touches the poller zero times.</li>
 <li><strong>Computes the timeout</strong> as the minimum across every entry's <code>next_due_ms</code> and every service's optional <code>next_deadline(now_ms)</code>, minus <code>now_ms</code>.</li>
 <li><strong>Blocks</strong> in <code>ipoll(timeout_ms)</code> over the registered sockets when any are registered; otherwise sleeps the timeout via <code>time.sleep_ms</code>.  Returns immediately when the nearest deadline has already passed or no deadline applies.</li>
 </ol>
-<p>Errors on a registered socket (<code>POLLERR</code> / <code>POLLHUP</code>) are routed to the owning service's optional <code>io_error(now_ms, eventmask)</code> hook so the service can transition cleanly to a failure state.  <code>POLLIN</code> / <code>POLLOUT</code> are wake signals only — <code>check</code> and <code>next_deadline</code> decide what runs on the next <code>tick</code>.</p>
+<p>Errors on a registered socket (<code>POLLERR</code> / <code>POLLHUP</code>) are routed to the owning service's optional <code>io_error(now_ms, eventmask)</code> hook so the service can transition cleanly to a failure state.  <code>POLLIN</code> / <code>POLLOUT</code> are wake signals only: <code>check</code> and <code>next_deadline</code> decide what runs on the next <code>tick</code>.</p>
 <p>Not sure which wait primitive a given job wants?  The timing guide's <a href="https://chumicro.github.io/ChuMicro/timing/stable/guide/#choosing-a-wait">Choosing a wait</a> table maps each question to its primitive across <code>chumicro_timing</code>, <code>chumicro_sockets</code>, and this service contract.</p>
 <h3 id="writing-a-service-that-participates-in-wait">Writing a service that participates in <code>wait</code><a class="headerlink" href="#writing-a-service-that-participates-in-wait" title="Permanent link">&para;</a></h3>
-<p>A socket-owning service exposes the duck-typed attributes the runner reads each loop.  All are optional — services without them work the same way they always did; the runner just won't wake for their I/O:</p>
+<p>A socket-owning service exposes the duck-typed attributes the runner reads each loop.  All are optional: services without them work the same way they always did; the runner just won't wake for their I/O:</p>
 <table>
 <thead>
 <tr>
@@ -1223,7 +1223,7 @@
 <tr>
 <td><code>io_socket</code></td>
 <td>socket-ish object or <code>None</code></td>
-<td>The socket whose readiness should wake the loop.  Either the pollable itself or an adapter wrapper exposing it on <code>.sock</code> — the runner unwraps <code>.sock</code> at registration, so producers never need to.</td>
+<td>The socket whose readiness should wake the loop.  Either the pollable itself or an adapter wrapper exposing it on <code>.sock</code>; the runner unwraps <code>.sock</code> at registration, so producers never need to.</td>
 </tr>
 <tr>
 <td><code>io_interest(now_ms)</code></td>
@@ -1269,10 +1269,10 @@
 </span><span id="__span-4-23"><a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">io_error</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">now_ms</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">eventmask</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 </span><span id="__span-4-24"><a id="__codelineno-4-24" name="__codelineno-4-24" href="#__codelineno-4-24"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">io_socket</span> <span class="o">=</span> <span class="kc">None</span>  <span class="c1"># drops out of the poll set on next wait()</span>
 </span></code></pre></div>
-<p>Every networked library in ChuMicro (<code>wifi</code>, <code>sockets</code>, <code>requests</code>, <code>http_server</code>, <code>mqtt</code>, <code>websockets</code>) implements this protocol — that is why their handlers share fairly with the rest of your loop.</p>
+<p>Every networked library in ChuMicro (<code>wifi</code>, <code>sockets</code>, <code>requests</code>, <code>http_server</code>, <code>mqtt</code>, <code>websockets</code>) implements this protocol, which is why their handlers share fairly with the rest of your loop.</p>
 <h3 id="injecting-a-poller-for-tests">Injecting a poller for tests<a class="headerlink" href="#injecting-a-poller-for-tests" title="Permanent link">&para;</a></h3>
 <p><code>Runner(poller=...)</code> accepts any object exposing <code>register(obj, eventmask)</code> / <code>modify(obj, eventmask)</code> / <code>unregister(obj)</code> / <code>ipoll(timeout_ms)</code>.  The default poller is built lazily on the first <code>wait()</code> that has a socket to register, so applications that never register an <code>io_socket</code> never pay for it.</p>
-<p><code>chumicro_runner.testing.FakePoller</code> is the test stand-in — see <a href="#testing-tasks">Testing tasks</a>.</p>
+<p><code>chumicro_runner.testing.FakePoller</code> is the test stand-in; see <a href="#testing-tasks">Testing tasks</a>.</p>
 <h2 id="the-service-contract">The service contract<a class="headerlink" href="#the-service-contract" title="Permanent link">&para;</a></h2>
 <p>A service is any object you hand to <code>runner.add(service)</code>.  The runner reads six members off it: two are required, the rest optional, each optional member carrying a coherence rule the dispatch relies on.</p>
 <table>
@@ -1348,7 +1348,7 @@
 </span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>        <span class="k">pass</span>
 </span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>
 </span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">detect_motion</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
-</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Read PIR sensor pin — fast digital read.&quot;&quot;&quot;</span>
+</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Read PIR sensor pin: fast digital read.&quot;&quot;&quot;</span>
 </span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>        <span class="c1"># On a real board: return self._pin.value</span>
 </span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a>        <span class="k">return</span> <span class="kc">False</span>
 </span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a>
@@ -1374,18 +1374,18 @@
 </span><span id="__span-6-32"><a id="__codelineno-6-32" name="__codelineno-6-32" href="#__codelineno-6-32"></a><span class="n">runner</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">MotionDetector</span><span class="p">())</span>
 </span></code></pre></div>
 <h3 id="handler-only">Handler-only<a class="headerlink" href="#handler-only" title="Permanent link">&para;</a></h3>
-<p>Pass just a handler with no check — it fires every tick (or per period):</p>
+<p>Pass just a handler with no check; it fires every tick (or per period):</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="n">runner</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">handler</span><span class="o">=</span><span class="k">lambda</span> <span class="n">now_ms</span><span class="p">:</span> <span class="n">scan_buttons</span><span class="p">(</span><span class="n">now_ms</span><span class="p">))</span>
 </span></code></pre></div>
 <h3 id="periodic">Periodic<a class="headerlink" href="#periodic" title="Permanent link">&para;</a></h3>
-<p>No check needed — the handler fires on a schedule:</p>
+<p>No check needed.  The handler fires on a schedule:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="n">runner</span><span class="o">.</span><span class="n">add_periodic</span><span class="p">(</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>    <span class="k">lambda</span> <span class="n">now_ms</span><span class="p">:</span> <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;blink!&quot;</span><span class="p">),</span>
 </span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>    <span class="n">period_ms</span><span class="o">=</span><span class="mi">500</span><span class="p">,</span>
 </span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="p">)</span>
 </span></code></pre></div>
 <h3 id="generator-driven">Generator-driven<a class="headerlink" href="#generator-driven" title="Permanent link">&para;</a></h3>
-<p>Write the I/O as a generator function and register it with <code>runner.add_generator(gen)</code>.  Each <code>yield from connect(...)</code> / <code>send_all(...)</code> / <code>recv_until(...)</code> hands control back to the runner between steps, so the body reads top-to-bottom while other services keep ticking.  Import the helpers explicitly from <code>chumicro_sockets.generators</code> — plain-runner consumers pay nothing.</p>
+<p>Write the I/O as a generator function and register it with <code>runner.add_generator(gen)</code>.  Each <code>yield from connect(...)</code> / <code>send_all(...)</code> / <code>recv_until(...)</code> hands control back to the runner between steps, so the body reads top-to-bottom while other services keep ticking.  Import the helpers explicitly from <code>chumicro_sockets.generators</code>; plain-runner consumers pay nothing.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_runner</span><span class="w"> </span><span class="kn">import</span> <span class="n">Runner</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_sockets.generators</span><span class="w"> </span><span class="kn">import</span> <span class="n">connect</span><span class="p">,</span> <span class="n">recv_until</span><span class="p">,</span> <span class="n">send_all</span>
 </span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_sockets</span><span class="w"> </span><span class="kn">import</span> <span class="n">connector</span>
@@ -1405,11 +1405,11 @@
 </span><span id="__span-9-17"><a id="__codelineno-9-17" name="__codelineno-9-17" href="#__codelineno-9-17"></a><span class="n">handle</span> <span class="o">=</span> <span class="n">runner</span><span class="o">.</span><span class="n">add_generator</span><span class="p">(</span><span class="n">echo_run</span><span class="p">(</span><span class="s2">&quot;echo.example&quot;</span><span class="p">,</span> <span class="mi">7</span><span class="p">,</span> <span class="n">radio</span><span class="o">=</span><span class="n">wifi_radio</span><span class="p">))</span>
 </span><span id="__span-9-18"><a id="__codelineno-9-18" name="__codelineno-9-18" href="#__codelineno-9-18"></a><span class="n">runner</span><span class="o">.</span><span class="n">run_until</span><span class="p">(</span><span class="n">handle</span><span class="p">)</span>
 </span></code></pre></div>
-<p><code>run_until(handle)</code> drives the tick/wait loop until the generator finishes — and re-raises <code>handle.error</code> if the task died, so a broken flow fails loudly instead of exiting clean.  Pass a callable instead for arbitrary conditions, or just <code>timeout_ms=</code> to run for a fixed window (a QoS-ack drain, a settling period).</p>
-<p>Each <code>yield from</code> is a scheduler checkpoint; between yields, other services registered on the same runner get their turn.  A bare <code>yield</code> suspends for exactly one tick.  <code>handle.done</code> flips True the moment the generator returns, dies, or is cancelled; <code>handle.error</code> holds the exception when the body raised (<code>None</code> otherwise), so a <code>while not handle.done</code> loop can report <em>why</em> a task ended — check it after the loop, or wire <code>Runner(on_handler_error=...)</code> for a loud callback at the moment of death.  <code>handle.cancel()</code> raises <code>GeneratorExit</code> inside the body so any <code>finally</code> block runs the cleanup.</p>
+<p><code>run_until(handle)</code> drives the tick/wait loop until the generator finishes, and re-raises <code>handle.error</code> if the task died, so a broken flow fails loudly instead of exiting clean.  Pass a callable instead for arbitrary conditions, or just <code>timeout_ms=</code> to run for a fixed window (a QoS-ack drain, a settling period).</p>
+<p>Each <code>yield from</code> is a scheduler checkpoint; between yields, other services registered on the same runner get their turn.  A bare <code>yield</code> suspends for exactly one tick.  <code>handle.done</code> flips True the moment the generator returns, dies, or is cancelled; <code>handle.error</code> holds the exception when the body raised (<code>None</code> otherwise), so a <code>while not handle.done</code> loop can report <em>why</em> a task ended: check it after the loop, or wire <code>Runner(on_handler_error=...)</code> for a loud callback at the moment of death.  <code>handle.cancel()</code> raises <code>GeneratorExit</code> inside the body so any <code>finally</code> block runs the cleanup.</p>
 <h4 id="waiting-on-a-callback-completed-event">Waiting on a callback-completed event<a class="headerlink" href="#waiting-on-a-callback-completed-event" title="Permanent link">&para;</a></h4>
-<p><code>Signal</code> + <code>wait_for</code> (in <code>chumicro_runner.generators</code>) suspend a generator until a callback-style service reports a one-time completion, which removes the state-change-callback-plus-module-flag preamble from sequential flows.  Hand <code>signal.set</code> (or a small wrapper) to the service as its callback, then <code>yield from</code>:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_runner.generators</span><span class="w"> </span><span class="kn">import</span> <span class="n">Signal</span><span class="p">,</span> <span class="n">wait_for</span>
+<p><code>Signal</code> + <code>wait_for</code> (in <code>chumicro_timing.waits</code>) suspend a generator until a callback-style service reports a one-time completion, which removes the state-change-callback-plus-module-flag preamble from sequential flows.  Hand <code>signal.set</code> (or a small wrapper) to the service as its callback, then <code>yield from</code>:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_timing.waits</span><span class="w"> </span><span class="kn">import</span> <span class="n">Signal</span><span class="p">,</span> <span class="n">wait_for</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>
 </span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="n">link_up</span> <span class="o">=</span> <span class="n">Signal</span><span class="p">()</span>
 </span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="n">wifi</span><span class="o">.</span><span class="n">on_state_change</span><span class="p">(</span><span class="k">lambda</span> <span class="n">old</span><span class="p">,</span> <span class="n">new</span><span class="p">:</span> <span class="n">link_up</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="n">new</span><span class="p">))</span>
@@ -1420,7 +1420,7 @@
 </span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a>    <span class="n">sock</span> <span class="o">=</span> <span class="k">yield from</span> <span class="n">connect</span><span class="p">(</span><span class="n">connector</span><span class="p">(</span><span class="n">HOST</span><span class="p">,</span> <span class="n">PORT</span><span class="p">,</span> <span class="n">radio</span><span class="o">=</span><span class="n">wifi</span><span class="o">.</span><span class="n">adapter</span><span class="o">.</span><span class="n">radio</span><span class="p">))</span>
 </span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a>    <span class="o">...</span>
 </span></code></pre></div>
-<p><code>wait_for(signal, deadline_ms=...)</code> bounds the wait: past the absolute-ticks deadline it raises <code>OSError(ETIMEDOUT)</code> inside the generator body, where a <code>try / except OSError</code> can route to a retry or a clean shutdown.  Reuse one signal across sequential waits by calling <code>signal.clear()</code> between them.  Scope discipline: this is for one-time completions a sequential flow genuinely blocks on — reactive fan-out and fire-and-forget acks stay callbacks.</p>
+<p><code>wait_for(signal, deadline_ms=...)</code> bounds the wait: past the absolute-ticks deadline it raises <code>OSError(ETIMEDOUT)</code> inside the generator body, where a <code>try / except OSError</code> can route to a retry or a clean shutdown.  Reuse one signal across sequential waits by calling <code>signal.clear()</code> between them.  Scope discipline: this is for one-time completions a sequential flow genuinely blocks on; reactive fan-out and fire-and-forget acks stay callbacks.</p>
 <h4 id="choosing-between-add-and-add_generator">Choosing between <code>add</code> and <code>add_generator</code><a class="headerlink" href="#choosing-between-add-and-add_generator" title="Permanent link">&para;</a></h4>
 <table>
 <thead>
@@ -1431,12 +1431,12 @@
 </thead>
 <tbody>
 <tr>
-<td>The work is reactive — a condition fires, you respond</td>
-<td>The work is a one-shot sequence — connect, send, recv, close</td>
+<td>The work is reactive: a condition fires, you respond</td>
+<td>The work is a one-shot sequence: connect, send, recv, close</td>
 </tr>
 <tr>
 <td>The state machine is small and stable (one state, or a handful of binary flags)</td>
-<td>The state machine is long and linear — multiple I/O steps in order</td>
+<td>The state machine is long and linear: multiple I/O steps in order</td>
 </tr>
 <tr>
 <td>Multiple instances run side by side and share resources cooperatively</td>
@@ -1448,16 +1448,16 @@
 </tr>
 </tbody>
 </table>
-<p>Default to <code>check</code> / <code>handle</code> for everything in <code>libraries/</code>; reach for <code>add_generator</code> when the work is naturally sequential I/O.  "Everything is a generator" is the drift to avoid — reactive services read more clearly in the gated shape, and two service models coexisting is genuinely lower overhead than forcing all work into one or the other.</p>
+<p>Default to <code>check</code> / <code>handle</code> for reactive work; reach for <code>add_generator</code> when the work is naturally sequential I/O.  "Everything is a generator" is the drift to avoid: reactive services read more clearly in the gated shape, and two service models coexisting is genuinely lower overhead than forcing all work into one or the other.</p>
 <h4 id="what-the-runner-does-not-use">What the runner does NOT use<a class="headerlink" href="#what-the-runner-does-not-use" title="Permanent link">&para;</a></h4>
 <p>The runner deliberately does not use <code>async</code> / <code>await</code> or the <code>asyncio</code> module.  Generators were picked over async syntax for four reasons in declining order of weight:</p>
 <ol>
-<li><strong>Yield-point hygiene.</strong>  <code>yield from helper()</code> raises <code>TypeError</code> if <code>helper</code> isn't a generator — the syntax enforces that every yield-point is a deliberate scheduler checkpoint.  <code>await helper()</code> against a regular function silently produces a <em>coroutine-without-await</em>, and the asyncio community already has a class of linters chasing that footgun.</li>
-<li><strong>Transparency.</strong>  A <code>yield</code> is one bytecode that hands control to the scheduler — single-steppable, breakpoint-able, visible in a traceback.  <code>await</code> hides the same handoff behind compile-time machinery that differs per runtime.</li>
+<li><strong>Yield-point hygiene.</strong>  <code>yield from helper()</code> raises <code>TypeError</code> if <code>helper</code> isn't a generator, so the syntax enforces that every yield-point is a deliberate scheduler checkpoint.  <code>await helper()</code> against a regular function silently produces a <em>coroutine-without-await</em>, and the asyncio community already has a class of linters chasing that footgun.</li>
+<li><strong>Transparency.</strong>  A <code>yield</code> is one bytecode that hands control to the scheduler: single-steppable, breakpoint-able, visible in a traceback.  <code>await</code> hides the same handoff behind compile-time machinery that differs per runtime.</li>
 <li><strong>Allocation budget on CircuitPython.</strong>  CircuitPython compiles <code>await x</code> to <code>load_method __await__; call; YIELD_FROM</code>; every <code>await</code> allocates a fresh generator from the <code>__await__()</code> call.  <code>yield from x</code> is one bytecode on every runtime.</li>
 <li><strong>Smaller lint surface.</strong>  A user who has never seen <code>async def</code> cannot reach for <code>import asyncio</code>.</li>
 </ol>
-<p><code>async def</code> / <code>await</code> / <code>async with</code> / <code>async for</code> and <code>import asyncio</code> / <code>import uasyncio</code> are banned across <code>libraries/</code> / <code>support/</code> / <code>workbench/</code> — see <a href="https://github.com/ChuMicro/ChuMicro/blob/main/docs/contributing/style-guide.md">the contributor style guide</a> for the contributor-facing rule.</p>
+<p><code>async def</code> / <code>await</code> / <code>async with</code> / <code>async for</code> and <code>import asyncio</code> / <code>import uasyncio</code> are banned across every ChuMicro package, device-side and host-side alike.</p>
 <h2 id="period-gated-services">Period-gated services<a class="headerlink" href="#period-gated-services" title="Permanent link">&para;</a></h2>
 <p>Pass <code>period_ms</code> to <code>add()</code> and the runner will only check the service when the period elapses.  Services without a period are checked every tick.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="n">runner</span> <span class="o">=</span> <span class="n">Runner</span><span class="p">()</span>
@@ -1472,7 +1472,7 @@
 <div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Speed up.</span>
 </span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">handle</span><span class="o">.</span><span class="n">set_period</span><span class="p">(</span><span class="mi">1000</span><span class="p">)</span>
 </span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>
-</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="c1"># Remove the period — service runs every tick again.</span>
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="c1"># Remove the period; service runs every tick again.</span>
 </span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="n">handle</span><span class="o">.</span><span class="n">set_period</span><span class="p">(</span><span class="kc">None</span><span class="p">)</span>
 </span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>
 </span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="c1"># Remove the service entirely.</span>
@@ -1489,7 +1489,7 @@
 </span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="n">runner</span><span class="o">.</span><span class="n">add_periodic</span><span class="p">(</span><span class="n">calibrate</span><span class="p">,</span> <span class="n">period_ms</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span> <span class="n">run_count</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
 </span></code></pre></div>
 <h3 id="phase-anchoring">Phase anchoring<a class="headerlink" href="#phase-anchoring" title="Permanent link">&para;</a></h3>
-<p>By default a fired periodic reschedules from the tick that fired it, so fires are always at least <code>period_ms</code> apart — but each fire inherits the tick's lateness, and the drift compounds.  A 1 Hz publish whose handler takes 80 ms settles near 1.08 s per cycle.</p>
+<p>By default a fired periodic reschedules from the tick that fired it, so fires are always at least <code>period_ms</code> apart, but each fire inherits the tick's lateness, and the drift compounds.  A 1 Hz publish whose handler takes 80 ms settles near 1.08 s per cycle.</p>
 <p>Pass <code>preserve_phase=True</code> for sampling, metering, or telemetry tasks that must hold their long-run cadence.  The next deadline then advances from the previous deadline in whole periods: fires stay aligned to the original schedule, and a stall longer than one period skips the missed fires instead of bursting to catch up.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># Holds 10 Hz cadence even when handlers run long.</span>
 </span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="n">runner</span><span class="o">.</span><span class="n">add_periodic</span><span class="p">(</span><span class="n">sample_adc</span><span class="p">,</span> <span class="n">period_ms</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span> <span class="n">preserve_phase</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
@@ -1508,7 +1508,7 @@
 </span><span id="__span-16-9"><a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a>    <span class="n">runner</span><span class="o">.</span><span class="n">wait</span><span class="p">(</span><span class="n">now_ms</span><span class="p">)</span>
 </span></code></pre></div>
 <h2 id="batch-firing">Batch firing<a class="headerlink" href="#batch-firing" title="Permanent link">&para;</a></h2>
-<p>All services are checked first, then all due handlers fire in sequence.  This guarantees that handlers see a consistent view of the world — no handler modifies state while other services are still being checked.</p>
+<p>All services are checked first, then all due handlers fire in sequence.  This guarantees that handlers see a consistent view of the world: no handler modifies state while other services are still being checked.</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>tick():
 </span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>  1. Capture ticks_ms() → now_ms
 </span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>  2. For each entry:
@@ -1525,8 +1525,8 @@
 <h2 id="testing-tasks">Testing tasks<a class="headerlink" href="#testing-tasks" title="Permanent link">&para;</a></h2>
 <p>The <code>chumicro_runner.testing</code> module provides two host-test helpers:</p>
 <ul>
-<li><code>CallRecorder</code> — a callable that records handler invocations for assertion in host-side tests.</li>
-<li><code>FakePoller</code> — a stand-in for <code>select.poll().ipoll</code> so unit tests can drive <code>Runner.wait()</code> without real file descriptors (CPython's <code>select.poll</code> needs real fds that in-memory fake sockets do not have).  Records every <code>register</code> / <code>modify</code> / <code>unregister</code> / <code>ipoll</code> call so tests can assert on what the runner did with the poll set; <code>set_ready(obj, eventmask)</code> queues a ready pair for the next <code>ipoll</code> return.</li>
+<li><code>CallRecorder</code>: a callable that records handler invocations for assertion in host-side tests.</li>
+<li><code>FakePoller</code>: a stand-in for <code>select.poll().ipoll</code> so unit tests can drive <code>Runner.wait()</code> without real file descriptors (CPython's <code>select.poll</code> needs real fds that in-memory fake sockets do not have).  Records every <code>register</code> / <code>modify</code> / <code>unregister</code> / <code>ipoll</code> call so tests can assert on what the runner did with the poll set; <code>set_ready(obj, eventmask)</code> queues a ready pair for the next <code>ipoll</code> return.</li>
 </ul>
 <h3 id="callrecorder"><code>CallRecorder</code><a class="headerlink" href="#callrecorder" title="Permanent link">&para;</a></h3>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_runner.testing</span><span class="w"> </span><span class="kn">import</span> <span class="n">CallRecorder</span>
@@ -1622,11 +1622,14 @@
 </tr>
 </tbody>
 </table>
-<p>Simulated examples run on CPython.  Hardware examples (<code>circuitpython_*</code> / <code>micropython_*</code>) require a real board — see the setup notes in each file.</p>
+<p>Simulated examples run on CPython.  Hardware examples (<code>circuitpython_*</code> / <code>micropython_*</code>) require a real board; see the setup notes in each file.</p>
 <hr />
 <div class="chumicro-footer">
 <p><a href="../">← Home</a></p>
-<p><a href="https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner">Source</a> · <a href="https://pypi.org/project/chumicro-runner/">PyPI</a> · <a href="https://github.com/ChuMicro/ChuMicro-Bundle">Bundle</a> · <a href="https://github.com/ChuMicro/ChuMicro-Bundle-Experimental">Experimental Bundle</a></p>
+<p><a href="https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner">Source</a> · \
+<a href="https://pypi.org/project/chumicro-runner/">PyPI</a> · \
+<a href="https://github.com/ChuMicro/ChuMicro-Bundle">Bundle</a> · \
+<a href="https://github.com/ChuMicro/ChuMicro-Bundle-Experimental">Experimental Bundle</a></p>
 </div>
 
 
