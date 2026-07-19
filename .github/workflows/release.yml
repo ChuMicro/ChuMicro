@@ -132,7 +132,7 @@ jobs:
       # restore with a circuitpython-less .tools whose cache "hit" also
       # skips the build-deps install needed to self-heal (see ci.yml
       # preflight for the full story).
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         id: tools-cache
         with:
           path: .tools
@@ -228,7 +228,7 @@ jobs:
 
       - name: Publish to PyPI
         if: inputs.dry_run != true
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b  # v1.14.0
         with:
           packages-dir: ${{ matrix.library_dir }}/dist/
           attestations: true
@@ -250,7 +250,7 @@ jobs:
       # rather than failing).
       - name: Create GitHub Release and tag
         if: inputs.dry_run != true
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ matrix.tag }}
           # Pin the tag to the exact commit that was built and gated, not a
@@ -322,7 +322,7 @@ jobs:
       # save cannot poison a fuller job's restore (see ci.yml preflight).
       # Still one cache action per path — separate cache actions for the
       # same path make the second restore overwrite the first.
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         id: tools-cache
         with:
           path: .tools
@@ -481,7 +481,7 @@ jobs:
 
       # tools-mp-: this job builds only the micropython unix-port (see
       # ci.yml preflight for why keys are split per produced toolset).
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         id: tools-cache
         with:
           path: .tools

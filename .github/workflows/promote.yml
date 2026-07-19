@@ -125,7 +125,7 @@ jobs:
           python-version: "3.14"
           cache: "pip"
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         id: tools-cache
         with:
           path: .tools
@@ -191,7 +191,7 @@ jobs:
 
       - name: Publish to PyPI
         if: ${{ !inputs.dry_run }}
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b  # v1.14.0
         with:
           packages-dir: "${{ needs.validate.outputs.library_dir }}/dist/"
           attestations: true
@@ -206,7 +206,7 @@ jobs:
       # re-runnable end to end.
       - name: Create GitHub Release and tag
         if: ${{ !inputs.dry_run }}
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.validate.outputs.stable_tag }}
           # Pin the tag to the exact commit this promotion ran from.
@@ -256,7 +256,7 @@ jobs:
       # restore to overwrite the first, leading to subtle corruption.
       # tools-mp-mpy-: this job produces mpy-cross + micropython only,
       # so it must not share a key with jobs producing other toolsets.
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         id: tools-cache
         with:
           path: .tools
@@ -393,7 +393,7 @@ jobs:
         with:
           python-version: "3.13"
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         id: tools-cache
         with:
           path: .tools
@@ -450,7 +450,7 @@ jobs:
           python-version: "3.13"
 
       - name: Cache pip packages
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/pip
           key: docs-pip-${{ hashFiles('requirements-docs.txt') }}
