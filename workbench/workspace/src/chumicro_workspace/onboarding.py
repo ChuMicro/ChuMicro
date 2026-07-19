@@ -136,7 +136,7 @@ def _next_steps_for(state: BoardState, *, uf2_drive: Path | None = None) -> list
     if state is BoardState.REPL_REACHABLE:
         return [
             "Board is in REPL — register it with:",
-            "  `python run.py add-device <id> --address <port> --runtime <runtime>`",
+            "  `python3 run.py add-device <id> --address <port> --runtime <runtime>`",
         ]
     if state is BoardState.UF2_BOOTLOADER:
         drive_hint = (
@@ -144,7 +144,7 @@ def _next_steps_for(state: BoardState, *, uf2_drive: Path | None = None) -> list
         )
         return [
             "Board is in UF2 bootloader — install firmware first." + drive_hint,
-            "  `python run.py install-firmware --method uf2 "
+            "  `python3 run.py install-firmware --method uf2 "
             "--url <firmware-url> --device <id>`",
             "  Then re-run `add-device` once the board reboots into the new firmware.",
         ]
@@ -152,14 +152,14 @@ def _next_steps_for(state: BoardState, *, uf2_drive: Path | None = None) -> list
         return [
             "Serial opens but no probe response — "
             "likely a blank ESP32 chip in ROM bootloader.",
-            "  `python run.py install-firmware --method esptool --erase "
+            "  `python3 run.py install-firmware --method esptool --erase "
             "--url <firmware-url> --device <id>`",
             "  Then re-run `add-device`.",
         ]
     # SERIAL_UNREACHABLE
     return [
         "Serial port could not be opened.",
-        "  `python run.py discover` lists every visible port — "
+        "  `python3 run.py discover` lists every visible port — "
         "pick the one that appears when you plug the board.",
         "  Check cable + USB port + permissions "
         "(Linux: confirm membership in `dialout` / `uucp`).",

@@ -1498,7 +1498,7 @@ class TestDeployFailureHints:
 
 
 class TestDeployDiffCleanup:
-    """`python run.py deploy <project>` runs a scoped diff-deploy by default.
+    """`python3 run.py deploy <project>` runs a scoped diff-deploy by default.
 
     The CLI routes through `Deployer.deploy_diff()` — the one stage
     primitive — so stale `/lib/*` from a previous deploy gets cleaned
@@ -3499,7 +3499,7 @@ class TestTestCommand:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         """When pytest isn't installed, ``test`` must exit nonzero with a
-        ``python run.py setup`` pointer instead of shelling out to a raw
+        ``python3 run.py setup`` pointer instead of shelling out to a raw
         "No module named pytest" traceback."""
         root = seed_workspace(tmp_path)
         runner = FakeSubprocessRunner()
@@ -3522,7 +3522,7 @@ class TestTestCommand:
         assert runner.calls == []
         captured = capsys.readouterr()
         assert "pytest is not installed" in captured.err
-        assert "python run.py setup" in captured.err
+        assert "python3 run.py setup" in captured.err
 
 
 class TestLintCommand:
@@ -3611,7 +3611,7 @@ class TestLintCommand:
         assert len(runner.calls) == 1
         captured = capsys.readouterr()
         assert "chumicro-checks is not installed" in captured.err
-        assert "python run.py setup" in captured.err
+        assert "python3 run.py setup" in captured.err
 
     def test_fails_loudly_when_ruff_missing(
         self,
@@ -3620,7 +3620,7 @@ class TestLintCommand:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         """When ruff isn't installed, lint must exit nonzero with a
-        ``python run.py setup`` pointer rather than green-washing."""
+        ``python3 run.py setup`` pointer rather than green-washing."""
         root = seed_workspace(tmp_path)
 
         # Force the import probe inside _cmd_lint to fail.
@@ -3640,7 +3640,7 @@ class TestLintCommand:
         assert exit_code != 0
         captured = capsys.readouterr()
         assert "ruff is not installed" in captured.err
-        assert "python run.py setup" in captured.err
+        assert "python3 run.py setup" in captured.err
 
 
 class TestQualityKnobsLint:

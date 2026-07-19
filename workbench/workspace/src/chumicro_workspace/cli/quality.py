@@ -33,7 +33,7 @@ def _cmd_test(args: argparse.Namespace) -> int:
     kicks in.  User passthrough args (after ``--``) win over the
     workspace default, since pytest takes the last occurrence.
 
-    Fails loudly (nonzero, with a ``python run.py setup`` pointer)
+    Fails loudly (nonzero, with a ``python3 run.py setup`` pointer)
     when pytest itself is missing rather than shelling out to a raw
     "No module named pytest" traceback — a workspace that never ran
     ``setup``'s ``[dev]`` install has no test runner to reach.
@@ -44,7 +44,7 @@ def _cmd_test(args: argparse.Namespace) -> int:
     except ImportError:
         print(
             "test: pytest is not installed in this venv.  Run "
-            "`python run.py setup` to install the workspace's [dev] "
+            "`python3 run.py setup` to install the workspace's [dev] "
             "extra (pytest, pytest-cov, ruff, chumicro-checks).",
             file=sys.stderr,
         )
@@ -67,7 +67,7 @@ def _cmd_lint(args: argparse.Namespace) -> int:
     Each tool reads its own config from ``pyproject.toml``
     (``[tool.ruff]`` and ``[tool.chumicro-checks]``).  Extra args
     after ``--`` forward to ruff.  Either tool missing from the venv
-    fails loudly (nonzero, with a ``python run.py setup`` pointer)
+    fails loudly (nonzero, with a ``python3 run.py setup`` pointer)
     rather than green-washing — a lint that lints nothing must not
     report success on a workspace that never installed the ``[dev]``
     extra.
@@ -95,7 +95,7 @@ def _cmd_lint(args: argparse.Namespace) -> int:
         except ImportError:
             print(
                 "lint: ruff is not installed in this venv.  Run "
-                "`python run.py setup` to install the workspace's [dev] "
+                "`python3 run.py setup` to install the workspace's [dev] "
                 "extra (ruff, chumicro-checks, pytest).",
                 file=sys.stderr,
             )
@@ -119,7 +119,7 @@ def _cmd_lint(args: argparse.Namespace) -> int:
         except ImportError:
             print(
                 "lint: chumicro-checks is not installed in this venv.  Run "
-                "`python run.py setup` to install the workspace's [dev] "
+                "`python3 run.py setup` to install the workspace's [dev] "
                 "extra (ruff, chumicro-checks, pytest).",
                 file=sys.stderr,
             )

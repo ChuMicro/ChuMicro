@@ -506,7 +506,7 @@ def _resolve_project_name(workspace: WorkspaceLayout, name: str) -> str:
         raise SystemExit(
             f"deploy: {name!r} is ambiguous — multiple projects match:\n"
             f"{candidate_list}\n"
-            f"specify the path: `python run.py deploy {candidates[0]}`",
+            f"specify the path: `python3 run.py deploy {candidates[0]}`",
         )
     # No match: let the caller's existence check produce the standard
     # "project not found" message after constructing the dir path.

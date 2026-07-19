@@ -34,7 +34,7 @@ names the file that carries it), merges, and returns a typed
 :class:`QualityConfig`.  Validation only.  Lint and coverage are
 run elsewhere.
 
-* ``lint.enabled = false`` turns ``python run.py lint`` into a
+* ``lint.enabled = false`` turns ``python3 run.py lint`` into a
   no-op with a hint (still discoverable; just doesn't run anything).
 * ``lint.tools`` selects which tools to run.  Default runs
   both ``ruff`` and ``chumicro-checks``; drop one to disable that
@@ -77,7 +77,7 @@ class LintConfig:
     """Lint-related knobs from ``workspace.yml``'s ``quality.lint``.
 
     Attributes:
-        enabled: When False, ``python run.py lint`` is a no-op.
+        enabled: When False, ``python3 run.py lint`` is a no-op.
             Defaults to True so a missing block doesn't disable
             linting silently.
         tools: Which lint tools to run.  Defaults to running both
