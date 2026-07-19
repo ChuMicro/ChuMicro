@@ -44,6 +44,22 @@ mpremote mip install github:ChuMicro/ChuMicro-Bundle-Experimental/chumicro_timin
 pip install chumicro-timing-experimental
 ```
 
+## First release of a new package
+
+The very first release of a brand-new package fails at the PyPI publish step unless a maintainer prepares PyPI ahead of the merge. PyPI only accepts a trusted-publisher upload for a project that already exists or has a matching pending publisher, and the workflow cannot create projects on its own. An account can also hold at most one pending publisher per (repository, workflow, environment) combination, so the slot is usually occupied.
+
+Before merging the first `VERSION` bump of a new package, a maintainer should register a pending publisher on pypi.org for `chumicro-<name>-experimental`: owner `ChuMicro`, repository `ChuMicro`, workflow `release.yml`, environment `pypi`. The first successful publish converts it into a normal per-project publisher automatically. The stable name gets the same treatment with `promote.yml` as the workflow when the package is first promoted.
+
+If the release already fired and failed, recover by bootstrapping the project directly: build the dists locally, verify with `twine check`, upload with a scoped API token, attach a per-project trusted publisher on pypi.org, then re-run the release with `workflow_dispatch`. The publish step's `skip-existing` makes the re-run safe, and the re-run also completes the bundle and libraries-channel jobs that the failed run skipped.
+
+Reading the publish failure:
+
+- **400 Bad Request**: the project does not exist and no pending publisher matched. Follow the bootstrap steps above.
+- **403 Forbidden**: the project exists but its trusted publisher is missing or misconfigured. Fix it on the project's Publishing page.
+- **429 (too many new projects)**: PyPI creates at most 4 new projects per rolling 24 hours, per user and per IP. Retrying does not help. Wait for the window to roll; the `Ratelimit-Policy` response header carries the exact reset time.
+
+A failed publish leg also skips the bundle, libraries-channel, and manifest jobs for the whole run, including packages whose legs succeeded. Their tags survive, so a `workflow_dispatch` re-run finishes their distribution without republishing anything.
+
 ## Requesting a stable promotion
 
 1. Open an issue using the [Stable Promotion Request](https://github.com/ChuMicro/ChuMicro/issues/new?template=stable_promotion.yml) template
