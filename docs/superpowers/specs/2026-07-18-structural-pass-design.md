@@ -78,12 +78,22 @@ These gate the stable wave; 1.1 is the API break.
 ### 1.1 Transport-factory glue moves into chumicro_sockets
 
 A `factories` module inside `chumicro_sockets` provides the connect, listen,
-and UDP factory variants, including the config-key validation the copies
-carry today.  The five per-library `sockets_factory.py` copies are deleted,
-and examples and guides import from `chumicro_sockets` instead.  The config
-import stays lazy so the sockets package gains no hard dependency edge.  A
-new decision record supersedes 0093 with this shape and records the measured
-flash delta on the smallest supported board.
+and UDP factory variants.  The five per-library `sockets_factory.py` copies
+are deleted, and examples and guides import from `chumicro_sockets` instead.
+The config import stays lazy so the sockets package gains no hard dependency
+edge.  A new decision record supersedes 0093 with this shape and records the
+measured flash delta on the smallest supported board.
+
+Dependency-direction constraint: the factories are generic.  They take host
+and port (or config key names) as parameters; protocol-specific key names
+like `mqtt.broker.host` stay in each protocol library's examples and guide.
+The sockets package must not learn any protocol's config namespace.  The
+injection seam is unchanged either way: protocol libraries keep taking a
+`transport_factory` argument and never import a transport implementation.
+The move actually tightens this, since today each protocol package ships
+glue that lazily imports `chumicro_sockets`, and a bring-your-own-socket
+deploy carries that dead module; afterward the protocol packages contain no
+reference to sockets at all.
 
 ### 1.2 Finish generator-first teaching
 
