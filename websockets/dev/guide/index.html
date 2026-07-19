@@ -327,10 +327,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#getting-started-client" class="md-nav__link">
+  <a href="#getting-started-with-generators" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
-        Getting started — client
+        Getting started with generators
       </span>
     </span>
   </a>
@@ -338,10 +338,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#getting-started-server" class="md-nav__link">
+  <a href="#getting-started-with-a-service-client" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
-        Getting started — server
+        Getting started with a service (client)
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#getting-started-with-a-service-server" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Getting started with a service (server)
       </span>
     </span>
   </a>
@@ -584,10 +595,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#getting-started-client" class="md-nav__link">
+  <a href="#getting-started-with-generators" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
-        Getting started — client
+        Getting started with generators
       </span>
     </span>
   </a>
@@ -595,10 +606,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#getting-started-server" class="md-nav__link">
+  <a href="#getting-started-with-a-service-client" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
-        Getting started — server
+        Getting started with a service (client)
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#getting-started-with-a-service-server" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Getting started with a service (server)
       </span>
     </span>
   </a>
@@ -748,60 +770,85 @@
 <h1 id="user-guide">User Guide<a class="headerlink" href="#user-guide" title="Permanent link">&para;</a></h1>
 <h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
 <p><code>chumicro-websockets</code> is a non-blocking WebSocket (RFC 6455) client + server built on <code>chumicro-sockets</code> and <code>chumicro-timing</code>.  Two top-level classes — <code>WebSocketClient</code> for outbound <code>ws://</code> / <code>wss://</code> connections, and <code>WebSocketServer</code> for inbound.  Both follow the runner pattern from <code>chumicro-runner</code> (<code>check(now_ms)</code> / <code>handle(now_ms)</code>), so an LED can keep blinking through the opening handshake, frame I/O, control-frame interleave, and the close handshake.</p>
-<h2 id="getting-started-client">Getting started — client<a class="headerlink" href="#getting-started-client" title="Permanent link">&para;</a></h2>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_websockets</span><span class="w"> </span><span class="kn">import</span> <span class="n">WebSocketClient</span><span class="p">,</span> <span class="n">WebSocketState</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_websockets.sockets_factory</span><span class="w"> </span><span class="kn">import</span> <span class="n">chumicro_sockets_connector_factory</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_timing</span><span class="w"> </span><span class="kn">import</span> <span class="n">ticks_ms</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_wifi</span><span class="w"> </span><span class="kn">import</span> <span class="n">wifi</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="n">client</span> <span class="o">=</span> <span class="n">WebSocketClient</span><span class="p">(</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">transport_factory</span><span class="o">=</span><span class="n">chumicro_sockets_connector_factory</span><span class="p">(</span><span class="n">radio</span><span class="o">=</span><span class="n">wifi</span><span class="o">.</span><span class="n">adapter</span><span class="o">.</span><span class="n">radio</span><span class="p">),</span>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="p">)</span>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="n">client</span><span class="o">.</span><span class="n">on_text</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">text</span><span class="p">:</span> <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;got: </span><span class="si">{</span><span class="n">text</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="n">client</span><span class="o">.</span><span class="n">on_close</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">code</span><span class="p">,</span> <span class="n">reason</span><span class="p">:</span> <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;closed </span><span class="si">{</span><span class="n">code</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">reason</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="n">client</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="s2">&quot;ws://api.example.com/stream&quot;</span><span class="p">,</span> <span class="n">timeout_ms</span><span class="o">=</span><span class="mi">10000</span><span class="p">)</span>
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="k">while</span> <span class="n">client</span><span class="o">.</span><span class="n">state</span> <span class="o">!=</span> <span class="n">WebSocketState</span><span class="o">.</span><span class="n">CLOSED</span><span class="p">:</span>
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>    <span class="n">now</span> <span class="o">=</span> <span class="n">ticks_ms</span><span class="p">()</span>
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>    <span class="k">if</span> <span class="n">client</span><span class="o">.</span><span class="n">check</span><span class="p">(</span><span class="n">now</span><span class="p">):</span>
-</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>        <span class="n">client</span><span class="o">.</span><span class="n">handle</span><span class="p">(</span><span class="n">now</span><span class="p">)</span>
-</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>    <span class="k">if</span> <span class="n">client</span><span class="o">.</span><span class="n">state</span> <span class="o">==</span> <span class="n">WebSocketState</span><span class="o">.</span><span class="n">OPEN</span> <span class="ow">and</span> <span class="n">want_to_send_now</span><span class="p">:</span>
-</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>        <span class="n">client</span><span class="o">.</span><span class="n">send_text</span><span class="p">(</span><span class="s2">&quot;hello&quot;</span><span class="p">)</span>
-</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>        <span class="n">want_to_send_now</span> <span class="o">=</span> <span class="kc">False</span>
+<h2 id="getting-started-with-generators">Getting started with generators<a class="headerlink" href="#getting-started-with-generators" title="Permanent link">&para;</a></h2>
+<p>The receive-stream surface reads inbound messages as a linear loop: <code>message = yield from client.next_message()</code> waits for the next message, hands it back, and loops until the session closes.  Register the client (it does the frame I/O each tick) and the consumer generator side by side.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_runner</span><span class="w"> </span><span class="kn">import</span> <span class="n">Runner</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_sockets.sockets_factory</span><span class="w"> </span><span class="kn">import</span> <span class="n">connector_factory</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_websockets</span><span class="w"> </span><span class="kn">import</span> <span class="n">WebSocketClient</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="n">client</span> <span class="o">=</span> <span class="n">WebSocketClient</span><span class="p">(</span><span class="n">transport_factory</span><span class="o">=</span><span class="n">connector_factory</span><span class="p">(</span><span class="n">radio</span><span class="o">=</span><span class="n">wifi</span><span class="o">.</span><span class="n">adapter</span><span class="o">.</span><span class="n">radio</span><span class="p">))</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="n">client</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="s2">&quot;ws://api.example.com/stream&quot;</span><span class="p">,</span> <span class="n">timeout_ms</span><span class="o">=</span><span class="mi">10_000</span><span class="p">)</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="k">def</span><span class="w"> </span><span class="nf">receive</span><span class="p">():</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>        <span class="n">message</span> <span class="o">=</span> <span class="k">yield from</span> <span class="n">client</span><span class="o">.</span><span class="n">next_message</span><span class="p">()</span>   <span class="c1"># InboundMessage</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>        <span class="k">if</span> <span class="n">message</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>            <span class="k">break</span>                                    <span class="c1"># session closed</span>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>        <span class="nb">print</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">text</span> <span class="k">if</span> <span class="n">message</span><span class="o">.</span><span class="n">is_text</span> <span class="k">else</span> <span class="n">message</span><span class="o">.</span><span class="n">data</span><span class="p">)</span>
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="n">runner</span> <span class="o">=</span> <span class="n">Runner</span><span class="p">()</span>
+</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="n">runner</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">client</span><span class="p">)</span>
+</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="n">handle</span> <span class="o">=</span> <span class="n">runner</span><span class="o">.</span><span class="n">add_generator</span><span class="p">(</span><span class="n">receive</span><span class="p">())</span>
+</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="n">runner</span><span class="o">.</span><span class="n">run_until</span><span class="p">(</span><span class="n">handle</span><span class="p">)</span>
 </span></code></pre></div>
-<h2 id="getting-started-server">Getting started — server<a class="headerlink" href="#getting-started-server" title="Permanent link">&para;</a></h2>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_websockets</span><span class="w"> </span><span class="kn">import</span> <span class="n">WebSocketServer</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_sockets</span><span class="w"> </span><span class="kn">import</span> <span class="n">listener</span> <span class="k">as</span> <span class="n">make_listener</span>
+<p>The first <code>next_message()</code> call switches inbound delivery from the <code>on_text</code> / <code>on_binary</code> callbacks to a bounded queue the generator drains (drop-oldest); pick one inbound surface per client.  See <code>examples/receive_stream.py</code>.</p>
+<h2 id="getting-started-with-a-service-client">Getting started with a service (client)<a class="headerlink" href="#getting-started-with-a-service-client" title="Permanent link">&para;</a></h2>
+<p>The <code>check</code> / <code>handle</code> service shape suits callback-style consumers and any client you drive from your own tick loop.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_websockets</span><span class="w"> </span><span class="kn">import</span> <span class="n">WebSocketClient</span><span class="p">,</span> <span class="n">WebSocketState</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_sockets.sockets_factory</span><span class="w"> </span><span class="kn">import</span> <span class="n">connector_factory</span>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_timing</span><span class="w"> </span><span class="kn">import</span> <span class="n">ticks_ms</span>
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_wifi</span><span class="w"> </span><span class="kn">import</span> <span class="n">wifi</span>
 </span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="k">def</span><span class="w"> </span><span class="nf">on_connection</span><span class="p">(</span><span class="n">connection</span><span class="p">):</span>
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>    <span class="n">connection</span><span class="o">.</span><span class="n">on_text</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">text</span><span class="p">:</span> <span class="n">connection</span><span class="o">.</span><span class="n">send_text</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;echo: </span><span class="si">{</span><span class="n">text</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>    <span class="n">connection</span><span class="o">.</span><span class="n">on_close</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">code</span><span class="p">,</span> <span class="n">reason</span><span class="p">:</span> <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;client gone: </span><span class="si">{</span><span class="n">code</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>
-</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="n">listener</span> <span class="o">=</span> <span class="n">make_listener</span><span class="p">(</span><span class="s2">&quot;0.0.0.0&quot;</span><span class="p">,</span> <span class="mi">8765</span><span class="p">,</span> <span class="n">radio</span><span class="o">=</span><span class="n">wifi</span><span class="o">.</span><span class="n">adapter</span><span class="o">.</span><span class="n">radio</span><span class="p">)</span>
-</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="n">server</span> <span class="o">=</span> <span class="n">WebSocketServer</span><span class="p">(</span>
-</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>    <span class="n">listener</span><span class="o">=</span><span class="n">listener</span><span class="p">,</span>
-</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>    <span class="n">on_connection</span><span class="o">=</span><span class="n">on_connection</span><span class="p">,</span>
-</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>    <span class="n">max_connections</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
-</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="p">)</span>
-</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>
-</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
-</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>    <span class="n">now</span> <span class="o">=</span> <span class="n">ticks_ms</span><span class="p">()</span>
-</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>    <span class="k">if</span> <span class="n">server</span><span class="o">.</span><span class="n">check</span><span class="p">(</span><span class="n">now</span><span class="p">):</span>
-</span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a>        <span class="n">server</span><span class="o">.</span><span class="n">handle</span><span class="p">(</span><span class="n">now</span><span class="p">)</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="n">client</span> <span class="o">=</span> <span class="n">WebSocketClient</span><span class="p">(</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>    <span class="n">transport_factory</span><span class="o">=</span><span class="n">connector_factory</span><span class="p">(</span><span class="n">radio</span><span class="o">=</span><span class="n">wifi</span><span class="o">.</span><span class="n">adapter</span><span class="o">.</span><span class="n">radio</span><span class="p">),</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="p">)</span>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="n">client</span><span class="o">.</span><span class="n">on_text</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">text</span><span class="p">:</span> <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;got: </span><span class="si">{</span><span class="n">text</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="n">client</span><span class="o">.</span><span class="n">on_close</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">code</span><span class="p">,</span> <span class="n">reason</span><span class="p">:</span> <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;closed </span><span class="si">{</span><span class="n">code</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">reason</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="n">client</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="s2">&quot;ws://api.example.com/stream&quot;</span><span class="p">,</span> <span class="n">timeout_ms</span><span class="o">=</span><span class="mi">10000</span><span class="p">)</span>
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>
+</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="k">while</span> <span class="n">client</span><span class="o">.</span><span class="n">state</span> <span class="o">!=</span> <span class="n">WebSocketState</span><span class="o">.</span><span class="n">CLOSED</span><span class="p">:</span>
+</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>    <span class="n">now</span> <span class="o">=</span> <span class="n">ticks_ms</span><span class="p">()</span>
+</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>    <span class="k">if</span> <span class="n">client</span><span class="o">.</span><span class="n">check</span><span class="p">(</span><span class="n">now</span><span class="p">):</span>
+</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>        <span class="n">client</span><span class="o">.</span><span class="n">handle</span><span class="p">(</span><span class="n">now</span><span class="p">)</span>
+</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>    <span class="k">if</span> <span class="n">client</span><span class="o">.</span><span class="n">state</span> <span class="o">==</span> <span class="n">WebSocketState</span><span class="o">.</span><span class="n">OPEN</span> <span class="ow">and</span> <span class="n">want_to_send_now</span><span class="p">:</span>
+</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>        <span class="n">client</span><span class="o">.</span><span class="n">send_text</span><span class="p">(</span><span class="s2">&quot;hello&quot;</span><span class="p">)</span>
+</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>        <span class="n">want_to_send_now</span> <span class="o">=</span> <span class="kc">False</span>
+</span></code></pre></div>
+<h2 id="getting-started-with-a-service-server">Getting started with a service (server)<a class="headerlink" href="#getting-started-with-a-service-server" title="Permanent link">&para;</a></h2>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_websockets</span><span class="w"> </span><span class="kn">import</span> <span class="n">WebSocketServer</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_sockets</span><span class="w"> </span><span class="kn">import</span> <span class="n">listener</span> <span class="k">as</span> <span class="n">make_listener</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_timing</span><span class="w"> </span><span class="kn">import</span> <span class="n">ticks_ms</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_wifi</span><span class="w"> </span><span class="kn">import</span> <span class="n">wifi</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="k">def</span><span class="w"> </span><span class="nf">on_connection</span><span class="p">(</span><span class="n">connection</span><span class="p">):</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>    <span class="n">connection</span><span class="o">.</span><span class="n">on_text</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">text</span><span class="p">:</span> <span class="n">connection</span><span class="o">.</span><span class="n">send_text</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;echo: </span><span class="si">{</span><span class="n">text</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>    <span class="n">connection</span><span class="o">.</span><span class="n">on_close</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">code</span><span class="p">,</span> <span class="n">reason</span><span class="p">:</span> <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;client gone: </span><span class="si">{</span><span class="n">code</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="n">listener</span> <span class="o">=</span> <span class="n">make_listener</span><span class="p">(</span><span class="s2">&quot;0.0.0.0&quot;</span><span class="p">,</span> <span class="mi">8765</span><span class="p">,</span> <span class="n">radio</span><span class="o">=</span><span class="n">wifi</span><span class="o">.</span><span class="n">adapter</span><span class="o">.</span><span class="n">radio</span><span class="p">)</span>
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="n">server</span> <span class="o">=</span> <span class="n">WebSocketServer</span><span class="p">(</span>
+</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>    <span class="n">listener</span><span class="o">=</span><span class="n">listener</span><span class="p">,</span>
+</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>    <span class="n">on_connection</span><span class="o">=</span><span class="n">on_connection</span><span class="p">,</span>
+</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>    <span class="n">max_connections</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="p">)</span>
+</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a>
+</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a>    <span class="n">now</span> <span class="o">=</span> <span class="n">ticks_ms</span><span class="p">()</span>
+</span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a>    <span class="k">if</span> <span class="n">server</span><span class="o">.</span><span class="n">check</span><span class="p">(</span><span class="n">now</span><span class="p">):</span>
+</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a>        <span class="n">server</span><span class="o">.</span><span class="n">handle</span><span class="p">(</span><span class="n">now</span><span class="p">)</span>
 </span></code></pre></div>
 <h2 id="runner-pattern">Runner pattern<a class="headerlink" href="#runner-pattern" title="Permanent link">&para;</a></h2>
 <p>Both <code>WebSocketClient</code> and <code>WebSocketServer</code> implement the runner contract (<code>check(now_ms)</code> / <code>handle(now_ms)</code>) — register them with <code>chumicro_runner.Runner</code> and they get ticked alongside your other services:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_runner</span><span class="w"> </span><span class="kn">import</span> <span class="n">Runner</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">runner</span> <span class="o">=</span> <span class="n">Runner</span><span class="p">()</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="n">runner</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">websocket_client</span><span class="p">)</span>     <span class="c1"># has check + handle</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="n">runner</span><span class="o">.</span><span class="n">add_periodic</span><span class="p">(</span><span class="n">led_blink</span><span class="p">,</span> <span class="n">period_ms</span><span class="o">=</span><span class="mi">500</span><span class="p">)</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="n">runner</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">sensor_service</span><span class="p">)</span>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>    <span class="n">runner</span><span class="o">.</span><span class="n">tick</span><span class="p">()</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_runner</span><span class="w"> </span><span class="kn">import</span> <span class="n">Runner</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">runner</span> <span class="o">=</span> <span class="n">Runner</span><span class="p">()</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="n">runner</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">websocket_client</span><span class="p">)</span>     <span class="c1"># has check + handle</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="n">runner</span><span class="o">.</span><span class="n">add_periodic</span><span class="p">(</span><span class="n">led_blink</span><span class="p">,</span> <span class="n">period_ms</span><span class="o">=</span><span class="mi">500</span><span class="p">)</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="n">runner</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">sensor_service</span><span class="p">)</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>    <span class="n">runner</span><span class="o">.</span><span class="n">tick</span><span class="p">()</span>
 </span></code></pre></div>
 <p><code>check(now_ms) -&gt; bool</code> reports whether work is pending; <code>handle(now_ms)</code>
 does at most one tick of progress, capped by <code>recv_budget_per_tick</code> and
@@ -851,11 +898,11 @@ never from a thread or interrupt.</p>
 <h3 id="server-connection">Server (<code>Connection</code>)<a class="headerlink" href="#server-connection" title="Permanent link">&para;</a></h3>
 <p>The user wires callbacks inside <code>on_connection(connection)</code>, which fires
 once per accepted connection at the moment its handshake completes:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">on_connection</span><span class="p">(</span><span class="n">connection</span><span class="p">):</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>    <span class="n">connection</span><span class="o">.</span><span class="n">on_text</span> <span class="o">=</span> <span class="o">...</span>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>    <span class="n">connection</span><span class="o">.</span><span class="n">on_binary</span> <span class="o">=</span> <span class="o">...</span>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="n">connection</span><span class="o">.</span><span class="n">on_close</span> <span class="o">=</span> <span class="o">...</span>
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="n">connection</span><span class="o">.</span><span class="n">on_oversized</span> <span class="o">=</span> <span class="o">...</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">on_connection</span><span class="p">(</span><span class="n">connection</span><span class="p">):</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>    <span class="n">connection</span><span class="o">.</span><span class="n">on_text</span> <span class="o">=</span> <span class="o">...</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>    <span class="n">connection</span><span class="o">.</span><span class="n">on_binary</span> <span class="o">=</span> <span class="o">...</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>    <span class="n">connection</span><span class="o">.</span><span class="n">on_close</span> <span class="o">=</span> <span class="o">...</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>    <span class="n">connection</span><span class="o">.</span><span class="n">on_oversized</span> <span class="o">=</span> <span class="o">...</span>
 </span></code></pre></div>
 <p>Same shape as the client's callbacks; semantically identical.</p>
 <h2 id="bring-your-own-transport">Bring your own transport<a class="headerlink" href="#bring-your-own-transport" title="Permanent link">&para;</a></h2>
@@ -888,10 +935,10 @@ once per accepted connection at the moment its handshake completes:</p>
 </table>
 <p><code>chumicro_sockets.connector</code> is one valid producer.  See <code>chumicro_sockets._connector.SocketConnector</code> for the connector contract (<code>tick(now_ms)</code>, <code>state</code>, <code>socket</code>, <code>io_*</code>, <code>next_deadline</code>, <code>cancel</code>) — any tick-driven state machine with that surface works as a custom factory.</p>
 <p>If you supply your own factory and want <code>chumicro_sockets</code> dropped from the deploy entirely, add a module-level constant to your entrypoint and the chumicro-workspace deployer will filter the default factory out of the import graph:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># code.py / app.py</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">__chumicro_skip_factories__</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;sockets_factory&quot;</span><span class="p">,)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># code.py / app.py</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">__chumicro_skip_factories__</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;sockets_factory&quot;</span><span class="p">,)</span>
 </span></code></pre></div>
-<p>Family form (<code>"sockets_factory"</code>, matches every <code>chumicro_*.sockets_factory</code>) or exact path (<code>"chumicro_websockets.sockets_factory"</code>).  An unmatched entry fails the deploy with a typo message rather than silently shipping the default.  Calling <code>WebSocketClient.from_config(...)</code> when <code>chumicro_websockets.sockets_factory</code> is missing — either skipped at deploy time or not installed by <code>circup</code> / <code>mip</code> — raises <code>RuntimeError</code> naming the bypass kwarg.</p>
+<p>Family form (<code>"sockets_factory"</code>, matches every <code>chumicro_*.sockets_factory</code>) or exact path (<code>"chumicro_sockets.sockets_factory"</code>).  An unmatched entry fails the deploy with a typo message rather than silently shipping the default.  Calling <code>WebSocketClient.from_config(...)</code> when <code>chumicro_sockets.sockets_factory</code> is missing — either skipped at deploy time or not installed by <code>circup</code> / <code>mip</code> — raises <code>RuntimeError</code> naming the bypass kwarg.</p>
 <p>For the full single-library adoption recipe — your transport, your <code>ticks=</code>, the runner-less drive loop, and host tests with no board — see <a href="https://github.com/ChuMicro/ChuMicro/blob/main/docs/contributing/standalone-integration.md">Standalone integration</a>.</p>
 <h2 id="memory-notes">Memory notes<a class="headerlink" href="#memory-notes" title="Permanent link">&para;</a></h2>
 <p>The library is sized for the minimum supported board class (256 KB
@@ -971,7 +1018,7 @@ MCU RAM, 2 MB physical / ~800 KB usable flash):</p>
 <p><code>wss://</code> client connections reuse <code>chumicro_sockets.connector(tls=True)</code> + <code>chumicro_sockets.ssl_context_with_ca</code>, with the same live-board constraints HTTPS clients have:</p>
 <ul>
 <li><strong>Device RTC must be set before <code>wss://</code>.</strong>  mbedTLS rejects every cert as "validity starts in the future" if the RTC is at boot default.  Use <a href="https://chumicro.github.io/ChuMicro/ntp/stable/"><code>chumicro-ntp</code></a> to set the clock first.</li>
-<li><strong>CA pinning is required.</strong>  Build the <code>ssl_context</code> with <code>chumicro_sockets.ssl_context_with_ca(pem)</code> and pass it through <code>chumicro_sockets_connector_factory(radio=..., ssl_context=ctx)</code>.</li>
+<li><strong>CA pinning is required.</strong>  Build the <code>ssl_context</code> with <code>chumicro_sockets.ssl_context_with_ca(pem)</code> and pass it through <code>connector_factory(radio=..., ssl_context=ctx)</code>.</li>
 <li><strong>Pi Pico W needs flash deploy mode for <code>wss://</code></strong> — RAM-mode leaves &lt;50 KB free for the mbedTLS handshake.</li>
 </ul>
 <h2 id="per-tick-knobs">Per-tick knobs<a class="headerlink" href="#per-tick-knobs" title="Permanent link">&para;</a></h2>
