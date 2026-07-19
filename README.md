@@ -131,11 +131,12 @@ Adopting one library into an existing project works too: bring your own socket a
 
 ## Watch it work on real hardware
 
-The fastest way to judge a library is to watch it complete a real exchange.  The [`demos/`](demos/) folder holds end-to-end scenarios where your board and your laptop play both sides, each one a single command from a clone of this repo:
+The fastest way to judge a library is to watch it complete a real exchange.  The [`demos/`](demos/) folder holds end-to-end scenarios where your board and your laptop play both sides (and one that runs entirely on your laptop, no board needed), each one a single command from a clone of this repo:
 
 - **[`mqtt_sensor_motor`](demos/mqtt_sensor_motor/)**: the board publishes its temperature over MQTT and takes fan-speed commands back, dimming its LED to match.  Your laptop runs the broker and the controller.
 - **[`http_server_roundtrip`](demos/http_server_roundtrip/)**: the board serves HTTP routes, the laptop discovers it and exercises them.
 - **[`sockets_runner_connector`](demos/sockets_runner_connector/)**: the TCP echo written as a straight-line generator, next to a [twin demo](demos/sockets_runner_connector_explicit/) doing the same job as an explicit state machine, so you can compare the two styles line by line.
+- **[`laptop_roundtrip`](demos/laptop_roundtrip/)**: no board at all.  An HTTP fetch, the server it talks to, and a blinking LED share one runner on your laptop, so you can watch the request finish without the blink ever pausing.
 
 Each demo's README says what you'll see and what it proves.  For single-library learning material, every library also ships an `examples/` folder that deploys to a board with one command (below).
 
@@ -176,7 +177,6 @@ Each library installs independently and pulls in as little as possible.  Install
 | **[ntp](libraries/ntp/)** | Sets the board's clock from the network.  Close enough to UTC for TLS certificate checks and honest log timestamps. |
 | **[config](libraries/config/)** | Typed runtime settings with one dotted-key convention (`wifi.ssid`, `mqtt.broker.host`) shared by every library. |
 | **[kvstore](libraries/kvstore/)** | Small persistent storage for what must survive a reboot: boot counters, tokens, timestamps.  Picks the right backend for your board. |
-| **[logging](libraries/logging/)** | Leveled logging with stdlib-shaped levels.  `BufferedHandler` defers formatting and I/O to the runner tick, so log lines never stall your loop. |
 | **[msgpack](libraries/msgpack/)** | Binary serialization, smaller than JSON for typical sensor payloads.  Compatible with the wider `msgpack` ecosystem. |
 | **[compat](libraries/compat/)** | The few standard-library pieces the device runtimes don't ship, so one file of code can run everywhere. |
 
@@ -255,6 +255,8 @@ A map of the repository, if you've cloned it and want to look around:
 libraries/    the libraries that run on boards (and your laptop)
 workbench/    the host-side CLI tools
 demos/        end-to-end scenarios: board + laptop, one command
+support/      the cross-runtime test harness and shared doc assets
+webui/        localhost pages an agent shows a human (the decision picker, reports)
 docs/         contributor guides and troubleshooting
 plans/        design decisions and work queue
 scripts/      developer task runner (run.py)
