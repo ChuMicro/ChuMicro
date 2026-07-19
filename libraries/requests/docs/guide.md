@@ -4,7 +4,35 @@
 
 `chumicro-requests` is a non-blocking HTTP/1.1 client built on `chumicro-sockets`.  `HttpClient` is the single entry point for every verb — its `check(now_ms)` / `handle(now_ms)` methods drive the request forward one tick at a time.  An LED keeps blinking on the same board while a request is in flight or mid-timeout against a stalled peer.  Two connect phases are the exception: the DNS lookup, and on MicroPython / CircuitPython the TLS handshake, each block the reactor for their duration (see *Bring your own transport*).  The library is single-in-flight today — a second `client.get(...)` while another request is running raises `HttpBusyError`.
 
-## Getting started
+## Getting started with generators
+
+The generator surface runs a whole request top to bottom (connect, send, receive, return) with no handle to poll and no `on_done` callback.  A single `response = yield from get(...)` drives the request under `Runner.add_generator`, and other runner services keep getting the CPU between yields.
+
+```python
+from chumicro_requests.generators import get
+from chumicro_runner import Runner
+from chumicro_sockets.sockets_factory import connector_factory
+
+transport_factory = connector_factory(radio=wifi.radio)
+
+
+def fetch_once():
+    response = yield from get(transport_factory, "http://api.example.com/now")
+    print(response.status_code, len(response.body))
+
+
+runner = Runner()
+handle = runner.add_generator(fetch_once())
+while not handle.done:
+    now_ms = runner.tick()
+    runner.wait(now_ms)
+```
+
+`chumicro_requests.generators` also exposes `post`, `put`, `patch`, `delete`, and the lower-level `fetch(transport_factory, method, url)`.  For a body too big for RAM, `stream(...)` returns a reader you pull one chunk per `yield from` (see [Streaming large bodies](#streaming-large-bodies)).
+
+## Getting started with a service
+
+Reach for the `HttpClient` service when you make repeated requests on one client, or when you want the `check` / `handle` shape that drops straight into a `Runner` alongside other services.
 
 ```python
 from chumicro_requests import HttpClient

@@ -6,7 +6,42 @@
 
 QoS 2 raises `UnsupportedQoSError`.  Last-will, retained messages, wildcard topic matching, and a structured oversized-message policy are built in.
 
-## Getting started
+## Getting started with generators
+
+The receive-stream surface reads inbound messages as a linear loop: `message = yield from client.next_message()` waits for the next message, acts on it, and loops until the client parks for good.  Register the client (it does the socket I/O each tick) and the consumer generator side by side.
+
+```python
+from chumicro_mqtt import MQTTClient
+from chumicro_runner import Runner
+from chumicro_sockets.sockets_factory import fixed_connector_factory
+
+client = MQTTClient(
+    transport_factory=fixed_connector_factory("broker.example.com", 1883),
+    client_id="sensor-1",
+)
+client.subscribe("commands/+")
+client.connect()
+
+
+def consume():
+    while True:
+        message = yield from client.next_message()   # InboundPublish
+        if message is None:
+            break                                    # client parked for good
+        print(message.topic, message.payload)
+
+
+runner = Runner()
+runner.add(client)
+handle = runner.add_generator(consume())
+runner.run_until(handle)
+```
+
+`MQTTClient.from_config(config, radio=...)` wires the same `fixed_connector_factory` for you from `mqtt.broker.host` / `mqtt.broker.port` and derives a per-device `client_id`.  The first `next_message()` call switches inbound delivery from the `on_message` callback to a bounded drop-oldest queue the generator drains; pick one inbound surface per client.  See `examples/receive_stream.py`.
+
+## Getting started with a service
+
+Reach for the callback service when you fan out across topics with `on_message` and `topic_matches`, or when you drive the client from your own tick loop.
 
 ```python
 from chumicro_timing import ticks_ms
