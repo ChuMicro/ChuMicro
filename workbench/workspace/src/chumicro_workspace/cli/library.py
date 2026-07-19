@@ -55,7 +55,68 @@ from chumicro_workspace.library_channel import (
     fetch_text_file,
     resolve_snapshot,
 )
+from chumicro_workspace.pyright_extra_paths import (
+    PYRIGHT_CONFIG_FILENAME,
+    InvalidPyrightConfigError,
+    add_library_extra_paths,
+    remove_library_extra_paths,
+)
 from chumicro_workspace.workspace import WorkspaceLayout
+
+_PYRIGHT_INVALID_WARNING = (
+    f"warning: {PYRIGHT_CONFIG_FILENAME} is not valid JSON; skipped "
+    "extraPaths update (fix it so editor imports resolve)."
+)
+
+
+def _maintain_pyright_paths_added(
+    workspace_root: Path, names: list[str],
+) -> None:
+    """Register acquired libraries' source dirs in ``pyrightconfig.json``.
+
+    Prints a one-line note when the file changed.  A ``pyrightconfig.json``
+    that exists but cannot be parsed prints a coached warning and is left
+    untouched, so a broken config never fails the acquisition.
+
+    Args:
+        workspace_root: Workspace root holding ``pyrightconfig.json``.
+        names: Import names of the libraries acquired on disk.
+    """
+    try:
+        added = add_library_extra_paths(workspace_root, names)
+    except InvalidPyrightConfigError:
+        print(_PYRIGHT_INVALID_WARNING)
+        return
+    if added:
+        print(
+            f"Updated {PYRIGHT_CONFIG_FILENAME} "
+            f"(added {', '.join(added)}).",
+        )
+
+
+def _maintain_pyright_paths_removed(
+    workspace_root: Path, name: str,
+) -> None:
+    """Drop an uninstalled library's source dir from ``pyrightconfig.json``.
+
+    Prints a one-line note when the file changed.  A ``pyrightconfig.json``
+    that exists but cannot be parsed prints a coached warning and is left
+    untouched, so a broken config never fails the uninstall.
+
+    Args:
+        workspace_root: Workspace root holding ``pyrightconfig.json``.
+        name: Import name of the library being uninstalled.
+    """
+    try:
+        removed = remove_library_extra_paths(workspace_root, [name])
+    except InvalidPyrightConfigError:
+        print(_PYRIGHT_INVALID_WARNING)
+        return
+    if removed:
+        print(
+            f"Updated {PYRIGHT_CONFIG_FILENAME} "
+            f"(dropped {', '.join(removed)}).",
+        )
 
 
 def _interactive(args: argparse.Namespace) -> bool:
@@ -206,6 +267,9 @@ def _cmd_library_add(args: argparse.Namespace) -> int:
     _print_install_summary(
         workspace.root, args.channel, args.name, closure, declined,
     )
+    _maintain_pyright_paths_added(
+        workspace.root, [name for name in closure if name not in declined],
+    )
     return 0
 
 
@@ -326,6 +390,7 @@ def _cmd_library_remove(args: argparse.Namespace) -> int:
         f"Removed {args.name}; kept in workspace.yml as declined "
         f"(use 'library forget {args.name}' to drop the record).",
     )
+    _maintain_pyright_paths_removed(workspace.root, args.name)
     return 0
 
 
@@ -346,6 +411,7 @@ def _cmd_library_forget(args: argparse.Namespace) -> int:
     del table[args.name]
     write_curated_libraries(workspace.workspace_yaml, table)
     print(f"Forgot {args.name} (record removed).")
+    _maintain_pyright_paths_removed(workspace.root, args.name)
     return 0
 
 
@@ -461,6 +527,10 @@ def _apply_selected(
         _print_install_summary(
             workspace.root, channel, root, closure, declined=set(),
         )
+    _maintain_pyright_paths_added(
+        workspace.root,
+        sorted({name for _, closure in closures for name in closure}),
+    )
     return 0
 
 
