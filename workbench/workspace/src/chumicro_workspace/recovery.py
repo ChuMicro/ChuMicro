@@ -69,7 +69,7 @@ _HINT_TABLE: tuple[tuple[re.Pattern[str], str, str], ...] = (
         "missing-chumicro-lib",
         (
             "library `{0}` isn't installed in this venv — run "
-            "`python run.py setup` to refresh deps, or add `{0}` to "
+            "`python3 run.py setup` to refresh deps, or add `{0}` to "
             "the workspace's pyproject.toml dependencies."
         ),
     ),
@@ -79,7 +79,7 @@ _HINT_TABLE: tuple[tuple[re.Pattern[str], str, str], ...] = (
         (
             "missing config key `{0}` — check projects/<project>/project_config.toml "
             "or `secrets.toml` (the gitignored workspace-wide credentials + "
-            "device defaults).  Use `python run.py deploy <project> --dry-run` "
+            "device defaults).  Use `python3 run.py deploy <project> --dry-run` "
             "to inspect what the merged runtime config carries."
         ),
     ),

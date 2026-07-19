@@ -243,7 +243,7 @@ class WorkspaceLayout:
     def from_dir(cls, start: Path | None = None) -> WorkspaceLayout:
         """Walk up from *start* until a ``workspace.yml`` is found.
 
-        The walk lets users run ``python run.py deploy ...`` from any
+        The walk lets users run ``python3 run.py deploy ...`` from any
         directory inside the workspace.  The root is resolved as the
         nearest ancestor with a ``workspace.yml``.
 

@@ -26,7 +26,7 @@ and travel with the wheel.  ``package_kind="workbench"`` swaps the
 four ``docs/`` templates for a workbench-flavored set under
 ``_payloads/workbench_template/``; every other file is shared.
 
-``python run.py new --library <name>`` is the usual entry point.
+``python3 run.py new --library <name>`` is the usual entry point.
 Callers that need finer control call :func:`scaffold_library`
 directly with an explicit target directory.
 """

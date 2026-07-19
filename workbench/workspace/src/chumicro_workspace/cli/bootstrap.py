@@ -23,15 +23,15 @@ def _print_bootstrap_next_steps() -> None:
     print()
     print("bootstrap: ready.  Next steps:")
     print(
-        "  python run.py new <project-name>      "
+        "  python3 run.py new <project-name>      "
         "# create a new project under projects/",
     )
     print(
-        "  python run.py deploy                "
+        "  python3 run.py deploy                "
         "# deploy your only project (no name needed)",
     )
     print(
-        "  python run.py repl                  "
+        "  python3 run.py repl                  "
         "# open the REPL on your board",
     )
 

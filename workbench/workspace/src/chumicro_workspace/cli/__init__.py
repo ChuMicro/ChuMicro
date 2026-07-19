@@ -4,7 +4,7 @@ Thin wrapper over the public ``chumicro_workspace`` /
 ``chumicro_deploy`` / ``chumicro_repl`` APIs.  Workspace template
 repos vendor a tiny ``run.py`` shim that simply calls
 :func:`main`; every command the workspace user invokes
-(``python run.py deploy back-porch``, ``python run.py repl``, etc.)
+(``python3 run.py deploy back-porch``, ``python3 run.py repl``, etc.)
 routes through this dispatcher.
 
 Every subcommand is registered on a single argparse dispatcher and
