@@ -24,7 +24,7 @@ Skipped at collection time when wifi credentials are missing.
 import time
 
 from chumicro_requests import HttpClient
-from chumicro_requests.sockets_factory import chumicro_sockets_connector_factory
+from chumicro_sockets.sockets_factory import connector_factory
 from chumicro_test_harness.network import runtime_config, wifi_up
 from chumicro_timing import ticks_ms
 
@@ -57,7 +57,7 @@ def test_real_http_get_completes_runner_shaped() -> None:
     print(f"WIFI_OK ip={ip}")
 
     client = HttpClient(
-        transport_factory=chumicro_sockets_connector_factory(radio=radio),
+        transport_factory=connector_factory(radio=radio),
     )
     request = client.get(_TARGET_URL, timeout_ms=_REQUEST_TIMEOUT_MS)
 

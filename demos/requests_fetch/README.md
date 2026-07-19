@@ -22,7 +22,7 @@ runner.add_generator(fetch_run(factory, url=fetch_url))
 - **One-shot fetch as a generator.** `chumicro_requests.generators.get`
   runs the whole request lifecycle under `Runner.add_generator`; the
   caller gets the `Response` back from the `yield from`.
-- **Reuses the connector factory.** `chumicro_sockets_connector_factory`
+- **Reuses the connector factory.** `connector_factory`
   is the same non-blocking connector the long-lived `HttpClient` uses.
 - **Generator vs reactive client.** Pair with
   `libraries/requests/examples/periodic_get.py`, which drives the

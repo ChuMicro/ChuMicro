@@ -30,10 +30,10 @@ For bundle setup, pre-compiled `.mpy` bundles, the experimental channel, and det
 
 ```python
 from chumicro_requests import HttpClient
-from chumicro_requests.sockets_factory import chumicro_sockets_connector_factory
+from chumicro_sockets.sockets_factory import connector_factory
 from chumicro_timing import ticks_ms
 
-client = HttpClient(transport_factory=chumicro_sockets_connector_factory())
+client = HttpClient(transport_factory=connector_factory())
 handle = client.get("http://api.example.com/now", timeout_ms=5000)
 
 while not handle.done:
@@ -58,7 +58,7 @@ print(response.json())            # parsed JSON when Content-Type is application
 | `chumicro_requests.generators` | Opt-in submodule: `yield from`-shaped `fetch` / `get` / `post` / ... one-shots and `stream` + `BodyReader` for chunked body reads under `Runner.add_generator`. |
 | `CaseInsensitiveDict` | Header dict with case-insensitive lookups. |
 | `WhenOversized` | Policy enum for responses past `max_body_bytes`. |
-| `chumicro_requests.sockets_factory.chumicro_sockets_connector_factory(...)` | Opt-in submodule: convenience connection-factory wired to chumicro-sockets. |
+| `chumicro_sockets.sockets_factory.connector_factory(...)` | Shared module: convenience connection-factory wired to chumicro-sockets. |
 | `parse_url(url)` | URL → `(scheme, host, port, path)`. |
 | `parse_charset(content_type)` | Extract charset from a Content-Type header value. |
 | `encode_request(...)` | Build raw HTTP request bytes. |
