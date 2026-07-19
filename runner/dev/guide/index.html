@@ -399,6 +399,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#the-service-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        The service contract
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#registration-patterns" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -828,6 +839,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#the-service-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        The service contract
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#registration-patterns" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -1186,6 +1208,7 @@
 <li><strong>Blocks</strong> in <code>ipoll(timeout_ms)</code> over the registered sockets when any are registered; otherwise sleeps the timeout via <code>time.sleep_ms</code>.  Returns immediately when the nearest deadline has already passed or no deadline applies.</li>
 </ol>
 <p>Errors on a registered socket (<code>POLLERR</code> / <code>POLLHUP</code>) are routed to the owning service's optional <code>io_error(now_ms, eventmask)</code> hook so the service can transition cleanly to a failure state.  <code>POLLIN</code> / <code>POLLOUT</code> are wake signals only — <code>check</code> and <code>next_deadline</code> decide what runs on the next <code>tick</code>.</p>
+<p>Not sure which wait primitive a given job wants?  The timing guide's <a href="https://chumicro.github.io/ChuMicro/timing/stable/guide/#choosing-a-wait">Choosing a wait</a> table maps each question to its primitive across <code>chumicro_timing</code>, <code>chumicro_sockets</code>, and this service contract.</p>
 <h3 id="writing-a-service-that-participates-in-wait">Writing a service that participates in <code>wait</code><a class="headerlink" href="#writing-a-service-that-participates-in-wait" title="Permanent link">&para;</a></h3>
 <p>A socket-owning service exposes the duck-typed attributes the runner reads each loop.  All are optional — services without them work the same way they always did; the runner just won't wake for their I/O:</p>
 <table>
@@ -1250,88 +1273,152 @@
 <h3 id="injecting-a-poller-for-tests">Injecting a poller for tests<a class="headerlink" href="#injecting-a-poller-for-tests" title="Permanent link">&para;</a></h3>
 <p><code>Runner(poller=...)</code> accepts any object exposing <code>register(obj, eventmask)</code> / <code>modify(obj, eventmask)</code> / <code>unregister(obj)</code> / <code>ipoll(timeout_ms)</code>.  The default poller is built lazily on the first <code>wait()</code> that has a socket to register, so applications that never register an <code>io_socket</code> never pay for it.</p>
 <p><code>chumicro_runner.testing.FakePoller</code> is the test stand-in — see <a href="#testing-tasks">Testing tasks</a>.</p>
+<h2 id="the-service-contract">The service contract<a class="headerlink" href="#the-service-contract" title="Permanent link">&para;</a></h2>
+<p>A service is any object you hand to <code>runner.add(service)</code>.  The runner reads six members off it: two are required, the rest optional, each optional member carrying a coherence rule the dispatch relies on.</p>
+<table>
+<thead>
+<tr>
+<th>Member</th>
+<th>Required</th>
+<th>When the runner reads it</th>
+<th>For</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>check(now_ms) -&gt; bool</code></td>
+<td>yes</td>
+<td>each <code>tick</code>, subject to any period gate</td>
+<td>deciding whether <code>handle</code> runs this tick</td>
+</tr>
+<tr>
+<td><code>handle(now_ms)</code></td>
+<td>yes</td>
+<td>each <code>tick</code>, when <code>check</code> returned <code>True</code></td>
+<td>one tick of work</td>
+</tr>
+<tr>
+<td><code>io_socket</code></td>
+<td>no</td>
+<td>each <code>wait</code>, as an attribute (the socket, or <code>None</code>)</td>
+<td>the socket to poll</td>
+</tr>
+<tr>
+<td><code>io_interest(now_ms) -&gt; int</code></td>
+<td>no</td>
+<td>each <code>wait</code></td>
+<td>OR-ing <code>IO_READ</code> / <code>IO_WRITE</code> into the poll set for <code>io_socket</code></td>
+</tr>
+<tr>
+<td><code>next_deadline(now_ms) -&gt; int \| None</code></td>
+<td>no</td>
+<td>each <code>wait</code></td>
+<td>bounding the idle timeout so the service still runs on time with no I/O</td>
+</tr>
+<tr>
+<td><code>io_error(now_ms, eventmask)</code></td>
+<td>no</td>
+<td>on <code>wait</code>, when <code>io_socket</code> reports <code>POLLERR</code> / <code>POLLHUP</code></td>
+<td>transitioning cleanly to a failure state</td>
+</tr>
+</tbody>
+</table>
+<p>The coherence rules, as the dispatch enforces them:</p>
+<ul>
+<li><strong><code>check</code> and <code>handle</code> are both required.</strong>  <code>Runner.add</code> reads both off the object at registration, so a service missing either cannot register.</li>
+<li><strong><code>io_socket</code> and <code>io_interest</code> come as a pair.</strong>  The poll sync reaches the socket through <code>io_interest</code>; one member without the other never reaches the poller.</li>
+<li><strong><code>io_error</code> requires <code>io_socket</code>.</strong>  It is dispatched only when that socket reports a poll error.</li>
+</ul>
+<p><code>chumicro_runner.testing.validate_service(service)</code> checks exactly these rules and raises <code>ValueError</code> naming the offending member.  It validates shape, never behavior, so drop it into a consumer library's test suite to catch a malformed service before it reaches a live runner:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_runner.testing</span><span class="w"> </span><span class="kn">import</span> <span class="n">validate_service</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="k">def</span><span class="w"> </span><span class="nf">test_my_service_is_a_valid_runner_service</span><span class="p">():</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>    <span class="n">validate_service</span><span class="p">(</span><span class="n">MySensorService</span><span class="p">(</span><span class="o">...</span><span class="p">))</span>
+</span></code></pre></div>
+<p>Work runs on the runner in two shapes: services, the contract above, and generators registered with <code>runner.add_generator</code>.  This section is the service side; the generator side is its own surface with its own helpers, and there is no third shape.</p>
 <h2 id="registration-patterns">Registration patterns<a class="headerlink" href="#registration-patterns" title="Permanent link">&para;</a></h2>
 <h3 id="object-based">Object-based<a class="headerlink" href="#object-based" title="Permanent link">&para;</a></h3>
 <p>Pass an object with <code>.check(now_ms) -&gt; bool</code> and <code>.handle(now_ms)</code>:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">MotionDetector</span><span class="p">:</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Gate-based motion detector using a PIR sensor.&quot;&quot;&quot;</span>
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>        <span class="c1"># On a real board: self._pin = digitalio.DigitalInOut(board.D5)</span>
-</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>        <span class="k">pass</span>
-</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>
-</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">detect_motion</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
-</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Read PIR sensor pin — fast digital read.&quot;&quot;&quot;</span>
-</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>        <span class="c1"># On a real board: return self._pin.value</span>
-</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>        <span class="k">return</span> <span class="kc">False</span>
-</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>
-</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">check</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">now_ms</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
-</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Return True when motion is detected.</span>
-</span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a>
-</span><span id="__span-5-16"><a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a><span class="sd">        Args:</span>
-</span><span id="__span-5-17"><a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a><span class="sd">            now_ms: Current tick timestamp.</span>
-</span><span id="__span-5-18"><a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a>
-</span><span id="__span-5-19"><a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a><span class="sd">        Returns:</span>
-</span><span id="__span-5-20"><a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a><span class="sd">            True if the PIR sensor reads high.</span>
-</span><span id="__span-5-21"><a id="__codelineno-5-21" name="__codelineno-5-21" href="#__codelineno-5-21"></a><span class="sd">        &quot;&quot;&quot;</span>
-</span><span id="__span-5-22"><a id="__codelineno-5-22" name="__codelineno-5-22" href="#__codelineno-5-22"></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">detect_motion</span><span class="p">()</span>
-</span><span id="__span-5-23"><a id="__codelineno-5-23" name="__codelineno-5-23" href="#__codelineno-5-23"></a>
-</span><span id="__span-5-24"><a id="__codelineno-5-24" name="__codelineno-5-24" href="#__codelineno-5-24"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">handle</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">now_ms</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="__span-5-25"><a id="__codelineno-5-25" name="__codelineno-5-25" href="#__codelineno-5-25"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;React to detected motion.</span>
-</span><span id="__span-5-26"><a id="__codelineno-5-26" name="__codelineno-5-26" href="#__codelineno-5-26"></a>
-</span><span id="__span-5-27"><a id="__codelineno-5-27" name="__codelineno-5-27" href="#__codelineno-5-27"></a><span class="sd">        Args:</span>
-</span><span id="__span-5-28"><a id="__codelineno-5-28" name="__codelineno-5-28" href="#__codelineno-5-28"></a><span class="sd">            now_ms: Current tick timestamp.</span>
-</span><span id="__span-5-29"><a id="__codelineno-5-29" name="__codelineno-5-29" href="#__codelineno-5-29"></a><span class="sd">        &quot;&quot;&quot;</span>
-</span><span id="__span-5-30"><a id="__codelineno-5-30" name="__codelineno-5-30" href="#__codelineno-5-30"></a>        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Motion!&quot;</span><span class="p">)</span>
-</span><span id="__span-5-31"><a id="__codelineno-5-31" name="__codelineno-5-31" href="#__codelineno-5-31"></a>
-</span><span id="__span-5-32"><a id="__codelineno-5-32" name="__codelineno-5-32" href="#__codelineno-5-32"></a><span class="n">runner</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">MotionDetector</span><span class="p">())</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">MotionDetector</span><span class="p">:</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Gate-based motion detector using a PIR sensor.&quot;&quot;&quot;</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>        <span class="c1"># On a real board: self._pin = digitalio.DigitalInOut(board.D5)</span>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>        <span class="k">pass</span>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">detect_motion</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Read PIR sensor pin — fast digital read.&quot;&quot;&quot;</span>
+</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>        <span class="c1"># On a real board: return self._pin.value</span>
+</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a>        <span class="k">return</span> <span class="kc">False</span>
+</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a>
+</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">check</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">now_ms</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Return True when motion is detected.</span>
+</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a>
+</span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="sd">        Args:</span>
+</span><span id="__span-6-17"><a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a><span class="sd">            now_ms: Current tick timestamp.</span>
+</span><span id="__span-6-18"><a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a>
+</span><span id="__span-6-19"><a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a><span class="sd">        Returns:</span>
+</span><span id="__span-6-20"><a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a><span class="sd">            True if the PIR sensor reads high.</span>
+</span><span id="__span-6-21"><a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a><span class="sd">        &quot;&quot;&quot;</span>
+</span><span id="__span-6-22"><a id="__codelineno-6-22" name="__codelineno-6-22" href="#__codelineno-6-22"></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">detect_motion</span><span class="p">()</span>
+</span><span id="__span-6-23"><a id="__codelineno-6-23" name="__codelineno-6-23" href="#__codelineno-6-23"></a>
+</span><span id="__span-6-24"><a id="__codelineno-6-24" name="__codelineno-6-24" href="#__codelineno-6-24"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">handle</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">now_ms</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-6-25"><a id="__codelineno-6-25" name="__codelineno-6-25" href="#__codelineno-6-25"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;React to detected motion.</span>
+</span><span id="__span-6-26"><a id="__codelineno-6-26" name="__codelineno-6-26" href="#__codelineno-6-26"></a>
+</span><span id="__span-6-27"><a id="__codelineno-6-27" name="__codelineno-6-27" href="#__codelineno-6-27"></a><span class="sd">        Args:</span>
+</span><span id="__span-6-28"><a id="__codelineno-6-28" name="__codelineno-6-28" href="#__codelineno-6-28"></a><span class="sd">            now_ms: Current tick timestamp.</span>
+</span><span id="__span-6-29"><a id="__codelineno-6-29" name="__codelineno-6-29" href="#__codelineno-6-29"></a><span class="sd">        &quot;&quot;&quot;</span>
+</span><span id="__span-6-30"><a id="__codelineno-6-30" name="__codelineno-6-30" href="#__codelineno-6-30"></a>        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Motion!&quot;</span><span class="p">)</span>
+</span><span id="__span-6-31"><a id="__codelineno-6-31" name="__codelineno-6-31" href="#__codelineno-6-31"></a>
+</span><span id="__span-6-32"><a id="__codelineno-6-32" name="__codelineno-6-32" href="#__codelineno-6-32"></a><span class="n">runner</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">MotionDetector</span><span class="p">())</span>
 </span></code></pre></div>
 <h3 id="handler-only">Handler-only<a class="headerlink" href="#handler-only" title="Permanent link">&para;</a></h3>
 <p>Pass just a handler with no check — it fires every tick (or per period):</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">runner</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">handler</span><span class="o">=</span><span class="k">lambda</span> <span class="n">now_ms</span><span class="p">:</span> <span class="n">scan_buttons</span><span class="p">(</span><span class="n">now_ms</span><span class="p">))</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="n">runner</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">handler</span><span class="o">=</span><span class="k">lambda</span> <span class="n">now_ms</span><span class="p">:</span> <span class="n">scan_buttons</span><span class="p">(</span><span class="n">now_ms</span><span class="p">))</span>
 </span></code></pre></div>
 <h3 id="periodic">Periodic<a class="headerlink" href="#periodic" title="Permanent link">&para;</a></h3>
 <p>No check needed — the handler fires on a schedule:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="n">runner</span><span class="o">.</span><span class="n">add_periodic</span><span class="p">(</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>    <span class="k">lambda</span> <span class="n">now_ms</span><span class="p">:</span> <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;blink!&quot;</span><span class="p">),</span>
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>    <span class="n">period_ms</span><span class="o">=</span><span class="mi">500</span><span class="p">,</span>
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="n">runner</span><span class="o">.</span><span class="n">add_periodic</span><span class="p">(</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>    <span class="k">lambda</span> <span class="n">now_ms</span><span class="p">:</span> <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;blink!&quot;</span><span class="p">),</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>    <span class="n">period_ms</span><span class="o">=</span><span class="mi">500</span><span class="p">,</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="p">)</span>
 </span></code></pre></div>
 <h3 id="generator-driven">Generator-driven<a class="headerlink" href="#generator-driven" title="Permanent link">&para;</a></h3>
 <p>Write the I/O as a generator function and register it with <code>runner.add_generator(gen)</code>.  Each <code>yield from connect(...)</code> / <code>send_all(...)</code> / <code>recv_until(...)</code> hands control back to the runner between steps, so the body reads top-to-bottom while other services keep ticking.  Import the helpers explicitly from <code>chumicro_sockets.generators</code> — plain-runner consumers pay nothing.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_runner</span><span class="w"> </span><span class="kn">import</span> <span class="n">Runner</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_sockets.generators</span><span class="w"> </span><span class="kn">import</span> <span class="n">connect</span><span class="p">,</span> <span class="n">recv_until</span><span class="p">,</span> <span class="n">send_all</span>
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_sockets</span><span class="w"> </span><span class="kn">import</span> <span class="n">connector</span>
-</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>
-</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>
-</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="k">def</span><span class="w"> </span><span class="nf">echo_run</span><span class="p">(</span><span class="n">host</span><span class="p">,</span> <span class="n">port</span><span class="p">,</span> <span class="n">radio</span><span class="p">):</span>
-</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>    <span class="n">sock</span> <span class="o">=</span> <span class="k">yield from</span> <span class="n">connect</span><span class="p">(</span><span class="n">connector</span><span class="p">(</span><span class="n">host</span><span class="p">,</span> <span class="n">port</span><span class="p">,</span> <span class="n">radio</span><span class="o">=</span><span class="n">radio</span><span class="p">))</span>
-</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>    <span class="k">try</span><span class="p">:</span>
-</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a>        <span class="k">yield from</span> <span class="n">send_all</span><span class="p">(</span><span class="n">sock</span><span class="p">,</span> <span class="sa">b</span><span class="s2">&quot;hello</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a>        <span class="n">reply</span> <span class="o">=</span> <span class="k">yield from</span> <span class="n">recv_until</span><span class="p">(</span><span class="n">sock</span><span class="p">,</span> <span class="sa">b</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">max_bytes</span><span class="o">=</span><span class="mi">4096</span><span class="p">)</span>
-</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;got </span><span class="si">{</span><span class="n">reply</span><span class="si">!r}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a>    <span class="k">finally</span><span class="p">:</span>
-</span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a>        <span class="n">sock</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
-</span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a>
-</span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a>
-</span><span id="__span-8-16"><a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a><span class="n">runner</span> <span class="o">=</span> <span class="n">Runner</span><span class="p">()</span>
-</span><span id="__span-8-17"><a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a><span class="n">handle</span> <span class="o">=</span> <span class="n">runner</span><span class="o">.</span><span class="n">add_generator</span><span class="p">(</span><span class="n">echo_run</span><span class="p">(</span><span class="s2">&quot;echo.example&quot;</span><span class="p">,</span> <span class="mi">7</span><span class="p">,</span> <span class="n">radio</span><span class="o">=</span><span class="n">wifi_radio</span><span class="p">))</span>
-</span><span id="__span-8-18"><a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a><span class="n">runner</span><span class="o">.</span><span class="n">run_until</span><span class="p">(</span><span class="n">handle</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_runner</span><span class="w"> </span><span class="kn">import</span> <span class="n">Runner</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_sockets.generators</span><span class="w"> </span><span class="kn">import</span> <span class="n">connect</span><span class="p">,</span> <span class="n">recv_until</span><span class="p">,</span> <span class="n">send_all</span>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_sockets</span><span class="w"> </span><span class="kn">import</span> <span class="n">connector</span>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>
+</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="k">def</span><span class="w"> </span><span class="nf">echo_run</span><span class="p">(</span><span class="n">host</span><span class="p">,</span> <span class="n">port</span><span class="p">,</span> <span class="n">radio</span><span class="p">):</span>
+</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a>    <span class="n">sock</span> <span class="o">=</span> <span class="k">yield from</span> <span class="n">connect</span><span class="p">(</span><span class="n">connector</span><span class="p">(</span><span class="n">host</span><span class="p">,</span> <span class="n">port</span><span class="p">,</span> <span class="n">radio</span><span class="o">=</span><span class="n">radio</span><span class="p">))</span>
+</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a>    <span class="k">try</span><span class="p">:</span>
+</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a>        <span class="k">yield from</span> <span class="n">send_all</span><span class="p">(</span><span class="n">sock</span><span class="p">,</span> <span class="sa">b</span><span class="s2">&quot;hello</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a>        <span class="n">reply</span> <span class="o">=</span> <span class="k">yield from</span> <span class="n">recv_until</span><span class="p">(</span><span class="n">sock</span><span class="p">,</span> <span class="sa">b</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">max_bytes</span><span class="o">=</span><span class="mi">4096</span><span class="p">)</span>
+</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;got </span><span class="si">{</span><span class="n">reply</span><span class="si">!r}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a>    <span class="k">finally</span><span class="p">:</span>
+</span><span id="__span-9-13"><a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a>        <span class="n">sock</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+</span><span id="__span-9-14"><a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a>
+</span><span id="__span-9-15"><a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a>
+</span><span id="__span-9-16"><a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a><span class="n">runner</span> <span class="o">=</span> <span class="n">Runner</span><span class="p">()</span>
+</span><span id="__span-9-17"><a id="__codelineno-9-17" name="__codelineno-9-17" href="#__codelineno-9-17"></a><span class="n">handle</span> <span class="o">=</span> <span class="n">runner</span><span class="o">.</span><span class="n">add_generator</span><span class="p">(</span><span class="n">echo_run</span><span class="p">(</span><span class="s2">&quot;echo.example&quot;</span><span class="p">,</span> <span class="mi">7</span><span class="p">,</span> <span class="n">radio</span><span class="o">=</span><span class="n">wifi_radio</span><span class="p">))</span>
+</span><span id="__span-9-18"><a id="__codelineno-9-18" name="__codelineno-9-18" href="#__codelineno-9-18"></a><span class="n">runner</span><span class="o">.</span><span class="n">run_until</span><span class="p">(</span><span class="n">handle</span><span class="p">)</span>
 </span></code></pre></div>
 <p><code>run_until(handle)</code> drives the tick/wait loop until the generator finishes — and re-raises <code>handle.error</code> if the task died, so a broken flow fails loudly instead of exiting clean.  Pass a callable instead for arbitrary conditions, or just <code>timeout_ms=</code> to run for a fixed window (a QoS-ack drain, a settling period).</p>
 <p>Each <code>yield from</code> is a scheduler checkpoint; between yields, other services registered on the same runner get their turn.  A bare <code>yield</code> suspends for exactly one tick.  <code>handle.done</code> flips True the moment the generator returns, dies, or is cancelled; <code>handle.error</code> holds the exception when the body raised (<code>None</code> otherwise), so a <code>while not handle.done</code> loop can report <em>why</em> a task ended — check it after the loop, or wire <code>Runner(on_handler_error=...)</code> for a loud callback at the moment of death.  <code>handle.cancel()</code> raises <code>GeneratorExit</code> inside the body so any <code>finally</code> block runs the cleanup.</p>
 <h4 id="waiting-on-a-callback-completed-event">Waiting on a callback-completed event<a class="headerlink" href="#waiting-on-a-callback-completed-event" title="Permanent link">&para;</a></h4>
 <p><code>Signal</code> + <code>wait_for</code> (in <code>chumicro_runner.generators</code>) suspend a generator until a callback-style service reports a one-time completion, which removes the state-change-callback-plus-module-flag preamble from sequential flows.  Hand <code>signal.set</code> (or a small wrapper) to the service as its callback, then <code>yield from</code>:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_runner.generators</span><span class="w"> </span><span class="kn">import</span> <span class="n">Signal</span><span class="p">,</span> <span class="n">wait_for</span>
-</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>
-</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="n">link_up</span> <span class="o">=</span> <span class="n">Signal</span><span class="p">()</span>
-</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="n">wifi</span><span class="o">.</span><span class="n">on_state_change</span><span class="p">(</span><span class="k">lambda</span> <span class="n">old</span><span class="p">,</span> <span class="n">new</span><span class="p">:</span> <span class="n">link_up</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="n">new</span><span class="p">))</span>
-</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>
-</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>
-</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="k">def</span><span class="w"> </span><span class="nf">main_run</span><span class="p">(</span><span class="n">wifi</span><span class="p">):</span>
-</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a>    <span class="k">yield from</span> <span class="n">wait_for</span><span class="p">(</span><span class="n">link_up</span><span class="p">)</span>          <span class="c1"># suspend until wifi&#39;s callback fires</span>
-</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a>    <span class="n">sock</span> <span class="o">=</span> <span class="k">yield from</span> <span class="n">connect</span><span class="p">(</span><span class="n">connector</span><span class="p">(</span><span class="n">HOST</span><span class="p">,</span> <span class="n">PORT</span><span class="p">,</span> <span class="n">radio</span><span class="o">=</span><span class="n">wifi</span><span class="o">.</span><span class="n">adapter</span><span class="o">.</span><span class="n">radio</span><span class="p">))</span>
-</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a>    <span class="o">...</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_runner.generators</span><span class="w"> </span><span class="kn">import</span> <span class="n">Signal</span><span class="p">,</span> <span class="n">wait_for</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="n">link_up</span> <span class="o">=</span> <span class="n">Signal</span><span class="p">()</span>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="n">wifi</span><span class="o">.</span><span class="n">on_state_change</span><span class="p">(</span><span class="k">lambda</span> <span class="n">old</span><span class="p">,</span> <span class="n">new</span><span class="p">:</span> <span class="n">link_up</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="n">new</span><span class="p">))</span>
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>
+</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>
+</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="k">def</span><span class="w"> </span><span class="nf">main_run</span><span class="p">(</span><span class="n">wifi</span><span class="p">):</span>
+</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a>    <span class="k">yield from</span> <span class="n">wait_for</span><span class="p">(</span><span class="n">link_up</span><span class="p">)</span>          <span class="c1"># suspend until wifi&#39;s callback fires</span>
+</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a>    <span class="n">sock</span> <span class="o">=</span> <span class="k">yield from</span> <span class="n">connect</span><span class="p">(</span><span class="n">connector</span><span class="p">(</span><span class="n">HOST</span><span class="p">,</span> <span class="n">PORT</span><span class="p">,</span> <span class="n">radio</span><span class="o">=</span><span class="n">wifi</span><span class="o">.</span><span class="n">adapter</span><span class="o">.</span><span class="n">radio</span><span class="p">))</span>
+</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a>    <span class="o">...</span>
 </span></code></pre></div>
 <p><code>wait_for(signal, deadline_ms=...)</code> bounds the wait: past the absolute-ticks deadline it raises <code>OSError(ETIMEDOUT)</code> inside the generator body, where a <code>try / except OSError</code> can route to a retry or a clean shutdown.  Reuse one signal across sequential waits by calling <code>signal.clear()</code> between them.  Scope discipline: this is for one-time completions a sequential flow genuinely blocks on — reactive fan-out and fire-and-forget acks stay callbacks.</p>
 <h4 id="choosing-between-add-and-add_generator">Choosing between <code>add</code> and <code>add_generator</code><a class="headerlink" href="#choosing-between-add-and-add_generator" title="Permanent link">&para;</a></h4>
@@ -1373,62 +1460,62 @@
 <p><code>async def</code> / <code>await</code> / <code>async with</code> / <code>async for</code> and <code>import asyncio</code> / <code>import uasyncio</code> are banned across <code>libraries/</code> / <code>support/</code> / <code>workbench/</code> — see <a href="https://github.com/ChuMicro/ChuMicro/blob/main/docs/contributing/style-guide.md">the contributor style guide</a> for the contributor-facing rule.</p>
 <h2 id="period-gated-services">Period-gated services<a class="headerlink" href="#period-gated-services" title="Permanent link">&para;</a></h2>
 <p>Pass <code>period_ms</code> to <code>add()</code> and the runner will only check the service when the period elapses.  Services without a period are checked every tick.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="n">runner</span> <span class="o">=</span> <span class="n">Runner</span><span class="p">()</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>
-</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="c1"># Sensor is only checked every 5 seconds.</span>
-</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="n">handle</span> <span class="o">=</span> <span class="n">runner</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">sensor</span><span class="p">,</span> <span class="n">period_ms</span><span class="o">=</span><span class="mi">5000</span><span class="p">)</span>
-</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>
-</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="c1"># Button scanner runs every tick.</span>
-</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="n">runner</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">button_scanner</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="n">runner</span> <span class="o">=</span> <span class="n">Runner</span><span class="p">()</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="c1"># Sensor is only checked every 5 seconds.</span>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="n">handle</span> <span class="o">=</span> <span class="n">runner</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">sensor</span><span class="p">,</span> <span class="n">period_ms</span><span class="o">=</span><span class="mi">5000</span><span class="p">)</span>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>
+</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="c1"># Button scanner runs every tick.</span>
+</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="n">runner</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">button_scanner</span><span class="p">)</span>
 </span></code></pre></div>
 <p>You can change or remove the period at runtime via the <code>TaskHandle</code>:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Speed up.</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">handle</span><span class="o">.</span><span class="n">set_period</span><span class="p">(</span><span class="mi">1000</span><span class="p">)</span>
-</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>
-</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="c1"># Remove the period — service runs every tick again.</span>
-</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="n">handle</span><span class="o">.</span><span class="n">set_period</span><span class="p">(</span><span class="kc">None</span><span class="p">)</span>
-</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a>
-</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="c1"># Remove the service entirely.</span>
-</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="n">handle</span><span class="o">.</span><span class="n">remove</span><span class="p">()</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Speed up.</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">handle</span><span class="o">.</span><span class="n">set_period</span><span class="p">(</span><span class="mi">1000</span><span class="p">)</span>
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="c1"># Remove the period — service runs every tick again.</span>
+</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="n">handle</span><span class="o">.</span><span class="n">set_period</span><span class="p">(</span><span class="kc">None</span><span class="p">)</span>
+</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>
+</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="c1"># Remove the service entirely.</span>
+</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="n">handle</span><span class="o">.</span><span class="n">remove</span><span class="p">()</span>
 </span></code></pre></div>
 <h3 id="delayed-start">Delayed start<a class="headerlink" href="#delayed-start" title="Permanent link">&para;</a></h3>
 <p>Pass <code>start_after_ms</code> to delay the first check.  Subsequent checks use <code>period_ms</code>:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Wait 2 seconds, then check every 5 seconds.</span>
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">runner</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">sensor</span><span class="p">,</span> <span class="n">period_ms</span><span class="o">=</span><span class="mi">5000</span><span class="p">,</span> <span class="n">start_after_ms</span><span class="o">=</span><span class="mi">2000</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Wait 2 seconds, then check every 5 seconds.</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="n">runner</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">sensor</span><span class="p">,</span> <span class="n">period_ms</span><span class="o">=</span><span class="mi">5000</span><span class="p">,</span> <span class="n">start_after_ms</span><span class="o">=</span><span class="mi">2000</span><span class="p">)</span>
 </span></code></pre></div>
 <h3 id="limited-runs">Limited runs<a class="headerlink" href="#limited-runs" title="Permanent link">&para;</a></h3>
 <p>Pass <code>run_count</code> to auto-remove a task after a set number of handler fires:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Fire exactly 3 times, then stop.</span>
-</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="n">runner</span><span class="o">.</span><span class="n">add_periodic</span><span class="p">(</span><span class="n">calibrate</span><span class="p">,</span> <span class="n">period_ms</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span> <span class="n">run_count</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Fire exactly 3 times, then stop.</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="n">runner</span><span class="o">.</span><span class="n">add_periodic</span><span class="p">(</span><span class="n">calibrate</span><span class="p">,</span> <span class="n">period_ms</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span> <span class="n">run_count</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
 </span></code></pre></div>
 <h3 id="phase-anchoring">Phase anchoring<a class="headerlink" href="#phase-anchoring" title="Permanent link">&para;</a></h3>
 <p>By default a fired periodic reschedules from the tick that fired it, so fires are always at least <code>period_ms</code> apart — but each fire inherits the tick's lateness, and the drift compounds.  A 1 Hz publish whose handler takes 80 ms settles near 1.08 s per cycle.</p>
 <p>Pass <code>preserve_phase=True</code> for sampling, metering, or telemetry tasks that must hold their long-run cadence.  The next deadline then advances from the previous deadline in whole periods: fires stay aligned to the original schedule, and a stall longer than one period skips the missed fires instead of bursting to catch up.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Holds 10 Hz cadence even when handlers run long.</span>
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="n">runner</span><span class="o">.</span><span class="n">add_periodic</span><span class="p">(</span><span class="n">sample_adc</span><span class="p">,</span> <span class="n">period_ms</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span> <span class="n">preserve_phase</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># Holds 10 Hz cadence even when handlers run long.</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="n">runner</span><span class="o">.</span><span class="n">add_periodic</span><span class="p">(</span><span class="n">sample_adc</span><span class="p">,</span> <span class="n">period_ms</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span> <span class="n">preserve_phase</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </span></code></pre></div>
 <p>One caveat: a phase-preserving fire that runs late catches back up to its schedule, so two fires can land closer together than <code>period_ms</code>.  Code that needs a guaranteed minimum gap (throttles, debounce) should keep the default.</p>
 <h2 id="multiple-services">Multiple services<a class="headerlink" href="#multiple-services" title="Permanent link">&para;</a></h2>
 <p>The pattern scales to many services with no extra boilerplate:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="n">runner</span> <span class="o">=</span> <span class="n">Runner</span><span class="p">()</span>
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="n">runner</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">motion_detector</span><span class="p">)</span>
-</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="n">runner</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">temperature_sensor</span><span class="p">,</span> <span class="n">period_ms</span><span class="o">=</span><span class="mi">5000</span><span class="p">)</span>
-</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="n">runner</span><span class="o">.</span><span class="n">add_periodic</span><span class="p">(</span><span class="n">toggle_led</span><span class="p">,</span> <span class="n">period_ms</span><span class="o">=</span><span class="mi">500</span><span class="p">)</span>
-</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="n">runner</span><span class="o">.</span><span class="n">add_periodic</span><span class="p">(</span><span class="n">log_status</span><span class="p">,</span> <span class="n">period_ms</span><span class="o">=</span><span class="mi">10000</span><span class="p">)</span>
-</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a>
-</span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a><span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
-</span><span id="__span-15-8"><a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a>    <span class="n">now_ms</span> <span class="o">=</span> <span class="n">runner</span><span class="o">.</span><span class="n">tick</span><span class="p">()</span>
-</span><span id="__span-15-9"><a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a>    <span class="n">runner</span><span class="o">.</span><span class="n">wait</span><span class="p">(</span><span class="n">now_ms</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="n">runner</span> <span class="o">=</span> <span class="n">Runner</span><span class="p">()</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="n">runner</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">motion_detector</span><span class="p">)</span>
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="n">runner</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">temperature_sensor</span><span class="p">,</span> <span class="n">period_ms</span><span class="o">=</span><span class="mi">5000</span><span class="p">)</span>
+</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="n">runner</span><span class="o">.</span><span class="n">add_periodic</span><span class="p">(</span><span class="n">toggle_led</span><span class="p">,</span> <span class="n">period_ms</span><span class="o">=</span><span class="mi">500</span><span class="p">)</span>
+</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="n">runner</span><span class="o">.</span><span class="n">add_periodic</span><span class="p">(</span><span class="n">log_status</span><span class="p">,</span> <span class="n">period_ms</span><span class="o">=</span><span class="mi">10000</span><span class="p">)</span>
+</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a>
+</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a><span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+</span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a>    <span class="n">now_ms</span> <span class="o">=</span> <span class="n">runner</span><span class="o">.</span><span class="n">tick</span><span class="p">()</span>
+</span><span id="__span-16-9"><a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a>    <span class="n">runner</span><span class="o">.</span><span class="n">wait</span><span class="p">(</span><span class="n">now_ms</span><span class="p">)</span>
 </span></code></pre></div>
 <h2 id="batch-firing">Batch firing<a class="headerlink" href="#batch-firing" title="Permanent link">&para;</a></h2>
 <p>All services are checked first, then all due handlers fire in sequence.  This guarantees that handlers see a consistent view of the world — no handler modifies state while other services are still being checked.</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>tick():
-</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>  1. Capture ticks_ms() → now_ms
-</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>  2. For each entry:
-</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>     - Period gate: skip if not due
-</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a>     - Check gate: skip if check(now_ms) returns False
-</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a>     - Queue handler
-</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a>  3. Fire all queued handlers with now_ms
+<div class="language-text highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>tick():
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>  1. Capture ticks_ms() → now_ms
+</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>  2. For each entry:
+</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a>     - Period gate: skip if not due
+</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a>     - Check gate: skip if check(now_ms) returns False
+</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a>     - Queue handler
+</span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a>  3. Fire all queued handlers with now_ms
 </span></code></pre></div>
 <h2 id="memory-notes">Memory notes<a class="headerlink" href="#memory-notes" title="Permanent link">&para;</a></h2>
 <ul>
@@ -1442,43 +1529,43 @@
 <li><code>FakePoller</code> — a stand-in for <code>select.poll().ipoll</code> so unit tests can drive <code>Runner.wait()</code> without real file descriptors (CPython's <code>select.poll</code> needs real fds that in-memory fake sockets do not have).  Records every <code>register</code> / <code>modify</code> / <code>unregister</code> / <code>ipoll</code> call so tests can assert on what the runner did with the poll set; <code>set_ready(obj, eventmask)</code> queues a ready pair for the next <code>ipoll</code> return.</li>
 </ul>
 <h3 id="callrecorder"><code>CallRecorder</code><a class="headerlink" href="#callrecorder" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_runner.testing</span><span class="w"> </span><span class="kn">import</span> <span class="n">CallRecorder</span>
-</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_timing.testing</span><span class="w"> </span><span class="kn">import</span> <span class="n">FakeTicks</span>
-</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>
-</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="n">fake</span> <span class="o">=</span> <span class="n">FakeTicks</span><span class="p">()</span>
-</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="n">recorder</span> <span class="o">=</span> <span class="n">CallRecorder</span><span class="p">()</span>
-</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="n">runner</span> <span class="o">=</span> <span class="n">Runner</span><span class="p">(</span><span class="n">ticks</span><span class="o">=</span><span class="n">fake</span><span class="p">)</span>
-</span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="n">runner</span><span class="o">.</span><span class="n">add_periodic</span><span class="p">(</span><span class="n">recorder</span><span class="p">,</span> <span class="n">period_ms</span><span class="o">=</span><span class="mi">100</span><span class="p">)</span>
-</span><span id="__span-17-8"><a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a>
-</span><span id="__span-17-9"><a id="__codelineno-17-9" name="__codelineno-17-9" href="#__codelineno-17-9"></a><span class="n">runner</span><span class="o">.</span><span class="n">tick</span><span class="p">()</span>
-</span><span id="__span-17-10"><a id="__codelineno-17-10" name="__codelineno-17-10" href="#__codelineno-17-10"></a><span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">recorder</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span>  <span class="c1"># not due yet</span>
-</span><span id="__span-17-11"><a id="__codelineno-17-11" name="__codelineno-17-11" href="#__codelineno-17-11"></a>
-</span><span id="__span-17-12"><a id="__codelineno-17-12" name="__codelineno-17-12" href="#__codelineno-17-12"></a><span class="n">fake</span><span class="o">.</span><span class="n">advance</span><span class="p">(</span><span class="mi">100</span><span class="p">)</span>
-</span><span id="__span-17-13"><a id="__codelineno-17-13" name="__codelineno-17-13" href="#__codelineno-17-13"></a><span class="n">runner</span><span class="o">.</span><span class="n">tick</span><span class="p">()</span>
-</span><span id="__span-17-14"><a id="__codelineno-17-14" name="__codelineno-17-14" href="#__codelineno-17-14"></a><span class="k">assert</span> <span class="n">recorder</span><span class="o">.</span><span class="n">calls</span> <span class="o">==</span> <span class="p">[</span><span class="mi">100</span><span class="p">]</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_runner.testing</span><span class="w"> </span><span class="kn">import</span> <span class="n">CallRecorder</span>
+</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_timing.testing</span><span class="w"> </span><span class="kn">import</span> <span class="n">FakeTicks</span>
+</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>
+</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="n">fake</span> <span class="o">=</span> <span class="n">FakeTicks</span><span class="p">()</span>
+</span><span id="__span-18-5"><a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a><span class="n">recorder</span> <span class="o">=</span> <span class="n">CallRecorder</span><span class="p">()</span>
+</span><span id="__span-18-6"><a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a><span class="n">runner</span> <span class="o">=</span> <span class="n">Runner</span><span class="p">(</span><span class="n">ticks</span><span class="o">=</span><span class="n">fake</span><span class="p">)</span>
+</span><span id="__span-18-7"><a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a><span class="n">runner</span><span class="o">.</span><span class="n">add_periodic</span><span class="p">(</span><span class="n">recorder</span><span class="p">,</span> <span class="n">period_ms</span><span class="o">=</span><span class="mi">100</span><span class="p">)</span>
+</span><span id="__span-18-8"><a id="__codelineno-18-8" name="__codelineno-18-8" href="#__codelineno-18-8"></a>
+</span><span id="__span-18-9"><a id="__codelineno-18-9" name="__codelineno-18-9" href="#__codelineno-18-9"></a><span class="n">runner</span><span class="o">.</span><span class="n">tick</span><span class="p">()</span>
+</span><span id="__span-18-10"><a id="__codelineno-18-10" name="__codelineno-18-10" href="#__codelineno-18-10"></a><span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">recorder</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span>  <span class="c1"># not due yet</span>
+</span><span id="__span-18-11"><a id="__codelineno-18-11" name="__codelineno-18-11" href="#__codelineno-18-11"></a>
+</span><span id="__span-18-12"><a id="__codelineno-18-12" name="__codelineno-18-12" href="#__codelineno-18-12"></a><span class="n">fake</span><span class="o">.</span><span class="n">advance</span><span class="p">(</span><span class="mi">100</span><span class="p">)</span>
+</span><span id="__span-18-13"><a id="__codelineno-18-13" name="__codelineno-18-13" href="#__codelineno-18-13"></a><span class="n">runner</span><span class="o">.</span><span class="n">tick</span><span class="p">()</span>
+</span><span id="__span-18-14"><a id="__codelineno-18-14" name="__codelineno-18-14" href="#__codelineno-18-14"></a><span class="k">assert</span> <span class="n">recorder</span><span class="o">.</span><span class="n">calls</span> <span class="o">==</span> <span class="p">[</span><span class="mi">100</span><span class="p">]</span>
 </span></code></pre></div>
 <h3 id="fakepoller"><code>FakePoller</code><a class="headerlink" href="#fakepoller" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">select</span>
-</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_runner</span><span class="w"> </span><span class="kn">import</span> <span class="n">IO_READ</span><span class="p">,</span> <span class="n">Runner</span>
-</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_runner.testing</span><span class="w"> </span><span class="kn">import</span> <span class="n">FakePoller</span>
-</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_timing.testing</span><span class="w"> </span><span class="kn">import</span> <span class="n">FakeTicks</span>
-</span><span id="__span-18-5"><a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a>
-</span><span id="__span-18-6"><a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a><span class="n">poller</span> <span class="o">=</span> <span class="n">FakePoller</span><span class="p">()</span>
-</span><span id="__span-18-7"><a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a><span class="n">runner</span> <span class="o">=</span> <span class="n">Runner</span><span class="p">(</span><span class="n">ticks</span><span class="o">=</span><span class="n">FakeTicks</span><span class="p">(),</span> <span class="n">poller</span><span class="o">=</span><span class="n">poller</span><span class="p">)</span>
-</span><span id="__span-18-8"><a id="__codelineno-18-8" name="__codelineno-18-8" href="#__codelineno-18-8"></a>
-</span><span id="__span-18-9"><a id="__codelineno-18-9" name="__codelineno-18-9" href="#__codelineno-18-9"></a><span class="k">class</span><span class="w"> </span><span class="nc">_Service</span><span class="p">:</span>
-</span><span id="__span-18-10"><a id="__codelineno-18-10" name="__codelineno-18-10" href="#__codelineno-18-10"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sock</span><span class="p">):</span>
-</span><span id="__span-18-11"><a id="__codelineno-18-11" name="__codelineno-18-11" href="#__codelineno-18-11"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">io_socket</span> <span class="o">=</span> <span class="n">sock</span>
-</span><span id="__span-18-12"><a id="__codelineno-18-12" name="__codelineno-18-12" href="#__codelineno-18-12"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">io_interest</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">now_ms</span><span class="p">):</span> <span class="k">return</span> <span class="n">IO_READ</span>
-</span><span id="__span-18-13"><a id="__codelineno-18-13" name="__codelineno-18-13" href="#__codelineno-18-13"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">check</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">now_ms</span><span class="p">):</span> <span class="k">return</span> <span class="kc">False</span>
-</span><span id="__span-18-14"><a id="__codelineno-18-14" name="__codelineno-18-14" href="#__codelineno-18-14"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">handle</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">now_ms</span><span class="p">):</span> <span class="k">pass</span>
-</span><span id="__span-18-15"><a id="__codelineno-18-15" name="__codelineno-18-15" href="#__codelineno-18-15"></a>
-</span><span id="__span-18-16"><a id="__codelineno-18-16" name="__codelineno-18-16" href="#__codelineno-18-16"></a><span class="n">sock</span> <span class="o">=</span> <span class="nb">object</span><span class="p">()</span>
-</span><span id="__span-18-17"><a id="__codelineno-18-17" name="__codelineno-18-17" href="#__codelineno-18-17"></a><span class="n">runner</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">_Service</span><span class="p">(</span><span class="n">sock</span><span class="p">),</span> <span class="n">period_ms</span><span class="o">=</span><span class="mi">100</span><span class="p">)</span>
-</span><span id="__span-18-18"><a id="__codelineno-18-18" name="__codelineno-18-18" href="#__codelineno-18-18"></a><span class="n">runner</span><span class="o">.</span><span class="n">wait</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
-</span><span id="__span-18-19"><a id="__codelineno-18-19" name="__codelineno-18-19" href="#__codelineno-18-19"></a>
-</span><span id="__span-18-20"><a id="__codelineno-18-20" name="__codelineno-18-20" href="#__codelineno-18-20"></a><span class="k">assert</span> <span class="p">(</span><span class="n">sock</span><span class="p">,</span> <span class="n">select</span><span class="o">.</span><span class="n">POLLIN</span><span class="p">)</span> <span class="ow">in</span> <span class="n">poller</span><span class="o">.</span><span class="n">register_calls</span>
-</span><span id="__span-18-21"><a id="__codelineno-18-21" name="__codelineno-18-21" href="#__codelineno-18-21"></a><span class="k">assert</span> <span class="n">poller</span><span class="o">.</span><span class="n">ipoll_calls</span> <span class="o">==</span> <span class="p">[</span><span class="mi">100</span><span class="p">]</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">select</span>
+</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_runner</span><span class="w"> </span><span class="kn">import</span> <span class="n">IO_READ</span><span class="p">,</span> <span class="n">Runner</span>
+</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_runner.testing</span><span class="w"> </span><span class="kn">import</span> <span class="n">FakePoller</span>
+</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_timing.testing</span><span class="w"> </span><span class="kn">import</span> <span class="n">FakeTicks</span>
+</span><span id="__span-19-5"><a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a>
+</span><span id="__span-19-6"><a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a><span class="n">poller</span> <span class="o">=</span> <span class="n">FakePoller</span><span class="p">()</span>
+</span><span id="__span-19-7"><a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a><span class="n">runner</span> <span class="o">=</span> <span class="n">Runner</span><span class="p">(</span><span class="n">ticks</span><span class="o">=</span><span class="n">FakeTicks</span><span class="p">(),</span> <span class="n">poller</span><span class="o">=</span><span class="n">poller</span><span class="p">)</span>
+</span><span id="__span-19-8"><a id="__codelineno-19-8" name="__codelineno-19-8" href="#__codelineno-19-8"></a>
+</span><span id="__span-19-9"><a id="__codelineno-19-9" name="__codelineno-19-9" href="#__codelineno-19-9"></a><span class="k">class</span><span class="w"> </span><span class="nc">_Service</span><span class="p">:</span>
+</span><span id="__span-19-10"><a id="__codelineno-19-10" name="__codelineno-19-10" href="#__codelineno-19-10"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sock</span><span class="p">):</span>
+</span><span id="__span-19-11"><a id="__codelineno-19-11" name="__codelineno-19-11" href="#__codelineno-19-11"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">io_socket</span> <span class="o">=</span> <span class="n">sock</span>
+</span><span id="__span-19-12"><a id="__codelineno-19-12" name="__codelineno-19-12" href="#__codelineno-19-12"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">io_interest</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">now_ms</span><span class="p">):</span> <span class="k">return</span> <span class="n">IO_READ</span>
+</span><span id="__span-19-13"><a id="__codelineno-19-13" name="__codelineno-19-13" href="#__codelineno-19-13"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">check</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">now_ms</span><span class="p">):</span> <span class="k">return</span> <span class="kc">False</span>
+</span><span id="__span-19-14"><a id="__codelineno-19-14" name="__codelineno-19-14" href="#__codelineno-19-14"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">handle</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">now_ms</span><span class="p">):</span> <span class="k">pass</span>
+</span><span id="__span-19-15"><a id="__codelineno-19-15" name="__codelineno-19-15" href="#__codelineno-19-15"></a>
+</span><span id="__span-19-16"><a id="__codelineno-19-16" name="__codelineno-19-16" href="#__codelineno-19-16"></a><span class="n">sock</span> <span class="o">=</span> <span class="nb">object</span><span class="p">()</span>
+</span><span id="__span-19-17"><a id="__codelineno-19-17" name="__codelineno-19-17" href="#__codelineno-19-17"></a><span class="n">runner</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">_Service</span><span class="p">(</span><span class="n">sock</span><span class="p">),</span> <span class="n">period_ms</span><span class="o">=</span><span class="mi">100</span><span class="p">)</span>
+</span><span id="__span-19-18"><a id="__codelineno-19-18" name="__codelineno-19-18" href="#__codelineno-19-18"></a><span class="n">runner</span><span class="o">.</span><span class="n">wait</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+</span><span id="__span-19-19"><a id="__codelineno-19-19" name="__codelineno-19-19" href="#__codelineno-19-19"></a>
+</span><span id="__span-19-20"><a id="__codelineno-19-20" name="__codelineno-19-20" href="#__codelineno-19-20"></a><span class="k">assert</span> <span class="p">(</span><span class="n">sock</span><span class="p">,</span> <span class="n">select</span><span class="o">.</span><span class="n">POLLIN</span><span class="p">)</span> <span class="ow">in</span> <span class="n">poller</span><span class="o">.</span><span class="n">register_calls</span>
+</span><span id="__span-19-21"><a id="__codelineno-19-21" name="__codelineno-19-21" href="#__codelineno-19-21"></a><span class="k">assert</span> <span class="n">poller</span><span class="o">.</span><span class="n">ipoll_calls</span> <span class="o">==</span> <span class="p">[</span><span class="mi">100</span><span class="p">]</span>
 </span></code></pre></div>
 <p>See the <a href="../testing/">testing helpers</a> page for detailed usage.</p>
 <h2 id="platform-notes">Platform notes<a class="headerlink" href="#platform-notes" title="Permanent link">&para;</a></h2>
