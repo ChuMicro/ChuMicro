@@ -235,16 +235,20 @@ class WebSocketServer:
         if listener is None:
             # Lazy import so a client-only deploy never pulls chumicro_sockets onto the board.
             try:
-                from chumicro_websockets.sockets_factory import (  # noqa: PLC0415 - lazy
-                    chumicro_sockets_listener,
+                from chumicro_sockets.sockets_factory import (  # noqa: PLC0415 - lazy
+                    listener_factory,
                 )
             except ImportError as exception:
                 raise RuntimeError(
-                    "chumicro_websockets.sockets_factory not available "
+                    "chumicro_sockets.sockets_factory not available "
                     "(excluded via __chumicro_skip_factories__ or not on "
                     "the board); pass listener= explicitly.",
                 ) from exception
-            listener = chumicro_sockets_listener(config, radio=radio)
+            listener = listener_factory(
+                config.get("websockets.server.host", "0.0.0.0"),
+                config.get("websockets.server.port", 8765),
+                radio=radio,
+            )()
         return cls(
             listener=listener,
             on_connection=on_connection,

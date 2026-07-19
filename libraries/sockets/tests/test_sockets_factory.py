@@ -40,6 +40,15 @@ class TestConnectorFactory:
         (_, kwargs), = recorder.calls
         assert kwargs == {"tls": False, "context": None, "radio": None}
 
+    def test_tls_call_without_context_passes_none(self):
+        recorder = _Recorder()
+        with SwapAttribute(chumicro_sockets, "connector", recorder):
+            factory = sockets_factory.connector_factory()
+            factory("h", 443, True)
+        (args, kwargs), = recorder.calls
+        assert args == ("h", 443)
+        assert kwargs == {"tls": True, "context": None, "radio": None}
+
 
 class TestFixedConnectorFactory:
     def test_closes_over_endpoint(self):

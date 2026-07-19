@@ -8,12 +8,12 @@
 
 ```python
 from chumicro_websockets import WebSocketClient, WebSocketState
-from chumicro_websockets.sockets_factory import chumicro_sockets_connector_factory
+from chumicro_sockets.sockets_factory import connector_factory
 from chumicro_timing import ticks_ms
 from chumicro_wifi import wifi
 
 client = WebSocketClient(
-    transport_factory=chumicro_sockets_connector_factory(radio=wifi.adapter.radio),
+    transport_factory=connector_factory(radio=wifi.adapter.radio),
 )
 client.on_text = lambda text: print(f"got: {text}")
 client.on_close = lambda code, reason: print(f"closed {code} {reason}")
@@ -125,7 +125,7 @@ If you supply your own factory and want `chumicro_sockets` dropped from the depl
 __chumicro_skip_factories__ = ("sockets_factory",)
 ```
 
-Family form (`"sockets_factory"`, matches every `chumicro_*.sockets_factory`) or exact path (`"chumicro_websockets.sockets_factory"`).  An unmatched entry fails the deploy with a typo message rather than silently shipping the default.  Calling `WebSocketClient.from_config(...)` when `chumicro_websockets.sockets_factory` is missing — either skipped at deploy time or not installed by `circup` / `mip` — raises `RuntimeError` naming the bypass kwarg.
+Family form (`"sockets_factory"`, matches every `chumicro_*.sockets_factory`) or exact path (`"chumicro_sockets.sockets_factory"`).  An unmatched entry fails the deploy with a typo message rather than silently shipping the default.  Calling `WebSocketClient.from_config(...)` when `chumicro_sockets.sockets_factory` is missing — either skipped at deploy time or not installed by `circup` / `mip` — raises `RuntimeError` naming the bypass kwarg.
 
 For the full single-library adoption recipe — your transport, your `ticks=`, the runner-less drive loop, and host tests with no board — see [Standalone integration](https://github.com/ChuMicro/ChuMicro/blob/main/docs/contributing/standalone-integration.md).
 
@@ -181,7 +181,7 @@ MCU RAM, 2 MB physical / ~800 KB usable flash):
 `wss://` client connections reuse `chumicro_sockets.connector(tls=True)` + `chumicro_sockets.ssl_context_with_ca`, with the same live-board constraints HTTPS clients have:
 
 - **Device RTC must be set before `wss://`.**  mbedTLS rejects every cert as "validity starts in the future" if the RTC is at boot default.  Use [`chumicro-ntp`](https://chumicro.github.io/ChuMicro/ntp/stable/) to set the clock first.
-- **CA pinning is required.**  Build the `ssl_context` with `chumicro_sockets.ssl_context_with_ca(pem)` and pass it through `chumicro_sockets_connector_factory(radio=..., ssl_context=ctx)`.
+- **CA pinning is required.**  Build the `ssl_context` with `chumicro_sockets.ssl_context_with_ca(pem)` and pass it through `connector_factory(radio=..., ssl_context=ctx)`.
 - **Pi Pico W needs flash deploy mode for `wss://`** — RAM-mode leaves <50 KB free for the mbedTLS handshake.
 
 ## Per-tick knobs

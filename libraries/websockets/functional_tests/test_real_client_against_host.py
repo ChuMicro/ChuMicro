@@ -31,9 +31,9 @@ same multi-stack-too-heavy reason as ``test_real_loopback.py``.
 import time
 
 from chumicro_config import config
+from chumicro_sockets.sockets_factory import connector_factory
 from chumicro_test_harness import skip
 from chumicro_websockets import WebSocketClient, WebSocketState
-from chumicro_websockets.sockets_factory import chumicro_sockets_connector_factory
 from chumicro_wifi import WifiConfig, WifiService, WifiState
 
 _DEADLINE_MS = 30_000
@@ -101,7 +101,7 @@ def test_real_client_round_trip_against_host_echo_server() -> None:
     close_observed = []
 
     client = WebSocketClient(
-        transport_factory=chumicro_sockets_connector_factory(radio=wifi.adapter.radio),
+        transport_factory=connector_factory(radio=wifi.adapter.radio),
         handshake_timeout_ms=_HANDSHAKE_TIMEOUT_MS,
     )
     client.on_open = lambda: open_observed.append(True)

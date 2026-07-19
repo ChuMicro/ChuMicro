@@ -8,12 +8,12 @@ An LED keeps blinking through the handshake, frame I/O, and the close handshake 
 
 ```python
 from chumicro_websockets import WebSocketClient, WebSocketState
-from chumicro_websockets.sockets_factory import chumicro_sockets_connector_factory
+from chumicro_sockets.sockets_factory import connector_factory
 from chumicro_timing import ticks_ms
 from chumicro_wifi import wifi
 
 client = WebSocketClient(
-    transport_factory=chumicro_sockets_connector_factory(radio=wifi.adapter.radio),
+    transport_factory=connector_factory(radio=wifi.adapter.radio),
 )
 client.on_text = lambda text: print(text)
 client.connect("ws://api.example.com/stream")
