@@ -176,6 +176,7 @@ Each library installs independently and pulls in as little as possible.  Install
 | **[ntp](libraries/ntp/)** | Sets the board's clock from the network.  Close enough to UTC for TLS certificate checks and honest log timestamps. |
 | **[config](libraries/config/)** | Typed runtime settings with one dotted-key convention (`wifi.ssid`, `mqtt.broker.host`) shared by every library. |
 | **[kvstore](libraries/kvstore/)** | Small persistent storage for what must survive a reboot: boot counters, tokens, timestamps.  Picks the right backend for your board. |
+| **[logging](libraries/logging/)** | Leveled logging with stdlib-shaped levels.  `BufferedHandler` defers formatting and I/O to the runner tick, so log lines never stall your loop. |
 | **[msgpack](libraries/msgpack/)** | Binary serialization, smaller than JSON for typical sensor payloads.  Compatible with the wider `msgpack` ecosystem. |
 | **[compat](libraries/compat/)** | The few standard-library pieces the device runtimes don't ship, so one file of code can run everywhere. |
 
