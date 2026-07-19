@@ -17,10 +17,14 @@ from chumicro_workspace.library import (
     LibraryFetchFailureKind,
 )
 from chumicro_workspace.library_channel import (
+    FILES_BASE_ENV,
+    TARBALLS_BASE_ENV,
+    _real_http_get,
     channel_repo,
     extract_library,
     fetch_snapshot_tarball,
     index_url,
+    raw_file_url,
     resolve_snapshot,
     tarball_url,
 )
@@ -104,6 +108,19 @@ class TestUrlBuilders:
     def test_tarball_url(self):
         assert tarball_url("ChuMicro/ChuMicro-Libraries", "20260519") == (
             "https://codeload.github.com/"
+            "ChuMicro/ChuMicro-Libraries/tar.gz/refs/tags/20260519"
+        )
+
+    def test_files_base_override_keeps_path_shape(self, monkeypatch):
+        monkeypatch.setenv(FILES_BASE_ENV, "http://localhost:8000/")
+        assert raw_file_url("ChuMicro/ChuMicro-Libraries", "main", "a/b") == (
+            "http://localhost:8000/ChuMicro/ChuMicro-Libraries/main/a/b"
+        )
+
+    def test_tarballs_base_override_keeps_path_shape(self, monkeypatch):
+        monkeypatch.setenv(TARBALLS_BASE_ENV, "file:///srv/mirror")
+        assert tarball_url("ChuMicro/ChuMicro-Libraries", "20260519") == (
+            "file:///srv/mirror/"
             "ChuMicro/ChuMicro-Libraries/tar.gz/refs/tags/20260519"
         )
 
@@ -272,6 +289,21 @@ class TestFetchSnapshotTarball:
 
 
 class TestRealHttpGet:
+    def test_file_scheme_serves_an_on_disk_mirror(self, tmp_path: Path):
+        body = _index_bytes("20260101", {})
+        (tmp_path / "index.json").write_bytes(body)
+        assert _real_http_get((tmp_path / "index.json").as_uri()) == body
+
+    def test_missing_file_raises_network_kind(self, tmp_path: Path):
+        with pytest.raises(LibraryFetchError) as caught:
+            _real_http_get((tmp_path / "absent.json").as_uri())
+        assert caught.value.kind is LibraryFetchFailureKind.NETWORK
+
+    def test_unsupported_scheme_raises_network_kind(self):
+        with pytest.raises(LibraryFetchError) as caught:
+            _real_http_get("ftp://mirror.example/index.json")
+        assert caught.value.kind is LibraryFetchFailureKind.NETWORK
+
     def test_http_404_is_package_not_found(self, monkeypatch):
         import urllib.error
 
