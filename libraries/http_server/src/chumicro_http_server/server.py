@@ -427,21 +427,38 @@ class HttpServer:
             MissingConfigKey: Exactly one of the TLS ``cert_path`` / ``key_path`` pair is set.
         """
         if transport_factory is None:
+            host = config.get("http_server.bind_host", "0.0.0.0")
+            port = config.get("http_server.bind_port", 8080)
+            cert_path = config.get("http_server.tls.cert_path")
+            key_path = config.get("http_server.tls.key_path")
+            if (cert_path is None) != (key_path is None):
+                from chumicro_config import MissingConfigKey  # noqa: PLC0415 - lazy
+
+                missing = (
+                    "http_server.tls.cert_path" if cert_path is None
+                    else "http_server.tls.key_path"
+                )
+                raise MissingConfigKey(
+                    f"required config key {missing!r} is missing; TLS "
+                    "requires both cert_path and key_path",
+                )
             # Lazy import so a caller-supplied transport_factory doesn't pull in chumicro_sockets.
             try:
-                from chumicro_http_server.sockets_factory import (  # noqa: PLC0415 - lazy
-                    chumicro_sockets_factory,
+                from chumicro_sockets.sockets_factory import (  # noqa: PLC0415 - lazy
+                    listener_factory,
                 )
             except ImportError as exception:
                 raise RuntimeError(
-                    "chumicro_http_server.sockets_factory not "
+                    "chumicro_sockets.sockets_factory not "
                     "available (excluded via __chumicro_skip_factories__ "
                     "or not on the board); pass transport_factory= "
                     "explicitly.",
                 ) from exception
 
-            transport_factory = chumicro_sockets_factory(
-                config, radio=radio, ssl_context=ssl_context,
+            transport_factory = listener_factory(
+                host, port,
+                radio=radio, ssl_context=ssl_context,
+                cert_path=cert_path, key_path=key_path,
             )
         return cls(
             transport_factory=transport_factory,
