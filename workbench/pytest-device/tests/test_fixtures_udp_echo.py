@@ -35,4 +35,4 @@ def test_udp_echo_server_echoes_datagram_back_to_sender():
         stop.set()
         # Give the daemon thread one timeout cycle to notice the
         # stop and close its socket before the test exits.
-        time.sleep(0.3)
+        time.sleep(0.1)

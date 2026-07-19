@@ -16,7 +16,7 @@ def test_start_tcp_echo_server_returns_handle_with_listening_port():
         assert not stop.is_set()
     finally:
         stop.set()
-        time.sleep(0.3)
+        time.sleep(0.1)
 
 
 def test_tcp_echo_server_echoes_stream_back_to_sender():
@@ -33,9 +33,9 @@ def test_tcp_echo_server_echoes_stream_back_to_sender():
         client.close()
     finally:
         stop.set()
-        # Give the daemon thread one timeout cycle to notice the stop
-        # and close its listener before the test exits.
-        time.sleep(0.3)
+        # Give the daemon thread a couple of 50 ms poll cycles to notice
+        # the stop and close its listener before the test exits.
+        time.sleep(0.1)
 
 
 def test_tcp_echo_server_accepts_a_second_connection_after_the_first_closes():
@@ -57,4 +57,4 @@ def test_tcp_echo_server_accepts_a_second_connection_after_the_first_closes():
         second.close()
     finally:
         stop.set()
-        time.sleep(0.3)
+        time.sleep(0.1)
