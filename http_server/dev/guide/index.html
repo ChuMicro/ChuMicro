@@ -508,17 +508,6 @@
   
 </li>
       
-        <li class="md-nav__item">
-  <a href="#not-included" class="md-nav__link">
-    <span class="md-ellipsis">
-      <span class="md-typeset">
-        Not included
-      </span>
-    </span>
-  </a>
-  
-</li>
-      
     </ul>
   
 </nav>
@@ -787,17 +776,6 @@
   
 </li>
       
-        <li class="md-nav__item">
-  <a href="#not-included" class="md-nav__link">
-    <span class="md-ellipsis">
-      <span class="md-typeset">
-        Not included
-      </span>
-    </span>
-  </a>
-  
-</li>
-      
     </ul>
   
 </nav>
@@ -818,7 +796,7 @@
 
 <h1 id="user-guide">User Guide<a class="headerlink" href="#user-guide" title="Permanent link">&para;</a></h1>
 <h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
-<p><code>chumicro-http-server</code> is a non-blocking HTTP/1.1 server that runs on CircuitPython, MicroPython, and CPython.  Each connection is a state machine the server advances one chunk per tick — an LED keeps blinking, a control loop keeps running, sensor reads keep happening, all while requests are being served.  Built on <code>chumicro-sockets</code> (TCP listener + accepted client sockets) and <code>chumicro-timing</code> (ticks) only; no <code>async</code>, no threads, no <code>chumicro-requests</code> dependency on the device.</p>
+<p><code>chumicro-http-server</code> is a non-blocking HTTP/1.1 server that runs on CircuitPython, MicroPython, and CPython.  Each connection is a state machine the server advances one chunk per tick: an LED keeps blinking, a control loop keeps running, sensor reads keep happening, all while requests are being served.  Built on <code>chumicro-sockets</code> (TCP listener + accepted client sockets) and <code>chumicro-timing</code> (ticks) only; no <code>async</code>, no threads, no <code>chumicro-requests</code> dependency on the device.</p>
 <h2 id="getting-started">Getting started<a class="headerlink" href="#getting-started" title="Permanent link">&para;</a></h2>
 <p>A minimal, hello-world server with one route:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_http_server</span><span class="w"> </span><span class="kn">import</span> <span class="n">HttpServer</span><span class="p">,</span> <span class="n">build_response</span>
@@ -841,9 +819,9 @@
 </span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>        <span class="n">server</span><span class="o">.</span><span class="n">handle</span><span class="p">(</span><span class="n">now</span><span class="p">)</span>
 </span></code></pre></div>
 <p>Build your server at startup. The first <code>HttpServer</code> reference imports the server module, so let that one-time cost land on a fresh heap.</p>
-<p><code>transport_factory</code> is a callable — the listener opens lazily on the first <code>handle()</code> call so construction is side-effect-free and unit-testable against a <code>FakeSocket</code>.</p>
+<p><code>transport_factory</code> is a callable: the listener opens lazily on the first <code>handle()</code> call so construction is side-effect-free and unit-testable against a <code>FakeSocket</code>.</p>
 <h2 id="runner-pattern">Runner pattern<a class="headerlink" href="#runner-pattern" title="Permanent link">&para;</a></h2>
-<p><code>HttpServer</code> implements the runner contract (<code>check(now_ms)</code> / <code>handle(now_ms)</code>) — register it with <code>chumicro_runner.Runner</code> and it gets ticked alongside your other services:</p>
+<p><code>HttpServer</code> implements the runner contract (<code>check(now_ms)</code> / <code>handle(now_ms)</code>).  Register it with <code>chumicro_runner.Runner</code> and it gets ticked alongside your other services:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_runner</span><span class="w"> </span><span class="kn">import</span> <span class="n">Runner</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">runner</span> <span class="o">=</span> <span class="n">Runner</span><span class="p">()</span>
@@ -873,14 +851,14 @@
 </span></code></pre></div>
 <p>Two route shapes are supported:</p>
 <ul>
-<li><strong>Exact match</strong> — <code>"/api/widgets"</code>.  O(1) lookup.</li>
-<li><strong>Single trailing parameter</strong> — <code>"/widgets/&lt;id&gt;"</code>.  The matched segment populates <code>request.path_params["id"]</code>.  Multi-parameter routes (<code>/users/&lt;uid&gt;/posts/&lt;pid&gt;</code>) are not supported.</li>
+<li><strong>Exact match</strong>: <code>"/api/widgets"</code>.  O(1) lookup.</li>
+<li><strong>Single trailing parameter</strong>: <code>"/widgets/&lt;id&gt;"</code>.  The matched segment populates <code>request.path_params["id"]</code>.  Multi-parameter routes (<code>/users/&lt;uid&gt;/posts/&lt;pid&gt;</code>) are not supported.</li>
 </ul>
 <p>Method dispatch:</p>
 <ul>
 <li>Path matched, method matched → handler runs.</li>
 <li>Path matched, method not registered → automatic <code>405 Method Not Allowed</code> with an <code>Allow:</code> header.</li>
-<li>Path not matched → 404, or fall through to a bare <code>handler=</code> callable if you set one (catch-all — useful for a static-file fallback or single-page app).</li>
+<li>Path not matched → 404, or fall through to a bare <code>handler=</code> callable if you set one (catch-all, useful for a static-file fallback or single-page app).</li>
 </ul>
 <h2 id="request-and-response"><code>Request</code> and <code>Response</code><a class="headerlink" href="#request-and-response" title="Permanent link">&para;</a></h2>
 <p>The handler signature is <code>(Request) -&gt; Response</code>.</p>
@@ -919,22 +897,22 @@
 </tr>
 <tr>
 <td><code>request.text()</code></td>
-<td>Body decoded per <code>Content-Type</code>'s charset. Only UTF-8 decodes on every runtime — MicroPython and CircuitPython ship a UTF-8-only <code>str</code> codec, so a declared non-UTF-8 charset raises or mis-decodes there.</td>
+<td>Body decoded per <code>Content-Type</code>'s charset. Only UTF-8 decodes on every runtime.  MicroPython and CircuitPython ship a UTF-8-only <code>str</code> codec, so a declared non-UTF-8 charset raises or mis-decodes there.</td>
 </tr>
 <tr>
 <td><code>request.json()</code></td>
-<td>Body parsed via <code>json.loads</code> — UTF-8 in, Python types out.</td>
+<td>Body parsed via <code>json.loads</code>: UTF-8 in, Python types out.</td>
 </tr>
 </tbody>
 </table>
-<p><code>build_response(status_code, *, body=None, json=None, text=None, html=None, headers=None)</code> is the convenience builder — pass exactly one of <code>body=</code> / <code>json=</code> / <code>text=</code> / <code>html=</code> and it sets the right <code>Content-Type</code>:</p>
+<p><code>build_response(status, *, body=None, json=None, text=None, html=None, headers=None)</code> is the convenience builder: pass exactly one of <code>body=</code> / <code>json=</code> / <code>text=</code> / <code>html=</code> and it sets the right <code>Content-Type</code>:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">build_response</span><span class="p">(</span><span class="mi">200</span><span class="p">,</span> <span class="n">json</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;ok&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">})</span>         <span class="c1"># application/json</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">build_response</span><span class="p">(</span><span class="mi">200</span><span class="p">,</span> <span class="n">text</span><span class="o">=</span><span class="s2">&quot;plain text&quot;</span><span class="p">)</span>         <span class="c1"># text/plain; charset=utf-8</span>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">build_response</span><span class="p">(</span><span class="mi">200</span><span class="p">,</span> <span class="n">html</span><span class="o">=</span><span class="s2">&quot;&lt;h1&gt;hi&lt;/h1&gt;&quot;</span><span class="p">)</span>        <span class="c1"># text/html; charset=utf-8</span>
 </span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="n">build_response</span><span class="p">(</span><span class="mi">200</span><span class="p">,</span> <span class="n">body</span><span class="o">=</span><span class="sa">b</span><span class="s2">&quot;</span><span class="se">\x00\x01\x02</span><span class="s2">&quot;</span><span class="p">)</span>      <span class="c1"># raw bytes, no Content-Type set</span>
 </span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="n">build_response</span><span class="p">(</span><span class="mi">204</span><span class="p">)</span>                            <span class="c1"># no body</span>
 </span></code></pre></div>
-<p>For full control, construct <code>Response</code> directly — its arguments are keyword-only and <code>reason</code> is required, and <code>body</code> must be <code>bytes</code> (a <code>str</code> body is rejected as a 500 at send time):</p>
+<p>For full control, construct <code>Response</code> directly: its arguments are keyword-only and <code>reason</code> is required, and <code>body</code> must be <code>bytes</code> (a <code>str</code> body is rejected as a 500 at send time):</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">Response</span><span class="p">(</span><span class="n">status_code</span><span class="o">=</span><span class="mi">200</span><span class="p">,</span> <span class="n">reason</span><span class="o">=</span><span class="s2">&quot;OK&quot;</span><span class="p">,</span> <span class="n">headers</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;X-Trace&quot;</span><span class="p">:</span> <span class="s2">&quot;abc&quot;</span><span class="p">},</span> <span class="n">body</span><span class="o">=</span><span class="sa">b</span><span class="s2">&quot;raw&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <h2 id="tick-fairness-knobs">Tick-fairness knobs<a class="headerlink" href="#tick-fairness-knobs" title="Permanent link">&para;</a></h2>
@@ -971,7 +949,7 @@
 <tr>
 <td><code>max_request_body_bytes</code></td>
 <td><code>16 KB</code></td>
-<td>Cap on a single buffered request body.  Requests declaring a larger <code>Content-Length</code> get a <code>413 Payload Too Large</code> response — no body bytes are allocated.  Within the cap, the body buffer is sized-to-fit at headers-complete time (one <code>bytearray(content_length)</code> allocation per request), freed when the response drains.</td>
+<td>Cap on a single buffered request body.  Requests declaring a larger <code>Content-Length</code> get a <code>413 Payload Too Large</code> response and no body bytes are allocated.  Within the cap, the body buffer is sized-to-fit at headers-complete time (one <code>bytearray(content_length)</code> allocation per request), freed when the response drains.</td>
 </tr>
 <tr>
 <td><code>max_request_line_bytes</code></td>
@@ -986,20 +964,20 @@
 <tr>
 <td><code>stream_buffer_size</code></td>
 <td><code>1 KB</code></td>
-<td>Staging-window size for a streaming response (see <a href="#streaming-large-response-bodies">Streaming large response bodies</a>).  Allocated lazily — only a connection that streams pays it — and reused for the whole transfer, so it is the entire per-stream RAM cost regardless of body size.</td>
+<td>Staging-window size for a streaming response (see <a href="#streaming-large-response-bodies">Streaming large response bodies</a>).  Allocated lazily (only a connection that streams pays it) and reused for the whole transfer, so it is the entire per-stream RAM cost regardless of body size.</td>
 </tr>
 </tbody>
 </table>
 <p>Defaults are conservative; the per-tick budgets keep an LED blink visible even with a chatty client and a big POST body.</p>
 <h2 id="connection-lifetime">Connection lifetime<a class="headerlink" href="#connection-lifetime" title="Permanent link">&para;</a></h2>
-<p>Each request is served on a fresh accepted socket; every response includes <code>Connection: close</code> and the socket is closed once the response drains.  HTTP/1.1 keep-alive and connection pooling are not supported.  Chunked request bodies are not supported either — use <code>Content-Length</code>.</p>
+<p>Each request is served on a fresh accepted socket; every response includes <code>Connection: close</code> and the socket is closed once the response drains.  HTTP/1.1 keep-alive and connection pooling are not supported.  Chunked request bodies are not supported either; use <code>Content-Length</code>.</p>
 <h2 id="streaming-large-response-bodies">Streaming large response bodies<a class="headerlink" href="#streaming-large-response-bodies" title="Permanent link">&para;</a></h2>
-<p>A normal <code>Response</code> holds its whole body in RAM.  When the body is bigger than the heap — a sensor-log dump, a file off storage, a long CSV export — return a <strong>streaming response</strong> instead: the server pulls the body from a callable one small window at a time and drains it to the client across ticks, so a 264 KB board can serve a body of any size at a fixed RAM cost.</p>
-<p>Streaming lives in an opt-in submodule (like <code>chumicro_requests.generators</code>) — import it explicitly.  A server that never streams never loads its code:</p>
+<p>A normal <code>Response</code> holds its whole body in RAM.  When the body is bigger than the heap (a sensor-log dump, a file off storage, a long CSV export), return a <strong>streaming response</strong> instead: the server pulls the body from a callable one small window at a time and drains it to the client across ticks, so a 264 KB board can serve a body of any size at a fixed RAM cost.</p>
+<p>Streaming lives in an opt-in submodule (like <code>chumicro_requests.generators</code>); import it explicitly.  A server that never streams never loads its code:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_http_server.streaming</span><span class="w"> </span><span class="kn">import</span> <span class="n">build_streaming_response</span><span class="p">,</span> <span class="n">SOURCE_EOF</span>
 </span></code></pre></div>
 <h3 id="the-byte-source">The byte source<a class="headerlink" href="#the-byte-source" title="Permanent link">&para;</a></h3>
-<p>You supply a <strong>source</strong> — a fill-a-buffer callable <code>source(buffer) -&gt; int</code>.  Each tick the server hands it the staging buffer; the source writes body bytes into it and returns what it did:</p>
+<p>You supply a <strong>source</strong>, a fill-a-buffer callable <code>source(buffer) -&gt; int</code>.  Each tick the server hands it the staging buffer; the source writes body bytes into it and returns what it did:</p>
 <table>
 <thead>
 <tr>
@@ -1014,7 +992,7 @@
 </tr>
 <tr>
 <td><code>0</code></td>
-<td>No bytes ready this tick, but the body is <strong>not</strong> finished — the server retries on a later tick.  Use this only for a source that can genuinely be empty for a tick (a sensor sampled asynchronously).</td>
+<td>No bytes ready this tick, but the body is <strong>not</strong> finished, so the server retries on a later tick.  Use this only for a source that can genuinely be empty for a tick (a sensor sampled asynchronously).</td>
 </tr>
 <tr>
 <td><code>SOURCE_EOF</code> (<code>-1</code>)</td>
@@ -1022,7 +1000,7 @@
 </tr>
 </tbody>
 </table>
-<p>The <code>0</code>-vs-<code>SOURCE_EOF</code> split is the whole contract: <code>0</code> means "ask again", <code>-1</code> means "done".  A source over a log or file that always has bytes until it runs out never returns <code>0</code> — it returns positive counts and then <code>SOURCE_EOF</code>.  A five-line generator that emits a list of records, chunking each to the buffer:</p>
+<p>The <code>0</code>-vs-<code>SOURCE_EOF</code> split is the whole contract: <code>0</code> means "ask again", <code>-1</code> means "done".  A source over a log or file that always has bytes until it runs out never returns <code>0</code>: it returns positive counts and then <code>SOURCE_EOF</code>.  A five-line generator that emits a list of records, chunking each to the buffer:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">make_source</span><span class="p">(</span><span class="n">records</span><span class="p">):</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>    <span class="n">pending</span> <span class="o">=</span> <span class="nb">bytearray</span><span class="p">()</span>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>    <span class="n">iterator</span> <span class="o">=</span> <span class="nb">iter</span><span class="p">(</span><span class="n">records</span><span class="p">)</span>
@@ -1045,21 +1023,21 @@
 <h3 id="framing-content-length-vs-chunked">Framing: Content-Length vs chunked<a class="headerlink" href="#framing-content-length-vs-chunked" title="Permanent link">&para;</a></h3>
 <p>The server picks the framing from whether you know the total length:</p>
 <ul>
-<li><strong>Known total</strong> — pass <code>content_length=</code>.  The server sends a <code>Content-Length</code> header and frames the body raw.  Your source must then produce exactly that many bytes before <code>SOURCE_EOF</code>; a mismatch breaks framing and closes the connection.</li>
-<li><strong>Unknown total</strong> — leave <code>content_length</code> unset (the default).  The server uses <code>Transfer-Encoding: chunked</code>, so you don't need to know the size up front.  Chunk framing is written into the staging buffer in place — no per-chunk allocation.</li>
+<li><strong>Known total</strong>: pass <code>content_length=</code>.  The server sends a <code>Content-Length</code> header and frames the body raw.  Your source must then produce exactly that many bytes before <code>SOURCE_EOF</code>; a mismatch breaks framing and closes the connection.</li>
+<li><strong>Unknown total</strong>: leave <code>content_length</code> unset (the default).  The server uses <code>Transfer-Encoding: chunked</code>, so you don't need to know the size up front.  Chunk framing is written into the staging buffer in place, with no per-chunk allocation.</li>
 </ul>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="n">build_streaming_response</span><span class="p">(</span><span class="mi">200</span><span class="p">,</span> <span class="n">source</span><span class="o">=</span><span class="n">src</span><span class="p">,</span> <span class="n">content_length</span><span class="o">=</span><span class="n">file_size</span><span class="p">)</span>  <span class="c1"># Content-Length</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">build_streaming_response</span><span class="p">(</span><span class="mi">200</span><span class="p">,</span> <span class="n">source</span><span class="o">=</span><span class="n">src</span><span class="p">)</span>                            <span class="c1"># chunked</span>
 </span></code></pre></div>
-<p>Do not set <code>Content-Length</code> / <code>Transfer-Encoding</code> / <code>Connection</code> in <code>headers=</code> yourself — the server owns framing.  Other headers (e.g. <code>Content-Type</code>) are yours to set.</p>
+<p>Do not set <code>Content-Length</code> / <code>Transfer-Encoding</code> / <code>Connection</code> in <code>headers=</code> yourself; the server owns framing.  Other headers (e.g. <code>Content-Type</code>) are yours to set.</p>
 <h3 id="ram-fairness-and-timeouts">RAM, fairness, and timeouts<a class="headerlink" href="#ram-fairness-and-timeouts" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Fixed staging window.</strong>  Each streaming connection allocates one <code>stream_buffer_size</code>-byte buffer (default 1 KB, constructor knob), reused for the whole transfer — the entire per-stream RAM cost, independent of body size.  It is minted lazily, so a buffered response never allocates one.  A stalled client never grows it: the source is polled for the next fill only after the current one has fully drained to the socket.</li>
-<li><strong>Per-tick fairness.</strong>  A streamed send is bounded by the same <code>send_budget_per_tick</code> a buffered response uses, so one large download can't starve other connections — every connection gets at most one budget slice per <code>handle()</code> tick.</li>
+<li><strong>Fixed staging window.</strong>  Each streaming connection allocates one <code>stream_buffer_size</code>-byte buffer (default 1 KB, constructor knob), reused for the whole transfer: the entire per-stream RAM cost, independent of body size.  It is minted lazily, so a buffered response never allocates one.  A stalled client never grows it: the source is polled for the next fill only after the current one has fully drained to the socket.</li>
+<li><strong>Per-tick fairness.</strong>  A streamed send is bounded by the same <code>send_budget_per_tick</code> a buffered response uses, so one large download can't starve other connections: every connection gets at most one budget slice per <code>handle()</code> tick.</li>
 <li><strong>Timeout.</strong>  <code>request_timeout_ms</code> bounds the whole streamed send, and a client that stops reading (sends keep returning EAGAIN) is closed when the deadline fires.  Size <code>request_timeout_ms</code> for your largest streamed response, the same way <code>chumicro_requests</code>' streamed reads size their <code>timeout_ms</code> for the download.</li>
 </ul>
 <h3 id="handler-failures-mid-stream">Handler failures mid-stream<a class="headerlink" href="#handler-failures-mid-stream" title="Permanent link">&para;</a></h3>
-<p>Once the first body byte is on the wire the response is committed — an error page can no longer be spliced in.  So if your source raises mid-stream, or under-/over-runs a declared <code>Content-Length</code>, the connection is closed (the client sees a truncated body) and the failure goes through the server's normal fail-and-close path.  Do all the work that can fail — opening the file, the first query — before you return the <code>StreamingResponse</code>, where it can still become a clean <code>500</code>.</p>
+<p>Once the first body byte is on the wire the response is committed; an error page can no longer be spliced in.  So if your source raises mid-stream, or under-/over-runs a declared <code>Content-Length</code>, the connection is closed (the client sees a truncated body) and the failure goes through the server's normal fail-and-close path.  Do all the work that can fail (opening the file, the first query) before you return the <code>StreamingResponse</code>, where it can still become a clean <code>500</code>.</p>
 <h2 id="bring-your-own-transport">Bring your own transport<a class="headerlink" href="#bring-your-own-transport" title="Permanent link">&para;</a></h2>
 <p><code>HttpServer</code> doesn't care which library produces its listener.  The <code>transport_factory</code> you pass is a zero-arg callable returning any object exposing the three-method contract:</p>
 <table>
@@ -1084,7 +1062,7 @@
 </tr>
 </tbody>
 </table>
-<p>Each accepted socket must in turn expose <code>recv_into(buffer, nbytes) -&gt; int</code>, <code>send(payload) -&gt; int</code>, <code>close() -&gt; None</code>, and best-effort <code>setblocking(flag)</code> — the same shape every other chumicro library expects from a TCP-like object.</p>
+<p>Each accepted socket must in turn expose <code>recv_into(buffer, nbytes) -&gt; int</code>, <code>send(payload) -&gt; int</code>, <code>close() -&gt; None</code>, and best-effort <code>setblocking(flag)</code>, the same shape every other chumicro library expects from a TCP-like object.</p>
 <p><code>chumicro_sockets.listener</code> is one valid producer.  Stdlib <code>socket.socket</code> bound + listening after <code>setblocking(False)</code> is another:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">socket</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">stdlib_socket</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>
@@ -1102,10 +1080,10 @@
 <div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># code.py / app.py</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">__chumicro_skip_factories__</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;sockets_factory&quot;</span><span class="p">,)</span>
 </span></code></pre></div>
-<p>Family form (the bare stem) or exact path (<code>"chumicro_sockets.sockets_factory"</code>).  An unmatched entry fails the deploy with a typo message rather than silently shipping the default.  Calling <code>HttpServer.from_config(...)</code> when <code>chumicro_sockets.sockets_factory</code> is missing — either skipped at deploy time or not installed by <code>circup</code> / <code>mip</code> — raises <code>RuntimeError</code> naming the bypass kwarg.</p>
-<p>For the full single-library adoption recipe — your transport, your <code>ticks=</code>, the runner-less drive loop, and host tests with no board — see <a href="https://github.com/ChuMicro/ChuMicro/blob/main/docs/contributing/standalone-integration.md">Standalone integration</a>.</p>
+<p>Family form (the bare stem) or exact path (<code>"chumicro_sockets.sockets_factory"</code>).  An unmatched entry fails the deploy with a typo message rather than silently shipping the default.  Calling <code>HttpServer.from_config(...)</code> when <code>chumicro_sockets.sockets_factory</code> is missing (either skipped at deploy time or not installed by <code>circup</code> / <code>mip</code>) raises <code>RuntimeError</code> naming the bypass kwarg.</p>
+<p><code>chumicro-http-server</code> adopts cleanly on its own: pass your own <code>transport_factory</code>, set <code>ticks=</code> to your clock, drive the server from a plain <code>while</code> loop instead of <code>chumicro_runner</code>, and unit-test it against a <code>FakeSocket</code> with no board attached.</p>
 <h2 id="tls-server-https">TLS server (HTTPS)<a class="headerlink" href="#tls-server-https" title="Permanent link">&para;</a></h2>
-<p><code>HttpServer</code> is transport-agnostic — its <code>transport_factory</code> returns whatever listener you give it.  For HTTPS, build a TLS-wrapped listener via <a href="https://github.com/ChuMicro/ChuMicro/tree/main/libraries/sockets"><code>chumicro_sockets.ssl_context_with_cert_and_key_paths</code></a>:</p>
+<p><code>HttpServer</code> is transport-agnostic: its <code>transport_factory</code> returns whatever listener you give it.  For HTTPS, build a TLS-wrapped listener via <a href="https://github.com/ChuMicro/ChuMicro/tree/main/libraries/sockets"><code>chumicro_sockets.ssl_context_with_cert_and_key_paths</code></a>:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_sockets</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>    <span class="n">listener</span><span class="p">,</span>
 </span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>    <span class="n">ssl_context_with_cert_and_key_paths</span><span class="p">,</span>
@@ -1137,7 +1115,7 @@
 <tr>
 <td>CircuitPython on ESP32-S2</td>
 <td>✅ Works</td>
-<td>Bench-tested ~5 KB heap for <code>SSLContext</code> + <code>load_cert_chain</code> + <code>wrap_socket(server_side=True)</code> on a listening socket (RSA-2048 self-signed cert).  Each incoming connection adds heap during handshake — leave tens of KB of headroom.</td>
+<td>Bench-tested ~5 KB heap for <code>SSLContext</code> + <code>load_cert_chain</code> + <code>wrap_socket(server_side=True)</code> on a listening socket (RSA-2048 self-signed cert).  Each incoming connection adds heap during handshake, so leave tens of KB of headroom.</td>
 </tr>
 <tr>
 <td>CircuitPython on rp2 (Pi Pico W / Pi Pico 2 W)</td>
@@ -1156,9 +1134,9 @@
 </tr>
 </tbody>
 </table>
-<p>The TLS handshake is synchronous inside <code>wrap_socket(..., server_side=True)</code> — the listener stalls until the handshake completes (single-digit to tens of milliseconds on the supported board class with a local TLS client; longer on a slow uplink as TLS rounds-trip).  After the handshake, the server's per-connection state machine resumes its runner-friendly progression.</p>
+<p>The TLS handshake is synchronous inside <code>wrap_socket(..., server_side=True)</code>: the listener stalls until the handshake completes (single-digit to tens of milliseconds on the supported board class with a local TLS client; longer on a slow uplink as TLS rounds-trip).  After the handshake, the server's per-connection state machine resumes its runner-friendly progression.</p>
 <h2 id="memory-notes">Memory notes<a class="headerlink" href="#memory-notes" title="Permanent link">&para;</a></h2>
-<p>Connection state is bounded by <code>max_connections</code>; each connection holds its receive buffer (a scratch chunk capped at 512 B, so a <code>recv_budget_per_tick</code> above 512 is satisfied by several <code>recv_into</code> calls per tick), the parsed <code>Request</code>, and the encoded <code>Response</code> until drained.  Nothing else allocates per-tick steady-state.  A streaming response adds one <code>stream_buffer_size</code> window (default 1 KB) per streaming connection, minted lazily and reused for the transfer — a body of any size costs that fixed window, never the whole body.  The shared <code>chumicro-requests</code> HTTP/1.1 wire primitives (case-insensitive header dict, charset parsing) are inlined into <code>chumicro_http_server._wire</code> so a server-only board doesn't ship the client library.  The streamed-body framing code lives in the opt-in <code>chumicro_http_server.streaming</code> submodule, loaded only when a handler actually streams, so a buffered-only server never pays its footprint.</p>
+<p>Connection state is bounded by <code>max_connections</code>; each connection holds its receive buffer (a scratch chunk capped at 512 B, so a <code>recv_budget_per_tick</code> above 512 is satisfied by several <code>recv_into</code> calls per tick), the parsed <code>Request</code>, and the encoded <code>Response</code> until drained.  Nothing else allocates per-tick steady-state.  A streaming response adds one <code>stream_buffer_size</code> window (default 1 KB) per streaming connection, minted lazily and reused for the transfer: a body of any size costs that fixed window, never the whole body.  The shared <code>chumicro-requests</code> HTTP/1.1 wire primitives (case-insensitive header dict, charset parsing) are inlined into <code>chumicro_http_server._wire</code> so a server-only board doesn't ship the client library.  The streamed-body framing code lives in the opt-in <code>chumicro_http_server.streaming</code> submodule, loaded only when a handler actually streams, so a buffered-only server never pays its footprint.</p>
 <h2 id="platform-notes">Platform notes<a class="headerlink" href="#platform-notes" title="Permanent link">&para;</a></h2>
 <p>Works identically on CPython, MicroPython, and CircuitPython.  The <code>chumicro-sockets</code> listener provides the platform-specific socket plumbing; the server just consumes the resulting non-blocking socket.</p>
 <h2 id="examples">Examples<a class="headerlink" href="#examples" title="Permanent link">&para;</a></h2>
@@ -1176,8 +1154,6 @@
 </tr>
 </tbody>
 </table>
-<h2 id="not-included">Not included<a class="headerlink" href="#not-included" title="Permanent link">&para;</a></h2>
-<p>WebSockets, sessions / cookies / auth helpers, multipart upload, sub-app mounting, async handlers — out of scope for now.  Reach for <a href="https://chumicro.github.io/ChuMicro/websockets/stable/"><code>chumicro-websockets</code></a> for the websocket case.</p>
 <hr />
 <div class="chumicro-footer">
 <p><a href="../">← Home</a></p>
