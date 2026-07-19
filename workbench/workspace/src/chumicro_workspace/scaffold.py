@@ -7,7 +7,7 @@ The output layout::
     ├── pyproject.toml
     ├── mkdocs.yml
     ├── README.md
-    ├── src/chumicro_<name>/
+    ├── src/<import_name>/
     │   ├── __init__.py
     │   ├── core.py
     │   └── testing.py
@@ -78,9 +78,9 @@ def _load_template(
     return template_path.read_text()
 
 
-def _import_name(name: str) -> str:
-    """Map ``my-project`` → ``chumicro_my_project`` for source imports."""
-    return f"chumicro_{name.replace('-', '_')}"
+def _import_name(distribution: str) -> str:
+    """Map a distribution name to its import name (hyphens → underscores)."""
+    return distribution.replace("-", "_")
 
 
 def _class_name(name: str) -> str:
@@ -112,6 +112,11 @@ class ScaffoldBranding:
     A ``None`` field selects the self-owned rendering for the text derived
     from it.  ``NEUTRAL_BRANDING`` leaves every field ``None``; a fully
     populated instance renders the branded form.
+
+    ``distribution_prefix`` prepends the family name to the package's
+    distribution and import names (``timing`` → ``chumicro-timing`` /
+    ``chumicro_timing``).  The neutral default is empty: a downstream
+    package is named by its owner, not stamped with someone else's brand.
     """
 
     author: str | None = None
@@ -121,6 +126,7 @@ class ScaffoldBranding:
     experimental_bundle_slug: str | None = None
     banner_image_url: str | None = None
     install_guide_url: str | None = None
+    distribution_prefix: str = ""
 
 
 #: Self-owned default.  A downstream scaffold carries no upstream identity.
@@ -140,6 +146,7 @@ CHUMICRO_BRANDING = ScaffoldBranding(
         "/support/docs/chumicro_tip.png"
     ),
     install_guide_url="https://github.com/ChuMicro/ChuMicro/blob/main/INSTALL.md",
+    distribution_prefix="chumicro-",
 )
 
 #: Fragment keys every template references.  Both branding builders return
@@ -162,7 +169,7 @@ _FRAGMENT_KEYS: tuple[str, ...] = (
 )
 
 
-def _neutral_fragments(name: str) -> dict[str, str]:
+def _neutral_fragments(distribution: str) -> dict[str, str]:
     """Build the self-owned fragment set: no upstream banner, URLs, or footers.
 
     The emitted package installs from PyPI under its own name, carries a
@@ -173,7 +180,7 @@ def _neutral_fragments(name: str) -> dict[str, str]:
     return {
         "banner": "",
         "family_note": "",
-        "install_block": f"```bash\npip install chumicro-{name}\n```\n\n",
+        "install_block": f"```bash\npip install {distribution}\n```\n\n",
         "contributing_intro": "Set up a development install:",
         "docs_section": "",
         "find_section": "",
@@ -190,6 +197,7 @@ def _neutral_fragments(name: str) -> dict[str, str]:
 def _branded_fragments(
     branding: ScaffoldBranding,
     name: str,
+    distribution: str,
     import_name: str,
     package_kind: str,
 ) -> dict[str, str]:
@@ -207,7 +215,7 @@ def _branded_fragments(
     bundle_name = branding.bundle_slug.rsplit("/", 1)[-1]
     experimental_bundle_url = f"https://github.com/{branding.experimental_bundle_slug}"
     experimental_bundle_name = branding.experimental_bundle_slug.rsplit("/", 1)[-1]
-    pypi_url = f"https://pypi.org/project/chumicro-{name}/"
+    pypi_url = f"https://pypi.org/project/{distribution}/"
     source_url = f"{branding.repo_url}/tree/main/{tree_dir}/{name}"
     library_source_url = f"{branding.repo_url}/tree/main/libraries/{name}"
     issues_url = f"{branding.repo_url}/issues"
@@ -274,14 +282,14 @@ def _branded_fragments(
             "# MicroPython\n"
             f"mpremote mip install github:{branding.bundle_slug}/{import_name}\n\n"
             "# CPython\n"
-            f"pip install chumicro-{name}\n"
+            f"pip install {distribution}\n"
             "```\n\n"
             "For bundle setup, pre-compiled `.mpy` bundles, the experimental "
             "channel, and details on PyPI naming, see the [chumicro INSTALL "
             f"guide]({branding.install_guide_url}).\n\n"
         ),
         "contributing_intro": (
-            f"Working on `chumicro-{name}` itself?  Clone the "
+            f"Working on `{distribution}` itself?  Clone the "
             f"[mono-repo]({branding.repo_url}) if you haven't already — the "
             "rest of the workflow assumes you're inside that workspace."
         ),
@@ -293,7 +301,7 @@ def _branded_fragments(
         ),
         "find_section": (
             "## Find this library\n\n"
-            f"- **PyPI:** [chumicro-{name}]({pypi_url})\n"
+            f"- **PyPI:** [{distribution}]({pypi_url})\n"
             f"- **Bundle:** [{bundle_name}]({bundle_url}/tree/main/{import_name}) "
             "(CircuitPython & MicroPython)\n"
             f"- **Experimental bundle:** [{experimental_bundle_name}]"
@@ -319,6 +327,7 @@ def _branded_fragments(
 def _branding_fragments(
     branding: ScaffoldBranding,
     name: str,
+    distribution: str,
     import_name: str,
     package_kind: str,
 ) -> dict[str, str]:
@@ -328,8 +337,10 @@ def _branding_fragments(
     is the tell: ``None`` (the neutral default) yields self-owned output.
     """
     if branding.repo_url is None:
-        return _neutral_fragments(name)
-    return _branded_fragments(branding, name, import_name, package_kind)
+        return _neutral_fragments(distribution)
+    return _branded_fragments(
+        branding, name, distribution, import_name, package_kind,
+    )
 
 
 def scaffold_library(
@@ -343,9 +354,11 @@ def scaffold_library(
 
     Args:
         target_dir: Parent directory.  Created if missing.
-        name: Library short name (e.g. ``"gpio"``).  Hyphens get
-            converted to underscores in the import path
-            (``chumicro-my-project`` → ``chumicro_my_project``).
+        name: Library short name (e.g. ``"gpio"``).  The branding's
+            ``distribution_prefix`` prepends to form the distribution
+            name, and hyphens convert to underscores for the import
+            path (neutral ``my-project`` → ``my_project``; branded
+            ``timing`` → ``chumicro-timing`` / ``chumicro_timing``).
         package_kind: ``"library"`` (default) for cross-runtime
             device packages.  Produces the standard chumicro library
             shape with no extras.  ``"workbench"`` for host-only
@@ -383,12 +396,13 @@ def scaffold_library(
     if library_dir.exists():
         raise LibraryAlreadyExistsError(library_dir)
 
-    import_name = _import_name(name)
+    distribution = f"{branding.distribution_prefix}{name}"
+    import_name = _import_name(distribution)
     class_name = _class_name(name)
     display_name = _display_name(name)
     test_name = name.replace("-", "_")
     branding_fragments = _branding_fragments(
-        branding, name, import_name, package_kind,
+        branding, name, distribution, import_name, package_kind,
     )
 
     (library_dir / "src" / import_name).mkdir(parents=True)
@@ -408,17 +422,19 @@ def scaffold_library(
     )
     (library_dir / "pyproject.toml").write_text(
         _load_template(pyproject_template).format(
-            name=name, import_name=import_name, **branding_fragments,
+            name=name, distribution=distribution,
+            import_name=import_name, **branding_fragments,
         ),
     )
     (library_dir / "mkdocs.yml").write_text(
         _load_template("mkdocs.yml.template").format(
-            name=name, **branding_fragments,
+            name=name, distribution=distribution, **branding_fragments,
         ),
     )
     (library_dir / "README.md").write_text(
         _load_template("readme.md.template").format(
-            name=name, import_name=import_name, **branding_fragments,
+            name=name, distribution=distribution,
+            import_name=import_name, **branding_fragments,
         ),
     )
 
@@ -431,22 +447,34 @@ def scaffold_library(
     (library_dir / "docs" / "index.md").write_text(
         _load_template(
             "index.md.template", template_dir=docs_template_dir,
-        ).format(name=name, import_name=import_name, **branding_fragments),
+        ).format(
+            name=name, distribution=distribution,
+            import_name=import_name, **branding_fragments,
+        ),
     )
     (library_dir / "docs" / "guide.md").write_text(
         _load_template(
             "guide.md.template", template_dir=docs_template_dir,
-        ).format(name=name, import_name=import_name, **branding_fragments),
+        ).format(
+            name=name, distribution=distribution,
+            import_name=import_name, **branding_fragments,
+        ),
     )
     (library_dir / "docs" / "api.md").write_text(
         _load_template(
             "api.md.template", template_dir=docs_template_dir,
-        ).format(name=name, import_name=import_name, **branding_fragments),
+        ).format(
+            name=name, distribution=distribution,
+            import_name=import_name, **branding_fragments,
+        ),
     )
     (library_dir / "docs" / "testing.md").write_text(
         _load_template(
             "testing.md.template", template_dir=docs_template_dir,
-        ).format(name=name, import_name=import_name, **branding_fragments),
+        ).format(
+            name=name, distribution=distribution,
+            import_name=import_name, **branding_fragments,
+        ),
     )
 
     (library_dir / "examples" / "basic_usage.py").write_text(
@@ -468,7 +496,7 @@ def scaffold_library(
     # RAM-mode `exec()`s library modules without a `__package__`, so
     # leading-dot relatives break at deploy.
     (library_dir / "src" / import_name / "__init__.py").write_text(
-        f'"""Public exports for the chumicro-{name} package."""\n'
+        f'"""Public exports for the {distribution} package."""\n'
         f"\n"
         f"from {import_name}.core import {class_name}\n"
         f"\n"
@@ -476,19 +504,19 @@ def scaffold_library(
     )
     (library_dir / "src" / import_name / "core.py").write_text(
         _load_template("core.py.template").format(
-            name=name, class_name=class_name,
+            name=name, distribution=distribution, class_name=class_name,
         ),
     )
     (library_dir / "src" / import_name / "testing.py").write_text(
         _load_template("testing.py.template").format(
-            name=name, import_name=import_name,
+            name=name, distribution=distribution, import_name=import_name,
         ),
     )
 
     # tests/.  No __init__.py, which keeps test module names from
     # colliding across libraries when pytest collects.
     (library_dir / "tests" / "conftest.py").write_text(
-        f'"""Test configuration for the chumicro-{name} package."""\n',
+        f'"""Test configuration for the {distribution} package."""\n',
     )
     (library_dir / "tests" / f"test_{test_name}.py").write_text(
         _load_template("test_library.py.template").format(

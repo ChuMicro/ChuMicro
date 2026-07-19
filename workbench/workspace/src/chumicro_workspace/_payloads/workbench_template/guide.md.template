@@ -16,7 +16,7 @@
 ## Install
 
 ```bash
-pip install chumicro-{name}
+pip install {distribution}
 ```
 
 ## Getting started

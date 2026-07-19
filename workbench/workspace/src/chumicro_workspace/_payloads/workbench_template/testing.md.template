@@ -31,7 +31,7 @@ def test_example():
 
 ## Usage from other packages
 
-Other workbench tools that depend on `chumicro-{name}` can import the fakes directly:
+Other workbench tools that depend on `{distribution}` can import the fakes directly:
 
 ```python
 from {import_name}.testing import Fake...

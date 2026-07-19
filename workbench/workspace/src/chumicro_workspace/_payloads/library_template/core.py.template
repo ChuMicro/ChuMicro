@@ -1,8 +1,8 @@
-"""Core implementation for chumicro-{name}."""
+"""Core implementation for {distribution}."""
 
 
 class {class_name}:
-    """A starter class demonstrating ChuMicro library patterns.
+    """A starter class demonstrating the scaffold's code patterns.
 
     Replace this with your real implementation.  This placeholder shows:
 

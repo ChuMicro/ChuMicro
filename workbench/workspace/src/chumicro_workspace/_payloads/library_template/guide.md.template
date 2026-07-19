@@ -10,7 +10,7 @@
 
 ## Overview
 
-`chumicro-{name}` provides `Countdown` — a single-shot timer that fires once after a period elapses, then stays fired until you reset it.  No `time.sleep()`, no callbacks, no async — you poll once per tick and the timer tells you when the deadline has passed.
+`{distribution}` provides `Countdown` — a single-shot timer that fires once after a period elapses, then stays fired until you reset it.  No `time.sleep()`, no callbacks, no async — you poll once per tick and the timer tells you when the deadline has passed.
 
 The typical use is a watchdog or a delayed action: arm the countdown, poll it each iteration of your main loop, run the side-effect once on the first `True`.
 

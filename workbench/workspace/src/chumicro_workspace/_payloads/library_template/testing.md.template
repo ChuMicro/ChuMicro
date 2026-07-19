@@ -47,7 +47,7 @@ def test_screensaver_dims_on_idle_timeout():
 
 ## Usage from other libraries
 
-Libraries that depend on `chumicro-{name}` can import the fakes directly in their own test suites:
+Libraries that depend on `{distribution}` can import the fakes directly in their own test suites:
 
 ```python
 from {import_name}.testing import FakeCountdown

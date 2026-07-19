@@ -1,4 +1,4 @@
-"""Test helpers for libraries that depend on chumicro-{name}.
+"""Test helpers for libraries that depend on {distribution}.
 
 Delete this file if the library does not expose injectable services
 that downstream consumers need to fake.  If you delete this file, also

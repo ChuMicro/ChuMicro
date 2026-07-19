@@ -20,9 +20,9 @@ class TestNameHelpers:
     """Tiny helpers map a hyphenated short-name to its derived forms."""
 
     def test_import_name_underscores(self) -> None:
-        assert _import_name("gpio") == "chumicro_gpio"
-        assert _import_name("my-project") == "chumicro_my_project"
-        assert _import_name("my_project") == "chumicro_my_project"
+        assert _import_name("gpio") == "gpio"
+        assert _import_name("chumicro-my-project") == "chumicro_my_project"
+        assert _import_name("my_project") == "my_project"
 
     def test_class_name_camel_case(self) -> None:
         assert _class_name("gpio") == "Gpio"
@@ -47,7 +47,8 @@ class TestScaffoldLibrary:
         assert (created / "mkdocs.yml").is_file()
         assert (created / "README.md").is_file()
         # src/<package>/.
-        package_dir = created / "src" / "chumicro_gpio"
+        # Neutral default: no chumicro- prefix on a downstream package.
+        package_dir = created / "src" / "gpio"
         assert (package_dir / "__init__.py").is_file()
         assert (package_dir / "core.py").is_file()
         assert (package_dir / "testing.py").is_file()
@@ -69,24 +70,24 @@ class TestScaffoldLibrary:
     def test_init_py_imports_starter_class(self, tmp_path: Path) -> None:
         """The package's __init__.py wires `from <pkg>.core import <Class>`."""
         created = scaffold_library(tmp_path / "libraries", "gpio")
-        init_text = (created / "src" / "chumicro_gpio" / "__init__.py").read_text()
-        assert "from chumicro_gpio.core import Gpio" in init_text
+        init_text = (created / "src" / "gpio" / "__init__.py").read_text()
+        assert "from gpio.core import Gpio" in init_text
         assert '__all__ = ["Gpio"]' in init_text
 
     def test_hyphen_name_translates_to_snake_case_imports(
         self, tmp_path: Path,
     ) -> None:
-        """`my-project` → package `chumicro_my_project`, class `MyProject`."""
+        """`my-project` → package `my_project`, class `MyProject`."""
         created = scaffold_library(tmp_path / "libraries", "my-project")
         # Filesystem uses hyphenated short-name (chumicro convention).
         assert created.name == "my-project"
         # Package + module name use snake_case.
         package_init = (
-            created / "src" / "chumicro_my_project" / "__init__.py"
+            created / "src" / "my_project" / "__init__.py"
         )
         assert package_init.is_file()
         text = package_init.read_text()
-        assert "from chumicro_my_project.core import MyProject" in text
+        assert "from my_project.core import MyProject" in text
         # Test file uses snake_case basename.
         assert (created / "tests" / "test_my_project.py").is_file()
 
@@ -199,7 +200,7 @@ class TestScaffoldBranding:
         """
         created = scaffold_library(tmp_path / "libraries", "gpio")
         readme_text = (created / "README.md").read_text()
-        assert "pip install chumicro-gpio" in readme_text
+        assert "pip install gpio" in readme_text
         assert "circup" not in readme_text
         assert "mip install" not in readme_text
         assert "Clone the [mono-repo]" not in readme_text
@@ -226,7 +227,7 @@ class TestScaffoldBranding:
         """The neutral mkdocs.yml keeps site_name but drops the ChuMicro URLs."""
         created = scaffold_library(tmp_path / "libraries", "gpio")
         mkdocs_text = (created / "mkdocs.yml").read_text()
-        assert "site_name: chumicro-gpio" in mkdocs_text
+        assert "site_name: gpio" in mkdocs_text
         assert "repo_url:" not in mkdocs_text
         assert "chumicro.github.io" not in mkdocs_text
 
