@@ -47,7 +47,7 @@ the body when the host fixture didn't spawn (no LAN IP detected).
 import gc
 
 from chumicro_requests import HttpClient
-from chumicro_requests.sockets_factory import chumicro_sockets_connector_factory
+from chumicro_sockets.sockets_factory import connector_factory
 from chumicro_test_harness import skip
 from chumicro_test_harness.network import runtime_config, wifi_up
 from chumicro_timing import ticks_ms
@@ -252,7 +252,7 @@ def test_real_streamed_large_download_stays_flat_on_heap() -> None:
     print(f"WIFI_OK ip={ip}")
 
     client = HttpClient(
-        transport_factory=chumicro_sockets_connector_factory(radio=radio),
+        transport_factory=connector_factory(radio=radio),
         stream_buffer_size=_STREAM_BUFFER_SIZE,
         recv_budget_per_tick=_RECV_BUDGET_PER_TICK,
         default_timeout_ms=_REQUEST_TIMEOUT_MS,

@@ -42,8 +42,8 @@ Example output::
 __chumicro_runtimes__ = ("circuitpython", "micropython")
 
 from chumicro_requests.generators import get
-from chumicro_requests.sockets_factory import chumicro_sockets_connector_factory
 from chumicro_runner import Runner
+from chumicro_sockets.sockets_factory import connector_factory
 from helpers import runtime_config, wifi_up
 
 WIFI_SSID = "your-wifi-ssid"  # noqa: S105 — replace before deploying
@@ -55,7 +55,7 @@ radio, ip = wifi_up(WIFI_SSID, WIFI_PASSWORD)
 print(f"WIFI_OK ip={ip}")
 
 target_url = config.get("generator_fetch.url", TARGET_URL)
-transport_factory = chumicro_sockets_connector_factory(radio=radio)
+transport_factory = connector_factory(radio=radio)
 print(f"Fetching {target_url}")
 
 

@@ -85,9 +85,9 @@ A generator is plain Python.  Each `yield from` marks the line where your code p
 
 ```python
 from chumicro_requests.generators import get
-from chumicro_requests.sockets_factory import chumicro_sockets_connector_factory
+from chumicro_sockets.sockets_factory import connector_factory
 
-transport_factory = chumicro_sockets_connector_factory(radio=wifi.adapter.radio)
+transport_factory = connector_factory(radio=wifi.adapter.radio)
 
 def fetch_forecast():
     response = yield from get(transport_factory, "http://example.com/")

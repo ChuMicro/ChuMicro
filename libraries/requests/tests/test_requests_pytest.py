@@ -1,4 +1,4 @@
-"""CPython-only tests for chumicro_requests.sockets_factory.chumicro_sockets_connector_factory.
+"""CPython-only tests for chumicro_sockets.sockets_factory.connector_factory.
 
 These cases use pytest's ``monkeypatch`` fixture to swap the module-
 level ``chumicro_sockets.connector`` symbol out for an in-test fake.
@@ -15,10 +15,10 @@ connector on each board" — is exercised end-to-end on real hardware in
 #: CPython-only lane (pytest fixtures / host stdlib); not cross-runtime.
 __chumicro_runtimes__ = ("cpython",)
 
-from chumicro_requests.sockets_factory import chumicro_sockets_connector_factory
+from chumicro_sockets.sockets_factory import connector_factory
 
 
-class TestChumicroSocketsConnectorFactory:
+class TestConnectorFactory:
     """The convenience factory maps ``use_tls`` onto ``connector(tls=)``."""
 
     def test_plain_tcp_maps_to_tls_false(self, monkeypatch):
@@ -30,7 +30,7 @@ class TestChumicroSocketsConnectorFactory:
 
         monkeypatch.setattr("chumicro_sockets.connector", fake_connector)
 
-        factory = chumicro_sockets_connector_factory(radio="my-radio")
+        factory = connector_factory(radio="my-radio")
         result = factory("example.test", 80, False)
         assert result == "tcp-connector"
         assert calls == [("example.test", 80, False, None, "my-radio")]
@@ -44,7 +44,7 @@ class TestChumicroSocketsConnectorFactory:
 
         monkeypatch.setattr("chumicro_sockets.connector", fake_connector)
 
-        factory = chumicro_sockets_connector_factory(radio=None, ssl_context="ctx")
+        factory = connector_factory(radio=None, ssl_context="ctx")
         result = factory("example.test", 443, True)
         assert result == "tls-connector"
         assert calls == [("example.test", 443, True, "ctx", None)]
@@ -60,7 +60,7 @@ class TestChumicroSocketsConnectorFactory:
 
         monkeypatch.setattr("chumicro_sockets.connector", fake_connector)
 
-        factory = chumicro_sockets_connector_factory(radio=None, ssl_context="ctx")
+        factory = connector_factory(radio=None, ssl_context="ctx")
         result = factory("example.test", 80, False)
         assert result == "tcp-connector"
         assert calls == [("example.test", 80, False, None, None)]

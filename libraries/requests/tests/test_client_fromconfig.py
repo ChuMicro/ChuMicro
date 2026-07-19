@@ -103,30 +103,28 @@ class TestFromConfig:
 
     def test_default_factory_threads_radio_and_ssl_context(self):
         """When neither *transport_factory* is passed, ``from_config``
-        builds one via ``chumicro_sockets_connector_factory(radio=…, ssl_context=…)``.
+        builds one via ``connector_factory(radio=…, ssl_context=…)``.
         Validates the wiring without needing a real socket by replacing
-        the symbol on its home module (``chumicro_requests.sockets_factory``);
+        the symbol on its home module (``chumicro_sockets.sockets_factory``);
         from_config lazy-imports through that path."""
-        import chumicro_requests.sockets_factory as sockets_factory_mod  # noqa: PLC0415
+        import chumicro_sockets.sockets_factory as sockets_factory_mod  # noqa: PLC0415
 
         captured: dict = {}
         sentinel_factory = lambda host, port, use_tls: FakeSocket()  # noqa: ARG005,E731
 
-        def fake_chumicro_sockets_connector_factory(*, radio=None, ssl_context=None):
+        def fake_connector_factory(*, radio=None, ssl_context=None):
             captured["radio"] = radio
             captured["ssl_context"] = ssl_context
             return sentinel_factory
 
-        original = sockets_factory_mod.chumicro_sockets_connector_factory
-        sockets_factory_mod.chumicro_sockets_connector_factory = (
-            fake_chumicro_sockets_connector_factory
-        )
+        original = sockets_factory_mod.connector_factory
+        sockets_factory_mod.connector_factory = fake_connector_factory
         try:
             client = HttpClient.from_config(
                 {}, radio="fake-radio", ssl_context="fake-ctx",
             )
         finally:
-            sockets_factory_mod.chumicro_sockets_connector_factory = original
+            sockets_factory_mod.connector_factory = original
 
         assert captured == {"radio": "fake-radio", "ssl_context": "fake-ctx"}
         assert client._transport_factory is sentinel_factory  # noqa: SLF001
@@ -136,27 +134,25 @@ class TestFromConfig:
         (per-request URL carries host/port), so empty config plus no
         override is fine.  No MissingConfigKey is ever raised.
         """
-        import chumicro_requests.sockets_factory as sockets_factory_mod  # noqa: PLC0415
+        import chumicro_sockets.sockets_factory as sockets_factory_mod  # noqa: PLC0415
 
         sentinel_factory = lambda host, port, use_tls: FakeSocket()  # noqa: ARG005,E731
 
-        def fake_chumicro_sockets_connector_factory(*, radio=None, ssl_context=None):
+        def fake_connector_factory(*, radio=None, ssl_context=None):
             return sentinel_factory
 
-        original = sockets_factory_mod.chumicro_sockets_connector_factory
-        sockets_factory_mod.chumicro_sockets_connector_factory = (
-            fake_chumicro_sockets_connector_factory
-        )
+        original = sockets_factory_mod.connector_factory
+        sockets_factory_mod.connector_factory = fake_connector_factory
         try:
             # No raise: empty config + no factory override is fine.
             client = HttpClient.from_config({})
         finally:
-            sockets_factory_mod.chumicro_sockets_connector_factory = original
+            sockets_factory_mod.connector_factory = original
 
         assert client._transport_factory is sentinel_factory  # noqa: SLF001
 
     def test_skipped_factory_module_raises_runtime_error(self):
-        """When ``chumicro_requests.sockets_factory`` is excluded via
+        """When ``chumicro_sockets.sockets_factory`` is excluded via
         ``__chumicro_skip_factories__``, the default branch of
         ``from_config`` raises ``RuntimeError`` naming the bypass
         kwarg instead of leaking ``ImportError``.  CPython-only
@@ -171,8 +167,8 @@ class TestFromConfig:
         if sys.implementation.name != "cpython":
             skip("sys.modules None-sentinel is CPython-specific")
 
-        original = sys.modules.get("chumicro_requests.sockets_factory")
-        sys.modules["chumicro_requests.sockets_factory"] = None
+        original = sys.modules.get("chumicro_sockets.sockets_factory")
+        sys.modules["chumicro_sockets.sockets_factory"] = None
         try:
             try:
                 HttpClient.from_config({})
@@ -183,6 +179,6 @@ class TestFromConfig:
                 raise AssertionError("expected RuntimeError")
         finally:
             if original is None:
-                sys.modules.pop("chumicro_requests.sockets_factory", None)
+                sys.modules.pop("chumicro_sockets.sockets_factory", None)
             else:
-                sys.modules["chumicro_requests.sockets_factory"] = original
+                sys.modules["chumicro_sockets.sockets_factory"] = original

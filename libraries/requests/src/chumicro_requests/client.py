@@ -264,18 +264,18 @@ class HttpClient:
         """Build an :class:`HttpClient` from runtime config."""
         if transport_factory is None:
             try:
-                from chumicro_requests.sockets_factory import (  # noqa: PLC0415 - lazy
-                    chumicro_sockets_connector_factory,
+                from chumicro_sockets.sockets_factory import (  # noqa: PLC0415 - lazy
+                    connector_factory,
                 )
             except ImportError as exception:
                 raise RuntimeError(
-                    "chumicro_requests.sockets_factory not available "
+                    "chumicro_sockets.sockets_factory not available "
                     "(excluded via __chumicro_skip_factories__ or "
                     "not on the board): pass transport_factory= "
                     "explicitly.",
                 ) from exception
 
-            transport_factory = chumicro_sockets_connector_factory(
+            transport_factory = connector_factory(
                 radio=radio, ssl_context=ssl_context,
             )
         return cls(

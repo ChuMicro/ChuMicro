@@ -55,8 +55,8 @@ post-wifi free heap.
 import time
 
 from chumicro_requests import HttpClient
-from chumicro_requests.sockets_factory import chumicro_sockets_connector_factory
 from chumicro_sockets import ssl_context_with_ca
+from chumicro_sockets.sockets_factory import connector_factory
 from chumicro_test_harness.network import runtime_config, wifi_up
 from chumicro_timing import ticks_ms
 
@@ -151,7 +151,7 @@ def test_real_https_get_completes_runner_shaped() -> None:
 
     ssl_context = ssl_context_with_ca(_CA_PEM)
     client = HttpClient(
-        transport_factory=chumicro_sockets_connector_factory(
+        transport_factory=connector_factory(
             radio=radio,
             ssl_context=ssl_context,
         ),
