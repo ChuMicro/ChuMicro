@@ -449,7 +449,8 @@ class TestNewLibrary:
         assert exit_code == 0
         library_dir = root / "libraries" / "gpio"
         assert library_dir.is_dir()
-        assert (library_dir / "src" / "chumicro_gpio" / "__init__.py").is_file()
+        # Downstream `new --library` is neutral: no chumicro- prefix.
+        assert (library_dir / "src" / "gpio" / "__init__.py").is_file()
         assert (library_dir / "VERSION").read_text() == "0.1.0\n"
 
     def test_into_overrides_target(

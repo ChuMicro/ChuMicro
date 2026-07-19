@@ -1,4 +1,4 @@
-site_name: chumicro-{name}
+site_name: {distribution}
 {mkdocs_urls}theme:
   name: material
   palette:

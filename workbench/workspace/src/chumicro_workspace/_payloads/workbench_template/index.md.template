@@ -1,4 +1,4 @@
-# chumicro-{name}
+# {distribution}
 
 <!-- Replace this with a bold one-line tagline + a supporting sentence
      that names the audience and concrete value.  See the readme.md
@@ -13,7 +13,7 @@ One supporting sentence with the concrete value and any non-obvious caveat.
 ## Quick example
 
 ```bash
-chumicro-{name} --help
+{distribution} --help
 ```
 
 ## Documentation

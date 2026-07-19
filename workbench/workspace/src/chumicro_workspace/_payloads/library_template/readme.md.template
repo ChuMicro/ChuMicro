@@ -1,4 +1,4 @@
-# chumicro-{name}
+# {distribution}
 
 {banner}<!-- HERO TAGLINE: one bold sentence saying what the library is for.
      Workshop several angles before picking one — problem-stated ("Timers
@@ -75,7 +75,7 @@ while True:
      a leaf with no upstream chumicro deps and no downstream consumers —
      be honest, don't pad. -->
 
-Depends on [`chumicro-timing`](../timing/) for tick arithmetic.  Used directly in user apps; no other ChuMicro library depends on it.
+Depends on [`chumicro-timing`](../timing/) for tick arithmetic.  Used directly in user apps; nothing downstream depends on it.
 
 ## Platform support
 
