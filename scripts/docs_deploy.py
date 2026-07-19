@@ -180,6 +180,10 @@ def docs_deploy(
     Returns:
         Exit code (0 for success, non-zero for failure).
     """
+    # Deliberately no is_parked() filter here: a parked library (Decision
+    # 0107) stays published on PyPI, and its released packages link these
+    # docs.  Parking removes it from the landing page and the bundle, not
+    # from the docs site.
     doc_dirs = discover_doc_dirs()
     if libraries:
         doc_dirs = [doc_dir for doc_dir in doc_dirs if doc_dir.name in libraries]
