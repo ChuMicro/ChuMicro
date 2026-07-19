@@ -525,11 +525,11 @@ class ImportGraphSource:
         """Emit an informational warning per user-written entry whose
         matched modules' parent libraries were never imported.
 
-        For an exact-form entry like ``"chumicro_websockets.sockets_factory"``,
-        dead means the user lists it but never imports ``chumicro_websockets``.
-        For a family-form entry like ``"sockets_factory"`` that matches
-        five libraries, dead means none of those five were used.  A
-        single-library project listing the family form is *not* dead.
+        For an exact-form entry like ``"chumicro_sockets.sockets_factory"``,
+        dead means the user lists it but never imports ``chumicro_sockets``.
+        For a family-form entry like ``"sockets_factory"``, dead means none
+        of the libraries owning a matched module were reached.  An entry
+        whose matched module the deploy does reach is *not* dead.
 
         Visit-set membership of the skip targets themselves is excluded
         from the "reached anything" check: the targets are added to the

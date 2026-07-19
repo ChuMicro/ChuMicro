@@ -41,8 +41,8 @@ A silent skip that shipped the unwanted library would be a worse outcome than re
 **Misuse at runtime.**  If you skip a factory but then call the affected library's `from_config(...)` on the device, the lazy import inside `from_config` is wrapped in `try/except ImportError → RuntimeError`:
 
 ```
-RuntimeError: chumicro_mqtt.sockets_factory not available
-(excluded via __chumicro_skip_factories__ or not on the board) —
+RuntimeError: chumicro_sockets.sockets_factory not available
+(excluded via __chumicro_skip_factories__ or not on the board);
 pass transport_factory= or socket= explicitly.
 ```
 
@@ -52,10 +52,10 @@ The five library `from_config` methods that lazy-import a factory submodule — 
 
 The walker accumulates two kinds of non-fatal hints on the source object:
 
-**Direct-import override.**  If your entrypoint imports a skip target explicitly (`import chumicro_mqtt.sockets_factory` at module top), the walker keeps the file in the deploy and warns:
+**Direct-import override.**  If your entrypoint imports a skip target explicitly (`import chumicro_sockets.sockets_factory` at module top), the walker keeps the file in the deploy and warns:
 
 ```
-__chumicro_skip_factories__ names 'chumicro_mqtt.sockets_factory' but
+__chumicro_skip_factories__ names 'chumicro_sockets.sockets_factory' but
 the entrypoint imports it directly; shipping it anyway.
 ```
 
@@ -69,7 +69,7 @@ matches ['chumicro_websockets.tls_factory'] but none of those
 libraries are imported; skip entry has no effect.
 ```
 
-A family entry that matches five libraries is dead only when none of those five are imported — a single-library project listing `("sockets_factory",)` doesn't get four spurious warnings.
+The `sockets_factory` family entry now resolves to the single shared `chumicro_sockets.sockets_factory` module, so it counts as live whenever any networking library's default wiring reaches that module, and goes dead only when nothing in the deploy does.
 
 ## When this matters (and when it doesn't)
 
@@ -89,23 +89,20 @@ The `chumicro-workspace library` CLI (`add` / `list` / `update` / `remove` / `sw
 
 ## For library authors: how the convention works
 
-The walker discovers factory submodules by glob — every file under `chumicro_*/` matching `[a-z][a-z0-9_]*_factory.py` is a candidate.  Two implications:
-
-* Place the helper at the package root: `libraries/<name>/src/chumicro_<name>/<stem>_factory.py`, not in a subdirectory like `factories/`.
-* Pick a descriptive stem that matches its peers across the workspace — `sockets_factory.py` for TCP/UDP injection, `tls_factory.py` for SSL-context injection, etc.  The family-form skip works because users can spell *one* name and mean *all* libraries.
-
-If your library's `from_config` (or any other construction path) lazy-imports its factory submodule, wrap the import in `try/except ImportError → RuntimeError`:
+The transport factory builders live in one shared module, `chumicro_sockets.sockets_factory`.  A networking library does not carry its own copy; its `from_config` (or any other construction path) lazy-imports the builder it needs and wraps the import so a skipped or absent module fails loudly:
 
 ```python
 if factory_kwarg is None:
     try:
-        from chumicro_<name>.<stem>_factory import <factory_callable>
+        from chumicro_sockets.sockets_factory import connector_factory
     except ImportError as exception:
         raise RuntimeError(
-            "<ClassName>.from_config() default wiring needs "
-            "chumicro_<name>.<stem>_factory.  This module was excluded "
-            "via __chumicro_skip_factories__ — pass <kwarg>= explicitly.",
+            "chumicro_sockets.sockets_factory not available "
+            "(excluded via __chumicro_skip_factories__ or not on the "
+            "board); pass transport_factory= explicitly.",
         ) from exception
 ```
 
-That's the contract every `from_config` in mqtt / requests / websockets / ntp / http_server already implements; mirror it for new libraries.  The `new-library` scaffolder puts the factory file at the package root for you — if you scaffolded via `python scripts/run.py new-library`, the placement is already right.
+That is the contract every `from_config` in mqtt, requests, websockets, ntp, and http_server implements; mirror it for new networking libraries.
+
+The walker discovers factory submodules by glob: every file under `chumicro_*/` matching `[a-z][a-z0-9_]*_factory.py` is a candidate, so the same skip mechanism covers a new factory family if you add one.  Place such a file at the package root (`libraries/<name>/src/chumicro_<name>/<stem>_factory.py`), not in a subdirectory like `factories/`, and pick a descriptive stem (`sockets_factory` for TCP/UDP injection, `tls_factory` for SSL-context injection).  The bare stem is what the family-form skip matches.
