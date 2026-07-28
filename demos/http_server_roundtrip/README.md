@@ -8,8 +8,10 @@ another window, no IP discovery.
 ## What it shows
 
 - `chumicro_wifi.WifiService` + `chumicro_http_server.HttpServer`
-  sharing one `while True:` loop on the board, same shape as the
-  README's "Now drop a network request in next to it" walkthrough.
+  sharing one `while True:` loop on the board, the same shape as the
+  root README's
+  ["Give WiFi a deadline and keep blinking"](../../README.md#give-wifi-a-deadline-and-keep-blinking)
+  walkthrough.
 - Three registered routes (`GET /hello`, `GET /uptime`,
   `POST /echo`) with a `@server.route(...)` decorator.
 - The host driver reads the `SERVER_READY` marker the board prints
@@ -33,6 +35,8 @@ Override:
 - `--runtime micropython`: pick the first MicroPython device.
 - `--ready-timeout-s <n>`: how long to wait for `SERVER_READY`
   (default 60 s; ESP32-S2 CP cold-boot + wifi can be slow).
+- `--completion-timeout-s <n>`: how long to wait for the board to
+  print `DEMO_COMPLETE` after the three requests land (default 90 s).
 
 ## Expected output
 

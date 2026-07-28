@@ -180,7 +180,7 @@ Each library installs independently and pulls in as little as possible.  Install
 | **[msgpack](libraries/msgpack/)** | Binary serialization, smaller than JSON for typical sensor payloads.  Compatible with the wider `msgpack` ecosystem. |
 | **[compat](libraries/compat/)** | The few standard-library pieces the device runtimes don't ship, so one file of code can run everywhere. |
 
-For a dependency graph and a "pick a library by problem" index, see [`libraries/README.md`](libraries/).
+For a dependency graph and a "pick a library by problem" index, see [`libraries/README.md`](libraries/).  One more library, [logging](libraries/logging/), is published but parked: it works as documented, nothing else integrates with it, and its README says whether it's for you.
 
 ## Try an example on a board
 
@@ -200,7 +200,7 @@ If your board doesn't have CircuitPython or MicroPython on it yet, `chumicro-dep
 
 ## Start a real project
 
-When you move past trying examples, start from the **[workspace template](https://github.com/ChuMicro/ChuMicro-Workspace-Template)**.  It's a clone-and-go repository where your source lives on your laptop under version control and deploys to the board on demand, instead of being edited live on a USB drive that corrupts when the cable wiggles.  While you iterate, RAM-mode deploys write nothing to flash at all; when you ship, flash deploys are checksum-verified.  Your WiFi password lives in a gitignored `secrets.toml` and gets baked onto the board at deploy time, so credentials never sit in your code or your git history.  And the same `pytest` that tests on your laptop tests on the board.
+When you move past trying examples, start from the **[workspace template](https://github.com/ChuMicro/ChuMicro-Workspace-Template)**.  It's a clone-and-go repository where your source lives on your laptop under version control and deploys to the board on demand, instead of being edited live on a USB drive that corrupts when the cable wiggles.  Deploys write to flash and verify every file by checksum; while you iterate, you can flip a board to RAM-mode deploys, which write nothing to flash at all.  Your WiFi password lives in a gitignored `secrets.toml` and gets baked onto the board at deploy time, so credentials never sit in your code or your git history.  And the same `pytest` that tests on your laptop tests on the board.
 
 ```bash
 git clone --depth 1 https://github.com/ChuMicro/ChuMicro-Workspace-Template my-workspace
@@ -219,7 +219,7 @@ Every library is tested at four levels: plain `pytest` on your laptop, the same 
 pytest libraries/timing/tests                            # laptop unit tests
 pytest libraries/ --target unix-port --runtime both      # device runtimes, no device needed
 pytest libraries/timing/functional_tests                 # on a real connected board
-python3 scripts/run.py preflight                         # everything CI checks, locally
+python scripts/run.py preflight                          # everything CI checks, locally
 ```
 
 [CONTRIBUTING.md](CONTRIBUTING.md#testing) covers the details, including hardware setup for on-device runs.
@@ -261,7 +261,7 @@ support/      the cross-runtime test harness and shared doc assets
 webui/        localhost pages an agent shows a human (the decision picker, reports)
 docs/         contributor guides and troubleshooting
 plans/        design decisions and work queue
-scripts/      developer task runner (run.py)
+scripts/      developer task runner (run.py, tasks in run_tasks/)
 ```
 
 ## License

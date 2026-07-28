@@ -1,11 +1,11 @@
 # sockets_runner_connector: sockets via runner with a generator
 
-End-to-end demo of the canonical pattern for **custom TCP protocols
-under runner**: write a generator that yields wait-tokens between
-each I/O step, hand it to `runner.add_generator`, and let the
-runner schedule it across ticks.  Drop-in template for any TCP
-protocol not covered by `HttpClient` / `MQTTClient` /
-`WebSocketClient`.
+End-to-end demo of a **custom TCP protocol running under the
+runner**: write a generator that yields wait-tokens between each
+I/O step, hand it to `runner.add_generator`, and let the runner
+schedule it across ticks.  Start from this demo for any TCP
+protocol `HttpClient` / `MQTTClient` / `WebSocketClient` don't
+already cover.
 
 `echo_run` here is the template, a 14-line function that calls
 `connect` / `send_all` / `recv_until` in straight-line order.  The
@@ -57,6 +57,8 @@ Override:
 - `--wifi-timeout-s <n>`: how long to wait for `WIFI_OK` (default 45 s).
 - `--connect-timeout-s <n>`: how long to wait for `CONNECTED` after
   `CONNECTING` (default 15 s).
+- `--completion-timeout-s <n>`: how long to wait for `DEMO_COMPLETE`
+  after `CONNECTED` (default 30 s).
 
 ## Expected output
 
@@ -115,8 +117,10 @@ reconnect-capable services, register a new generator from the wifi
 
 - [`sockets_runner_connector_explicit`](../sockets_runner_connector_explicit/):
   the same wire behaviour, written as an explicit per-state
-  `check` / `handle` service.  Read it for the teaching version of
-  what `connect` / `send_all` / `recv_until` do under the hood.
+  `check` / `handle` service.  Read it to see the state machine, the
+  `io_socket` / `io_interest` bookkeeping, and the partial-send
+  handling that `connect` / `send_all` / `recv_until` keep out of
+  your code.
 - [`sockets_tcp_roundtrip`](../sockets_tcp_roundtrip/): synchronous
   TCP, no runner-driven connect.  Simpler app code; blocks for the
   full TCP handshake.

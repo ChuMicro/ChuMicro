@@ -36,6 +36,8 @@ Override:
 - `--runtime micropython`: pick the first MicroPython device.
 - `--wifi-timeout-s <n>`: how long to wait for the board's `WIFI_OK`
   marker (default 45 s).
+- `--completion-timeout-s <n>`: how long to wait for `DEMO_COMPLETE`
+  after `WIFI_OK` (default 30 s).
 
 ## Expected output
 

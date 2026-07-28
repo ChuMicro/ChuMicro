@@ -354,7 +354,7 @@ class TestRuntimeControlNames:
             address="/dev/cu.usbmodem1",
         )
 
-        assert collection._runtime_prepare_name(device) == "Setup — CircuitPython"
+        assert collection._runtime_prepare_name(device) == "Setup: CircuitPython"
 
     def test_runtime_run_file_name(self) -> None:
         """Run-file items should include the runtime in a stable label."""
@@ -364,7 +364,7 @@ class TestRuntimeControlNames:
             address="/dev/ttyUSB0",
         )
 
-        assert collection._runtime_run_file_name(device) == "Run overhead — MicroPython"
+        assert collection._runtime_run_file_name(device) == "Run overhead: MicroPython"
 
 
 class TestReportedDurations:

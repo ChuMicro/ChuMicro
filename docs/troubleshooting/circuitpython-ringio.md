@@ -29,7 +29,7 @@ The bug only surfaces when building `VARIANT=standard`, which nobody in the Circ
 
 ## CircuitPython does not use RingIO
 
-A full-tree search confirms RingIO is never used in CircuitPython-specific code: no references in `shared-bindings/`, `shared-module/`, `ports/` (only the coverage variant's disable), `py/circuitpy_mpconfig.h`, `py/circuitpy_defns.mk`, or `tests/`.  The only RingIO code in the tree is inherited from upstream MicroPython: `py/objringio.c`, `py/obj.h:893` (extern declaration), `py/modmicropython.c:216–217` (conditional registration), and `py/py.cmake:101` (CMake source list).
+A full-tree search confirms RingIO is never used in CircuitPython-specific code: no references in `shared-bindings/`, `shared-module/`, `ports/` (only the coverage variant's disable), `py/circuitpy_mpconfig.h`, `py/circuitpy_defns.mk`, or `tests/`.  The only RingIO code in the tree is inherited from upstream MicroPython: `py/objringio.c`, `py/obj.h:893` (extern declaration), `py/modmicropython.c:216-217` (conditional registration), and `py/py.cmake:101` (CMake source list).
 
 RingIO is a MicroPython-only feature (`micropython.RingIO()`), a lock-free single-producer/single-consumer ring buffer designed for ISR-to-main-loop communication.  CircuitPython forbids ISR usage and has its own I/O abstractions, so the type has no purpose in the CircuitPython ecosystem.
 

@@ -1,6 +1,24 @@
 # WiFi won't connect
 
-This page is for when a board in your workspace won't join wifi, or joins and then behaves strangely.  Most week-one wifi trouble is one of four traps: a silent drop that raises nothing, a connect that freezes everything else, a specific board that needs its transmit power turned down, or a `settings.toml` that fights the wifi library for the radio.
+This page is for when a board in your workspace won't join wifi, or joins and then behaves strangely.  Most week-one wifi trouble is one of five traps: credentials that never reached the board, a silent drop that raises nothing, a connect that freezes everything else, a specific board that needs its transmit power turned down, or a `settings.toml` that fights the wifi library for the radio.
+
+## The functional tests all skip, or a deployed example never joins anything
+
+The credentials never reached the board.  Wifi credentials start in `secrets.toml` at the workspace root, which the deploy merges into `/runtime_config.msgpack` for the board to read back.  Workspace setup materializes that file from a template with deliberately bogus placeholder values, so a fresh clone can't join a network by accident, and two states leave you with nothing happening and no wifi error to read:
+
+- **`secrets.toml` is missing.**  Nothing is staged, so `load_runtime_config()` on the board raises `OSError`.  The networking libraries' functional tests catch this at collection time and skip every device test with a message naming the keys they wanted.  A deployed example has no such guard: it dies on the board, which you see only if you are tailing the serial output.
+- **`secrets.toml` is there but still carries the placeholder SSID** (`replace-with-your-ap-ssid`).  The functional-test conftests read that placeholder as "no credentials yet" and stage nothing, so those tests skip the same way.  A deployed example fails fast instead: its helpers recognize both the in-file `WIFI_SSID` placeholder and the `secrets.toml` one, and raise immediately with a message naming where to put real credentials.
+
+**Fix.** Put your real network name and password in the workspace-root `secrets.toml`, then deploy again:
+
+```toml
+# secrets.toml: gitignored, never committed
+[wifi]
+ssid = "your-network"
+password = "your-password"
+```
+
+`chumicro-workspace dump-config <project>` prints the merged config a deploy would send, so you can confirm `wifi.ssid` before touching the board, and `chumicro-workspace deploy <project> --tail` shows what the board says once it boots.  (details: [Device testing](../contributing/device-testing.md#configure-secretstoml))
 
 ## The board sits in `RECONNECTING`, nothing is raised, and `wifi.last_error` is `None`
 

@@ -105,7 +105,7 @@ Right-click a test file or test function in the editor → **Run 'test_...'**. P
 
 Right-click a `libraries/<name>/functional_tests/test_*.py` file, function, or the whole `functional_tests/` directory.  Play buttons route to hardware once `devices.yml` is populated.  See [Device Testing](device-testing.md) for setup.
 
-For functional tests, the test tree shows extra `Setup — <runtime>` and `Run overhead — <runtime>` nodes alongside the individual test functions.  CP RAM-mode tests may fail early with a flash-mode hint when the staged code doesn't fit the board's live free heap.  In that case set the board's `deploy_mode: flash` in `devices.yml` or run with `--deploy-mode flash`.  See [Device Testing](device-testing.md) for the transport details.
+For functional tests, the test tree shows extra `Setup: <runtime>` and `Run overhead: <runtime>` nodes alongside the individual test functions.  CP RAM-mode tests may fail early with a flash-mode hint when the staged code doesn't fit the board's live free heap.  In that case set the board's `deploy_mode: flash` in `devices.yml` or run with `--deploy-mode flash`.  See [Device Testing](device-testing.md) for the transport details.
 
 > **Note:** PyCharm also offers **Run with Coverage** (shield icon). This uses PyCharm's built-in coverage runner, which doesn't understand the project's multi-library layout. Use the **Test** run config or the terminal for accurate coverage.
 

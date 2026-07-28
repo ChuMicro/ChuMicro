@@ -9,7 +9,8 @@ one command, with no broker setup beyond `brew install mosquitto`.
 The board wires `chumicro_wifi.WifiService` + `chumicro_mqtt.MQTTClient`
 into one `chumicro_runner.Runner` and drives them with
 `while True: now = runner.tick(); runner.wait(now)`, the same shape
-the root README's "Now scale it up: add MQTT and chumicro_runner"
+the root README's
+["Give WiFi a deadline and keep blinking"](../../README.md#give-wifi-a-deadline-and-keep-blinking)
 walkthrough uses.  It reads like a mainstream MQTT quickstart: set a
 Last Will, set the callbacks once, connect, let the loop run.  All the
 connect-time setup lives in one `on_connect` (the publish and the
@@ -55,6 +56,10 @@ Override:
 - `--runtime micropython`: pick the first MicroPython device.
 - `--connect-timeout-s <n>`: how long to wait for the board's
   `MQTT_CONNECTED` marker (default 60 s).
+- `--telemetry-timeout-s <n>`: how long to wait for all three
+  telemetry receipts on the host (default 30 s).
+- `--completion-timeout-s <n>`: how long to wait for `DEMO_COMPLETE`
+  after the round trip (default 120 s).
 
 ## Expected output
 

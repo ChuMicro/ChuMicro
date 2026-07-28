@@ -11,18 +11,18 @@ The fix depends on which one it is:
 - ChuMicro library: add it so the deploy ships it.
 
 ```bash
-python3 run.py library add chumicro_mqtt
+chumicro-workspace library add chumicro_mqtt
 ```
 
 - Project-local helper: fix the import path, or move code shared between projects into `shared/`.
 - External package: drop its source tree under `packages/`, where the deploy's import walker finds it.
 - Genuinely optional import: wrap it in `try` / `except ImportError` so a missing module is tolerated.
 
-## `run.py new` rejects the project name, or `import projects.<name>.app` fails at deploy
+## `chumicro-workspace new` rejects the project name, or `import projects.<name>.app` fails at deploy
 
 The runtime imports your project as a Python package, so every part of the path has to be a valid Python identifier: letters, digits, and underscores only, with no hyphens, no dots, and no leading digit.
 
-Use underscores.  Rename `back-porch` to `back_porch`, and `1sensor` to `sensor_one`.  `python3 run.py new` checks the name up front and fails fast with the reason.
+Use underscores.  Rename `back-porch` to `back_porch`, and `1sensor` to `sensor_one`.  `chumicro-workspace new` checks the name up front and fails fast with the reason.
 
 ## `from shared.foo import bar` refused at deploy, or `ImportError` on boot
 
@@ -45,7 +45,7 @@ The sockets library `chumicro_sockets`, which supplies the network transport, wa
 Install the sockets library:
 
 ```bash
-python3 run.py library add chumicro_sockets
+chumicro-workspace library add chumicro_sockets
 ```
 
 Or hand the transport in yourself with `transport_factory=` (MQTT and NTP also accept `socket=`).  If a skip entry is filtering the sockets library out, fix or remove that entry, and keep factory files at the `*_factory.py` path.

@@ -81,7 +81,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--runtime", default=None,
         choices=("circuitpython", "micropython"),
-        help="runtime filter when --device isn't given (default: devices.yml default)",
+        help=(
+            "runtime filter: when --device isn't given, picks the "
+            "first matching device (default: circuitpython)"
+        ),
     )
     parser.add_argument(
         "--wifi-timeout-s", type=float, default=45.0,

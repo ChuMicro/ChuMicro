@@ -6,8 +6,10 @@ This policy covers the published ChuMicro artifacts:
 
 - The device libraries, the `chumicro_*` packages under `libraries/` that ship
   to PyPI and the CircuitPython bundle.
-- The workbench tools, `chumicro-workspace`, `chumicro-deploy`, `chumicro-repl`,
-  and `chumicro-pytest-device`.
+- The host-side tools published on PyPI: the workbench packages
+  `chumicro-workspace`, `chumicro-deploy`, `chumicro-repl`,
+  `chumicro-pytest-device`, and `chumicro-checks`, plus the support package
+  `chumicro-test-harness`.
 
 Two areas are worth calling out because they carry more risk than a timer or a
 key-value store.

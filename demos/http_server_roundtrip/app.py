@@ -3,8 +3,8 @@
 Brings WiFi up with ``chumicro_wifi.WifiService`` and serves three
 routes with ``chumicro_http_server.HttpServer``.  Both services
 share one cooperative ``while True:`` loop (no async, no threads),
-which is the same shape the README's "Now drop a network request in
-next to it" walkthrough uses.
+which is the same shape the README's "Give WiFi a deadline and keep
+blinking" walkthrough uses.
 
 The host driver discovers the board's address by reading the
 ``SERVER_READY ip=<ip> port=<port>`` marker line, fires three HTTP

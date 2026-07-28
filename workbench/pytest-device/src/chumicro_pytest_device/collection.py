@@ -2,7 +2,7 @@
 
 The pytest hooks here intercept files under
 ``libraries/<name>/functional_tests/`` (always),
-``projects/<name>/functional_tests/`` (only when explicitly targeted —
+``projects/<name>/functional_tests/`` (only when explicitly targeted;
 :func:`pytest_ignore_collect` drops them on a bare sweep), and
 ``libraries/<name>/tests/`` (under ``--target unix-port`` /
 ``--target device-unit``), returning a :class:`DeviceTestFile` so
@@ -73,14 +73,14 @@ def _assert_summary_reconciles(result: RunResult, raw_output: str) -> None:
 
     The device prints an authoritative ``SUMMARY total=N failed=M`` as the
     last line of a complete run.  Its absence means the run was truncated
-    before finishing (a board that crashed mid-run, a serial drop) — a
+    before finishing (a board that crashed mid-run, a serial drop): a
     partial transcript that reads green when the surviving lines all
     passed.  A ``failed`` count higher than the parsed FAIL lines means a
     failure result was dropped from the output, which is the dangerous
     case: a real failure silently vanishing into a pass.
 
     More parsed result lines than the device's own ``total`` means a
-    stray line that looks like a PASS/FAIL/SKIP was injected — free-form
+    stray line that looks like a PASS/FAIL/SKIP was injected: free-form
     board prose, print-debugging, or an exception message that happens to
     match a result pattern.  A phantom ``PASS test_b`` emitted before
     ``test_b``'s real ``FAIL`` would let the first-match per-test lookup
@@ -149,7 +149,7 @@ def _assert_collected_reconciles(
     direct ``test_*`` children of a ``class Test*``.  The on-device runner
     discovers tests at runtime via ``dir()``, which also surfaces
     ``test_*`` methods *inherited* from a base class and module-level
-    ``test_name = _factory()`` bindings — tests with no ``DeviceTestItem``
+    ``test_name = _factory()`` bindings, tests with no ``DeviceTestItem``
     to map their result onto.  A FAIL among them reconciles symmetrically
     against SUMMARY (the orphan FAIL inflates both the parsed and reported
     counts) and the session exits green.  Cross-checking the device-run
@@ -191,12 +191,12 @@ def _parse_test_functions(filepath: Path) -> list[str]:
 
     ``async def test_*`` is collected too, at module level and as a
     ``Test*`` method.  The runner discovers it via ``dir()`` and fails it
-    (an ``async def`` body never runs — calling it only builds an
+    (an ``async def`` body never runs; calling it only builds an
     un-awaited coroutine).  Collecting it here gives that FAIL a pytest
     item to land on: without it the device-run name is an orphan that
     fails the whole file's reconcile instead of just that one test.  A
     generator-bodied ``def test_*`` (a stray ``yield``) needs no special
-    case — its AST node is a plain ``FunctionDef`` already matched below,
+    case: its AST node is a plain ``FunctionDef`` already matched below,
     and the runner fails it the same way.
 
     Args:
@@ -282,12 +282,12 @@ def _filter_targets_by_marker(
 
 def _runtime_prepare_name(device_entry: DeviceEntry) -> str:
     """Return the synthetic pytest item name for a runtime prepare step."""
-    return f"Setup — {runtime_display_name(device_entry.runtime)}"
+    return f"Setup: {runtime_display_name(device_entry.runtime)}"
 
 
 def _runtime_run_file_name(device_entry: DeviceEntry) -> str:
     """Return the synthetic pytest item name for a runtime file-run step."""
-    return f"Run overhead — {runtime_display_name(device_entry.runtime)}"
+    return f"Run overhead: {runtime_display_name(device_entry.runtime)}"
 
 
 def _sum_reported_test_durations(test_results: list[TestResult]) -> float:
@@ -319,7 +319,7 @@ def _device_items(
 def _item_source_dirs(
     session: pytest.Session, item: DeviceRuntimeItem,
 ) -> list[Path]:
-    """Source-dir closure for one item — the project-aware split point.
+    """Source-dir closure for one item: the project-aware split point.
 
     Project functional tests resolve through the workspace's
     acquisition surfaces (:func:`resolve_project_source_dirs`:
@@ -327,7 +327,7 @@ def _item_source_dirs(
     ``libraries/<name>/src`` trees); library tests keep the
     libraries-root dependency walk
     (:func:`resolve_library_source_dirs`).  Every consumer of an
-    item's closure — deploy-mode resolution and both staging paths —
+    item's closure (deploy-mode resolution and both staging paths)
     must route through here so the two lanes can't drift apart.
     """
     if _is_project_functional_test(item.test_file):
@@ -513,7 +513,7 @@ class DeviceTestFile(pytest.File):
                     f"{self.path} is collected for the cross-runtime / "
                     "on-device lane but defines no discoverable tests "
                     "(no module-level 'def test_*' and no 'class Test*' "
-                    "with 'test_*' methods — its tests are pytest-style, "
+                    "with 'test_*' methods; its tests are pytest-style, "
                     "which the cross-runtime harness does not run).  "
                     "Either rewrite the tests as plain functions or "
                     "'class Test*' methods, or declare "
@@ -844,8 +844,8 @@ def _load_fallback_device(session: pytest.Session) -> DeviceEntry:
         pytest.skip(
             "No devices registered in devices.yml.  Run "
             "`chumicro-workspace add-device <id> --address <port>` "
-            "to register a board — probes hardware identity + fills in "
-            "defaults on first registration."
+            "to register a board.  That probes hardware identity and "
+            "fills in defaults on first registration."
         )
 
     return targets[0]
@@ -873,8 +873,8 @@ def pytest_ignore_collect(
 
     A ``projects/<name>/functional_tests/test_*.py`` file runs on a board
     only when its ``functional_tests`` tree is explicitly named on the
-    command line.  On a bare workspace sweep it is ignored here — neither
-    host-imported as plain pytest nor routed to the device backend — so a
+    command line.  On a bare workspace sweep it is ignored here, neither
+    host-imported as plain pytest nor routed to the device backend, so a
     board-facing project acceptance test never runs its assertions
     against the host's stand-in backend.
 
@@ -904,8 +904,8 @@ def pytest_pycollect_makemodule(
     ``projects/<name>/functional_tests/`` files. The default Module
     factory would import them on the host, which fails for runtime-
     restricted files that ``import microcontroller`` / ``import wifi`` at
-    top level.  Untargeted project functional tests never reach this hook
-    — :func:`pytest_ignore_collect` drops them before collection.
+    top level.  Untargeted project functional tests never reach this
+    hook: :func:`pytest_ignore_collect` drops them before collection.
 
     Under ``--target unix-port`` *or* ``--target device-unit`` we also
     claim ``libraries/<name>/tests/`` files so the harness backend
@@ -926,7 +926,7 @@ def pytest_pycollect_makemodule(
 
     A ``__chumicro_host_only__`` file under
     ``libraries/<name>/functional_tests/`` is the Category 1 host
-    driver shape — it carries a regular pytest test that drives a
+    driver shape: it carries a regular pytest test that drives a
     paired board file via the ``device_bootstrap_runner`` fixture.
     Returning ``None`` here lets pytest's default Module factory
     import it as ordinary host-side pytest.
@@ -983,7 +983,7 @@ def pytest_collect_file(
 
     A library functional test file marked
     ``__chumicro_host_only__ = True`` is the Category 1 host-driver
-    shape — it carries a regular pytest test that drives a paired
+    shape: it carries a regular pytest test that drives a paired
     board file via the ``device_bootstrap_runner`` fixture.
     Returning ``None`` for it leaves the file to ordinary pytest
     collection (the host test runs on CPython, just like a unit
@@ -1024,7 +1024,7 @@ def pytest_collection_modifyitems(
        and targeted ``projects/<name>/functional_tests/``, so duplicate
        items for those should never be produced in practice.  A host-only
        file is a regular pytest test that
-       drives a paired board file via fixtures — its
+       drives a paired board file via fixtures, so its
        :class:`pytest.Function` items are exactly the right shape and
        must survive this sweep.
     2. Deselect every :class:`DeviceRuntimeItem` whose test file
@@ -1266,7 +1266,7 @@ def _sibling_extra_modules(test_files: list[Path]) -> list[Path]:
     next to it in the same ``tests/`` directory, named with a leading
     underscore (``_swap_helpers.py``).  ``test_*.py`` files and
     ``conftest.py`` don't start with an underscore, so the ``_*.py``
-    glob excludes them by construction — it picks up only the shared
+    glob excludes them by construction: it picks up only the shared
     helpers, which neither the normal source closure nor the test-file
     list otherwise stages.  The caller passes the result to
     ``transport.stage(extra_modules=...)``, which lands each helper on
@@ -1334,7 +1334,7 @@ def _bulk_stage_for_device(
         # Match on ``library_name`` (not ``library_dir.name``): the two
         # are identical for library items, but a nested project's name
         # is slash-form (``garage/heater``) while its dir name is just
-        # the leaf — and the caller passes ``item.library_name``.
+        # the leaf, and the caller passes ``item.library_name``.
         if library_filter is not None and item.library_name != library_filter:
             continue
 

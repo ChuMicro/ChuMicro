@@ -55,6 +55,8 @@ Override:
 - `--wifi-timeout-s <n>`: how long to wait for `WIFI_OK` (default 45 s).
 - `--connect-timeout-s <n>`: how long to wait for `CONNECTED` after
   `CONNECTING` (default 15 s).
+- `--completion-timeout-s <n>`: how long to wait for `DEMO_COMPLETE`
+  after `CONNECTED` (default 30 s).
 
 ## Expected output
 

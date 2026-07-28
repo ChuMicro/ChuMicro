@@ -12,6 +12,20 @@ messages.  These pages cover what an inline message can't: multi-step
 recoveries, and symptoms whose proximate error doesn't name the root
 cause.
 
+The commands on these pages are the `chumicro-workspace` CLI, which is on
+your PATH once the workspace's Python environment is active.  Inside a
+cloned workspace template, `python3 run.py <cmd>` reaches the same
+commands through a bootstrap wrapper, so `python3 run.py deploy` and
+`chumicro-workspace deploy` do the same thing.
+
+The deploy and board tooling runs on macOS and Linux.  Windows hosts
+aren't supported for it, and WSL2 on its own isn't a way around that:
+WSL2 has no USB passthrough, so the board's serial port never appears
+inside it without `usbipd-win` (the USB/IP bridge you install on the
+Windows side) attaching the device first.  Editing, linting, and unit
+tests do run natively on Windows; [CONTRIBUTING](../../CONTRIBUTING.md#prerequisites)
+covers what each platform gets.
+
 ## Getting a board working
 
 - [**Board not found**](board-not-found.md): nothing shows up in
@@ -39,9 +53,10 @@ cause.
 
 ## Network
 
-- [**WiFi won't connect**](wifi-wont-connect.md): silent drops with no
-  error, CircuitPython's blocking connect, weak-antenna boards, and the
-  board-resident `settings.toml` fighting your config.
+- [**WiFi won't connect**](wifi-wont-connect.md): credentials that never
+  left `secrets.toml`, silent drops with no error, CircuitPython's
+  blocking connect, weak-antenna boards, and the board-resident
+  `settings.toml` fighting your config.
 - [**TLS and HTTPS failures**](tls-https-failures.md): certificate
   validity errors on a board whose clock is unset, handshake
   out-of-memory, custom CA wiring, and the platform limits.
