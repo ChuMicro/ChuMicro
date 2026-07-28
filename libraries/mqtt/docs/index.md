@@ -2,7 +2,7 @@
 
 **Non-blocking MQTT 3.1.1 client (QoS 0 + 1) for CircuitPython, MicroPython, and CPython.**
 
-Built on `chumicro-sockets` and `chumicro-timing` — your LED keeps blinking through CONNECT, SUBSCRIBE, PUBLISH, and PUBACK round-trips because every step takes one tick of work.
+Built on `chumicro-sockets` for TCP and TLS and `chumicro-timing` for ticks.  Every step of the protocol takes one tick of work, so your LED keeps blinking through CONNECT, SUBSCRIBE, PUBLISH, and PUBACK round-trips.
 
 ## Quick example
 
@@ -10,9 +10,10 @@ Built on `chumicro-sockets` and `chumicro-timing` — your LED keeps blinking th
 from chumicro_timing import ticks_ms
 from chumicro_mqtt import MQTTClient
 
-# On CircuitPython pass radio=wifi.radio; MP / CPython have no radio.
 # from_config builds the transport factory: the client dials the broker
-# non-blocking (one connect phase per tick) and self-heals after drops.
+# without blocking (one connect phase per tick) and self-heals after a
+# drop.  On CircuitPython add radio=wifi.radio from the built-in wifi
+# module; MicroPython and CPython need no radio.
 client = MQTTClient.from_config(
     {"mqtt.broker.host": "broker.example.com", "mqtt.broker.port": 1883},
 )
@@ -20,7 +21,7 @@ client = MQTTClient.from_config(
 client.on_message = lambda topic, payload: print(topic, payload)
 client.connect()
 
-# Drive from your tick loop — runner-shaped.
+# Drive it from your tick loop, or hand it to a runner.
 while True:
     now = ticks_ms()
     if client.check(now):
@@ -29,9 +30,9 @@ while True:
 
 ## Documentation
 
-- [User Guide](guide.md) — connecting, QoS 1, last-will, TLS, pattern routing, tuning knobs
-- [API Reference](api.md) — full API documentation
-- [Testing Helpers](testing.md) — fakes for downstream test suites
+- [User Guide](guide.md): connecting, publishing at QoS 0 and QoS 1, subscribing and pattern routing, last-will, TLS, wifi-drop self-heal, and the tuning knobs
+- [API Reference](api.md): `MQTTClient`, its protocol states, and the error types it raises
+- [Testing Helpers](testing.md): using the canned broker packets and `new_client` in your tests
 
 ---
 

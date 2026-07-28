@@ -2,7 +2,7 @@
 
 **Non-blocking HTTP/1.1 server for CircuitPython, MicroPython, and CPython.**
 
-Each connection is a state machine the server advances one chunk per runner tick — an LED keeps blinking while requests are being served.  Built on `chumicro-sockets` and `chumicro-timing` only.
+Each connection is a state machine the server advances one chunk per runner tick, so an LED keeps blinking while requests are being served.  Built on `chumicro-sockets` and `chumicro-timing` only.
 
 ## Quick example
 
@@ -10,10 +10,14 @@ Each connection is a state machine the server advances one chunk per runner tick
 from chumicro_http_server import HttpServer, build_response
 from chumicro_sockets import listener
 from chumicro_timing import ticks_ms
+from chumicro_wifi import WifiConfig, WifiService
+
+wifi = WifiService(WifiConfig(ssid="home-wifi", password="secret"))
 
 server = HttpServer(
+    # radio= is the CircuitPython radio handle; MicroPython and CPython ignore it.
     transport_factory=lambda: listener(
-        host="0.0.0.0", port=8080, radio=wifi.radio,
+        host="0.0.0.0", port=8080, radio=wifi.adapter.radio,
     ),
 )
 
@@ -27,14 +31,17 @@ def widget(request):
 
 while True:
     now = ticks_ms()
+    if wifi.check(now):        # keeps the link up and reconnects after a drop
+        wifi.handle(now)
     if server.check(now):
         server.handle(now)
 ```
 
 ## Documentation
 
-- [User Guide](guide.md) — routing, response helpers, TLS server, platform notes
-- [API Reference](api.md) — full API documentation
+- [User Guide](guide.md): routing and path parameters, the runner pattern, tick-fairness knobs, streaming large bodies, TLS server, platform notes
+- [API Reference](api.md): `HttpServer`, `Request` / `Response`, `build_response`, and the streaming submodule
+- [Testing Helpers](testing.md): using `FakeListener` in your tests
 
 ---
 

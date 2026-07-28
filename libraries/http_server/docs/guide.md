@@ -12,10 +12,14 @@ A minimal, hello-world server with one route:
 from chumicro_http_server import HttpServer, build_response
 from chumicro_sockets import listener
 from chumicro_timing import ticks_ms
+from chumicro_wifi import WifiConfig, WifiService
+
+wifi = WifiService(WifiConfig(ssid="home-wifi", password="secret"))
 
 server = HttpServer(
+    # radio= is the CircuitPython radio handle; MicroPython and CPython ignore it.
     transport_factory=lambda: listener(
-        host="0.0.0.0", port=8080, radio=wifi.radio,
+        host="0.0.0.0", port=8080, radio=wifi.adapter.radio,
     ),
 )
 
@@ -25,6 +29,8 @@ def index(request):
 
 while True:
     now = ticks_ms()
+    if wifi.check(now):
+        wifi.handle(now)
     if server.check(now):
         server.handle(now)
 ```
@@ -258,9 +264,11 @@ ssl_context = ssl_context_with_cert_and_key_paths(
 )
 
 def open_listener():
+    # wifi is the WifiService from the quick example; only CircuitPython
+    # reads the radio handle.
     return listener(
         host="0.0.0.0", port=8443,
-        tls=True, context=ssl_context, radio=wifi.radio,
+        tls=True, context=ssl_context, radio=wifi.adapter.radio,
     )
 
 server = HttpServer(transport_factory=open_listener)

@@ -1,6 +1,6 @@
 # Testing Helpers
 
-`chumicro_sockets.testing` ships `FakeSocket` — an in-memory test double satisfying the duck-typed TCP socket surface (`send` / `recv_into` / `close` / `setblocking`) so downstream libraries (`chumicro-mqtt`, `chumicro-requests`) and your own network apps can reach high coverage without spinning up a network.
+`chumicro_sockets.testing` ships in-memory socket doubles so network code can be tested without a network.  `FakeSocket` answers the same `send` / `recv_into` / `close` / `setblocking` calls a real socket answers, `FakeUDPSocket` does the same for datagrams, and `FakeSocketConnector` stands in for the tick-driven dial a connector performs.  The module declares itself test support, so the deploy walker and the bundle builder drop it and it never lands on a microcontroller.
 
 ## Usage
 
@@ -22,7 +22,7 @@ def test_handshake_writes_correct_prefix():
 
 `FakeSocket.sent` is a `bytearray` that accumulates every `send()` call.  `enqueue_recv(chunk)` queues a chunk for the next `recv_into()`; multiple chunks queue in FIFO order.  `enqueue_eagain_for_send(count)` and `enqueue_eagain_for_recv(count)` script `OSError(EAGAIN)` raises so non-blocking-loop logic can be exercised deterministically.
 
-A short read pushes the unconsumed tail back on the queue head — mimics real-socket fragmentation:
+A short read pushes the unconsumed tail back on the queue head, the way a real socket splits a stream across reads:
 
 ```python
 sock = FakeSocket()
@@ -32,7 +32,9 @@ sock.recv_into(buffer, 3)   # reads "abc"; "def" still queued
 sock.recv_into(buffer, 8)   # reads "def"
 ```
 
-## Usage from other libraries
+## Using these fakes in your own tests
+
+Your test suite imports them straight from the installed package, the same way this library's own tests do:
 
 ```python
 from chumicro_sockets.testing import FakeSocket

@@ -1,16 +1,10 @@
 # Testing Helpers
 
-Host-only fakes for testing code that depends on `chumicro-requests`.
-Excluded from every device bundle by name, so they never land on a
-microcontroller.
+Host-only fakes for testing code that depends on `chumicro-requests`.  `chumicro_requests.testing` declares itself test support, so the deploy walker and the bundle builder drop it and it never lands on a microcontroller.
 
 ## `FakeHttpClient`
 
-In-memory `HttpClient` stand-in. Same external surface (`get` / `check`
-/ `handle` / `busy` / `on_oversized`); tests script responses via
-`enqueue_response()` (success) or `enqueue_error()` (failure). Each
-`get()` pops one scripted entry; the next `handle()` tick completes
-the `RequestHandle`.
+In-memory `HttpClient` stand-in.  It answers the same `get` / `check` / `handle` / `busy` / `on_oversized` calls the real client answers, and tests script responses with `enqueue_response()` (success) or `enqueue_error()` (failure).  Each `get()` pops one scripted entry, and the next `handle()` tick completes the `RequestHandle`.
 
 ```python
 from chumicro_requests.testing import FakeHttpClient
@@ -28,10 +22,7 @@ assert fake.calls[0].url == "http://api.example.test/weather"
 
 ## Streamed requests
 
-A `stream=True` request against the fake compresses the real client's
-contract into one tick: `handle()` completes the request, and the
-scripted body drains through `read_body_into` — bytes first, then `0`
-for end of body.
+A `stream=True` request against the fake compresses the real client's contract into one tick: `handle()` completes the request, and the scripted body drains through `read_body_into`, bytes first, then `0` for end of body.
 
 ```python
 fake = FakeHttpClient()
@@ -46,8 +37,7 @@ assert handle.result.streamed is True
 assert fake.calls[0].stream is True
 ```
 
-`fake.cancel()` mirrors `HttpClient.cancel()`: the in-flight handle
-finishes with an `HttpError` and its `on_done` callback fires.
+`fake.cancel()` mirrors `HttpClient.cancel()`: the in-flight handle finishes with an `HttpError` and its `on_done` callback fires.
 
 ## `enqueue_error` example
 
@@ -64,15 +54,15 @@ weather.tick(now_ms=10)
 assert weather.last_error_message == "simulated timeout"
 ```
 
-## Usage from other libraries
+## Using these fakes in your own tests
 
-Libraries that depend on `chumicro-requests` can import the fake directly in their own test suites:
+Your test suite imports the fake straight from the installed package, the same way this library's own tests do:
 
 ```python
 from chumicro_requests.testing import FakeHttpClient
 ```
 
-Libraries that expose injectable services ship their own test fakes alongside the production code, so every consumer uses the same shared fake.
+Project convention: libraries that expose injectable services ship their own test fakes alongside the production code.
 
 ## API Reference
 

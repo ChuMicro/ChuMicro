@@ -2,7 +2,7 @@
 
 **Cross-runtime compatibility polyfills for CircuitPython, MicroPython, and CPython.**
 
-Lightweight reimplementations of CPython standard-library features missing on microcontroller runtimes — on CPython, the real C implementations are re-exported with no overhead.
+Lightweight reimplementations of the standard-library pieces CircuitPython and MicroPython leave out. Import from `chumicro_compat` and the same code runs on all three runtimes: on CPython the real C implementation is re-exported, so the import costs nothing there.
 
 ## Quick example
 
@@ -21,8 +21,8 @@ set_status_led(100)  # pin 13 → 100%
 
 ## Documentation
 
-- [User Guide](guide.md) — what's polyfilled and why, usage patterns
-- [API Reference](api.md) — full API documentation
+- [User Guide](guide.md): `functools.partial` across runtimes, platform notes, examples
+- [API Reference](api.md): `partial` and its `func` / `args` / `keywords` attributes
 
 ---
 

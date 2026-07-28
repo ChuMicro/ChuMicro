@@ -2,7 +2,7 @@
 
 **Cross-runtime [MessagePack](https://msgpack.org) serialization for CircuitPython, MicroPython, and CPython.**
 
-Encodes Python objects to compact binary bytes and decodes them back.  On CircuitPython boards with the native `msgpack` C module, all functions delegate to the built-in — the pure-Python encoder is never loaded.
+Encodes Python objects to compact binary bytes and decodes them back.  On CircuitPython firmware that ships the native `msgpack` C module, every function delegates to that built-in and the pure-Python encoder never loads.
 
 ## Quick example
 
@@ -20,8 +20,8 @@ print(restored)              # {0: 'MyNetwork', 1: 'secret', 2: True}
 
 ## Documentation
 
-- [User Guide](guide.md) — getting started, usage patterns, size comparison
-- [API Reference](api.md) — full API documentation
+- [User Guide](guide.md): the stream and bytes APIs, when to reach for msgpack instead of `struct`, decoding corrupt or untrusted input, integer keys for compact storage, the supported types, and the size comparison against JSON
+- [API Reference](api.md): `packb` and `unpackb` for bytes, `pack` and `unpack` for streams
 
 ---
 

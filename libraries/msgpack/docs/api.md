@@ -1,12 +1,10 @@
 # API Reference
 
-## chumicro_msgpack
+## `chumicro_msgpack`
+
+`packb` and `unpackb` work on `bytes` in memory; `pack` and `unpack` read and write a stream, which keeps a large value off the heap on a small board.
 
 ::: chumicro_msgpack
-
-## chumicro_msgpack._pure
-
-::: chumicro_msgpack._pure
     options:
       members:
         - packb
@@ -20,6 +18,9 @@
 
 [← Home](index.md)
 
-[Source](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/msgpack) · [PyPI](https://pypi.org/project/chumicro-msgpack/) · [Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) · [Experimental Bundle](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental)
+[Source](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/msgpack) · \
+[PyPI](https://pypi.org/project/chumicro-msgpack/) · \
+[Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) · \
+[Experimental Bundle](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental)
 
 </div>

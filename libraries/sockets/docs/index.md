@@ -1,15 +1,16 @@
 # chumicro-sockets
 
-**Cross-runtime TCP + TLS client sockets for CircuitPython, MicroPython, and CPython.**
+**One TCP, TLS, and UDP socket surface across CircuitPython, MicroPython, and CPython.**
 
-One protocol, one connect entry, runtime-appropriate adapters underneath — CircuitPython's `socketpool`, MicroPython's `socket` + `ssl`, CPython's stdlib.
+Three entry points cover the shapes a device needs: `connector` dials out, `listener` accepts inbound connections, and `udp_socket` sends and receives datagrams.  TLS is a `tls=` flag on each, and custom-CA trust and server-side certificates work the same way everywhere.  Underneath, each entry picks the runtime's own substrate (CircuitPython's `socketpool`, MicroPython's `socket` plus `ssl`, CPython's stdlib) so your code never names one.
 
 ## Quick example
 
 ```python
 from chumicro_sockets import connector
 
-# On CircuitPython pass `radio=wifi.radio` here; MP / CPython ignore the kwarg.
+# CircuitPython needs the board radio: import the built-in wifi module and
+# pass radio=wifi.radio.  MicroPython and CPython ignore the argument.
 dial = connector("broker.example.com", 1883, radio=None)
 while dial.state not in ("ready", "failed"):  # or register with a runner
     dial.tick(0)
@@ -24,9 +25,9 @@ sock.close()
 
 ## Documentation
 
-- [User Guide](guide.md) — getting started and usage patterns
-- [API Reference](api.md) — full API documentation
-- [Testing Helpers](testing.md) — fakes for downstream test suites
+- [User Guide](guide.md): plain TCP, TLS defaults, TLS with a custom CA, driving a connector from a runner, per-runtime and per-chip quirks
+- [API Reference](api.md): `connector` / `listener` / `udp_socket` and the SSL-context builders, plus the transport factories, the generator helpers, and the wait objects
+- [Testing Helpers](testing.md): using `FakeSocket` in your tests
 
 ---
 

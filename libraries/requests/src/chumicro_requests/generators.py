@@ -78,19 +78,19 @@ class BodyReader:
 
 
 def fetch(
-    transport_factory,
-    method,
-    url,
+    transport_factory: object,
+    method: str,
+    url: str,
     *,
-    headers=None,
-    body=None,
-    json=None,
-    max_redirects=None,
-    max_body_bytes=DEFAULT_MAX_BODY_BYTES,
-    timeout_ms=DEFAULT_TIMEOUT_MS,
-    user_agent=None,
-    ticks=None,
-):
+    headers: object | None = None,
+    body: object | None = None,
+    json: object | None = None,
+    max_redirects: int | None = None,
+    max_body_bytes: int = DEFAULT_MAX_BODY_BYTES,
+    timeout_ms: int = DEFAULT_TIMEOUT_MS,
+    user_agent: str | None = None,
+    ticks: object | None = None,
+) -> object:
     """Issue one HTTP request and return the :class:`Response`.
 
     Args:
