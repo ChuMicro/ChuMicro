@@ -478,9 +478,8 @@
 
 
 <h1 id="chumicro-runner">chumicro-runner<a class="headerlink" href="#chumicro-runner" title="Permanent link">&para;</a></h1>
-<p><strong>Tick-based scheduling for CircuitPython, MicroPython, and CPython — debuggable from <code>print()</code>.</strong></p>
-<p><code>runner.tick()</code> runs every registered service once on a shared timestamp.  Each service is one object with <code>check(now_ms)</code> + <code>handle(now_ms)</code>; your loop is six lines.  Every state change shows up in the order you wrote.</p>
-<p>Every networked library in ChuMicro (<code>chumicro-wifi</code>, <code>chumicro-sockets</code>, <code>chumicro-mqtt</code>, <code>chumicro-requests</code>, <code>chumicro-http-server</code>, <code>chumicro-websockets</code>) is shaped to register here — your LED can keep blinking through a TLS handshake, a slow HTTP response, or a stalled MQTT peer because every one of them gets the same fair share of every tick.</p>
+<p><strong>Tick-based scheduling for CircuitPython, MicroPython, and CPython, debuggable from <code>print()</code>.</strong></p>
+<p>Your main loop is the two calls below: <code>runner.tick()</code> runs every registered service once on a shared timestamp, then <code>runner.wait()</code> idles the CPU until the next deadline or socket event.  Each service is one object with <code>check(now_ms)</code> and <code>handle(now_ms)</code>, so every state change happens in the order you wrote and a <code>print()</code> shows it.  Every networked library in ChuMicro (<code>chumicro-wifi</code>, <code>chumicro-sockets</code>, <code>chumicro-mqtt</code>, <code>chumicro-requests</code>, <code>chumicro-http-server</code>, <code>chumicro-websockets</code>) is shaped to register here, so your LED keeps blinking through a TLS handshake, a slow HTTP response, or a stalled MQTT peer: each of them gets the same share of every tick.</p>
 <h2 id="quick-example">Quick example<a class="headerlink" href="#quick-example" title="Permanent link">&para;</a></h2>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_runner</span><span class="w"> </span><span class="kn">import</span> <span class="n">Runner</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
@@ -489,13 +488,14 @@
 </span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="n">runner</span><span class="o">.</span><span class="n">add_periodic</span><span class="p">(</span><span class="k">lambda</span> <span class="n">now_ms</span><span class="p">:</span> <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;five seconds&quot;</span><span class="p">),</span> <span class="n">period_ms</span><span class="o">=</span><span class="mi">5000</span><span class="p">)</span>
 </span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>
 </span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">runner</span><span class="o">.</span><span class="n">tick</span><span class="p">()</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">now_ms</span> <span class="o">=</span> <span class="n">runner</span><span class="o">.</span><span class="n">tick</span><span class="p">()</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">runner</span><span class="o">.</span><span class="n">wait</span><span class="p">(</span><span class="n">now_ms</span><span class="p">)</span>
 </span></code></pre></div>
 <h2 id="documentation">Documentation<a class="headerlink" href="#documentation" title="Permanent link">&para;</a></h2>
 <ul>
-<li><a href="guide/">User Guide</a> — getting started and usage patterns</li>
-<li><a href="api/">API Reference</a> — full API documentation</li>
-<li><a href="testing/">Testing Helpers</a> — using fakes in your tests</li>
+<li><a href="guide/">User Guide</a>: the check / handle service contract, registration patterns, generator-driven flows, idling between ticks, period-gated and batch-fired services</li>
+<li><a href="api/">API Reference</a>: <code>Runner</code> with its <code>add</code> / <code>add_periodic</code> / <code>add_generator</code> registrations, <code>TaskHandle</code>, and the <code>sleep_until</code> suspension helper</li>
+<li><a href="testing/">Testing Helpers</a>: using <code>CallRecorder</code>, <code>FakePoller</code>, and <code>validate_service</code> in your tests</li>
 </ul>
 <hr />
 <div class="chumicro-footer">
