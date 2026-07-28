@@ -401,10 +401,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#usage-from-other-libraries" class="md-nav__link">
+  <a href="#using-these-fakes-in-your-own-tests" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
-        Usage from other libraries
+        Using these fakes in your own tests
       </span>
     </span>
   </a>
@@ -714,10 +714,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#usage-from-other-libraries" class="md-nav__link">
+  <a href="#using-these-fakes-in-your-own-tests" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
-        Usage from other libraries
+        Using these fakes in your own tests
       </span>
     </span>
   </a>
@@ -964,15 +964,9 @@
 
 
 <h1 id="testing-helpers">Testing Helpers<a class="headerlink" href="#testing-helpers" title="Permanent link">&para;</a></h1>
-<p>Host-only fakes for testing code that depends on <code>chumicro-requests</code>.
-Excluded from every device bundle by name, so they never land on a
-microcontroller.</p>
+<p>Host-only fakes for testing code that depends on <code>chumicro-requests</code>.  <code>chumicro_requests.testing</code> declares itself test support, so the deploy walker and the bundle builder drop it and it never lands on a microcontroller.</p>
 <h2 id="fakehttpclient"><code>FakeHttpClient</code><a class="headerlink" href="#fakehttpclient" title="Permanent link">&para;</a></h2>
-<p>In-memory <code>HttpClient</code> stand-in. Same external surface (<code>get</code> / <code>check</code>
-/ <code>handle</code> / <code>busy</code> / <code>on_oversized</code>); tests script responses via
-<code>enqueue_response()</code> (success) or <code>enqueue_error()</code> (failure). Each
-<code>get()</code> pops one scripted entry; the next <code>handle()</code> tick completes
-the <code>RequestHandle</code>.</p>
+<p>In-memory <code>HttpClient</code> stand-in.  It answers the same <code>get</code> / <code>check</code> / <code>handle</code> / <code>busy</code> / <code>on_oversized</code> calls the real client answers, and tests script responses with <code>enqueue_response()</code> (success) or <code>enqueue_error()</code> (failure).  Each <code>get()</code> pops one scripted entry, and the next <code>handle()</code> tick completes the <code>RequestHandle</code>.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_requests.testing</span><span class="w"> </span><span class="kn">import</span> <span class="n">FakeHttpClient</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">fake</span> <span class="o">=</span> <span class="n">FakeHttpClient</span><span class="p">()</span>
@@ -986,10 +980,7 @@ the <code>RequestHandle</code>.</p>
 </span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="k">assert</span> <span class="n">fake</span><span class="o">.</span><span class="n">calls</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">url</span> <span class="o">==</span> <span class="s2">&quot;http://api.example.test/weather&quot;</span>
 </span></code></pre></div>
 <h2 id="streamed-requests">Streamed requests<a class="headerlink" href="#streamed-requests" title="Permanent link">&para;</a></h2>
-<p>A <code>stream=True</code> request against the fake compresses the real client's
-contract into one tick: <code>handle()</code> completes the request, and the
-scripted body drains through <code>read_body_into</code> — bytes first, then <code>0</code>
-for end of body.</p>
+<p>A <code>stream=True</code> request against the fake compresses the real client's contract into one tick: <code>handle()</code> completes the request, and the scripted body drains through <code>read_body_into</code>, bytes first, then <code>0</code> for end of body.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">fake</span> <span class="o">=</span> <span class="n">FakeHttpClient</span><span class="p">()</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">fake</span><span class="o">.</span><span class="n">enqueue_response</span><span class="p">(</span><span class="n">status</span><span class="o">=</span><span class="mi">200</span><span class="p">,</span> <span class="n">body</span><span class="o">=</span><span class="sa">b</span><span class="s2">&quot;blob-bytes&quot;</span><span class="p">)</span>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
@@ -1001,8 +992,7 @@ for end of body.</p>
 </span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="k">assert</span> <span class="n">handle</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">streamed</span> <span class="ow">is</span> <span class="kc">True</span>
 </span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="k">assert</span> <span class="n">fake</span><span class="o">.</span><span class="n">calls</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">stream</span> <span class="ow">is</span> <span class="kc">True</span>
 </span></code></pre></div>
-<p><code>fake.cancel()</code> mirrors <code>HttpClient.cancel()</code>: the in-flight handle
-finishes with an <code>HttpError</code> and its <code>on_done</code> callback fires.</p>
+<p><code>fake.cancel()</code> mirrors <code>HttpClient.cancel()</code>: the in-flight handle finishes with an <code>HttpError</code> and its <code>on_done</code> callback fires.</p>
 <h2 id="enqueue_error-example"><code>enqueue_error</code> example<a class="headerlink" href="#enqueue_error-example" title="Permanent link">&para;</a></h2>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_requests</span><span class="w"> </span><span class="kn">import</span> <span class="n">HttpTimeoutError</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_requests.testing</span><span class="w"> </span><span class="kn">import</span> <span class="n">FakeHttpClient</span>
@@ -1015,11 +1005,11 @@ finishes with an <code>HttpError</code> and its <code>on_done</code> callback fi
 </span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="n">weather</span><span class="o">.</span><span class="n">tick</span><span class="p">(</span><span class="n">now_ms</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
 </span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="k">assert</span> <span class="n">weather</span><span class="o">.</span><span class="n">last_error_message</span> <span class="o">==</span> <span class="s2">&quot;simulated timeout&quot;</span>
 </span></code></pre></div>
-<h2 id="usage-from-other-libraries">Usage from other libraries<a class="headerlink" href="#usage-from-other-libraries" title="Permanent link">&para;</a></h2>
-<p>Libraries that depend on <code>chumicro-requests</code> can import the fake directly in their own test suites:</p>
+<h2 id="using-these-fakes-in-your-own-tests">Using these fakes in your own tests<a class="headerlink" href="#using-these-fakes-in-your-own-tests" title="Permanent link">&para;</a></h2>
+<p>Your test suite imports the fake straight from the installed package, the same way this library's own tests do:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_requests.testing</span><span class="w"> </span><span class="kn">import</span> <span class="n">FakeHttpClient</span>
 </span></code></pre></div>
-<p>Libraries that expose injectable services ship their own test fakes alongside the production code, so every consumer uses the same shared fake.</p>
+<p>Project convention: libraries that expose injectable services ship their own test fakes alongside the production code.</p>
 <h2 id="api-reference">API Reference<a class="headerlink" href="#api-reference" title="Permanent link">&para;</a></h2>
 
 
