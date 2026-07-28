@@ -2,4 +2,4 @@ blank_issues_enabled: true
 contact_links:
   - name: Ask a question
     url: https://github.com/ChuMicro/ChuMicro/discussions/new?category=q-a
-    about: Use Discussions for questions, help, and ideas — Issues are for bugs and feature requests.
+    about: Use Discussions for questions, help, and ideas; Issues are for bugs and feature requests.

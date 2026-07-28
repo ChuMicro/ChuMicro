@@ -1,6 +1,6 @@
 # Testing Helpers
 
-<!-- GENERATION INSTRUCTIONS — delete this block once the page is written.
+<!-- GENERATION INSTRUCTIONS: delete this block once the page is written.
 
      This page documents the fakes in the package's `testing` submodule.
      If this workbench tool does NOT expose injectable services that
@@ -8,8 +8,9 @@
        1. Delete this file (`docs/testing.md`)
        2. Delete `src/{import_name}/testing.py`
        3. Remove the `- Testing Helpers: testing.md` line from `mkdocs.yml`
-       4. Remove the Testing Helpers link from `docs/index.md`
-       5. Remove the Testing helpers link from `README.md`
+       4. Remove the Testing Helpers bullet from `docs/index.md`
+       5. Remove the `### Testing` group from the "What's included" tables
+          in `README.md`
 
      Workbench tools that accept dependencies via constructor injection
      (subprocess, serial port, filesystem) should provide ready-made
@@ -29,15 +30,15 @@ def test_example():
     ...
 ```
 
-## Usage from other packages
+## Using these fakes in your own tests
 
-Other workbench tools that depend on `{distribution}` can import the fakes directly:
+Install `{distribution}` and import the fakes straight into your test suite:
 
 ```python
 from {import_name}.testing import Fake...
 ```
 
-Workbench tools that expose injectable services ship their own test fakes alongside the production code, so every consumer uses the same shared fake.
+Project convention: packages that expose injectable services ship their own test fakes alongside the production code.
 
 ## API Reference
 

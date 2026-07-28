@@ -1,8 +1,8 @@
 """Tests for {import_name}.
 
-Cross-runtime: runs on CPython (via pytest), and — if you import
-``raises`` from ``chumicro_test_harness`` for exception assertions —
-on MicroPython and CircuitPython through the lightweight test harness.
+Cross-runtime: runs on CPython (via pytest), and on MicroPython and
+CircuitPython through the lightweight test harness, provided you import
+``raises`` from ``chumicro_test_harness`` for exception assertions.
 """
 
 import {import_name}

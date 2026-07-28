@@ -1,22 +1,22 @@
 # {distribution}
 
 {banner}<!-- HERO TAGLINE: one bold sentence saying what the library is for.
-     Workshop several angles before picking one — problem-stated ("Timers
+     Workshop several angles before picking one: problem-stated ("Timers
      that don't block"), differentiator ("Tick-based scheduling without
-     async"), audience-stated ("Stdlib polyfills for boards that ship without
-     them"), or vivid-concrete ("A persistent dict for counters and tokens").
-     Keep it under ~90 chars.  Avoid AI-tic filler ("comprehensive",
-     "seamless", "one-stop", "canonical" — see workspace style guide). -->
+     async"), audience-stated ("Stdlib polyfills for boards that ship
+     without them"), or vivid-concrete ("A persistent dict for counters
+     and tokens").  Keep it under ~90 chars.  Avoid AI-tic filler
+     ("comprehensive", "seamless", "one-stop", "canonical"); the workspace
+     style guide lists the rest. -->
 
 **A single-shot timer that fires once after N milliseconds.**
 
 <!-- ELABORATION: one or two sentences that flesh out the tagline.  Name the
-     concrete user value, mention cross-runtime support, and flag any
-     non-obvious constraint a cold reader would want to know inside ~10
-     seconds.  Be honest about caveats — soften sweeping claims that aren't
-     bench-verified. -->
+     concrete user value and flag any non-obvious constraint a cold reader
+     would want to know inside ~10 seconds.  Be honest about caveats, and
+     soften sweeping claims that aren't bench-verified. -->
 
-Set a deadline, poll each tick, get `True` once when time's up — no `time.sleep()`, no callbacks.  Works identically on CircuitPython, MicroPython, and CPython.
+Set a deadline, poll each tick, and get `True` once when time's up.  No `time.sleep()`, no callbacks.
 
 {family_note}## Install
 
@@ -25,7 +25,7 @@ Set a deadline, poll each tick, get `True` once when time's up — no `time.slee
 <!-- QUICK EXAMPLE: 5-12 lines.  Must actually run without modification on
      at least one runtime.  Show the most common use case, not the most
      advanced.  Add an inline comment showing the expected output so readers
-     can verify their setup works.  If the library is network-shaped (needs
+     can verify their setup works.  If the package is network-shaped (needs
      wifi credentials), use placeholders ("your-network" / "your-password")
      so the example doesn't look like a real working endpoint. -->
 
@@ -38,19 +38,20 @@ countdown = Countdown(period_ms=5000)    # fires once after 5 s
 while True:
     now = ticks_ms()
     if countdown.fired(now):
-        print("time's up")               # → "time's up" after ~5 seconds
+        print("time's up")               # prints "time's up" after ~5 seconds
         break
 ```
 
 ## What's included
 
 <!-- API SUMMARY: tables grouped by purpose.  One table per major feature
-     group, not one giant catch-all.  Reference shapes:
-     - libraries/timing/README.md — small surface, three groups
-     - libraries/runner/README.md — richer surface, API + registration
-       patterns + runtime mutation + testing
-     Each row: `| Symbol | One-line description |`.  Use the same column
-     header text across groups for visual consistency. -->
+     group, not one giant catch-all.  Two shapes are in use across the
+     published packages: a small surface splits into two or three groups
+     (core objects, helpers, fakes), and a richer surface adds groups for
+     registration patterns and runtime mutation.  Each row is
+     `| Symbol | One-line description |`, and the column header text stays
+     the same across groups.  The Testing group below is optional: keep it
+     only if the package ships a `testing` module of fakes. -->
 
 ### Core
 
@@ -69,53 +70,35 @@ while True:
 
 ## Where this fits
 
-<!-- STACK FIT: 1-2 sentences naming what this library depends on (upstream)
+<!-- STACK FIT: 1-2 sentences naming what this package depends on (upstream)
      and what depends on it (downstream).  Helps a cold reader place the
-     library in the ecosystem.  Drop this whole section if the library is
-     a leaf with no upstream chumicro deps and no downstream consumers —
-     be honest, don't pad. -->
+     package in the ecosystem.  Drop this whole section if the package is a
+     leaf with no upstream dependencies and no downstream consumers; be
+     honest, don't pad.  Link to other packages with absolute URLs.  A
+     relative sibling path renders broken on PyPI. -->
 
-Depends on [`chumicro-timing`](../timing/) for tick arithmetic.  Used directly in user apps; nothing downstream depends on it.
+Depends on [`chumicro-timing`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/timing) for tick arithmetic.  Used directly in user apps; nothing downstream depends on it.
 
-## Platform support
+{platform_section}## Examples
 
-Works on CPython, MicroPython, and CircuitPython.
-
-<!-- If the library has a runtime quirk (e.g. CP-on-rp2 lacks TLS server,
-     CP wifi.radio.connect is blocking, the native msgpack module is only
-     on CP firmware), add a `### <Quirk name>` subsection under here that
-     names the constraint concretely and tells the reader what to do about
-     it.  Don't bury the surprise in a docstring. -->
-
-## Examples
-
-<!-- EXAMPLES TABLE: one row per file in `examples/`.  Filename → what
+<!-- EXAMPLES TABLE: one row per file in `examples/`.  Filename, then what
      it demonstrates.  Hardware-specific examples (board GPIO, board LED)
-     should say so in the description.  CPython-runnable examples are
-     better default examples — easier for a cold reader to try. -->
+     should say so in the description.  CPython-runnable examples make the
+     better default: a cold reader can try them without a board. -->
 
 | Example | What it shows |
 |---|---|
-| [`countdown_basic.py`](examples/countdown_basic.py) | Single-shot fire on CPython — no hardware needed |
-| [`circuitpython_button_hold.py`](examples/circuitpython_button_hold.py) | LED stays lit for 5 s after a button press on CircuitPython |
-| [`micropython_button_hold.py`](examples/micropython_button_hold.py) | Same button-hold pattern on MicroPython |
+| [`countdown_basic.py`]({examples_url_base}countdown_basic.py) | Single-shot fire on CPython, no hardware needed |
+| [`circuitpython_button_hold.py`]({examples_url_base}circuitpython_button_hold.py) | LED stays lit for 5 s after a button press on CircuitPython |
+| [`micropython_button_hold.py`]({examples_url_base}micropython_button_hold.py) | Same button-hold pattern on MicroPython |
 
 ## Contributing
 
-<!-- CONTRIBUTING: leave the body as-is — it's the standard host + on-device
-     dev loop.  The section name has to be "Contributing" (matches every
-     other library); the audience-split opening sentence carries the
-     per-library specificity. -->
+<!-- CONTRIBUTING: the block below is this package's canonical Contributing
+     text.  Leave it as it renders, and keep the section named
+     "Contributing" so every package reads the same. -->
 
 {contributing_intro}
-
-```bash
-pip install -e .[test]
-pytest tests/                  # host-side tests
-pytest functional_tests/       # on-device tests (needs a board registered in devices.yml)
-```
-
-Register a board before running functional tests: `chumicro-workspace add-device <id> --address <port>`.
 
 {docs_section}{find_section}## License
 

@@ -1,13 +1,16 @@
 # {distribution}
 
-<!-- This template is a worked example for fictional `chumicro-foo` —
-     a single-shot countdown timer.  Replace the tagline + quick
-     example with your real library's shape.  Keep the Documentation
-     block + footer as-is. -->
+<!-- This template is a worked example for a fictional single-shot
+     countdown timer, the same fictional library the README and the other
+     three docs templates use.  Replace the tagline, the body sentence,
+     and the quick example with your real library's shape.  Keep the
+     Documentation bullets and the footer, and drop the Testing Helpers
+     bullet if the package ships no `testing` module.  Delete this comment
+     when you're done. -->
 
 **A single-shot timer that fires once after N milliseconds.**
 
-Set a deadline, poll each tick, get `True` once when time's up — no `time.sleep()`, no callbacks.
+Set a deadline, poll each tick, and get `True` once when time's up.  No `time.sleep()`, no callbacks.
 
 ## Quick example
 
@@ -26,7 +29,7 @@ while True:
 
 ## Documentation
 
-- [User Guide](guide.md) — getting started and usage patterns
-- [API Reference](api.md) — full API documentation
-- [Testing Helpers](testing.md) — fakes for downstream test suites
+- [User Guide](guide.md): firing once, sharing timestamps, resetting, wiring into a runner
+- [API Reference](api.md): every public class and method, generated from the source docstrings
+- [Testing Helpers](testing.md): using `FakeCountdown` in your tests
 {footer_index}

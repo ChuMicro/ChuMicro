@@ -1,8 +1,11 @@
-"""{display_name} — basic usage.
+"""{display_name}: basic usage.
 
-Shows basic usage of the {display_name} class.
+Shows basic usage of the {class_name} class.
 
 Runs on CPython, MicroPython, and CircuitPython.
+
+Rewrite the script below for your real class, then update the Example
+output block so it matches what the rewritten script actually prints.
 
 Example output::
 

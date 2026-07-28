@@ -6,8 +6,9 @@ remove all testing-helper references:
 
   1. Delete ``docs/testing.md``
   2. Remove the ``- Testing Helpers: testing.md`` line from ``mkdocs.yml`` nav
-  3. Remove the Testing Helpers link from ``docs/index.md``
-  4. Remove the Testing helpers link from ``README.md``
+  3. Remove the Testing Helpers bullet from ``docs/index.md``
+  4. Remove the ``### Testing`` group from the "What's included"
+     tables in ``README.md``
 
 When keeping this file, replace this docstring and the placeholder
 class below with real fakes.  A good fake:

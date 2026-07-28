@@ -1,16 +1,15 @@
 # User Guide
 
-<!-- This template is a worked example for fictional `chumicro-foo` —
-     a single-shot countdown timer.  Same fictional library as
-     readme.md.template + the other three docs templates.  Rewrite
-     each section for your real library, keeping the same shape and
-     section ordering.  Drop the conditional Runner-pattern + Memory-
-     notes sections if they don't apply.  Delete this comment when
-     you're done. -->
+<!-- This template is a worked example for a fictional single-shot
+     countdown timer, the same fictional library the README and the other
+     three docs templates use.  Rewrite each section for your real
+     library, keeping the same shape and section ordering.  Drop the
+     conditional Runner-pattern and Memory-notes sections if they don't
+     apply.  Delete this comment when you're done. -->
 
 ## Overview
 
-`{distribution}` provides `Countdown` — a single-shot timer that fires once after a period elapses, then stays fired until you reset it.  No `time.sleep()`, no callbacks, no async — you poll once per tick and the timer tells you when the deadline has passed.
+`{distribution}` provides `Countdown`, a single-shot timer that fires once after a period elapses and stays fired until you reset it.  No `time.sleep()`, no callbacks, no async: you poll once per tick and the timer tells you when the deadline has passed.
 
 The typical use is a watchdog or a delayed action: arm the countdown, poll it each iteration of your main loop, run the side-effect once on the first `True`.
 
@@ -31,11 +30,13 @@ while True:
         break
 ```
 
-`fired(now_ms)` returns `True` exactly once — the first poll after the deadline.  Every subsequent call returns `False` until you `reset()`.
+`fired(now_ms)` returns `True` exactly once, on the first poll after the deadline.  Every subsequent call returns `False` until you `reset()`.
 
 ### Sharing timestamps
 
 Capture `ticks_ms()` once per loop iteration and pass the same value to every component.  Independent clock reads drift on slow microcontrollers, which can desynchronize timers that should fire together.
+
+In the snippet below, `screen` and `radio` stand in for the display and network objects your own app already holds:
 
 ```python
 from {import_name} import Countdown
@@ -74,27 +75,30 @@ if countdown.remaining_ms(now) < 1000:
 
 ## Runner pattern
 
-`Countdown` is poll-shaped, not runner-shaped — it doesn't own a clock or schedule itself.  Wire it into a `Runner` by polling from a check function:
+`Countdown` is poll-shaped, not runner-shaped: it owns no clock and doesn't schedule itself.  Wire it into a `Runner` by polling it from a registered handler:
 
 ```python
 from chumicro_runner import Runner
 from {import_name} import Countdown
 
 countdown = Countdown(period_ms=5000)
+fired = []
 
-def deadline_check():
-    if countdown.fired(runner.now_ms):
+def poll_deadline(now_ms):
+    if countdown.fired(now_ms):
         print("time's up")
-        runner.stop()
+        fired.append(now_ms)
 
 runner = Runner()
-runner.add(deadline_check)
-runner.run()
+runner.add(handler=poll_deadline, period_ms=100)
+runner.run_until(lambda: fired)
 ```
+
+`runner.add(handler=...)` registers a plain callable the runner invokes with the current tick value, and `period_ms` sets how often.  `run_until(predicate)` drives the tick-and-idle loop until the predicate returns something truthy; pass `timeout_ms=` as well to bound the wait.
 
 ## Memory notes
 
-`Countdown` holds three ints (period, deadline, fired flag) — under 50 bytes per instance.  No buffers, no allocations on `fired()` or `reset()`.  Safe to instantiate one per logical timer; preallocating a pool gains nothing.
+`Countdown` holds three ints (period, deadline, fired flag), under 50 bytes per instance.  No buffers, no allocations on `fired()` or `reset()`.  Safe to instantiate one per logical timer; preallocating a pool gains nothing.
 
 ## Platform notes
 
@@ -104,7 +108,7 @@ Works identically on CPython, MicroPython, and CircuitPython.  All tick arithmet
 
 | Example | What it shows |
 |---|---|
-| [`countdown_basic.py`]({examples_url_base}countdown_basic.py) | Single-shot fire on CPython — no hardware needed |
+| [`countdown_basic.py`]({examples_url_base}countdown_basic.py) | Single-shot fire on CPython, no hardware needed |
 | [`circuitpython_button_hold.py`]({examples_url_base}circuitpython_button_hold.py) | LED stays lit for 5 s after a button press on CircuitPython |
 | [`micropython_button_hold.py`]({examples_url_base}micropython_button_hold.py) | Same button-hold pattern on MicroPython |
 {footer_page}

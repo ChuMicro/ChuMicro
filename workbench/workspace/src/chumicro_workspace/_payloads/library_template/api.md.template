@@ -1,12 +1,14 @@
 # API Reference
 
-<!-- Starts as a single autodoc directive for the whole package.  As
-     the library grows multiple modules, split this into per-module
-     sections with `## Heading` + `::: {import_name}.<module>`
-     directives — see libraries/timing/docs/api.md for an example.
-     The autodoc renderer pulls docstrings + type hints directly from
-     the source, so the page stays in sync with the code without
-     manual edits here. -->
+<!-- Delete this comment before you publish: a finished api.md carries no
+     scaffold guidance.  The page is one `## ` heading per public module
+     you document, the fully qualified module path in backticks (for
+     example `## `{import_name}.core``), with a single `:::` directive
+     under each.  Modules whose name starts with an underscore stay
+     undocumented.  The whole-package directive below is the right shape
+     until the package grows a second public module.  The renderer pulls
+     docstrings and type hints from the source, so the page stays in sync
+     with the code without manual edits here. -->
 
 ::: {import_name}
 {footer_page}

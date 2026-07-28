@@ -1,21 +1,21 @@
-# workspace.yml — host-only workspace machinery for this workspace.
+# workspace.yml: host-only workspace machinery for this workspace.
 #
-# Gitignored.  Materialised on first ``setup`` and never overwritten —
+# Gitignored.  Materialised on first ``setup`` and never overwritten;
 # edit it freely; re-runs of setup will not clobber your changes.
 #
-# This file holds host-only machinery — nothing here flows onto a
+# This file holds host-only machinery; nothing here flows onto a
 # device.  Wifi credentials, broker auth, and other device-bound
 # defaults live in the gitignored ``secrets.toml`` instead.
 #
 # Four top-level blocks (all optional):
 #
 #   library_sources: Local paths or pinned overrides for shared libraries.
-#                    Empty by default — falls through to the workspace's
+#                    Empty by default; falls through to the workspace's
 #                    ``shared/`` / ``libraries/`` / ``packages/`` tree.
 #
 #   deploy_targets:  Per-project → per-device default mapping.  Bare
 #                    ``deploy <project>`` (no --device) picks the
-#                    project's mapped target.  Empty by default —
+#                    project's mapped target.  Empty by default;
 #                    single-project deploys fall back to devices.yml's
 #                    ``defaults:`` block.
 #

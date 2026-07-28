@@ -16,8 +16,8 @@ authors = [
 ]
 keywords = [
     # Workbench tools run on the host (laptop), not on a board.  Tag with
-    # the things they help you do — typical entries: "deploy", "serial",
-    # "config", "workspace", etc.
+    # the things they help you do.  Typical entries: "deploy", "serial",
+    # "config", "workspace".
     "host", "workbench",
 ]
 classifiers = [
@@ -30,9 +30,9 @@ classifiers = [
 ]
 dependencies = [
     # Workbench packages may freely depend on CPython-only third-party
-    # libraries (pyserial, pyyaml, ruamel, rich, etc.) — workbench is
-    # CPython-only.  Don't depend on chumicro libraries from
-    # libraries/ — those are for the device.
+    # libraries (pyserial, pyyaml, ruamel, rich, etc.) because workbench
+    # packages are CPython-only.  Don't depend on the chumicro device
+    # libraries; those are built for the board.
 ]
 
 {project_urls}[project.scripts]

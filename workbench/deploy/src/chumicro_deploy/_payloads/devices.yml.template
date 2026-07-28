@@ -1,4 +1,4 @@
-# devices.yml — board registry.  Three-zone shape:
+# devices.yml: board registry.  Three-zone shape:
 #
 #   USER-OWNED      Never overwritten without --force.  Edit freely.
 #   HARDWARE-ONCE   Written on first probe; prompts before re-overwriting
@@ -8,7 +8,7 @@
 # `chumicro-workspace add-device`, `rename`, and `probe` edit this file
 # via ruamel.yaml; user comments + key order survive every round-trip.
 #
-# This file is gitignored — it will not be committed.
+# This file is gitignored; it will not be committed.
 
 defaults:
   # Pin which device id each runtime defaults to when no --device
@@ -23,7 +23,7 @@ defaults:
   deploy_mode: flash
   # Which runtimes IDE play buttons target: "micropython", "circuitpython",
   # or "both".  Drives `chumicro-pytest-device`'s IDE-targeting collection
-  # for `functional_tests/` — relevant in any workspace where library
+  # for `functional_tests/`, relevant in any workspace where library
   # authors run their tests through an IDE play button (e.g.
   # workspace-template users who scaffold their own libraries via
   # `chumicro-workspace new --library <name>`).
@@ -37,7 +37,7 @@ devices: []
   #   runtime: micropython                          # USER-OWNED
   #   # supports_ram_mode: false                    # USER-OWNED
   #   #   Optional. Default true. Set false ONLY for a board that
-  #   #   cannot run RAM mode at all — a requested ram deploy then
+  #   #   cannot run RAM mode at all; a requested ram deploy then
   #   #   switches to flash with a message. A board where RAM is
   #   #   merely tight (e.g. Pi Pico W's 256 KB) should stay true;
   #   #   tightness is handled per-library, not by disabling the board.
