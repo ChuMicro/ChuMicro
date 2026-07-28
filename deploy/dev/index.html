@@ -545,7 +545,7 @@
 
 <h1 id="chumicro-deploy">chumicro-deploy<a class="headerlink" href="#chumicro-deploy" title="Permanent link">&para;</a></h1>
 <p><strong>Host-side transports and deploy tooling for CircuitPython and MicroPython boards.</strong></p>
-<p>Push code, probe identity, flash firmware, recover from common transport failures.  Runs on your laptop — not on the board.</p>
+<p>Push code onto a board, find out what firmware it is running, flash new firmware, and get a readable explanation when the serial port or the CIRCUITPY drive misbehaves. Runs on your laptop, not on the board.</p>
 <h2 id="quick-example">Quick example<a class="headerlink" href="#quick-example" title="Permanent link">&para;</a></h2>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_deploy</span><span class="w"> </span><span class="kn">import</span> <span class="n">Device</span><span class="p">,</span> <span class="n">Deployer</span><span class="p">,</span> <span class="n">FileMapSource</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
@@ -559,42 +559,39 @@
 </span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="n">entrypoint</span><span class="o">=</span><span class="s2">&quot;/main.py&quot;</span><span class="p">,</span>
 </span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="p">)</span>
 </span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="n">result</span> <span class="o">=</span> <span class="n">Deployer</span><span class="p">(</span><span class="n">device</span><span class="p">)</span><span class="o">.</span><span class="n">deploy</span><span class="p">(</span><span class="n">source</span><span class="p">)</span>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="n">result</span> <span class="o">=</span> <span class="n">Deployer</span><span class="p">(</span><span class="n">device</span><span class="p">)</span><span class="o">.</span><span class="n">deploy_diff</span><span class="p">(</span><span class="n">source</span><span class="p">)</span>
 </span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="nb">print</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">execute_output</span><span class="p">)</span>
 </span></code></pre></div>
 <h2 id="what-you-get">What you get<a class="headerlink" href="#what-you-get" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong><code>Device</code></strong> — configure a target board (runtime, address, deploy mode). Construct it explicitly, from a dict via <code>Device.from_dict</code>, or load it from a <code>devices.yml</code> workspace file (see below).</li>
-<li><strong><code>Deployer</code></strong> — write files onto the board and run the entrypoint.</li>
-<li><strong><code>RecoveringDeployer</code></strong> — wraps <code>Deployer</code> with failure classification and user-facing coaching (unplug, drive ejected, REPL stuck, macOS FSKit wedge).  Pass <code>prompt=input</code> for an interactive retry loop; the default <code>prompt=None</code> reports once and re-raises.</li>
-<li><strong><code>FileSource</code> variants</strong> — <code>FileMapSource</code> for in-memory dicts, <code>DirectorySource</code> for a host directory, <code>ImportGraphSource</code> to walk Python imports.</li>
-<li><strong><code>probe_device</code></strong> — identify a connected board (runtime, version, machine, CPU UID).</li>
-<li><strong><code>flash_firmware</code></strong> — download and flash firmware via UF2 (Pi Pico family) or esptool (ESP32 family), with programmatic bootloader entry + interactive fallback.</li>
-<li><strong><code>resolve_firmware_url</code></strong> — turn a board ID + version into a download URL.</li>
-<li><strong><code>chumicro_deploy.config.default.load_devices_yml</code></strong> — built-in <code>devices.yml</code> loader. Accepts <code>device_id</code> for a specific entry or <code>runtime</code> for the workspace's CP / MP default. The schema is owned here; <code>chumicro-repl</code> and any future workbench tool consume the same shape.</li>
-<li><strong><code>chumicro_deploy.host_platform</code></strong> — <code>WindowsNotSupportedError</code> / <code>RsyncMissingError</code> for the two host prerequisites that aren't auto-installable.</li>
-<li><strong><code>MicropythonTransport</code> / <code>CircuitpythonTransport</code></strong> — the lower-level transport layer if you need to drive stage / execute yourself.</li>
+<li><strong>Ship a directory, a dict you built in memory, or only the modules your entrypoint imports.</strong> <code>DirectorySource</code> walks a host directory, <code>FileMapSource</code> takes a <code>dict</code> mapping on-device paths to contents, and <code>ImportGraphSource</code> reads the import statements out of your entrypoint and ships just what they resolve to.</li>
+<li><strong>Run from RAM while you iterate, write to flash when the code has to survive a reboot.</strong> <code>Device(deploy_mode="ram")</code> pushes the payload over the serial REPL without touching the board's filesystem; <code>deploy_mode="flash"</code> writes it down. <code>Deployer.deploy_diff</code> also deletes on-device files that are no longer in the payload, so the board matches what you just sent.</li>
+<li><strong>Get told what went wrong and how to fix it.</strong> <code>RecoveringDeployer</code> names the failure (another app is holding the port, the CIRCUITPY drive is gone, the REPL is stuck, macOS has wedged its FSKit filesystem extension) and prints the physical steps that clear it. Pass <code>prompt=input</code> for an Enter-to-retry loop; the default reports once and re-raises.</li>
+<li><strong>Check what a board is running before you deploy to it.</strong> <code>probe_device</code> returns the runtime name, version, machine string, and CPU UID.</li>
+<li><strong>Reflash a board from a firmware URL.</strong> <code>flash_firmware</code> covers the UF2 bootloader drive (Pi Pico family) and esptool over serial (ESP32 family). It enters the bootloader for you and asks you to hold the button only when that fails. <code>resolve_firmware_url</code> builds the CircuitPython download URL from a board ID and a version.</li>
+<li><strong>Keep the connection details in one <code>devices.yml</code> instead of in every script.</strong> <code>chumicro_deploy.config.default.load_devices_yml</code> reads one entry by id, or the workspace default for a runtime. The schema is owned here, and <code>chumicro-repl</code> reads the same file.</li>
+<li><strong>Drive the transport layer yourself when you need to.</strong> <code>chumicro_deploy.micropython_transport.MicropythonTransport</code> and <code>chumicro_deploy.circuitpython_transport.CircuitpythonTransport</code> expose the staging and execution steps directly. Two host prerequisites that cannot be installed for you raise named errors from <code>chumicro_deploy.host_platform</code>: <code>WindowsNotSupportedError</code> and <code>RsyncMissingError</code>.</li>
 </ul>
 <h2 id="companion-chumicro-repl">Companion: chumicro-repl<a class="headerlink" href="#companion-chumicro-repl" title="Permanent link">&para;</a></h2>
-<p>After a deploy, follow the board with <strong><a href="../repl/"><code>chumicro-repl</code></a></strong> — the sister workbench tool that opens interactive serial sessions, tails the friendly REPL, and exposes a programmatic <code>ReplSession</code> for headless test fixtures. Both tools consume the same <code>devices.yml</code> workspace file:</p>
+<p>After a deploy, follow the board with <a href="https://chumicro.github.io/ChuMicro/repl/stable/"><code>chumicro-repl</code></a>, the sister workbench tool that opens interactive serial sessions, tails the friendly REPL, and exposes a programmatic <code>ReplSession</code> for headless test fixtures. Both tools read the same <code>devices.yml</code> workspace file:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_deploy</span><span class="w"> </span><span class="kn">import</span> <span class="n">Deployer</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_repl</span><span class="w"> </span><span class="kn">import</span> <span class="n">tail</span><span class="p">,</span> <span class="n">ExitCode</span>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">result</span> <span class="o">=</span> <span class="n">Deployer</span><span class="p">(</span><span class="n">device</span><span class="p">)</span><span class="o">.</span><span class="n">deploy</span><span class="p">(</span><span class="n">source</span><span class="p">)</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">result</span> <span class="o">=</span> <span class="n">Deployer</span><span class="p">(</span><span class="n">device</span><span class="p">)</span><span class="o">.</span><span class="n">deploy_diff</span><span class="p">(</span><span class="n">source</span><span class="p">)</span>
 </span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">success</span><span class="p">:</span>
 </span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>    <span class="k">if</span> <span class="n">tail</span><span class="p">(</span><span class="n">device</span><span class="p">,</span> <span class="n">seconds</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span> <span class="ow">is</span> <span class="n">ExitCode</span><span class="o">.</span><span class="n">TRACEBACK_DETECTED</span><span class="p">:</span>
 </span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>        <span class="k">raise</span> <span class="ne">SystemExit</span><span class="p">(</span><span class="s2">&quot;board crashed during follow-up tail&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <h2 id="documentation">Documentation<a class="headerlink" href="#documentation" title="Permanent link">&para;</a></h2>
 <ul>
-<li><a href="guide/">User Guide</a> — getting started, each surface explained, runtime notes.</li>
-<li><a href="api/">API Reference</a> — full API from the source docstrings.</li>
-<li><a href="testing/">Testing Helpers</a> — <code>FakeTransport</code>, <code>FakeSerialPort</code>, <code>FakeTime</code> for host-side tests.</li>
+<li><a href="guide/">User Guide</a>: getting started, each surface explained, runtime notes.</li>
+<li><a href="api/">API Reference</a>: full API from the source docstrings.</li>
+<li><a href="testing/">Testing Helpers</a>: <code>FakeTransport</code>, <code>FakeSerialPort</code>, <code>FakeTime</code> for host-side tests.</li>
 </ul>
 <h2 id="install">Install<a class="headerlink" href="#install" title="Permanent link">&para;</a></h2>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>pip<span class="w"> </span>install<span class="w"> </span>chumicro-deploy
 </span></code></pre></div>
-<p>No bundle registration needed — chumicro-deploy is a host tool, not on-device code.</p>
+<p>No bundle registration needed. chumicro-deploy is a host tool, not on-device code.</p>
 <hr />
 <div class="chumicro-footer">
 <p><a href="../../">← All ChuMicro Packages</a></p>

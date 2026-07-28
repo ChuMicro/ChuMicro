@@ -5115,7 +5115,7 @@ the internal layout for readers who want to navigate by source file.</p>
 
     <div class="doc doc-contents first">
 
-        <p>Device — transport-agnostic configuration for a target board.</p>
+        <p>Device: transport-agnostic configuration for a target board.</p>
 <p>A :class:<code>Device</code> bundles the runtime identity (<code>circuitpython</code> /
 <code>micropython</code>), the host-side connection details (serial address,
 baudrate, CIRCUITPY drive path), and the deploy-mode preference.
@@ -5190,7 +5190,7 @@ third-party loader registered through the
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Runtime identifier — <code>"circuitpython"</code> or
+                <p>Runtime identifier, <code>"circuitpython"</code> or
 <code>"micropython"</code>.</p>
               </div>
             </td>
@@ -5242,7 +5242,7 @@ transport's mode label at construction time
               <div class="doc-md-description">
                 <p>Top-level script the runtime executes on
 boot.  Defaults vary per runtime (<code>"code.py"</code> on
-CircuitPython, <code>"main.py"</code> on MicroPython) — pass
+CircuitPython, <code>"main.py"</code> on MicroPython).  Pass
 <code>None</code> to use the runtime default.</p>
               </div>
             </td>
@@ -5348,7 +5348,7 @@ target runs something else.</p>
     <div class="doc doc-contents ">
 
         <p>Construct a :class:<code>Device</code> from a mapping of field names.</p>
-<p>Accepts the same keys as the constructor — <code>transport</code>,
+<p>Accepts the same keys as the constructor: <code>transport</code>,
 <code>address</code>, and optional <code>baudrate</code>, <code>deploy_mode</code>,
 <code>entrypoint_name</code>, and <code>resource_prefix</code>.  Unknown keys
 are ignored so YAML / TOML / JSON inputs with extra metadata
@@ -5472,7 +5472,7 @@ instead.</p>
 
     <div class="doc doc-contents first">
 
-        <p>Deployer — orchestrate file staging + entrypoint execution on a Device.</p>
+        <p>Deployer: orchestrate file staging + entrypoint execution on a Device.</p>
 <p>The :class:<code>Deployer</code> owns the end-to-end "push code onto a board and
 run it" flow.  It consumes a :class:<code>~chumicro_deploy.sources.FileSource</code>,
 constructs a transport via :class:<code>~chumicro_deploy.device.Device</code>,
@@ -5620,14 +5620,14 @@ is called once per :meth:<code>deploy_diff</code> invocation.</p>
 <li>Connect.</li>
 <li>Ask the transport for every in-scope file currently on the
    device (<code>list_files_in_scope</code>).</li>
-<li>Compute the stale set — paths on the device that aren't in
+<li>Compute the stale set, the paths on the device that aren't in
    the new payload.</li>
 <li>Delete the stale set (<code>delete_files</code>).</li>
 <li>Hand off to the normal :meth:<code>deploy_files</code> for the actual
    write + execute.</li>
 </ol>
 <p>Out-of-scope files (user-uploaded images, hand-edited
-<code>settings.toml</code>, etc.) are never touched — see
+<code>settings.toml</code>, etc.) are never touched; see
 :func:<code>chumicro_deploy.protocol.is_in_deploy_scope</code> for the rule.</p>
 <p>Mode-aware: in RAM-mode deploys (CP RAM, MP mount) the
 transport's <code>list_files_in_scope</code> returns an empty list and
@@ -5699,7 +5699,7 @@ including it.</p>
             <td>
               <div class="doc-md-description">
                 <p>When <code>True</code>, call <code>transport.wipe_filesystem()</code>
-before staging — full destructive erase (keep set
+before staging, a full destructive erase (keep set
 included) for corruption-recovery flows.  Skips the
 diff cleanup entirely (nothing left to diff against
 after a wipe).  RAM-mode transports treat the wipe
@@ -5962,7 +5962,7 @@ default; ignored on MP transports.</p>
 
     <div class="doc doc-contents first">
 
-        <p>DeployResult and DeployError — outcome types returned by the deployer.</p>
+        <p>DeployResult and DeployError: outcome types returned by the deployer.</p>
 <p>Defined in their own module so callers can annotate against a stable
 return type without pulling in the orchestration code.</p>
 
@@ -6158,14 +6158,14 @@ non-<code>None</code> traceback implies <code>success=False</code>.</p>
 
     <div class="doc doc-contents first">
 
-        <p>File sources — plug-in input types that feed the Deployer.</p>
+        <p>File sources: plug-in input types that feed the Deployer.</p>
 <p>A :class:<code>FileSource</code> produces two things: a mapping of on-device
 paths to byte contents, and the name of the entrypoint file the
 runtime should boot into.  Three built-ins cover the common cases:</p>
 <ul>
-<li>:class:<code>FileMapSource</code> — caller already has an in-memory dict.</li>
-<li>:class:<code>DirectorySource</code> — ship a directory tree from disk.</li>
-<li>:class:<code>ImportGraphSource</code> — walk imports from an entrypoint file
+<li>:class:<code>FileMapSource</code> when the caller already has an in-memory dict.</li>
+<li>:class:<code>DirectorySource</code> to ship a directory tree from disk.</li>
+<li>:class:<code>ImportGraphSource</code> to walk imports from an entrypoint file
   and ship exactly the transitively-reachable modules.</li>
 </ul>
 <p>Custom sources implement the :class:<code>FileSource</code> protocol.  The
@@ -6546,7 +6546,7 @@ on-device path is the file path relative to <em>root</em>, joined with
             <td>
               <div class="doc-md-description">
                 <p>On-device entrypoint path.  Must end up as a key
-in the produced file map — i.e. must be a file under
+in the produced file map, i.e. must be a file under
 <em>root</em> (relative to <em>resource_prefix</em>).</p>
               </div>
             </td>
@@ -6703,7 +6703,7 @@ the resolved modules.  Packages are walked through their
 either a device-runtime built-in (<code>gc</code>, <code>time</code>, <code>board</code>)
 the host can't provide, or a library the walk should have found
 but didn't (missing from the search paths, or a typo).  The two
-look identical at the AST level — both are bare module names.
+look identical at the AST level, since both are bare module names.
 :class:<code>ImportGraphSource</code> distinguishes them by an explicit
 allowlist: a name on
 :data:<code>chumicro_deploy.import_allowlist.DEVICE_BUILTIN_MODULES</code>
@@ -6715,7 +6715,7 @@ missing module rather than shipping an import that would
 import guarded by <code>try: ... except ImportError</code> (a deliberate
 optional fallback), and the speculative <code>module.name</code> probe the
 walk uses to resolve <code>from module import name</code> against a real
-submodule — when <code>name</code> is a function or class in
+submodule.  When <code>name</code> is a function or class in
 <code>module/__init__.py</code> instead, the probe doesn't resolve and is
 silently dropped.</p>
 
@@ -6831,7 +6831,7 @@ module file (default <code>/lib</code>).</p>
 / <code>"cpython"</code>), modules carrying a <code>__chumicro_runtimes__</code>
 marker for a different runtime are dropped, and their
 imports are not walked further.  <code>None</code> (the default)
-ships every reachable module — the right setting when the
+ships every reachable module, the right setting when the
 runtime selector reaches both adapters at import time and
 you want the unmatched one available so the selector can
 fail loudly on misclassification.  The entrypoint itself
@@ -6845,7 +6845,7 @@ is never filtered.</p>
       </tbody>
     </table>
         <p>Honors a module-level <code>__chumicro_skip_factories__</code> opt-out on
-<em>entrypoint</em> — see :mod:<code>chumicro_deploy.skip_factories</code> for the
+<em>entrypoint</em>; see :mod:<code>chumicro_deploy.skip_factories</code> for the
 marker shape and matching rules.  Diagnostics (direct-import
 overrides, dead-skip notices) surface through
 :attr:<code>skip_factories_warnings</code>.</p>
@@ -7026,7 +7026,7 @@ side.</p>
 
     <div class="doc doc-contents first">
 
-        <p>probe_device — one-shot runtime-identity probe over a transport.</p>
+        <p>probe_device: one-shot runtime-identity probe over a transport.</p>
 <p>Thin wrapper over :meth:<code>TransportProtocol.probe_implementation</code> that
 owns the transport lifecycle (connect / probe / disconnect) and
 returns a :class:<code>DeviceInfo</code> callers can surface to users.</p>
@@ -7101,7 +7101,7 @@ field of the <code>__CHU_IMPL__:</code> marker line.</p>
               <div class="doc-md-description">
                 <p>Parsed <code>sys.implementation</code> fields (runtime
 name, version, machine string).  <code>None</code> when the probe
-script ran but no marker came back — almost always a
+script ran but no marker came back, almost always a
 hardware or connection issue.</p>
               </div>
             </td>
@@ -7178,7 +7178,7 @@ without the hardware ID, or the module raised).</p>
 
     <div class="doc doc-contents ">
 
-        <p>Connect, probe, disconnect — return what the board reports.</p>
+        <p>Connect, probe, disconnect, and return what the board reports.</p>
 <p>Exceptions during the probe propagate.  Wrap the call when a
 soft-failure shape is needed.  The transport is always
 disconnected, even on error.</p>
@@ -7346,7 +7346,7 @@ selection and per-path recovery strategies.</p>
 
 
         <p>Raised when a flash step fails.</p>
-<p>Message always includes recovery guidance — e.g. "put the board
+<p>Message always includes recovery guidance, e.g. "put the board
 in bootloader mode and retry" or "install esptool first".
 Catchers typically surface the message directly to the user
 rather than trying to introspect.</p>
@@ -7507,7 +7507,7 @@ Defaults to <code>"en_US"</code>.</p>
               <div class="doc-md-description">
                 <p>If <em>runtime</em> is not supported, or
 if any required field is empty.  <code>cause</code> carries the
-specific failure — see :class:<code>UnresolvedFirmwareError</code>.</p>
+specific failure; see :class:<code>UnresolvedFirmwareError</code>.</p>
               </div>
             </td>
           </tr>
@@ -8140,7 +8140,7 @@ or <code>OSError</code> whose text is the real signal.</p>
     <div class="doc doc-contents ">
 
         <p>Return processes currently holding <em>port_path</em> open.</p>
-<p>Uses <code>lsof -F pcn &lt;port&gt;</code> on POSIX — output format is one
+<p>Uses <code>lsof -F pcn &lt;port&gt;</code> on POSIX.  The output format is one
 field per line tagged with a single character (<code>p</code> for PID,
 <code>c</code> for short command, <code>n</code> for path).  Each PID record
 starts with a <code>p</code> line, and subsequent <code>c</code> / <code>n</code> lines belong
@@ -8204,8 +8204,8 @@ running <code>lsof</code> themselves.</p>
 <p>Recent macOS releases moved the FAT (<code>msdosfs</code>) driver out of the
 kernel and into a user-space FSKit extension
 (<code>com.apple.fskit.msdos.appex</code>).  When that extension hits an
-internal error mid-probe — most often on small CIRCUITPY FAT12
-volumes — it can leave <code>diskarbitrationd</code> stuck in an
+internal error mid-probe (most often on small CIRCUITPY FAT12
+volumes), it can leave <code>diskarbitrationd</code> stuck in an
 uninterruptible kernel wait.  Symptoms:</p>
 <ul>
 <li><code>diskutil list</code> hangs indefinitely.</li>
@@ -8348,7 +8348,7 @@ to work.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p><code>False</code>.  Any subprocess failure — missing <code>pgrep</code>/<code>ps</code>,</p>
+                <p><code>False</code>.  Any subprocess failure (missing <code>pgrep</code>/<code>ps</code>,</p>
               </div>
             </td>
           </tr>
@@ -8358,7 +8358,7 @@ to work.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>timeout, non-zero exit — is treated as "not wedged" so a</p>
+                <p>timeout, non-zero exit) is treated as "not wedged" so a</p>
               </div>
             </td>
           </tr>
@@ -8402,18 +8402,18 @@ to work.</p>
     <div class="doc doc-contents first">
 
         <p>Host-platform compatibility checks for chumicro-deploy.</p>
-<p>The deploy package targets developer laptops — fully supported on
+<p>The deploy package targets developer laptops: fully supported on
 macOS, fully viable on Linux, and explicitly unsupported on native
 Windows.  This module surfaces those gaps as fast-failing errors with
 actionable remediation hints rather than letting them manifest as
 <code>no devices found</code> deep inside the deploy flow.</p>
 <p>Two checks live here:</p>
 <ul>
-<li>:func:<code>check_supported_platform</code> — call before any path that
+<li>:func:<code>check_supported_platform</code>, called before any path that
   enumerates serial ports or USB mount points, so Windows users see
   a "use WSL2" message immediately instead of an empty-port-list dead
   end.</li>
-<li>:func:<code>check_rsync_available</code> — call before flash-mode deploy.  The
+<li>:func:<code>check_rsync_available</code>, called before flash-mode deploy.  The
   CircuitPython flash transport shells out to <code>rsync</code> and there is
   no fallback (FAT32 timestamp semantics make <code>shutil.copytree</code>
   unreliable for incremental writes).  Detecting absence up-front
@@ -8598,7 +8598,7 @@ from :func:<code>install_hint_for_rsync</code>.</p>
     </div>
 
 </div><h2 id="devicesyml-schema-and-loader-registry">Devices.yml schema and loader registry<a class="headerlink" href="#devicesyml-schema-and-loader-registry" title="Permanent link">&para;</a></h2>
-<p>The <code>chumicro_deploy.config</code> package owns the <code>devices.yml</code> schema —
+<p>The <code>chumicro_deploy.config</code> package owns the <code>devices.yml</code> schema.
 <code>load_devices_yml</code> is the built-in loader (registered under the
 <code>"default"</code> entry-point name); third parties register their own
 config formats via the <code>chumicro_deploy.config_loaders</code> entry-point
@@ -8733,8 +8733,8 @@ behavior is not silently shadowed.</p>
 
         <p>Default YAML config loader that ships with <code>chumicro-deploy</code>.</p>
 <p>Loads the <code>devices.yml</code> schema that <code>chumicro-deploy</code> defines and
-owns.  Any project — its own workspace, a project-workspace template,
-or a third-party consumer — can write this shape to configure its
+owns.  Any project (its own workspace, a project-workspace template,
+or a third-party consumer) can write this shape to configure its
 deploy targets without depending on any upstream tooling.</p>
 <p>The schema (stable subset that the loader accepts):</p>
 <p>.. code-block:: yaml</p>
@@ -8760,7 +8760,7 @@ setup commands, descriptions) can share the same file.</p>
 <code>devices.yml</code> is actually used.</p>
 <p>Third parties that need a different shape (JSON, TOML, a custom
 YAML layout) can register their own loader via the
-<code>chumicro_deploy.config_loaders</code> entry-point group — see
+<code>chumicro_deploy.config_loaders</code> entry-point group; see
 :func:<code>chumicro_deploy.config.discover_config_loaders</code>.</p>
 
 
@@ -9238,11 +9238,11 @@ type.</p>
         <p>Load one device from a <code>devices.yml</code> file.</p>
 <p>Resolution precedence:</p>
 <ol>
-<li><em>device_id</em> — wins outright.</li>
-<li><em>runtime</em> — picks <code>defaults.&lt;runtime&gt;</code> when <em>device_id</em> is
+<li><em>device_id</em> wins outright.</li>
+<li><em>runtime</em> picks <code>defaults.&lt;runtime&gt;</code> when <em>device_id</em> is
    <code>None</code>, so a single-runtime caller disambiguates a
    two-runtime <code>defaults:</code> block without naming the device id.</li>
-<li>Single-default fallback — when both <em>device_id</em> and <em>runtime</em>
+<li>Single-default fallback: when both <em>device_id</em> and <em>runtime</em>
    are <code>None</code>, exactly one runtime default in the file picks
    itself, otherwise raises.</li>
 </ol>
@@ -9394,7 +9394,7 @@ with a runtime hint.</p>
 
         <p>Resolve one device and return its raw <code>devices.yml</code> entry.</p>
 <p>Identical resolution to :func:<code>load_devices_yml</code> (same precedence,
-same errors) but returns the unmapped entry dict — including
+same errors) but returns the unmapped entry dict, including
 <code>hardware</code> and other keys the :class:<code>Device</code> dataclass drops.
 Use when fields off the schema are needed alongside the transport
 facade (firmware-URL derivation reads <code>hardware.firmware_source</code>).</p>
@@ -9431,16 +9431,16 @@ facade (firmware-URL derivation reads <code>hardware.firmware_source</code>).</p
 both satisfy, in a form type checkers can enforce.</p>
 <p>Two protocols are defined:</p>
 <ul>
-<li>:class:<code>TransportProtocol</code> — the minimum every transport must
+<li>:class:<code>TransportProtocol</code> is the minimum every transport must
   implement: <code>connect</code>, <code>stage</code>, <code>execute</code>, <code>soft_reset</code>,
   <code>reset</code>, <code>recover</code>, <code>disconnect</code>.</li>
-<li>:class:<code>ExtendedTransportProtocol</code> — adds the
+<li>:class:<code>ExtendedTransportProtocol</code> adds the
   CircuitPython-specific RAM-mode chunking helpers
   (<code>execute_scripts</code>, <code>probe_free_memory</code>,
   <code>inline_script_budget_bytes</code>).  <code>MicropythonTransport</code> does not
   need these, because there is no per-script RAM budget on mpremote.</li>
 </ul>
-<p>CPython-only — these protocols ride on <code>typing.Protocol</code>, which only
+<p>CPython-only: these protocols ride on <code>typing.Protocol</code>, which only
 the workbench tooling uses (the cross-runtime device libraries that
 satisfy the contract don't import this module).</p>
 
@@ -9667,7 +9667,7 @@ without a mount-order-dependent path.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p><code>sys.implementation.name</code> — <code>"circuitpython"</code> or
+                <p><code>sys.implementation.name</code>, either <code>"circuitpython"</code> or
 <code>"micropython"</code>.</p>
               </div>
             </td>
@@ -9691,7 +9691,7 @@ without a mount-order-dependent path.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p><code>sys.implementation._machine</code> on both runtimes —
+                <p><code>sys.implementation._machine</code> on both runtimes,
 a free-form string describing the board (e.g.
 <code>"Raspberry Pi Pico W with rp2040"</code>).  Empty when the
 firmware does not expose it.</p>
@@ -9854,8 +9854,8 @@ implementation that eliminates wall-clock waits.</p>
 
 
         <p>Base for both runtimes' transport errors.</p>
-<p>Orchestration that treats the transports uniformly — the
-<code>RecoveringDeployer</code> retry loop, the failure classifier —
+<p>Orchestration that treats the transports uniformly (the
+<code>RecoveringDeployer</code> retry loop, the failure classifier)
 catches this instead of enumerating per-runtime subclasses, so
 adding a runtime doesn't mean auditing every catch site.</p>
 
@@ -10034,10 +10034,10 @@ dispatched to the callback as it arrives over the serial link,
 before :meth:<code>execute</code> returns.  Lines are dispatched without
 their trailing newline; <code>\r\n</code> is normalized to <code>\n</code>.
 When <em>on_line</em> is <code>None</code> (the default), behaviour is the
-request/response shape every existing call site assumes —
+request/response shape every existing call site assumes, and
 captured stdout still comes back as the return value.</p>
-<p>Streaming dispatch lets a host-side consumer react mid-execute
-— for example, a test fixture that opens a TCP connection only
+<p>Streaming dispatch lets a host-side consumer react mid-execute:
+for example, a test fixture that opens a TCP connection only
 once the board prints a "server ready" line, or a long-running
 bake harness that surfaces board output as it lands instead of
 after the bootstrap finishes.</p>
@@ -10060,7 +10060,7 @@ after the bootstrap finishes.</p>
 
         <p>Run <em>script</em> on the device without staging and return captured stdout.</p>
 <p>Sibling of :meth:<code>execute</code> for short, self-contained scripts
-that don't need any staged sources / test files / harness —
+that don't need any staged sources / test files / harness:
 e.g. a feature-detection probe (<code>try: import esp32</code> etc.),
 a quick <code>sys.implementation</code> query, an inline diagnostic.
 Bypasses the <code>stage()-must-be-called-first</code> precondition
@@ -10088,7 +10088,7 @@ that :meth:<code>execute</code> enforces.</p>
             <td>
               <div class="doc-md-description">
                 <p>Self-contained Python source to run via the raw
-REPL.  No imports of staged modules — only built-ins
+REPL.  No imports of staged modules, only built-ins
 and runtime-provided modules.</p>
               </div>
             </td>
@@ -10393,7 +10393,7 @@ the on-device path as each file is written.</p>
               <div class="doc-md-description">
                 <p>Optional callback invoked once per line
 of captured execute output, in order.  Not guaranteed
-to stream live — transports may call it after
+to stream live, since transports may call it after
 execute() completes.</p>
               </div>
             </td>
@@ -10481,7 +10481,7 @@ an empty list.</p>
         <p>Delete <em>paths</em> from the device's filesystem.</p>
 <p>No-op when <em>paths</em> is empty.  Each path must be in the same
 leading-slash form :meth:<code>deploy_files</code> accepts; transports
-normalize internally.  Missing paths are tolerated silently —
+normalize internally.  Missing paths are tolerated silently:
 a previous deploy may have already removed something, so
 re-deleting shouldn't error.</p>
 <p>Best-effort: a single delete failure logs a warning but does
@@ -10531,7 +10531,7 @@ an entrypoint, so this is a no-op there.</p>
     <div class="doc doc-contents ">
 
         <p>Erase the device's user filesystem before the next deploy.</p>
-<p>Destructive — wipes <em>every</em> file the runtime can see, both
+<p>Destructive: wipes <em>every</em> file the runtime can see, both
 in-scope (<code>/lib/*</code>, <code>/code.py</code> / <code>/main.py</code> / etc.) and
 out-of-scope (<code>/settings.toml</code>, hand-edited <code>boot.py</code>,
 user-uploaded assets).  Use for clean-slate / corruption-
@@ -10702,10 +10702,10 @@ order under a single callback.</p>
 <li>The four entrypoint / state files in :data:<code>DEPLOY_SCOPE_FILES</code>
   (<code>/code.py</code>, <code>/main.py</code>, <code>/active.py</code>,
   <code>/runtime_config.msgpack</code>).</li>
-<li>Everything under <code>/lib/</code> — see :data:<code>DEPLOY_SCOPE_PREFIXES</code>.</li>
+<li>Everything under <code>/lib/</code>; see :data:<code>DEPLOY_SCOPE_PREFIXES</code>.</li>
 </ul>
-<p>Anything else — user-uploaded images, manually-edited
-<code>boot.py</code> overrides, hand-tuned <code>settings.toml</code> knobs — is
+<p>Anything else (user-uploaded images, manually-edited
+<code>boot.py</code> overrides, hand-tuned <code>settings.toml</code> knobs) is
 out of scope and survives every diff-deploy untouched.</p>
 <p>The check is path-shape only: callers should normalize their
 paths to leading-slash form before calling.</p>
@@ -10843,7 +10843,7 @@ write.</p>
 <p>Two execution paths:</p>
 <ul>
 <li><strong>Persistent serial transport</strong> (mount mode and per-execute path):
-  uses <code>mpremote.transport_serial.SerialTransport</code> directly — opens
+  uses <code>mpremote.transport_serial.SerialTransport</code> directly.  Opens
   the serial port once per session, enters raw REPL once, mounts the
   staging directory once, and runs each bootstrap via <code>exec_raw</code>.
   Avoids the cold-start cost of spawning <code>mpremote</code> per
@@ -11009,7 +11009,7 @@ write.</p>
             <td>
               <div class="doc-md-description">
                 <p>Serial baud rate (default 115200).  Only used for the
-persistent serial transport — subprocess <code>mpremote</code>
+persistent serial transport, because subprocess <code>mpremote</code>
 invocations negotiate baud rate themselves.</p>
               </div>
             </td>
@@ -11249,8 +11249,8 @@ flash, so a file staged for <code>/runtime_config.msgpack</code>
 lands at that absolute path.  <strong>Mount mode raises</strong>
 :class:<code>UnsupportedExtraFilesError</code>: mpremote
 <code>mount_local</code> lands the staging tree at <code>/remote</code>, so
-the bytes would appear at <code>/remote/runtime_config.msgpack</code>
-— invisible to a reader that opens the absolute
+the bytes would appear at <code>/remote/runtime_config.msgpack</code>,
+invisible to a reader that opens the absolute
 <code>/runtime_config.msgpack</code>.</p>
               </div>
             </td>
@@ -11352,7 +11352,7 @@ newline; <code>\r\n</code> is normalized to <code>\n</code>.  Wires
 straight into mpremote's <code>data_consumer</code> hook on
 <code>exec_raw</code>, which fires per byte during the stdout
 read phase and stops at the <code>\x04</code> end-of-stdout
-marker — the dispatcher discards that terminator byte
+marker.  The dispatcher discards that terminator byte
 so callbacks only see board content.</p>
               </div>
             </td>
@@ -11940,7 +11940,7 @@ FIRST.  An empty root-level <code>/&lt;pkg&gt;/</code> resolves
 is <code>None</code>, <code>dir()</code> empty) and shadows the populated
 <code>/lib/&lt;pkg&gt;/</code> deeper in the path.  <code>rmdir</code> only removes
 an empty directory so live packages are never touched.
-Dot-prefixed entries are skipped — they're not ours to reap.</p>
+Dot-prefixed entries are skipped: they're not ours to reap.</p>
 
 
     </div>
@@ -11961,8 +11961,8 @@ Dot-prefixed entries are skipped — they're not ours to reap.</p>
         <p>Remove <code>main.py</code> / <code>code.py</code> and confirm they are gone.</p>
 <p>Copy mode only.  Mount (RAM) mode never writes a persistent
 entrypoint.  Runs <code>os.remove</code> <em>on the device</em> (authoritative
-immediately — unlike the CIRCUITPY host-FAT path there is no
-flush lag) and, in the same raw-REPL script, re-<code>stat</code>s each
+immediately, since unlike the CIRCUITPY host-FAT path there is
+no flush lag) and, in the same raw-REPL script, re-<code>stat</code>s each
 path so a still-present entrypoint raises on the device and
 surfaces as a loud error.  Call once before a soft-reset so
 the reboot cannot race a stale entrypoint left by a prior
@@ -12607,8 +12607,8 @@ they land at the drive root next to the test files.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Non-Python files to land at named device paths
-— typically <code>{"/runtime_config.msgpack": &lt;bytes&gt;}</code> so
+                <p>Non-Python files to land at named device paths,
+typically <code>{"/runtime_config.msgpack": &lt;bytes&gt;}</code> so
 test code can call <code>chumicro_config.load_runtime_config()</code>.
 <strong>RAM mode raises</strong> :class:<code>UnsupportedExtraFilesError</code>
 because there's no writable device-side filesystem to
@@ -12707,7 +12707,7 @@ CIRCUITPY drive alongside library sources.</p>
 it arrives over the serial link, before this method
 returns.  Lines are delivered without their trailing
 newline; <code>\r\n</code> is normalized to <code>\n</code>.  When
-<code>None</code>, no streaming dispatch happens — the captured
+<code>None</code>, no streaming dispatch happens and the captured
 stdout is still returned in the usual request/response
 shape.</p>
               </div>
@@ -13105,7 +13105,7 @@ never blocks the real test run.</p>
 <p>Exits raw REPL (Ctrl-B), sends Ctrl-D to trigger a soft reboot
 (which clears <code>sys.modules</code> and all interpreter state), waits
 for the reboot to complete, then re-enters raw REPL.</p>
-<p>Leaves the interpreter clean — previous modules are evicted
+<p>Leaves the interpreter clean, with previous modules evicted
 from RAM.</p>
 
 
@@ -13453,7 +13453,7 @@ so a swallowed error here just retries next time.</p>
         <p>Unlink <code>code.py</code> / <code>main.py</code> and confirm they are gone.</p>
 <p>Flash mode only.  RAM mode never writes a persistent
 entrypoint, so there is nothing to clear.  Host-side
-<code>pathlib.unlink</code> (a directory-entry-only op — no FAT data
+<code>pathlib.unlink</code> (a directory-entry-only op with no FAT data
 write), then <code>flush_volume</code> so the deletion is on the
 physical medium before a soft-reboot re-reads FAT, then a
 bounded poll that the drive no longer shows them.  Raises if
@@ -13558,11 +13558,11 @@ method finds nothing to close and only clears
 CircuitPython raw REPL.  Two builders share the same helper-function
 prefix:</p>
 <ul>
-<li>:func:<code>build_circuitpython_bootstrap_scripts</code> — test-harness
+<li>:func:<code>build_circuitpython_bootstrap_scripts</code> is the test-harness
   flavor.  Registers library modules via the class-as-module
   pattern (no <code>types.ModuleType</code> on CircuitPython), inlines a test
   file, and runs it through <code>chumicro_test_harness.runner.run_module</code>.</li>
-<li>:func:<code>build_circuitpython_deploy_scripts</code> — deploy flavor.
+<li>:func:<code>build_circuitpython_deploy_scripts</code> is the deploy flavor.
   Registers every non-entrypoint file as an importable module, then
   <code>exec()</code>-s the entrypoint as <code>__main__</code>.  No test-harness
   dependency is needed, and the deploy tail is two lines long, kept
@@ -14164,15 +14164,15 @@ staging a test-fake bundle for on-device test runs.</p>
 (FAT32 timestamps are unreliable) and <code>--inplace</code> avoids
 temp-file rename races on FAT32.  Two parameter shapes:</p>
 <ul>
-<li><strong>Clean push</strong> — <code>delete=True</code> with
+<li><strong>Clean push</strong>: <code>delete=True</code> with
   <code>additional_excludes=DEVICE_KEEP_SET</code>.  Clean slate, only the
   closed keep set survives.</li>
-<li><strong>Additive push</strong> — <code>delete=False</code> with no extra excludes.
+<li><strong>Additive push</strong>: <code>delete=False</code> with no extra excludes.
   Stale files persist.  Used when other board files are
   hand-managed.</li>
 </ul>
 <p>The base exclude set (build artifacts + macOS noise / sentinel
-dirs) is shared and unconditional — see :data:<code>_BASE_RSYNC_EXCLUDES</code>.</p>
+dirs) is shared and unconditional; see :data:<code>_BASE_RSYNC_EXCLUDES</code>.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -14230,7 +14230,7 @@ dirs) is shared and unconditional — see :data:<code>_BASE_RSYNC_EXCLUDES</code
                 <p>When <code>True</code>, pass <code>--delete</code> so files in
 destination but not source are removed (clean slate;
 only <code>additional_excludes</code> survive).  <code>False</code> is the
-additive shape — stale files persist.</p>
+additive shape, where stale files persist.</p>
               </div>
             </td>
             <td>
@@ -14808,7 +14808,7 @@ for real.</p>
 
         <p>Test fakes for the device transport layer.</p>
 <p>Exports :class:<code>FakeTransport</code>, :class:<code>FakeSerialPort</code>,
-:class:<code>FakeTime</code>, and :func:<code>isolate_from_host_filesystem</code> — see
+:class:<code>FakeTime</code>, and :func:<code>isolate_from_host_filesystem</code>.  See
 each one's docstring for shape and usage.  Typical injection::</p>
 <div class="language-text highlight"><pre><span></span><code>from chumicro_deploy.testing import FakeSerialPort, FakeTime
 
@@ -15379,7 +15379,7 @@ A non-empty dict in RAM mode raises
               <div class="doc-md-description">
                 <p><code>mode == "ram"</code> and
 <em>extra_files</em> is non-empty.  RAM mode bypasses the
-device filesystem entirely — there's nowhere to land
+device filesystem entirely, so there's nowhere to land
 bytes.  Switch the device's <code>deploy_mode</code> to
 <code>"flash"</code> before calling.</p>
               </div>
@@ -15410,7 +15410,7 @@ otherwise :attr:<code>execute_output</code>.  Raises :attr:<code>execute_raises<
 after recording when set.</p>
 <p>When <em>on_line</em> is provided, dispatches one call per line of the
 returned string (split via :meth:<code>str.splitlines</code>) before
-returning — same shape the real transports use, so a test can
+returning, the same shape the real transports use, so a test can
 drive marker-style stdout coordination against the fake without
 wiring a real serial stream.</p>
 
@@ -15470,7 +15470,7 @@ staging.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Recorded with the call but not enforced — the
+                <p>Recorded with the call but not enforced, since the
 fake transport's "device" responds instantly.</p>
               </div>
             </td>
@@ -15507,7 +15507,7 @@ fake transport's "device" responds instantly.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>the same canned-response slot — tests that need separate</p>
+                <p>the same canned-response slot; tests that need separate</p>
               </div>
             </td>
           </tr>
