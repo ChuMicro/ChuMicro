@@ -9,4 +9,7 @@
       <url>
         <loc>https://chumicro.github.io/ChuMicro/http-server/dev/api/</loc>
       </url>
+      <url>
+        <loc>https://chumicro.github.io/ChuMicro/http-server/dev/testing/</loc>
+      </url>
 </urlset>
