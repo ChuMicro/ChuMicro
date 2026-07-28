@@ -1,8 +1,8 @@
-"""Localhost submit server — the shared transport beneath every webui surface.
+"""Localhost submit server: the shared transport beneath every webui surface.
 
 Serves a self-contained HTML page over http on 127.0.0.1:<free port>, writes each POST's
 body verbatim to a sink file, prints a '<received> -> <sink>' line, and shuts down after
-the FIRST POST — a session is one submission, so the process *completing* is itself the
+the FIRST POST. A session is one submission, so the process *completing* is itself the
 submit signal (read the sink then). Auto-opens the page unless an env var is set (an
 orchestrating session sets it and opens the URL itself). Transport ONLY: it never parses or
 applies the submission.
@@ -23,9 +23,9 @@ def serve_oneshot(directory, page, *, post_path, sink_name, env_no_open,
                   label_received, label_closed, on_get=None):
     """Serve `directory/page`; write each POST to `post_path` into `directory/sink_name`.
 
-    One-shot: stop after the FIRST POST — write the request body, print
-    '<label_received> -> <sink>', and shut down. `on_get` (or None) runs before each GET
-    of the page — the picker uses it to re-render a stale page. Auto-opens the URL unless
+    One-shot: after the FIRST POST it writes the request body, prints
+    '<label_received> -> <sink>', and shuts down. `on_get` (or None) runs before each GET
+    of the page; the picker uses it to re-render a stale page. Auto-opens the URL unless
     `env_no_open` is set. Prints 'SERVING <url>' on start and '<label_closed> <sink>' on
     close. Returns the sink path.
     """

@@ -30,7 +30,7 @@ def main():
     result = subprocess.run([sys.executable, os.path.join(HERE, "validate_picker.py")],
                             capture_output=True, text=True, cwd=repo_root, timeout=120)
     if result.returncode != 0:
-        sys.stderr.write("validate_picker.py failed after this edit — fix before moving on:\n"
+        sys.stderr.write("validate_picker.py failed after this edit; fix before moving on:\n"
                          + result.stdout + result.stderr)
         sys.exit(2)
     print("validate_picker.py: all gates green after this edit")

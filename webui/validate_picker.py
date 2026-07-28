@@ -5,24 +5,24 @@ A PostToolUse hook (picker_edit_gate.py here, wired in .claude/settings.json) ru
 automatically on every agent edit to render_picker.py or this file.  Agent directive for
 every other path to a picker change (scripted edits, edits outside an agent session, a
 repo this directory migrates into): run this file plus validate_picker_smoke.py yourself
-before committing — the gates only need to run when the picker changed, so no repo-wide
+before committing.  The gates only need to run when the picker changed, so no repo-wide
 preflight wiring is assumed.  Gates, in order:
 
-  1. render    — a fixture spec exercising every schema feature (columns pick_ui with an empty
+  1. render:     a fixture spec exercising every schema feature (columns pick_ui with an empty
                  candidate and a 4-box scroll row, seeded edit box, all four badge severities,
                  chip + select + help facets, a multiline diff, nested sections, an informational
                  card, page_width) renders without error;
-  2. structure — those features actually landed in the HTML: candidate/edit/radio-row counts,
+  2. structure:  those features actually landed in the HTML: candidate/edit/radio-row counts,
                  facet bar + select, diff lines, the page-width override, the collapsed card;
-  3. js        — every <script> block passes `node --check`;
-  4. drift     — the file's three coupled namespaces stay in sync: every class a CSS selector
+  3. js:         every <script> block passes `node --check`;
+  4. drift:      the file's three coupled namespaces stay in sync: every class a CSS selector
                  names, every class/id the page JS queries, and every data-* attribute the JS
                  reads must exist in the rendered HTML or be set by the JS itself. Renaming
-                 .cardfold in one place and not the others keeps every other tool green — this
+                 .cardfold in one place and not the others keeps every other tool green, and this
                  gate is the one that catches it;
-  5. vnu       — the W3C Nu checker with --also-check-css, when resolvable ($VNU_JAR, `vnu` on
+  5. vnu:        the W3C Nu checker with --also-check-css, when resolvable ($VNU_JAR, `vnu` on
                  PATH, or ./node_modules/vnu-jar); SKIPPED loudly otherwise. The only gate that
-                 sees content-model violations and CSS a browser would silently drop — both
+                 sees content-model violations and CSS a browser would silently drop.  Both
                  classes shipped before it existed (a <div> inside <span class="ftext">;
                  `font:14.5px/1.5 inherit`, which drops the whole declaration).
 
@@ -46,14 +46,14 @@ sys.path.insert(0, HERE)
 import render_picker  # noqa: E402
 
 FIXTURE = {
-    "title": "validator fixture — every renderer feature",
+    "title": "validator fixture: every renderer feature",
     "key": "validate-fixture",
     "blob_header": "validator fixture picks",
     "subtitle": "4 findings · 1 high · fixture",
     "intro_html": '<p>Intro block with <a href="#card-3">a deep link</a> and <code>inline code</code>.</p>',
     "sections": [
         {"title": "What this file does", "html": "<p>Top-level section body.</p>", "open": True},
-        {"title": "Per-file understanding — 2 files",
+        {"title": "Per-file understanding (2 files)",
          "sections": [
              {"title": "a.py", "html": "<p>child section <small>faint</small> <code>mono</code></p>"},
              {"title": "b.py", "html": "<pre>preformatted\nblock</pre>"},
@@ -81,7 +81,7 @@ FIXTURE = {
             "why": "consequence in one sentence",
             "fix": "the exact proposed change",
             "detail": {"label": "how the code does this", "text": "mechanism prose…"},
-            "warning": "Validator: fix needs review — seeded warning",
+            "warning": "Validator: fix needs review (seeded warning)",
             "evidence": 'SKILL.md:3 "quoted evidence" <unescaped?>',
             "diff": {
                 "location": "SKILL.md:3",
@@ -100,13 +100,13 @@ FIXTURE = {
             "pick_ui": {
                 "style": "columns",
                 "candidates": [
-                    {"value": "suggested", "label": "suggested — writer 1",
+                    {"value": "suggested", "label": "suggested, writer 1",
                      "chips": ["2 lines shorter", "names the actor"],
                      "text": "candidate text one",
                      "more": {"label": "full symbol", "text": "def full(): ..."}},
-                    {"value": "alt", "label": "alternative — writer 2", "text": ""},
+                    {"value": "alt", "label": "alternative, writer 2", "text": ""},
                     {"value": "third", "label": "third writer", "text": "candidate three"},
-                    {"value": "fourth", "label": "fourth writer — forces scroll", "text": "candidate four"},
+                    {"value": "fourth", "label": "fourth writer, forces scroll", "text": "candidate four"},
                 ],
                 "edit": {"value": "edit", "label": "edit it myself", "seed": "current text\nsecond line"},
                 "context": {"label": "original", "text": "the docstring as it stands today"},
@@ -116,7 +116,7 @@ FIXTURE = {
         },
         {
             "id": "3",
-            "title": "informational card — no radios",
+            "title": "informational card, no radios",
             "options": [],
             "badge": "AMBIGUOUS",
             "summary": "informational only",
@@ -133,7 +133,7 @@ FIXTURE = {
         },
         {
             "id": "5",
-            "title": "carried finding — status chip + greyed card",
+            "title": "carried finding: status chip + greyed card",
             "badge": "MINOR",
             "summary": "baseline/waiver continuity: a persisting card, greyed, chip-stamped",
             "status": "persisting",            # renders a .statuschip in the card head
@@ -168,7 +168,7 @@ def skip(name, reason):
 
 
 def check_structure(page):
-    """Every fixture feature left its mark in the HTML — a feature the renderer quietly stopped
+    """Every fixture feature left its mark in the HTML.  A feature the renderer quietly stopped
     emitting fails here even though the page is valid."""
     expectations = [
         ('class="ccol"', 4, "candidate boxes (item 2)"),
@@ -219,7 +219,7 @@ def check_js(outdir, page):
 
 
 def _selector_text(css):
-    """The selector part of every rule — class tokens in declarations (hex colors, decimals,
+    """The selector part of every rule: class tokens in declarations (hex colors, decimals,
     quoted strings) never enter the namespace comparison."""
     selectors, depth, current = [], 0, []
     for char in css:
@@ -236,8 +236,8 @@ def _selector_text(css):
 
 
 def check_drift(page):
-    """The renderer's three coupled namespaces — classes the Python emits into HTML, selectors
-    in the CSS constant, query strings and dataset reads in the SCRIPT constant — agree."""
+    """The renderer's three coupled namespaces agree: classes the Python emits into HTML,
+    selectors in the CSS constant, and query strings and dataset reads in the SCRIPT constant."""
     html_classes = {token for attr in re.findall(r'class="([^"]*)"', page) for token in attr.split()}
     html_ids = set(re.findall(r'id="([^"]*)"', page))
     html_data = set(re.findall(r'data-([\w-]+)="', page))

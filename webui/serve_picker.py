@@ -4,14 +4,14 @@
 A page from render_picker.py carries a selection bar whose blob the human can always
 copy and paste back into the session. Served over http, the same bar also shows a
 **Submit to session** button: it POSTs the blob here, and this server writes it to
-<dir>/selection.txt, prints one `SELECTION RECEIVED -> <path>` line, and **shuts down** —
-a picker session is one submission. Run it in the background; the process *completing*
+<dir>/selection.txt, prints one `SELECTION RECEIVED -> <path>` line, and **shuts down**,
+since a picker session is one submission. Run it in the background; the process *completing*
 is itself the submit signal (read selection.txt then), so no separate stdout watch is
 needed. Off-server, Copy/paste is the no-server fallback. The server is transport only:
 it never parses or applies a selection.
 
 Binds 127.0.0.1 on a free port. Tries to auto-open the page unless PICKER_NO_OPEN is
-set — a convenience for a human running this directly. An orchestrating session sets
+set, a convenience for a human running this directly. An orchestrating session sets
 PICKER_NO_OPEN=1 and runs `open <url>` on the printed SERVING line itself: from a
 sandboxed background process the auto-open either fails silently or lands late as a
 duplicate tab, so the session must be the only opener.
@@ -29,7 +29,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # repo root — for the shared webui toolkit
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # repo root, for the shared webui toolkit
 from webui.server import serve_oneshot
 
 RENDERER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "render_picker.py")
@@ -63,7 +63,7 @@ def main():
     # the picker's surface of the shared one-shot server; on_get re-renders a stale page
     serve_oneshot(directory, page, post_path="/selection", sink_name="selection.txt",
                   env_no_open="PICKER_NO_OPEN", label_received="SELECTION RECEIVED",
-                  label_closed="PICKER CLOSED — selection saved to", on_get=rerender_if_stale)
+                  label_closed="PICKER CLOSED: selection saved to", on_get=rerender_if_stale)
 
 
 if __name__ == "__main__":

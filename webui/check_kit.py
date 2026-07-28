@@ -6,7 +6,7 @@ Run: `python3 -m webui.check_kit`  (exit 0 = green). Covers:
   2. `page()` emits a self-contained, dark-clean doc with the theme toggle, and the SSE
      client only when `live=True`;
   3. `content_key` is stable for identical content and differs for different content;
-  4. a full session round-trip — an SSE client connects, a `/push` reload reaches it, a
+  4. a full session round-trip: an SSE client connects, a `/push` reload reaches it, a
      `/selection` post writes the sink, and `/canvas` serves the current page.
 """
 from __future__ import annotations
@@ -19,7 +19,7 @@ import time
 import urllib.request
 
 # Run-anywhere: importable both as `python3 -m webui.check_kit` and as a bare gate script
-# (`<venv>/python webui/check_kit.py`) — put the repo root on the path either way.
+# (`<venv>/python webui/check_kit.py`). Put the repo root on the path either way.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from webui import kit
@@ -76,7 +76,7 @@ def _read_until(url, target, timeout=6):
                         return
                 if time.time() > deadline:
                     return
-        except Exception as exc:  # noqa: BLE001 — record, the assert reports it
+        except Exception as exc:  # noqa: BLE001 - record it, the assert reports it
             res["err"] = str(exc)
 
     thread = threading.Thread(target=run, daemon=True)
@@ -155,7 +155,7 @@ def main():
     _content_key()
     _session()
     _canvas_cli()
-    print("GREEN — webui kit + re-serve session server + live-canvas CLI")
+    print("GREEN: webui kit + re-serve session server + live-canvas CLI")
 
 
 if __name__ == "__main__":

@@ -3,14 +3,14 @@
 <img src="https://raw.githubusercontent.com/ChuMicro/ChuMicro/main/support/docs/chumicro_tip.png"
 align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
-**Push code onto a CircuitPython or MicroPython board, probe its identity, and flash firmware — from your laptop.**
+**Push code onto a CircuitPython or MicroPython board, probe its identity, and flash firmware, all from your laptop.**
 
-Programmatic Python API + a `chumicro-deploy` CLI.  Pluggable file sources (in-memory, directory walk, AST-driven import graph), pluggable transport modes (RAM mode for fast iteration, flash mode for persistence), and an interactive recovery layer that classifies failures (port busy, drive ejected, raw REPL stuck, macOS FSKit wedge, source traceback) and walks you through the fix.
+Ship a host directory, a file map you built in memory, or only the modules your entrypoint actually imports.  Run the payload from RAM while you iterate, or write it to flash when the code has to survive a reboot.  When a deploy fails you get the reason (another app is holding the serial port, the CIRCUITPY drive ejected, the raw REPL is stuck, macOS wedged its FSKit filesystem extension) and the steps that clear it, instead of a raw traceback.  Available as a Python API and as a `chumicro-deploy` CLI.
 
 <br clear="left">
 
-> Part of the [ChuMicro](https://github.com/ChuMicro/ChuMicro) family — small, focused Python libraries for microcontrollers and laptops. [Browse all workbench tools.](https://github.com/ChuMicro/ChuMicro/tree/main/workbench)
-> This is a [workbench tool](https://github.com/ChuMicro/ChuMicro/blob/main/docs/contributing/workbench.md) — runs on your laptop, not on the board.
+> Part of the [ChuMicro](https://github.com/ChuMicro/ChuMicro) family: small, focused Python libraries for microcontrollers and laptops. [Browse all workbench tools.](https://github.com/ChuMicro/ChuMicro/tree/main/workbench)
+> This is a [workbench tool](https://github.com/ChuMicro/ChuMicro/blob/main/docs/contributing/workbench.md): it runs on your laptop, not on the board.
 
 ## Install
 
@@ -18,7 +18,7 @@ Programmatic Python API + a `chumicro-deploy` CLI.  Pluggable file sources (in-m
 pip install chumicro-deploy
 ```
 
-`pyserial` (CircuitPython transport) and `mpremote` (MicroPython transport) come along as dependencies.  On macOS and Linux you'll also need `rsync` available on `$PATH` for flash-mode deploys to the CIRCUITPY USB drive — install via `brew install rsync` (macOS Homebrew if not already shipped), `apt-get install rsync` (Debian/Ubuntu), `dnf install rsync` (Fedora), `pacman -S rsync` (Arch), `apk add rsync` (Alpine), or `zypper install rsync` (openSUSE).  Native Windows isn't currently supported (raises `WindowsNotSupportedError` on import); WSL2 works.
+`pyserial` (CircuitPython transport) and `mpremote` (MicroPython transport) come along as dependencies.  On macOS and Linux you'll also need `rsync` available on `$PATH` for flash-mode deploys to the CIRCUITPY USB drive.  Install it via `brew install rsync` (macOS Homebrew if not already shipped), `apt-get install rsync` (Debian/Ubuntu), `dnf install rsync` (Fedora), `pacman -S rsync` (Arch), `apk add rsync` (Alpine), or `zypper install rsync` (openSUSE).  Native Windows isn't currently supported (raises `WindowsNotSupportedError` on import); WSL2 works.
 
 <details>
 <summary>Experimental (pre-release) versions and channel switching</summary>
@@ -61,10 +61,10 @@ For a workspace project that already has a `devices.yml`, swap the `Device(...)`
 | Symbol | Description |
 |---|---|
 | `Device(transport, address, deploy_mode, ...)` | Configure a target board.  Build explicitly or via `Device.from_dict(...)`; or load a registry via `load_devices_yml(...)` / `load_device_registry(...)` |
-| `Deployer(device)` | Push a `FileSource` onto the board and execute the entrypoint.  Returns a `DeployResult` with success / output / traceback |
-| `Deployer.deploy_diff(source, *, wipe=False, ...)` | Same shape, but first lists in-scope files on the device and deletes any that aren't in the new payload |
+| `Deployer(device)` | Deploy orchestrator for one board.  `deploy_diff` is its one deploy method |
+| `Deployer.deploy_diff(source, *, clean=True, wipe=False, ...)` | Push a `FileSource`, run the entrypoint, and delete the on-device files that aren't in the new payload.  Returns a `DeployResult` with success / output / traceback.  Clean-slate by default; `clean=False` reconciles only the entrypoint, state files, and `/lib`; `wipe=True` erases the filesystem first |
 | `RecoveringDeployer(deployer, *, prompt=None, max_attempts=3)` | Wraps `Deployer` with failure classification and a `RecoveryPlan`.  Pass `prompt=input` for an interactive retry loop; default `prompt=None` reports once and re-raises.  Both CLIs use the interactive form by default (`--non-interactive` to opt out) |
-| `FileMapSource(files, entrypoint)` | In-memory `dict[device_path, bytes]` source — for generated payloads or one-off scripts |
+| `FileMapSource(files, entrypoint)` | In-memory `dict[device_path, bytes]` source, for generated payloads or one-off scripts |
 | `DirectorySource(directory, entrypoint, resource_prefix)` | Walk a host directory and ship every file under it |
 | `ImportGraphSource(entrypoint, search_paths, device_entrypoint)` | AST-walk the entrypoint and ship only transitively-imported modules |
 | `probe_device(device)` → `DeviceInfo` | Identify a connected board (runtime, version, machine string, CPU UID) |
@@ -75,30 +75,32 @@ For a workspace project that already has a `devices.yml`, swap the `Device(...)`
 
 ### `devices.yml` writer surface
 
-`chumicro_deploy.config.devices_yaml` (separate submodule) — round-trip read/write of the device registry with comments and key order preserved, three-zone classification (user-owned / hardware-once / probed-always).  This is what `chumicro-workspace add-device` and friends sit on; consumers building their own onboarding flow against `devices.yml` use this surface directly.
+`chumicro_deploy.config.devices_yaml` (separate submodule) reads and writes the device registry round-trip, preserving comments and key order, and classifies every field into one of three zones (user-owned / hardware-once / probed-always).  This is what `chumicro-workspace add-device` and friends sit on; consumers building their own onboarding flow against `devices.yml` use this surface directly.
 
 | Symbol | What it does |
 |---|---|
+| `read_devices_yml_template()` → `str` | The empty-registry `devices.yml` text, for writing a fresh file before the first device is registered |
 | `load_devices(path)` → `CommentedMap` | Parse with comments + key order preserved (returns ruamel `CommentedMap`, distinct from the typed reader at `chumicro_deploy.config.default.load_devices`) |
 | `dump_devices(data, path)` | Atomic write back via tempfile + rename |
 | `find_device(data, device_id)` / `list_device_ids(data)` | Read-only lookups against the loaded document |
 | `add_device(data, *, device_id, runtime, address, hardware, ...)` | Append a new entry; raises `DeviceAlreadyExistsError` on id collision |
-| `update_device_address(data, device_id, new_address)` | Silent refresh — address is the probed-always zone |
+| `remove_device(data, device_id)` → `CommentedMap` | Drop an entry and null any `defaults:` key that pointed at it.  Returns the removed entry, so the same id can be re-registered.  Raises `DeviceNotFoundError` when there's no match |
+| `update_device_address(data, device_id, new_address)` | Silent refresh; address is in the probed-always zone |
 | `update_device_firmware_version(data, device_id, new_version)` | Silent refresh of the cached `firmware_version` |
-| `update_device_hardware(data, device_id, *, force=False, **fields)` | Hardware-once zone — raises `HardwareOverwriteError` on a value change unless `force=True` |
+| `update_device_hardware(data, device_id, *, force=False, **fields)` | Hardware-once zone.  Raises `HardwareOverwriteError` on a value change unless `force=True` |
 | `rename_device(data, old_id, new_id)` / `set_runtime_default(data, runtime, device_id)` | Higher-level mutations |
-| `USER_OWNED_FIELDS` / `PROBED_ALWAYS_FIELDS` / `HARDWARE_ONCE_FIELDS` / `HARDWARE_BLOCK_ZONES` | The canonical zone classification — single source of truth that the typed reader's `_KNOWN_KEYS` derives from |
+| `USER_OWNED_FIELDS` / `PROBED_ALWAYS_FIELDS` / `HARDWARE_ONCE_FIELDS` / `HARDWARE_BLOCK_ZONES` | The canonical zone classification, the single source of truth that the typed reader's `_KNOWN_KEYS` derives from |
 
 ### CLI subcommands
 
-`python -m chumicro_deploy <subcommand>` (or just `chumicro-deploy <subcommand>` after `pip install`).  Each accepts `--devices-file devices.yml --device <id>` instead of `--transport` + `--address` for workspace-style invocations.
+`python -m chumicro_deploy <subcommand>` (or just `chumicro-deploy <subcommand>` after `pip install`).  The three board-facing subcommands accept `--devices-file devices.yml --device <id>` instead of `--transport` + `--address` for workspace-style invocations.
 
 | Subcommand | What it does |
 |---|---|
 | `probe` | Identify a board's runtime / version / machine / UID.  `--json` for machine-readable output |
 | `deploy` | Push a `--directory` or `--file-map` to the board and run the `--entrypoint`.  Interactive coaching by default; `--non-interactive` for CI |
-| `flash` | Download + apply firmware.  `--method uf2` or `--method esptool`; `--erase` to wipe user partitions; `--non-interactive` to fail instead of prompting on bootloader-entry |
-| `resolve-firmware-url` | Print the canonical firmware URL for a `--board-id` + `--runtime` + `--version` (no board needed) |
+| `flash-firmware` | Download and apply firmware.  `--method uf2` or `--method esptool`, inferred from the URL extension when omitted.  On the esptool path the flash is erased first, wiping the CIRCUITPY drive, NVS, and stored WiFi credentials; pass `--no-erase` to keep user data on an in-place upgrade.  `--non-interactive` fails instead of prompting on bootloader entry |
+| `resolve-firmware-url` | Print the CircuitPython firmware URL for a `--board-id` + `--runtime` + `--version` (no board needed) |
 
 ### Testing fakes
 
@@ -110,7 +112,7 @@ For a workspace project that already has a `devices.yml`, swap the `Device(...)`
 
 ## Where this fits
 
-Leaf — no upstream ChuMicro deps (uses third-party `pyserial` and `mpremote` for transport).  Sister of [`chumicro-repl`](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/repl), substrate for [`chumicro-workspace`](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/workspace) and [`chumicro-pytest-device`](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/pytest-device).
+Leaf: no upstream ChuMicro deps (uses third-party `pyserial` and `mpremote` for transport).  Sister of [`chumicro-repl`](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/repl), substrate for [`chumicro-workspace`](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/workspace) and [`chumicro-pytest-device`](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/pytest-device).
 
 ## Companion: chumicro-repl
 
@@ -122,20 +124,12 @@ Leaf — no upstream ChuMicro deps (uses third-party `pyserial` and `mpremote` f
 |---|---|
 | `programmatic_deploy.py` | Minimal `Deployer` + `DirectorySource` walkthrough |
 | `file_map_deploy.py` | Multi-file payload built in memory via `FileMapSource` |
-| `import_graph_deploy.py` | `ImportGraphSource` AST-walk — ships only modules the entrypoint actually imports |
+| `import_graph_deploy.py` | `ImportGraphSource` AST-walk that ships only the modules the entrypoint actually imports |
 | `demo_recovery_hand_holding.py` | Interactive walk through every `DeployFailureKind` recovery scenario against real hardware |
 
 ## Contributing
 
-Working on `chumicro-deploy` itself?  Clone the [mono-repo](https://github.com/ChuMicro/ChuMicro) if you haven't already — the rest of the workflow assumes you're inside that workspace.
-
-```bash
-pip install -e .[test]
-pytest tests/                  # host-side tests
-pytest functional_tests/       # on-device tests (needs a board registered in devices.yml)
-```
-
-Register a board before running functional tests: `chumicro-workspace add-device <id> --address <port>` (or hand-write a `devices.yml` entry).
+Issues, bug reports, and pull requests are welcome, and so is "I ran it on this board and here's what happened", some of the most useful feedback a hardware project can get.  Development happens in the [ChuMicro repository](https://github.com/ChuMicro/ChuMicro), whose contributing guide covers setup and the test workflow.
 
 ## Docs
 

@@ -1,14 +1,14 @@
-"""The session server — keep the server up and PUSH to the browser (the re-serve channel).
+"""The session server: keep the server up and PUSH to the browser (the re-serve channel).
 
 `serve_oneshot` (server.py) solves SUBMIT (browser→server) but not RE-SERVE (server→browser):
 today each turn the agent re-`open()`s a fresh page, so the human manually refreshes or lands
 in a new tab. This server fixes that. It owns ONE stable "canvas" URL (opened once) plus a
 server→browser push channel, so each turn the agent regenerates the page and pushes a signal
-(`reload` / `navigate` / `toast` / `progress` / `done`) into the SAME tab — always current,
-never refreshed by hand, never duplicated.
+(`reload` / `navigate` / `toast` / `progress` / `done`) into the SAME tab, which stays current
+without a hand refresh and without a second tab piling up.
 
 Turn-based is no obstacle: the server outlives the turn (run it in the background; the agent
-hits `/push` each turn — cross-process via `push_to(port, event)`). The channel is **SSE**
+hits `/push` each turn, cross-process via `push_to(port, event)`). The channel is **SSE**
 (Server-Sent Events): re-serve is push-only, SSE is exactly that, it is trivial over the
 stdlib server (hold the response open, write `data:` frames), auto-reconnects, and adds no
 dependency. Websockets are reserved for the day a surface needs the browser to stream signal
@@ -30,7 +30,7 @@ import urllib.request
 
 
 class _QuietServer(http.server.ThreadingHTTPServer):
-    """ThreadingHTTPServer that swallows the normal client-disconnect errors — an SSE tab that
+    """ThreadingHTTPServer that swallows the normal client-disconnect errors. An SSE tab that
     navigates away or a curl that times out resets the connection, which is expected, not a fault."""
     daemon_threads = True
 
@@ -55,7 +55,7 @@ class SessionServer:
         self.sink = os.path.join(self.directory, sink_name)
         self.submissions = []
         self.port = None
-        self._clients = []          # list[queue.Queue] — one per connected EventSource
+        self._clients = []          # list[queue.Queue], one per connected EventSource
         self._lock = threading.Lock()
         self._httpd = None
         self._thread = None
@@ -160,7 +160,7 @@ class SessionServer:
         return self
 
     def wait(self):
-        """Block the caller until the server stops (POST /shutdown or stop()) — so a foreground
+        """Block the caller until the server stops (POST /shutdown or stop()), so a foreground
         `serve` exits cleanly and runs its cleanup, instead of sleeping past the shutdown."""
         if self._thread is not None:
             self._thread.join()
@@ -197,7 +197,7 @@ def _port(directory):
     path = os.path.join(os.path.abspath(directory), PORT_FILE)
     if not os.path.exists(path):
         raise SystemExit(
-            f"no live session in {directory!r} — start one: python3 -m webui.session serve {directory}")
+            f"no live session in {directory!r}; start one: python3 -m webui.session serve {directory}")
     with open(path) as handle:
         return int(handle.read().strip())
 
@@ -205,7 +205,7 @@ def _port(directory):
 def _cmd_serve(args):
     """Run the server in the foreground; the agent BACKGROUNDS this so it outlives a turn. Seeds a
     live canvas page (so the first GET already carries the SSE client), writes the port file, and
-    serves until SIGINT or POST /shutdown — cleaning up the port file on the way out."""
+    serves until SIGINT or POST /shutdown, cleaning up the port file on the way out."""
     import webbrowser
 
     from webui import kit
@@ -222,10 +222,10 @@ def _cmd_serve(args):
     if args.open:
         try:
             webbrowser.open(server.url)
-        except Exception:  # noqa: BLE001 — headless: the printed URL is the fallback
+        except Exception:  # noqa: BLE001 - headless, the printed URL is the fallback
             pass
     try:
-        server.wait()                        # block until POST /shutdown or Ctrl-C — then clean up
+        server.wait()                        # block until POST /shutdown or Ctrl-C, then clean up
     except KeyboardInterrupt:
         pass
     finally:
@@ -247,7 +247,7 @@ def _cmd_show(args):
     if args.wrap:
         src = kit.page(args.title or "ChuMicro", src, live=True)
     elif "EventSource" not in src:
-        print("warning: page has no SSE client (build it with kit.page(live=True) or pass --wrap) — "
+        print("warning: page has no SSE client (build it with kit.page(live=True) or pass --wrap): "
               "the reload push won't reach it", flush=True)
     with open(os.path.join(directory, "canvas.html"), "w") as handle:
         handle.write(src)
@@ -270,13 +270,13 @@ def _cmd_event(args):
 def _cmd_stop(args):
     try:
         push_to(_port(args.directory), {}, path="/shutdown")
-    except Exception:  # noqa: BLE001 — already down is fine
+    except Exception:  # noqa: BLE001 - already down is fine
         pass
     print("session stopped", flush=True)
 
 
 def main(argv=None):
-    """The live-canvas CLI (the re-serve channel) — keep ONE tab live across turns and push into it:
+    """The live-canvas CLI (the re-serve channel): keep ONE tab live across turns and push into it:
 
       serve <dir> [--open]                  start the bg server (writes .session-port; agent backgrounds this)
       show  <dir> <file> [--wrap --title T] set the canvas to <file> + push reload (--wrap = wrap a body fragment)
