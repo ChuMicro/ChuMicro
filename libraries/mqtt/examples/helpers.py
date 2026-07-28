@@ -189,11 +189,12 @@ def wifi_up(default_ssid, default_password, *, timeout_s=15):
     ssid = config.get("wifi.ssid", default_ssid)
     password = config.get("wifi.password", default_password)
 
-    if not ssid or ssid == "your-wifi-ssid":
+    if not ssid or ssid in ("your-wifi-ssid", "replace-with-your-ap-ssid"):
         raise RuntimeError(
             "set WIFI_SSID + WIFI_PASSWORD at the top of the example "
-            "before deploying (or populate wifi.ssid / wifi.password "
-            "in the deployed /runtime_config.msgpack)",
+            "before deploying, or put real credentials in secrets.toml "
+            "so the deployed /runtime_config.msgpack carries "
+            "wifi.ssid / wifi.password",
         )
 
     name = sys.implementation.name
