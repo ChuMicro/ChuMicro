@@ -496,37 +496,42 @@
 
 <h1 id="chumicro-repl">chumicro-repl<a class="headerlink" href="#chumicro-repl" title="Permanent link">&para;</a></h1>
 <p><strong>Host-side serial REPL for CircuitPython and MicroPython boards.</strong></p>
-<p>Interactive TUI with traceback highlighting + a programmatic <code>ReplSession</code> for headless test fixtures.  Runs on your laptop — not on the board.</p>
+<p>Four surfaces: a line-mode editor, a byte-passthrough TUI, a one-shot <code>tail()</code> follow mode, and a programmatic <code>ReplSession</code> for headless test fixtures.  Runs on your laptop, not on the board.</p>
 <h2 id="quick-example">Quick example<a class="headerlink" href="#quick-example" title="Permanent link">&para;</a></h2>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_repl</span><span class="w"> </span><span class="kn">import</span> <span class="n">ReplSession</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="k">with</span> <span class="n">ReplSession</span><span class="p">(</span><span class="s2">&quot;/dev/cu.usbmodem14101&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">session</span><span class="p">:</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">session</span><span class="o">.</span><span class="n">exec</span><span class="p">(</span><span class="s2">&quot;import os&quot;</span><span class="p">)</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">sysname</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">call</span><span class="p">(</span><span class="s2">&quot;os.uname&quot;</span><span class="p">)</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="nb">print</span><span class="p">(</span><span class="n">sysname</span><span class="p">)</span>
+<p>Point the CLI at a serial port path:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>chumicro-repl<span class="w"> </span>--address<span class="w"> </span>/dev/cu.usbmodem14101
 </span></code></pre></div>
-<p>Or use the CLI — point it at a serial port path:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>chumicro-repl<span class="w"> </span>--address<span class="w"> </span>/dev/cu.usbmodem14101
+<p>On a terminal that opens <strong>line mode</strong>, a host-side line editor that reads a complete line before shipping it to the device.  Up-arrow recalls history from earlier sessions on the same board, Ctrl-R searches back through it, and Tab completes Python keywords plus whatever the board already has in scope.  Lines starting with <code>:</code> run locally instead of going to the device: <code>:help</code> lists them, <code>:edit</code> hands the recent buffer to <code>$EDITOR</code>, <code>:save</code> and <code>:load</code> keep snippets around.  <code>:quit</code>, Ctrl-D, or Ctrl-C at an empty prompt exits without rebooting the board.</p>
+<p>Need byte-exact forwarding for paste mode or raw-REPL framing?  Add <code>--mode passthrough</code>.  Keystrokes then go straight to the device, Ctrl-C / Ctrl-D / Ctrl-E are forwarded to match the <code>mpremote repl</code> keybindings, and Ctrl-X quits the TUI locally.  Either way, <code>chumicro-repl</code> prints a dim banner on connect with the connection details and key hints, and nudges the friendly REPL to reprint its <code>&gt;&gt;&gt;</code> so you don't sit at a blank screen.</p>
+<p>From Python:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_repl</span><span class="w"> </span><span class="kn">import</span> <span class="n">ReplSession</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="k">with</span> <span class="n">ReplSession</span><span class="p">(</span><span class="s2">&quot;/dev/cu.usbmodem14101&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">session</span><span class="p">:</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>    <span class="n">session</span><span class="o">.</span><span class="n">exec</span><span class="p">(</span><span class="s2">&quot;import os&quot;</span><span class="p">)</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="n">sysname</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">call</span><span class="p">(</span><span class="s2">&quot;os.uname&quot;</span><span class="p">)</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>    <span class="nb">print</span><span class="p">(</span><span class="n">sysname</span><span class="p">)</span>
 </span></code></pre></div>
-<p>Press <strong>Ctrl-X</strong> to quit; <strong>Ctrl-C / Ctrl-D / Ctrl-E</strong> are forwarded to the board, matching the <code>mpremote repl</code> keybindings. On connect, <code>chumicro-repl</code> prints a dim banner with the connection details and key hints, and nudges the friendly REPL to reprint its <code>&gt;&gt;&gt;</code> so you don't sit at a blank screen.</p>
 <h2 id="what-you-get">What you get<a class="headerlink" href="#what-you-get" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Interactive TUI</strong> — a thin, mpremote-compatible terminal that streams the board's REPL with traceback highlighting, a startup banner that names the connection + keybindings, and auto-reconnect when the cable drops mid-session.</li>
-<li><strong><code>InteractiveReplSession</code></strong> — sibling of <code>chumicro_deploy.RecoveringDeployer</code>.  Wraps <code>ReplSession</code> with classification + retry + coaching for session-start failures.</li>
-<li><strong><code>tail(device, seconds)</code></strong> — stream the friendly REPL for a window, fail fast on a traceback, return an <code>ExitCode</code>.  Useful as a post-deploy follow-up step.</li>
-<li><strong><code>ReplSession</code></strong> — programmatic raw-REPL context manager. <code>exec(code)</code>, <code>call(function_name, *args, **kwargs)</code>, <code>read_until(pattern, timeout)</code> for headless test fixtures.</li>
-<li><strong><code>detect_patterns</code> / <code>colorize</code></strong> — streaming pattern detector + ANSI renderer for CircuitPython <code>Traceback</code>, <code>safe mode</code>, <code>Hard fault</code>, MicroPython <code>Traceback</code>, and MicroPython <code>MPY: soft reboot</code> banners.</li>
-<li><strong><code>chumicro-repl</code> CLI</strong> — <code>--address</code>, <code>--baudrate</code>, <code>--tail</code>, <code>--no-fail-on-traceback</code>, <code>--mode {line,passthrough}</code>.</li>
+<li><strong>Line mode</strong>, the default on a terminal: a host-side line editor with cursor edit, Ctrl-R reverse search, and history that persists per device under <code>~/.chumicro-repl/history/</code>, so a session on one board doesn't pollute another.  <code>interactive_line(device)</code> opens it from Python.</li>
+<li><strong><code>:commands</code> inside line mode</strong>: <code>:help</code>, <code>:edit</code>, <code>:save</code>, <code>:load</code>, <code>:snippets</code>, <code>:rescan</code>, <code>:quit</code>.  The table is <code>BUILTIN_COMMANDS</code>, and a handler receives a <code>LineModeContext</code>, so you can register your own.</li>
+<li><strong>Tab completion</strong> against Python keywords and builtins (no device round-trip) merged with the board's own <code>dir()</code>, fetched on first Tab and cached for the session.  <code>fetch_device_names(port)</code> drives that round-trip on its own, <code>build_default_completer()</code> assembles the completer, and <code>CompletionCache</code> is what <code>:rescan</code> clears.</li>
+<li><strong>Passthrough mode</strong>: a thin, mpremote-compatible terminal that streams the board's REPL byte for byte, with traceback highlighting, a startup banner naming the connection and keybindings, and auto-reconnect when the cable drops mid-session.  <code>interactive(device)</code> opens it from Python.</li>
+<li><strong><code>tail(device, seconds)</code></strong>: stream the friendly REPL for a window, fail fast on a traceback, return an <code>ExitCode</code>.  Useful as a post-deploy follow-up step.</li>
+<li><strong><code>ReplSession</code></strong>: programmatic raw-REPL context manager.  <code>exec(code)</code>, <code>call(function_name, *args, **kwargs)</code>, <code>read_until(pattern, timeout)</code> for headless test fixtures.</li>
+<li><strong><code>InteractiveReplSession</code></strong>: sibling of <code>chumicro_deploy.RecoveringDeployer</code>.  Wraps <code>ReplSession</code> with classification, retry, and coaching for session-start failures.</li>
+<li><strong><code>detect_patterns</code> / <code>colorize</code></strong>: streaming pattern detector and ANSI renderer for CircuitPython <code>Traceback</code>, <code>safe mode</code>, <code>Hard fault</code>, MicroPython <code>Traceback</code>, and MicroPython <code>MPY: soft reboot</code> banners.</li>
+<li><strong><code>chumicro-repl</code> CLI</strong>: <code>--address</code>, <code>--baudrate</code>, <code>--tail</code>, <code>--no-fail-on-traceback</code>, and <code>--mode {auto,line,passthrough}</code> (<code>auto</code> is the default and picks line mode on a terminal, passthrough when stdin is piped).</li>
 </ul>
 <h2 id="documentation">Documentation<a class="headerlink" href="#documentation" title="Permanent link">&para;</a></h2>
 <ul>
-<li><a href="guide/">User Guide</a> — getting started, each surface explained, runtime notes.</li>
-<li><a href="api/">API Reference</a> — full API from the source docstrings.</li>
+<li><a href="guide/">User Guide</a>, for getting started, each surface explained, and runtime notes.</li>
+<li><a href="api/">API Reference</a>, the full API from the source docstrings.</li>
 </ul>
 <h2 id="install">Install<a class="headerlink" href="#install" title="Permanent link">&para;</a></h2>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>pip<span class="w"> </span>install<span class="w"> </span>chumicro-repl
 </span></code></pre></div>
-<p>No bundle registration needed — chumicro-repl is a host tool, not on-device code.</p>
+<p>No bundle registration needed.  chumicro-repl is a host tool, not on-device code.</p>
 <hr />
 <div class="chumicro-footer">
 <p><a href="../../">← All ChuMicro Packages</a></p>

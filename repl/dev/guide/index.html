@@ -388,10 +388,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#programmatic-raw-repl-replsession" class="md-nav__link">
+  <a href="#programmatic-raw-repl-with-replsession" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
-        Programmatic raw REPL — <code>ReplSession</code>
+        Programmatic raw REPL with <code>ReplSession</code>
       </span>
     </span>
   </a>
@@ -399,10 +399,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#recover-from-session-start-failures-interactivereplsession" class="md-nav__link">
+  <a href="#recover-from-session-start-failures-with-interactivereplsession" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
-        Recover from session-start failures — <code>InteractiveReplSession</code>
+        Recover from session-start failures with <code>InteractiveReplSession</code>
       </span>
     </span>
   </a>
@@ -590,10 +590,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#programmatic-raw-repl-replsession" class="md-nav__link">
+  <a href="#programmatic-raw-repl-with-replsession" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
-        Programmatic raw REPL — <code>ReplSession</code>
+        Programmatic raw REPL with <code>ReplSession</code>
       </span>
     </span>
   </a>
@@ -601,10 +601,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#recover-from-session-start-failures-interactivereplsession" class="md-nav__link">
+  <a href="#recover-from-session-start-failures-with-interactivereplsession" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
-        Recover from session-start failures — <code>InteractiveReplSession</code>
+        Recover from session-start failures with <code>InteractiveReplSession</code>
       </span>
     </span>
   </a>
@@ -670,7 +670,7 @@
 </span></code></pre></div>
 <p>Host-only. No bundle registration or device-side install needed. After install, a <code>chumicro-repl</code> console script is on your PATH.</p>
 <h2 id="command-line-interface">Command-line interface<a class="headerlink" href="#command-line-interface" title="Permanent link">&para;</a></h2>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Interactive TUI by serial path.</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Interactive REPL by serial path.  On a terminal this opens line mode.</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>chumicro-repl<span class="w"> </span>--address<span class="w"> </span>/dev/cu.usbmodem14101
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="c1"># One-shot tail for 5 seconds, fail on traceback (default).</span>
@@ -679,9 +679,9 @@
 </span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="c1"># Tail without failing on traceback (useful for diagnosing crash loops).</span>
 </span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>chumicro-repl<span class="w"> </span>--address<span class="w"> </span>/dev/cu.usbmodem14101<span class="w"> </span>--tail<span class="w"> </span><span class="m">30</span><span class="w"> </span>--no-fail-on-traceback
 </span></code></pre></div>
-<p>By default in a TTY, <code>chumicro-repl</code> opens <strong>line mode</strong> — a host-side line editor that buffers each line locally before shipping to the device.  Switch to byte-passthrough with <code>--mode passthrough</code> if you need raw-REPL framing or paste-mode forwarding.</p>
+<p>By default in a TTY, <code>chumicro-repl</code> opens <strong>line mode</strong>, a host-side line editor that buffers each line locally before shipping it to the device.  Switch to byte-passthrough with <code>--mode passthrough</code> if you need raw-REPL framing or paste-mode forwarding.</p>
 <h2 id="line-mode">Line mode<a class="headerlink" href="#line-mode" title="Permanent link">&para;</a></h2>
-<p>The default for terminal sessions.  <code>prompt_toolkit</code> reads a complete line on the host — cursor edit, arrow keys, history navigation, Ctrl-R reverse search — then ships it to the device when you press Enter.  The device responds in the friendly REPL; the response streams back through the same pattern detector + traceback highlighter <code>tail()</code> uses.</p>
+<p>The default for terminal sessions.  <code>prompt_toolkit</code> reads a complete line on the host, giving you cursor edit, arrow keys, history navigation, and Ctrl-R reverse search, then ships the line to the device when you press Enter.  The device responds in the friendly REPL, and the response streams back through the same pattern detector and traceback highlighter <code>tail()</code> uses.</p>
 <p>Lines starting with <code>:</code> are interpreted locally as builtin commands rather than shipped to the device:</p>
 <table>
 <thead>
@@ -697,7 +697,7 @@
 </tr>
 <tr>
 <td><code>:edit</code></td>
-<td>Open <code>$EDITOR</code> with the last 10 input lines pre-seeded.  On save+exit, every non-empty line ships line-by-line to the device.  Falls back to <code>vi</code> when <code>$EDITOR</code> is unset.  Honors shell-shaped values: <code>EDITOR="code -w"</code> works.</td>
+<td>Open <code>$EDITOR</code> with the last 10 input lines pre-seeded.  On save and exit, every non-empty line ships line-by-line to the device.  Falls back to <code>vi</code> when <code>$EDITOR</code> is unset.  Honors shell-shaped values: <code>EDITOR="code -w"</code> works.</td>
 </tr>
 <tr>
 <td><code>:save NAME</code></td>
@@ -713,11 +713,11 @@
 </tr>
 <tr>
 <td><code>:rescan</code></td>
-<td>Drop the cached <code>dir()</code> so the next Tab re-queries the device.  Use after <code>import</code>-ing a new module.</td>
+<td>Drop the cached <code>dir()</code> so the next Tab re-queries the device.  Use it after <code>import</code>-ing a new module.</td>
 </tr>
 <tr>
 <td><code>:quit</code></td>
-<td>Exit without rebooting the device.  EOF (Ctrl-D) / Ctrl-C at an empty prompt do the same.</td>
+<td>Exit without rebooting the device.  EOF (Ctrl-D) and Ctrl-C at an empty prompt do the same.</td>
 </tr>
 </tbody>
 </table>
@@ -739,13 +739,13 @@
 <h3 id="tab-completion">Tab completion<a class="headerlink" href="#tab-completion" title="Permanent link">&para;</a></h3>
 <p>Two sources merge in line mode:</p>
 <ul>
-<li><strong>Static catalog</strong> — Python keywords (<code>for</code>, <code>import</code>, <code>True</code>, …) and public builtins (<code>print</code>, <code>range</code>, <code>len</code>, …).  Always available; no device round-trip.</li>
-<li><strong>On-device <code>dir()</code></strong> — populated lazily on first Tab via a <code>print(repr(dir()))</code> round-trip through raw REPL.  Measured RTT on the supported CircuitPython and MicroPython boards is 8–45 ms — well below the perceptual "instant" threshold.  Cached for the session; <code>:rescan</code> invalidates after a new <code>import</code>.</li>
+<li><strong>Static catalog</strong>, meaning Python keywords (<code>for</code>, <code>import</code>, <code>True</code>, and so on) and public builtins (<code>print</code>, <code>range</code>, <code>len</code>, and so on).  Always available; no device round-trip.</li>
+<li><strong>On-device <code>dir()</code></strong>, populated lazily on first Tab via a <code>print(repr(dir()))</code> round-trip through raw REPL.  Measured across four boards (Lolin S2 and Pi Pico W, each running CircuitPython and MicroPython), the round-trip took between 8 ms and 45 ms.  Cached for the session; <code>:rescan</code> invalidates it after a new <code>import</code>.</li>
 </ul>
 <p>The friendly-banner reprint that the round-trip's <code>Ctrl-B</code> triggers is captured before line-mode resumes drawing, so it never leaks into your terminal.  Embedding the round-trip in your own shape?  Call <code>chumicro_repl.completion.fetch_device_names(port)</code>.</p>
-<p>CircuitPython's bare REPL has an empty user namespace by design — <code>dir()</code> returns only <code>__name__</code> / <code>__file__</code> until you <code>import</code> something.  MicroPython pre-imports a handful of platform modules (<code>gc</code>, <code>os</code>, <code>machine</code>, <code>rp2</code>, <code>vfs</code>).  The static catalog covers what's typed most regardless.</p>
+<p>CircuitPython's bare REPL has an empty user namespace by design: <code>dir()</code> returns only <code>__name__</code> and <code>__file__</code> until you <code>import</code> something.  MicroPython pre-imports a handful of platform modules (<code>gc</code>, <code>os</code>, <code>machine</code>, <code>rp2</code>, <code>vfs</code>).  The static catalog covers what's typed most regardless.</p>
 <h2 id="passthrough-mode-mode-passthrough">Passthrough mode (<code>--mode passthrough</code>)<a class="headerlink" href="#passthrough-mode-mode-passthrough" title="Permanent link">&para;</a></h2>
-<p>When you need byte-exact forwarding — paste mode, raw-REPL framing, mpremote-shape Ctrl-C/Ctrl-D semantics — pass <code>--mode passthrough</code>.  Keystrokes go straight to the device; the board does its own line editing.</p>
+<p>When you need byte-exact forwarding for paste mode, raw-REPL framing, or mpremote-shape Ctrl-C / Ctrl-D semantics, pass <code>--mode passthrough</code>.  Keystrokes go straight to the device and the board does its own line editing.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>chumicro-repl<span class="w"> </span>--mode<span class="w"> </span>passthrough<span class="w"> </span>--address<span class="w"> </span>/dev/cu.usbmodem14101
 </span></code></pre></div>
 <p>Startup prints a dim banner identifying the connection (<code>chumicro-repl · /dev/cu.usbmodem14101 · circuitpython · 115200 baud</code>) and the four keys you might want, then sends a single carriage return to nudge the friendly REPL into reprinting its <code>&gt;&gt;&gt;</code>:</p>
@@ -759,23 +759,23 @@
 <tbody>
 <tr>
 <td>Ctrl-C</td>
-<td>Forwarded — interrupts on-device.</td>
+<td>Forwarded; interrupts on-device.</td>
 </tr>
 <tr>
 <td>Ctrl-D</td>
-<td>Forwarded — soft-reboots the runtime.</td>
+<td>Forwarded; soft-reboots the runtime.</td>
 </tr>
 <tr>
 <td>Ctrl-E</td>
-<td>Forwarded — enters MicroPython paste mode.</td>
+<td>Forwarded; enters MicroPython paste mode.</td>
 </tr>
 <tr>
 <td>Ctrl-X</td>
-<td><strong>Local exit</strong> — quits the TUI without rebooting the board.</td>
+<td><strong>Local exit</strong>: quits the TUI without rebooting the board.</td>
 </tr>
 </tbody>
 </table>
-<p>All other keystrokes pass through unchanged.  The board does its own line editing — arrow keys, backspace, history all work, but they live on the device, not the host.  No <code>:</code> commands, no Tab completion against the host catalog, no persistent history file (the device's own history scrolls inside the runtime's <code>&gt;&gt;&gt;</code> prompt).</p>
+<p>All other keystrokes pass through unchanged.  The board does its own line editing, so arrow keys, backspace, and history all work, but they live on the device, not the host.  No <code>:</code> commands, no Tab completion against the host catalog, no persistent history file (the device's own history scrolls inside the runtime's <code>&gt;&gt;&gt;</code> prompt).</p>
 <p>Choose passthrough when you need byte-exact behavior or when you're piping input over stdin (line mode requires interactive input from a TTY); choose line mode for everyday inner-loop work.  <code>--mode auto</code> (the default) inspects <code>sys.stdin.isatty()</code> and picks the right one.</p>
 <h2 id="tail-mode-for-deploy-follow-ups">Tail mode for deploy follow-ups<a class="headerlink" href="#tail-mode-for-deploy-follow-ups" title="Permanent link">&para;</a></h2>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_deploy</span><span class="w"> </span><span class="kn">import</span> <span class="n">Device</span>
@@ -790,9 +790,9 @@
 </span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="k">if</span> <span class="n">result</span> <span class="ow">is</span> <span class="n">ExitCode</span><span class="o">.</span><span class="n">TRACEBACK_DETECTED</span><span class="p">:</span>
 </span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>    <span class="k">raise</span> <span class="ne">SystemExit</span><span class="p">(</span><span class="s2">&quot;deploy crashed on the board&quot;</span><span class="p">)</span>
 </span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="k">elif</span> <span class="n">result</span> <span class="ow">is</span> <span class="n">ExitCode</span><span class="o">.</span><span class="n">OK</span><span class="p">:</span>
-</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;clean tail — board ran without surfacing a traceback&quot;</span><span class="p">)</span>
+</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;clean tail: board ran without surfacing a traceback&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<p><code>tail()</code> accepts either a <code>chumicro_deploy.Device</code> or a bare port path string. Output is decoded UTF-8 safely (multi-byte code-points split across reads do not corrupt the stream) and ANSI-highlighted as it scrolls past — tracebacks are bold red, safe-mode banners are yellow, hard faults are red-on-red, MicroPython soft-reboot banners are dim cyan.</p>
+<p><code>tail()</code> accepts either a <code>chumicro_deploy.Device</code> or a bare port path string. Output is decoded UTF-8 safely (multi-byte code-points split across reads do not corrupt the stream) and ANSI-highlighted as it scrolls past: tracebacks are bold red, safe-mode banners are yellow, hard faults are red-on-red, MicroPython soft-reboot banners are dim cyan.</p>
 <p>The window ends when:</p>
 <ul>
 <li>The <code>seconds</code> budget elapses → <code>ExitCode.OK</code>.</li>
@@ -800,12 +800,12 @@
 <li>A <code>KeyboardInterrupt</code> reaches the read loop → <code>ExitCode.INTERRUPTED</code>.</li>
 </ul>
 <p>Soft-reboot banners are informational and never end a tail early.</p>
-<h2 id="programmatic-raw-repl-replsession">Programmatic raw REPL — <code>ReplSession</code><a class="headerlink" href="#programmatic-raw-repl-replsession" title="Permanent link">&para;</a></h2>
+<h2 id="programmatic-raw-repl-with-replsession">Programmatic raw REPL with <code>ReplSession</code><a class="headerlink" href="#programmatic-raw-repl-with-replsession" title="Permanent link">&para;</a></h2>
 <p><code>ReplSession</code> is a context manager that puts the board into raw REPL on entry and exits cleanly. Three primitives:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_repl</span><span class="w"> </span><span class="kn">import</span> <span class="n">ReplSession</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="k">with</span> <span class="n">ReplSession</span><span class="p">(</span><span class="s2">&quot;/dev/cu.usbmodem14101&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">session</span><span class="p">:</span>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>    <span class="c1"># Run a block — returns stdout as a UTF-8 string.</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>    <span class="c1"># Run a block, get stdout back as a UTF-8 string.</span>
 </span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>    <span class="n">output</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">exec</span><span class="p">(</span><span class="s2">&quot;import os</span><span class="se">\n</span><span class="s2">print(os.uname())</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>
 </span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>    <span class="c1"># Call a named function with literal args, parse the repr.</span>
@@ -815,12 +815,12 @@
 </span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>    <span class="c1"># board signal before the next exec.</span>
 </span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>    <span class="n">captured</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">read_until</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;READY&quot;</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mf">5.0</span><span class="p">)</span>
 </span></code></pre></div>
-<p><code>exec(code, timeout=10.0)</code> returns stdout. If the board emitted stderr (typically because the code raised an exception), <code>ReplSession</code> raises <code>ReplSessionError</code> with the stderr block attached as the exception's <code>.stderr</code> attribute — raw REPL never raises a Python exception object across the wire, so surfacing it as a string is the closest host-side analog.</p>
+<p><code>exec(code, timeout=10.0)</code> returns stdout. If the board emitted stderr (typically because the code raised an exception), <code>ReplSession</code> raises <code>ReplSessionError</code> with the stderr block attached as the exception's <code>.stderr</code> attribute. Raw REPL never raises a Python exception object across the wire, so surfacing it as a string is the closest host-side analog.</p>
 <p><code>call(function_name, *args, **kwargs)</code> builds a <code>print(repr(&lt;function_name&gt;(*args, **kwargs)))</code> and parses the result via <code>ast.literal_eval</code>. Round-trips numbers, strings, bytes, tuples, lists, dicts, sets, booleans, and <code>None</code>. Anything else raises <code>ReplSessionError</code> because the repr is not a literal.</p>
 <p><code>read_until(pattern, timeout)</code> reads bytes from the port until the regex matches the accumulated decoded text. Operates on the friendly REPL too, so callers tailing a deploy can wait for a specific signal without bouncing through raw REPL.</p>
 <p>The session accepts a <code>chumicro_deploy.Device</code>, a bare serial-port path, or any object with <code>.address</code> and <code>.baudrate</code> attributes. Tests inject <code>time</code> (a <code>TimeSource</code> protocol) and <code>port_factory</code> (any callable returning a <code>SerialPort</code> protocol) so the whole context is exercised without real hardware.</p>
-<h2 id="recover-from-session-start-failures-interactivereplsession">Recover from session-start failures — <code>InteractiveReplSession</code><a class="headerlink" href="#recover-from-session-start-failures-interactivereplsession" title="Permanent link">&para;</a></h2>
-<p><code>ReplSession</code> raises directly on a failed session-start — that's the deterministic surface programmatic callers want.  For interactive use, <code>InteractiveReplSession</code> wraps a <code>ReplSession</code> with classification + a retry-loop + user-facing coaching, mirroring <code>chumicro_deploy.RecoveringDeployer</code>.</p>
+<h2 id="recover-from-session-start-failures-with-interactivereplsession">Recover from session-start failures with <code>InteractiveReplSession</code><a class="headerlink" href="#recover-from-session-start-failures-with-interactivereplsession" title="Permanent link">&para;</a></h2>
+<p><code>ReplSession</code> raises directly on a failed session-start, which is the deterministic surface programmatic callers want.  For interactive use, <code>InteractiveReplSession</code> wraps a <code>ReplSession</code> with classification, a retry-loop, and user-facing coaching, mirroring <code>chumicro_deploy.RecoveringDeployer</code>.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_repl</span><span class="w"> </span><span class="kn">import</span> <span class="n">InteractiveReplSession</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="k">with</span> <span class="n">InteractiveReplSession</span><span class="p">(</span><span class="n">device</span><span class="p">,</span> <span class="n">max_attempts</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span> <span class="k">as</span> <span class="n">session</span><span class="p">:</span>
@@ -828,15 +828,15 @@
 </span></code></pre></div>
 <p>When the underlying session fails to open, the wrapper:</p>
 <ol>
-<li>Classifies the exception into a <code>ReplFailureKind</code> — one of <code>PORT_NOT_FOUND</code>, <code>PORT_BUSY</code>, <code>PORT_PERMISSION_DENIED</code>, <code>RAW_REPL_UNRESPONSIVE</code>, or <code>UNKNOWN</code>.</li>
-<li>Prints the matching <code>RecoveryPlan</code> (headline + ordered fix-steps) to <em>output</em>.</li>
-<li>Prompts the user via <em>prompt</em> — bare Enter retries; <code>q</code> / <code>quit</code> / <code>abort</code> / <code>exit</code> re-raises the last error.</li>
+<li>Classifies the exception into a <code>ReplFailureKind</code>: one of <code>PORT_NOT_FOUND</code>, <code>PORT_BUSY</code>, <code>PORT_PERMISSION_DENIED</code>, <code>RAW_REPL_UNRESPONSIVE</code>, or <code>UNKNOWN</code>.</li>
+<li>Prints the matching <code>RecoveryPlan</code> (headline plus ordered fix-steps) to <em>output</em>.</li>
+<li>Prompts the user via <em>prompt</em>: bare Enter retries; <code>q</code> / <code>quit</code> / <code>abort</code> / <code>exit</code> re-raises the last error.</li>
 <li>After <code>max_attempts</code> attempts, the last exception re-raises.</li>
 </ol>
 <p><code>prompt</code> and <code>output</code> are injectable so you can plug the wrapper into a TUI dialog, a logging framework, or a test scripted with a queue of canned responses.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_repl</span><span class="w"> </span><span class="kn">import</span> <span class="n">InteractiveReplSession</span><span class="p">,</span> <span class="n">classify_session_failure</span><span class="p">,</span> <span class="n">ReplFailureKind</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="c1"># Custom orchestrator — classify directly without using the wrapper.</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="c1"># Custom orchestrator: classify directly without using the wrapper.</span>
 </span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="k">try</span><span class="p">:</span>
 </span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>    <span class="k">with</span> <span class="n">ReplSession</span><span class="p">(</span><span class="n">device</span><span class="p">)</span> <span class="k">as</span> <span class="n">session</span><span class="p">:</span>
 </span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>        <span class="o">...</span>
@@ -845,8 +845,8 @@
 </span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>    <span class="k">if</span> <span class="n">kind</span> <span class="ow">is</span> <span class="n">ReplFailureKind</span><span class="o">.</span><span class="n">PORT_BUSY</span><span class="p">:</span>
 </span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>        <span class="o">...</span>  <span class="c1"># close-the-other-tool flow</span>
 </span></code></pre></div>
-<p>Mid-session disconnects (after the handshake completed) do <em>not</em> route through this layer — those are handled by the auto-reconnect loop in <code>tail()</code> and <code>run_loop()</code> (see <code>reconnect_seconds</code>).  Subclass <code>ReplSessionDisconnected</code> matters for that path; <code>InteractiveReplSession</code> matters for "the session never opened".</p>
-<p>The interactive <a href="https://github.com/ChuMicro/ChuMicro/blob/main/workbench/repl/examples/demo_repl_robustness.py"><code>demo_repl_robustness.py</code></a> example walks every scenario against a real board — happy path, port-not-found (bogus address), port-busy (open the port elsewhere first), raw-REPL-unresponsive (board stuck in interrupt-disabled code), auto-reconnect during tail (yank + replug the cable), and abort during reconnect.</p>
+<p>Mid-session disconnects (after the handshake completed) do <em>not</em> route through this layer.  Those are handled by the auto-reconnect loop in <code>tail()</code> and <code>run_loop()</code> (see <code>reconnect_seconds</code>).  Subclass <code>ReplSessionDisconnected</code> matters for that path; <code>InteractiveReplSession</code> matters for "the session never opened".</p>
+<p>The interactive <a href="https://github.com/ChuMicro/ChuMicro/blob/main/workbench/repl/examples/demo_repl_robustness.py"><code>demo_repl_robustness.py</code></a> example walks every scenario against a real board: happy path, port-not-found (bogus address), port-busy (open the port elsewhere first), raw-REPL-unresponsive (board stuck in interrupt-disabled code), auto-reconnect during tail (yank and replug the cable), and abort during reconnect.</p>
 <h2 id="pattern-detection-and-highlighting">Pattern detection and highlighting<a class="headerlink" href="#pattern-detection-and-highlighting" title="Permanent link">&para;</a></h2>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_repl</span><span class="w"> </span><span class="kn">import</span> <span class="n">detect_patterns</span><span class="p">,</span> <span class="n">colorize</span><span class="p">,</span> <span class="n">Theme</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>
@@ -862,7 +862,7 @@
 </span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="n">theme</span> <span class="o">=</span> <span class="n">Theme</span><span class="p">(</span><span class="n">traceback</span><span class="o">=</span><span class="s2">&quot;32&quot;</span><span class="p">)</span>  <span class="c1"># green tracebacks</span>
 </span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a><span class="nb">print</span><span class="p">(</span><span class="n">colorize</span><span class="p">(</span><span class="n">text</span><span class="p">,</span> <span class="n">theme</span><span class="o">=</span><span class="n">theme</span><span class="p">),</span> <span class="n">end</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<p>The <code>StreamingPatternDetector</code> is the primitive <code>tail()</code> and the TUI build on — it buffers a bounded amount of trailing context so a pattern that spans a chunk boundary still matches without growing memory on long-running sessions. Use it directly for any custom streaming consumer.</p>
+<p>The <code>StreamingPatternDetector</code> is the primitive <code>tail()</code> and the TUI build on. It buffers a bounded amount of trailing context so a pattern that spans a chunk boundary still matches without growing memory on long-running sessions. Use it directly for any custom streaming consumer.</p>
 <h2 id="test-fakes">Test fakes<a class="headerlink" href="#test-fakes" title="Permanent link">&para;</a></h2>
 <p>Host-side tests can drive every surface without real hardware:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_repl</span><span class="w"> </span><span class="kn">import</span> <span class="n">ReplSession</span>
@@ -881,12 +881,12 @@
 </span></code></pre></div>
 <p>Three fakes are exposed under <code>chumicro_repl.testing</code>:</p>
 <ul>
-<li><code>FakeSerialPort</code> — drop-in for <code>serial.Serial</code>. Records writes; replays scripted <code>read_chunks</code>.</li>
-<li><code>FakeKeyboard</code> — replays scripted keystrokes for <code>chumicro_repl.tui.run_loop</code>.</li>
-<li><code>FakeTime</code> — deterministic seconds-domain time source. <code>monotonic()</code> is stable; <code>sleep()</code> advances the clock without a real wait.</li>
+<li><code>FakeSerialPort</code>, a drop-in for <code>serial.Serial</code>. Records writes; replays scripted <code>read_chunks</code>.</li>
+<li><code>FakeKeyboard</code>, which replays scripted keystrokes for <code>chumicro_repl.tui.run_loop</code>.</li>
+<li><code>FakeTime</code>, a deterministic seconds-domain time source. <code>monotonic()</code> is stable; <code>sleep()</code> advances the clock without a real wait.</li>
 </ul>
 <h2 id="runtime-notes">Runtime notes<a class="headerlink" href="#runtime-notes" title="Permanent link">&para;</a></h2>
-<p>The raw-REPL framing is identical between CircuitPython and MicroPython — both runtimes emit the same <code>OK&lt;stdout&gt;\x04&lt;stderr&gt;\x04&gt;</code> shape on the same Ctrl-A/Ctrl-D handshake. The only divergence is what a friendly-REPL Ctrl-D prints: MicroPython emits <code>MPY: soft reboot</code> and CircuitPython is silent. <code>ReplSession</code> never leaves raw REPL during operation, so the divergence never surfaces there; it's a concern only for <code>tail()</code> (which highlights the soft-reboot banner) and the interactive TUI (which forwards Ctrl-D and shows whatever the board prints).</p>
+<p>The raw-REPL framing is identical between CircuitPython and MicroPython. Both runtimes emit the same <code>OK&lt;stdout&gt;\x04&lt;stderr&gt;\x04&gt;</code> shape on the same Ctrl-A/Ctrl-D handshake. The only divergence is what a friendly-REPL Ctrl-D prints: MicroPython emits <code>MPY: soft reboot</code> and CircuitPython is silent. <code>ReplSession</code> never leaves raw REPL during operation, so the divergence never surfaces there; it's a concern only for <code>tail()</code> (which highlights the soft-reboot banner) and the passthrough TUI (which forwards Ctrl-D and shows whatever the board prints).</p>
 <p>Pattern detection covers:</p>
 <table>
 <thead>
