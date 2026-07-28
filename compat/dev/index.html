@@ -452,7 +452,7 @@
 
 <h1 id="chumicro-compat">chumicro-compat<a class="headerlink" href="#chumicro-compat" title="Permanent link">&para;</a></h1>
 <p><strong>Cross-runtime compatibility polyfills for CircuitPython, MicroPython, and CPython.</strong></p>
-<p>Lightweight reimplementations of CPython standard-library features missing on microcontroller runtimes — on CPython, the real C implementations are re-exported with no overhead.</p>
+<p>Lightweight reimplementations of the standard-library pieces CircuitPython and MicroPython leave out. Import from <code>chumicro_compat</code> and the same code runs on all three runtimes: on CPython the real C implementation is re-exported, so the import costs nothing there.</p>
 <h2 id="quick-example">Quick example<a class="headerlink" href="#quick-example" title="Permanent link">&para;</a></h2>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_compat.functools</span><span class="w"> </span><span class="kn">import</span> <span class="n">partial</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
@@ -467,8 +467,8 @@
 </span></code></pre></div>
 <h2 id="documentation">Documentation<a class="headerlink" href="#documentation" title="Permanent link">&para;</a></h2>
 <ul>
-<li><a href="guide/">User Guide</a> — what's polyfilled and why, usage patterns</li>
-<li><a href="api/">API Reference</a> — full API documentation</li>
+<li><a href="guide/">User Guide</a>: <code>functools.partial</code> across runtimes, platform notes, examples</li>
+<li><a href="api/">API Reference</a>: <code>partial</code> and its <code>func</code> / <code>args</code> / <code>keywords</code> attributes</li>
 </ul>
 <hr />
 <div class="chumicro-footer">
