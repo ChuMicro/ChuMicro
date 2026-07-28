@@ -17,6 +17,15 @@ body:
         - runner
         - compat
         - msgpack
+        - config
+        - http-server
+        - kvstore
+        - mqtt
+        - ntp
+        - requests
+        - sockets
+        - websockets
+        - wifi
         - New library
         - Infrastructure / tooling
         - Not sure
@@ -29,9 +38,10 @@ body:
       label: Problem or use case
       description: What problem does this solve? What are you trying to do that you can't do today?
       placeholder: |
-        I'm building a weather station and need to store calibration settings
-        persistently across reboots, but there's no ChuMicro library for
-        persistent key-value storage.
+        I want to append sensor readings to a file on a microSD card, but
+        mounting the card and writing to it differs between CircuitPython
+        and MicroPython, and a slow write stalls my runner loop. kvstore
+        handles small values that survive a reboot, not bulk file writes.
     validations:
       required: true
 
@@ -41,8 +51,9 @@ body:
       label: Proposed solution
       description: How do you think this should work? Code examples are welcome.
       placeholder: |
-        A Settings class that wraps NVM on CircuitPython and files on
-        MicroPython/CPython, with a dict-like API and explicit save/load.
+        A runner-shaped SD card service that mounts through each runtime's
+        own driver (sdcardio on CircuitPython, machine.SDCard on
+        MicroPython) and writes buffered lines a chunk per tick.
     validations:
       required: false
 

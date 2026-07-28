@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ChuMicro — Documentation</title>
+  <title>ChuMicro: Documentation</title>
   <link rel="icon" href="./assets/images/favicon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -103,7 +103,7 @@
   <div class="container">
     <header>
       <h1>ChuMicro</h1>
-      <p>Cross-runtime Python libraries for CircuitPython, MicroPython, and CPython &mdash; built for ESP32, RP2040, and other microcontrollers.</p>
+      <p>Cross-runtime Python libraries for CircuitPython, MicroPython, and CPython, built for ESP32, RP2040, and other microcontrollers.</p>
       <div class="badges">
         <span class="badge badge-cream">CircuitPython</span>
         <span class="badge badge-amber">MicroPython</span>

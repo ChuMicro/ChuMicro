@@ -35,8 +35,8 @@ from shared import TEMPLATES_DIR
 #: so a newly added library appears without editing this file.
 LIBRARY_ORDER = (
     "timing", "runner", "wifi", "requests", "http_server", "mqtt",
-    "websockets", "sockets", "ntp", "config", "kvstore", "msgpack",
-    "compat",
+    "websockets", "sockets", "ntp", "config", "kvstore", "logging",
+    "msgpack", "compat",
 )
 
 #: Workbench card order: the root README's bench-tools order, front door

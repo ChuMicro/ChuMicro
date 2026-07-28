@@ -154,6 +154,57 @@ class TestScaffoldLibrary:
         assert "All ChuMicro Packages" in index_text
         assert "All ChuMicro Libraries" not in index_text
 
+    def test_workbench_kind_readme_is_host_only(
+        self, tmp_path: Path,
+    ) -> None:
+        """A workbench README installs from PyPI and claims no device runtime.
+
+        Host tools never enter the CircuitPython / MicroPython bundle, so
+        the install block is a plain ``pip install``, the "Find this
+        library" list drops both bundle rows, and the library shape's
+        "Platform support" claim is omitted rather than promising a
+        laptop-only tool runs on a board.
+        """
+        created = scaffold_library(
+            tmp_path / "workbench", "trinket", package_kind="workbench",
+            branding=CHUMICRO_BRANDING,
+        )
+        readme_text = (created / "README.md").read_text()
+        assert "pip install chumicro-trinket" in readme_text
+        assert "circup" not in readme_text
+        assert "mip install" not in readme_text
+        assert "**Bundle:**" not in readme_text
+        assert "**Experimental bundle:**" not in readme_text
+        assert "## Platform support" not in readme_text
+        assert "Works on CPython, MicroPython, and CircuitPython" not in readme_text
+        assert "- **Source:** [workbench/trinket]" in readme_text
+        # Family note sends the reader to the workbench index, not the
+        # library one.
+        assert "Browse all workbench tools." in readme_text
+
+    def test_rendered_files_carry_no_em_dashes(self, tmp_path: Path) -> None:
+        """Every rendered file is em-dash free, in all three flavors.
+
+        The style guide bans the em-dash everywhere, including code
+        comments and table cells, and a scaffold is the first draft of a
+        package's published docs.
+        """
+        roots = (
+            scaffold_library(
+                tmp_path / "branded", "gpio", branding=CHUMICRO_BRANDING,
+            ),
+            scaffold_library(tmp_path / "neutral", "my-project"),
+            scaffold_library(
+                tmp_path / "workbench", "trinket",
+                package_kind="workbench", branding=CHUMICRO_BRANDING,
+            ),
+        )
+        for root in roots:
+            for path in sorted(root.rglob("*")):
+                if not path.is_file():
+                    continue
+                assert "—" not in path.read_text(), f"em-dash in {path}"
+
     def test_library_kind_keeps_library_flavored_docs(
         self, tmp_path: Path,
     ) -> None:
@@ -198,8 +249,15 @@ class TestScaffoldBranding:
         assert "chumicro_tip.png" not in readme_text
         assert "Part of the [ChuMicro]" not in readme_text
         assert "ChuMicro-Bundle" not in readme_text
-        assert "github.com/ChuMicro" not in readme_text
         assert "chumicro.github.io" not in readme_text
+        # No branding-derived URL survives.  The one ChuMicro URL left is
+        # the worked example's link to chumicro-timing under "Where this
+        # fits": README links are absolute because relative sibling paths
+        # render broken on PyPI, and the owner rewrites that prose.
+        assert "github.com/ChuMicro/ChuMicro/issues" not in readme_text
+        assert "github.com/ChuMicro/ChuMicro/blob/main/LICENSE" not in readme_text
+        assert readme_text.count("github.com/ChuMicro") == 1
+        assert "libraries/timing) for tick arithmetic" in readme_text
 
     def test_neutral_readme_installs_from_pypi_only(
         self, tmp_path: Path,
@@ -270,6 +328,10 @@ class TestScaffoldBranding:
         assert "Part of the [ChuMicro]" in readme_text
         assert "circup install chumicro_gpio" in readme_text
         assert "github.com/ChuMicro/ChuMicro/blob/main/LICENSE" in readme_text
+        # Device libraries keep the three-runtime platform claim and both
+        # bundle rows; the workbench kind drops them.
+        assert "## Platform support" in readme_text
+        assert "**Experimental bundle:**" in readme_text
 
     def test_branded_and_neutral_share_the_body(self, tmp_path: Path) -> None:
         """Both flavors render from one template set: shared body is identical.

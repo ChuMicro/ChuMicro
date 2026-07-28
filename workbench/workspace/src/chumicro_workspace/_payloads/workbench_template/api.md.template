@@ -1,9 +1,11 @@
 # API Reference
 
-<!-- Starts as a single autodoc directive for the whole package.  As
-     the workbench tool grows multiple modules, split into per-module
-     sections with `## Heading` + `::: {import_name}.<module>`
-     directives. -->
+<!-- Delete this comment before you publish: a finished api.md carries no
+     scaffold guidance.  The whole-package directive below is the right
+     shape until the tool grows a second public module; after that, split
+     into one `## ` heading per module with the fully qualified module
+     path in backticks and a single `::: {import_name}.<module>`
+     directive under each. -->
 
 ::: {import_name}
 {footer_page}

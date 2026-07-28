@@ -24,7 +24,10 @@ The output layout::
 Templates ship beside this module under ``_payloads/library_template/``
 and travel with the wheel.  ``package_kind="workbench"`` swaps the
 four ``docs/`` templates for a workbench-flavored set under
-``_payloads/workbench_template/``; every other file is shared.
+``_payloads/workbench_template/``.  Every other file renders from the
+one shared template set, with the kind steering the fragments that
+differ: install lines, bundle links, source paths, and the README's
+platform claim.
 
 ``python3 run.py new --library <name>`` is the usual entry point.
 Callers that need finer control call :func:`scaffold_library`
@@ -72,7 +75,7 @@ def _load_template(
     template_path = template_dir / filename
     if not template_path.is_file():
         raise FileNotFoundError(
-            f"library scaffold template missing at {template_path} — "
+            f"library scaffold template missing at {template_path}: "
             "chumicro-workspace install may be broken; reinstall.",
         )
     return template_path.read_text()
@@ -156,6 +159,7 @@ _FRAGMENT_KEYS: tuple[str, ...] = (
     "banner",
     "family_note",
     "install_block",
+    "platform_section",
     "contributing_intro",
     "docs_section",
     "find_section",
@@ -169,7 +173,55 @@ _FRAGMENT_KEYS: tuple[str, ...] = (
 )
 
 
-def _neutral_fragments(distribution: str) -> dict[str, str]:
+#: README "Contributing" body for a self-owned package.  The branded
+#: rendering points contributors at the upstream repo's guide; a
+#: self-owned package has no upstream, so the dev loop lives here.
+_NEUTRAL_CONTRIBUTING = (
+    "Set up a development install:\n"
+    "\n"
+    "```bash\n"
+    "pip install -e .[test]\n"
+    "pytest tests/                  # host-side tests\n"
+    "pytest functional_tests/       # on-device tests (needs a board "
+    "registered in devices.yml)\n"
+    "```\n"
+    "\n"
+    "Register a board before running functional tests: "
+    "`chumicro-workspace add-device <id> --address <port>`."
+)
+
+
+def _platform_section(package_kind: str) -> str:
+    """Build the README's platform block for *package_kind*.
+
+    A device library states the three runtimes it runs on and leaves a
+    prompt for runtime quirks.  A workbench package gets nothing: it is
+    host-only CPython, so a "runs on CircuitPython" claim would be false,
+    and its host prerequisites belong in the Install section next to the
+    ``pip install`` line.
+    """
+    if package_kind == "workbench":
+        return ""
+    return (
+        "## Platform support\n"
+        "\n"
+        "Works on CPython, MicroPython, and CircuitPython.\n"
+        "\n"
+        "<!-- If the library has a runtime quirk (CircuitPython on rp2 has "
+        "no TLS\n"
+        "     server, `wifi.radio.connect` blocks on CircuitPython, the "
+        "native\n"
+        "     msgpack module ships only on CircuitPython firmware), add a\n"
+        "     `### <Quirk name>` subsection here that names the constraint "
+        "and\n"
+        "     tells the reader what to do about it.  Don't bury the "
+        "surprise in\n"
+        "     a docstring. -->\n"
+        "\n"
+    )
+
+
+def _neutral_fragments(distribution: str, package_kind: str) -> dict[str, str]:
     """Build the self-owned fragment set: no upstream banner, URLs, or footers.
 
     The emitted package installs from PyPI under its own name, carries a
@@ -177,11 +229,12 @@ def _neutral_fragments(distribution: str) -> dict[str, str]:
     to fill in.  Every ChuMicro repo, bundle, and docs-site reference the
     branded rendering would add is omitted.
     """
-    return {
+    fragments = {
         "banner": "",
         "family_note": "",
         "install_block": f"```bash\npip install {distribution}\n```\n\n",
-        "contributing_intro": "Set up a development install:",
+        "platform_section": _platform_section(package_kind),
+        "contributing_intro": _NEUTRAL_CONTRIBUTING,
         "docs_section": "",
         "find_section": "",
         "license_body": "MIT",
@@ -192,6 +245,10 @@ def _neutral_fragments(distribution: str) -> dict[str, str]:
         "footer_page": "",
         "examples_url_base": "examples/",
     }
+    assert set(fragments) == set(_FRAGMENT_KEYS), (
+        "neutral fragments must cover exactly _FRAGMENT_KEYS"
+    )
+    return fragments
 
 
 def _branded_fragments(
@@ -203,12 +260,12 @@ def _branded_fragments(
 ) -> dict[str, str]:
     """Build the upstream-branded fragment set from *branding*'s URLs + names.
 
-    The README and mkdocs source links always resolve under ``libraries/``
-    (the shared readme/mkdocs templates use that path for every kind); the
-    pyproject ``Source`` and the docs-footer source link follow the package
-    kind's tree (``libraries/`` or ``workbench/``).  The result reproduces
-    the branded output the mono-repo scaffold emitted before branding was
-    parameterized.
+    Every source link (README, docs footers, pyproject ``Source``, mkdocs
+    ``repo_url``, examples) resolves under the package kind's own tree,
+    ``libraries/<name>`` or ``workbench/<name>``.  The install block, the
+    "Find this library" rows, and the family note also follow the kind:
+    workbench tools are host-only CPython, so they never enter the device
+    bundle and never claim a device runtime.
     """
     tree_dir = "workbench" if package_kind == "workbench" else "libraries"
     bundle_url = f"https://github.com/{branding.bundle_slug}"
@@ -217,7 +274,6 @@ def _branded_fragments(
     experimental_bundle_name = branding.experimental_bundle_slug.rsplit("/", 1)[-1]
     pypi_url = f"https://pypi.org/project/{distribution}/"
     source_url = f"{branding.repo_url}/tree/main/{tree_dir}/{name}"
-    library_source_url = f"{branding.repo_url}/tree/main/libraries/{name}"
     issues_url = f"{branding.repo_url}/issues"
 
     if package_kind == "workbench":
@@ -234,6 +290,34 @@ def _branded_fragments(
             f'Source = "{source_url}"\n'
             f'Issues = "{issues_url}"\n'
             "\n"
+        )
+        family_note = (
+            '<br clear="left">\n\n'
+            f"> Part of the [ChuMicro]({branding.repo_url}) family: small, "
+            "focused Python libraries for microcontrollers and laptops. "
+            "[Browse all workbench tools.]"
+            f"({branding.repo_url}/tree/main/workbench)\n"
+            "> This is a [workbench tool]"
+            f"({branding.repo_url}/blob/main/docs/contributing/workbench.md): "
+            "it runs on your laptop, not on the board."
+            "\n\n"
+        )
+        install_block = (
+            "```bash\n"
+            f"pip install {distribution}\n"
+            "```\n\n"
+            "<!-- INSTALL: a workbench tool is host-only, so PyPI is the "
+            "whole story.\n"
+            "     Add a sentence naming any host prerequisite the user "
+            "installs\n"
+            "     themselves (a binary on PATH, a Python floor) and any "
+            "platform\n"
+            "     that isn't supported. -->\n\n"
+        )
+        find_section = (
+            "## Find this library\n\n"
+            f"- **PyPI:** [{distribution}]({pypi_url})\n"
+            f"- **Source:** [{tree_dir}/{name}]({source_url})\n\n"
         )
     else:
         link_row = (
@@ -252,30 +336,19 @@ def _branded_fragments(
             f'Bundle = "{bundle_url}"\n'
             "\n"
         )
-
-    footer_open = '\n---\n\n<div class="chumicro-footer" markdown>\n\n'
-    footer_index = f"{footer_open}{index_backlink}\n\n{link_row}\n\n</div>"
-    footer_page = f"{footer_open}[← Home](index.md)\n\n{link_row}\n\n</div>"
-
-    return {
-        "banner": (
-            f'<img src="{branding.banner_image_url}"\n'
-            'align="left" width="64" '
-            'style="margin-right: 16px; margin-bottom: 8px;">\n\n'
-        ),
-        "family_note": (
+        family_note = (
             '<br clear="left">\n\n'
-            f"> Part of the [ChuMicro]({branding.repo_url}) family — small, "
+            f"> Part of the [ChuMicro]({branding.repo_url}) family: small, "
             "focused Python libraries for microcontrollers and laptops. "
             f"[Browse all libraries.]({branding.repo_url}/tree/main/libraries)"
             "\n\n"
-        ),
-        "install_block": (
-            "<!-- INSTALL: leave this block as-is — it's the standard "
-            "3-runtime install\n"
-            "     pattern.  Only edit if your library has unusual install "
-            "requirements\n"
-            "     (rare). -->\n\n"
+        )
+        install_block = (
+            "<!-- INSTALL: leave this block as it renders.  It is the "
+            "standard\n"
+            "     three-runtime install pattern; only edit it if your "
+            "library has\n"
+            "     unusual install requirements (rare). -->\n\n"
             "```bash\n"
             f"# CircuitPython (after `circup bundle-add {branding.bundle_slug}`)\n"
             f"circup install {import_name}\n\n"
@@ -287,7 +360,30 @@ def _branded_fragments(
             "For bundle setup, pre-compiled `.mpy` bundles, the experimental "
             "channel, and details on PyPI naming, see the [chumicro INSTALL "
             f"guide]({branding.install_guide_url}).\n\n"
+        )
+        find_section = (
+            "## Find this library\n\n"
+            f"- **PyPI:** [{distribution}]({pypi_url})\n"
+            f"- **Bundle:** [{bundle_name}]({bundle_url}/tree/main/{import_name}) "
+            "(CircuitPython & MicroPython)\n"
+            f"- **Experimental bundle:** [{experimental_bundle_name}]"
+            f"({experimental_bundle_url}/tree/main/{import_name})\n"
+            f"- **Source:** [{tree_dir}/{name}]({source_url})\n\n"
+        )
+
+    footer_open = '\n---\n\n<div class="chumicro-footer" markdown>\n\n'
+    footer_index = f"{footer_open}{index_backlink}\n\n{link_row}\n\n</div>"
+    footer_page = f"{footer_open}[← Home](index.md)\n\n{link_row}\n\n</div>"
+
+    fragments = {
+        "banner": (
+            f'<img src="{branding.banner_image_url}"\n'
+            'align="left" width="64" '
+            'style="margin-right: 16px; margin-bottom: 8px;">\n\n'
         ),
+        "family_note": family_note,
+        "install_block": install_block,
+        "platform_section": _platform_section(package_kind),
         "contributing_intro": (
             "Issues, bug reports, and pull requests are welcome, and so is "
             '"I ran it on this board and here\'s what happened", some of '
@@ -302,29 +398,25 @@ def _branded_fragments(
             f"**[Experimental docs]({branding.docs_base_url}/{name}/experimental/)**"
             "\n\n"
         ),
-        "find_section": (
-            "## Find this library\n\n"
-            f"- **PyPI:** [{distribution}]({pypi_url})\n"
-            f"- **Bundle:** [{bundle_name}]({bundle_url}/tree/main/{import_name}) "
-            "(CircuitPython & MicroPython)\n"
-            f"- **Experimental bundle:** [{experimental_bundle_name}]"
-            f"({experimental_bundle_url}/tree/main/{import_name})\n"
-            f"- **Source:** [libraries/{name}]({library_source_url})\n\n"
-        ),
+        "find_section": find_section,
         "license_body": f"[MIT]({branding.repo_url}/blob/main/LICENSE)",
         "author": branding.author,
         "project_urls": project_urls,
         "mkdocs_urls": (
             f"site_url: {branding.docs_base_url}/{name}/\n"
-            f"repo_url: {branding.repo_url}/tree/main/libraries/{name}\n"
+            f"repo_url: {source_url}\n"
             "repo_name: Source\n"
         ),
         "footer_index": footer_index,
         "footer_page": footer_page,
         "examples_url_base": (
-            f"{branding.repo_url}/blob/main/libraries/{name}/examples/"
+            f"{branding.repo_url}/blob/main/{tree_dir}/{name}/examples/"
         ),
     }
+    assert set(fragments) == set(_FRAGMENT_KEYS), (
+        "branded fragments must cover exactly _FRAGMENT_KEYS"
+    )
+    return fragments
 
 
 def _branding_fragments(
@@ -340,7 +432,7 @@ def _branding_fragments(
     is the tell: ``None`` (the neutral default) yields self-owned output.
     """
     if branding.repo_url is None:
-        return _neutral_fragments(distribution)
+        return _neutral_fragments(distribution, package_kind)
     return _branded_fragments(
         branding, name, distribution, import_name, package_kind,
     )
@@ -370,8 +462,10 @@ def scaffold_library(
             point), and pulls the four ``docs/`` templates from
             ``_payloads/workbench_template/`` (no Runner pattern,
             no Memory notes, no Bundle footer link).  The rest of
-            the tree (src/tests/examples/README/mkdocs) is shared
-            between kinds.
+            the tree (src/tests/examples/README/mkdocs) renders from
+            the shared templates, with the kind steering the README's
+            install block, "Find this library" rows, family note, and
+            platform claim, plus every source URL's tree.
         branding: Upstream identity stamped into the README banner,
             docs footers, ``[project.urls]``, and mkdocs ``repo_url``.
             Defaults to ``NEUTRAL_BRANDING`` so a downstream scaffold

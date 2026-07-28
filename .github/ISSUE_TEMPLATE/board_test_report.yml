@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for testing on real hardware — every data point helps!
+        Thanks for testing on real hardware. Every data point helps.
         Fill in what you can. Even "it worked" is useful.
 
   - type: input
@@ -58,5 +58,5 @@ body:
     id: notes
     attributes:
       label: Anything else?
-      description: Optional — surprises, workarounds, or suggestions.
+      description: Optional. Surprises, workarounds, or suggestions.
 

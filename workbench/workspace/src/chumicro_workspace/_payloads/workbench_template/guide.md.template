@@ -1,17 +1,19 @@
 # User Guide
 
-<!-- GENERATION INSTRUCTIONS — delete this block once the guide is written.
+<!-- GENERATION INSTRUCTIONS: delete this block once the guide is written.
 
      Workbench packages are host-only CPython tools that run on your
      laptop, not on the microcontroller.  This template differs from the
      library template: no cross-runtime story, no Runner pattern, no
-     Memory notes, no Bundle install — workbench packages only ship via
-     PyPI.  Every section below is required unless marked conditional. -->
+     Memory notes, and no bundle install, because workbench packages ship
+     through PyPI only.  The section shape follows the published workbench
+     guides: an opening paragraph, Install, Command-line interface, one
+     section per surface the tool exposes, then Runtime notes last.  Every
+     section is required unless marked conditional. -->
 
-## Overview
-
-<!-- Required. 2-4 sentences: what the tool does, who runs it, the core
-     concept.  Name the key CLIs / classes. -->
+<!-- Required. One sentence on what the tool does and who runs it, then
+     one sentence listing the surfaces this guide walks, in the order the
+     sections below cover them. -->
 
 ## Install
 
@@ -19,25 +21,37 @@
 pip install {distribution}
 ```
 
-## Getting started
+<!-- Required. Name the third-party dependencies that come along, any host
+     prerequisite the user has to install themselves (a CLI on PATH, a
+     Python version floor), and any platform that isn't supported.  Say
+     that there is no device-side install. -->
 
-<!-- Required. The most common usage pattern — CLI invocation OR a
-     copy-pasteable Python snippet — that runs end-to-end. -->
+## Command-line interface
 
-## CLI reference
+<!-- Conditional. Include if the package ships a console script.  Show the
+     real invocations in one bash block with a comment above each, then
+     say what `--help` covers and how the CLI reports errors. -->
 
-<!-- Conditional. Include if the package ships an entry-point CLI.
-     One section per subcommand, or a single table for short surfaces. -->
+```bash
+{distribution} --help
+```
 
-## Host platform notes
+## <One heading per surface>
 
-<!-- Required. Operating-system and Python-version constraints.  Call
-     out any platform-specific behavior (e.g. macOS uses FSKit for
-     CIRCUITPY mounts; Windows requires admin for raw serial). -->
+<!-- Required. One `## ` section per surface a user reaches for: a class,
+     an entry-point function, a file the tool reads.  Name the surface in
+     the heading, show a snippet that runs as written, and say what
+     happens when it fails. -->
 
-## Examples
+## Test fakes
 
-<!-- Required. List every example from the examples/ directory in a
-     table:
-     | Example | What it shows | -->
+<!-- Conditional. Include if the package ships a `testing` module.  Name
+     each fake and what it stands in for, and point at
+     [Testing Helpers](testing.md) for the full surface. -->
+
+## Runtime notes
+
+<!-- Required. Host constraints (operating system, Python version, a
+     binary that has to be on PATH) plus any device-runtime difference
+     this tool absorbs so the reader doesn't have to. -->
 {footer_page}
