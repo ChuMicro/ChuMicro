@@ -412,10 +412,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#usage-from-other-libraries" class="md-nav__link">
+  <a href="#using-these-fakes-in-your-own-tests" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
-        Usage from other libraries
+        Using these fakes in your own tests
       </span>
     </span>
   </a>
@@ -742,10 +742,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#usage-from-other-libraries" class="md-nav__link">
+  <a href="#using-these-fakes-in-your-own-tests" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
-        Usage from other libraries
+        Using these fakes in your own tests
       </span>
     </span>
   </a>
@@ -998,7 +998,7 @@
 
 
 <h1 id="testing-helpers">Testing Helpers<a class="headerlink" href="#testing-helpers" title="Permanent link">&para;</a></h1>
-<p><code>chumicro_wifi.testing</code> provides <code>FakeWifi</code> and <code>FakeWifiAdapter</code> for downstream libraries that depend on <code>chumicro-wifi</code> but want to drive connect / drop / reconnect scenarios deterministically from tests — no real radio, no real network, no real time.</p>
+<p><code>chumicro_wifi.testing</code> provides <code>FakeWifi</code> and <code>FakeWifiAdapter</code> so your tests can drive connect, drop, and reconnect scenarios deterministically: no real radio, no real network, no real time. The fakes stay on the host: <code>chumicro-deploy</code> reads the test-support marker at the top of the module and leaves it out of every device bundle it builds.</p>
 <h2 id="fakewifi"><code>FakeWifi</code><a class="headerlink" href="#fakewifi" title="Permanent link">&para;</a></h2>
 <p>A <code>WifiService</code> wrapping a <code>FakeWifiAdapter</code> with the test hooks exposed directly on the wrapper.  Use this when you want a drop-in <code>WifiService</code> your code-under-test treats like the real thing:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_wifi.testing</span><span class="w"> </span><span class="kn">import</span> <span class="n">FakeWifi</span>
@@ -1017,7 +1017,7 @@
 </span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>    <span class="k">assert</span> <span class="n">wifi</span><span class="o">.</span><span class="n">state</span> <span class="o">==</span> <span class="s2">&quot;connected&quot;</span>
 </span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>    <span class="k">assert</span> <span class="n">my_service</span><span class="o">.</span><span class="n">ready</span>
 </span></code></pre></div>
-<p><code>FakeWifi</code> ships with sensible defaults (<code>ssid="testnet"</code>, <code>password="password"</code>, short reconnect backoffs).  Pass a custom <code>WifiConfig</code> to the constructor if your test needs different settings.</p>
+<p><code>FakeWifi</code> ships with sensible defaults (<code>ssid="testnet"</code>, <code>password="password"</code>, short reconnect backoffs).  Pass <code>config=</code> a custom <code>WifiConfig</code> if your test needs different settings.</p>
 <h2 id="test-hooks">Test hooks<a class="headerlink" href="#test-hooks" title="Permanent link">&para;</a></h2>
 <p>The hooks below live on <code>FakeWifiAdapter</code> and are forwarded to <code>FakeWifi</code> for ergonomic test code:</p>
 <table>
@@ -1046,7 +1046,11 @@
 </tr>
 <tr>
 <td><code>drop_link()</code></td>
-<td>Simulates a link-down event — the next <code>is_linked()</code> returns <code>False</code>, triggering the service's reconnect path.</td>
+<td>Simulates a link-down event: the next <code>is_linked()</code> returns <code>False</code>, which sends the service into its reconnect path.</td>
+</tr>
+<tr>
+<td><code>restore_link()</code></td>
+<td>Simulates the access point coming back on its own, with no <code>connect()</code> call.</td>
 </tr>
 <tr>
 <td><code>calls</code></td>
@@ -1072,7 +1076,7 @@
 </span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>    <span class="k">assert</span> <span class="n">wifi</span><span class="o">.</span><span class="n">state</span> <span class="o">==</span> <span class="s2">&quot;connected&quot;</span>
 </span></code></pre></div>
 <h2 id="fakewifiadapter-lower-level"><code>FakeWifiAdapter</code> (lower level)<a class="headerlink" href="#fakewifiadapter-lower-level" title="Permanent link">&para;</a></h2>
-<p>When you need to compose your own service shape — for example, a test that wires <code>FakeWifiAdapter</code> into a real <code>WifiService</code> to verify the supervisor's behavior — use the adapter directly:</p>
+<p>When you need to compose your own service shape (a test that wires <code>FakeWifiAdapter</code> into a real <code>WifiService</code> to check the supervisor's behavior, for example), use the adapter directly:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_wifi</span><span class="w"> </span><span class="kn">import</span> <span class="n">WifiConfig</span><span class="p">,</span> <span class="n">WifiService</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_wifi.testing</span><span class="w"> </span><span class="kn">import</span> <span class="n">FakeWifiAdapter</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_timing.testing</span><span class="w"> </span><span class="kn">import</span> <span class="n">FakeTicks</span>
@@ -1088,16 +1092,16 @@
 </span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>        <span class="n">ticks</span><span class="o">=</span><span class="n">ticks</span><span class="p">,</span>
 </span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>    <span class="p">)</span>
 </span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a>    <span class="n">service</span><span class="o">.</span><span class="n">handle</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
-</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a>    <span class="c1"># Exception is captured rather than propagated — the service</span>
-</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a>    <span class="c1"># stays in CONNECTING with a retry scheduled.</span>
+</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a>    <span class="c1"># The exception is captured, not propagated: the service stays</span>
+</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a>    <span class="c1"># in CONNECTING with a retry scheduled.</span>
 </span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a>    <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">service</span><span class="o">.</span><span class="n">last_error</span><span class="p">,</span> <span class="ne">OSError</span><span class="p">)</span>
 </span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a>    <span class="k">assert</span> <span class="n">service</span><span class="o">.</span><span class="n">state</span> <span class="o">==</span> <span class="s2">&quot;connecting&quot;</span>
 </span></code></pre></div>
-<h2 id="usage-from-other-libraries">Usage from other libraries<a class="headerlink" href="#usage-from-other-libraries" title="Permanent link">&para;</a></h2>
-<p>Libraries that depend on <code>chumicro-wifi</code> can import the fakes directly in their own test suites:</p>
+<h2 id="using-these-fakes-in-your-own-tests">Using these fakes in your own tests<a class="headerlink" href="#using-these-fakes-in-your-own-tests" title="Permanent link">&para;</a></h2>
+<p>Install <code>chumicro-wifi</code> and import the fakes straight into your test suite:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_wifi.testing</span><span class="w"> </span><span class="kn">import</span> <span class="n">FakeWifi</span><span class="p">,</span> <span class="n">FakeWifiAdapter</span>
 </span></code></pre></div>
-<p>Libraries that expose injectable services ship their own test fakes alongside the production code, so every consumer uses the same shared fake.</p>
+<p>Project convention: libraries that expose injectable services ship their own test fakes alongside the production code.</p>
 <h2 id="api-reference">API Reference<a class="headerlink" href="#api-reference" title="Permanent link">&para;</a></h2>
 
 

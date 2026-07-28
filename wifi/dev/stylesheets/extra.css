@@ -1,4 +1,4 @@
-/* ChuMicro docs — dark-mode readability overrides for Material for MkDocs.
+/* ChuMicro docs: dark-mode readability overrides for Material for MkDocs.
  *
  * The slate scheme provides the dark background.  These overrides improve
  * font sizing, code block contrast, and add warm accent touches to match
@@ -8,7 +8,7 @@
  * the 10°–50° orange/gold range; no greens or blues.
  *
  * This is the single source of truth.  The build copies it into each
- * library's docs/stylesheets/ at build time — do not duplicate this file.
+ * library's docs/stylesheets/ at build time; do not duplicate this file.
  */
 
 /* -- Warm accent palette (aligned with the logo and landing page) ------- */
@@ -42,7 +42,7 @@
   line-height: 1.6;
 }
 
-/* Tighten paragraph and list spacing — Material defaults add generous
+/* Tighten paragraph and list spacing; Material defaults add generous
    bottom margins that create excessive whitespace between blocks. */
 .md-typeset p,
 .md-typeset ul,
@@ -144,7 +144,7 @@
 
 /* -- Miscellaneous ------------------------------------------------------ */
 
-/* Version selector badge — warm gold */
+/* Version selector badge: warm gold */
 .md-version__current {
   color: var(--chumicro-gold);
 }
