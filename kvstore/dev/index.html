@@ -479,7 +479,7 @@
 
 <h1 id="chumicro-kvstore">chumicro-kvstore<a class="headerlink" href="#chumicro-kvstore" title="Permanent link">&para;</a></h1>
 <p><strong>Tiny mutable key-value store for runtime state that survives reboot.</strong></p>
-<p>Counters, timestamps, tokens, retry budgets — across CircuitPython, MicroPython, and CPython.  Backends auto-select per runtime (CP NVM with CRC framing, MP NVS, MP LittleFS, in-memory).  Not a config system: config is read-only at deploy time and lives in <code>chumicro-config</code>; KVStore is read-write at runtime.</p>
+<p>Counters, timestamps, tokens, and retry budgets that your program writes while it runs and still finds after a power cycle, on CircuitPython, MicroPython, and CPython.  You get a dict you assign to and <code>commit()</code> when the change matters; the backend is chosen for the runtime you are on (NVM with CRC framing on CircuitPython, NVS on ESP32 MicroPython, LittleFS elsewhere, in-memory on a host).</p>
 <h2 id="quick-example">Quick example<a class="headerlink" href="#quick-example" title="Permanent link">&para;</a></h2>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_kvstore</span><span class="w"> </span><span class="kn">import</span> <span class="n">KVStore</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_timing</span><span class="w"> </span><span class="kn">import</span> <span class="n">ticks_ms</span>
@@ -491,9 +491,9 @@
 </span></code></pre></div>
 <h2 id="documentation">Documentation<a class="headerlink" href="#documentation" title="Permanent link">&para;</a></h2>
 <ul>
-<li><a href="guide/">User Guide</a> — backends, auto-selection, commit semantics, sizing</li>
-<li><a href="api/">API Reference</a> — full API documentation</li>
-<li><a href="testing/">Testing Helpers</a> — <code>FakeKVStore</code> for downstream test suites</li>
+<li><a href="guide/">User Guide</a>: backends and <code>auto</code> selection, commit semantics, sizing and full-store handling, corruption handling, platform notes</li>
+<li><a href="api/">API Reference</a>: <code>KVStore</code> methods, <code>commit_if_changed</code>, and the <code>KVStoreFull</code> / <code>KVStoreCorrupt</code> exceptions</li>
+<li><a href="testing/">Testing Helpers</a>: using <code>FakeKVStore</code> in your tests</li>
 </ul>
 <hr />
 <div class="chumicro-footer">
