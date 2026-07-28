@@ -1249,3 +1249,25 @@ Two constraints shaped it (2026-07-19 GA docs pass):
 
 Change the wording in one place and sweep the other fifteen (14 READMEs
 plus the scaffold string); the scaffold is the piece audits forget.
+
+## mkdocstrings renders what the api.md names, and griffe gates it
+
+Two coupled gotchas from the 2026-07-28 secondary-docs pass:
+
+1. **PEP-562 lazy re-exports are invisible to `::: package`.**  A library
+   that re-exports its classes through a module-level `__getattr__`
+   (mqtt, requests, websockets do this to keep import-time heap down)
+   renders *nothing* for those names under a bare `::: chumicro_x`
+   directive: griffe resolves statically and never calls the hook.  Give
+   each real module its own `::: chumicro_x.client` section in
+   `docs/api.md`.  Before the fix, `MQTTClient` and `WebSocketClient`
+   had no API reference at all and nobody noticed, because the page
+   built green while rendering almost nothing.
+
+2. **Adding a module to api.md arms the griffe gate for it.**  The
+   preflight docs phase fails on griffe warnings, but only for modules
+   an api.md actually names.  A module with unannotated public
+   signatures builds fine right up until someone documents it, and then
+   the docs phase goes red for a "pre-existing" reason.  When adding a
+   `:::` section, annotate the module's public signatures in the same
+   change (`object` for duck-typed params is the house convention).

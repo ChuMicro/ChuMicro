@@ -28,7 +28,13 @@ class FakeListener:
         pass
 
 
-def request_bytes(method="GET", path="/", *, headers=None, body=b""):
+def request_bytes(
+    method: str = "GET",
+    path: str = "/",
+    *,
+    headers: list[tuple[str, str]] | None = None,
+    body: bytes = b"",
+) -> bytes:
     """Build a raw HTTP/1.1 request byte string.
 
     Args:

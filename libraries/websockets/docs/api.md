@@ -1,11 +1,16 @@
 # API Reference
 
-<!-- Starts as a single autodoc directive for the whole package. As the
-     library grows multiple modules, split this into per-module sections
-     with `## Heading` + `::: chumicro_websockets.<module>` directives — see
-     libraries/timing/docs/api.md for an example. -->
+## `chumicro_websockets`
 
 ::: chumicro_websockets
+
+## `chumicro_websockets.client`
+
+::: chumicro_websockets.client
+
+## `chumicro_websockets.server`
+
+::: chumicro_websockets.server
 
 ---
 

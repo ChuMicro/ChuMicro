@@ -1,6 +1,6 @@
 # Testing Helpers
 
-`chumicro_kvstore.testing` provides `FakeKVStore` — an in-memory `KVStore` with explicit corruption + capacity hooks for downstream tests.  It wraps the real `MemoryBackend`, so every assertion you write against the public `KVStore` API exercises the same code path the production runtime takes.  Downstream consumers import this rather than inventing ad-hoc mocks.
+`chumicro_kvstore.testing` provides `FakeKVStore`, an in-memory `KVStore` with explicit corruption and capacity hooks for your tests.  It runs on the same in-memory backend the auto-selector picks on a host, so every assertion you write goes through the real `KVStore` code path rather than a mock of it.  The module declares the `__chumicro_test_support__` marker, and the deploy tool drops every module carrying it, so the fake never ships to a board.
 
 ## Usage
 
@@ -19,7 +19,7 @@ def test_boot_counter_persists():
 
 ## Simulating a small NVM
 
-CP NVM on small boards is 256 bytes.  Use `capacity=` to drive `KVStoreFull` deterministically without needing the real hardware:
+CircuitPython NVM is the tightest backend: typically 256 bytes on SAMD21 boards, around 4 KB on RP2040, and 8 KB on SAMD51 and ESP32 boards, minus 10 bytes of CRC framing.  Use `capacity=` to drive `KVStoreFull` deterministically without needing the real hardware:
 
 ```python
 from chumicro_kvstore import KVStoreFull
@@ -56,7 +56,7 @@ except KVStoreFull:
 
 ## Simulating corruption
 
-`simulate_corrupt()` marks the underlying memory backend corrupt; the next `reload()` (or `KVStore` re-construction) surfaces a corruption event.  In-memory state stays intact until explicitly reloaded — matching the real device behavior, where in-flight state isn't poisoned by a backend-level fault.
+`simulate_corrupt()` marks the underlying backend corrupt; the next `reload()` (or `KVStore` re-construction) surfaces a corruption event.  In-memory state stays intact until you explicitly reload, matching the real device behavior, where a backend-level fault doesn't poison state already in hand.
 
 ```python
 from chumicro_kvstore import KVStoreCorrupt
@@ -75,7 +75,7 @@ def test_reload_raises_on_corrupt():
         pass
 ```
 
-The construction path treats corruption as recoverable — `is_corrupt` becomes `True` and the store resets to empty:
+The construction path treats corruption as recoverable: `is_corrupt` becomes `True` and the store resets to empty.
 
 ```python
 def test_construction_recovers_from_corrupt():
@@ -116,9 +116,9 @@ restarted = FakeKVStore(initial_payload=seeded.raw_payload)
 assert restarted["boot_count"] == 7
 ```
 
-## Usage from other libraries
+## Using these fakes in your own tests
 
-Libraries that depend on `chumicro-kvstore` can import the fake directly:
+Installing `chumicro-kvstore` puts `chumicro_kvstore.testing` on your path, so your own suite imports the fake and passes it wherever your code expects a `KVStore`:
 
 ```python
 from chumicro_kvstore.testing import FakeKVStore

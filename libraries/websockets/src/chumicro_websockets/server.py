@@ -262,8 +262,8 @@ class WebSocketServer:
 
     def __init__(
         self,
-        listener,
-        on_connection,
+        listener: object,
+        on_connection: object,
         *,
         max_connections: int = 2,
         accept_path: str | None = None,

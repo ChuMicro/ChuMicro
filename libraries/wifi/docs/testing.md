@@ -1,6 +1,6 @@
 # Testing Helpers
 
-`chumicro_wifi.testing` provides `FakeWifi` and `FakeWifiAdapter` for downstream libraries that depend on `chumicro-wifi` but want to drive connect / drop / reconnect scenarios deterministically from tests — no real radio, no real network, no real time.
+`chumicro_wifi.testing` provides `FakeWifi` and `FakeWifiAdapter` so your tests can drive connect, drop, and reconnect scenarios deterministically: no real radio, no real network, no real time. The fakes stay on the host: `chumicro-deploy` reads the test-support marker at the top of the module and leaves it out of every device bundle it builds.
 
 ## `FakeWifi`
 
@@ -24,7 +24,7 @@ def test_my_service_waits_for_wifi():
     assert my_service.ready
 ```
 
-`FakeWifi` ships with sensible defaults (`ssid="testnet"`, `password="password"`, short reconnect backoffs).  Pass a custom `WifiConfig` to the constructor if your test needs different settings.
+`FakeWifi` ships with sensible defaults (`ssid="testnet"`, `password="password"`, short reconnect backoffs).  Pass `config=` a custom `WifiConfig` if your test needs different settings.
 
 ## Test hooks
 
@@ -36,7 +36,8 @@ The hooks below live on `FakeWifiAdapter` and are forwarded to `FakeWifi` for er
 | `set_connect_outcome(False)` | Next `connect()` returns a clean refusal. |
 | `set_connect_outcome(OSError)` | Next `connect()` raises the named exception class. |
 | `set_connect_outcomes([True, False, True])` | Queue a one-shot sequence of outcomes; the default takes over after the queue drains. |
-| `drop_link()` | Simulates a link-down event — the next `is_linked()` returns `False`, triggering the service's reconnect path. |
+| `drop_link()` | Simulates a link-down event: the next `is_linked()` returns `False`, which sends the service into its reconnect path. |
+| `restore_link()` | Simulates the access point coming back on its own, with no `connect()` call. |
 | `calls` | List of recorded adapter calls (`("configure", config)`, `("connect", config)`).  Assert on this to verify call ordering. |
 
 ## Simulating a reconnect
@@ -62,7 +63,7 @@ def test_reconnect_after_link_drop():
 
 ## `FakeWifiAdapter` (lower level)
 
-When you need to compose your own service shape — for example, a test that wires `FakeWifiAdapter` into a real `WifiService` to verify the supervisor's behavior — use the adapter directly:
+When you need to compose your own service shape (a test that wires `FakeWifiAdapter` into a real `WifiService` to check the supervisor's behavior, for example), use the adapter directly:
 
 ```python
 from chumicro_wifi import WifiConfig, WifiService
@@ -80,21 +81,21 @@ def test_supervisor_handles_exception_during_connect():
         ticks=ticks,
     )
     service.handle(0)
-    # Exception is captured rather than propagated — the service
-    # stays in CONNECTING with a retry scheduled.
+    # The exception is captured, not propagated: the service stays
+    # in CONNECTING with a retry scheduled.
     assert isinstance(service.last_error, OSError)
     assert service.state == "connecting"
 ```
 
-## Usage from other libraries
+## Using these fakes in your own tests
 
-Libraries that depend on `chumicro-wifi` can import the fakes directly in their own test suites:
+Install `chumicro-wifi` and import the fakes straight into your test suite:
 
 ```python
 from chumicro_wifi.testing import FakeWifi, FakeWifiAdapter
 ```
 
-Libraries that expose injectable services ship their own test fakes alongside the production code, so every consumer uses the same shared fake.
+Project convention: libraries that expose injectable services ship their own test fakes alongside the production code.
 
 ## API Reference
 

@@ -1,11 +1,16 @@
 # API Reference
 
-<!-- Starts as a single autodoc directive for the whole package. As the
-     library grows multiple modules, split this into per-module sections
-     with `## Heading` + `::: chumicro_mqtt.<module>` directives — see
-     libraries/timing/docs/api.md for an example. -->
+## `chumicro_mqtt`
+
+The error types every call can raise, and `topic_matches` for checking a topic against a wildcard filter.
 
 ::: chumicro_mqtt
+
+## `chumicro_mqtt.client`
+
+`MQTTClient` itself, the `ProtocolState` values it moves through, the `InboundPublish` record handed to your message callback, the `WhenOversized` policy, and `default_client_id`.  `from chumicro_mqtt import MQTTClient` gives you the same class.
+
+::: chumicro_mqtt.client
 
 ---
 

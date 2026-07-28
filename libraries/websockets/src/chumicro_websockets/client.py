@@ -88,7 +88,7 @@ class WebSocketClient(_BaseSession):
 
     def __init__(
         self,
-        transport_factory,
+        transport_factory: object,
         *,
         max_message_bytes: int = DEFAULT_MAX_MESSAGE_BYTES,
         recv_budget_per_tick: int = DEFAULT_RECV_BUDGET_PER_TICK,

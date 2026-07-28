@@ -1,15 +1,10 @@
 # Testing Helpers
 
-`chumicro_logging.testing` provides handler fakes that downstream
-libraries and applications can use to assert against logger output
-without writing one-off mocks.
+`chumicro_logging.testing` provides handler fakes so your tests can assert against logger output without writing one-off mocks. The fakes stay on the host: `chumicro-deploy` reads the test-support marker at the top of the module and leaves it out of every device bundle it builds.
 
 ## RecordingHandler
 
-Captures every emitted record in a list for assertions.  Calls to
-`emit(level, name, message)` append a `(level, name, message)` tuple
-to `records`.  Pass the handler to a `Logger` and assert against its
-output.
+Captures every emitted record in a list for assertions. Calls to `emit(level, name, message)` append a `(level, name, message)` tuple to `records`. Pass the handler to a `Logger` and assert against its output.
 
 ```python
 from chumicro_logging import INFO, Logger
@@ -25,15 +20,11 @@ def test_logger_emits_at_info():
     assert handler.records == [(INFO, "subsystem", "up")]
 ```
 
-`RecordingHandler` itself respects an optional `level` threshold —
-records below the threshold are dropped without being captured —
-which makes it easy to verify that a logger correctly filters at a
-particular level.  Call `clear()` between assertions to reset.
+`RecordingHandler` respects an optional `level` threshold of its own: records below it are dropped without being captured, which is how you check that a logger filters at a particular level. Call `clear()` between assertions to reset.
 
 ## FailingHandler
 
-Raises a configured exception on every `emit` call.  Useful for
-verifying that misbehaving handlers never crash the logger:
+Raises a configured exception on every `emit` call. Useful for verifying that a misbehaving handler never crashes the logger:
 
 ```python
 from chumicro_logging import Logger
@@ -51,15 +42,11 @@ def test_failing_handler_is_swallowed():
     assert recorder.records[0][2] == "survive me"
 ```
 
-The default exception is `RuntimeError("handler boom")`.  Pass a
-custom exception via the `exception=` keyword to simulate specific
-failure modes.
+The default exception is `RuntimeError("handler boom")`. Pass a custom exception via the `exception=` keyword to simulate specific failure modes, and read `calls` to count how many times the handler was reached.
 
-## Usage from applications
+## Using these fakes in your own tests
 
-No other ChuMicro library imports `chumicro-logging`, so these fakes are
-for application and integration tests that build a `Logger` directly.
-Import them the same way:
+Nothing else in ChuMicro logs through this library, so these fakes are for your own tests: build a `Logger`, attach a handler, and assert on what came out.
 
 ```python
 from chumicro_logging.testing import RecordingHandler

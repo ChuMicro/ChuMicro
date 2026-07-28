@@ -2,7 +2,7 @@
 
 ## Overview
 
-`chumicro-sockets` provides a single TCP + TLS client API that works the same way on CircuitPython, MicroPython, and CPython.  The runtimes diverge in ways the library can't paper over: CircuitPython has no `socket` module, only `socketpool(radio)`; MicroPython has stdlib socket + mbedTLS-backed ssl on current builds; CPython has the full stdlib stack.  So the library exposes one duck-typed TCP socket surface (`send` / `recv_into` / `close` / `setblocking`) and routes [`connector`](api.md#chumicro_sockets.connector) to a runtime-appropriate adapter.  There is one connect state machine per runtime: `connector()` returns a tick-driven object a runner drives (or a one-shot script drives inline).
+`chumicro-sockets` provides one TCP, TLS, and UDP socket API (`connector`, `listener`, `udp_socket`) that works the same way on CircuitPython, MicroPython, and CPython.  The runtimes diverge in ways the library can't paper over: CircuitPython has no `socket` module, only `socketpool(radio)`; MicroPython has stdlib socket + mbedTLS-backed ssl on current builds; CPython has the full stdlib stack.  So the library exposes one duck-typed TCP socket surface (`send` / `recv_into` / `close` / `setblocking`) and routes [`connector`](api.md#chumicro_sockets.connector) to a runtime-appropriate adapter.  There is one connect state machine per runtime: `connector()` returns a tick-driven object a runner drives (or a one-shot script drives inline).
 
 `chumicro-mqtt`, `chumicro-requests`, `chumicro-http-server`, and `chumicro-websockets` all build on this library; none of them import `socketpool`, `socket`, or `ssl` directly.
 

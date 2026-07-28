@@ -2,7 +2,7 @@
 
 **Tiny mutable key-value store for runtime state that survives reboot.**
 
-Counters, timestamps, tokens, retry budgets — across CircuitPython, MicroPython, and CPython.  Backends auto-select per runtime (CP NVM with CRC framing, MP NVS, MP LittleFS, in-memory).  Not a config system: config is read-only at deploy time and lives in `chumicro-config`; KVStore is read-write at runtime.
+Counters, timestamps, tokens, and retry budgets that your program writes while it runs and still finds after a power cycle, on CircuitPython, MicroPython, and CPython.  You get a dict you assign to and `commit()` when the change matters; the backend is chosen for the runtime you are on (NVM with CRC framing on CircuitPython, NVS on ESP32 MicroPython, LittleFS elsewhere, in-memory on a host).
 
 ## Quick example
 
@@ -18,9 +18,9 @@ store.commit()                                # one flush per logical change
 
 ## Documentation
 
-- [User Guide](guide.md) — backends, auto-selection, commit semantics, sizing
-- [API Reference](api.md) — full API documentation
-- [Testing Helpers](testing.md) — `FakeKVStore` for downstream test suites
+- [User Guide](guide.md): backends and `auto` selection, commit semantics, sizing and full-store handling, corruption handling, platform notes
+- [API Reference](api.md): `KVStore` methods, `commit_if_changed`, and the `KVStoreFull` / `KVStoreCorrupt` exceptions
+- [Testing Helpers](testing.md): using `FakeKVStore` in your tests
 
 ---
 
