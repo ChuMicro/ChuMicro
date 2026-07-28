@@ -368,10 +368,21 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#usage" class="md-nav__link">
+  <a href="#building-a-client-and-ticking-it" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
-        Usage
+        Building a client and ticking it
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-full-round-trip" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        A full round-trip
       </span>
     </span>
   </a>
@@ -412,10 +423,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#usage-from-other-libraries" class="md-nav__link">
+  <a href="#using-these-fakes-in-your-own-tests" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
-        Usage from other libraries
+        Using these fakes in your own tests
       </span>
     </span>
   </a>
@@ -587,10 +598,21 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#usage" class="md-nav__link">
+  <a href="#building-a-client-and-ticking-it" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
-        Usage
+        Building a client and ticking it
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-full-round-trip" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        A full round-trip
       </span>
     </span>
   </a>
@@ -631,10 +653,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#usage-from-other-libraries" class="md-nav__link">
+  <a href="#using-these-fakes-in-your-own-tests" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
-        Usage from other libraries
+        Using these fakes in your own tests
       </span>
     </span>
   </a>
@@ -776,50 +798,69 @@
 
 
 <h1 id="testing-helpers">Testing Helpers<a class="headerlink" href="#testing-helpers" title="Permanent link">&para;</a></h1>
-<p><code>chumicro_mqtt.testing</code> provides pre-baked broker-response byte sequences for unit tests.  Tests typically drive <code>MQTTClient</code> against a <code>chumicro_sockets.testing.FakeSocket</code> — script the broker's responses with these helpers, let the client tick, then assert the wire-format on <code>sock.sent</code>.</p>
-<p>The canned-bytes helpers stay in sync with the encoder/decoder, so a hand-rolled byte literal in a test doesn't drift if the wire format changes.</p>
-<h2 id="usage">Usage<a class="headerlink" href="#usage" title="Permanent link">&para;</a></h2>
-<p>Enqueue each broker response <em>just before</em> the client action that
-expects it — the client drains the socket greedily, so a PUBACK
-sitting in the recv queue before its PUBLISH has been sent is
-treated as an unsolicited ack and faults the client.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_mqtt</span><span class="w"> </span><span class="kn">import</span> <span class="n">MQTTClient</span><span class="p">,</span> <span class="n">ProtocolState</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_mqtt.testing</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">canned_connack_bytes</span><span class="p">,</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">canned_puback_bytes</span><span class="p">,</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">canned_suback_bytes</span><span class="p">,</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">canned_publish_bytes</span><span class="p">,</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="p">)</span>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_sockets.testing</span><span class="w"> </span><span class="kn">import</span> <span class="n">FakeSocket</span>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="k">def</span><span class="w"> </span><span class="nf">test_connect_publish_subscribe_roundtrip</span><span class="p">():</span>
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="n">sock</span> <span class="o">=</span> <span class="n">FakeSocket</span><span class="p">()</span>
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    <span class="n">sock</span><span class="o">.</span><span class="n">enqueue_recv</span><span class="p">(</span><span class="n">canned_connack_bytes</span><span class="p">(</span><span class="n">return_code</span><span class="o">=</span><span class="mi">0</span><span class="p">))</span>
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>    <span class="n">client</span> <span class="o">=</span> <span class="n">MQTTClient</span><span class="p">(</span><span class="n">sock</span><span class="p">,</span> <span class="n">client_id</span><span class="o">=</span><span class="s2">&quot;test&quot;</span><span class="p">)</span>
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>    <span class="n">client</span><span class="o">.</span><span class="n">connect</span><span class="p">()</span>
-</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>    <span class="k">while</span> <span class="n">client</span><span class="o">.</span><span class="n">state</span> <span class="o">!=</span> <span class="n">ProtocolState</span><span class="o">.</span><span class="n">CONNECTED</span><span class="p">:</span>
-</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>        <span class="n">client</span><span class="o">.</span><span class="n">handle</span><span class="p">(</span><span class="n">now_ms</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
-</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>
-</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>    <span class="n">sock</span><span class="o">.</span><span class="n">enqueue_recv</span><span class="p">(</span><span class="n">canned_suback_bytes</span><span class="p">(</span><span class="n">packet_id</span><span class="o">=</span><span class="mi">1</span><span class="p">))</span>
-</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>    <span class="n">client</span><span class="o">.</span><span class="n">subscribe</span><span class="p">(</span><span class="s2">&quot;commands/+&quot;</span><span class="p">)</span>
-</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>    <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">3</span><span class="p">):</span>
-</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>        <span class="n">client</span><span class="o">.</span><span class="n">handle</span><span class="p">(</span><span class="n">now_ms</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
-</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>
-</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a>    <span class="n">acked</span> <span class="o">=</span> <span class="p">[]</span>
-</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a>    <span class="n">sock</span><span class="o">.</span><span class="n">enqueue_recv</span><span class="p">(</span><span class="n">canned_puback_bytes</span><span class="p">(</span><span class="n">packet_id</span><span class="o">=</span><span class="mi">2</span><span class="p">))</span>
-</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a>    <span class="n">client</span><span class="o">.</span><span class="n">publish</span><span class="p">(</span>
-</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a>        <span class="s2">&quot;sensors/temp&quot;</span><span class="p">,</span> <span class="sa">b</span><span class="s2">&quot;21.5&quot;</span><span class="p">,</span> <span class="n">qos</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
-</span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a>        <span class="n">on_publish</span><span class="o">=</span><span class="k">lambda</span> <span class="n">topic</span><span class="p">,</span> <span class="n">payload</span><span class="p">:</span> <span class="n">acked</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">topic</span><span class="p">),</span>
-</span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a>    <span class="p">)</span>
-</span><span id="__span-0-30"><a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a>    <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">3</span><span class="p">):</span>
-</span><span id="__span-0-31"><a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a>        <span class="n">client</span><span class="o">.</span><span class="n">handle</span><span class="p">(</span><span class="n">now_ms</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
-</span><span id="__span-0-32"><a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a>
-</span><span id="__span-0-33"><a id="__codelineno-0-33" name="__codelineno-0-33" href="#__codelineno-0-33"></a>    <span class="k">assert</span> <span class="n">acked</span> <span class="o">==</span> <span class="p">[</span><span class="s2">&quot;sensors/temp&quot;</span><span class="p">]</span>
-</span><span id="__span-0-34"><a id="__codelineno-0-34" name="__codelineno-0-34" href="#__codelineno-0-34"></a>    <span class="c1"># Inspect what the client wrote on the wire.  `sock.sent` is a</span>
-</span><span id="__span-0-35"><a id="__codelineno-0-35" name="__codelineno-0-35" href="#__codelineno-0-35"></a>    <span class="c1"># bytearray of everything send()&#39;d in order.</span>
-</span><span id="__span-0-36"><a id="__codelineno-0-36" name="__codelineno-0-36" href="#__codelineno-0-36"></a>    <span class="k">assert</span> <span class="n">sock</span><span class="o">.</span><span class="n">sent</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="mh">0x10</span>  <span class="c1"># CONNECT fixed header</span>
+<p><code>chumicro_mqtt.testing</code> provides pre-baked broker-response byte sequences plus two fixtures for building a client and ticking it.  Tests drive <code>MQTTClient</code> against a <code>chumicro_sockets.testing.FakeSocket</code>: script the broker's responses with these helpers, let the client tick, then assert the wire format on <code>sock.sent</code>.  The helpers stay on the host: <code>chumicro-deploy</code> reads the test-support marker at the top of the module and leaves it out of every device bundle it builds.</p>
+<p>Each helper spells out one packet shape once, so a test reads <code>canned_suback_bytes(packet_id=1)</code> instead of a byte literal nobody can check by eye.</p>
+<h2 id="building-a-client-and-ticking-it">Building a client and ticking it<a class="headerlink" href="#building-a-client-and-ticking-it" title="Permanent link">&para;</a></h2>
+<p><code>new_client(sock, ticks, **overrides)</code> builds an <code>MQTTClient</code> on <em>sock</em> with test defaults: client id <code>"test-client"</code>, a 60-second keep-alive, a 5-second ack timeout, and two publish retries.  Any keyword you pass replaces one of those defaults or sets another <code>MQTTClient</code> argument.  <code>drive(client, ticks, count=1)</code> calls <code>client.handle(ticks.ticks_ms())</code> <em>count</em> times, which is the loop most tests need after an action that expects a broker response.</p>
+<p>Pass a hand-driven clock as <em>ticks</em> so the test decides when keep-alives and ack timeouts fire.  <code>chumicro_timing.testing.FakeTicks</code> is one, and it only moves when you call <code>advance()</code>:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_mqtt</span><span class="w"> </span><span class="kn">import</span> <span class="n">ProtocolState</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_mqtt.testing</span><span class="w"> </span><span class="kn">import</span> <span class="n">canned_connack_bytes</span><span class="p">,</span> <span class="n">drive</span><span class="p">,</span> <span class="n">new_client</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_sockets.testing</span><span class="w"> </span><span class="kn">import</span> <span class="n">FakeSocket</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_timing.testing</span><span class="w"> </span><span class="kn">import</span> <span class="n">FakeTicks</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="k">def</span><span class="w"> </span><span class="nf">test_client_reaches_connected</span><span class="p">():</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">sock</span> <span class="o">=</span> <span class="n">FakeSocket</span><span class="p">()</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">ticks</span> <span class="o">=</span> <span class="n">FakeTicks</span><span class="p">()</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="n">sock</span><span class="o">.</span><span class="n">enqueue_recv</span><span class="p">(</span><span class="n">canned_connack_bytes</span><span class="p">(</span><span class="n">return_code</span><span class="o">=</span><span class="mi">0</span><span class="p">))</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    <span class="n">client</span> <span class="o">=</span> <span class="n">new_client</span><span class="p">(</span><span class="n">sock</span><span class="p">,</span> <span class="n">ticks</span><span class="p">,</span> <span class="n">keep_alive_seconds</span><span class="o">=</span><span class="mi">30</span><span class="p">)</span>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>    <span class="n">client</span><span class="o">.</span><span class="n">connect</span><span class="p">()</span>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>    <span class="n">drive</span><span class="p">(</span><span class="n">client</span><span class="p">,</span> <span class="n">ticks</span><span class="p">,</span> <span class="n">count</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>    <span class="k">assert</span> <span class="n">client</span><span class="o">.</span><span class="n">state</span> <span class="o">==</span> <span class="n">ProtocolState</span><span class="o">.</span><span class="n">CONNECTED</span>
 </span></code></pre></div>
+<p>Give the client and the tick values you drive it with the same source.  A client left on the real clock and then handed a made-up <code>now_ms</code> sees every deadline as long past, and it fails on the first response it gets.</p>
+<h2 id="a-full-round-trip">A full round-trip<a class="headerlink" href="#a-full-round-trip" title="Permanent link">&para;</a></h2>
+<p>Enqueue each broker response just before the client action that expects it.  The client drains the socket greedily, so a PUBACK sitting in the recv queue before its PUBLISH has been sent counts as an unsolicited ack and faults the client.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_mqtt.testing</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>    <span class="n">canned_connack_bytes</span><span class="p">,</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>    <span class="n">canned_puback_bytes</span><span class="p">,</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>    <span class="n">canned_suback_bytes</span><span class="p">,</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="n">drive</span><span class="p">,</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>    <span class="n">new_client</span><span class="p">,</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="p">)</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_sockets.testing</span><span class="w"> </span><span class="kn">import</span> <span class="n">FakeSocket</span>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_timing.testing</span><span class="w"> </span><span class="kn">import</span> <span class="n">FakeTicks</span>
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="k">def</span><span class="w"> </span><span class="nf">test_connect_subscribe_publish_roundtrip</span><span class="p">():</span>
+</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>    <span class="n">sock</span> <span class="o">=</span> <span class="n">FakeSocket</span><span class="p">()</span>
+</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>    <span class="n">ticks</span> <span class="o">=</span> <span class="n">FakeTicks</span><span class="p">()</span>
+</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>    <span class="n">sock</span><span class="o">.</span><span class="n">enqueue_recv</span><span class="p">(</span><span class="n">canned_connack_bytes</span><span class="p">(</span><span class="n">return_code</span><span class="o">=</span><span class="mi">0</span><span class="p">))</span>
+</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>
+</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>    <span class="n">client</span> <span class="o">=</span> <span class="n">new_client</span><span class="p">(</span><span class="n">sock</span><span class="p">,</span> <span class="n">ticks</span><span class="p">)</span>
+</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>    <span class="n">client</span><span class="o">.</span><span class="n">connect</span><span class="p">()</span>
+</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>    <span class="n">drive</span><span class="p">(</span><span class="n">client</span><span class="p">,</span> <span class="n">ticks</span><span class="p">,</span> <span class="n">count</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+</span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a>
+</span><span id="__span-1-21"><a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a>    <span class="n">sock</span><span class="o">.</span><span class="n">enqueue_recv</span><span class="p">(</span><span class="n">canned_suback_bytes</span><span class="p">(</span><span class="n">packet_id</span><span class="o">=</span><span class="mi">1</span><span class="p">))</span>
+</span><span id="__span-1-22"><a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a>    <span class="n">client</span><span class="o">.</span><span class="n">subscribe</span><span class="p">(</span><span class="s2">&quot;commands/+&quot;</span><span class="p">)</span>
+</span><span id="__span-1-23"><a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a>    <span class="n">drive</span><span class="p">(</span><span class="n">client</span><span class="p">,</span> <span class="n">ticks</span><span class="p">,</span> <span class="n">count</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+</span><span id="__span-1-24"><a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a>
+</span><span id="__span-1-25"><a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a>    <span class="n">acked</span> <span class="o">=</span> <span class="p">[]</span>
+</span><span id="__span-1-26"><a id="__codelineno-1-26" name="__codelineno-1-26" href="#__codelineno-1-26"></a>    <span class="n">sock</span><span class="o">.</span><span class="n">enqueue_recv</span><span class="p">(</span><span class="n">canned_puback_bytes</span><span class="p">(</span><span class="n">packet_id</span><span class="o">=</span><span class="mi">2</span><span class="p">))</span>
+</span><span id="__span-1-27"><a id="__codelineno-1-27" name="__codelineno-1-27" href="#__codelineno-1-27"></a>    <span class="n">client</span><span class="o">.</span><span class="n">publish</span><span class="p">(</span>
+</span><span id="__span-1-28"><a id="__codelineno-1-28" name="__codelineno-1-28" href="#__codelineno-1-28"></a>        <span class="s2">&quot;sensors/temp&quot;</span><span class="p">,</span> <span class="sa">b</span><span class="s2">&quot;21.5&quot;</span><span class="p">,</span> <span class="n">qos</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+</span><span id="__span-1-29"><a id="__codelineno-1-29" name="__codelineno-1-29" href="#__codelineno-1-29"></a>        <span class="n">on_publish</span><span class="o">=</span><span class="k">lambda</span> <span class="n">topic</span><span class="p">,</span> <span class="n">payload</span><span class="p">:</span> <span class="n">acked</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">topic</span><span class="p">),</span>
+</span><span id="__span-1-30"><a id="__codelineno-1-30" name="__codelineno-1-30" href="#__codelineno-1-30"></a>    <span class="p">)</span>
+</span><span id="__span-1-31"><a id="__codelineno-1-31" name="__codelineno-1-31" href="#__codelineno-1-31"></a>    <span class="n">drive</span><span class="p">(</span><span class="n">client</span><span class="p">,</span> <span class="n">ticks</span><span class="p">,</span> <span class="n">count</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+</span><span id="__span-1-32"><a id="__codelineno-1-32" name="__codelineno-1-32" href="#__codelineno-1-32"></a>
+</span><span id="__span-1-33"><a id="__codelineno-1-33" name="__codelineno-1-33" href="#__codelineno-1-33"></a>    <span class="k">assert</span> <span class="n">acked</span> <span class="o">==</span> <span class="p">[</span><span class="s2">&quot;sensors/temp&quot;</span><span class="p">]</span>
+</span><span id="__span-1-34"><a id="__codelineno-1-34" name="__codelineno-1-34" href="#__codelineno-1-34"></a>    <span class="c1"># Inspect what the client wrote on the wire.  `sock.sent` is a</span>
+</span><span id="__span-1-35"><a id="__codelineno-1-35" name="__codelineno-1-35" href="#__codelineno-1-35"></a>    <span class="c1"># bytearray of everything send()&#39;d in order.</span>
+</span><span id="__span-1-36"><a id="__codelineno-1-36" name="__codelineno-1-36" href="#__codelineno-1-36"></a>    <span class="k">assert</span> <span class="n">sock</span><span class="o">.</span><span class="n">sent</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="mh">0x10</span>  <span class="c1"># CONNECT fixed header</span>
+</span></code></pre></div>
+<p>Packet ids start at 1 and count up per outbound packet that needs one, which is why the SUBSCRIBE above is acked with <code>packet_id=1</code> and the PUBLISH with <code>packet_id=2</code>.</p>
 <h2 id="available-helpers">Available helpers<a class="headerlink" href="#available-helpers" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -830,71 +871,71 @@ treated as an unsolicited ack and faults the client.</p>
 </thead>
 <tbody>
 <tr>
-<td><code>canned_connack_bytes(return_code=0, session_present=False)</code></td>
-<td>CONNACK packet — <code>return_code=0</code> means accepted; 1-5 are rejection codes per MQTT 3.1.1 §3.2.2.3.</td>
+<td><code>canned_connack_bytes(*, return_code=0, session_present=False)</code></td>
+<td>CONNACK packet.  <code>return_code=0</code> means accepted; 1 to 5 are the rejection codes in MQTT 3.1.1 §3.2.2.3.</td>
 </tr>
 <tr>
 <td><code>canned_puback_bytes(packet_id)</code></td>
-<td>PUBACK packet — drives QoS-1 publish acknowledgment.</td>
+<td>PUBACK packet, which acknowledges a QoS 1 publish.</td>
 </tr>
 <tr>
 <td><code>canned_suback_bytes(packet_id, granted_qos=0)</code></td>
-<td>SUBACK packet — acknowledges a one-subscription SUBSCRIBE.</td>
+<td>SUBACK packet acknowledging a one-subscription SUBSCRIBE.</td>
 </tr>
 <tr>
 <td><code>canned_unsuback_bytes(packet_id)</code></td>
-<td>UNSUBACK packet — acknowledges an UNSUBSCRIBE.</td>
+<td>UNSUBACK packet acknowledging an UNSUBSCRIBE.</td>
 </tr>
 <tr>
 <td><code>canned_pingresp_bytes()</code></td>
-<td>PINGRESP packet — keep-alive response.</td>
+<td>PINGRESP packet, the keep-alive response.</td>
 </tr>
 <tr>
-<td><code>canned_publish_bytes(topic, payload, qos=0, retain=False, packet_id=None)</code></td>
-<td>PUBLISH packet shaped like the broker would send — feed it to <code>sock.enqueue_recv()</code> to simulate an inbound message.</td>
+<td><code>canned_publish_bytes(topic, payload, *, qos=0, retain=False, packet_id=None)</code></td>
+<td>PUBLISH packet shaped like the broker would send.  Feed it to <code>sock.enqueue_recv()</code> to simulate an inbound message.</td>
 </tr>
 </tbody>
 </table>
+<p>Arguments after the <code>*</code> are keyword-only: <code>canned_connack_bytes(return_code=4)</code> works, <code>canned_connack_bytes(4)</code> raises <code>TypeError</code>.</p>
 <h2 id="simulating-a-broker-rejection">Simulating a broker rejection<a class="headerlink" href="#simulating-a-broker-rejection" title="Permanent link">&para;</a></h2>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">test_client_handles_connect_refusal</span><span class="p">():</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>    <span class="n">sock</span> <span class="o">=</span> <span class="n">FakeSocket</span><span class="p">()</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>    <span class="n">sock</span><span class="o">.</span><span class="n">enqueue_recv</span><span class="p">(</span><span class="n">canned_connack_bytes</span><span class="p">(</span><span class="n">return_code</span><span class="o">=</span><span class="mi">4</span><span class="p">))</span>   <span class="c1"># bad credentials</span>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="n">client</span> <span class="o">=</span> <span class="n">MQTTClient</span><span class="p">(</span><span class="n">sock</span><span class="p">,</span> <span class="n">client_id</span><span class="o">=</span><span class="s2">&quot;test&quot;</span><span class="p">)</span>
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>    <span class="n">client</span><span class="o">.</span><span class="n">connect</span><span class="p">()</span>
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>    <span class="n">client</span><span class="o">.</span><span class="n">handle</span><span class="p">(</span><span class="n">now_ms</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
-</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>
-</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>    <span class="k">assert</span> <span class="n">client</span><span class="o">.</span><span class="n">state</span> <span class="o">==</span> <span class="n">ProtocolState</span><span class="o">.</span><span class="n">FAILED</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">test_client_handles_connect_refusal</span><span class="p">():</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="n">sock</span> <span class="o">=</span> <span class="n">FakeSocket</span><span class="p">()</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    <span class="n">ticks</span> <span class="o">=</span> <span class="n">FakeTicks</span><span class="p">()</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="n">sock</span><span class="o">.</span><span class="n">enqueue_recv</span><span class="p">(</span><span class="n">canned_connack_bytes</span><span class="p">(</span><span class="n">return_code</span><span class="o">=</span><span class="mi">4</span><span class="p">))</span>   <span class="c1"># bad credentials</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>    <span class="n">client</span> <span class="o">=</span> <span class="n">new_client</span><span class="p">(</span><span class="n">sock</span><span class="p">,</span> <span class="n">ticks</span><span class="p">)</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>    <span class="n">client</span><span class="o">.</span><span class="n">connect</span><span class="p">()</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>    <span class="n">drive</span><span class="p">(</span><span class="n">client</span><span class="p">,</span> <span class="n">ticks</span><span class="p">,</span> <span class="n">count</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>    <span class="k">assert</span> <span class="n">client</span><span class="o">.</span><span class="n">state</span> <span class="o">==</span> <span class="n">ProtocolState</span><span class="o">.</span><span class="n">FAILED</span>
 </span></code></pre></div>
 <h2 id="simulating-an-inbound-message">Simulating an inbound message<a class="headerlink" href="#simulating-an-inbound-message" title="Permanent link">&para;</a></h2>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">test_subscriber_receives_publish</span><span class="p">():</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="n">sock</span> <span class="o">=</span> <span class="n">FakeSocket</span><span class="p">()</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    <span class="n">sock</span><span class="o">.</span><span class="n">enqueue_recv</span><span class="p">(</span><span class="n">canned_connack_bytes</span><span class="p">(</span><span class="n">return_code</span><span class="o">=</span><span class="mi">0</span><span class="p">))</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="n">received</span> <span class="o">=</span> <span class="p">[]</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>    <span class="n">client</span> <span class="o">=</span> <span class="n">MQTTClient</span><span class="p">(</span><span class="n">sock</span><span class="p">,</span> <span class="n">client_id</span><span class="o">=</span><span class="s2">&quot;test&quot;</span><span class="p">)</span>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>    <span class="n">client</span><span class="o">.</span><span class="n">on_message</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">topic</span><span class="p">,</span> <span class="n">payload</span><span class="p">:</span> <span class="n">received</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">topic</span><span class="p">,</span> <span class="n">payload</span><span class="p">))</span>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>    <span class="n">client</span><span class="o">.</span><span class="n">connect</span><span class="p">()</span>
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>    <span class="k">while</span> <span class="n">client</span><span class="o">.</span><span class="n">state</span> <span class="o">!=</span> <span class="n">ProtocolState</span><span class="o">.</span><span class="n">CONNECTED</span><span class="p">:</span>
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>        <span class="n">client</span><span class="o">.</span><span class="n">handle</span><span class="p">(</span><span class="n">now_ms</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
-</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>
-</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>    <span class="n">sock</span><span class="o">.</span><span class="n">enqueue_recv</span><span class="p">(</span><span class="n">canned_suback_bytes</span><span class="p">(</span><span class="n">packet_id</span><span class="o">=</span><span class="mi">1</span><span class="p">))</span>
-</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>    <span class="n">client</span><span class="o">.</span><span class="n">subscribe</span><span class="p">(</span><span class="s2">&quot;sensors/+&quot;</span><span class="p">)</span>
-</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>    <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">3</span><span class="p">):</span>
-</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a>        <span class="n">client</span><span class="o">.</span><span class="n">handle</span><span class="p">(</span><span class="n">now_ms</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
-</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a>
-</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a>    <span class="c1"># Broker now pushes a retained / fresh message on the subscription.</span>
-</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a>    <span class="n">sock</span><span class="o">.</span><span class="n">enqueue_recv</span><span class="p">(</span><span class="n">canned_publish_bytes</span><span class="p">(</span><span class="s2">&quot;sensors/temp&quot;</span><span class="p">,</span> <span class="sa">b</span><span class="s2">&quot;22.1&quot;</span><span class="p">))</span>
-</span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a>    <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">3</span><span class="p">):</span>
-</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a>        <span class="n">client</span><span class="o">.</span><span class="n">handle</span><span class="p">(</span><span class="n">now_ms</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
-</span><span id="__span-2-21"><a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a>
-</span><span id="__span-2-22"><a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a>    <span class="k">assert</span> <span class="n">received</span> <span class="o">==</span> <span class="p">[(</span><span class="s2">&quot;sensors/temp&quot;</span><span class="p">,</span> <span class="sa">b</span><span class="s2">&quot;22.1&quot;</span><span class="p">)]</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">test_subscriber_receives_publish</span><span class="p">():</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>    <span class="n">sock</span> <span class="o">=</span> <span class="n">FakeSocket</span><span class="p">()</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>    <span class="n">ticks</span> <span class="o">=</span> <span class="n">FakeTicks</span><span class="p">()</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="n">sock</span><span class="o">.</span><span class="n">enqueue_recv</span><span class="p">(</span><span class="n">canned_connack_bytes</span><span class="p">(</span><span class="n">return_code</span><span class="o">=</span><span class="mi">0</span><span class="p">))</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="n">received</span> <span class="o">=</span> <span class="p">[]</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>    <span class="n">client</span> <span class="o">=</span> <span class="n">new_client</span><span class="p">(</span><span class="n">sock</span><span class="p">,</span> <span class="n">ticks</span><span class="p">)</span>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>    <span class="n">client</span><span class="o">.</span><span class="n">on_message</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">topic</span><span class="p">,</span> <span class="n">payload</span><span class="p">:</span> <span class="n">received</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">topic</span><span class="p">,</span> <span class="n">payload</span><span class="p">))</span>
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>    <span class="n">client</span><span class="o">.</span><span class="n">connect</span><span class="p">()</span>
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>    <span class="n">drive</span><span class="p">(</span><span class="n">client</span><span class="p">,</span> <span class="n">ticks</span><span class="p">,</span> <span class="n">count</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>
+</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>    <span class="n">sock</span><span class="o">.</span><span class="n">enqueue_recv</span><span class="p">(</span><span class="n">canned_suback_bytes</span><span class="p">(</span><span class="n">packet_id</span><span class="o">=</span><span class="mi">1</span><span class="p">))</span>
+</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>    <span class="n">client</span><span class="o">.</span><span class="n">subscribe</span><span class="p">(</span><span class="s2">&quot;sensors/+&quot;</span><span class="p">)</span>
+</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>    <span class="n">drive</span><span class="p">(</span><span class="n">client</span><span class="p">,</span> <span class="n">ticks</span><span class="p">,</span> <span class="n">count</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a>
+</span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a>    <span class="c1"># Broker now pushes a retained or fresh message on the subscription.</span>
+</span><span id="__span-3-17"><a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a>    <span class="n">sock</span><span class="o">.</span><span class="n">enqueue_recv</span><span class="p">(</span><span class="n">canned_publish_bytes</span><span class="p">(</span><span class="s2">&quot;sensors/temp&quot;</span><span class="p">,</span> <span class="sa">b</span><span class="s2">&quot;22.1&quot;</span><span class="p">))</span>
+</span><span id="__span-3-18"><a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a>    <span class="n">drive</span><span class="p">(</span><span class="n">client</span><span class="p">,</span> <span class="n">ticks</span><span class="p">,</span> <span class="n">count</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+</span><span id="__span-3-19"><a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a>
+</span><span id="__span-3-20"><a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a>    <span class="k">assert</span> <span class="n">received</span> <span class="o">==</span> <span class="p">[(</span><span class="s2">&quot;sensors/temp&quot;</span><span class="p">,</span> <span class="sa">b</span><span class="s2">&quot;22.1&quot;</span><span class="p">)]</span>
 </span></code></pre></div>
-<h2 id="usage-from-other-libraries">Usage from other libraries<a class="headerlink" href="#usage-from-other-libraries" title="Permanent link">&para;</a></h2>
-<p>Libraries that depend on <code>chumicro-mqtt</code> can import the helpers directly in their own test suites:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_mqtt.testing</span><span class="w"> </span><span class="kn">import</span> <span class="n">canned_connack_bytes</span><span class="p">,</span> <span class="n">canned_publish_bytes</span>
+<h2 id="using-these-fakes-in-your-own-tests">Using these fakes in your own tests<a class="headerlink" href="#using-these-fakes-in-your-own-tests" title="Permanent link">&para;</a></h2>
+<p>Your own test suite imports the helpers the same way, and needs nothing beyond the <code>chumicro-mqtt</code> install itself:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_mqtt.testing</span><span class="w"> </span><span class="kn">import</span> <span class="n">canned_connack_bytes</span><span class="p">,</span> <span class="n">canned_publish_bytes</span>
 </span></code></pre></div>
-<p>Libraries that expose injectable services ship their own test fakes alongside the production code, so every consumer uses the same shared fake.</p>
+<p>Project convention: libraries that expose injectable services ship their own test fakes alongside the production code.</p>
 <h2 id="api-reference">API Reference<a class="headerlink" href="#api-reference" title="Permanent link">&para;</a></h2>
 
 
