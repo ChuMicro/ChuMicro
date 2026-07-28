@@ -418,10 +418,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#usage-from-other-libraries" class="md-nav__link">
+  <a href="#client-and-server-loopback" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
-        Usage from other libraries
+        Client and server loopback
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#using-these-fakes-in-your-own-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Using these fakes in your own tests
       </span>
     </span>
   </a>
@@ -710,10 +721,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#usage-from-other-libraries" class="md-nav__link">
+  <a href="#client-and-server-loopback" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
-        Usage from other libraries
+        Client and server loopback
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#using-these-fakes-in-your-own-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Using these fakes in your own tests
       </span>
     </span>
   </a>
@@ -922,8 +944,8 @@
 
 
 <h1 id="testing-helpers">Testing Helpers<a class="headerlink" href="#testing-helpers" title="Permanent link">&para;</a></h1>
-<p><code>chumicro_websockets.testing</code> ships two in-memory fakes so libraries that depend on <code>chumicro-websockets</code> (and the library's own test suite) can drive <code>WebSocketClient</code> and <code>WebSocketServer</code> end-to-end without real sockets.</p>
-<p>For the ticks domain, use <code>chumicro_timing.testing.FakeTicks</code> — pass it through the client's / server's <code>ticks=</code> kwarg.</p>
+<p><code>chumicro_websockets.testing</code> ships two in-memory fakes so your tests can drive <code>WebSocketClient</code> and <code>WebSocketServer</code> end to end without real sockets. The fakes stay on the host: <code>chumicro-deploy</code> reads the test-support marker at the top of the module and leaves it out of every device bundle it builds.</p>
+<p>For the ticks domain, use <code>chumicro_timing.testing.FakeTicks</code> and pass it through the client's or server's <code>ticks=</code> argument.</p>
 <h2 id="usage">Usage<a class="headerlink" href="#usage" title="Permanent link">&para;</a></h2>
 <h3 id="fakeconnection"><code>FakeConnection</code><a class="headerlink" href="#fakeconnection" title="Permanent link">&para;</a></h3>
 <p>Bidirectional in-memory pipe satisfying the <code>TCPClientSocket</code> shape:</p>
@@ -981,30 +1003,72 @@
 </span></code></pre></div>
 <h3 id="ticks-domain">Ticks domain<a class="headerlink" href="#ticks-domain" title="Permanent link">&para;</a></h3>
 <p>For ticks-domain fakes use <code>chumicro_timing.testing.FakeTicks</code>.  <code>clock.advance(ms)</code> jumps the simulated clock forward to drive timeouts, auto-ping cadences, and pong-overdue watchdogs:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_timing.testing</span><span class="w"> </span><span class="kn">import</span> <span class="n">FakeTicks</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_websockets</span><span class="w"> </span><span class="kn">import</span> <span class="n">WebSocketClient</span>
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_websockets.testing</span><span class="w"> </span><span class="kn">import</span> <span class="n">FakeConnection</span>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="n">clock</span> <span class="o">=</span> <span class="n">FakeTicks</span><span class="p">()</span>
-</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="n">client</span> <span class="o">=</span> <span class="n">WebSocketClient</span><span class="p">(</span>
-</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>    <span class="n">transport_factory</span><span class="o">=</span><span class="k">lambda</span> <span class="o">*</span><span class="n">_args</span><span class="p">,</span> <span class="o">**</span><span class="n">_kwargs</span><span class="p">:</span> <span class="n">FakeSocketConnector</span><span class="p">(</span>
-</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>        <span class="n">actions</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;dns_ok&quot;</span><span class="p">,</span> <span class="s2">&quot;tcp_ok&quot;</span><span class="p">],</span> <span class="n">socket</span><span class="o">=</span><span class="n">FakeConnection</span><span class="p">(),</span>
-</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>    <span class="p">),</span>
-</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>    <span class="n">handshake_timeout_ms</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span>
-</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>    <span class="n">ticks</span><span class="o">=</span><span class="n">clock</span><span class="p">,</span>
-</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="p">)</span>
-</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="n">client</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="s2">&quot;ws://example.com/&quot;</span><span class="p">)</span>
-</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="n">clock</span><span class="o">.</span><span class="n">advance</span><span class="p">(</span><span class="mi">2000</span><span class="p">)</span>  <span class="c1"># past the handshake deadline</span>
-</span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="n">client</span><span class="o">.</span><span class="n">handle</span><span class="p">(</span><span class="n">clock</span><span class="o">.</span><span class="n">ticks_ms</span><span class="p">())</span>
-</span><span id="__span-5-16"><a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a><span class="c1"># Client now CLOSED with WebSocketTimeoutError.</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_sockets.testing</span><span class="w"> </span><span class="kn">import</span> <span class="n">FakeSocketConnector</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_timing.testing</span><span class="w"> </span><span class="kn">import</span> <span class="n">FakeTicks</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_websockets</span><span class="w"> </span><span class="kn">import</span> <span class="n">WebSocketClient</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_websockets.testing</span><span class="w"> </span><span class="kn">import</span> <span class="n">FakeConnection</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="n">clock</span> <span class="o">=</span> <span class="n">FakeTicks</span><span class="p">()</span>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="n">client</span> <span class="o">=</span> <span class="n">WebSocketClient</span><span class="p">(</span>
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>    <span class="n">transport_factory</span><span class="o">=</span><span class="k">lambda</span> <span class="o">*</span><span class="n">_args</span><span class="p">,</span> <span class="o">**</span><span class="n">_kwargs</span><span class="p">:</span> <span class="n">FakeSocketConnector</span><span class="p">(</span>
+</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>        <span class="n">actions</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;dns_ok&quot;</span><span class="p">,</span> <span class="s2">&quot;tcp_ok&quot;</span><span class="p">],</span> <span class="n">socket</span><span class="o">=</span><span class="n">FakeConnection</span><span class="p">(),</span>
+</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>    <span class="p">),</span>
+</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>    <span class="n">handshake_timeout_ms</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span>
+</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>    <span class="n">ticks</span><span class="o">=</span><span class="n">clock</span><span class="p">,</span>
+</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="p">)</span>
+</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="n">client</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="s2">&quot;ws://example.com/&quot;</span><span class="p">)</span>
+</span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="n">clock</span><span class="o">.</span><span class="n">advance</span><span class="p">(</span><span class="mi">2000</span><span class="p">)</span>  <span class="c1"># past the handshake deadline</span>
+</span><span id="__span-5-16"><a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a><span class="n">client</span><span class="o">.</span><span class="n">handle</span><span class="p">(</span><span class="n">clock</span><span class="o">.</span><span class="n">ticks_ms</span><span class="p">())</span>
+</span><span id="__span-5-17"><a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a><span class="c1"># Client now CLOSED with WebSocketTimeoutError.</span>
 </span></code></pre></div>
-<h2 id="usage-from-other-libraries">Usage from other libraries<a class="headerlink" href="#usage-from-other-libraries" title="Permanent link">&para;</a></h2>
-<p>Libraries that depend on <code>chumicro-websockets</code> can import the fakes directly:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_timing.testing</span><span class="w"> </span><span class="kn">import</span> <span class="n">FakeTicks</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_websockets.testing</span><span class="w"> </span><span class="kn">import</span> <span class="n">FakeConnection</span><span class="p">,</span> <span class="n">FakeListener</span>
+<h2 id="client-and-server-loopback">Client and server loopback<a class="headerlink" href="#client-and-server-loopback" title="Permanent link">&para;</a></h2>
+<p>Two <code>FakeConnection</code> objects and a byte pump give you a full client-to-server round trip in one process. Each pass hands both sides a tick, then moves whatever they wrote into the other's inbound queue:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_sockets.testing</span><span class="w"> </span><span class="kn">import</span> <span class="n">FakeSocketConnector</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_timing.testing</span><span class="w"> </span><span class="kn">import</span> <span class="n">FakeTicks</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_websockets</span><span class="w"> </span><span class="kn">import</span> <span class="n">WebSocketClient</span><span class="p">,</span> <span class="n">WebSocketServer</span><span class="p">,</span> <span class="n">WebSocketState</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_websockets.testing</span><span class="w"> </span><span class="kn">import</span> <span class="n">FakeConnection</span><span class="p">,</span> <span class="n">FakeListener</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="k">def</span><span class="w"> </span><span class="nf">pump</span><span class="p">(</span><span class="n">client_socket</span><span class="p">,</span> <span class="n">server_socket</span><span class="p">):</span>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>    <span class="n">server_socket</span><span class="o">.</span><span class="n">feed_inbound</span><span class="p">(</span><span class="n">client_socket</span><span class="o">.</span><span class="n">read_outbound</span><span class="p">())</span>
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>    <span class="n">client_socket</span><span class="o">.</span><span class="n">feed_inbound</span><span class="p">(</span><span class="n">server_socket</span><span class="o">.</span><span class="n">read_outbound</span><span class="p">())</span>
+</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>
+</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="k">def</span><span class="w"> </span><span class="nf">test_handshake_loopback</span><span class="p">():</span>
+</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a>    <span class="n">clock</span> <span class="o">=</span> <span class="n">FakeTicks</span><span class="p">()</span>
+</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a>    <span class="n">client_socket</span> <span class="o">=</span> <span class="n">FakeConnection</span><span class="p">()</span>
+</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a>    <span class="n">server_socket</span> <span class="o">=</span> <span class="n">FakeConnection</span><span class="p">()</span>
+</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a>    <span class="n">listener</span> <span class="o">=</span> <span class="n">FakeListener</span><span class="p">()</span>
+</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a>    <span class="n">listener</span><span class="o">.</span><span class="n">queue_accept</span><span class="p">(</span><span class="n">server_socket</span><span class="p">)</span>
+</span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a>
+</span><span id="__span-6-17"><a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a>    <span class="n">server</span> <span class="o">=</span> <span class="n">WebSocketServer</span><span class="p">(</span>
+</span><span id="__span-6-18"><a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a>        <span class="n">listener</span><span class="o">=</span><span class="n">listener</span><span class="p">,</span>
+</span><span id="__span-6-19"><a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a>        <span class="n">on_connection</span><span class="o">=</span><span class="k">lambda</span> <span class="n">conn</span><span class="p">:</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-6-20"><a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a>        <span class="n">ticks</span><span class="o">=</span><span class="n">clock</span><span class="p">,</span>
+</span><span id="__span-6-21"><a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a>    <span class="p">)</span>
+</span><span id="__span-6-22"><a id="__codelineno-6-22" name="__codelineno-6-22" href="#__codelineno-6-22"></a>    <span class="n">client</span> <span class="o">=</span> <span class="n">WebSocketClient</span><span class="p">(</span>
+</span><span id="__span-6-23"><a id="__codelineno-6-23" name="__codelineno-6-23" href="#__codelineno-6-23"></a>        <span class="n">transport_factory</span><span class="o">=</span><span class="k">lambda</span> <span class="o">*</span><span class="n">_args</span><span class="p">,</span> <span class="o">**</span><span class="n">_kwargs</span><span class="p">:</span> <span class="n">FakeSocketConnector</span><span class="p">(</span>
+</span><span id="__span-6-24"><a id="__codelineno-6-24" name="__codelineno-6-24" href="#__codelineno-6-24"></a>            <span class="n">actions</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;dns_ok&quot;</span><span class="p">,</span> <span class="s2">&quot;tcp_ok&quot;</span><span class="p">],</span> <span class="n">socket</span><span class="o">=</span><span class="n">client_socket</span><span class="p">,</span>
+</span><span id="__span-6-25"><a id="__codelineno-6-25" name="__codelineno-6-25" href="#__codelineno-6-25"></a>        <span class="p">),</span>
+</span><span id="__span-6-26"><a id="__codelineno-6-26" name="__codelineno-6-26" href="#__codelineno-6-26"></a>        <span class="n">ticks</span><span class="o">=</span><span class="n">clock</span><span class="p">,</span>
+</span><span id="__span-6-27"><a id="__codelineno-6-27" name="__codelineno-6-27" href="#__codelineno-6-27"></a>    <span class="p">)</span>
+</span><span id="__span-6-28"><a id="__codelineno-6-28" name="__codelineno-6-28" href="#__codelineno-6-28"></a>
+</span><span id="__span-6-29"><a id="__codelineno-6-29" name="__codelineno-6-29" href="#__codelineno-6-29"></a>    <span class="n">client</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="s2">&quot;ws://example.com/&quot;</span><span class="p">)</span>
+</span><span id="__span-6-30"><a id="__codelineno-6-30" name="__codelineno-6-30" href="#__codelineno-6-30"></a>    <span class="k">for</span> <span class="n">_tick</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">50</span><span class="p">):</span>
+</span><span id="__span-6-31"><a id="__codelineno-6-31" name="__codelineno-6-31" href="#__codelineno-6-31"></a>        <span class="n">client</span><span class="o">.</span><span class="n">handle</span><span class="p">(</span><span class="n">clock</span><span class="o">.</span><span class="n">ticks_ms</span><span class="p">())</span>
+</span><span id="__span-6-32"><a id="__codelineno-6-32" name="__codelineno-6-32" href="#__codelineno-6-32"></a>        <span class="n">server</span><span class="o">.</span><span class="n">handle</span><span class="p">(</span><span class="n">clock</span><span class="o">.</span><span class="n">ticks_ms</span><span class="p">())</span>
+</span><span id="__span-6-33"><a id="__codelineno-6-33" name="__codelineno-6-33" href="#__codelineno-6-33"></a>        <span class="n">pump</span><span class="p">(</span><span class="n">client_socket</span><span class="p">,</span> <span class="n">server_socket</span><span class="p">)</span>
+</span><span id="__span-6-34"><a id="__codelineno-6-34" name="__codelineno-6-34" href="#__codelineno-6-34"></a>        <span class="k">if</span> <span class="n">client</span><span class="o">.</span><span class="n">state</span> <span class="o">==</span> <span class="n">WebSocketState</span><span class="o">.</span><span class="n">OPEN</span><span class="p">:</span>
+</span><span id="__span-6-35"><a id="__codelineno-6-35" name="__codelineno-6-35" href="#__codelineno-6-35"></a>            <span class="k">break</span>
+</span><span id="__span-6-36"><a id="__codelineno-6-36" name="__codelineno-6-36" href="#__codelineno-6-36"></a>
+</span><span id="__span-6-37"><a id="__codelineno-6-37" name="__codelineno-6-37" href="#__codelineno-6-37"></a>    <span class="k">assert</span> <span class="n">client</span><span class="o">.</span><span class="n">state</span> <span class="o">==</span> <span class="n">WebSocketState</span><span class="o">.</span><span class="n">OPEN</span>
+</span><span id="__span-6-38"><a id="__codelineno-6-38" name="__codelineno-6-38" href="#__codelineno-6-38"></a>    <span class="k">assert</span> <span class="n">server</span><span class="o">.</span><span class="n">connection_count</span> <span class="o">==</span> <span class="mi">1</span>
+</span></code></pre></div>
+<p>Keep pumping the same way past the handshake and the pair carries text, binary, ping/pong, and the close handshake, all without a real socket.</p>
+<h2 id="using-these-fakes-in-your-own-tests">Using these fakes in your own tests<a class="headerlink" href="#using-these-fakes-in-your-own-tests" title="Permanent link">&para;</a></h2>
+<p>Install <code>chumicro-websockets</code> and import the fakes straight into your test suite:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_timing.testing</span><span class="w"> </span><span class="kn">import</span> <span class="n">FakeTicks</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_websockets.testing</span><span class="w"> </span><span class="kn">import</span> <span class="n">FakeConnection</span><span class="p">,</span> <span class="n">FakeListener</span>
 </span></code></pre></div>
 <p>Project convention: libraries that expose injectable services ship their own test fakes alongside the production code.</p>
-<p>For end-to-end client ↔ server loopback, see <code>tests/test_integration.py</code> in this library — it pumps bytes between paired <code>FakeConnection</code> objects to drive both runners through their full lifecycle in-process.</p>
 <h2 id="api-reference">API Reference<a class="headerlink" href="#api-reference" title="Permanent link">&para;</a></h2>
 
 
