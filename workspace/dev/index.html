@@ -496,37 +496,37 @@
 
 <h1 id="chumicro-workspace">chumicro-workspace<a class="headerlink" href="#chumicro-workspace" title="Permanent link">&para;</a></h1>
 <p><strong>Host-side CLI for running ChuMicro projects on real boards.</strong></p>
-<p>One command brings up a fresh board, scaffolds a project, deploys it, and tails the REPL.  Composes <a href="../deploy/"><code>chumicro-deploy</code></a> + <a href="../repl/"><code>chumicro-repl</code></a> with the workspace pieces those packages don't own: deploy-time config merge, a CLI that reads <code>workspace.yml</code>, three-zone <code>devices.yml</code> round-trip, board-state onboarding, firmware URL derivation, an import-graph deploy mode, and the boot-shim layout that lets one board host multiple projects.</p>
+<p>Register a board you just plugged in, scaffold a project, ship it, and watch the board's output stream back to your terminal.  Builds on <a href="https://chumicro.github.io/ChuMicro/deploy/stable/"><code>chumicro-deploy</code></a> for the transports, firmware flashing, and the <code>devices.yml</code> schema, and picks up <a href="https://chumicro.github.io/ChuMicro/repl/stable/"><code>chumicro-repl</code></a> when you ask for an interactive session or a tail.</p>
 <h2 id="quick-example">Quick example<a class="headerlink" href="#quick-example" title="Permanent link">&para;</a></h2>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Day-zero bring-up — installs firmware, registers the board, deploys a demo,</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="c1"># and tails the REPL.</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>chumicro-workspace<span class="w"> </span>bootstrap<span class="w"> </span>--with-demo
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Day-zero: probe the board, register it in devices.yml, print what to run next.</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="c1"># --demo also ships the built-in demo payload so the board does something.</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>chumicro-workspace<span class="w"> </span>bootstrap<span class="w"> </span>back-porch<span class="w"> </span>--address<span class="w"> </span>/dev/cu.usbmodem1101<span class="w"> </span>--demo
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
 </span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="c1"># Iterate after that.</span>
 </span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>chumicro-workspace<span class="w"> </span>new<span class="w"> </span>garage/sensors/door_open
 </span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>chumicro-workspace<span class="w"> </span>deploy<span class="w"> </span>garage/sensors/door_open
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>chumicro-workspace<span class="w"> </span>repl<span class="w"> </span>garage/sensors/door_open
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>chumicro-workspace<span class="w"> </span>deploy<span class="w"> </span>garage/sensors/door_open<span class="w"> </span>--tail<span class="w"> </span><span class="m">30</span>
 </span></code></pre></div>
 <h2 id="what-you-get">What you get<a class="headerlink" href="#what-you-get" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong><code>bootstrap</code></strong> — one-command day-zero board bring-up: firmware install, board onboarding, demo deploy, REPL follow.</li>
-<li><strong><code>new</code></strong> — scaffold a project (flat or namespaced).  <code>--library</code> and <code>--workbench</code> flags scaffold a full chumicro-style library or workbench package alongside.</li>
-<li><strong><code>deploy</code></strong> — write project files onto the board through three deploy modes (RAM, flash, boot-shim) with import-graph filtering.</li>
-<li><strong><code>repl</code></strong> — open an interactive session against any registered board.</li>
-<li><strong><code>devices.yml</code> round-trip</strong> — three-zone YAML (defaults / devices / device-credentials) with safe rename + swap-board flows.</li>
-<li><strong><code>workspace.yml</code> config merge</strong> — flatten nested TOML config to dotted keys, merge per-library defaults, msgpack-encode for the device.</li>
-<li><strong><code>install-firmware</code></strong> — UF2 (Pi Pico family) and esptool (ESP32 family), with programmatic bootloader entry + interactive fallback.</li>
-<li><strong><code>doctor</code></strong> — health checks for the workspace, devices, and host platform.</li>
+<li><strong>Bring up a board with one command.</strong> <code>bootstrap</code> probes the runtime, writes the device into <code>devices.yml</code>, and tells you what to run next.  Pass <code>--demo</code> to ship a working payload in the same breath.</li>
+<li><strong>Scaffold a project, flat or nested.</strong> <code>new garage/sensors/door_open</code> creates the tree and the namespace markers.  <code>--library</code> and <code>--workbench</code> scaffold a full chumicro-style library or a host-only tool instead.</li>
+<li><strong>Ship code and its config together.</strong> <code>deploy</code> writes your project's files plus the merged runtime config to the board and starts it.  <code>--import-graph</code> walks the imports and ships only the modules the project actually reaches.  A board runs one project at a time; to change which one, deploy the other.</li>
+<li><strong>Watch what the board says.</strong> <code>deploy &lt;project&gt; --tail</code> streams serial output for a window after the deploy; <code>repl</code> opens an interactive session against any registered board.</li>
+<li><strong>Keep credentials out of your source.</strong> <code>secrets.toml</code> holds the wifi password and device defaults once; each project's <code>project_config.toml</code> overrides what it needs; the board gets the merged result as msgpack.</li>
+<li><strong>Keep <code>devices.yml</code> yours.</strong> Comments and field order survive every rewrite.  Three zones decide who wins: user-owned fields (<code>id</code>, <code>description</code>, <code>deploy_mode</code>) are never overwritten, probed-always fields (<code>address</code>, <code>firmware_version</code>) refresh on each probe, and hardware-once fields (<code>runtime</code> and the <code>hardware:</code> block) need an explicit <code>--force</code>.</li>
+<li><strong>Install firmware.</strong> <code>install-firmware</code> handles UF2 (Pi Pico family) and esptool (ESP32 family), entering the bootloader programmatically where it can and coaching you through it where it can't.</li>
+<li><strong>Find out what's broken.</strong> <code>status</code> is the one-screen snapshot; <code>doctor</code> adds a Python version check and an AST scan for each project's <code>run()</code>.</li>
 </ul>
 <h2 id="documentation">Documentation<a class="headerlink" href="#documentation" title="Permanent link">&para;</a></h2>
 <ul>
-<li><a href="guide/">User Guide</a> — workflow walkthroughs end-to-end.</li>
-<li><a href="api/">API Reference</a> — auto-generated reference for the public Python surface.</li>
+<li><a href="guide/">User Guide</a> for workflow walkthroughs end to end.</li>
+<li><a href="api/">API Reference</a> for the public Python surface.</li>
 </ul>
 <h2 id="install">Install<a class="headerlink" href="#install" title="Permanent link">&para;</a></h2>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pip<span class="w"> </span>install<span class="w"> </span>chumicro-workspace
 </span></code></pre></div>
-<p>No bundle registration needed — chumicro-workspace is a host tool, not on-device code.</p>
+<p>No bundle registration needed: chumicro-workspace is a host tool, not on-device code.</p>
 <hr />
 <div class="chumicro-footer">
 <p><a href="../../">← All ChuMicro Packages</a></p>
