@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "chumicro-msgpack"
 dynamic = ["version"]
-description = "Compact MessagePack serialization for CircuitPython, MicroPython, and CPython — delegates to the native C module when available."
+description = "Compact MessagePack serialization for CircuitPython, MicroPython, and CPython: delegates to the native C module when available."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"

@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "chumicro-wifi"
 dynamic = ["version"]
-description = "Unified wifi supervisor across CircuitPython, MicroPython, and CPython — sole-supervisor model with reconnect, state machine, and per-runtime adapters."
+description = "Unified wifi supervisor across CircuitPython, MicroPython, and CPython: sole-supervisor model with reconnect, state machine, and per-runtime adapters."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
@@ -58,10 +58,10 @@ exclude = [".gitignore"]
 packages = ["src/chumicro_wifi"]
 
 # ---------------------------------------------------------------------
-# Runtime-config manifest — declares which flat dotted keys this
+# Runtime-config manifest: declares which flat dotted keys this
 # library reads from the ``runtime_config.msgpack`` payload.
 # ``chumicro-workspace`` reads this at deploy time to validate a
-# project's merged config before baking the msgpack — missing required
+# project's merged config before baking the msgpack; missing required
 # keys surface as a precise ``ConfigManifestError`` instead of a
 # cryptic on-device ``MissingConfigKey`` boot failure.
 #
@@ -71,12 +71,12 @@ packages = ["src/chumicro_wifi"]
 #   required_keys = ["<dotted.key>", ...]   # missing → deploy-time error
 #   optional_keys = ["<dotted.key>", ...]   # missing → factory uses default
 #
-# Keys are flat dotted strings — same vocabulary the runtime accessor
+# Keys are flat dotted strings; same vocabulary the runtime accessor
 # uses (``config["wifi.password"]``).  An empty table is valid and
 # means "this library reads runtime config but doesn't pin keys yet".
 #
 # Source of truth pairs with ``WifiConfig.from_config`` in
-# ``src/chumicro_wifi/config.py`` — keep them in sync.
+# ``src/chumicro_wifi/config.py``; keep them in sync.
 
 [tool.chumicro.config]
 required_keys = ["wifi.ssid", "wifi.password"]

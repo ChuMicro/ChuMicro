@@ -28,7 +28,7 @@ classifiers = [
 ]
 dependencies = [
     "pyserial>=3.5",
-    # prompt_toolkit drives the line-mode REPL — cursor edit, history
+    # prompt_toolkit drives the line-mode REPL; cursor edit, history
     # search, persistent per-device history.  CPython-only is fine
     # here: `chumicro-repl` is a workbench tool that runs on the
     # user's laptop, never on a microcontroller.

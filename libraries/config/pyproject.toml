@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "chumicro-config"
 dynamic = ["version"]
-description = "Standardized runtime-config helpers for ChuMicro libraries — section loader + on-device runtime-config reader."
+description = "Standardized runtime-config helpers for ChuMicro libraries: section loader plus on-device runtime-config reader."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"

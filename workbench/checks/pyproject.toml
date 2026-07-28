@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "chumicro-checks"
 dynamic = ["version"]
-description = "Workspace-internal lint rules (CHU0NN) shared between the chumicro mono-repo and the ChuMicro-Workspace-Template starter."
+description = "Lint rules (CHU0NN) for ChuMicro workspaces: naming, whitespace, prose, and drift gates that no-op where their targets are absent."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"

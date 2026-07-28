@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "chumicro-ntp"
 dynamic = ["version"]
-description = "Runner-shaped SNTP client over an injected UDP socket — pure-Python, cross-runtime."
+description = "Runner-shaped SNTP client over an injected UDP socket: pure Python, cross-runtime."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
@@ -60,7 +60,7 @@ exclude = [".gitignore"]
 packages = ["src/chumicro_ntp"]
 
 # ---------------------------------------------------------------------
-# Runtime-config manifest — declares the flat dotted keys this library
+# Runtime-config manifest: declares the flat dotted keys this library
 # knows about.  All keys are optional: ``NTPClient.from_config`` reads
 # ``ntp.server`` / ``ntp.port`` / ``ntp.timeout_ms``, each falling back
 # to the constructor defaults (``pool.ntp.org``, port 123, 5 s timeout)

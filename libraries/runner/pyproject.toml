@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "chumicro-runner"
 dynamic = ["version"]
-description = "Tick-based task runner for CircuitPython, MicroPython, and CPython — non-blocking check/handle scheduling without async."
+description = "Tick-based task runner for CircuitPython, MicroPython, and CPython: non-blocking check/handle scheduling without async."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"

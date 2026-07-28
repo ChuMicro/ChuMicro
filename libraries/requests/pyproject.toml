@@ -68,7 +68,7 @@ packages = ["src/chumicro_requests"]
 requires_flash = true
 
 # ---------------------------------------------------------------------
-# Runtime-config manifest — declares the flat dotted keys this library
+# Runtime-config manifest: declares the flat dotted keys this library
 # knows about.  All keys are optional today: HttpClient takes its
 # tunables via constructor args.  This block describes the
 # forward-looking config-aware surface that an ``HttpClient.from_config``

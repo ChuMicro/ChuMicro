@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "chumicro-workspace"
 dynamic = ["version"]
-description = "Host-side runtime for ChuMicro project workspaces — config merge, secrets resolution, deploy orchestration, command dispatch."
+description = "Host-side runtime for ChuMicro project workspaces: config merge, secrets resolution, deploy orchestration, command dispatch."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
@@ -16,7 +16,7 @@ authors = [
 dependencies = [
     # The only chumicro-internal dep.  ``chumicro-deploy`` owns the
     # devices.yml schema + writer + the firmware URL surface; workspace
-    # composes on top.  No imports from ``libraries/`` — those are
+    # composes on top.  No imports from ``libraries/``; those are
     # device-side packages, workbench is for the laptop.
     "chumicro-deploy",
     # MessagePack writer for the runtime-config artifact deployed to
@@ -24,18 +24,18 @@ dependencies = [
     # ``use_single_float=True`` so float32 encoding matches what
     # CircuitPython's native ``msgpack`` module accepts.
     "msgpack>=1.0",
-    # ruamel.yaml — comes transitively via chumicro-deploy for
+    # ruamel.yaml; comes transitively via chumicro-deploy for
     # devices.yml round-trip; workspace also uses it directly for
     # workspace.yml comment-preserving append + quality config
     # reads.  Single YAML library across the workbench (PyYAML
     # dropped when the deploy package switched to ruamel).
     "ruamel.yaml>=0.18",
-    # tomlkit — comment-preserving TOML round-trip used by the
+    # tomlkit; comment-preserving TOML round-trip used by the
     # additive ``setup`` re-apply path: when the upstream starter
     # gains new keys, append them to the user's secrets.toml /
     # project_config.toml without clobbering edits or losing comments.
     # The stdlib ``tomllib`` reads but can't write TOML; tomlkit fills
-    # the writer half.  Pure Python, ~80 KB, CPython-only — workbench
+    # the writer half.  Pure Python, ~80 KB, CPython-only; workbench
     # scope only, never reaches a device.
     "tomlkit>=0.13",
 ]

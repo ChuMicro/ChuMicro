@@ -68,18 +68,18 @@ packages = ["src/chumicro_mqtt"]
 requires_flash = true
 
 # ---------------------------------------------------------------------
-# Runtime-config manifest — declares the flat dotted keys this library
+# Runtime-config manifest: declares the flat dotted keys this library
 # knows about.  ``chumicro-workspace`` reads it at deploy time to
 # validate the merged user config and to surface the documented
 # vocabulary via tooling.
 #
-# MQTTClient.from_config requires the broker host/port — without
+# MQTTClient.from_config requires the broker host/port; without
 # them the default socket factory has nowhere to dial.  Identity +
 # auth keys remain optional (sensible defaults; auth omitted means
 # anonymous CONNECT).
 #
 # Callers passing a pre-built ``socket=`` or custom ``transport_factory=``
-# bypass the default factory and don't need ``mqtt.broker.*`` set —
+# bypass the default factory and don't need ``mqtt.broker.*`` set;
 # but those callers are owning the connection themselves, not asking
 # the library to dial.
 

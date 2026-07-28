@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "chumicro-websockets"
 dynamic = ["version"]
-description = "Non-blocking WebSocket (RFC 6455) client + server for CircuitPython, MicroPython, and CPython"
+description = "Non-blocking WebSocket (RFC 6455) client and server for CircuitPython, MicroPython, and CPython."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
@@ -68,11 +68,11 @@ packages = ["src/chumicro_websockets"]
 requires_flash = true
 
 # ---------------------------------------------------------------------
-# Runtime-config manifest — declares the flat dotted keys this library
+# Runtime-config manifest: declares the flat dotted keys this library
 # knows about.  All keys are optional today: WebSocketClient and
 # WebSocketServer take their tunables + connection target via
 # constructor args.  This block describes the forward-looking
-# config-aware surface that ``.from_config`` factories will consume —
+# config-aware surface that ``.from_config`` factories will consume;
 # client connect target + server bind target + per-side message-size
 # caps.
 
