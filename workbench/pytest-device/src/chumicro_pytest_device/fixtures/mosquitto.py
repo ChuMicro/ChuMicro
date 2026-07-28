@@ -2,7 +2,7 @@
 
 `start_mosquitto_broker(bind_host, workdir)` returns `(process, port)`
 on success or `None` when `mosquitto` is not on PATH. The caller owns
-teardown — terminate the process and remove the workdir from its own
+teardown: terminate the process and remove the workdir from its own
 pytest_sessionfinish hook.
 
 The broker config is anonymous-auth, no persistence, single LAN-bound

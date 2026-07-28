@@ -88,7 +88,7 @@ def _loop_target_ids(tree: ast.Module) -> set[tuple[int, str]]:
     Covers ``for`` and ``async for`` statements and the ``for`` clause
     of every comprehension or generator expression.  These bindings are
     exempt from the single-letter rule the same way ``for i in
-    range(n):`` is — a single-letter comprehension variable
+    range(n):`` is: a single-letter comprehension variable
     (``sum(x for x in values)``) is idiomatic, not a violation.
     """
     result: set[tuple[int, str]] = set()

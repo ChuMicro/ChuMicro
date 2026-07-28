@@ -43,7 +43,7 @@ class _DiscoveryError:
 	"""A test candidate whose attribute access or instantiation raised.
 
 	Discovery reads a module attribute and, for a ``Test*`` class,
-	constructs it; either step can raise — a property with a side effect,
+	constructs it; either step can raise: a property with a side effect,
 	or a constructor that allocates a fixture buffer and hits
 	``MemoryError`` on a 264 KB board, or one that needs arguments and
 	gets none.  Letting that exception escape the discovery generator
@@ -169,7 +169,7 @@ def _unrun_test_reason(result):
 	A ``test_*`` containing ``yield`` is a generator function; an
 	``async def test_*`` is a coroutine function.  Calling either returns
 	a generator or coroutine object *without* running the body, so its
-	assertions never execute — a naive runner sees no exception and prints
+	assertions never execute, so a naive runner sees no exception and prints
 	PASS for a test that did nothing.  Both objects expose ``send`` and
 	``throw`` on CPython, MicroPython, and CircuitPython (MicroPython
 	represents an ``async def`` result as a ``generator``), while an

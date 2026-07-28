@@ -1,9 +1,9 @@
-"""UDP echo client — wifi-capable CircuitPython / MicroPython board.
+"""UDP echo client on a wifi-capable CircuitPython / MicroPython board.
 
 Brings wifi up via the local ``helpers`` module, opens a UDP socket on
 the board, sends one datagram to a known host echo server, and reads
 the echo back.  The same shape works for any UDP request/response
-protocol — NTP, mDNS, SSDP, SNMP, application-specific.
+protocol: NTP, mDNS, SSDP, SNMP, application-specific.
 
 Adjust ``ECHO_HOST`` / ``ECHO_PORT`` to point at your host echo
 server.  The ``chumicro-sockets`` functional-test suite ships a host-side
@@ -18,7 +18,7 @@ Example output::
     RECV bytes=17 src=('192.168.1.10', 51232)
 """
 
-#: Cross-runtime — wifi-up via :mod:`helpers` dispatches per
+#: Cross-runtime: wifi-up via :mod:`helpers` dispatches per
 #: ``sys.implementation.name`` (CP / MP) and the UDP socket helpers
 #: are runtime-neutral.  The marker tells :func:`scripts.verify_examples`
 #: + ``deploy-example`` to allow this file on either runtime.
@@ -29,8 +29,8 @@ import time
 from chumicro_sockets import udp_socket
 from helpers import ticks_add, ticks_diff, ticks_ms, wifi_up
 
-WIFI_SSID = "your-wifi-ssid"  # noqa: S105 — replace before deploying
-WIFI_PASSWORD = "your-wifi-password"  # noqa: S105 — replace before deploying
+WIFI_SSID = "your-wifi-ssid"  # noqa: S105 - replace before deploying
+WIFI_PASSWORD = "your-wifi-password"  # noqa: S105 - replace before deploying
 ECHO_HOST = "192.168.1.10"
 ECHO_PORT = 12345
 PAYLOAD = b"hello-from-board"

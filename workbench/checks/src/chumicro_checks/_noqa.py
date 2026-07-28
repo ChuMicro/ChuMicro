@@ -3,18 +3,18 @@ per-line suppression.
 
 Two suppression syntaxes are recognized:
 
-* ``# noqa: CHU0NN`` — Python, TOML, INI, anywhere a ``#`` line comment
+* ``# noqa: CHU0NN``: Python, TOML, INI, anywhere a ``#`` line comment
   is valid.
-* ``<!-- noqa: CHU0NN -->`` — Markdown.
+* ``<!-- noqa: CHU0NN -->``: Markdown.
 
 Both forms accept a comma-separated list of codes (``# noqa: CHU006,
 CHU012``) and a bare form (``# noqa``) that suppresses every code.
 
 The ``noqa`` token must stand alone: after it (or after its code
 list) comes whitespace, a second ``#`` comment, or end of line.  Prose
-that merely starts with ``noqa`` — ``# noqa-tracking``, ``.noqa`` in a
-path, ```` `# noqa` `` `` mentioned in Markdown — is not a directive and
-suppresses nothing.
+that merely starts with ``noqa`` is not a directive and suppresses
+nothing: ``# noqa-tracking``, a ```` `# noqa` `` `` mention in Markdown,
+and ``.noqa`` in a path all read as ordinary text.
 """
 
 from __future__ import annotations

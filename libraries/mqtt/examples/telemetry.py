@@ -102,7 +102,7 @@ def on_message(topic, payload):
 
 def on_connect():
     # Connect-time setup, fired once the broker session is up: subscribe
-    # to the command topic.  (subscribe() requires CONNECTED — publish()
+    # to the command topic.  (subscribe() requires CONNECTED; publish()
     # instead buffers pre-connect, so the loop below can publish without
     # waiting.)
     print(f"MQTT_CONNECTED broker={config['mqtt.broker.host']}:{config['mqtt.broker.port']}")

@@ -3,8 +3,8 @@
 Recent macOS releases moved the FAT (``msdosfs``) driver out of the
 kernel and into a user-space FSKit extension
 (``com.apple.fskit.msdos.appex``).  When that extension hits an
-internal error mid-probe — most often on small CIRCUITPY FAT12
-volumes — it can leave ``diskarbitrationd`` stuck in an
+internal error mid-probe (most often on small CIRCUITPY FAT12
+volumes), it can leave ``diskarbitrationd`` stuck in an
 uninterruptible kernel wait.  Symptoms:
 
 - ``diskutil list`` hangs indefinitely.
@@ -37,13 +37,13 @@ from collections.abc import Callable
 #:
 #: Targets:
 #:
-#: - ``com.apple.fskit.msdos`` — the user-space FAT filesystem
+#: - ``com.apple.fskit.msdos``, the user-space FAT filesystem
 #:   extension that wedged in the first place.
-#: - ``fskit_helper`` / ``fskitd`` / ``fskit_agent`` — FSKit support
+#: - ``fskit_helper`` / ``fskitd`` / ``fskit_agent``, FSKit support
 #:   daemons whose XPC connections to the extension are now stale.
-#: - ``diskarbitrationd`` — the system-level mount arbiter stuck in
+#: - ``diskarbitrationd``, the system-level mount arbiter stuck in
 #:   uninterruptible wait.
-#: - ``DiskArbitrationAgent`` — the per-user agent that registers
+#: - ``DiskArbitrationAgent``, the per-user agent that registers
 #:   volumes with Finder's Locations sidebar.  ``killall -9`` works
 #:   against it because the per-user launchd respawns it on the next
 #:   on-demand XPC load, even with ``KeepAlive=false``.  ``launchctl
@@ -94,8 +94,8 @@ def detect_fskit_wedge(
 
     Returns:
         ``True`` if the daemon is in uninterruptible wait, else
-        ``False``.  Any subprocess failure — missing ``pgrep``/``ps``,
-        timeout, non-zero exit — is treated as "not wedged" so a
+        ``False``.  Any subprocess failure (missing ``pgrep``/``ps``,
+        timeout, non-zero exit) is treated as "not wedged" so a
         false positive can never block a legitimate retry.
     """
     if platform != "darwin":

@@ -174,7 +174,7 @@ def _check_file(filepath: Path, repo_root: Path) -> list[Finding]:
             message=(
                 f"module docstring disclaims {named!r} as future work / "
                 f"not-yet-implemented, but it ships as a public symbol in "
-                f"this module — update the docstring to the real surface "
+                f"this module; update the docstring to the real surface "
                 f"(or # noqa: CHU015 if the symbol is genuinely an "
                 f"unrelated stub)"
             ),

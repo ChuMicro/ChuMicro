@@ -1,22 +1,22 @@
-"""Interactive REPL TUI — forwards stdin ↔ serial with highlighting.
+"""Interactive REPL TUI: forwards stdin ↔ serial with highlighting.
 
 The TUI is deliberately thin: stdin bytes are passed through to the
 board unchanged, serial bytes are UTF-8 decoded and ANSI-highlighted
 before being written to stdout.  The board does its own line
-editing — arrow keys, backspace, paste-mode (Ctrl-E) all reach the
+editing: arrow keys, backspace, paste-mode (Ctrl-E) all reach the
 device verbatim.
 
 Keybindings mirror ``mpremote repl``:
 
-- **Ctrl-C** — forwarded to the board.  Raises
+- **Ctrl-C**: forwarded to the board.  Raises
   :class:`KeyboardInterrupt` on-device, which cancels whatever is
   running and returns to the friendly REPL.
-- **Ctrl-D** — forwarded to the board.  Soft-reboots the runtime
+- **Ctrl-D**: forwarded to the board.  Soft-reboots the runtime
   (MicroPython prints ``MPY: soft reboot``, CircuitPython is
   silent but rewinds).
-- **Ctrl-E** — forwarded to the board.  Enters MicroPython paste
+- **Ctrl-E**: forwarded to the board.  Enters MicroPython paste
   mode; CircuitPython ignores it.
-- **Ctrl-X** — intercepted locally.  Exits the TUI without
+- **Ctrl-X**: intercepted locally.  Exits the TUI without
   rebooting or interrupting the board.
 
 The loop is structured so tests can drive it without real terminal
@@ -104,12 +104,12 @@ def run_loop(
     forward-and-highlight behavior without a real serial port.
 
     Args:
-        port: Open :class:`SerialPort` — the TUI writes keystrokes
+        port: Open :class:`SerialPort`.  The TUI writes keystrokes
             and reads device output through this port.  Closing the
             port remains the caller's responsibility.
         keyboard: Non-blocking keystroke source.
         output: Destination for serial output.  ANSI escapes are
-            written whether or not the stream is a TTY — the caller
+            written whether or not the stream is a TTY; the caller
             owns the decision to strip them downstream.
         time: Injectable time source.
         theme: Color theme for pattern highlighting.
@@ -126,7 +126,7 @@ def run_loop(
         reopen: Callable returning a fresh :class:`SerialPort`,
             invoked when the current port drops and
             *reconnect_seconds* allows.  Defaults to ``None`` (no
-            auto-reconnect — the loop returns
+            auto-reconnect, so the loop returns
             :attr:`ExitCode.DISCONNECTED` on the first disconnect).
             :func:`interactive` wires this to a closure over the
             original port factory so a replug picks up
@@ -157,11 +157,11 @@ def run_loop(
         """Run the reconnect loop after *error* and prepare fresh state.
 
         Returns either:
-          * An ``int`` exit code — the caller must return it from
+          * An ``int`` exit code: the caller must return it from
             :func:`run_loop` immediately (``0`` on user-requested exit
             during reconnect, :attr:`ExitCode.DISCONNECTED` on budget
             exhaustion).
-          * A ``(port, decoder, detector)`` tuple — the caller swaps
+          * A ``(port, decoder, detector)`` tuple: the caller swaps
             its locals for these fresh instances and continues the
             loop.
 
@@ -229,7 +229,7 @@ def run_loop(
         # user sees whatever the board printed in response to the last
         # keystroke before the TUI vanishes.  On exit the drain loops
         # until ``in_waiting`` reports zero or the exit-drain deadline
-        # elapses — the deadline keeps Ctrl-X responsive against a board
+        # elapses.  The deadline keeps Ctrl-X responsive against a board
         # printing in a tight loop, where ``in_waiting`` never settles.
         had_serial_activity = False
         exit_drain_deadline = (
@@ -261,7 +261,7 @@ def run_loop(
                 flush_quietly(output)
             if not exit_requested:
                 # Return to the keyboard-poll loop after one drain
-                # so interactive typing stays responsive — we only
+                # so interactive typing stays responsive; we only
                 # loop the drain when the user has asked to exit.
                 break
         if exit_requested:
@@ -275,7 +275,7 @@ def run_loop(
 #: replug; bounded so a forgotten session eventually exits
 #: instead of holding the terminal hostage.  Press Ctrl-X
 #: during the window to abort early.  Named to distinguish from
-#: the shorter tail() default in :mod:`._follow` — the two
+#: the shorter tail() default in :mod:`._follow`; the two
 #: surfaces want different ceilings (a CI-tail wants to fail
 #: fast; an interactive session wants to wait for the user).
 DEFAULT_TUI_RECONNECT_SECONDS = 60.0
@@ -296,7 +296,7 @@ def interactive(
 ) -> int:
     """Open *device* and run the interactive TUI until Ctrl-X.
 
-    Thin wrapper over :func:`run_loop` — pulls in the POSIX
+    Thin wrapper over :func:`run_loop`.  Pulls in the POSIX
     terminal raw-mode setup, the real pyserial port factory, and
     the default stdin/stdout streams.  Tests that want to drive the
     loop deterministically should call :func:`run_loop` directly
@@ -385,8 +385,8 @@ def interactive_line(
 ) -> int:
     """Open *device* and run the line-mode REPL.
 
-    Sibling of :func:`interactive` — instead of forwarding keystrokes
-    byte-by-byte to the device, runs a host-side `prompt_toolkit`
+    Sibling of :func:`interactive`.  Instead of forwarding keystrokes
+    byte-by-byte to the device, it runs a host-side `prompt_toolkit`
     line editor with persistent per-device history.
     Each completed line ships to the device; serial output streams
     back through the same pattern-detector + traceback highlighter
@@ -451,7 +451,7 @@ def _format_welcome_banner(
     constructed from a bare port path.
 
     The keybinding line documents only the keys the TUI actually
-    cares about — Ctrl-X is the local exit, the rest are forwarded
+    cares about: Ctrl-X is the local exit, the rest are forwarded
     verbatim and listed for discoverability rather than because the
     TUI special-cases them.
     """
@@ -482,7 +482,7 @@ def _transport_label(device: DeviceLike | str) -> str | None:
 
 
 class _StdinKeyboard:
-    """Adapter — wraps a binary input stream for :class:`KeyInputReader`.
+    """Adapter that wraps a binary input stream for :class:`KeyInputReader`.
 
     POSIX: in terminal raw mode, ``sys.stdin.buffer.read1(n)`` reads
     whatever is currently buffered (never blocks) once we have put
@@ -500,7 +500,7 @@ class _StdinKeyboard:
     def read_available(self) -> bytes:
         # ``BinaryIO`` doesn't statically expose ``read1`` (only the
         # subclass ``BufferedIOBase`` does), so the type checker can't
-        # see the call.  Probe at runtime — every BufferedReader and
+        # see the call.  Probe at runtime: every BufferedReader and
         # BytesIO this adapter is asked to handle has it.  Falls back
         # to a blocking ``read(n)`` on rare streams without ``read1``.
         read1: object | None = getattr(self._stream, "read1", None)
@@ -522,7 +522,7 @@ class _StdinKeyboard:
 def _posix_raw_mode(fd: int) -> Iterator[None]:
     """Put terminal *fd* into raw mode, restore settings on exit.
 
-    Uses :mod:`termios` / :mod:`tty` — standard library only, no
+    Uses :mod:`termios` / :mod:`tty`, standard library only, no
     extra deps.  On platforms without :mod:`termios` (Windows) the
     call falls through as a no-op; the TUI still works but key
     repeats and Ctrl-char interception depend on the terminal
@@ -573,15 +573,15 @@ def _tui_reconnect(
 
     Returns ``(port, user_exited)``:
 
-    * ``(new_port, False)`` — factory succeeded; *new_port* is the
+    * ``(new_port, False)``: factory succeeded; *new_port* is the
       live :class:`SerialPort`.
-    * ``(None, True)`` — the user pressed *exit_key* during the
+    * ``(None, True)``: the user pressed *exit_key* during the
       retry window; the caller should return ``0``.
-    * ``(None, False)`` — *reopen* was ``None``, the budget was
+    * ``(None, False)``: *reopen* was ``None``, the budget was
       zero, or the budget elapsed; the caller should return
       :attr:`ExitCode.DISCONNECTED`.
 
-    Writes a "*** device disconnected — ... ***" notice on entry.
+    Writes a "*** device disconnected: ... ***" notice on entry.
     When *reopen* is supplied and *reconnect_seconds* is positive,
     follows up with a "*** retrying ***" notice and polls until
     either the factory succeeds or the user presses *exit_key*; on
@@ -596,7 +596,7 @@ def _tui_reconnect(
     if reopen is None or reconnect_seconds <= 0:
         return None, False
     output.write(
-        f"\x1b[2m*** retrying for up to {reconnect_seconds:.0f}s — "
+        f"\x1b[2m*** retrying for up to {reconnect_seconds:.0f}s: "
         f"plug the device back in, or press Ctrl-X to abort"
         f" ***\x1b[0m\r\n"
     )

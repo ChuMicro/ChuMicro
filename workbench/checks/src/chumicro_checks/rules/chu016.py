@@ -158,7 +158,7 @@ def _check_file(filepath: Path, repo_root: Path) -> list[Finding]:
                 message=(
                     f"module-level `import {module_root}` will fail on "
                     f"{crashes_on} but this example's "
-                    f"__chumicro_runtimes__ declares it — guard the import "
+                    f"__chumicro_runtimes__ declares it; guard the import "
                     f"under a `sys.implementation.name` branch (or inside "
                     f"the function that needs it)"
                 ),

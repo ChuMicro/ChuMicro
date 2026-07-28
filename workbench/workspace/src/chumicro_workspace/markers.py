@@ -1,7 +1,7 @@
 """Board-to-host sync via stdout markers.
 
 A board prints ``<NAME> key=value key=value ...`` lines on its stdout to
-signal checkpoints back to the host — e.g. ``SERVER_READY ip=192.168.1.50
+signal checkpoints back to the host, e.g. ``SERVER_READY ip=192.168.1.50
 port=8765`` once an HTTP server starts accepting connections.  The
 streaming transport's ``on_line`` hook feeds each captured stdout line
 through :func:`parse_marker`; matches land on a :class:`MarkerQueue`
@@ -22,9 +22,9 @@ Marker syntax:
 * Anything else parses as :data:`None`, including free-form board prose,
   traceback frames, and pytest result-parser lines.
 
-A line that *tried* to be a marker but failed — uppercase first word
+A line that *tried* to be a marker but failed (uppercase first word
 plus at least one well-formed ``key=value`` token, but another token
-malformed (typically a value containing whitespace) — still parses as
+malformed, typically a value containing whitespace) still parses as
 :data:`None`, but :meth:`MarkerQueue.offer_line` records it as a
 near-miss so a later :meth:`MarkerQueue.wait_for` timeout names the
 mangled line instead of presenting an empty queue.
@@ -71,7 +71,7 @@ def parse_marker(line: str) -> Marker | None:
     including:
 
     * Lines whose first word is in
-      :data:`_RESERVED_MARKER_NAMES` — they belong to
+      :data:`_RESERVED_MARKER_NAMES`, which belong to
       :mod:`result_parser`.
     * Lines whose first word is not an uppercase identifier (leading
       whitespace, lowercase, digit-led, punctuation).
@@ -117,7 +117,7 @@ class MarkerQueue:
     Non-matching markers that arrive while a :meth:`wait_for` is
     pending are retained (up to ``_DEFERRED_MARKER_CAP``, oldest
     dropped past that) so a later ``wait_for`` for their name still
-    succeeds — a driver waiting on markers in the wrong order gets a
+    succeeds, so a driver waiting on markers in the wrong order gets a
     late match instead of a silent loss.  Markers popped this way also
     feed the timeout diagnostics: a ``wait_for`` that times out names
     what *did* arrive.
@@ -140,9 +140,9 @@ class MarkerQueue:
     def offer_line(self, line: str) -> Marker | None:
         """Parse one stdout *line*; push and return its marker, else None.
 
-        Lines that are marker near-misses — uppercase first word plus at
+        Lines that are marker near-misses (uppercase first word plus at
         least one well-formed ``key=value`` token, but another token
-        malformed (typically a value containing whitespace) — are
+        malformed, typically a value containing whitespace) are
         recorded so :meth:`wait_for` timeout messages can name them.
         Everything else (board prose, tracebacks, result-parser lines)
         is ignored.
@@ -170,8 +170,8 @@ class MarkerQueue:
         Scans retained markers first, then drains whatever is currently
         queued (retaining non-matches), and returns :data:`None` when
         no marker named *name* has arrived yet.  For callers that must
-        keep doing work while waiting — e.g. a demo driver ticking a
-        host-side client between checks — poll in a loop instead of
+        keep doing work while waiting (e.g. a demo driver ticking a
+        host-side client between checks), poll in a loop instead of
         blocking in :meth:`wait_for`.
         """
         match = self._pop_deferred(name)
@@ -194,14 +194,14 @@ class MarkerQueue:
             timeout_s: Seconds to wait before giving up.
 
         Returns:
-            The matching :class:`Marker` — either retained from an
+            The matching :class:`Marker`, either retained from an
             earlier wait or popped off the queue.
 
         Raises:
             MarkerTimeoutError: No matching marker arrived within
                 *timeout_s* seconds.  The message names the awaited
                 marker, any non-matching markers that did arrive, and
-                any marker-shaped lines that failed to parse — so a
+                any marker-shaped lines that failed to parse, so a
                 failing test points at the actual mismatch instead of
                 surfacing a generic queue-empty.
         """

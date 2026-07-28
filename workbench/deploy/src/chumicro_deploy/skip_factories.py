@@ -8,16 +8,16 @@ module-level constant the walker reads at AST time::
         "chumicro_websockets.tls_factory",    # exact: this one module
     )
 
-The reader uses :func:`ast.parse` — never executes the file — so an
+The reader uses :func:`ast.parse` and never executes the file, so an
 entrypoint that imports device-only modules (``import wifi``,
 ``import board``) remains readable on the host.
 
 This module exposes three primitives the walker glues together:
 
-* :func:`read_skip_factories_marker` — pull the constant from one file.
-* :func:`discover_factory_modules` — list every ``chumicro_*/<name>_factory.py``
+* :func:`read_skip_factories_marker` pulls the constant from one file.
+* :func:`discover_factory_modules` lists every ``chumicro_*/<name>_factory.py``
   under the search paths.
-* :func:`resolve_skip_targets` — match the user's entries against the
+* :func:`resolve_skip_targets` matches the user's entries against the
   discovered list with family + exact semantics, surfacing typos.
 """
 
@@ -41,8 +41,8 @@ def read_skip_factories_marker(entrypoint_path: Path) -> tuple[str, ...] | None:
     an empty tuple only if the marker is explicitly empty (legal but
     useless; the walker treats it as no-op).
 
-    Read via :func:`ast.parse` — never executes the file, so device-
-    only imports at the top of *entrypoint_path* don't trip the
+    Read via :func:`ast.parse`, which never executes the file, so
+    device-only imports at the top of *entrypoint_path* don't trip the
     reader.
     """
     try:
@@ -107,22 +107,22 @@ def resolve_skip_targets(
 
     Returns ``(per_entry, unmatched)``.
 
-    * ``per_entry`` — mapping of each user-written entry to the set of
+    * ``per_entry`` is a mapping of each user-written entry to the set of
       fully-qualified factory module names it matched.  Order of the
       keys preserves the order the user wrote them.  The union of all
       values is the skip set; the per-entry mapping enables dead-skip
       diagnostics (an entry is dead when none of its matched modules'
       parent libraries are imported).
-    * ``unmatched`` — user entries that matched zero discovered modules,
+    * ``unmatched`` holds user entries that matched zero discovered modules,
       preserved in the order the user wrote them.  Treat a non-empty
       ``unmatched`` as a typo guard and raise: silently shipping the
       unwanted library is worse than refusing to deploy.
 
     Two match shapes:
 
-    * Entry contains a ``.`` — exact match against a discovered module
+    * Entry contains a ``.``: exact match against a discovered module
       path (``chumicro_mqtt.sockets_factory``).
-    * Entry contains no ``.`` — family match against the file stem
+    * Entry contains no ``.``: family match against the file stem
       (``sockets_factory`` matches every ``chumicro_*.sockets_factory``).
     """
     per_entry: dict[str, frozenset[str]] = {}

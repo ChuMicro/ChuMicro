@@ -28,7 +28,7 @@ class FlashDriveError(Exception):
 #: read stale content even after sync returns.
 FLUSH_SETTLE_DELAY = 0.5
 
-#: Floor for the rsync timeout — handles cold-start work (USB
+#: Floor for the rsync timeout.  Handles cold-start work (USB
 #: enumeration, FAT init, raw REPL handoff) regardless of how small
 #: the deploy is.  Set generously: false-positives (slow board
 #: treated as wedged) are far worse than slow detection of a real
@@ -267,15 +267,15 @@ def rsync(
     (FAT32 timestamps are unreliable) and ``--inplace`` avoids
     temp-file rename races on FAT32.  Two parameter shapes:
 
-    * **Clean push** — ``delete=True`` with
+    * **Clean push**: ``delete=True`` with
       ``additional_excludes=DEVICE_KEEP_SET``.  Clean slate, only the
       closed keep set survives.
-    * **Additive push** — ``delete=False`` with no extra excludes.
+    * **Additive push**: ``delete=False`` with no extra excludes.
       Stale files persist.  Used when other board files are
       hand-managed.
 
     The base exclude set (build artifacts + macOS noise / sentinel
-    dirs) is shared and unconditional — see :data:`_BASE_RSYNC_EXCLUDES`.
+    dirs) is shared and unconditional; see :data:`_BASE_RSYNC_EXCLUDES`.
 
     Args:
         source: Source directory whose contents to sync.
@@ -283,7 +283,7 @@ def rsync(
         delete: When ``True``, pass ``--delete`` so files in
             destination but not source are removed (clean slate;
             only ``additional_excludes`` survive).  ``False`` is the
-            additive shape — stale files persist.
+            additive shape, where stale files persist.
         additional_excludes: Extra basenames to add to ``--exclude``.
             Pass :data:`DEVICE_KEEP_SET` on clean pushes so
             ``--delete`` doesn't wipe the device-required keep set;
@@ -348,20 +348,20 @@ def rsync(
 #: their own list, so "what survives a deploy" cannot drift between
 #: paths.
 #:
-#: * ``boot_out.txt`` — CP writes it only on a *hard* reboot, and a
+#: * ``boot_out.txt``: CP writes it only on a *hard* reboot, and a
 #:   deploy soft-reboots, so wiping it strands the drive without
 #:   identity until the next power cycle and breaks the next deploy's
 #:   UID drive-match on multi-board hosts.
-#: * ``boot.py`` — a device necessity, and a project that ships its
+#: * ``boot.py``: a device necessity, and a project that ships its
 #:   own ``boot.py`` overwrites it as payload (payload always wins).
-#: * ``_chu_kv.msgpack`` — the only filesystem-backed kvstore case
+#: * ``_chu_kv.msgpack``: the only filesystem-backed kvstore case
 #:   (MP non-NVS boards), and CP ``nvm`` / ESP32 ``nvs`` are
 #:   off-filesystem and never at risk.
 #:
 #: ``settings.toml`` is deliberately NOT here: a board-resident one is
 #: a competing wifi authority vs chumicro's config-driven wifi
 #: (``runtime_config.msgpack`` + host ``secrets.toml``), so it is
-#: evicted on every path — with a one-time loud notice when one is
+#: evicted on every path, with a one-time loud notice when one is
 #: actually present.
 DEVICE_KEEP_SET: tuple[str, ...] = (
     "boot.py",
@@ -441,7 +441,7 @@ def verify_rsync(
         ) from rsync_error
     except subprocess.TimeoutExpired as timeout_error:
         raise FlashDriveError(
-            f"rsync verification hung past {timeout:.0f}s — the FAT "
+            f"rsync verification hung past {timeout:.0f}s.  The FAT "
             "volume may have wedged after the main rsync.  Tap RESET "
             "and re-deploy."
         ) from timeout_error
@@ -480,11 +480,11 @@ def strip_extended_attributes(path: Path) -> None:
             timeout=METADATA_HELPER_TIMEOUT_SECONDS,
         )
     except FileNotFoundError:
-        print("WARNING: xattr not found — skipping extended attribute removal")
+        print("WARNING: xattr not found: skipping extended attribute removal")
     except subprocess.TimeoutExpired:  # pragma: no cover -defensive
         print(
             "WARNING: xattr -cr hung past "
-            f"{METADATA_HELPER_TIMEOUT_SECONDS:.0f}s — continuing without it"
+            f"{METADATA_HELPER_TIMEOUT_SECONDS:.0f}s, continuing without it"
         )
 
 
@@ -511,16 +511,16 @@ def clean_dot_files(drive_path: Path) -> None:
             timeout=METADATA_HELPER_TIMEOUT_SECONDS,
         )
     except FileNotFoundError:
-        print("WARNING: dot_clean not found — skipping ._ file cleanup")
+        print("WARNING: dot_clean not found: skipping ._ file cleanup")
     except subprocess.TimeoutExpired:  # pragma: no cover -defensive
         print(
             "WARNING: dot_clean hung past "
-            f"{METADATA_HELPER_TIMEOUT_SECONDS:.0f}s — continuing without it"
+            f"{METADATA_HELPER_TIMEOUT_SECONDS:.0f}s, continuing without it"
         )
 
 
 #: Sentinel files / directories macOS recognizes to skip a volume.  Planted
-#: at the drive root so subsequent remounts inherit the suppression — the
+#: at the drive root so subsequent remounts inherit the suppression, the
 #: equivalent of ``mdutil -i off`` (which resets on remount) but persistent.
 #:
 #: ``.Trashes`` is the load-bearing one: macOS preemptively creates
@@ -629,12 +629,12 @@ def flush_volume(
             )
         except subprocess.TimeoutExpired:  # pragma: no cover -defensive
             print(
-                f"WARNING: sync hung past {SYNC_TIMEOUT_SECONDS:.0f}s — "
+                f"WARNING: sync hung past {SYNC_TIMEOUT_SECONDS:.0f}s: "
                 "USB stack may be wedged.  Falling back to os.sync()"
             )
             os.sync()
         except Exception:  # pragma: no cover
-            print("WARNING: sync command failed — falling back to os.sync()")
+            print("WARNING: sync command failed: falling back to os.sync()")
             os.sync()
     else:
         os.sync()  # pragma: no cover -tests run on macOS

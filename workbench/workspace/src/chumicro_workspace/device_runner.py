@@ -1,8 +1,8 @@
-"""Background-thread bootstrap runner — overlap a host orchestrator with a board run.
+"""Background-thread bootstrap runner: overlap a host orchestrator with a board run.
 
 The board prints checkpoint markers on its stdout (``SERVER_READY
 ip=... port=...``, ``MQTT_CONNECTED broker=...``) and the host
-orchestrator reacts mid-execute — open a TCP connection, publish a
+orchestrator reacts mid-execute: open a TCP connection, publish a
 command, wait for the next marker.  That overlap requires the board's
 bootstrap to run concurrently with the host code that drives it.
 
@@ -13,7 +13,7 @@ internal :class:`MarkerQueue`.  The host code calls :meth:`wait_for`
 to block on a specific marker, then later :meth:`wait_for_completion`
 to join the thread and read the captured stdout.
 
-The board side stays single-threaded cooperative — this module adds
+The board side stays single-threaded cooperative; this module adds
 no constraints to what runs on the device.  All concurrency is
 host-side.
 
@@ -49,7 +49,7 @@ class DeviceBootstrapRunner:
         captured_stdout = runner.wait_for_completion(timeout_s=30)
         runner.shutdown()
 
-    Or as a context manager — :meth:`shutdown` is called on exit even
+    Or as a context manager, where :meth:`shutdown` is called on exit even
     if the body raises::
 
         with DeviceBootstrapRunner(transport, bootstrap) as runner:
@@ -153,7 +153,7 @@ class DeviceBootstrapRunner:
     def shutdown(self, *, timeout_s: float | None = None) -> None:
         """Best-effort join the bg thread.  Idempotent; safe to call any time.
 
-        Does not interrupt the bootstrap — the board is expected to
+        Does not interrupt the bootstrap.  The board is expected to
         carry its own deadline and exit on its own.
 
         Args:
@@ -161,7 +161,7 @@ class DeviceBootstrapRunner:
                 joins without timeout, which is fine when the bg thread
                 is known to have completed (after a successful
                 :meth:`wait_for_completion`).  Pass a finite value to
-                give up after that many seconds — useful on the
+                give up after that many seconds, useful on the
                 cleanup path after a host-side abort where the bg
                 thread is still mid-execute and would otherwise block
                 until the board's own deadline expires.  A timed-out

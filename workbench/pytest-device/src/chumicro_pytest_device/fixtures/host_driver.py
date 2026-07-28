@@ -7,11 +7,11 @@ request.  This module exposes the client side of that handshake.
 
 Surface:
 
-* :func:`bind_to(runner)` — plain function, returns a ``hit(path, ...)``
+* :func:`bind_to(runner)`: plain function, returns a ``hit(path, ...)``
   callable bound to the supplied :class:`DeviceBootstrapRunner`.  Use
   this when wiring runner + fixture directly from a test or helper
   outside the pytest fixture graph.
-* :func:`http_client_against_board` — pytest fixture that returns
+* :func:`http_client_against_board`: pytest fixture that returns
   :func:`bind_to` itself, so tests can write
   ``hit = http_client_against_board(runner)`` and stay inside the
   fixture-graph.
@@ -64,7 +64,7 @@ class HttpResponseSnapshot:
 
     Returned by :func:`bind_to`'s ``hit`` callable in place of the raw
     :class:`http.client.HTTPResponse` so the underlying socket can be
-    closed before the call returns — no caller bookkeeping to remember.
+    closed before the call returns, with no caller bookkeeping to remember.
 
     ``headers`` keys are lowercased so a test can match
     ``response.headers["content-type"]`` without worrying about how
@@ -86,7 +86,7 @@ def bind_to(runner: DeviceBootstrapRunner) -> Callable[..., HttpResponseSnapshot
        :meth:`DeviceBootstrapRunner.wait_for` for the ``SERVER_READY``
        marker (with the per-call ``timeout_s``) and caches the
        resolved ``ip:port``.  Subsequent invocations reuse the
-       cached address — the board prints ``SERVER_READY`` once at
+       cached address, because the board prints ``SERVER_READY`` once at
        startup, so re-waiting on every call would block forever
        after the first request consumed the marker.
     2. Opens :class:`http.client.HTTPConnection` to the cached
@@ -170,7 +170,7 @@ def _resolve_board_file(request: pytest.FixtureRequest) -> Path:
        ``test_real_<scenario>.py`` in the same directory.
 
     Calls ``pytest.fail`` with a clear message when neither rule
-    produces a real file — better an immediate stop than a confusing
+    produces a real file.  Better an immediate stop than a confusing
     downstream stage failure.
     """
     host_file = Path(str(request.fspath))
@@ -191,7 +191,7 @@ def _resolve_board_file(request: pytest.FixtureRequest) -> Path:
     if not board_file.is_file():
         pytest.fail(
             f"device_bootstrap_runner resolved board file {board_file!r} "
-            f"does not exist — paired with host file {host_file!r}.",
+            f"does not exist (paired with host file {host_file!r}).",
         )
     return board_file
 

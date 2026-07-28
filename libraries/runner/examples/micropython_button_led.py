@@ -8,7 +8,7 @@ console (or a sweep harness) can verify the loop without a probe.
 
 Example output::
 
-    Button toggle — press button to flip the LED.
+    Button toggle: press button to flip the LED.
 
       [  815 ms] press → toggle
       [ 1407 ms] press → toggle
@@ -81,7 +81,7 @@ class ButtonToggle:
 runner = Runner()
 runner.add(ButtonToggle())
 
-print("Button toggle — press button to flip the LED.\n")
+print("Button toggle: press button to flip the LED.\n")
 
 while True:
     runner.tick()

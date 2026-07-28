@@ -4782,7 +4782,7 @@ class TestAddDeviceOmittedAddress:
         ])
         assert exit_code == 0
         captured = capsys.readouterr()
-        assert "only one port found — using /dev/cu.only" in captured.out
+        assert "only one port found, using /dev/cu.only" in captured.out
         body = (tmp_path / "devices.yml").read_text()
         assert "address: /dev/cu.only" in body
 

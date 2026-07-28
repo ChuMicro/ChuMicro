@@ -1,4 +1,4 @@
-"""Deployer — orchestrate file staging + entrypoint execution on a Device.
+"""Deployer: orchestrate file staging + entrypoint execution on a Device.
 
 The :class:`Deployer` owns the end-to-end "push code onto a board and
 run it" flow.  It consumes a :class:`~chumicro_deploy.sources.FileSource`,
@@ -262,14 +262,14 @@ class Deployer:
         1. Connect.
         2. Ask the transport for every in-scope file currently on the
            device (``list_files_in_scope``).
-        3. Compute the stale set — paths on the device that aren't in
+        3. Compute the stale set, the paths on the device that aren't in
            the new payload.
         4. Delete the stale set (``delete_files``).
         5. Hand off to the normal :meth:`deploy_files` for the actual
            write + execute.
 
         Out-of-scope files (user-uploaded images, hand-edited
-        ``settings.toml``, etc.) are never touched — see
+        ``settings.toml``, etc.) are never touched; see
         :func:`chumicro_deploy.protocol.is_in_deploy_scope` for the rule.
 
         Mode-aware: in RAM-mode deploys (CP RAM, MP mount) the
@@ -292,7 +292,7 @@ class Deployer:
                 the keep set; *wipe* erases the whole filesystem
                 including it.
             wipe: When ``True``, call ``transport.wipe_filesystem()``
-                before staging — full destructive erase (keep set
+                before staging, a full destructive erase (keep set
                 included) for corruption-recovery flows.  Skips the
                 diff cleanup entirely (nothing left to diff against
                 after a wipe).  RAM-mode transports treat the wipe

@@ -276,7 +276,7 @@ def _cmd_add_device(
             )
             if diagnosis.state is BoardState.UF2_BOOTLOADER:
                 print(
-                    "add-device: board is in UF2 bootloader, not REPL — "
+                    "add-device: board is in UF2 bootloader, not REPL; "
                     "install firmware first.",
                     file=sys.stderr,
                 )
@@ -341,7 +341,7 @@ def _cmd_add_device(
     print(f"add-device: registered {args.id} ({info.implementation.name})")
     if support.status is not FirmwareSupportStatus.SUPPORTED:
         print(
-            f"add-device: warning — {info.implementation.name} "
+            f"add-device: warning: {info.implementation.name} "
             f"firmware compatibility:",
             file=sys.stderr,
         )
@@ -447,7 +447,7 @@ def _cmd_remove_device(args: argparse.Namespace) -> int:
         print(
             f"remove-device: refusing to delete {args.id!r} without "
             "--yes.  This drops the entry's user-owned metadata "
-            "(description, deploy_mode, ...) — a probe cannot rebuild it.",
+            "(description, deploy_mode, ...); a probe cannot rebuild it.",
             file=sys.stderr,
         )
         return 2
@@ -489,7 +489,7 @@ def _cmd_reset_device(args: argparse.Namespace) -> int:
     existing = find_device(data, args.id)
     if existing is None:
         print(
-            f"reset-device: {args.id!r} not found — use `add-device` "
+            f"reset-device: {args.id!r} not found; use `add-device` "
             "to register a new board.",
             file=sys.stderr,
         )
@@ -507,14 +507,14 @@ def _cmd_reset_device(args: argparse.Namespace) -> int:
     address = args.address or existing.get("address")
     if not address:
         print(
-            f"reset-device: {args.id!r} has no stored address — pass "
+            f"reset-device: {args.id!r} has no stored address, so pass "
             "--address <port>.",
             file=sys.stderr,
         )
         return 1
 
     steer = (
-        "reset-device: probe failed — the board must be connected to "
+        "reset-device: probe failed: the board must be connected to "
         "rebuild the entry.  To drop a stale entry without a board use "
         "`remove-device`; to re-register use `add-device`."
     )
@@ -548,7 +548,7 @@ def _cmd_reset_device(args: argparse.Namespace) -> int:
         if info.implementation is None:
             print(
                 "reset-device: probe did not return an implementation "
-                "marker — cannot rebuild the entry.",
+                "marker, so the entry cannot be rebuilt.",
                 file=sys.stderr,
             )
             return 1
@@ -615,7 +615,7 @@ def _add_devices_parsers(subparsers: argparse._SubParsersAction) -> None:
         choices=("circuitpython", "micropython"),
         default=None,
         help=(
-            "Runtime to probe — picks the right Device facade for "
+            "Runtime to probe: picks the right Device facade for "
             "probe_device.  Optional: when omitted, the runtime is "
             "auto-detected by trying both transports against the "
             "given address."
@@ -630,7 +630,7 @@ def _add_devices_parsers(subparsers: argparse._SubParsersAction) -> None:
         "--force",
         action="store_true",
         help=(
-            "Overwrite an existing entry with this id — refreshes the "
+            "Overwrite an existing entry with this id: refreshes the "
             "address and hardware-once fields from the live probe."
         ),
     )
@@ -673,9 +673,9 @@ def _add_devices_parsers(subparsers: argparse._SubParsersAction) -> None:
         help="Delete a device entry from devices.yml.",
         description=(
             "Delete one entry by id and null any defaults: reference "
-            "to it so the file stays loadable.  Destructive — drops "
+            "to it so the file stays loadable.  Destructive: it drops "
             "user-owned metadata (description, deploy_mode, ...) that "
-            "no probe can rebuild — so it is gated behind --yes.  No "
+            "no probe can rebuild, so it is gated behind --yes.  No "
             "board needs to be connected."
         ),
     )
@@ -727,7 +727,7 @@ def _add_devices_parsers(subparsers: argparse._SubParsersAction) -> None:
         default=None,
         help=(
             "Pin the runtime to probe.  Optional: when omitted the "
-            "runtime is re-inferred by trying both transports — a "
+            "runtime is re-inferred by trying both transports, because a "
             "reset is exactly when firmware may have been reflashed."
         ),
     )

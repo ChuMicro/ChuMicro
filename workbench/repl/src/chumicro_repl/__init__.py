@@ -1,15 +1,19 @@
-"""chumicro-repl — host-side serial REPL for embedded boards.
+"""chumicro-repl: host-side serial REPL for embedded boards.
 
 Publishable workbench tool that talks to CircuitPython and MicroPython
-boards over pyserial.  Three surfaces:
+boards over pyserial.  Four surfaces:
 
-- :func:`interactive` / ``python -m chumicro_repl`` — interactive TUI
-  that forwards keystrokes to the board, with core keybindings
-  (Ctrl-C / Ctrl-D / Ctrl-X / Ctrl-E).
-- :func:`tail` — one-shot "stream output for N seconds" follow-up used
+- :func:`interactive_line` / ``python -m chumicro_repl``: line-mode
+  REPL with line editing, Tab completion, persistent history, and
+  ``:commands``.  What the bare command opens on a terminal.
+- :func:`interactive`: passthrough TUI that forwards keystrokes to the
+  board, with core keybindings (Ctrl-C / Ctrl-D / Ctrl-X / Ctrl-E).
+  Opt in with ``--mode passthrough``; also the automatic choice when
+  stdin is not a terminal.
+- :func:`tail`: one-shot "stream output for N seconds" follow-up used
   by deploy orchestration; highlights tracebacks as they arrive and
   returns an :class:`ExitCode`.
-- :class:`ReplSession` — programmatic context manager with
+- :class:`ReplSession`: programmatic context manager with
   :meth:`~ReplSession.exec`, :meth:`~ReplSession.call`, and
   :meth:`~ReplSession.read_until` for headless fixtures.
 

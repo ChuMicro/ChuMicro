@@ -2,10 +2,10 @@
 
 Public API:
 
-* :class:`Finding` — one rule violation (path, line, code, message).
-* :class:`Rule` — abstract base; a rule walks a repo root and returns
+* :class:`Finding`: one rule violation (path, line, code, message).
+* :class:`Rule`: abstract base; a rule walks a repo root and returns
   findings.
-* :func:`registered_rules` — every rule the package ships, keyed by
+* :func:`registered_rules`: every rule the package ships, keyed by
   CHU code.
 """
 

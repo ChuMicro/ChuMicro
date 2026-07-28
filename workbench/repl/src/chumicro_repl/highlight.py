@@ -28,7 +28,7 @@ from .patterns import (
 _ANSI_RESET = "\x1b[0m"
 
 #: Regex for stripping ANSI escape sequences back out of a string.
-#: Conservative — matches the ``CSI .* <final byte>`` shape used by
+#: Conservative: matches the ``CSI .* <final byte>`` shape used by
 #: SGR styling; does not try to handle the full VT100 vocabulary.
 _ANSI_SEQUENCE_PATTERN = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 
@@ -68,7 +68,7 @@ class Theme:
             return self.soft_reboot
         # Enum is closed; an unknown kind means a future pattern was
         # added without wiring a style.  Fall back to no styling
-        # rather than crash — highlighter should never be the cause
+        # rather than crash.  The highlighter should never be the cause
         # of a REPL session ending.
         return ""  # pragma: no cover - defensive, enum is closed today
 
@@ -116,7 +116,7 @@ def colorize(
     cursor = 0
     for pattern_match in resolved_matches:
         if pattern_match.start < cursor:
-            # Overlapping or out-of-order — skip to keep escapes balanced.
+            # Overlapping or out-of-order: skip to keep escapes balanced.
             continue
         output_parts.append(text[cursor:pattern_match.start])
         sgr = active_theme.style_for(pattern_match.kind)
@@ -131,7 +131,7 @@ def colorize(
 def strip_ansi_sequences(text: str) -> str:
     """Return *text* with every ANSI escape sequence removed.
 
-    Intended for tests that assert on highlighted output — the ANSI
+    Intended for tests that assert on highlighted output, where the ANSI
     bytes are noise in an ``assert "Traceback" in output`` context.
     Also useful when piping colorized output into a log file without
     losing human-readable content.

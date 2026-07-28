@@ -1,6 +1,6 @@
 """Host-platform compatibility checks for chumicro-deploy.
 
-The deploy package targets developer laptops — fully supported on
+The deploy package targets developer laptops: fully supported on
 macOS, fully viable on Linux, and explicitly unsupported on native
 Windows.  This module surfaces those gaps as fast-failing errors with
 actionable remediation hints rather than letting them manifest as
@@ -8,11 +8,11 @@ actionable remediation hints rather than letting them manifest as
 
 Two checks live here:
 
-- :func:`check_supported_platform` — call before any path that
+- :func:`check_supported_platform`, called before any path that
   enumerates serial ports or USB mount points, so Windows users see
   a "use WSL2" message immediately instead of an empty-port-list dead
   end.
-- :func:`check_rsync_available` — call before flash-mode deploy.  The
+- :func:`check_rsync_available`, called before flash-mode deploy.  The
   CircuitPython flash transport shells out to ``rsync`` and there is
   no fallback (FAT32 timestamp semantics make ``shutil.copytree``
   unreliable for incremental writes).  Detecting absence up-front
@@ -78,7 +78,7 @@ def install_hint_for_rsync() -> str:
     platform = sys.platform
     if platform == "darwin":
         return (
-            "rsync ships with macOS — if it is missing, reinstall the "
+            "rsync ships with macOS.  If it is missing, reinstall the "
             "Xcode Command Line Tools (`xcode-select --install`) or "
             "`brew install rsync`."
         )

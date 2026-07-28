@@ -8,7 +8,7 @@ table::
 
 Recognized keys:
 
-* ``ignore`` — list of CHU codes to skip in this repo.
+* ``ignore``: list of CHU codes to skip in this repo.
 
 Unknown keys are tolerated silently. Future versions may add config
 keys that older installed packages should ignore rather than fail on.

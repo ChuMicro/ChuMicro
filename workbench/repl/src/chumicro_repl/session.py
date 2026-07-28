@@ -1,20 +1,20 @@
-"""Programmatic REPL session — raw REPL over pyserial.
+"""Programmatic REPL session: raw REPL over pyserial.
 
 :class:`ReplSession` is a context manager that opens a serial
 connection to a CircuitPython or MicroPython board, drives the raw
 REPL (Ctrl-A entry, Ctrl-D exec, ``OK<stdout>\\x04<stderr>\\x04>``
 framing), and exposes three primitives:
 
-- :meth:`~ReplSession.exec` — run a block of code, return stdout.
-- :meth:`~ReplSession.call` — call a named function with literal
+- :meth:`~ReplSession.exec`: run a block of code, return stdout.
+- :meth:`~ReplSession.call`: call a named function with literal
   arguments, return the parsed ``repr`` of the result.
-- :meth:`~ReplSession.read_until` — read raw bytes until a pattern
+- :meth:`~ReplSession.read_until`: read raw bytes until a pattern
   matches, for callers that bypass raw REPL entirely (tailing the
   friendly REPL, for instance).
 
 The raw-REPL framing is identical between CircuitPython and
-MicroPython — neither runtime adds a runtime-specific header to
-either the prompt or the response — so a single code path handles
+MicroPython (neither runtime adds a runtime-specific header to
+either the prompt or the response), so a single code path handles
 both.  The only divergence is what a soft-reboot (Ctrl-D in the
 *friendly* REPL) prints: MicroPython emits ``MPY: soft reboot``,
 CircuitPython is silent.  :meth:`ReplSession.exec` never exits raw
@@ -50,7 +50,7 @@ from .framing import Utf8StreamDecoder
 #: Default per-exec timeout.
 DEFAULT_TIMEOUT = 10.0
 
-#: Pause between handshake steps — after each Ctrl-C to give the
+#: Pause between handshake steps: after each Ctrl-C to give the
 #: board time to settle, and after Ctrl-A to let the raw-REPL
 #: banner fully emit before we read for the prompt.
 _HANDSHAKE_SETTLE = 0.1
@@ -74,13 +74,13 @@ class ReplSessionError(Exception):
 
     Covers four broad classes:
 
-    - Timeout — the board did not respond within the per-op timeout.
-    - Protocol error — the board emitted bytes that don't match the
+    - Timeout: the board did not respond within the per-op timeout.
+    - Protocol error: the board emitted bytes that don't match the
       raw-REPL framing (typically because it was not in raw REPL;
       e.g. bootloader mode, a firmware-less chip, wrong baudrate).
-    - Execution error — the board executed the code but raised an
+    - Execution error: the board executed the code but raised an
       exception.  The exception's stderr is attached as :attr:`stderr`.
-    - **Disconnect** — the device dropped mid-call.  Surfaced as the
+    - **Disconnect**: the device dropped mid-call.  Surfaced as the
       :class:`ReplSessionDisconnected` subclass so callers can catch
       "the cable came out" without conflating it with the other
       three classes.
@@ -124,7 +124,7 @@ class ReplSession:
 
     The constructor opens the serial port, interrupts whatever was
     running, and enters raw REPL.  The ``__exit__`` path sends Ctrl-B
-    (exit raw REPL) and closes the port — the board is left in the
+    (exit raw REPL) and closes the port, so the board is left in the
     friendly REPL, ready for an interactive user or another session.
 
     Args:
@@ -134,8 +134,8 @@ class ReplSession:
             baudrate / time / port-factory come from the other
             keyword arguments.
         baudrate: Only consulted when *device* is a string.  Ignored
-            when *device* exposes its own ``baudrate`` attribute —
-            the device's value wins.
+            when *device* exposes its own ``baudrate`` attribute,
+            because the device's value wins.
         time: Injectable time source (for tests).  Defaults to the
             stdlib ``time`` module.
         port_factory: Injectable port factory (for tests).  Defaults
@@ -228,7 +228,7 @@ class ReplSession:
 
         Returns *stdout* as a UTF-8 string.  If *stderr* is non-empty
         the call raises :class:`ReplSessionError` with ``stderr``
-        attached — raw REPL never raises an exception object on the
+        attached.  Raw REPL never raises an exception object on the
         host side, only on the board, so surfacing it as a stderr
         blob is the closest host-side analog.
 
@@ -282,14 +282,14 @@ class ReplSession:
         Builds a one-line ``print(repr(<function_name>(*args, **kwargs)))``
         and execs it, then parses the stdout via
         :func:`ast.literal_eval`.  Round-trips anything
-        :func:`literal_eval` handles — numbers, strings, bytes,
+        :func:`literal_eval` handles: numbers, strings, bytes,
         tuples, lists, dicts, sets, booleans, ``None``.  Anything
         else raises :class:`ReplSessionError` because the repr is
         not a literal.
 
         Args:
             function_name: Fully-qualified dotted name.  The board
-                must already have the name bound — import whatever
+                must already have the name bound, so import whatever
                 the caller needs in a prior :meth:`exec`.
             *args: Positional arguments.  Rendered via :func:`repr`.
             timeout: Per-call deadline in seconds.
@@ -326,7 +326,7 @@ class ReplSession:
         """Read bytes until *pattern* matches the accumulated string.
 
         Unlike :meth:`exec` + :meth:`call`, this primitive operates
-        on raw bytes from the port — it does not send anything, and
+        on raw bytes from the port.  It does not send anything, and
         it accepts output produced by either the friendly or the raw
         REPL.  Callers that want to stream output from a board that
         is not under raw-REPL control (for instance, tailing a deploy)
@@ -439,7 +439,7 @@ class ReplSession:
         ``>``) does not drop bytes when two markers land in the
         same serial-port read.
 
-        Raises :class:`ReplSessionError` on timeout — the
+        Raises :class:`ReplSessionError` on timeout.  The
         accumulated bytes are included in the message so callers
         debugging a stuck board can see what the device sent.
         """
@@ -469,7 +469,7 @@ class ReplSession:
     def _require_port(self) -> SerialPort:
         if self._port is None:
             raise ReplSessionError(
-                "ReplSession used outside of 'with' block — "
+                "ReplSession used outside of 'with' block: "
                 "enter the context manager before calling exec/call/read_until"
             )
         return self._port

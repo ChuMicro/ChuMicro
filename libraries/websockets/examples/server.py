@@ -16,7 +16,7 @@ deploy pipeline) via the flat-key API:
 * WiFi (read by ``helpers.wifi_up``): ``wifi.ssid`` / ``wifi.password``.
 * WebSocket server (read by ``WebSocketServer.from_config``):
   ``websockets.server.host`` / ``websockets.server.port`` /
-  ``websockets.server.max_message_bytes`` — all optional, defaults
+  ``websockets.server.max_message_bytes``, all optional, defaulting
   to ``0.0.0.0:8765`` with the library's message-size cap.
 
 When ``runtime_config.msgpack`` isn't present (raw single-file

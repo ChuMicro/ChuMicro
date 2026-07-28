@@ -9,7 +9,7 @@ is no scaffolding CLI command).  These zones govern only what
   (reading-material demos shipped from the template), the
   agent-skill documents under `.github/skills/`, and the CI
   workflows under `.github/workflows/` (their headers declare
-  themselves tool-owned, so `update` re-flows CI fixes — sibling
+  themselves tool-owned, so `update` re-flows CI fixes; sibling
   custom workflows the user adds live outside this set and stay
   untouched).  `update` rewrites these so newer template releases
   flow in.

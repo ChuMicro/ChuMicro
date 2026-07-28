@@ -164,12 +164,12 @@ def source_calls_hard_reset_at_top_level(source: str) -> int | None:
 
     The closure-scan companion to :func:`module_calls_hard_reset`: an
     imported module's top-level code runs at boot exactly like the
-    entrypoint's, so a reset there crash-loops the board just the same —
-    but a reset inside a ``def`` is the *recommended* pattern (called on
+    entrypoint's, so a reset there crash-loops the board just the same.
+    But a reset inside a ``def`` is the *recommended* pattern (called on
     a deliberate condition), so this walk descends into top-level
     ``if`` / ``try`` / loop / ``with`` blocks (they run at import) and
     prunes at any function or class body (those run only when called).
-    Unreadable or unparseable source returns ``None`` — the deploy's
+    Unreadable or unparseable source returns ``None``, because the deploy's
     own compile step reports those failures with better context.
     """
     try:
@@ -205,7 +205,7 @@ def module_calls_hard_reset(path: Path) -> int | None:
 
     Either call reboots the board.  In a shipped boot entrypoint, which
     the board runs on every boot, a reset reboots the board, which
-    re-runs the entrypoint and resets again — a crash loop that bricks
+    re-runs the entrypoint and resets again: a crash loop that bricks
     the deploy cycle until the board is wiped.  Returns the first such
     call's line so the deploy path can refuse it.  Import aliases are
     resolved first, so ``import machine as m; m.reset()`` and

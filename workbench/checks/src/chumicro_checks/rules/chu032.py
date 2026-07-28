@@ -12,7 +12,7 @@ breadcrumb.
 This rule mechanizes the closed set of pointer phrases that always
 signal the drift.  It deliberately does NOT flag a bare dependency
 mention (``Built on :mod:`chumicro_sockets```) or a fake naming the
-real type it stands in for — those name an architectural fact, not a
+real type it stands in for.  Those name an architectural fact, not a
 "go read another file" instruction, and blanket-flagging them would
 fire on hundreds of legitimate lines.  The judgment half (is this
 comment self-contained?) stays with ``/audit-comments`` and reviewer;
@@ -20,12 +20,12 @@ this lint is the safety net for the enumerated phrases.
 
 Flagged phrases:
 
-- ``see ``X``'s docstring`` — a possessive pointer at a named other
+- ``see ``X``'s docstring``: a possessive pointer at a named other
   thing's docstring.
-- ``documents the rationale`` / ``documents the why`` — a comment
+- ``documents the rationale`` / ``documents the why``: a comment
   delegating its own reasoning to another location.
 - ``follows the pattern in`` / ``follows the pattern of`` /
-  ``per the pattern in`` — a cross-reference to a pattern's home
+  ``per the pattern in``: a cross-reference to a pattern's home
   instead of stating what the code does.
 
 Scope: ``libraries/*/src/`` and ``workbench/*/src/``.  ``tests/`` and
@@ -58,18 +58,18 @@ _RULE_CODE = "CHU032"
 
 _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     (
-        # ``see ``Name``'s docstring`` — a pointer at a named other
+        # ``see ``Name``'s docstring`` is a pointer at a named other
         # thing's docstring.  The backtick-quoted name + possessive is
         # the signal; "see the module docstring" (no name) is a
         # same-file reference and stays clean.
         re.compile(r"see\s+``[^`]+``'s docstring", re.IGNORECASE),
-        "'see ``X``'s docstring' pointer — restate the fact inline; a "
+        "'see ``X``'s docstring' pointer: restate the fact inline; a "
         "consumer who installed the package can't read a sibling file's "
         "docstring",
     ),
     (
         re.compile(r"documents the (?:rationale|why|reasoning)", re.IGNORECASE),
-        "'documents the rationale' cross-reference — state the why here, "
+        "'documents the rationale' cross-reference: state the why here, "
         "or lift it to the relevant ADR / workstream file",
     ),
     (
@@ -77,7 +77,7 @@ _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
             r"(?:follows|per) the pattern (?:in|of)\b",
             re.IGNORECASE,
         ),
-        "'follows the pattern in X' cross-reference — describe what this "
+        "'follows the pattern in X' cross-reference: describe what this "
         "code does; a cold reader of this file can't follow the pointer",
     ),
 )
@@ -143,7 +143,7 @@ def _check_file(filepath: Path, repo_root: Path) -> list[Finding]:
 class CHU032_CrossReferencePointer(Rule):
     code = _RULE_CODE
     description = (
-        "no cross-reference pointer phrases in publishable comments — "
+        "no cross-reference pointer phrases in publishable comments: "
         "comments stand alone for a cold reader of their own file"
     )
 

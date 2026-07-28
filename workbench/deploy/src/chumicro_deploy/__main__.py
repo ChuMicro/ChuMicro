@@ -1,4 +1,4 @@
-"""``python -m chumicro_deploy`` entry point — delegates to :mod:`cli`."""
+"""``python -m chumicro_deploy`` entry point, delegating to :mod:`cli`."""
 
 from __future__ import annotations
 

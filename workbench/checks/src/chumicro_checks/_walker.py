@@ -49,7 +49,7 @@ def iter_text_files(
 
     If *root* is itself a file with a matching suffix, yield just that
     file.  If *root* doesn't exist or is neither a file nor a directory,
-    yield nothing — callers don't need to pre-check existence.
+    yield nothing, so callers don't need to pre-check existence.
     """
     suffix_set = tuple(suffixes)
     if root.is_file():

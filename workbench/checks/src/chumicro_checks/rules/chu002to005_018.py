@@ -11,15 +11,15 @@ gitignored user-local files (``devices.yml``, ``secrets.toml``) with
 tracked ones, and the walker reads the filesystem, not git. Scanning
 root would false-positive on per-user files.
 
-* CHU002 — file does not end with exactly one newline.  Structural;
+* CHU002: file does not end with exactly one newline.  Structural;
   no per-line suppression.
-* CHU003 — more than two consecutive blank lines.  Structural; no
+* CHU003: more than two consecutive blank lines.  Structural; no
   per-line suppression.
-* CHU004 — trailing whitespace on a line.  Suppress with
+* CHU004: trailing whitespace on a line.  Suppress with
   ``# noqa: CHU004`` on the line.
-* CHU018 — CR / CRLF line endings; LF only.  Structural; no per-line
+* CHU018: CR / CRLF line endings; LF only.  Structural; no per-line
   suppression (a CR is never wanted in this repo's text files).
-* CHU005 — blank line immediately after a block opener (``def``,
+* CHU005: blank line immediately after a block opener (``def``,
   ``class``, ``if``, ``for``, ``while``, ``with``, ``try``, ``else``,
   ``elif``, ``except``, ``finally``, ``match``, ``case``, and the
   ``async`` variants).  A multi-line header whose ``):`` closes on its

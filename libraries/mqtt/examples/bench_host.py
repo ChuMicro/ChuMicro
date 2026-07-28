@@ -70,7 +70,7 @@ def main():
     )
     parser.add_argument(
         "--hostile", action="store_true",
-        help="Publish a 64 KB payload before listening — extra oversized-tier stress.",
+        help="Publish a 64 KB payload before listening, for extra oversized-tier stress.",
     )
     parser.add_argument(
         "--hostile-bytes", type=int, default=65536,
@@ -117,7 +117,7 @@ def main():
     client.disconnect()
 
     if verdict["line"] is None:
-        print(f"[host] TIMEOUT — no verdict within {args.timeout}s")
+        print(f"[host] TIMEOUT: no verdict within {args.timeout}s")
         return 1
     if verdict["line"].startswith("ALL_OK"):
         print("[host] PASS")

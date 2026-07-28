@@ -1,4 +1,4 @@
-"""DeployResult and DeployError — outcome types returned by the deployer.
+"""DeployResult and DeployError: outcome types returned by the deployer.
 
 Defined in their own module so callers can annotate against a stable
 return type without pulling in the orchestration code.

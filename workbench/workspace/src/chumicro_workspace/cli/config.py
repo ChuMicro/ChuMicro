@@ -87,7 +87,7 @@ def _cmd_config_validate(args: argparse.Namespace) -> int:
     if not project_names:
         print(
             "config-validate: no projects under "
-            f"{workspace.projects_dir} — nothing to validate.",
+            f"{workspace.projects_dir}; nothing to validate.",
         )
         return 0
 
@@ -97,7 +97,7 @@ def _cmd_config_validate(args: argparse.Namespace) -> int:
     if union is None:
         print(
             "config-validate: no library declares a "
-            "[tool.chumicro.config] manifest — nothing to validate against.",
+            "[tool.chumicro.config] manifest; nothing to validate against.",
         )
         return 0
 
@@ -166,7 +166,7 @@ def _add_config_parsers(subparsers: argparse._SubParsersAction) -> None:
         help=(
             "Validate the merged runtime config for one or more projects "
             "against the union manifest of every library reachable from "
-            "the import graph.  Exits 1 on any failure — designed as a "
+            "the import graph.  Exits 1 on any failure; designed as a "
             "fast pre-deploy / CI gate."
         ),
     )

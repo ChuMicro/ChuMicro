@@ -7,11 +7,11 @@ tick.  Refetching the current instant inside a method that already has
 breaking the "one shared instant per tick" guarantee.  Every
 dependency-injection spelling of the fetch is flagged:
 
-* ``self._ticks.ticks_ms()`` / ``self._ticks_ms()`` — a provider held
+* ``self._ticks.ticks_ms()`` / ``self._ticks_ms()``: a provider held
   on ``self``.
-* ``ticks.ticks_ms()`` — a provider passed in as a parameter or bound
+* ``ticks.ticks_ms()``: a provider passed in as a parameter or bound
   to a local.
-* ``ticks_ms()`` — a bare call to a name imported from the timing
+* ``ticks_ms()``: a bare call to a name imported from the timing
   library (``from chumicro_timing import ticks_ms``).
 
 This rule flags any such refetch inside a function that takes a
@@ -76,10 +76,10 @@ def _is_ticks_ms_call(node: ast.Call) -> bool:
 
     Matches every dependency-injection spelling of the fetch:
 
-    * ``ticks_ms()`` — a bare call to an imported name.
-    * ``<name>.ticks_ms()`` / ``<name>._ticks_ms()`` — a provider held
+    * ``ticks_ms()``: a bare call to an imported name.
+    * ``<name>.ticks_ms()`` / ``<name>._ticks_ms()``: a provider held
       in a parameter, local, or on ``self`` (``self._ticks_ms()``).
-    * ``<name>.<attr>.ticks_ms()`` — a provider one attribute deep
+    * ``<name>.<attr>.ticks_ms()``: a provider one attribute deep
       (``self._ticks.ticks_ms()``).
     """
     if node.args or node.keywords:
@@ -152,7 +152,7 @@ def _check_function(
                 code=_RULE_CODE,
                 message=(
                     f"refetching ticks_ms() inside {func.name!r} drops the "
-                    f"runner-supplied now_ms — use the parameter instead "
+                    f"runner-supplied now_ms; use the parameter instead "
                     f"(or guard the refetch with ``if now_ms is None``)"
                 ),
             )
@@ -192,7 +192,7 @@ def _check_file(filepath: Path, repo_root: Path) -> list[Finding]:
 class CHU013_TicksRefetch(Rule):
     code = _RULE_CODE
     description = (
-        "no mid-tick ticks_ms refetch — use the runner-supplied now_ms"
+        "no mid-tick ticks_ms refetch; use the runner-supplied now_ms"
     )
 
     def check(self, repo_root: Path) -> list[Finding]:

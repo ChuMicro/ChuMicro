@@ -2,16 +2,16 @@
 
 Brings wifi up via the local ``helpers`` module, opens an HTTP server
 on ``0.0.0.0:8080`` with three routes, and prints requests as they
-arrive.  Single-board demo — drive it from your laptop with ``curl``
+arrive.  Single-board demo: drive it from your laptop with ``curl``
 or a browser; for a two-physical-board pattern see the
 ``two_board_handshake/`` example in the workspace template.
 
 Routes:
 
-* ``GET /`` — HTML hello page (open in a browser).
-* ``GET /api/uptime`` — JSON ``{"uptime_ms": <int>}``; updates between
-  hits so you can see the server is live.
-* ``POST /api/echo`` — accepts any JSON body, returns it wrapped as
+* ``GET /`` returns an HTML hello page (open in a browser).
+* ``GET /api/uptime`` returns JSON ``{"uptime_ms": <int>}``; it updates
+  between hits so you can see the server is live.
+* ``POST /api/echo`` accepts any JSON body and returns it wrapped as
   ``{"echoed": <body>}``.
 
 Configuration
@@ -23,7 +23,7 @@ Reads ``/runtime_config.msgpack`` via ``helpers.runtime_config()``:
 * HTTP server: ``http_server.bind_host`` / ``bind_port`` /
   ``max_connections`` / ``request_timeout_ms`` / ``max_request_body_bytes``
   plus the optional TLS pair ``http_server.tls.cert_path`` /
-  ``http_server.tls.key_path`` — all optional with library defaults
+  ``http_server.tls.key_path``, all optional with library defaults
   (``0.0.0.0:8080``, plain TCP).
 
 When ``runtime_config.msgpack`` isn't present (raw single-file deploy),
@@ -50,7 +50,7 @@ Example output (board side)::
     [+] POST /api/echo  body={"hello": "board"}
 """
 
-#: Cross-runtime — wifi-up via :mod:`helpers` dispatches per
+#: Cross-runtime: wifi-up via :mod:`helpers` dispatches per
 #: ``sys.implementation.name`` (CP / MP) and the HTTP server is
 #: pure-Python.  The marker tells :func:`scripts.verify_examples`
 #: + ``deploy-example`` to allow this file on either runtime.
@@ -61,8 +61,8 @@ import time
 from chumicro_http_server import HttpServer, build_response
 from helpers import runtime_config, ticks_diff, ticks_ms, wifi_up
 
-WIFI_SSID = "your-wifi-ssid"  # noqa: S105 — replace before deploying
-WIFI_PASSWORD = "your-wifi-password"  # noqa: S105 — replace before deploying
+WIFI_SSID = "your-wifi-ssid"  # noqa: S105 - replace before deploying
+WIFI_PASSWORD = "your-wifi-password"  # noqa: S105 - replace before deploying
 
 config = runtime_config()
 radio, ip = wifi_up(WIFI_SSID, WIFI_PASSWORD)

@@ -16,11 +16,11 @@ PLANS: dict[DeployFailureKind, RecoveryPlan] = {
         headline="The serial port is unavailable.",
         fix_steps=(
             "Check that the board is plugged into USB.",
-            "Close any app that may be holding the port — Mu, Thonny, "
+            "Close any app that may be holding the port: Mu, Thonny, "
             "screen/minicom, another mpremote, PyCharm or VS Code "
             "serial console.",
             "If the port still does not appear, tap the board's "
-            "RESET button and wait 2–3 seconds for re-enumeration.",
+            "RESET button and wait 2 to 3 seconds for re-enumeration.",
         ),
         retryable=True,
     ),
@@ -38,7 +38,7 @@ PLANS: dict[DeployFailureKind, RecoveryPlan] = {
     ),
     DeployFailureKind.COMMAND_TIMED_OUT: RecoveryPlan(
         headline=(
-            "The board stopped responding mid-command — its USB-CDC "
+            "The board stopped responding mid-command.  Its USB-CDC "
             "serial link likely wedged."
         ),
         fix_steps=(
@@ -54,12 +54,12 @@ PLANS: dict[DeployFailureKind, RecoveryPlan] = {
     DeployFailureKind.NO_PYTHON_RUNTIME: RecoveryPlan(
         headline=(
             "The board responds, but it's not running CircuitPython "
-            "or MicroPython — looks like Arduino, a raw bootloader, "
+            "or MicroPython.  It looks like Arduino, a raw bootloader, "
             "or unknown firmware."
         ),
         fix_steps=(
-            "Install firmware before deploying — chumicro libraries "
-            "need a Python runtime on the board.  Pick the runtime "
+            "Install firmware before deploying, because chumicro "
+            "libraries need a Python runtime on the board.  Pick the runtime "
             "that suits your project: CircuitPython for the broadest "
             "Adafruit-board support, MicroPython for stronger "
             "hardware-acceleration on ESP32 / Pi Pico W.",
@@ -70,7 +70,7 @@ PLANS: dict[DeployFailureKind, RecoveryPlan] = {
             "for the ESP32 family).",
             "The firmware URL is derived from the device entry; pass "
             "--url <firmware-url> to flash a specific build instead.  "
-            "Heads-up: flashing is destructive — it overwrites whatever "
+            "Heads-up: flashing is destructive, and it overwrites whatever "
             "the board is currently running (your Arduino sketch, "
             "custom firmware, etc.).  Back up first if it matters.",
             "After flashing, the board re-enumerates with the new "
@@ -81,7 +81,7 @@ PLANS: dict[DeployFailureKind, RecoveryPlan] = {
     DeployFailureKind.CIRCUITPY_DRIVE_MISSING: RecoveryPlan(
         headline="The CIRCUITPY drive is not mounted.",
         fix_steps=(
-            "Tap RESET on the board — this re-exposes the drive "
+            "Tap RESET on the board.  This re-exposes the drive "
             "whether it was hidden by flash deploy mode or ejected "
             "manually from Finder.",
             "If the board has no RESET button, unplug + replug it.",
@@ -92,7 +92,7 @@ PLANS: dict[DeployFailureKind, RecoveryPlan] = {
     ),
     DeployFailureKind.MACOS_FSKIT_WEDGED: RecoveryPlan(
         headline=(
-            "macOS FSKit / DiskArbitration is wedged — CIRCUITPY drives "
+            "macOS FSKit / DiskArbitration is wedged.  CIRCUITPY drives "
             "cannot mount until the stuck daemons are killed."
         ),
         fix_steps=(
@@ -112,11 +112,11 @@ PLANS: dict[DeployFailureKind, RecoveryPlan] = {
             "and chumicro-deploy works against them), but on "
             "recent macOS they may NOT appear in Finder's "
             "Locations sidebar.  That's an Apple FSKit-Finder "
-            "regression unrelated to this recovery — reach them "
+            "regression unrelated to this recovery.  Reach them "
             "via Shift+Cmd+C (Computer view) or drag one into "
             "the Favorites sidebar section.",
-            "If the wedge persists after the command, reboot — "
-            "that always clears it and also resets the Finder "
+            "If the wedge persists after the command, reboot.  "
+            "That always clears it and also resets the Finder "
             "sidebar classifier.",
             "Full write-up (why each daemon is killed, what the "
             "Finder sidebar regression is, and when to reboot) "
@@ -129,7 +129,7 @@ PLANS: dict[DeployFailureKind, RecoveryPlan] = {
     DeployFailureKind.FLASH_COPY_FAILED: RecoveryPlan(
         headline="Copying files to the CIRCUITPY drive failed.",
         fix_steps=(
-            "Reformat the CIRCUITPY drive — the read-only state is "
+            "Reformat the CIRCUITPY drive.  The read-only state is "
             "typically a corrupted FAT that persists across RESETs.  "
             "Run `chumicro-workspace reset-board --yes --device "
             "<id>` (or `import storage; storage.erase_filesystem()` "
@@ -138,7 +138,7 @@ PLANS: dict[DeployFailureKind, RecoveryPlan] = {
             "Check free space on the drive if the payload is larger "
             "than a few KiB.",
             "Optional pre-step before reformatting: tap RESET and "
-            "retry once.  Treat this as a longshot — RESET only "
+            "retry once.  Treat this as a longshot, because RESET only "
             "clears transient cases, not the typical FAT corruption "
             "that needs the reformat above.",
         ),
@@ -161,7 +161,7 @@ PLANS: dict[DeployFailureKind, RecoveryPlan] = {
         ),
         fix_steps=(
             "Re-run with `--deploy-mode flash` to land the files on "
-            "the CIRCUITPY drive instead — flash mode is the "
+            "the CIRCUITPY drive instead.  Flash mode is the "
             "built-in escape hatch for payloads that do not fit.",
             "Reduce payload size by trimming unused imports, or "
             "split the deploy across multiple runs.",
@@ -184,7 +184,7 @@ PLANS: dict[DeployFailureKind, RecoveryPlan] = {
             "no deployed file and is not a known device built-in."
         ),
         fix_steps=(
-            "Read the error above — it names each importing file and the "
+            "Read the error above.  It names each importing file and the "
             "module it imports that the walker could not find.",
             "If the module is one of your libraries, register it so the "
             "walker can find it: add its directory to the deploy's search "
@@ -196,7 +196,7 @@ PLANS: dict[DeployFailureKind, RecoveryPlan] = {
             "(comma-separated top-level names); the durable fix is adding "
             "it to the allowlist upstream.",
             "If the import is a deliberate optional fallback, wrap it in "
-            "`try: import foo` / `except ImportError:` — the walker treats "
+            "`try: import foo` / `except ImportError:`.  The walker treats "
             "ImportError-guarded imports as optional and does not refuse "
             "the deploy over them.",
         ),
@@ -206,7 +206,7 @@ PLANS: dict[DeployFailureKind, RecoveryPlan] = {
         headline="The entrypoint ran but raised a traceback.",
         fix_steps=(
             "Read the traceback above, fix the source, and redeploy.",
-            "To poke at the board's state live, open a REPL — "
+            "To poke at the board's state live, open a REPL with "
             "`screen <port> 115200`, `minicom`, `mpremote`, or your "
             "IDE's serial console.",
         ),

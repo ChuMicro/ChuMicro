@@ -149,7 +149,7 @@ def _device_from_args(args: argparse.Namespace) -> Device:
 
 
 def _stderr_progress(fraction: float, message: str) -> None:
-    """Progress callback — one line per event on stderr."""
+    """Progress callback that prints one line per event on stderr."""
     print(f"[{fraction:5.1%}] {message}", file=sys.stderr, flush=True)
 
 
@@ -327,7 +327,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=True,
         help=(
             "esptool path only: skip the erase-flash step before "
-            "write-flash.  Default erases first — wipes every user "
+            "write-flash.  Default erases first, wiping every user "
             "partition (CIRCUITPY drive, NVS, wifi credentials) so a "
             "fresh reflash doesn't inherit leftover sectors from a "
             "previous build.  Pass --no-erase to preserve user data "
@@ -424,7 +424,7 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Additive deploy: reconcile only the entrypoint / "
             "state files + /lib, leaving every other board file in "
-            "place.  The default is clean-slate — the deploy removes "
+            "place.  The default is clean-slate: the deploy removes "
             "anything that isn't the new payload or a device-required "
             "keep-set file (boot.py, boot_out.txt, _chu_kv.msgpack); a "
             "board-resident settings.toml is evicted.  Use --no-wipe "
@@ -435,7 +435,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--wipe",
         action="store_true",
         help=(
-            "Erase the *entire* device filesystem before deploying — "
+            "Erase the *entire* device filesystem before deploying, "
             "the keep set (boot.py, boot_out.txt, _chu_kv.msgpack) "
             "included.  Stricter than the clean-slate default; for "
             "corruption recovery.  No-op in RAM mode."
@@ -448,7 +448,7 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Override which runtime's files are deployed.  Defaults to "
             "the device's configured runtime (--transport / "
-            "--devices-file) — files marked for a different runtime "
+            "--devices-file).  Files marked for a different runtime "
             "via __chumicro_runtimes__ are filtered out.  Set "
             "explicitly to override the auto-derived value."
         ),
@@ -472,8 +472,8 @@ def build_parser() -> argparse.ArgumentParser:
             "How long to capture serial output after the entrypoint's "
             "soft-reboot (CircuitPython flash mode only).  Default uses "
             "the transport's built-in timeout (10 s).  Set higher when "
-            "the entrypoint's first print lands beyond that window — "
-            "MQTT connect, blocking recv, etc.  Set to 0 to skip the "
+            "the entrypoint's first print lands beyond that window "
+            "(MQTT connect, blocking recv, etc.).  Set to 0 to skip the "
             "capture entirely and return as soon as the soft-reboot "
             "has been triggered, leaving the board running."
         ),

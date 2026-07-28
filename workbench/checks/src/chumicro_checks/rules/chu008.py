@@ -84,30 +84,30 @@ def _template_repo_scan_roots(repo_root: Path) -> list[Path]:
 _PATTERNS: tuple[LeakPattern, ...] = (
     (
         re.compile(r"\b(?:Decision|ADR)\s*0\d{3}\b"),
-        "Decision/ADR NNNN ref — ADRs live in the chumicro mono-repo, not in a "
+        "Decision/ADR NNNN ref: ADRs live in the chumicro mono-repo, not in a "
         "user workspace.  Inline the relevant rationale instead of pointing "
         "at the ADR number",
         everywhere,
     ),
     (
         re.compile(r"\bplans/[A-Za-z0-9_./-]*\.md\b"),
-        "plans/...md path — mono-repo planning tree; users don't have it",
+        "plans/...md path: mono-repo planning tree; users don't have it",
         everywhere,
     ),
     (
         re.compile(r"\bplans/(?:decisions|workstreams|next-up|patterns|learnings)\b"),
-        "plans/... path — mono-repo planning tree; users don't have it",
+        "plans/... path: mono-repo planning tree; users don't have it",
         everywhere,
     ),
     (
         re.compile(r"\bscripts/run\.py\b"),
-        "scripts/run.py ref — mono-repo command runner; users have run.py "  # noqa: CHU006  rule-pattern data: this message describes what the rule flags
+        "scripts/run.py ref: mono-repo command runner; users have run.py "  # noqa: CHU006  rule-pattern data: this message describes what the rule flags
         "(without the scripts/ prefix) in their workspace root",
         everywhere,
     ),
     (
         re.compile(r"\bchumicro\s+mono[\s-]?repo\b", re.IGNORECASE),
-        "'chumicro mono-repo' framing — users don't see their workspace as "
+        "'chumicro mono-repo' framing: users don't see their workspace as "
         "a derivative of an upstream",
         everywhere,
     ),

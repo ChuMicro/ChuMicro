@@ -1,22 +1,22 @@
 """Host-side CIRCUITPY drive discovery, identity, and scope-listing helpers.
 
-Every helper here works on host paths only — no serial I/O — so they
+Every helper here works on host paths only, with no serial I/O, so they
 can be exercised in unit tests against ``tmp_path``-built fixtures
 without standing up a fake transport.
 
 Three concerns live here:
 
-- **Mount discovery** — :func:`_circuitpy_base_paths` +
+- **Mount discovery**: :func:`_circuitpy_base_paths` +
   :func:`_circuitpy_volume_candidates` walk the OS-specific mount
   roots and return every directory that looks like a mounted
   CIRCUITPY drive.
-- **Identity probing** — :func:`_read_boot_out_text` +
+- **Identity probing**: :func:`_read_boot_out_text` +
   :func:`_read_boot_out_identity` parse the ``UID:`` + machine-string
   fields out of a drive's ``boot_out.txt``.  Two finders
   (:func:`find_circuitpy_drive_for_uid`,
   :func:`find_circuitpy_drive_for_machine`) wrap them for the common
   "which mount belongs to this board?" lookup.
-- **Scope listing** — :func:`_list_scope_on_drive` walks a mounted
+- **Scope listing**: :func:`_list_scope_on_drive` walks a mounted
   drive and returns the in-scope file set for diff-deploy.
 """
 
@@ -37,14 +37,14 @@ def _format_probe_error(drive_path: Path | str, error: OSError) -> str:
 
     Distinguishes three classes of failure on the drive:
 
-    - ``ENOSPC`` — drive is full.  Includes the exact errno phrasing
+    - ``ENOSPC``: drive is full.  Includes the exact errno phrasing
       (``No space left on device``) so the recovery classifier picks
       it up.
-    - ``EROFS`` — drive remounted read-only (rare on CIRCUITPY but
+    - ``EROFS``: drive remounted read-only (rare on CIRCUITPY but
       possible after a USB hiccup or a board that booted into
       protected mode).
     - Anything else (typically ``EACCES`` from a stale Finder-eject
-      mount) — kept as the original "not found or not writable"
+      mount) is kept as the original "not found or not writable"
       wrapper that documents both candidate causes.
     """
     error_name = error.__class__.__name__

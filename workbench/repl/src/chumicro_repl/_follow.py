@@ -109,7 +109,7 @@ def tail(
             run the full window regardless.
         output: Destination for the streamed text.  Defaults to
             ``sys.stdout``.  ANSI escapes are emitted whether or not
-            the stream is a TTY — pipe into
+            the stream is a TTY, so pipe into
             :func:`chumicro_repl.highlight.strip_ansi_sequences`
             downstream for plain text.
         theme: Color theme.  Defaults to
@@ -125,7 +125,7 @@ def tail(
             :attr:`ExitCode.DISCONNECTED`.  Default
             :data:`DEFAULT_TAIL_RECONNECT_SECONDS` (30 s); set to ``0.0``
             to disable retries (CI-friendly fail-fast).  The window
-            is *additional* to *seconds* — time spent reconnecting
+            is *additional* to *seconds*, so time spent reconnecting
             does not count against the tail budget, since the
             user's intent is "watch for *seconds* of *output*".
         reconnect_interval: Sleep between reconnect attempts.
@@ -186,13 +186,13 @@ def tail(
                     )
                 except KeyboardInterrupt:
                     # Ctrl-C during the replug wait ends the tail the
-                    # same way it does mid-read — a clean INTERRUPTED
+                    # same way it does mid-read: a clean INTERRUPTED
                     # exit rather than a propagated KeyboardInterrupt.
                     return ExitCode.INTERRUPTED
                 if reconnected is None:
                     return ExitCode.DISCONNECTED
                 port = reconnected
-                # Reset the streaming state — the new port has its own
+                # Reset the streaming state, because the new port has its own
                 # buffer, so any pending UTF-8 partial bytes from the
                 # old port are gone.  Keeping the pattern detector
                 # would risk emitting a match that straddled the gap.
@@ -231,7 +231,7 @@ def _write_reconnecting_notice(output: TextIO, seconds: float) -> None:
     the output doesn't flood while the user fumbles with the cable.
     """
     output.write(
-        f"\x1b[2m*** retrying for up to {seconds:.0f}s — "
+        f"\x1b[2m*** retrying for up to {seconds:.0f}s: "
         f"plug the device back in, or press Ctrl-C to abort ***\x1b[0m\r\n"
     )
     flush_quietly(output)
@@ -259,7 +259,7 @@ def _attempt_reconnect(
     Returns the freshly-opened :class:`SerialPort` on success, or
     ``None`` when the reconnect budget was exhausted.  Writes a
     one-time "retrying" notice on entry, a "reconnected" notice on
-    success, and a final "gave up" notice on timeout — all dim-styled
+    success, and a final "gave up" notice on timeout, all dim-styled
     so they don't blend into device output.
 
     A :class:`KeyboardInterrupt` raised during the retry wait (the

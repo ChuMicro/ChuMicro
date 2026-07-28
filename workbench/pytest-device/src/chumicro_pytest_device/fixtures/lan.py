@@ -23,7 +23,7 @@ import time
 def detect_lan_ip() -> str | None:
     """Return the host's primary LAN IPv4, or `None` when undetectable.
 
-    Opens a UDP socket and "connects" it to a public IP — no packet
+    Opens a UDP socket and "connects" it to a public IP. No packet
     is sent, but the kernel selects the local address it would use to
     route there. `getsockname` then exposes that address. Works on
     macOS and Linux multi-interface setups.

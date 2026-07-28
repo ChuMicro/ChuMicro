@@ -157,7 +157,7 @@ from chumicro_deploy.result import DeployResult
         # Unresolved import: the walker refused before touching the board.
         (
             "Deploy refused: unresolved import.\n"
-            "  /proj/app.py imports 'chumicro_missing' — resolves to no "
+            "  /proj/app.py imports 'chumicro_missing', which resolves to no "
             "deployed file and is not a known device built-in",
             DeployFailureKind.UNRESOLVED_IMPORT,
         ),

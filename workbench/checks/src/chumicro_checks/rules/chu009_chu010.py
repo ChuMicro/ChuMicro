@@ -30,7 +30,7 @@ asserting.  Two shapes are flagged::
 
 A trailing ``return`` at the end of an ``except`` handler, a ``for`` /
 ``while`` body (or its ``else``), a ``with`` body, or a ``try``
-``finally`` body is flagged the same way — each ends the test early and
+``finally`` body is flagged the same way.  Each ends the test early and
 orphans the assertions after the enclosing statement.  A ``pass`` in
 those positions is left alone: an ``except OSError: pass`` swallowing a
 cleanup error skips nothing and is a normal idiom.
@@ -194,7 +194,7 @@ def _return_bodies_in_scope(func: ast.FunctionDef):
     ``lambda`` / ``class`` (same closure carve-out as
     :func:`_ifs_in_scope`).  Yields the body list of every
     ``except`` handler, ``for`` / ``while`` body and ``else``,
-    ``with`` body, and ``try`` ``finally`` body — the positions where a
+    ``with`` body, and ``try`` ``finally`` body: the positions where a
     trailing ``return`` ends the test early.  The ``try`` body and the
     ``if`` family are handled elsewhere.
     """
@@ -226,13 +226,13 @@ def _silent_return_findings(
     Three shapes, all reported as the test silently passing:
 
     * ``Return`` / ``Pass`` as the **last** statement of any ``if``
-      body — the guarded branch skips every assertion below it.
+      body, which makes the guarded branch skip every assertion below it.
     * a bare ``return`` / ``pass`` that is a direct statement of the
-      test body and not its final statement — an early exit that
+      test body and not its final statement, an early exit that
       orphans the assertions after it.
     * ``Return`` as the last statement of an ``except`` handler, a
       ``for`` / ``while`` body or ``else``, a ``with`` body, or a
-      ``try`` ``finally`` body — the same early-exit skip, one level
+      ``try`` ``finally`` body: the same early-exit skip, one level
       deeper.  ``Pass`` in those positions is deliberately not flagged
       (it skips nothing).
 
@@ -257,7 +257,7 @@ def _silent_return_findings(
                 line=report_line,
                 code=_CHU009,
                 message=(
-                    f"silent ``{statement_kind}`` in test body — runner "
+                    f"silent ``{statement_kind}`` in test body: runner "
                     f"reports the test as PASS without exercising the "
                     f"assertions below.  Use "
                     f"``chumicro_test_harness.skip(reason)`` for a visible "
@@ -279,7 +279,7 @@ def _silent_return_findings(
                     ),
                     last,
                 )
-        # A real ``else:`` body — the canonical "skip when the hardware
+        # A real ``else:`` body is the canonical "skip when the hardware
         # is missing" shape.  An ``elif`` is a lone nested ``ast.If`` in
         # orelse that _ifs_in_scope yields on its own, so skip it here.
         orelse = node.orelse
@@ -325,7 +325,7 @@ def _no_assertion_findings(
             line=func.lineno,
             code=_CHU010,
             message=(
-                f"test function {func.name!r} has no assertion — pass an "
+                f"test function {func.name!r} has no assertion; pass an "
                 f"explicit ``assert``, ``raise``, ``pytest.raises``, or "
                 f"``chumicro_test_harness.skip`` so the test can fail on a "
                 f"regression."

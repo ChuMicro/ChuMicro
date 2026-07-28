@@ -1,4 +1,4 @@
-"""NTPClient on CircuitPython / MicroPython — query a real NTP server.
+"""NTPClient on CircuitPython / MicroPython: query a real NTP server.
 
 Brings wifi up via the local ``helpers`` module, builds an
 ``NTPClient`` via ``NTPClient.from_config`` (which auto-constructs a
@@ -15,12 +15,12 @@ deploy pipeline) via the flat-key API:
 
 * WiFi (read by ``helpers.wifi_up``): ``wifi.ssid`` / ``wifi.password``.
 * NTP (read by ``NTPClient.from_config``): ``ntp.server`` /
-  ``ntp.port`` / ``ntp.timeout_ms`` — all optional with sensible
+  ``ntp.port`` / ``ntp.timeout_ms``, all optional with sensible
   defaults (``pool.ntp.org``, port 123, 5 s timeout).
 
 When ``runtime_config.msgpack`` isn't present (raw single-file
 deploys), wifi creds fall back to the placeholder constants below
-— edit them first.
+(edit them first).
 
 Deploying
 =========
@@ -35,7 +35,7 @@ Example output::
     NTP_OK unix_seconds=1745782634
 """
 
-#: Cross-runtime — wifi-up via :mod:`helpers` dispatches per
+#: Cross-runtime: wifi-up via :mod:`helpers` dispatches per
 #: ``sys.implementation.name`` (CP / MP) and the SNTP client itself
 #: is pure-Python.  The marker tells :func:`scripts.verify_examples`
 #: + ``deploy-example`` to allow this file on either runtime.
@@ -46,8 +46,8 @@ import time
 from chumicro_ntp import NTPClient
 from helpers import runtime_config, ticks_ms, wifi_up
 
-WIFI_SSID = "your-wifi-ssid"  # noqa: S105 — replace before deploying
-WIFI_PASSWORD = "your-wifi-password"  # noqa: S105 — replace before deploying
+WIFI_SSID = "your-wifi-ssid"  # noqa: S105 - replace before deploying
+WIFI_PASSWORD = "your-wifi-password"  # noqa: S105 - replace before deploying
 
 config = runtime_config()
 radio, ip = wifi_up(WIFI_SSID, WIFI_PASSWORD)

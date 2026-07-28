@@ -97,8 +97,8 @@ _FLASH_COPY_PATTERNS = (
 #: Subset of FLASH_COPY signals that are unambiguously about the drive's
 #: *state* (full / read-only / I/O error).  These win over the broader
 #: ``CIRCUITPY drive not found or not writable`` wrapper text the
-#: transport emits — the drive is found, it just can't accept the
-#: write — so the classifier checks them before
+#: transport emits (the drive is found, it just can't accept the
+#: write), so the classifier checks them before
 #: :data:`_CIRCUITPY_DRIVE_PATTERNS`.  ``rsync`` is included because an
 #: rsync failure originates inside the flash copy path; the drive
 #: itself is necessarily mounted by the time rsync runs.
@@ -127,7 +127,7 @@ _COMMAND_TIMEOUT_PATTERNS = (
     "command timed out",
 )
 
-#: Deploy-call misconfiguration — wrong flag, missing file, etc.
+#: Deploy-call misconfiguration: wrong flag, missing file, etc.
 #: These are programmer errors, not runtime conditions.  Classifier
 #: only flags them to steer retry decisions; the message is what
 #: the caller actually reads.
@@ -147,7 +147,7 @@ _UNRESOLVED_IMPORT_PATTERNS = (
 
 #: Signature of a Python traceback embedded in an error message.
 #: On CircuitPython RAM mode the raw REPL raises
-#: ``CircuitpythonTransportError`` with the board's stderr inline —
+#: ``CircuitpythonTransportError`` with the board's stderr inline,
 #: including ``Traceback (most recent call last):``.  Detecting that
 #: substring lets the classifier route user-code errors to
 #: :attr:`DeployFailureKind.TRACEBACK_RETURNED` (non-retryable, "fix
@@ -160,7 +160,7 @@ _TRACEBACK_IN_MESSAGE_PATTERN = "traceback (most recent call last)"
 #: the first row whose any-substring matches ``str(error).lower()``
 #: wins.  Order is load-bearing:
 #:
-#: 1. ``CONFIGURATION_ERROR`` first — caller misuse messages often
+#: 1. ``CONFIGURATION_ERROR`` first, because caller misuse messages often
 #:    contain substrings that look like other kinds (e.g. "CIRCUITPY
 #:    drive not found").
 #: 2. ``TRACEBACK_RETURNED`` before bootstrap / flash buckets so a
@@ -213,7 +213,7 @@ def classify_deploy_failure(error: Exception) -> DeployFailureKind:
     """
     # Typed disconnect subclasses skip the string-pattern dance.
     # They were raised because the device dropped, period.  Routes
-    # to PORT_UNAVAILABLE — the recovery is "plug it back in".
+    # to PORT_UNAVAILABLE, where the recovery is "plug it back in".
     if isinstance(error, MidDeployDisconnected):
         return DeployFailureKind.PORT_UNAVAILABLE
 
@@ -252,7 +252,7 @@ class PortHolder:
 #: into the captured path.
 _PORT_PATH_RE = re.compile(r"/dev/(?:cu|tty)[A-Za-z0-9._-]+")
 
-#: Substrings that flag a port-holding process as "probably ours" —
+#: Substrings that flag a port-holding process as "probably ours":
 #: a stale chumicro-deploy or mpremote subprocess from a previous
 #: run, vs. an external app the user explicitly opened (Mu, Thonny,
 #: VS Code's serial console).
@@ -305,7 +305,7 @@ def diagnose_port_holders(
 ) -> list[PortHolder]:
     """Return processes currently holding *port_path* open.
 
-    Uses ``lsof -F pcn <port>`` on POSIX — output format is one
+    Uses ``lsof -F pcn <port>`` on POSIX.  The output format is one
     field per line tagged with a single character (``p`` for PID,
     ``c`` for short command, ``n`` for path).  Each PID record
     starts with a ``p`` line, and subsequent ``c`` / ``n`` lines belong

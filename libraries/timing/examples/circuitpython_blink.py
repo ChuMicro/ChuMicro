@@ -1,4 +1,4 @@
-"""Periodic LED blink — CircuitPython.
+"""Periodic LED blink on CircuitPython.
 
 Toggles the onboard LED once per second using a non-blocking
 ``Rate`` timer (drift-free, phase-aligned cadence).  Prints a line
@@ -8,7 +8,7 @@ the loop without watching the LED itself.
 Setup:
 1. Install ``chumicro_timing`` (``circup install chumicro_timing``
    or copy the package to ``lib/``).
-2. No extra wiring — uses the built-in LED (``board.LED``).
+2. No extra wiring needed.  Uses the built-in LED (``board.LED``).
    Works on most CircuitPython boards (Feather, QT Py, Metro, etc.).
 3. Save this file as ``code.py`` on the board.
 
@@ -23,7 +23,7 @@ Example output::
 Runs on CircuitPython.
 """
 
-#: CircuitPython-only — uses ``board`` + ``digitalio`` (CP API).
+#: CircuitPython-only.  Uses ``board`` + ``digitalio`` (CP API).
 #: Pair: ``micropython_blink.py`` for the MP equivalent (``machine.Pin``).
 __chumicro_runtimes__ = ("circuitpython",)
 

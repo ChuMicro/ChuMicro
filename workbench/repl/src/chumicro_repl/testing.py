@@ -2,13 +2,13 @@
 
 Provides three fakes for host-side tests:
 
-- :class:`FakeSerialPort` — drop-in replacement for ``serial.Serial``
+- :class:`FakeSerialPort`: drop-in replacement for ``serial.Serial``
   in :class:`chumicro_repl.session.ReplSession`,
   :func:`chumicro_repl.tail`, and :func:`chumicro_repl.tui.run_loop`.
   Records writes, replays scripted reads.
-- :class:`FakeKeyboard` — replays scripted keystrokes for
+- :class:`FakeKeyboard`: replays scripted keystrokes for
   :func:`chumicro_repl.tui.run_loop` tests.
-- :class:`FakeTime` — deterministic seconds-domain time source that
+- :class:`FakeTime`: deterministic seconds-domain time source that
   satisfies the ``TimeSource`` protocol so tests never sleep.
 """
 
@@ -22,7 +22,7 @@ __all__ = ["FakeKeyboard", "FakeSerialPort", "FakeTime"]
 class FakeTime:
     """Deterministic seconds-domain time source for host-side tests.
 
-    ``monotonic()`` is stable — repeated calls return the same value
+    ``monotonic()`` is stable: repeated calls return the same value
     until the clock is explicitly advanced.  ``sleep()`` advances the
     clock by *duration* without a real wait.
     """
@@ -50,18 +50,18 @@ class FakeSerialPort:
 
     Records every write into :attr:`writes` and replays scripted
     reads from :attr:`read_chunks`.  Each successful ``read(n)``
-    consumes one chunk regardless of *n* — tests that need to model
+    consumes one chunk regardless of *n*, so tests that need to model
     fine-grained byte-level delivery should script per-byte chunks.
 
     Instances are callable and return themselves, so a
     ``FakeSerialPort`` instance can be passed directly as a
-    ``serial_port_factory`` kwarg — no wrapper closure needed.
+    ``serial_port_factory`` kwarg, with no wrapper closure needed.
 
     Args:
         read_chunks: Items the next ``read(n)`` call returns, in
             order.  Each item is either ``bytes`` (returned verbatim)
             or an instance of :class:`BaseException` (raised on the
-            call — used to script ``OSError`` / ``SerialException``
+            call, used to script ``OSError`` / ``SerialException``
             disconnects mid-stream).  When the script is exhausted,
             subsequent reads return ``b""`` and ``in_waiting`` is
             ``0``.
@@ -142,7 +142,7 @@ class FakeSerialPort:
         self.closed = True
 
     def reset_input_buffer(self) -> None:
-        """No-op — required by the :class:`SerialPort` protocol."""
+        """No-op, required by the :class:`SerialPort` protocol."""
 
     def feed(self, *chunks: bytes | BaseException) -> None:
         """Append more scripted chunks (or exceptions) after construction.
@@ -159,7 +159,7 @@ class FakeKeyboard:
 
     Each entry in :attr:`scripted_input` is delivered as a single
     ``read_available()`` return value.  When the script is
-    exhausted, subsequent calls return ``b""`` — the loop will
+    exhausted, subsequent calls return ``b""`` and the loop will
     eventually stall unless the test arranges another exit
     (typically by sending Ctrl-X as the last scripted entry).
     """

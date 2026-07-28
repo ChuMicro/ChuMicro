@@ -60,7 +60,7 @@ def _add_bootstrap_parser(subparsers: argparse._SubParsersAction) -> None:
     bootstrap_parser = subparsers.add_parser(
         "bootstrap",
         help=(
-            "Onboarding entry point — same as `add-device` plus a "
+            "Onboarding entry point: same as `add-device` plus a "
             "next-steps footer pointing at `new` / `deploy` / `repl`.  "
             "Pass --demo to chain into the built-in demo deploy after "
             "register."

@@ -114,7 +114,7 @@ def _cmd_reset_board(args: argparse.Namespace) -> int:
     if transport.mode in ("ram", "mount"):
         print(
             f"reset-board: {target} is configured for {transport.mode} "
-            "mode — nothing in flash to wipe.  Re-run on a board whose "
+            "mode, so there is nothing in flash to wipe.  Re-run on a board whose "
             "deploy_mode is flash / copy if you intended to clear "
             "persistent state.",
         )
@@ -216,12 +216,12 @@ def _add_firmware_parsers(subparsers: argparse._SubParsersAction) -> None:
         ),
         description=(
             "Erase every user file the runtime can see on the selected "
-            "board — including out-of-scope files like settings.toml and "
-            "hand-edited boot.py — without redeploying any project.  "
+            "board, including out-of-scope files like settings.toml and "
+            "hand-edited boot.py, without redeploying any project.  "
             "Standalone counterpart to `deploy --wipe`.  Used to recover "
             "a board whose flash filled up with stage residue (the "
             "MicroPython path runs `os.VfsLfs2.mkfs`, which `os.remove` "
-            "alone cannot match — LittleFS metadata + wear-leveling "
+            "alone cannot match: LittleFS metadata + wear-leveling "
             "artifacts survive a file-walk).  No-op in RAM / mount mode."
         ),
     )
@@ -243,7 +243,7 @@ def _add_upgrade_firmware_parser(subparsers: argparse._SubParsersAction) -> None
     """Register the ``upgrade-firmware`` alias of ``install-firmware``."""
     upgrade_firmware_parser = subparsers.add_parser(
         "upgrade-firmware",
-        help="Alias of install-firmware — same flash flow.",
+        help="Alias of install-firmware: same flash flow.",
     )
     _add_workspace_arg(upgrade_firmware_parser)
     _add_device_selector(upgrade_firmware_parser)

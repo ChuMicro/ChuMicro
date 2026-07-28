@@ -406,7 +406,7 @@ def pytest_configure(config: pytest.Config) -> None:
     config.addinivalue_line(
         "markers",
         "device_bootstrap(board_file): override the sibling-name rule for "
-        "device_bootstrap_runner — name the board-side bootstrap file "
+        "device_bootstrap_runner: name the board-side bootstrap file "
         "(resolved relative to the host test file's directory).",
     )
 

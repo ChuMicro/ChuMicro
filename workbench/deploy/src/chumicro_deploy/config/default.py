@@ -1,8 +1,8 @@
 """Default YAML config loader that ships with ``chumicro-deploy``.
 
 Loads the ``devices.yml`` schema that ``chumicro-deploy`` defines and
-owns.  Any project — its own workspace, a project-workspace template,
-or a third-party consumer — can write this shape to configure its
+owns.  Any project (its own workspace, a project-workspace template,
+or a third-party consumer) can write this shape to configure its
 deploy targets without depending on any upstream tooling.
 
 The schema (stable subset that the loader accepts):
@@ -33,7 +33,7 @@ Importing this module pulls in PyYAML (already a dependency of
 
 Third parties that need a different shape (JSON, TOML, a custom
 YAML layout) can register their own loader via the
-``chumicro_deploy.config_loaders`` entry-point group — see
+``chumicro_deploy.config_loaders`` entry-point group; see
 :func:`chumicro_deploy.config.discover_config_loaders`.
 """
 
@@ -432,7 +432,7 @@ def _resolve_raw_entry(
     if device_id is not None and runtime is not None:
         raise ValueError(
             "load_devices_yml: device_id and runtime are mutually "
-            "exclusive — pass one or neither, not both."
+            "exclusive: pass one or neither, not both."
         )
 
     entries, defaults = load_raw_entries(yaml_path)
@@ -458,7 +458,7 @@ def _resolve_raw_entry(
     elif runtime is not None:
         if runtime not in ("circuitpython", "micropython"):
             raise ValueError(
-                f"Unsupported runtime {runtime!r} — expected "
+                f"Unsupported runtime {runtime!r}: expected "
                 f"'circuitpython' or 'micropython'."
             )
         runtime_default = defaults.get(runtime)
@@ -507,11 +507,11 @@ def load_devices_yml(
 
     Resolution precedence:
 
-    1. *device_id* — wins outright.
-    2. *runtime* — picks ``defaults.<runtime>`` when *device_id* is
+    1. *device_id* wins outright.
+    2. *runtime* picks ``defaults.<runtime>`` when *device_id* is
        ``None``, so a single-runtime caller disambiguates a
        two-runtime ``defaults:`` block without naming the device id.
-    3. Single-default fallback — when both *device_id* and *runtime*
+    3. Single-default fallback: when both *device_id* and *runtime*
        are ``None``, exactly one runtime default in the file picks
        itself, otherwise raises.
 
@@ -551,7 +551,7 @@ def load_devices_yml_raw(
     """Resolve one device and return its raw ``devices.yml`` entry.
 
     Identical resolution to :func:`load_devices_yml` (same precedence,
-    same errors) but returns the unmapped entry dict — including
+    same errors) but returns the unmapped entry dict, including
     ``hardware`` and other keys the :class:`Device` dataclass drops.
     Use when fields off the schema are needed alongside the transport
     facade (firmware-URL derivation reads ``hardware.firmware_source``).

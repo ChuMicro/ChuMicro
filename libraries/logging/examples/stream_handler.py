@@ -1,4 +1,4 @@
-"""Logger + StreamHandler — minimal end-to-end logging.
+"""Logger + StreamHandler: minimal end-to-end logging.
 
 The simplest end-to-end shape: a logger writing to stdout via a
 ``StreamHandler``.  Records below the logger's level are dropped silently.
@@ -17,7 +17,7 @@ from chumicro_logging import DEBUG, INFO, Logger, StreamHandler
 handler = StreamHandler()
 logger = Logger("boot", level=INFO, handlers=[handler])
 
-logger.debug("invisible — below INFO")
+logger.debug("invisible (below INFO)")
 logger.info("hello")
 logger.warning("something is off")
 logger.error("something broke")

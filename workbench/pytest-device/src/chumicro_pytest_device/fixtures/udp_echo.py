@@ -23,7 +23,7 @@ def start_udp_echo_server(bind_host: str) -> tuple[str, int, threading.Event]:
     """Bind a UDP echo socket on `bind_host`; return `(host, port, stop_event)`.
 
     The echo thread loops on `recvfrom` with a 50 ms timeout so it
-    can poll the stop event between datagrams. Sends are best-effort —
+    can poll the stop event between datagrams. Sends are best-effort:
     OSError on send (peer rebooted etc.) is silently dropped.
     """
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)

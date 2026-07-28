@@ -65,7 +65,7 @@ def _library_scope_from_path(path: Path) -> str | None:
 
     The project path-shape walk mirrors
     ``session._is_project_functional_test`` and
-    ``session._project_unit_name`` — duplicated here (as the library-name
+    ``session._project_unit_name``, duplicated here (as the library-name
     walk already is) to keep this module a leaf that ``session`` imports,
     never the reverse.
     """

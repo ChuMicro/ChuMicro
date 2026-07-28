@@ -19,7 +19,7 @@ What the rule leaves alone:
 - ``# noqa: ARG002 - runner contract`` (the accepted form).
 - ``# noqa: PLC0415`` with no trailing explanation (nothing to
   separate).
-- ``# noqa: ARG002 (runner contract uses now_ms)`` — the parenthetical
+- ``# noqa: ARG002 (runner contract uses now_ms)``: the parenthetical
   form is an accepted alternative, not the em-dash drift class this
   rule targets.
 
@@ -111,8 +111,8 @@ def _check_file(filepath: Path, repo_root: Path) -> list[Finding]:
                 code=_RULE_CODE,
                 message=(
                     f"noqa / pragma explanation separator {match.group(1)!r} "
-                    f"— use ' - ' (space hyphen space) to separate the "
-                    f"suppression from its explanation"
+                    f"is not the accepted form; use ' - ' (space hyphen "
+                    f"space) to separate the suppression from its explanation"
                 ),
             )
         )

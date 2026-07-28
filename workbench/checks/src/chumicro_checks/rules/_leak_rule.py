@@ -7,18 +7,18 @@ patterns differ.
 
 Each ``LeakRule`` instance carries:
 
-* ``code`` — stable rule identifier (``CHU006``, ``CHU008``).
-* ``description`` — short prose for ``--list``.
-* ``scan_roots_for(repo_root)`` — callable that resolves the
+* ``code``: stable rule identifier (``CHU006``, ``CHU008``).
+* ``description``: short prose for ``--list``.
+* ``scan_roots_for(repo_root)``: callable that resolves the
   directories to walk under the current repo.  An empty list means
   silent no-op (the rule's targets don't exist in this repo shape).
-* ``patterns`` — tuple of ``(re.Pattern, message, scope_predicate)``;
+* ``patterns``: tuple of ``(re.Pattern, message, scope_predicate)``;
   each pattern fires only when ``scope_predicate(relative_path)``
   returns True, where ``relative_path`` is the file's path relative to
   the repo root.  A per-rule package-exemption stays local to that
   rule, and keying it on the repo-relative path means a leading-segment
   exemption can't be tricked by the absolute checkout path.
-* ``suffixes`` — file extensions walked.
+* ``suffixes``: file extensions walked.
 """
 
 from __future__ import annotations

@@ -173,7 +173,7 @@ def write_disconnect_notice(output: TextIO, error: OSError) -> None:
     terminal raw mode (where the OS no longer auto-translates
     ``\\n``).
     """
-    output.write(f"\r\n\x1b[2m*** device disconnected — {error} ***\x1b[0m\r\n")
+    output.write(f"\r\n\x1b[2m*** device disconnected: {error} ***\x1b[0m\r\n")
     flush_quietly(output)
 
 

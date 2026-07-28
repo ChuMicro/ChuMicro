@@ -7,7 +7,7 @@ the stand-ins: each is a context manager that installs a replacement on
 enter and restores the original on exit, including the case where the
 attribute or key was absent before (it is deleted again on exit).
 :class:`FakeModule` is a bare class that stands in for a module object
-where ``types.ModuleType`` would normally be used — the unix-ports omit
+where ``types.ModuleType`` would normally be used: the unix-ports omit
 ``types``, so tests build a plain instance and hang attributes on it.
 
 Depends only on built-ins, so it loads on CPython, MicroPython, and

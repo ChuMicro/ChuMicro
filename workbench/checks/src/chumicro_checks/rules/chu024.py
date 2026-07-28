@@ -35,35 +35,35 @@ _RULE_CODE = "CHU024"
 _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     (
         re.compile(r"^\s*#{2,}\s+Updates?\b"),
-        "ADR ``Update`` banner heading — edit the body in place instead",
+        "ADR ``Update`` banner heading: edit the body in place instead",
     ),
     (
         re.compile(r"^\s*##\s+Amendments?\b"),
-        "ADR ``## Amendments`` section — edit the body in place instead",
+        "ADR ``## Amendments`` section: edit the body in place instead",
     ),
     (
         re.compile(r"^\s*##\s+Changelog\b", re.IGNORECASE),
-        "ADR ``## Changelog`` section — git log on the ADR carries history",
+        "ADR ``## Changelog`` section: git log on the ADR carries history",
     ),
     (
         re.compile(r"^\s*##\s+Progress\s+notes\b", re.IGNORECASE),
-        "ADR ``## Progress notes`` section — status belongs in the workstream file",
+        "ADR ``## Progress notes`` section: status belongs in the workstream file",
     ),
     (
         re.compile(r"^\s*>.{0,80}\bAmended by\b"),
-        "ADR ``Amended by`` blockquote — cross-link the successor inline instead",
+        "ADR ``Amended by`` blockquote: cross-link the successor inline instead",
     ),
     (
         re.compile(r"\bThis was revised\b"),
-        "ADR revision narrative — describe current state, let git log carry history",
+        "ADR revision narrative: describe current state, let git log carry history",
     ),
     (
         re.compile(r"\bthis decision has been revised\b", re.IGNORECASE),
-        "ADR revision preamble — describe current state, let git log carry history",
+        "ADR revision preamble: describe current state, let git log carry history",
     ),
     (
         re.compile(r"^\s*Revised:\s*\d{4}-\d{2}-\d{2}\b"),
-        "ADR dated revision banner — edit the body in place; let git log carry history",
+        "ADR dated revision banner: edit the body in place; let git log carry history",
     ),
 )
 
@@ -99,7 +99,7 @@ def _check_file(filepath: Path) -> list[Finding]:
 class CHU024_AdrBanners(Rule):
     code = _RULE_CODE
     description = (
-        "no history banners on accepted ADRs — edit the body in place"
+        "no history banners on accepted ADRs: edit the body in place"
     )
 
     def check(self, repo_root: Path) -> list[Finding]:
