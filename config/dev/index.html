@@ -452,7 +452,7 @@
 
 <h1 id="chumicro-config">chumicro-config<a class="headerlink" href="#chumicro-config" title="Permanent link">&para;</a></h1>
 <p><strong>Typed runtime configuration for ChuMicro libraries.</strong></p>
-<p>Every library reads its settings from one shared file using dotted keys — write <code>wifi.ssid</code> in TOML, get <code>WifiConfig.ssid</code> on the device.</p>
+<p>Every library reads its settings from one deployed <code>runtime_config.msgpack</code> using dotted keys. The app loads that file once at boot and hands the whole config to each library, which pulls its own prefix off it: <code>wifi.ssid</code> becomes <code>WifiConfig.ssid</code>, <code>mqtt.broker.host</code> becomes the broker the MQTT client dials.</p>
 <h2 id="quick-example">Quick example<a class="headerlink" href="#quick-example" title="Permanent link">&para;</a></h2>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_config</span><span class="w"> </span><span class="kn">import</span> <span class="n">load_runtime_config</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_wifi</span><span class="w"> </span><span class="kn">import</span> <span class="n">WifiConfig</span><span class="p">,</span> <span class="n">WifiService</span>
@@ -462,8 +462,8 @@
 </span></code></pre></div>
 <h2 id="documentation">Documentation<a class="headerlink" href="#documentation" title="Permanent link">&para;</a></h2>
 <ul>
-<li><a href="guide/">User Guide</a> — getting started and usage patterns</li>
-<li><a href="api/">API Reference</a> — full API documentation</li>
+<li><a href="guide/">User Guide</a>: writing a <code>from_config</code> for your own library, soft loading with <code>try_load_section</code>, exception handling, the on-device config shape</li>
+<li><a href="api/">API Reference</a>: <code>load_runtime_config</code>, <code>load_section</code>, <code>RuntimeConfig</code>, and the config exceptions</li>
 </ul>
 <hr />
 <div class="chumicro-footer">
