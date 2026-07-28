@@ -379,10 +379,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#usage-from-other-libraries" class="md-nav__link">
+  <a href="#using-these-fakes-in-your-own-tests" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
-        Usage from other libraries
+        Using these fakes in your own tests
       </span>
     </span>
   </a>
@@ -704,10 +704,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#usage-from-other-libraries" class="md-nav__link">
+  <a href="#using-these-fakes-in-your-own-tests" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
-        Usage from other libraries
+        Using these fakes in your own tests
       </span>
     </span>
   </a>
@@ -988,7 +988,7 @@
 
 
 <h1 id="testing-helpers">Testing Helpers<a class="headerlink" href="#testing-helpers" title="Permanent link">&para;</a></h1>
-<p><code>chumicro_sockets.testing</code> ships <code>FakeSocket</code> — an in-memory test double satisfying the duck-typed TCP socket surface (<code>send</code> / <code>recv_into</code> / <code>close</code> / <code>setblocking</code>) so downstream libraries (<code>chumicro-mqtt</code>, <code>chumicro-requests</code>) and your own network apps can reach high coverage without spinning up a network.</p>
+<p><code>chumicro_sockets.testing</code> ships in-memory socket doubles so network code can be tested without a network.  <code>FakeSocket</code> answers the same <code>send</code> / <code>recv_into</code> / <code>close</code> / <code>setblocking</code> calls a real socket answers, <code>FakeUDPSocket</code> does the same for datagrams, and <code>FakeSocketConnector</code> stands in for the tick-driven dial a connector performs.  The module declares itself test support, so the deploy walker and the bundle builder drop it and it never lands on a microcontroller.</p>
 <h2 id="usage">Usage<a class="headerlink" href="#usage" title="Permanent link">&para;</a></h2>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_sockets.testing</span><span class="w"> </span><span class="kn">import</span> <span class="n">FakeSocket</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
@@ -1005,14 +1005,15 @@
 </span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>    <span class="k">assert</span> <span class="n">sock</span><span class="o">.</span><span class="n">sent</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="sa">b</span><span class="s2">&quot;</span><span class="se">\x10</span><span class="s2">&quot;</span><span class="p">)</span>  <span class="c1"># MQTT CONNECT packet prefix</span>
 </span></code></pre></div>
 <p><code>FakeSocket.sent</code> is a <code>bytearray</code> that accumulates every <code>send()</code> call.  <code>enqueue_recv(chunk)</code> queues a chunk for the next <code>recv_into()</code>; multiple chunks queue in FIFO order.  <code>enqueue_eagain_for_send(count)</code> and <code>enqueue_eagain_for_recv(count)</code> script <code>OSError(EAGAIN)</code> raises so non-blocking-loop logic can be exercised deterministically.</p>
-<p>A short read pushes the unconsumed tail back on the queue head — mimics real-socket fragmentation:</p>
+<p>A short read pushes the unconsumed tail back on the queue head, the way a real socket splits a stream across reads:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">sock</span> <span class="o">=</span> <span class="n">FakeSocket</span><span class="p">()</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">sock</span><span class="o">.</span><span class="n">enqueue_recv</span><span class="p">(</span><span class="sa">b</span><span class="s2">&quot;abcdef&quot;</span><span class="p">)</span>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">buffer</span> <span class="o">=</span> <span class="nb">bytearray</span><span class="p">(</span><span class="mi">8</span><span class="p">)</span>
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">sock</span><span class="o">.</span><span class="n">recv_into</span><span class="p">(</span><span class="n">buffer</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>   <span class="c1"># reads &quot;abc&quot;; &quot;def&quot; still queued</span>
 </span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="n">sock</span><span class="o">.</span><span class="n">recv_into</span><span class="p">(</span><span class="n">buffer</span><span class="p">,</span> <span class="mi">8</span><span class="p">)</span>   <span class="c1"># reads &quot;def&quot;</span>
 </span></code></pre></div>
-<h2 id="usage-from-other-libraries">Usage from other libraries<a class="headerlink" href="#usage-from-other-libraries" title="Permanent link">&para;</a></h2>
+<h2 id="using-these-fakes-in-your-own-tests">Using these fakes in your own tests<a class="headerlink" href="#using-these-fakes-in-your-own-tests" title="Permanent link">&para;</a></h2>
+<p>Your test suite imports them straight from the installed package, the same way this library's own tests do:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_sockets.testing</span><span class="w"> </span><span class="kn">import</span> <span class="n">FakeSocket</span>
 </span></code></pre></div>
 <p>Project convention: libraries that expose injectable services ship their own test fakes alongside the production code.</p>
