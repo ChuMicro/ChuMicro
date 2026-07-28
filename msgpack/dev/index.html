@@ -452,7 +452,7 @@
 
 <h1 id="chumicro-msgpack">chumicro-msgpack<a class="headerlink" href="#chumicro-msgpack" title="Permanent link">&para;</a></h1>
 <p><strong>Cross-runtime <a href="https://msgpack.org">MessagePack</a> serialization for CircuitPython, MicroPython, and CPython.</strong></p>
-<p>Encodes Python objects to compact binary bytes and decodes them back.  On CircuitPython boards with the native <code>msgpack</code> C module, all functions delegate to the built-in — the pure-Python encoder is never loaded.</p>
+<p>Encodes Python objects to compact binary bytes and decodes them back.  On CircuitPython firmware that ships the native <code>msgpack</code> C module, every function delegates to that built-in and the pure-Python encoder never loads.</p>
 <h2 id="quick-example">Quick example<a class="headerlink" href="#quick-example" title="Permanent link">&para;</a></h2>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_msgpack</span><span class="w"> </span><span class="kn">import</span> <span class="n">packb</span><span class="p">,</span> <span class="n">unpackb</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
@@ -466,8 +466,8 @@
 </span></code></pre></div>
 <h2 id="documentation">Documentation<a class="headerlink" href="#documentation" title="Permanent link">&para;</a></h2>
 <ul>
-<li><a href="guide/">User Guide</a> — getting started, usage patterns, size comparison</li>
-<li><a href="api/">API Reference</a> — full API documentation</li>
+<li><a href="guide/">User Guide</a>: the stream and bytes APIs, when to reach for msgpack instead of <code>struct</code>, decoding corrupt or untrusted input, integer keys for compact storage, the supported types, and the size comparison against JSON</li>
+<li><a href="api/">API Reference</a>: <code>packb</code> and <code>unpackb</code> for bytes, <code>pack</code> and <code>unpack</code> for streams</li>
 </ul>
 <hr />
 <div class="chumicro-footer">
