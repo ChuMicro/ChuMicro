@@ -390,10 +390,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#usage-from-applications" class="md-nav__link">
+  <a href="#using-these-fakes-in-your-own-tests" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
-        Usage from applications
+        Using these fakes in your own tests
       </span>
     </span>
   </a>
@@ -599,10 +599,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#usage-from-applications" class="md-nav__link">
+  <a href="#using-these-fakes-in-your-own-tests" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
-        Usage from applications
+        Using these fakes in your own tests
       </span>
     </span>
   </a>
@@ -756,14 +756,9 @@
 
 
 <h1 id="testing-helpers">Testing Helpers<a class="headerlink" href="#testing-helpers" title="Permanent link">&para;</a></h1>
-<p><code>chumicro_logging.testing</code> provides handler fakes that downstream
-libraries and applications can use to assert against logger output
-without writing one-off mocks.</p>
+<p><code>chumicro_logging.testing</code> provides handler fakes so your tests can assert against logger output without writing one-off mocks. The fakes stay on the host: <code>chumicro-deploy</code> reads the test-support marker at the top of the module and leaves it out of every device bundle it builds.</p>
 <h2 id="recordinghandler">RecordingHandler<a class="headerlink" href="#recordinghandler" title="Permanent link">&para;</a></h2>
-<p>Captures every emitted record in a list for assertions.  Calls to
-<code>emit(level, name, message)</code> append a <code>(level, name, message)</code> tuple
-to <code>records</code>.  Pass the handler to a <code>Logger</code> and assert against its
-output.</p>
+<p>Captures every emitted record in a list for assertions. Calls to <code>emit(level, name, message)</code> append a <code>(level, name, message)</code> tuple to <code>records</code>. Pass the handler to a <code>Logger</code> and assert against its output.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">INFO</span><span class="p">,</span> <span class="n">Logger</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_logging.testing</span><span class="w"> </span><span class="kn">import</span> <span class="n">RecordingHandler</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
@@ -776,13 +771,9 @@ output.</p>
 </span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>
 </span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="k">assert</span> <span class="n">handler</span><span class="o">.</span><span class="n">records</span> <span class="o">==</span> <span class="p">[(</span><span class="n">INFO</span><span class="p">,</span> <span class="s2">&quot;subsystem&quot;</span><span class="p">,</span> <span class="s2">&quot;up&quot;</span><span class="p">)]</span>
 </span></code></pre></div>
-<p><code>RecordingHandler</code> itself respects an optional <code>level</code> threshold —
-records below the threshold are dropped without being captured —
-which makes it easy to verify that a logger correctly filters at a
-particular level.  Call <code>clear()</code> between assertions to reset.</p>
+<p><code>RecordingHandler</code> respects an optional <code>level</code> threshold of its own: records below it are dropped without being captured, which is how you check that a logger filters at a particular level. Call <code>clear()</code> between assertions to reset.</p>
 <h2 id="failinghandler">FailingHandler<a class="headerlink" href="#failinghandler" title="Permanent link">&para;</a></h2>
-<p>Raises a configured exception on every <code>emit</code> call.  Useful for
-verifying that misbehaving handlers never crash the logger:</p>
+<p>Raises a configured exception on every <code>emit</code> call. Useful for verifying that a misbehaving handler never crashes the logger:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">Logger</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_logging.testing</span><span class="w"> </span><span class="kn">import</span> <span class="n">FailingHandler</span><span class="p">,</span> <span class="n">RecordingHandler</span>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
@@ -797,13 +788,9 @@ verifying that misbehaving handlers never crash the logger:</p>
 </span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>    <span class="k">assert</span> <span class="n">logger</span><span class="o">.</span><span class="n">handler_errors</span> <span class="o">==</span> <span class="mi">1</span>
 </span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>    <span class="k">assert</span> <span class="n">recorder</span><span class="o">.</span><span class="n">records</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">2</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;survive me&quot;</span>
 </span></code></pre></div>
-<p>The default exception is <code>RuntimeError("handler boom")</code>.  Pass a
-custom exception via the <code>exception=</code> keyword to simulate specific
-failure modes.</p>
-<h2 id="usage-from-applications">Usage from applications<a class="headerlink" href="#usage-from-applications" title="Permanent link">&para;</a></h2>
-<p>No other ChuMicro library imports <code>chumicro-logging</code>, so these fakes are
-for application and integration tests that build a <code>Logger</code> directly.
-Import them the same way:</p>
+<p>The default exception is <code>RuntimeError("handler boom")</code>. Pass a custom exception via the <code>exception=</code> keyword to simulate specific failure modes, and read <code>calls</code> to count how many times the handler was reached.</p>
+<h2 id="using-these-fakes-in-your-own-tests">Using these fakes in your own tests<a class="headerlink" href="#using-these-fakes-in-your-own-tests" title="Permanent link">&para;</a></h2>
+<p>Nothing else in ChuMicro logs through this library, so these fakes are for your own tests: build a <code>Logger</code>, attach a handler, and assert on what came out.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_logging.testing</span><span class="w"> </span><span class="kn">import</span> <span class="n">RecordingHandler</span>
 </span></code></pre></div>
 <p>Project convention: libraries that expose injectable services ship their own test fakes alongside the production code.</p>

@@ -478,19 +478,21 @@
 
 
 <h1 id="chumicro-logging">chumicro-logging<a class="headerlink" href="#chumicro-logging" title="Permanent link">&para;</a></h1>
-<p><strong>Leveled logging for ChuMicro libraries — non-blocking, zero dependencies.</strong></p>
-<p>Familiar stdlib-logging shape (level integers, named loggers, attached handlers) plus a <code>BufferedHandler</code> that drains records off the hot tick path on each runner tick.</p>
+<p><strong>Buffer log lines off the hot path so logging never stalls your control loop.</strong></p>
+<p>Level constants (<code>DEBUG</code> / <code>INFO</code> / <code>WARNING</code> / <code>ERROR</code> / <code>CRITICAL</code>), named loggers, and attached handlers give you the shape you already know from the standard library's <code>logging</code>.  <code>BufferedHandler</code> adds the part a device needs: it stores raw records on the hot path and defers both the formatting and the I/O to drain time on your runner tick.  The library stands on its own and depends on nothing else, so you build a <code>Logger</code> in your own code and hand it to your own modules.</p>
+<p><strong>Status: parked.</strong>  chumicro-logging works as documented and stays published, but it is not under active development and no other ChuMicro library integrates with it.  Adopt it as a standalone buffered logger, or skip it.</p>
 <h2 id="quick-example">Quick example<a class="headerlink" href="#quick-example" title="Permanent link">&para;</a></h2>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">INFO</span><span class="p">,</span> <span class="n">Logger</span><span class="p">,</span> <span class="n">StreamHandler</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">logger</span> <span class="o">=</span> <span class="n">Logger</span><span class="p">(</span><span class="s2">&quot;boot&quot;</span><span class="p">,</span> <span class="n">level</span><span class="o">=</span><span class="n">INFO</span><span class="p">,</span> <span class="n">handlers</span><span class="o">=</span><span class="p">[</span><span class="n">StreamHandler</span><span class="p">()])</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;hello&quot;</span><span class="p">)</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;hello&quot;</span><span class="p">)</span>        <span class="c1"># -&gt; stdout: INFO:boot:hello</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;invisible&quot;</span><span class="p">)</span>   <span class="c1"># below threshold; dropped silently</span>
 </span></code></pre></div>
 <h2 id="documentation">Documentation<a class="headerlink" href="#documentation" title="Permanent link">&para;</a></h2>
 <ul>
-<li><a href="guide/">User Guide</a> — getting started and usage patterns</li>
-<li><a href="api/">API Reference</a> — full API documentation</li>
-<li><a href="testing/">Testing Helpers</a> — fakes for downstream test suites</li>
+<li><a href="guide/">User Guide</a>: getting started, the runner pattern for <code>BufferedHandler</code>, memory and platform notes</li>
+<li><a href="api/">API Reference</a>: <code>Logger</code>, <code>StreamHandler</code>, <code>BufferedHandler</code>, and the level constants</li>
+<li><a href="testing/">Testing Helpers</a>: using <code>RecordingHandler</code> and <code>FailingHandler</code> in your tests</li>
 </ul>
 <hr />
 <div class="chumicro-footer">
