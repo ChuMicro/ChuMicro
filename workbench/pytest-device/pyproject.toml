@@ -45,7 +45,7 @@ dependencies = [
     # ``msgpack`` decoder (no float64 support).
     "msgpack>=1.0",
     # The TLS-echo fixture (``fixtures/tls_echo.py``) generates a
-    # self-signed cert with ``cryptography``.  Declared directly — it is
+    # self-signed cert with ``cryptography``.  Declared directly; it is
     # NOT a transitive dependency of any other declared package.
     "cryptography>=42.0",
 ]

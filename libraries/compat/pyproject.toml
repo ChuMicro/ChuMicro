@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "chumicro-compat"
 dynamic = ["version"]
-description = "Cross-runtime compatibility polyfills for CircuitPython, MicroPython, and CPython — functools.partial and more."
+description = "Cross-runtime compatibility polyfills for CircuitPython, MicroPython, and CPython: functools.partial and more."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"

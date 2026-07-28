@@ -69,11 +69,11 @@ packages = ["src/chumicro_http_server"]
 requires_flash = true
 
 # ---------------------------------------------------------------------
-# Runtime-config manifest — declares the flat dotted keys this library
+# Runtime-config manifest: declares the flat dotted keys this library
 # knows about.  All keys are optional: HttpServer takes its tunables +
 # bind target via constructor args, and ``HttpServer.from_config`` /
-# ``chumicro_sockets_factory`` read these keys — bind host/port, limits,
-# and optional TLS material paths — each with a constructor default.
+# ``chumicro_sockets_factory`` read these keys (bind host/port, limits,
+# and optional TLS material paths), each with a constructor default.
 
 [tool.chumicro.config]
 required_keys = []

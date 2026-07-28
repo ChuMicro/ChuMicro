@@ -29,7 +29,7 @@ classifiers = [
 dependencies = [
     "mpremote>=1.26",
     "pyserial>=3.5",
-    # ruamel.yaml — preserves comments + key order on round-trip writes
+    # ruamel.yaml; preserves comments + key order on round-trip writes
     # for ``chumicro_deploy.config.devices_yaml``; reads use the same
     # parser via ``YAML(typ="safe")``.  Standardized on a single YAML
     # library across the workbench rather than splitting read (PyYAML)

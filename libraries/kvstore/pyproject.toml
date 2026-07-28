@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "chumicro-kvstore"
 dynamic = ["version"]
-description = "Tiny mutable key-value store for persisted runtime state — counters, timestamps, tokens — across CircuitPython, MicroPython, and CPython."
+description = "Tiny mutable key-value store for persisted runtime state (counters, timestamps, tokens) across CircuitPython, MicroPython, and CPython."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
