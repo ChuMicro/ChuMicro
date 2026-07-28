@@ -1,30 +1,30 @@
 #!/usr/bin/env python3
 """Render a generic decision page (picker.html) from a JSON spec.
 
-One card per item — id, severity badge, a source chip naming what raised the item,
-a plain-words summary, labeled why / fix rows, the evidence in a small mono block —
-plus a pick area and a notes box. The pick area defaults to a radio row; an item's
+One card per item, carrying its id, a severity badge, a source chip naming what raised
+the item, a plain-words summary, labeled why / fix rows, the evidence in a small mono
+block, a pick area, and a notes box. The pick area defaults to a radio row; an item's
 `pick_ui` swaps in a different strategy (today: "columns", side-by-side candidate
 boxes with an optional seeded edit textarea). A sticky bar serializes every choice
 into a line-oriented paste-back blob:
 
-    PICKS — <blob_header>
+    PICKS \u2014 <blob_header>
     1 = apply
       note 1: <free text, newlines collapsed>
     2 = edit
       edit 2: <the edit box's exact text, newlines as literal \\n, backslashes doubled>
     3 = skip
 
-A note on an applied item is the user's wording adjustment — on a default-strategy
-page there is no separate "edit" option; the orchestrator honors apply-with-note as
+A note on an applied item is the user's wording adjustment: on a default-strategy
+page there is no separate "edit" option, so the orchestrator honors apply-with-note as
 apply-with-this-wording. A card whose `pick_ui` defines an edit choice carries a
 dedicated edit box instead: its exact text rides back on its own `edit <id>:` line
 (the consuming parser decodes the escapes), and the note box stays a note.
 The Submit button carries a live summary of the picks that differ from their
-defaults ("Submit — 3 apply · 1 discuss"), so the moment of commitment shows
+defaults ("Submit \u2014 3 apply \u00b7 1 discuss"), so the moment of commitment shows
 what is being committed.
 
-The page is self-contained (inline CSS + JS) and works from file:// — Copy
+The page is self-contained (inline CSS + JS) and works from file://. Copy
 selection always works; a Submit button appears only when the page is served
 over http (see serve_picker.py, which loops the POST back to the session).
 Choices and notes persist in localStorage under the spec's `key`, so a reload
@@ -34,9 +34,9 @@ the system).
 Spec schema:
 
     {
-      "title": "audit-skill report — git-commit",        // page heading
+      "title": "audit-skill report for git-commit",      // page heading
       "key": "audit-skill:git-commit:20260611T",          // localStorage namespace; change per run
-      "blob_header": "audit-skill picks (git-commit)",    // first blob line after "PICKS — "
+      "blob_header": "audit-skill picks (git-commit)",    // first blob line after "PICKS \u2014 "
       "subtitle": "4 findings · 1 high · validated",      // optional metadata line under the title (escaped);
                                                           // use this for counts/status, not intro_html
       "intro_html": "<p>…</p>",                           // optional block above the cards (trusted HTML)
@@ -44,21 +44,21 @@ Spec schema:
         {"title": "What this file does",                  // rendered between intro and the decision
          "html": "<p>…</p>",                              // area (trusted HTML); open: true expands
          "open": true},                                   // the section on load
-        {"title": "Per-file understanding — 10 files",    // a section may nest child sections instead of
-         "sections": [{"title": "a.py", "html": "…"}]}    // (or alongside) html — ten files stay one
+        {"title": "Per-file understanding (10 files)",    // a section may nest child sections instead of
+         "sections": [{"title": "a.py", "html": "…"}]}    // (or alongside) html; ten files stay one
       ],                                                  // top-level row, expanding to one row per file
       "options": ["apply", "discuss", "skip"],            // page-wide option set
       "default": "skip",                                  // page-wide pre-checked option (omit for none)
-      "page_width": 1280,                                 // content-column width in px (default 920) — a
+      "page_width": 1280,                                 // content-column width in px (default 920); a
                                                           // page of side-by-side candidates earns more
                                                           // width than a finding list
       "expand_on": ["discuss"],                           // optional: picking one of these options expands
-                                                          // the card and focuses its notes box — for options
+                                                          // the card and focuses its notes box, for options
                                                           // whose substance lives in the note (a discussion
                                                           // opener, a wording adjustment)
       "option_help": {                                    // optional legend, rendered above the cards AND as
         "apply": "make the proposed change (a note adjusts its wording)",   // hover text on every card's
-        "discuss": "no change yet — talk it through in chat first",         // radio labels, so the meaning
+        "discuss": "no change yet, talk it through in chat first",          // radio labels, so the meaning
         "skip": "leave as is"                                               // travels with each decision
       },
       "items": [
@@ -66,7 +66,7 @@ Spec schema:
           "id": "1",                                      // rides back in the blob; unique
           "title": "vague description stem",              // card heading (escaped)
           "badge": "IMPORTANT",                           // optional pill; known severities get colors
-          "source": "loader lens — frontmatter contract", // optional chip: what raised this item
+          "source": "loader lens, frontmatter contract",  // optional chip: what raised this item
           "meta": "effort: small · Foo.bar @ tick",       // optional faint line under the heading
           "summary": "plain-words description…",          // optional paragraph under the heading
           "where": {"place": "heartbeat.py · Foo.bar",    // optional labeled row: place renders as text,
@@ -81,7 +81,7 @@ Spec schema:
           "status": "persisting",                         // optional chip in the card head (any short word;
                                                           // the audit skills pass new / persisting / resolved
                                                           // / waived for baseline + waiver continuity)
-          "muted": true,                                  // optional: grey the whole card (un-greys on hover) —
+          "muted": true,                                  // optional: grey the whole card (un-greys on hover),
                                                           // for a carried finding, so the eye lands on new ones
           "warning": "Validator: fix needs review …",     // optional amber callout; also puts an amber
                                                           // ⚠ in the card head (hover shows the text),
@@ -100,7 +100,7 @@ Spec schema:
             "style": "columns",                           // radio row. "columns": one box per candidate, side
             "candidates": [                               // by side (4+ scroll horizontally), the whole box
               {"value": "suggested",                      // clickable; value rides in the blob like any option
-               "label": "suggested — writer pass 3",      // box heading next to its radio
+               "label": "suggested, writer pass 3",       // box heading next to its radio
                "chips": ["2 lines shorter"],              // optional faint comparison chips
                "text": "the candidate text…",             // the box body, a mono block
                "more": {"label": "full symbol",           // optional per-candidate expander
@@ -110,7 +110,7 @@ Spec schema:
                      "label": "edit it myself",           // seeded with `seed`; its exact text rides back as
                      "seed": "current text"},             // an `edit <id>:` blob line (newline-escaped)
             "context": {"label": "original",              // optional non-selectable lead box above the
-                        "text": "the current text…"}      // candidates — the baseline they are read against
+                        "text": "the current text…"}      // candidates: the baseline they are read against
           },                                              // with pick_ui, the choice set is candidates[].value
                                                           // + edit.value and the options field is ignored
           "notes": true,                                  // notes box (default: true on decision cards,
@@ -128,7 +128,7 @@ Spec schema:
         {"key": "severity",                               // values: explicit order (others append by first
          "values": ["high", "med", "low"]},               // appearance); label: caption (defaults to key);
         {"key": "angle",                                  // help: hover text per chip value. style: "select"
-         "help": {"trap": "correctness lens — …"}},       // renders the group as one dropdown — the right
+         "help": {"trap": "correctness lens, …"}},        // renders the group as one dropdown, the right
         {"key": "file", "style": "select"}                // shape past ~6 values. Chip rows render first (in
       ]                                                   // spec order, then picked); select rows render last,
                                                           // keeping the chips in one area
@@ -136,13 +136,13 @@ Spec schema:
 
 A pick-area strategy changes only how choices render: every strategy emits radios
 named pick:<id>, so the blob, tally, picked facet, expand_on, and Reset stay
-strategy-agnostic. A new strategy is a new branch in pick_area_html() plus its CSS —
+strategy-agnostic. A new strategy is a new branch in pick_area_html() plus its CSS;
 the page JS needs nothing. In the columns strategy the whole candidate box is
 clickable, the checked box carries an accent ring, and typing in the edit textarea
 selects its radio; Reset returns the textarea to its seed.
 
-The facet bar is the page's one narrowing mechanism — no tabs (a finding list is
-one dataset; tabs hide most of it and tax cross-tab comparison). Chips toggle:
+The facet bar is the page's one narrowing mechanism, and there are no tabs (a finding
+list is one dataset; tabs hide most of it and tax cross-tab comparison). Chips toggle:
 multi-select within a group reads as OR, groups combine as AND, an empty group
 means no narrowing. A card missing a value for a selected group is narrowed out.
 Hidden cards stay in the DOM, so the blob, tally, and Reset always cover them.
@@ -153,17 +153,17 @@ is visible before the click, and a selection that empties the whole list shows a
 "nothing matches" state with its own clear button; a clear-filters button
 appears in the bar while anything is active. A select-style group narrows to one
 value at a time, its option labels carrying the same live counts. Selections
-persist per page key. Items render in spec order — ordering (e.g. by severity)
+persist per page key. Items render in spec order, so ordering (e.g. by severity)
 is the spec author's job.
 
 When at least one decision card exists, the bar gains a virtual `picked` row
-(suppress with "picked_facet": false) whose chips track the live radio values —
-narrow to your apply set for a final look before submitting. `picked` is a
+(suppress with "picked_facet": false) whose chips track the live radio values, so you
+can narrow to your apply set for a final look before submitting. `picked` is a
 reserved facet key. "decided_facet": true adds a `decided` row (pending / done):
-a card turns done when the human actively decides it — picks a candidate box,
+a card turns done when the human actively decides it: picks a candidate box,
 re-affirms the already-checked one, or re-affirms the edit box after typing in
 it (picking the edit choice or typing only opens the work; clicking the box
-again settles it, the same gesture as a candidate) — so `pending` narrows to
+again settles it, the same gesture as a candidate), so `pending` narrows to
 the cards not yet visited; a done card's id carries a ✓. A candidate
 pick also re-seeds a pristine edit box with that candidate's text; once the
 human types there, their text is never replaced. `decided` is reserved too. Every card carries id card-<id, non-alphanumerics dashed>,
@@ -171,16 +171,16 @@ so trusted section or intro HTML can deep-link to a card (#card-heartbeat-3);
 navigating to a folded card unfolds it, and the target card flashes an accent
 ring that fades out.
 
-Every card folds to a strip — title row, radios, the summary, and the diff when
-one exists — on a title-row click; `collapsed: true` sets the initial state, and
+A title-row click folds a card to a strip (title row, radios, the summary, and the
+diff when one exists); `collapsed: true` sets the initial state, and
 fold changes persist in localStorage like picks and notes do. Picking an option listed in
 `expand_on` opens the card and focuses its notes box, for options whose
-substance lives in the note. Reset returns the page to its rendered defaults —
+substance lives in the note. Reset returns the page to its rendered defaults:
 picks to the default option, notes cleared, cards and page-top sections back to
 their spec fold state; only the active tab and the active chip (navigation, not
 decision state) survive it.
 
-body_html and intro_html are written into the page unescaped — the spec author
+body_html and intro_html are written into the page unescaped, because the spec author
 is the orchestrating session, not an untrusted source.
 
 Usage: render_picker.py <spec.json> [<output-dir>]    (default output dir: the spec's directory)
@@ -199,7 +199,7 @@ import re
 import sys
 
 _REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-sys.path.insert(0, _REPO)   # repo root — so `from webui import kit` resolves when run as a script
+sys.path.insert(0, _REPO)   # repo root, so `from webui import kit` resolves when run as a script
 from webui import kit  # the ONE shared palette + content-key
 from webui.theme import assert_full_dark_override
 
@@ -215,10 +215,10 @@ BADGE_CLASSES = {
 }
 
 # The palette is the ONE kit source. These local names ALIAS the kit's semantic
-# vars — alias values are var(...), so they are theme-correct (resolve per active theme) AND
+# vars. Alias values are var(...), so they are theme-correct (resolve per active theme) AND
 # exempt from the dark-override lint. The picker's existing CSS (which references --card /
 # --why / --fix / --where / --blob-bg / --bar / --note-bg) is left untouched but now draws
-# from one palette — killing the three-different-accents drift. color-scheme stays per-theme
+# from one palette, which kills the three-different-accents drift. color-scheme stays per-theme
 # (native form controls). Every hardcoded hex below is converted to a var (the dark-mode bug).
 _KIT_PALETTE = (
     kit.palette_css() + "\n"
@@ -485,7 +485,7 @@ SCRIPT = """
     if (changed) t += ' \\u00b7 ' + changed + ' changed from default';
     if (unpicked) t += ' \\u00b7 ' + unpicked + ' unpicked';
     document.getElementById('count').textContent = t;
-    // the Submit label carries what would be sent — the moment of commitment shows the commitment
+    // the Submit label carries what would be sent, so the moment of commitment shows the commitment
     var summary = Object.keys(byValue).map(function (v) { return byValue[v] + ' ' + v; }).join(' \\u00b7 ');
     document.getElementById('submitbtn').textContent = summary ? 'Submit \\u2014 ' + summary : 'Submit to session';
     var b = document.getElementById('blob'); if (b) b.value = buildBlob();
@@ -507,7 +507,7 @@ SCRIPT = """
   function copy() {
     var blob = buildBlob();
     var done = function () { confirmFlash(document.getElementById('copybtn'), 'Copied \\u2713'); };
-    // the execCommand fallback needs a visible, selected textarea — only that path opens the blob drawer
+    // the execCommand fallback needs a visible, selected textarea, so only that path opens the blob drawer
     var fallback = function () {
       var bw = document.querySelector('.blobwrap'); if (bw && !bw.open) bw.open = true;
       var ta = document.getElementById('blob'); ta.value = blob; ta.select();
@@ -530,7 +530,7 @@ SCRIPT = """
   document.querySelectorAll('.card input[type=radio]').forEach(function (r) {
     r.addEventListener('change', function () {
       // a pick whose substance lives in a text box (edit, discuss) opens the card and puts the cursor
-      // there — the edit box when this pick owns one, the notes box otherwise
+      // there: the edit box when this pick owns one, the notes box otherwise
       if (EXPAND_ON.indexOf(r.value) !== -1) {
         var c = r.closest('.card');
         c.classList.remove('collapsed');
@@ -576,7 +576,7 @@ SCRIPT = """
   });
   // the edit container behaves like a candidate box: a click anywhere in it selects the edit
   // choice and puts the cursor in the textarea. Re-affirming it (a second click once edit is
-  // picked and text has been typed) finishes the edit decision, same gesture as a candidate —
+  // picked and text has been typed) finishes the edit decision, same gesture as a candidate.
   // blur cannot finish it, because clicking back to a suggestion mid-think would fire blur and
   // yank the card out of an active pending filter.
   document.querySelectorAll('.cedit').forEach(function (box) {
@@ -671,7 +671,7 @@ SCRIPT = """
     });
     doneSet.clear();
     dirtyEdits.clear();
-    // fold state returns to spec defaults too, cards and sections both — Reset means "as first rendered"
+    // fold state returns to spec defaults too, cards and sections both: Reset means "as first rendered"
     document.querySelectorAll('.card.collapsible').forEach(function (c) {
       c.classList.toggle('collapsed', c.dataset.fold === '1');
     });
@@ -680,7 +680,7 @@ SCRIPT = """
     if (fchips.length || fselects.length) applyFacets();
     confirmFlash(document.getElementById('resetbtn'), 'Defaults restored \\u2713');
   });
-  // facet bar: chips toggle — OR within a group, AND across groups, empty group = no narrowing.
+  // facet bar: chips toggle. OR within a group, AND across groups, empty group = no narrowing.
   // Hidden cards stay in the DOM, so the blob and tally cover them. Selections persist per page key.
   var fchips = document.querySelectorAll('.facetbar .fchip');
   var fselects = document.querySelectorAll('.facetbar .fselect');
@@ -733,7 +733,7 @@ SCRIPT = """
     });
     // a chip's count ignores its own group's selection (standard faceted search), so
     // within-group numbers stay stable while you multi-select. A non-active chip whose
-    // count is zero dims and stops responding — a dead-end combination shows before the click.
+    // count is zero dims and stops responding, so a dead-end combination shows before the click.
     fchips.forEach(function (b) {
       var n = 0;
       allCards.forEach(function (c) {
@@ -786,7 +786,7 @@ SCRIPT = """
     if (b) b.addEventListener('click', clearFacets);
   });
   if (fchips.length || fselects.length) applyFacets();
-  // a deep link from a context section can land on a folded card — unfold it, flash it, and let
+  // a deep link from a context section can land on a folded card, so unfold it, flash it, and let
   // the flash fade out. The hash is a transient navigation aid, not state: it clears as soon as
   // it is handled, so a reload replays nothing and a re-click of the same link is a fresh jump.
   function revealHash() {
@@ -809,13 +809,13 @@ SCRIPT = """
 
 
 def anchor_id(item_id):
-    """One stable element id per card (card-heartbeat-3) — '#' and friends would break a URL
+    """One stable element id per card (card-heartbeat-3). '#' and friends would break a URL
     fragment, so every non-alphanumeric becomes a dash. Section HTML deep-links against this."""
     return "card-" + re.sub(r"[^A-Za-z0-9_-]", "-", item_id)
 
 
 def item_options(item, page_options):
-    """The card's choice set — candidates[].value + edit.value under a pick_ui strategy, the
+    """The card's choice set: candidates[].value + edit.value under a pick_ui strategy, the
     options field (page-wide set as fallback) otherwise. [] means an informational card."""
     pick_ui = item.get("pick_ui") or {}
     if pick_ui.get("style") == "columns":
@@ -827,11 +827,11 @@ def item_options(item, page_options):
 
 
 def pick_area_html(item, options, default, option_help, suggested=None):
-    """The card's interactive choice block — the strategy seam.
+    """The card's interactive choice block, the strategy seam.
 
     Default strategy: one radio-label row. "columns" (item.pick_ui): one bordered box per candidate
-    laid out side by side — radio + label heading, comparison chips, the candidate text in its own
-    mono block, an optional expander — plus a full-width edit box seeded with pick_ui.edit.seed.
+    laid out side by side (radio + label heading, comparison chips, the candidate text in its own
+    mono block, an optional expander), plus a full-width edit box seeded with pick_ui.edit.seed.
     An optional pick_ui.context renders first as a full-width non-selectable box (label + mono
     text): the baseline the candidates are read against.
     Every strategy emits radios named pick:<id>; the page JS is strategy-agnostic. A new strategy
@@ -916,7 +916,7 @@ def card_html(item, page_options, page_default, option_help):
     where_value = item.get("where")
     if isinstance(where_value, dict):
         code = f'<div class="fcode">{html.escape(where_value["code"])}</div>' if where_value.get("code") else ""
-        # the code line is a <div>, so its wrapper must be flow content — a <span> here violates
+        # the code line is a <div>, so its wrapper must be flow content; a <span> here violates
         # the HTML content model and makes validators suppress errors in the whole subtree
         where_html = (f'<div class="field f-where"><span class="flabel">where</span>'
                       f'<div class="ftext">{html.escape(where_value.get("place", ""))}{code}</div></div>')
@@ -981,7 +981,7 @@ def legend_html(option_help):
     if not option_help:
         return ""
     parts = " &nbsp;·&nbsp; ".join(
-        f"<b>{html.escape(option)}</b> — {html.escape(meaning)}" for option, meaning in option_help.items()
+        f"<b>{html.escape(option)}</b>: {html.escape(meaning)}" for option, meaning in option_help.items()
     )
     return f'<div class="legend">{parts}</div>'
 
@@ -1012,7 +1012,7 @@ def main():
                 counts[value] += 1
         label = html.escape(group.get("label", key))
         if group.get("style") == "select":
-            # one compact control regardless of value count — the right shape past ~6 values
+            # one compact control regardless of value count, the right shape past ~6 values
             options = [f'<option value="" data-base="all">all ({sum(counts.values())})</option>'] + [
                 f'<option value="{html.escape(value)}" data-base="{html.escape(value)}">'
                 f'{html.escape(value)} ({counts[value]})</option>'
@@ -1095,7 +1095,7 @@ def main():
     accept_btn = ('<button id="acceptall" title="select every suggested pick (respects the filter)">'
                   '★ accept suggested</button>') if has_suggestions else ""
     # `live` (spec field or --live) lets this page be DRIVEN through the live canvas (webui.session):
-    # inject the kit's re-serve channel (toast/progress CSS — the picker is --shadow-clash-free) + the
+    # inject the kit's re-serve channel (toast/progress CSS; the picker is --shadow-clash-free) + the
     # SSE client, so the agent can push reload/toast into the open picker tab. Default off = unchanged.
     live = bool(spec.get("live")) or ("--live" in sys.argv)
     live_block = (f"<style>{kit.live_css()}</style><script>{kit.sse_client_js()}</script>") if live else ""
@@ -1124,7 +1124,7 @@ def main():
   <span class="kbhint">j / k move · a accept</span>
   <details class="blobwrap"><summary>selection blob</summary>
   <textarea id="blob" readonly></textarea>
-  <p class="hint">Submit sends this blob straight to the waiting session. No server? Copy it and paste it into the chat instead — same effect.</p>
+  <p class="hint">Submit sends this blob straight to the waiting session. No server? Copy it and paste it into the chat instead, same effect.</p>
   </details>
  </div>
 </div>
@@ -1134,7 +1134,7 @@ def main():
 </body></html>
 """
     output_path = os.path.join(output_dir, "picker.html")
-    assert_full_dark_override(page, label="decision picker")   # fail loud — never ship a half-theme
+    assert_full_dark_override(page, label="decision picker")   # fail loud, never ship a half-theme
     with open(output_path, "w") as handle:
         handle.write(page)
     print(f"RENDERED {output_path}", flush=True)

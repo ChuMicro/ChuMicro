@@ -7,8 +7,8 @@ for light on :root must be re-defined under :root[data-theme=dark], or that page
 on a light background in dark mode. page() (kit.py) runs it on the HTML it is about to emit and
 raises instead of shipping the broken page.
 
-Pure stdlib — regex over the emitted CSS. A non-color custom property such as --pagew:920px is
-ignored; only color-valued properties must carry a dark override.
+Pure stdlib: a regex pass over the emitted CSS. A non-color custom property such as --pagew:920px
+is ignored; only color-valued properties must carry a dark override.
 """
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ _BAD_MEDIA = re.compile(r"@media[^{]*prefers-color-scheme")
 
 
 class ThemeContractError(ValueError):
-    """The dark-override theming contract is violated — the page would render a half-theme."""
+    """The dark-override theming contract is violated, so the page would render a half-theme."""
 
 
 def _vars(css, pattern):

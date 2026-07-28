@@ -14,7 +14,7 @@ static gates cannot see:
 
 Playwright and the chromium browser binary are heavy host-only deps absent from a fresh
 checkout. When either is missing this exits SKIP_EXIT (3) with a one-line reason naming the
-install step — never a silent pass that would let a JS regression ship unobserved.
+install step, never a silent pass that would let a JS regression ship unobserved.
 
 Usage: validate_picker_smoke.py [<output-dir>]   (default: a fresh temp dir)
 Exit 0 all behavior assertions held; 2 a behavior assertion failed; 3 playwright or chromium
@@ -61,7 +61,7 @@ def main():
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:
-        print("SKIPPED smoke (playwright not installed — `pip install playwright`)", flush=True)
+        print("SKIPPED smoke (playwright not installed; `pip install playwright`)", flush=True)
         sys.exit(SKIP_EXIT)
 
     page_path = _render_page(outdir)
@@ -73,9 +73,9 @@ def main():
             try:
                 browser = playwright.chromium.launch(headless=True)
             except Exception as error:
-                # A missing browser binary surfaces here, not at import — `playwright install
+                # A missing browser binary surfaces here, not at import, meaning `playwright install
                 # chromium` has not been run. Skip loudly rather than fail the gate.
-                print(f"SKIPPED smoke (chromium unavailable — `playwright install chromium`): "
+                print(f"SKIPPED smoke (chromium unavailable; `playwright install chromium`): "
                       f"{type(error).__name__}: {error}", flush=True)
                 sys.exit(SKIP_EXIT)
             page = browser.new_page()
@@ -103,7 +103,7 @@ def main():
                 problems.append(f'blob missing the typed note line; blob was:\n{blob_text}')
 
             # item 2 is the columns pick_ui card; its default is "suggested". Pick a different
-            # candidate ("alt") so the change actually fires — a non-default, non-edit pick that
+            # candidate ("alt") so the change actually fires: a non-default, non-edit pick that
             # also marks the card decided.
             card2 = page.locator('.card[data-id="2"]')
             card2.locator('input[type=radio][value="alt"]').check()

@@ -43,7 +43,7 @@ the internal layout for readers who want to navigate by source file.
 
 ## Devices.yml schema and loader registry
 
-The `chumicro_deploy.config` package owns the `devices.yml` schema —
+The `chumicro_deploy.config` package owns the `devices.yml` schema.
 `load_devices_yml` is the built-in loader (registered under the
 `"default"` entry-point name); third parties register their own
 config formats via the `chumicro_deploy.config_loaders` entry-point

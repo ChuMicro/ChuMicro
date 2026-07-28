@@ -1,4 +1,4 @@
-"""The webui kit — one palette, one page shell, one affordance helper, one content-key, and the
+"""The webui kit: one palette, one page shell, one affordance helper, one content-key, and the
 SSE re-serve client. The shared construction layer beneath every browser surface an agent renders
 for a human (the decision picker, a report, an A/B compare), so a palette, affordance, or theme fix
 lands once and every surface inherits it.
@@ -35,7 +35,7 @@ PALETTE_DARK = {
 
 
 def palette_css():
-    """The single source of theme color — both blocks, identical keys."""
+    """The single source of theme color: both blocks, identical keys."""
     light = "".join(f"{k}:{v};" for k, v in PALETTE_LIGHT.items())
     dark = "".join(f"{k}:{v};" for k, v in PALETTE_DARK.items())
     return f":root{{{light}}}\n:root[data-theme=dark]{{{dark}}}"
@@ -50,7 +50,7 @@ def content_key(content, *, prefix="page"):
     return f"{prefix}:{hashlib.sha1(content.encode()).hexdigest()[:12]}"
 
 
-# ── The affordance rules, extracted so any surface — even a JS-rendered one — gets the SAME
+# ── The affordance rules, extracted so any surface (even a JS-rendered one) gets the SAME
 #    press / confirm-flash / busy feedback ("a button press must show something"). ──
 AFFORD_CSS = """
 .chu-ok{background:var(--good)!important;color:var(--accent-fg)!important;border-color:var(--good)!important;}
@@ -115,7 +115,7 @@ def affordance_js():
 
 def live_css():
     """The CSS a surface needs to host the re-serve channel (affordance + toast/progress) WITHOUT
-    the kit's layout CSS — for a surface that has its own layout but opts into being driven through
+    the kit's layout CSS, for a surface that has its own layout but opts into being driven through
     the live canvas."""
     return AFFORD_CSS + CHANNEL_CSS
 
