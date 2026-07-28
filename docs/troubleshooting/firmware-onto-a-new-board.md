@@ -11,13 +11,13 @@ Flash a runtime.  Flashing erases whatever is on the board.
 - RP2040 and RP2350 boards use the UF2 method.  Put the board in its bootloader first by holding BOOTSEL (or double-tapping RESET on many boards) while plugging in, so its UF2 drive mounts:
 
 ```bash
-python3 run.py install-firmware --method uf2 --device <id>
+chumicro-workspace install-firmware --method uf2 --device <id>
 ```
 
 - ESP32-family boards flash over serial with esptool (the ESP32 flashing tool).  Add `--erase` on a first flash or when switching runtimes:
 
 ```bash
-python3 run.py install-firmware --method esptool --erase --device <id>
+chumicro-workspace install-firmware --method esptool --erase --device <id>
 ```
 
 For a board not yet in `devices.yml`, pass the image URL with `--url <firmware-url>` in place of `--device`.
@@ -29,7 +29,7 @@ Vendors often ship boards with old firmware, sometimes well below the version Ch
 `add-device` prints an `OLD` warning naming the floor and the running version when you register a board below it.  Upgrade the firmware before troubleshooting anything else:
 
 ```bash
-python3 run.py install-firmware --method uf2 --device <id>
+chumicro-workspace install-firmware --method uf2 --device <id>
 ```
 
 ## ESP32-S2 goes silent entering the bootloader; esptool reports "No serial data received"
@@ -45,7 +45,7 @@ Put the board into its bootloader by hand: hold BOOT (GPIO0), press and release 
 The command refuses to run without `--yes`, which is the moment to stop and reconsider.  Back up any board-only files first, then:
 
 ```bash
-python3 run.py reset-board --device <id> --yes
+chumicro-workspace reset-board --device <id> --yes
 ```
 
 It is a no-op in RAM or mount mode, where there is no device filesystem to wipe.

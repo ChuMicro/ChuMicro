@@ -115,7 +115,7 @@ VS Code's Testing panel (beaker icon in the sidebar, or `⌘⇧T` / `Ctrl+Shift+
 
 Click the ▶ button next to any test file or function to run it. This is fast for iterating but does not produce coverage data or enforce the coverage threshold.
 
-For real-board `functional_tests/`, the same Testing panel can target the explicit `functional_tests/` file, directory, or function.  The repository's pytest device plugin intercepts those targets and routes them to hardware.  The test tree shows extra `Setup — <runtime>` and `Run overhead — <runtime>` nodes alongside the individual tests.
+For real-board `functional_tests/`, the same Testing panel can target the explicit `functional_tests/` file, directory, or function.  The repository's pytest device plugin intercepts those targets and routes them to hardware.  The test tree shows extra `Setup: <runtime>` and `Run overhead: <runtime>` nodes alongside the individual tests.
 
 If no device is configured yet, pytest skips the run with a message telling you to generate or fill in `devices.yml`.  See [Device Testing](device-testing.md) for setup, the schema, and CLI options.
 

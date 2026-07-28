@@ -69,7 +69,7 @@ Read on if you want to override per-device deploy mode, change the `defaults.ide
 defaults:
   micropython: office-esp32-mp
   circuitpython: office-esp32-cp
-  deploy_mode: ram
+  deploy_mode: flash
   ide_runtime: micropython
 ```
 
@@ -79,7 +79,7 @@ Fields:
 |---|---|
 | `micropython` | Default MicroPython device ID from the `devices:` list |
 | `circuitpython` | Default CircuitPython device ID from the `devices:` list |
-| `deploy_mode` | Workspace-wide default deploy mode: `ram` or `flash` |
+| `deploy_mode` | Workspace-wide default deploy mode: `flash` (the default, per [Decision 0047](../../plans/decisions/0047-deploy-mode-flash-default.md)) or `ram` |
 | `ide_runtime` | Which runtime(s) IDE play buttons target: `micropython`, `circuitpython`, or `both` |
 
 Notes:
@@ -106,13 +106,13 @@ devices:
     runtime: circuitpython
     address: /dev/cu.usbmodem101
     description: Desk board running CircuitPython
-    deploy_mode: ram
+    deploy_mode: flash
 
   - id: office-esp32-mp
     runtime: micropython
     address: /dev/cu.usbserial-0001
     description: Desk board running MicroPython
-    deploy_mode: flash
+    deploy_mode: ram      # opt out of the flash default for this board
 ```
 
 Supported fields today:
@@ -136,7 +136,7 @@ Supported fields today:
 | `ram` | `mpremote mount`-based execution | raw-REPL inline execution |
 | `flash` | `mpremote fs cp -r` copy mode | copy to CIRCUITPY drive, then import from flash |
 
-Use `ram` for day-to-day functional-test iteration. Use `flash` when a board cannot hold the RAM-mode payload comfortably or when you need persistence semantics.
+`flash` is the default for project deploys, examples, and functional tests ([Decision 0047](../../plans/decisions/0047-deploy-mode-flash-default.md)), because it runs your code the way a shipped deploy does.  Opt into `ram` per device or per run when you are iterating on a single library that needs no persistence and no multi-library composition, and you want the edits to stay off the board's flash.
 
 #### When you must use `flash`
 

@@ -37,7 +37,7 @@ Why each piece:
 
 After the command:
 
-1. Wait 1–2 seconds for the daemons to respawn.
+1. Wait 1 to 2 seconds for the daemons to respawn.
 2. Unplug and replug the board if its CIRCUITPY hasn't reappeared yet.
 3. `/Volumes/CIRCUITPY` should now be mounted, readable, and writable.
 4. Retry the deploy.  If you were in the `RecoveringDeployer` retry loop, press Enter at the prompt.
@@ -85,6 +85,8 @@ Either way the recovery is the same and lives on the device side: reset the boar
 - `chumicro-workspace reset-board --yes --device <id>`: wipes the device filesystem clean-slate; CircuitPython rebuilds an empty writable FS on next boot.  This destroys user files on the board; back up first if anything on the board is the only copy.
 - Or unplug, hold the BOOT/RESET button if the board has one, replug.  The runtime re-initializes and the user FS comes back writable.
 - The FSKit recovery `killall` from the section above is a separate flow: that one is for the drive-never-appears wedge, not for a writable-side refusal.
+
+## CIRCUITPY mount exists but writes fail with EACCES
 
 **Symptom**
 

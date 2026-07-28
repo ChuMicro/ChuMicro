@@ -9,7 +9,7 @@ In RAM deploy mode the whole library bootstrap sits on the heap, and the multi-K
 **Fix.** These libraries declare `requires_flash = true`, so the deploy pre-flight auto-switches RAM to flash and prints why, and flash is the default deploy mode.  If you pinned RAM mode, drop the pin or force flash:
 
 ```
-python3 run.py deploy <project> --deploy-mode flash
+chumicro-workspace deploy <project> --deploy-mode flash
 ```
 
 (background: [Decision 0047](../../plans/decisions/0047-deploy-mode-flash-default.md))

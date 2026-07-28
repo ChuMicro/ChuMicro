@@ -45,6 +45,10 @@ Override:
 
 - `--device <id>`: a specific device id from `devices.yml`.
 - `--runtime micropython`: pick the first MicroPython device.
+- `--wifi-timeout-s <n>`: how long to wait for the board's `WIFI_OK`
+  marker (default 45 s).
+- `--completion-timeout-s <n>`: how long to wait for the board's
+  `STREAM_CLOSED` marker (default 30 s).
 
 ## Expected output
 

@@ -2,7 +2,7 @@
 
 <img src="../../support/docs/chumicro_tip.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
-Workbench packages are host-only CPython tools that ship to PyPI but never reach the device: `chumicro-deploy`, `chumicro-repl`, `chumicro-workspace`, `chumicro-pytest-device`.  This page documents how to add a new one and how the lifecycle differs from a [device library](new-library.md).
+Workbench packages are host-only CPython tools that ship to PyPI but never reach the device: `chumicro-deploy`, `chumicro-repl`, `chumicro-workspace`, `chumicro-pytest-device`, `chumicro-checks`.  This page documents how to add a new one and how the lifecycle differs from a [device library](new-library.md).
 
 <br clear="left">
 

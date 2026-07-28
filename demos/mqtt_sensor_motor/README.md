@@ -1,11 +1,10 @@
 # mqtt_sensor_motor: a temperature-controlled fan node
 
-The canonical IoT round trip on `chumicro_mqtt`: a board reads its
-on-chip temperature, publishes it as JSON telemetry, and drives a PWM
-"motor" (fan/pump) from speed commands the broker delivers, with a
-local Mosquitto broker bridging the board to a CPython-side
-counterparty, in one command, no broker setup beyond
-`brew install mosquitto`.
+A board reads its on-chip temperature, publishes it as JSON telemetry
+over `chumicro_mqtt`, and drives a PWM "motor" (fan/pump) from speed
+commands the broker delivers. A local Mosquitto broker bridges the
+board to a CPython-side counterparty, and one command starts both
+ends, so the setup stops at `brew install mosquitto`.
 
 No motor hardware is needed on the bench: the demo drives a PWM duty
 cycle on a GPIO (exactly how a real fan/pump ESC is commanded) and
@@ -87,6 +86,8 @@ Override:
 - `--connect-timeout-s <n>`: how long to wait for the board's
   `MQTT_CONNECTED` marker (default 60 s; ESP32-S2 cold-boot + wifi can
   be slow).
+- `--telemetry-timeout-s <n>`: how long to wait for the first three
+  telemetry receipts (default 30 s).
 
 ## Expected output
 

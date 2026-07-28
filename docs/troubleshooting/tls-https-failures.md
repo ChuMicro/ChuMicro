@@ -49,7 +49,7 @@ For local development only, you can instead backdate the cert's `notBefore` so t
 **Fix.** If you pinned RAM mode, deploy HTTPS and `wss://` workloads in flash mode:
 
 ```
-python3 run.py deploy <project> --deploy-mode flash
+chumicro-workspace deploy <project> --deploy-mode flash
 ```
 
 or set `deploy_mode: flash` for the device in `devices.yml`.  An ESP32-S3 with more than 200 KB of free heap after wifi can do HTTPS in RAM mode.

@@ -148,7 +148,7 @@ Do not silently swallow exceptions in host-side infrastructure (`scripts/`, `wor
 try:
     subprocess.run(["xattr", "-cr", str(path)], check=True)
 except FileNotFoundError:
-    print("WARNING: xattr not found — skipping extended attribute removal")
+    print("WARNING: xattr not found: skipping extended attribute removal")
 except subprocess.CalledProcessError as exception:
     print(f"WARNING: xattr failed: {exception}")
 

@@ -17,8 +17,8 @@ import chumicro_sockets
 from chumicro_http_server import HttpServer
 from chumicro_http_server.streaming import SOURCE_EOF, build_streaming_response
 from chumicro_requests.generators import get
-from chumicro_sockets.sockets_factory import connector_factory
 from chumicro_runner import Runner
+from chumicro_sockets.sockets_factory import connector_factory
 from chumicro_timing import Rate, ticks_add, ticks_diff, ticks_ms
 
 # LED half-period: lit for BLINK_MS, dark for BLINK_MS.

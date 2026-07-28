@@ -85,7 +85,7 @@ If any of those three is false, the skip constant is a no-op and the dead-skip w
 
 ## Compatibility with on-device library curation
 
-The `chumicro-workspace library` CLI (`add` / `list` / `update` / `remove` / `switch-channel`) is the on-device library host: it pulls a chumicro library *and the chumicro libraries it transitively needs* from PyPI into the workspace's `libraries/` folder, where the deploy walker treats them like local libraries.  `library add` resolves the transitive set from each fetched library's `pyproject.toml`, so dropping a library also drops the deps only it reached.  The skip-factories constant is the entrypoint-shape annotation that decides which factory submodules (and therefore which transitive deps) are actually needed; the same constant works for both deploy paths.
+The `chumicro-workspace library` CLI (`list` / `browse` / `add` / `update` / `remove` / `forget` / `switch-channel`) is the on-device library host: it pulls a chumicro library *and the chumicro libraries it transitively needs* from PyPI into the workspace's `libraries/` folder, where the deploy walker treats them like local libraries.  `library add` resolves the transitive set from each fetched library's `pyproject.toml`, so dropping a library also drops the deps only it reached.  The skip-factories constant is the entrypoint-shape annotation that decides which factory submodules (and therefore which transitive deps) are actually needed; the same constant works for both deploy paths.
 
 ## For library authors: how the convention works
 
