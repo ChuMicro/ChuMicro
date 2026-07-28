@@ -25,7 +25,7 @@ of the following before deploying:
   host IP.
 
 If no server URL is configured, the example prints a SETUP message
-and exits cleanly — it does not try to reach the placeholder.
+and exits cleanly without trying to reach the placeholder.
 
 Configuration
 =============
@@ -38,7 +38,7 @@ deploy pipeline) via the flat-key API:
 * WebSocket client (read by ``WebSocketClient.from_config``):
   ``websockets.client.max_message_bytes`` (optional, library default).
 * App-level: ``websockets.client.connect_url`` is read by this
-  example and passed to ``client.connect(url)`` — it's declared in
+  example and passed to ``client.connect(url)``.  It's declared in
   the manifest because users need to set it per-project, but
   ``WebSocketClient.from_config`` doesn't consume it (URL is a
   per-connection argument).
@@ -73,7 +73,7 @@ if not connect_url:
         "       a desktop), then set `websockets.client.connect_url` in your",
     )
     print(
-        "       secrets.toml — e.g. ws://192.168.1.42:8765/ — and redeploy.",
+        "       secrets.toml (e.g. ws://192.168.1.42:8765/) and redeploy.",
     )
     raise SystemExit(0)
 

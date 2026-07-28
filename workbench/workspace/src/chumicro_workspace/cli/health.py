@@ -136,7 +136,7 @@ def _fix_fskit_wedge(
 
     if not detect_fskit_wedge():
         print(
-            "[chumicro-workspace] No FSKit wedge detected — refusing "
+            "[chumicro-workspace] No FSKit wedge detected; refusing "
             "to run the recovery command.\n"
             "Running it on a healthy system kills daemons mid-"
             "operation on mounted volumes and leaves them in an "
@@ -219,7 +219,7 @@ def _add_health_parsers(subparsers: argparse._SubParsersAction) -> None:
     doctor_parser = subparsers.add_parser(
         "doctor",
         help=(
-            "Strict sibling of `status` — adds Python version check "
+            "Strict sibling of `status`: adds Python version check "
             "and a per-project AST scan for `run()`."
         ),
     )
@@ -232,7 +232,7 @@ def _add_health_parsers(subparsers: argparse._SubParsersAction) -> None:
             "macOS only.  Detect the FSKit wedge and, if present, "
             "run the sudo killall recovery command for you (sudo "
             "prompts for your password inline).  Refuses to run "
-            "when no wedge is detected — running the recovery on a "
+            "when no wedge is detected, because running the recovery on a "
             "healthy system damages mounted volumes."
         ),
     )

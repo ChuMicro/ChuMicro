@@ -94,26 +94,26 @@ class UnresolvedFirmwareError(Exception):
 
     Carries the diagnosis so the CLI can surface a helpful message:
 
-    - ``cause="no_board_id"`` — CP path needs ``hardware.board_id``
+    - ``cause="no_board_id"``: CP path needs ``hardware.board_id``
       (or :func:`resolve_firmware_url` was called with empty
       ``board_id``).
-    - ``cause="no_version"`` — :func:`resolve_firmware_url` was
+    - ``cause="no_version"``: :func:`resolve_firmware_url` was
       called with an empty ``version`` argument.
-    - ``cause="no_machine"`` — MP path needs ``hardware.machine``.
-    - ``cause="machine_not_in_map"`` — MP machine string isn't in
+    - ``cause="no_machine"``: MP path needs ``hardware.machine``.
+    - ``cause="machine_not_in_map"``: MP machine string isn't in
       the curated map, and no ``hardware.firmware_source`` is set.
-    - ``cause="no_versions_listed"`` — the S3 bucket returned no
+    - ``cause="no_versions_listed"``: the S3 bucket returned no
       uf2 keys for the prefix.  Wrong board id, or the language
       isn't published for that board.
-    - ``cause="no_stable_versions"`` — the listing has only
+    - ``cause="no_stable_versions"``: the listing has only
       pre-release / unstable versions.  Pass ``allow_prerelease=True``.
-    - ``cause="no_mp_builds_listed"`` — the
+    - ``cause="no_mp_builds_listed"``: the
       ``micropython.org/download/<BOARD>/`` page returned no parsable
       firmware anchors.  Likely a wrong BOARD name or a board that
       moved upstream.
-    - ``cause="unsupported_runtime"`` — runtime isn't ``circuitpython``
+    - ``cause="unsupported_runtime"``: runtime isn't ``circuitpython``
       or ``micropython``.
-    - ``cause="micropython_needs_listing"`` — caller invoked
+    - ``cause="micropython_needs_listing"``: caller invoked
       :func:`resolve_firmware_url` (the pure URL formatter) with
       runtime=micropython, which embeds a per-build date that can't
       be inferred from version alone.  Use
@@ -127,7 +127,7 @@ class UnresolvedFirmwareError(Exception):
 
 
 # ---------------------------------------------------------------------------
-# CircuitPython — S3 listing
+# CircuitPython: S3 listing
 # ---------------------------------------------------------------------------
 
 
@@ -234,7 +234,7 @@ def latest_circuitpython_url(
 
 
 # ---------------------------------------------------------------------------
-# MicroPython — machine → BOARD map
+# MicroPython: machine → BOARD map
 # ---------------------------------------------------------------------------
 
 
@@ -250,7 +250,7 @@ def micropython_board_for_machine(machine_string: str) -> str | None:
 
 
 # ---------------------------------------------------------------------------
-# MicroPython — micropython.org listing scrape
+# MicroPython: micropython.org listing scrape
 # ---------------------------------------------------------------------------
 
 #: micropython.org's per-board download landing page URL.  Stable
@@ -284,7 +284,7 @@ MICROPYTHON_FIRMWARE_BASE_URL = "https://micropython.org"
 #:     / ``dfu``.
 #:
 #: Capture groups: ``date`` (8 digits), ``unstable`` ("unstable-" or
-#: empty — legacy marker), ``version`` (the ``v1.x.y`` portion),
+#: empty, the legacy marker), ``version`` (the ``v1.x.y`` portion),
 #: ``prerelease`` (the post-version ``-preview.69.gSHA``-shaped
 #: suffix; empty for stable builds), ``ext`` (filename extension).
 _MICROPYTHON_FILENAME_PATTERN = re.compile(
@@ -322,7 +322,7 @@ def list_micropython_builds(
     """Scrape ``micropython.org/download/<board>/`` for firmware builds.
 
     Returns ``(date, version, unstable_marker, prerelease_suffix,
-    absolute_url)`` tuples — every published build whose filename
+    absolute_url)`` tuples for every published build whose filename
     matches :data:`_MICROPYTHON_FILENAME_PATTERN` and ends in the
     requested *file_extension*.  ``date`` is YYYYMMDD.  ``version`` is
     the raw ``v1.x.y`` (or ``v1.x``) portion.  ``unstable_marker`` is
@@ -366,7 +366,7 @@ def list_micropython_builds(
         raise UnresolvedFirmwareError(
             f"micropython.org/download/{board}/ returned no .{file_extension} "
             f"build anchors (wrong BOARD name, board moved upstream, or this "
-            f"port doesn't publish .{file_extension} firmware — try another "
+            f"port doesn't publish .{file_extension} firmware; try another "
             f"file_extension).",
             cause="no_mp_builds_listed",
         )

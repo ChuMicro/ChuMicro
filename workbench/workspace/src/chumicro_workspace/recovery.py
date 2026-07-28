@@ -54,8 +54,8 @@ _HINT_TABLE: tuple[tuple[re.Pattern[str], str, str], ...] = (
         re.compile(r"OSError:.*['\"]?/?runtime_config\.msgpack"),
         "ram-mode-config",
         (
-            "RAM-mode deploys don't persist `/runtime_config.msgpack` "
-            "— switch to flash mode for projects that read runtime "
+            "RAM-mode deploys don't persist `/runtime_config.msgpack`.  "
+            "Switch to flash mode for projects that read runtime "
             "config (set `defaults.deploy_mode: flash` in devices.yml "
             "or override per-device)."
         ),
@@ -68,7 +68,7 @@ _HINT_TABLE: tuple[tuple[re.Pattern[str], str, str], ...] = (
         ),
         "missing-chumicro-lib",
         (
-            "library `{0}` isn't installed in this venv — run "
+            "library `{0}` isn't installed in this venv; run "
             "`python3 run.py setup` to refresh deps, or add `{0}` to "
             "the workspace's pyproject.toml dependencies."
         ),
@@ -77,7 +77,7 @@ _HINT_TABLE: tuple[tuple[re.Pattern[str], str, str], ...] = (
         re.compile(r"KeyError:\s*'([^']+)'"),
         "missing-config-key",
         (
-            "missing config key `{0}` — check projects/<project>/project_config.toml "
+            "missing config key `{0}`: check projects/<project>/project_config.toml "
             "or `secrets.toml` (the gitignored workspace-wide credentials + "
             "device defaults).  Use `python3 run.py deploy <project> --dry-run` "
             "to inspect what the merged runtime config carries."

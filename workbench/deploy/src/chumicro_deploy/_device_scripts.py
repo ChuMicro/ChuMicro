@@ -2,7 +2,7 @@
 
 Host-side home for the Python snippets the transport execs on a
 board (raw REPL or ``mpremote exec``), plus the host-side parser for
-the scope-listing scripts' output — marker, emitter, and parser live
+the scope-listing scripts' output.  Marker, emitter, and parser live
 together so they cannot drift apart.
 
 Every script body is pure stdlib (``os.listdir`` + ``os.stat``) so it
@@ -90,7 +90,7 @@ LIST_ALL_SCRIPT: str = _WALK_AND_PRINT_DEF + "_walk('/')\n"
 
 #: Recursive rmtree tolerant of files, dirs, and already-absent
 #: paths: try dir-removal first, fall back to file removal, swallow
-#: the rest (best-effort — the post-``fs cp`` free-space check is the
+#: the rest (best-effort, since the post-``fs cp`` free-space check is the
 #: real guard downstream).
 _RMTREE_DEF: str = (
     "import os\n"
@@ -140,7 +140,7 @@ def delete_files_script(paths: list[str]) -> str:
     """Delete *paths* then reap every directory left empty.
 
     ``repr(paths)`` round-trips a list of strings cleanly into a
-    Python literal — no manual escaping required.  The reap walks the
+    Python literal, so no manual escaping is required.  The reap walks the
     whole filesystem bottom-up and ``os.rmdir``-reaps any directory
     that's now empty; dot-prefixed entries are skipped (not ours to
     reap) and ``rmdir`` only removes empties so live packages are

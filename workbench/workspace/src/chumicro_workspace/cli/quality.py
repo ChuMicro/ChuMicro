@@ -35,7 +35,7 @@ def _cmd_test(args: argparse.Namespace) -> int:
 
     Fails loudly (nonzero, with a ``python3 run.py setup`` pointer)
     when pytest itself is missing rather than shelling out to a raw
-    "No module named pytest" traceback — a workspace that never ran
+    "No module named pytest" traceback: a workspace that never ran
     ``setup``'s ``[dev]`` install has no test runner to reach.
     """
     workspace = _resolve_workspace(args)
@@ -68,7 +68,7 @@ def _cmd_lint(args: argparse.Namespace) -> int:
     (``[tool.ruff]`` and ``[tool.chumicro-checks]``).  Extra args
     after ``--`` forward to ruff.  Either tool missing from the venv
     fails loudly (nonzero, with a ``python3 run.py setup`` pointer)
-    rather than green-washing — a lint that lints nothing must not
+    rather than green-washing: a lint that lints nothing must not
     report success on a workspace that never installed the ``[dev]``
     extra.
 

@@ -8,7 +8,7 @@ first-write text for ``devices.yml`` / ``workspace.yml`` /
 ``secrets.toml`` from the readers in
 :mod:`chumicro_workspace.templates` on first ``setup``.
 
-``pyproject.toml`` is tool-owned, so `update` re-flows it — but
+``pyproject.toml`` is tool-owned, so `update` re-flows it, but
 workspace users legitimately add their own host-side entries to its
 ``[project].dependencies`` array, and a blind overwrite would drop
 them.  As a carve-out, when re-flowing ``pyproject.toml`` `update`
@@ -259,7 +259,7 @@ def _reflow_pyproject_preserving_dependencies(
     so upstream comments and layout survive.  Requirements present in
     both arrays, or only in the incoming array, keep their incoming
     form; a user removal of an upstream-shipped requirement is not
-    preserved.  Comparison is on the raw requirement strings — exact
+    preserved.  Comparison is on the raw requirement strings: exact
     match, no PEP 508 normalization.
 
     Returns *incoming_bytes* unchanged (a plain overwrite) when either

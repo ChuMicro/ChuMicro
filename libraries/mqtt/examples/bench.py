@@ -11,7 +11,7 @@ The library's design promises two things this bench verifies live:
 
 * an inbound PUBLISH whose total wire size is ≤ ``rx_buffer_size``
   parses inline and is delivered intact with no per-message heap
-  allocation — so a consumer that needs a larger payload intact sizes
+  allocation, so a consumer that needs a larger payload intact sizes
   ``rx_buffer_size`` up to cover it,
 * a PUBLISH above ``rx_buffer_size`` (and a topic above
   ``rx_buffer_size``) drain via rolling discard, with no payload-sized
@@ -222,7 +222,7 @@ def _reset_inbound():
 
 
 def scenario_tier1():
-    banner("STEADY (small) — inline parse (32-byte payload)")
+    banner("STEADY (small): inline parse (32-byte payload)")
     scenario = Scenario("steady_32b")
     _reset_inbound()
     payload = b"x" * 32
@@ -238,7 +238,7 @@ def scenario_tier1():
 
 
 def scenario_tier3():
-    banner(f"OVERSIZED — rolling drain (4096 B above {RX_BUFFER_SIZE} B rx buffer)")
+    banner(f"OVERSIZED: rolling drain (4096 B above {RX_BUFFER_SIZE} B rx buffer)")
     scenario = Scenario("oversize_4kb")
     seen = len(oversize_events)
     payload = b"z" * 4096
@@ -261,7 +261,7 @@ def scenario_tier3():
 
 
 def scenario_oversize_topic():
-    banner(f"OVERSIZE TOPIC — 300-char topic blows the {RX_BUFFER_SIZE} B rx buffer")
+    banner(f"OVERSIZE TOPIC: 300-char topic blows the {RX_BUFFER_SIZE} B rx buffer")
     scenario = Scenario("oversize_topic")
     seen = len(oversize_events)
     long_topic = INBOUND_TOPIC + "/" + ("a" * 300)
@@ -284,7 +284,7 @@ def scenario_oversize_topic():
 
 
 def scenario_qos1():
-    banner("QoS 1 — 10 round-trips with PUBACK")
+    banner("QoS 1: 10 round-trips with PUBACK")
     scenario = Scenario("qos1_10x")
     acked = [0]
     rtts_ms = []
@@ -314,7 +314,7 @@ def scenario_qos1():
 
 
 def scenario_keepalive():
-    banner("KEEPALIVE — idle 35 s (one PINGREQ cycle at 30 s)")
+    banner("KEEPALIVE: idle 35 s (one PINGREQ cycle at 30 s)")
     scenario = Scenario("keepalive_35s")
     state_before = mqtt.state
     deadline = ticks_add(ticks_ms(), 35_000)
@@ -327,7 +327,7 @@ def scenario_keepalive():
 
 
 def scenario_stress():
-    banner("STRESS — 100 small messages back-to-back")
+    banner("STRESS: 100 small messages back-to-back")
     scenario = Scenario("stress_100x")
     _reset_inbound()
     expected = 100

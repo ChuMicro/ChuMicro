@@ -2,8 +2,8 @@
 
 Brings wifi up via the local ``helpers`` module, then fetches a URL
 with a single ``response = yield from get(...)`` driven by
-``Runner.add_generator``.  The request reads top-to-bottom — connect,
-send, receive, return — with no handle to poll and no ``on_done``
+``Runner.add_generator``.  The request reads top-to-bottom (connect,
+send, receive, return) with no handle to poll and no ``on_done``
 callback.
 
 Pair with ``periodic_get.py``, which drives the long-lived ``HttpClient``
@@ -21,7 +21,7 @@ pipeline) via the flat-key API:
 * App-level: ``generator_fetch.url`` (the URL to fetch).
 
 When ``runtime_config.msgpack`` isn't present, wifi creds and the URL
-fall back to the placeholder constants below — edit them first.
+fall back to the placeholder constants below (edit them first).
 
 Deploying
 =========
@@ -37,7 +37,7 @@ Example output::
     status=200 bytes=1256
 """
 
-#: Cross-runtime — wifi-up via :mod:`helpers` dispatches per
+#: Cross-runtime: wifi-up via :mod:`helpers` dispatches per
 #: ``sys.implementation.name`` (CP / MP); the generator is pure-Python.
 __chumicro_runtimes__ = ("circuitpython", "micropython")
 
@@ -46,8 +46,8 @@ from chumicro_runner import Runner
 from chumicro_sockets.sockets_factory import connector_factory
 from helpers import runtime_config, wifi_up
 
-WIFI_SSID = "your-wifi-ssid"  # noqa: S105 — replace before deploying
-WIFI_PASSWORD = "your-wifi-password"  # noqa: S105 — replace before deploying
+WIFI_SSID = "your-wifi-ssid"  # noqa: S105 - replace before deploying
+WIFI_PASSWORD = "your-wifi-password"  # noqa: S105 - replace before deploying
 TARGET_URL = "http://example.com/"
 
 config = runtime_config()

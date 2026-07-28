@@ -32,62 +32,62 @@ _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
             r"\b(?:Surfaced|Discovered|Observed|Captured|Caught|shipped|landed) "
             r"\d{4}-\d{2}-\d{2}\b",
         ),
-        "dated incident — move to commit message or workstream file",
+        "dated incident: move to commit message or workstream file",
     ),
     (
         re.compile(r"\bverified (?:live|on hardware) \d{4}-\d{2}-\d{2}\b", re.IGNORECASE),
-        "dated verification — move to commit message or workstream file",
+        "dated verification: move to commit message or workstream file",
     ),
     (
         re.compile(
             r"\b(?:live-tested|bench-tested) on [^\n]{1,40}\d{4}-\d{2}-\d{2}\b",
             re.IGNORECASE,
         ),
-        "dated verification — move to commit message or workstream file",
+        "dated verification: move to commit message or workstream file",
     ),
     (
         re.compile(r"\b(?:Phase|Step|Slice)\s+\d+[a-z]?\b[^\n]{0,80}\bworkstream\b"),
-        "workstream-phase pointer — move to commit message or workstream file",
+        "workstream-phase pointer: move to commit message or workstream file",
     ),
     (
         re.compile(r"\bworkstream\s+Phase\s+\d+[a-z]?\b"),
-        "workstream-phase pointer — move to commit message or workstream file",
+        "workstream-phase pointer: move to commit message or workstream file",
     ),
     (
         # Slice N: workstream-only jargon in this codebase (no
         # procedural meaning), so match every numbered occurrence.
         re.compile(r"\bSlice\s+\d+[a-z]?\b"),
-        "workstream-phase pointer — move to commit message or workstream file",
+        "workstream-phase pointer: move to commit message or workstream file",
     ),
     (
         # Phase|Step N when NOT followed by a colon. Procedural
         # numbered steps ("# Step 1: put the board in bootloader mode")
         # use the colon and stay clean.
         re.compile(r"\b(?:Phase|Step)\s+\d+[a-z]?\b(?!\s*:)"),
-        "workstream-phase pointer — move to commit message or workstream file",
+        "workstream-phase pointer: move to commit message or workstream file",
     ),
     (
         # Item N: multi-item workstream shape. No procedural usage
         # exists in this codebase.
         re.compile(r"\bItem\s+\d+[a-z]?\b"),
-        "workstream-phase pointer — move to commit message or workstream file",
+        "workstream-phase pointer: move to commit message or workstream file",
     ),
     (
         # F-numbered finding within ~80 chars of an ISO date.
         re.compile(r"\bF\d+\b[^\n]{0,80}\b\d{4}-\d{2}-\d{2}\b"),
-        "dated verification finding — move to commit message or workstream file",
+        "dated verification finding: move to commit message or workstream file",
     ),
     (
         re.compile(r"\bverification\s+finding\s+#?\d+(?:,\s*\d{4}-\d{2}-\d{2})?\b"),
-        "dated verification finding — move to commit message or workstream file",
+        "dated verification finding: move to commit message or workstream file",
     ),
     (
         re.compile(r"\b\d{4}-\d{2}-\d{2}\s+verification\s+(?:pass|finding)\b"),
-        "dated verification pass — move to commit message or workstream file",
+        "dated verification pass: move to commit message or workstream file",
     ),
     (
         re.compile(r"\bRegression for \d{4}-\d{2}-\d{2}\b"),
-        "dated incident — move to commit message or workstream file",
+        "dated incident: move to commit message or workstream file",
     ),
     (
         # Verb-less dated-incident phrasings like "the 2026-05-09
@@ -97,36 +97,36 @@ _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
             r"\bthe \d{4}-\d{2}-\d{2}\s+"
             r"(?:audit|sweep|incident|pass|investigation|review|finding)\b",
         ),
-        "dated incident — move to commit message or workstream file",
+        "dated incident: move to commit message or workstream file",
     ),
     (
         re.compile(r"\bin the [a-z]+-[a-z]+(?:\s+[a-z]+){0,2}\s+(?:pass|audit|sweep|bake)\b"),
-        "workstream-phase pointer — move to commit message or workstream file",
+        "workstream-phase pointer: move to commit message or workstream file",
     ),
     (
         re.compile(r"\b(?:Earlier versions|Previously,?\s+th(?:is|e)|We used to|Used to be)\b"),
-        "removed-code framing — move to commit message or workstream file",
+        "removed-code framing: move to commit message or workstream file",
     ),
     (
         # "X retained only until Y lands|landed": roadmap framing
         # for a thing kept around pending future work.
         re.compile(r"\bretained (?:only )?until\b[^\n]{0,80}\b(?:lands?|landed)\b"),
-        "dateless landed-history framing — move to commit message or workstream file",
+        "dateless landed-history framing: move to commit message or workstream file",
     ),
     (
         # "before X landed": past-tense framing of a prior incident.
         re.compile(r"\bbefore [^\n]{1,80}\blanded\b"),
-        "dateless landed-history framing — move to commit message or workstream file",
+        "dateless landed-history framing: move to commit message or workstream file",
     ),
     (
         # "deferred until ...": future-work / roadmap framing.
         re.compile(r"\bdeferred until\b"),
-        "deferred-work framing — move to commit message or workstream file",
+        "deferred-work framing: move to commit message or workstream file",
     ),
     (
         # "until we have a|an X": roadmap framing for a future capability.
         re.compile(r"\buntil we have (?:a|an)\b"),
-        "deferred-work framing — move to commit message or workstream file",
+        "deferred-work framing: move to commit message or workstream file",
     ),
 )
 

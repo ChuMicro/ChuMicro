@@ -6,20 +6,20 @@ can fail a deploy when a traceback arrives.
 
 Recognized kinds:
 
-- :attr:`PatternKind.TRACEBACK` — the ``Traceback (most recent call
+- :attr:`PatternKind.TRACEBACK`: the ``Traceback (most recent call
   last):`` header that both runtimes emit at the start of an uncaught
   exception block.  Spans from the header line through the blank line
   that follows the exception summary.
-- :attr:`PatternKind.SAFE_MODE` — CircuitPython's ``safe mode`` block,
+- :attr:`PatternKind.SAFE_MODE`: CircuitPython's ``safe mode`` block,
   printed when the supervisor drops into safe mode after repeated
   crashes or after ``supervisor.reload()`` into a broken state.
-- :attr:`PatternKind.HARD_FAULT` — the CircuitPython ``Hard fault``
+- :attr:`PatternKind.HARD_FAULT`: the CircuitPython ``Hard fault``
   message and the register dump that follows it.
-- :attr:`PatternKind.SOFT_REBOOT` — the MicroPython ``MPY: soft
+- :attr:`PatternKind.SOFT_REBOOT`: the MicroPython ``MPY: soft
   reboot`` banner that follows a ``machine.soft_reset()`` or a
   Ctrl-D in the interactive REPL.
 
-The detector is line-oriented — pass a decoded string of lines (or a
+The detector is line-oriented.  Pass a decoded string of lines (or a
 single complete line) to :func:`detect_patterns` and get back a list
 of :class:`PatternMatch` records, each carrying a span into the
 input string plus the detected kind.
@@ -64,7 +64,7 @@ class PatternMatch:
 
 
 #: ``Traceback (most recent call last):`` header followed by the
-#: indented frame block.  Shared between CP and MP — both runtimes
+#: indented frame block.  Shared between CP and MP, because both runtimes
 #: emit the CPython-compatible traceback format.  We match the header
 #: line, the indented frames, and the final ``<ExceptionClass>: ...``
 #: summary line (which is not indented).  The block terminates at the
@@ -78,7 +78,7 @@ _TRACEBACK_PATTERN = re.compile(
 
 #: CircuitPython's safe-mode banner.  Observed forms:
 #:
-#: - ``Auto-reload is on. ...``  (not safe mode — ignored)
+#: - ``Auto-reload is on. ...``  (not safe mode, ignored)
 #: - ``You are in safe mode because: ...\nPress reset to exit safe mode.\n``
 #:
 #: The banner is multi-line, ends at the "Press reset" line.  We match
@@ -181,7 +181,7 @@ class StreamingPatternDetector:
     def feed(self, text: str) -> list[PatternMatch]:
         """Append *text* and return every newly-detected match.
 
-        Matches are emitted once — subsequent :meth:`feed` calls will
+        Matches are emitted once: subsequent :meth:`feed` calls will
         not re-emit a pattern that was already returned.  The returned
         :attr:`PatternMatch.start` / :attr:`~PatternMatch.end` indices
         are positions in the logical stream (total bytes fed), so a

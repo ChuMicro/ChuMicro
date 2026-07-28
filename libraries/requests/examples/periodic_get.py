@@ -3,7 +3,7 @@
 Brings wifi up via the local ``helpers`` module, fetches a configured
 URL every ``POLL_INTERVAL_S`` seconds, prints the status code + body
 length.  Demonstrates the runner-shaped client driving real network
-I/O while a simple LED-style counter keeps incrementing — proof that
+I/O while a simple LED-style counter keeps incrementing, proof that
 the in-flight request never block-calls the loop.
 
 Configuration
@@ -16,13 +16,13 @@ deploy pipeline) via the flat-key API:
 * WiFi (read by ``helpers.wifi_up``): ``wifi.ssid`` / ``wifi.password``.
 * HTTP (read by ``HttpClient.from_config``): ``requests.default_timeout_ms``
   / ``requests.default_max_redirects`` / ``requests.user_agent`` /
-  ``requests.max_body_bytes`` — all optional with library defaults.
+  ``requests.max_body_bytes``, all optional with library defaults.
 * App-level (this example's own concerns, not the library's):
   ``periodic_get.url``.
 
 When ``runtime_config.msgpack`` isn't present (raw single-file
 deploys), wifi creds and the target URL fall back to the placeholder
-constants below — edit them first.
+constants below (edit them first).
 
 Deploying
 =========
@@ -39,7 +39,7 @@ Example output::
     [2] status=200 bytes=1256 led_ticks=89
 """
 
-#: Cross-runtime — wifi-up via :mod:`helpers` dispatches per
+#: Cross-runtime: wifi-up via :mod:`helpers` dispatches per
 #: ``sys.implementation.name`` (CP / MP) and the HTTP client is
 #: pure-Python.
 __chumicro_runtimes__ = ("circuitpython", "micropython")
@@ -49,8 +49,8 @@ import time
 from chumicro_requests import HttpClient
 from helpers import runtime_config, ticks_add, ticks_diff, ticks_ms, wifi_up
 
-WIFI_SSID = "your-wifi-ssid"  # noqa: S105 — replace before deploying
-WIFI_PASSWORD = "your-wifi-password"  # noqa: S105 — replace before deploying
+WIFI_SSID = "your-wifi-ssid"  # noqa: S105 - replace before deploying
+WIFI_PASSWORD = "your-wifi-password"  # noqa: S105 - replace before deploying
 TARGET_URL = "http://example.com/"
 POLL_INTERVAL_S = 30
 

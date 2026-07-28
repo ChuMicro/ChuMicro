@@ -9,14 +9,14 @@ this rule does.
 
 Two surfaces, compared by top-level command name:
 
-* **Registered** — AST-extracted ``subparsers.add_parser("<name>")``
+* **Registered**: AST-extracted ``subparsers.add_parser("<name>")``
   calls under ``workbench/workspace/src/chumicro_workspace/cli/``.
   Only calls whose receiver is a function parameter typed
   ``argparse._SubParsersAction`` (by convention named ``subparsers``)
   count. A nested ``verbs.add_parser("list")`` for ``library``'s
   sub-verbs is registered against a different object and is *not* a
   top-level command.
-* **Documented** — the leading command-shaped token of every
+* **Documented**: the leading command-shaped token of every
   backtick span in the ``Commands`` column of the README table.  A
   span like ``new --library <name>`` documents ``new``; a prose
   backtick like ``workspace.yml`` or ``quality:`` is not
@@ -208,7 +208,7 @@ def _check_repo(repo_root: Path) -> list[Finding]:
                     message=(
                         f"command {name!r} is documented in the workspace "
                         f"command table but no subparser registers it "
-                        f"(phantom command — delete the row or implement it)"
+                        f"(phantom command: delete the row or implement it)"
                     ),
                 )
             )
@@ -223,7 +223,7 @@ def _check_repo(repo_root: Path) -> list[Finding]:
                     code=_RULE_CODE,
                     message=(
                         f"subcommand {name!r} is registered but absent from "
-                        f"the workspace command table (hidden command — add "
+                        f"the workspace command table (hidden command: add "
                         f"it to the table)"
                     ),
                 )
@@ -235,7 +235,7 @@ def _check_repo(repo_root: Path) -> list[Finding]:
 class CHU014_CommandTableParity(Rule):
     code = _RULE_CODE
     description = (
-        "workspace CLI command-table parity — no phantom/hidden commands"
+        "workspace CLI command-table parity: no phantom/hidden commands"
     )
 
     def check(self, repo_root: Path) -> list[Finding]:

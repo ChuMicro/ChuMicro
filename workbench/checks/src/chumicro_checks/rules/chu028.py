@@ -150,7 +150,7 @@ def _extract_paragraphs(text: str, filepath: Path) -> list[_Paragraph]:
 class CHU028_AdrPrincipleDuplication(Rule):
     code = _RULE_CODE
     description = (
-        "no cross-ADR principle duplication — one invariant, one home"
+        "no cross-ADR principle duplication: one invariant, one home"
     )
 
     def check(self, repo_root: Path) -> list[Finding]:
@@ -196,7 +196,7 @@ class CHU028_AdrPrincipleDuplication(Rule):
                         code=_RULE_CODE,
                         message=(
                             f"ADR principle duplicated across "
-                            f"{len(files)} ADRs — state once and "
+                            f"{len(files)} ADRs; state once and "
                             f"cross-link from the rest.  Sites: {sites}"
                         ),
                     )

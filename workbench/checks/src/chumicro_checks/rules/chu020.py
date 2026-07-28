@@ -16,7 +16,7 @@ keeps the rule off the very documentation that names what it bans.
 
 An apostrophe flanked by word characters on both sides (``isn't``,
 ``user's``) is a contraction or possessive, not a quote delimiter, so
-it never opens a pair — ``Don't call it robust`` still fires.
+it never opens a pair, so ``Don't call it robust`` still fires.
 
 ``Note that`` is intentionally NOT in the matcher.  ``\\bNote that\\b``
 fires on legitimate technical prose (``Note that the API requires a
@@ -115,8 +115,8 @@ def _check_file(filepath: Path) -> list[Finding]:
         if line_suppresses(line, _RULE_CODE):
             continue
         for pattern, message in (
-            (_ADJECTIVES, "AI-tic adjective — name what the thing covers / survives instead"),
-            (_SENTENCE_OPENERS, "AI-tic sentence opener — just say the thing"),
+            (_ADJECTIVES, "AI-tic adjective: name what the thing covers / survives instead"),
+            (_SENTENCE_OPENERS, "AI-tic sentence opener: just say the thing"),
         ):
             for match in pattern.finditer(line):
                 if _is_paired_quoted(line, match.start(), match.end()):
@@ -135,7 +135,7 @@ def _check_file(filepath: Path) -> list[Finding]:
 class CHU020_AiTicPhrases(Rule):
     code = _RULE_CODE
     description = (
-        "closed AI-tic phrase set — drop unfounded adjectives and "
+        "closed AI-tic phrase set: drop unfounded adjectives and "
         "sentence-opener filler from user-facing prose"
     )
 

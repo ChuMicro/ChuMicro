@@ -131,8 +131,8 @@ def _load_heap_budgets(workspace_root: Path) -> dict:
     """Read the ``[heap]`` table from ``target-runtimes.toml``.
 
     Returns the raw table (per-runtime defaults + ``overrides``
-    sub-table), or an empty dict when the file or table is absent —
-    absent means "no ceiling", preserving pre-budget behavior for
+    sub-table), or an empty dict when the file or table is absent.
+    Absent means "no ceiling", preserving pre-budget behavior for
     workspaces that haven't declared one.
     """
     config_path = workspace_root / "target-runtimes.toml"
@@ -232,7 +232,7 @@ class UnixPortBackend:
         ("0" or "off" disables the ceiling entirely), then the
         library's entry in ``target-runtimes.toml [heap.overrides]``,
         then the runtime's ``[heap]`` default.  ``None`` means spawn
-        with the port's native multi-MB heap — the pre-budget behavior,
+        with the port's native multi-MB heap, the pre-budget behavior
         kept only for workspaces with no ``[heap]`` table.
         """
         if self._heapsize != HEAPSIZE_FROM_CONFIG:
@@ -296,7 +296,7 @@ class UnixPortBackend:
                 f"Cross-runtime test harness not found at {harness}.  "
                 f"The unix-port target requires the test harness's "
                 f"worker script at support/test_harness/"
-                f"run_cross_runtime.py — only present in development "
+                f"run_cross_runtime.py, which is only present in development "
                 f"checkouts of the chumicro libraries, not in installed "
                 f"packages.",
             )
@@ -345,7 +345,7 @@ class UnixPortBackend:
             # Chunked exec is the MicroPython fidelity shape (real MP
             # sweeps stage statement-chunked).  CircuitPython's
             # production default is flash mode, which execs whole
-            # files, so CP runs whole-file — the faithful shape for
+            # files, so CP runs whole-file, the faithful shape for
             # both runtimes.
             try:
                 boundaries = chunk_boundaries_for(Path(item.test_file))
@@ -401,8 +401,8 @@ class UnixPortBackend:
             raise BackendExecuteError(
                 f"unix-port worker for {item.test_file} hit MemoryError "
                 f"under the board-shaped heap budget "
-                f"({target.runtime} heapsize={budget}) before completing "
-                f"— an import chain or workload this size would OOM a "
+                f"({target.runtime} heapsize={budget}) before completing.  "
+                f"An import chain or workload this size would OOM a "
                 f"real Pico W.  Slim it, or raise the library's entry "
                 f"in target-runtimes.toml [heap.overrides] with a "
                 f"measured justification.\n\n{output}",

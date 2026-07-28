@@ -1,8 +1,8 @@
 """``chumicro-repl`` command-line interface.
 
 Thin wrapper over :func:`chumicro_repl.tui.interactive` and
-:func:`chumicro_repl.tail`.  No logic beyond argument translation —
-the CLI exists so the common cases ("connect to my board",
+:func:`chumicro_repl.tail`.  No logic beyond argument translation.
+The CLI exists so the common cases ("connect to my board",
 "tail my deploy") don't require a Python script.
 
 Invoked via ``python -m chumicro_repl ...`` or, after installation,
@@ -87,7 +87,7 @@ def _resolve_mode(requested: str) -> str:
 
     ``line`` and ``passthrough`` pass through unchanged.  ``auto``
     inspects ``sys.stdin.isatty()`` and picks ``line`` only when stdin
-    is a real terminal — line mode's prompt_toolkit reader needs
+    is a real terminal, because line mode's prompt_toolkit reader needs
     interactive input, so a piped or redirected stdin must fall back
     to byte passthrough.
     """
@@ -98,7 +98,7 @@ def _resolve_mode(requested: str) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Entry point — parse *argv* and route to interactive / tail."""
+    """Entry point: parse *argv* and route to interactive / tail."""
     parser = build_parser()
     args = parser.parse_args(argv)
     if args.tail is not None:

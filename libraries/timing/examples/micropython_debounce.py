@@ -1,4 +1,4 @@
-"""Button debounce — MicroPython.
+"""Button debounce on MicroPython.
 
 Reads a physical button with software debounce using ``ticks_ms``
 and ``ticks_diff``.  Toggles the onboard LED on each accepted press.
@@ -7,7 +7,7 @@ console (or a sweep harness) can verify the loop without a probe.
 
 Example output::
 
-    Button debounce — press button to flip the LED.
+    Button debounce: press button to flip the LED.
 
       [  815 ms] press → toggle
       [ 1407 ms] press → toggle
@@ -25,7 +25,7 @@ Setup:
 Runs on MicroPython.
 """
 
-#: MicroPython-only — uses ``machine.Pin`` (MP API).
+#: MicroPython-only.  Uses ``machine.Pin`` (MP API).
 #: Pair: ``circuitpython_debounce.py`` for the CP equivalent (``board`` + ``digitalio``).
 __chumicro_runtimes__ = ("micropython",)
 
@@ -45,7 +45,7 @@ last_stable = button.value()
 last_change_ms = ticks_ms()
 led_state = False
 
-print("Button debounce — press button to flip the LED.\n")
+print("Button debounce: press button to flip the LED.\n")
 
 while True:
     now = ticks_ms()

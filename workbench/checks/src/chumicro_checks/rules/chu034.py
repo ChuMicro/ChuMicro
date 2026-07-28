@@ -2,13 +2,13 @@
 
 Exactly one orchestrator places a code payload on a board:
 ``Deployer.deploy_diff()``.  It is built from three lower-level
-transport primitives — ``deploy_files`` (write the payload and run its
+transport primitives: ``deploy_files`` (write the payload and run its
 entrypoint) and the diff-reconcile pair ``list_files_in_scope`` +
 ``delete_files`` (find and remove the stale files a fresh deploy
 replaces).  Those three are called only from inside the
 ``chumicro_deploy`` package that owns the orchestrator.  A call to any
 of them from any other first-party module is a second device-staging
-path — the exact drift that lets a command grow its own delete scope or
+path, the exact drift that lets a command grow its own delete scope or
 its own write-then-run sequence that diverges from the one pipeline.
 Every consumer stages code by calling ``Deployer.deploy_diff()``.
 
@@ -107,7 +107,7 @@ def _check_file(filepath: Path, repo_root: Path) -> list[Finding]:
                 code=_RULE_CODE,
                 message=(
                     f"{method}() is a device-staging primitive reserved to "
-                    f"chumicro_deploy — stage code through "
+                    f"chumicro_deploy; stage code through "
                     f"Deployer.deploy_diff() instead of calling it directly"
                 ),
             )
@@ -118,7 +118,7 @@ def _check_file(filepath: Path, repo_root: Path) -> list[Finding]:
 class CHU034_OneDeviceStagingPath(Rule):
     code = _RULE_CODE
     description = (
-        "device-staging primitives are chumicro_deploy-internal — "
+        "device-staging primitives are chumicro_deploy-internal: "
         "stage code through Deployer.deploy_diff()"
     )
 

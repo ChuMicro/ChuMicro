@@ -265,11 +265,11 @@ def _project_library_source_map(workspace_root: Path) -> dict[str, Path]:
 
     Covers a workspace's two library-acquisition surfaces:
 
-    * ``workspace.yml``'s ``library_sources:`` block (dev mode — an
+    * ``workspace.yml``'s ``library_sources:`` block (dev mode: an
       explicit ``{import_name: directory}`` override).  Relative values
       resolve against *workspace_root*; entries whose directory is absent
       are skipped.
-    * ``libraries/<name>/src`` trees (regular mode — populated by
+    * ``libraries/<name>/src`` trees (regular mode: populated by
       ``chumicro-workspace library add``).  Each top-level importable
       child of a ``src`` directory maps to that directory.
 
@@ -310,7 +310,7 @@ def _accumulate_project_source_dir(
     """Add *import_name*'s source dir plus its chumicro deps, dependency-first.
 
     Looks *import_name* up in *source_map*.  An unresolvable name is
-    skipped silently — the on-device ``ImportError`` names the missing
+    skipped silently, because the on-device ``ImportError`` names the missing
     library, matching how :func:`resolve_library_source_dirs` treats an
     absent dependency directory.  For a resolved directory, its sibling
     ``pyproject.toml`` ``[project].dependencies`` are walked first so a
@@ -358,7 +358,7 @@ def resolve_project_source_dirs(
       library under ``libraries/<name>/src``.
 
     Seeds from the project's own ``pyproject.toml``
-    ``[project].dependencies`` (best-effort — a workspace project need not
+    ``[project].dependencies`` (best-effort, since a workspace project need not
     carry one) and from every ``chumicro_*`` import in *test_files*, then
     walks the transitive ``chumicro-*`` dependency closure via each
     resolved library's sibling ``pyproject.toml``.  Dependency-first
@@ -442,14 +442,14 @@ def resolve_cp_deploy_transport(
     """Resolve a CircuitPython entry's deploy path to ``"serial"`` or ``"drive"``.
 
     - An explicit ``deploy_transport`` of ``"serial"`` / ``"drive"`` wins
-      outright — the honest representation for a board that structurally
+      outright, the honest representation for a board that structurally
       has (or lacks) a CIRCUITPY volume, and the disambiguator on a
       mixed bench where the host-side drive scan can't tell which mount
       belongs to which board.
     - ``"auto"`` picks serial only for a *flash* deploy when **no**
       CIRCUITPY volume is mounted at all (a lone drive-less board);
-      otherwise it keeps the drive path.  RAM mode never needs serial —
-      its inline exec already runs drive-less on the stock transport.
+      otherwise it keeps the drive path.  RAM mode never needs serial,
+      since its inline exec already runs drive-less on the stock transport.
 
     Non-CircuitPython runtimes always return ``"drive"`` (ignored by
     ``Device.create_transport``'s MicroPython branch).
@@ -560,7 +560,7 @@ def execute_device_bootstrap(
     markers are pushed onto the queue as they arrive over the serial
     link.  Lines that aren't markers (free-form board prose,
     result-parser ``PASS`` / ``FAIL`` / ``SUMMARY`` lines) are ignored
-    by the marker layer — they still ride the captured-stdout return
+    by the marker layer, but they still ride the captured-stdout return
     value, so the existing result-parser path consumes them unchanged.
 
     When *marker_queue* is :data:`None` (the default), no streaming

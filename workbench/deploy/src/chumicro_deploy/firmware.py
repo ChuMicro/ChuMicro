@@ -64,7 +64,7 @@ def resolve_firmware_url(
     Raises:
         UnresolvedFirmwareError: If *runtime* is not supported, or
             if any required field is empty.  ``cause`` carries the
-            specific failure — see :class:`UnresolvedFirmwareError`.
+            specific failure; see :class:`UnresolvedFirmwareError`.
     """
     if not board_id:
         raise UnresolvedFirmwareError(
@@ -94,7 +94,7 @@ def resolve_firmware_url(
 
 
 # ---------------------------------------------------------------------------
-# flash_firmware — download + apply new firmware to a connected board
+# flash_firmware: download + apply new firmware to a connected board
 # ---------------------------------------------------------------------------
 
 
@@ -132,7 +132,7 @@ _DOWNLOAD_CHUNK_SIZE = 64 * 1024
 class FlashFirmwareError(Exception):
     """Raised when a flash step fails.
 
-    Message always includes recovery guidance — e.g. "put the board
+    Message always includes recovery guidance, e.g. "put the board
     in bootloader mode and retry" or "install esptool first".
     Catchers typically surface the message directly to the user
     rather than trying to introspect.
@@ -150,7 +150,7 @@ def _infer_reflash_method(url: str) -> str:
     without a separate flag.
 
     Raises:
-        ValueError: URL extension isn't ``.uf2`` or ``.bin`` — the
+        ValueError: URL extension isn't ``.uf2`` or ``.bin``, so the
             caller has to pass ``reflash_method`` explicitly.
     """
     lowered = url.split("?", 1)[0].lower()
@@ -159,7 +159,7 @@ def _infer_reflash_method(url: str) -> str:
     if lowered.endswith(".bin"):
         return ReflashMethod.ESPTOOL.value
     raise ValueError(
-        f"Cannot infer reflash_method from URL {url!r} — expected "
+        f"Cannot infer reflash_method from URL {url!r}: expected "
         f"a .uf2 or .bin extension.  Pass reflash_method explicitly."
     )
 
@@ -189,8 +189,8 @@ def _download_firmware(
             created if missing.
         on_progress: Optional ``(fraction, message)`` callback.  The
             fraction progresses from 0.0 at download-start to 1.0
-            when the stream is fully consumed — per-chunk updates
-            when ``Content-Length`` is known, coarse start/stop
+            when the stream is fully consumed, with per-chunk updates
+            when ``Content-Length`` is known and coarse start/stop
             otherwise.
         urlopen: Injectable override for the HTTP open call.
 
@@ -440,7 +440,7 @@ def _copy_uf2_to_drive(
     except OSError as error:
         raise FlashFirmwareError(
             f"Copying firmware to {destination!r} failed: {error}.  "
-            f"The board is still in bootloader mode — re-run "
+            f"The board is still in bootloader mode, so re-run "
             f"flash_firmware() to retry the copy."
         ) from error
     try:
@@ -448,7 +448,7 @@ def _copy_uf2_to_drive(
             os.fsync(handle.fileno())
     except OSError:  # pragma: no cover -best-effort flush
         pass
-    _report(on_progress, 1.0, "copy complete — waiting for board reboot")
+    _report(on_progress, 1.0, "copy complete, waiting for board reboot")
 
 
 def _flash_firmware_uf2(
@@ -463,7 +463,7 @@ def _flash_firmware_uf2(
     sleep: Callable[[float], None] = time.sleep,
     monotonic: Callable[[], float] = time.monotonic,
 ) -> None:
-    """Drive the full UF2 reflash flow — bootloader, copy, reboot."""
+    """Drive the full UF2 reflash flow: bootloader, copy, reboot."""
     _report(on_progress, 0.0, "entering bootloader")
     programmatic_ok = _dispatch_bootloader_reset(device)
 
@@ -506,7 +506,7 @@ def _flash_firmware_uf2(
         raise FlashFirmwareError(
             f"UF2 drive {drive_path!r} did not disappear within "
             f"{_UF2_REBOOT_TIMEOUT:.0f}s.  The flash may still have "
-            f"succeeded — check the board's serial output — but the "
+            f"succeeded (check the board's serial output), but the "
             f"reboot signal timed out.  Unplug/replug if the board "
             f"does not come back on its own."
         )

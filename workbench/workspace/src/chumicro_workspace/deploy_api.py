@@ -64,7 +64,7 @@ class DeployApiError(RuntimeError):
     """Base for deploy_api configuration / resolution failures.
 
     Wraps the kind of errors that surface before the bg-thread bootstrap
-    runs — no matching device, missing ``app.py``, ``deploy_mode``
+    runs: no matching device, missing ``app.py``, ``deploy_mode``
     inconsistent with the device entry.  Transport-level failures during
     the run itself surface through ``wait_for_completion`` as their
     native exception types.
@@ -77,13 +77,13 @@ class DeviceNotFoundError(DeployApiError):
 
 @dataclass
 class DeployedProject:
-    """Live deploy session — a board running a bootstrap with markers streaming back.
+    """Live deploy session: a board running a bootstrap with markers streaming back.
 
     Returned by :func:`deploy_project`.  Public attributes are read-only
     (modify-by-replace via a fresh ``deploy_project`` call); public
     methods delegate to the underlying :class:`DeviceBootstrapRunner`.
 
-    Context-manager compatible — ``__exit__`` calls :meth:`shutdown`.
+    Context-manager compatible: ``__exit__`` calls :meth:`shutdown`.
     """
 
     #: The resolved device registry entry the deploy targets.  Exposed
@@ -134,10 +134,10 @@ class DeployedProject:
 
         Returns the full captured stdout once the bootstrap finishes;
         :data:`None` while it's still running.  For real-time observation
-        during the run, reach into ``runner.marker_queue`` instead — the
-        captured stream is only populated when ``execute()`` returns.
+        during the run, reach into ``runner.marker_queue`` instead, because
+        the captured stream is only populated when ``execute()`` returns.
         """
-        # pylint: disable=protected-access — runner's _captured_output is
+        # pylint: disable=protected-access - runner's _captured_output is
         # public-shaped state without a public getter today; the abstraction
         # is "expose the captured stream while still alive."
         return self.runner._captured_output  # noqa: SLF001
@@ -146,7 +146,7 @@ class DeployedProject:
         """Close the transport and reap the bg thread.  Idempotent.
 
         Safe to call from a ``finally`` clause even when the bootstrap
-        is still running — the runner's shutdown is best-effort and the
+        is still running: the runner's shutdown is best-effort and the
         transport's ``disconnect()`` is tolerant of any state.  When
         the first join times out, ``disconnect()`` fails the bg
         thread's blocked read fast, so the follow-up reap bounds the
@@ -204,7 +204,7 @@ def _select_device(
         if entry.runtime == effective_runtime:
             return entry
     raise DeviceNotFoundError(
-        f"no {effective_runtime!r} device in devices.yml — "
+        f"no {effective_runtime!r} device in devices.yml; "
         f"register one with `chumicro-workspace add-device`.",
     )
 
@@ -246,7 +246,7 @@ def _resolve_workspace_root(project_dir: Path) -> Path:
     ``<repo>/projects/<name>/``; the repo root is what carries
     ``secrets.toml`` + ``devices.yml`` + ``libraries/`` + the harness.
     Fall back to ``project_dir.parents[1]`` (assume two-deep) when
-    neither marker is found — the demos convention is exactly this
+    neither marker is found, because the demos convention is exactly this
     layout.
     """
     for candidate in [project_dir, *project_dir.parents]:
@@ -261,7 +261,7 @@ def _resolve_workspace_root(project_dir: Path) -> Path:
 #: A demo's bootstrap imports only ``chumicro_test_harness.runner`` and
 #: ``.discovery`` (whose closure is ``__init__`` + ``assertions`` + ``skip``).
 #: The ``network`` real-I/O helpers and ``patching`` fakes exist only to
-#: support test files, so a running demo never loads them — and on a 256 KB
+#: support test files, so a running demo never loads them, and on a 256 KB
 #: board their ~15 KB of source (before the device-stage strip) is the
 #: difference between a one-request demo fitting and ``No space left``.
 _DEMO_UNUSED_HARNESS_MODULES = ("network.py", "patching.py")
@@ -364,7 +364,7 @@ def deploy_project(
             what runs.
         extra_runtime_config: Flat-key dict merged on top of
             ``secrets.toml`` to form ``/runtime_config.msgpack``.
-            Last-write-wins — extras override secrets defaults.
+            Last-write-wins: extras override secrets defaults.
         boot_shim: Reserved.  Always uses the test-shaped raw-REPL
             bootstrap path today; a future signature change may wire
             this kwarg to a different bootstrap shape.
@@ -387,7 +387,7 @@ def deploy_project(
     app_file = project_dir / "app.py"
     if not app_file.is_file():
         raise DeployApiError(
-            f"no app.py in {project_dir} — deploy_api expects a "
+            f"no app.py in {project_dir}; deploy_api expects a "
             f"project-shaped directory with app.py at its root.",
         )
 

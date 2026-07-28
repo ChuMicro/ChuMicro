@@ -67,7 +67,7 @@ def _check_file(filepath: Path) -> list[Finding]:
         # A numbered record (or one carrying a lifecycle marker) whose
         # ``Status:`` line is missing or styled so the parser can't read
         # it (``**Status:**``, indented) is exactly the malformed record
-        # most in need of flagging — the filename asserts a lifecycle the
+        # most in need of flagging: the filename asserts a lifecycle the
         # body can't confirm.  A non-numbered ``.md`` is genuinely not a
         # decision record and stays a silent no-op.
         if (
@@ -81,7 +81,7 @@ def _check_file(filepath: Path) -> list[Finding]:
                     line=1,
                     code=_RULE_CODE,
                     message=(
-                        "decision record has no parseable `Status:` line — "
+                        "decision record has no parseable `Status:` line; "
                         "the filename asserts a lifecycle the body can't "
                         "confirm; add a `Status:` field at line start "
                         "(e.g. `Status: accepted`)"
@@ -112,7 +112,7 @@ def _check_file(filepath: Path) -> list[Finding]:
 
     if status == "superseded" and superseded_marker is None:
         flag(status_line, "Status is `superseded` but the filename lacks "
-                          "the `-SUPERSEDED-BY-NNNN-` marker — rename it so "
+                          "the `-SUPERSEDED-BY-NNNN-` marker; rename it so "
                           "the index reader skips it without opening it")
     if superseded_marker and status != "superseded":
         flag(status_line, f"filename marks SUPERSEDED-BY but Status is "
@@ -136,7 +136,7 @@ def _check_file(filepath: Path) -> list[Finding]:
     if archived is not None and inert_marker is None:
         flag(_line_of(text, archived.start()),
              "`Archived:` field present but the filename lacks the "
-             "`-INERT-` marker — rename it")
+             "`-INERT-` marker; rename it")
 
     return findings
 
@@ -176,7 +176,7 @@ class CHU019_ArchivedDecisionMarkers(Rule):
                             code=_RULE_CODE,
                             message=(
                                 f"number {number} is used by "
-                                f"{len(paths)} files ({collision}) — a "
+                                f"{len(paths)} files ({collision}); a "
                                 f"rename must keep the number unique"
                             ),
                         )

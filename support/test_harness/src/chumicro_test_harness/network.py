@@ -1,6 +1,6 @@
 """Wifi bringup + runtime-config helpers for networking-library tests and examples.
 
-Self-contained — only stdlib + the runtime's built-in wifi primitives
+Self-contained: only stdlib + the runtime's built-in wifi primitives
 (CP ``wifi``, MP ``network``). Importable on every runtime including
 CPython, where :func:`runtime_config` still works against a local
 msgpack file and :func:`wifi_up` raises ``RuntimeError`` rather than
@@ -8,11 +8,11 @@ attempt a host-side wifi connect.
 
 Exposes:
 
-* :func:`runtime_config` — read ``/runtime_config.msgpack`` and return
+* :func:`runtime_config`: read ``/runtime_config.msgpack`` and return
   its flat-key dict. Returns ``{}`` when the file is absent or empty.
   Decoded by the inline msgpack reader below so the helper works on
   Pi Pico W MicroPython, whose firmware ships without ``msgpack``.
-* :func:`wifi_up` — bring wifi up via the runtime's built-in primitives
+* :func:`wifi_up`: bring wifi up via the runtime's built-in primitives
   and return ``(radio, ip)``. On CP, ``radio`` is ``wifi.radio`` so a
   caller can build a ``socketpool.SocketPool(radio)``; on MP, ``radio``
   is ``None`` because the global ``socket`` module reads from whichever
@@ -39,7 +39,7 @@ MicroPython::
 
     wlan = network.WLAN(network.STA_IF)
     wlan.active(True)
-    # Pi Pico W (CYW43) only — disable aggressive idle power-save so
+    # Pi Pico W (CYW43) only: disable aggressive idle power-save so
     # connects don't take 30+ seconds. Whitelist by os.uname().machine
     # (see _CYW43_MACHINES below). ESP32 boards skip the call; the
     # kwarg raises RuntimeError there.
@@ -61,7 +61,7 @@ _RUNTIME_CONFIG_PATH = "/runtime_config.msgpack"
 #: Known CYW43-based MicroPython board identifiers (``os.uname().machine``).
 #: The CYW43 chip's aggressive idle power-save makes wifi connects take
 #: 30+ seconds; ``wlan.config(pm=0xa11140)`` disables it. Add new entries
-#: as CYW43-bearing boards land in upstream MP — match the exact string
+#: as CYW43-bearing boards land in upstream MP.  Match the exact string
 #: ``os.uname().machine`` returns on the board (visible in the REPL via
 #: ``import os; print(os.uname().machine)``).
 _CYW43_MACHINES = (
@@ -72,7 +72,7 @@ _CYW43_MACHINES = (
 def runtime_config():
     """Return ``/runtime_config.msgpack`` decoded as a dict, or ``{}``.
 
-    Uses the inline msgpack decoder below — no on-device ``msgpack``
+    Uses the inline msgpack decoder below, so no on-device ``msgpack``
     module needed. Returns ``{}`` when the file is absent (raw
     single-file deploys, or any deploy that didn't bake one) or empty.
     """
@@ -99,7 +99,7 @@ def wifi_up(default_ssid, default_password, *, timeout_s=15):
     supplied defaults. Blocks until the link is connected or
     *timeout_s* elapses.
 
-    On CircuitPython the returned radio is ``wifi.radio`` — pass it
+    On CircuitPython the returned radio is ``wifi.radio``; pass it
     wherever a socket pool is built (``socketpool.SocketPool(radio)``).
     On MicroPython the returned radio is ``None``: there's no
     per-radio socket pool to thread, the global ``socket`` module
@@ -139,7 +139,7 @@ def wifi_up(default_ssid, default_password, *, timeout_s=15):
         wlan.active(True)
         # CYW43 boards (Pi Pico W today, list in _CYW43_MACHINES above)
         # default to aggressive idle power-save which makes connects
-        # take 30+ seconds.  Disable it.  Other boards skip the call —
+        # take 30+ seconds.  Disable it.  Other boards skip the call:
         # ESP32 rejects the kwarg with ESP_ERR_INVALID_ARG (raised as
         # RuntimeError, not OSError / ValueError) and has its own
         # power-save defaults.
@@ -159,7 +159,7 @@ def wifi_up(default_ssid, default_password, *, timeout_s=15):
 
 
 # ---------------------------------------------------------------------------
-# Tiny msgpack decoder — handles every type used by runtime_config.msgpack:
+# Tiny msgpack decoder.  Handles every type used by runtime_config.msgpack:
 # nil / bool / int (every width) / float 32+64 / str / bin / array / map.
 # No ext / timestamp.  Spec: github.com/msgpack/msgpack/blob/master/spec.md
 # ---------------------------------------------------------------------------

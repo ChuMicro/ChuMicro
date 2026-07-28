@@ -58,7 +58,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="chumicro-workspace",
         description=(
-            "Host-side dispatcher for ChuMicro project workspaces — "
+            "Host-side dispatcher for ChuMicro project workspaces: "
             "deploy projects, probe boards, open REPLs, and manage "
             "devices.yml from one CLI."
         ),

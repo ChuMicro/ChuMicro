@@ -1,4 +1,4 @@
-"""chumicro-pytest-device — pytest plugin for on-device library tests.
+"""chumicro-pytest-device: pytest plugin for on-device library tests.
 
 Runs library functional tests on connected CircuitPython and
 MicroPython boards.  pytest loads the plugin through the

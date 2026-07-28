@@ -24,7 +24,7 @@ Example output::
     [6001 ms] health: OK
     [6001 ms] lights ON (level=12)
     ...
-    [8005 ms] MOTION — activating alarm
+    [8005 ms] MOTION: activating alarm
     [8005 ms] health: OK
     ...
 
@@ -80,7 +80,7 @@ class MotionDetector:
         Args:
             now_ms: Current tick value.
         """
-        print(f"  [{now_ms} ms] MOTION — activating alarm")
+        print(f"  [{now_ms} ms] MOTION: activating alarm")
 
 
 class LightSensor:

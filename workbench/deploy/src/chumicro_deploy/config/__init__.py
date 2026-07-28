@@ -81,7 +81,7 @@ def discover_config_loaders() -> dict[str, ConfigLoader]:
             raise ValueError(
                 f"Third-party package registered a "
                 f"{BUILTIN_LOADER_NAME!r} config_loaders entry point "
-                f"— that name is reserved for the built-in "
+                f"but that name is reserved for the built-in "
                 f"devices.yml loader.  Rename the entry point in "
                 f"the offending package's pyproject.toml."
             )

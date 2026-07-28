@@ -1,4 +1,4 @@
-"""Periodic blink — the embedded hello world.
+"""Periodic blink: the embedded hello world.
 
 Prints a message once per second using a non-blocking ``Rate`` timer.
 ``Rate`` is drift-free: it fires on a phase-aligned cadence rather than

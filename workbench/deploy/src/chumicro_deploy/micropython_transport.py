@@ -3,7 +3,7 @@
 Two execution paths:
 
 - **Persistent serial transport** (mount mode and per-execute path):
-  uses ``mpremote.transport_serial.SerialTransport`` directly — opens
+  uses ``mpremote.transport_serial.SerialTransport`` directly.  Opens
   the serial port once per session, enters raw REPL once, mounts the
   staging directory once, and runs each bootstrap via ``exec_raw``.
   Avoids the cold-start cost of spawning ``mpremote`` per
@@ -69,7 +69,7 @@ _EXECUTE_IDLE_TIMEOUT: float = 300.0
 #: Wall-clock cap on a single ``mpremote`` subprocess call (connect, fs
 #: cp, exec, wipe).  Generous so a large file copy over serial isn't
 #: false-timed-out, but finite so a board whose USB-CDC wedges mid-command
-#: can't hang the deploy forever — the timeout becomes a classified
+#: can't hang the deploy forever.  The timeout becomes a classified
 #: MicropythonTransportError instead.
 _MPREMOTE_SUBPROCESS_TIMEOUT: float = 120.0
 
@@ -198,7 +198,7 @@ class MicropythonTransport:
     Args:
         address: Serial port or network address of the device.
         baudrate: Serial baud rate (default 115200).  Only used for the
-            persistent serial transport — subprocess ``mpremote``
+            persistent serial transport, because subprocess ``mpremote``
             invocations negotiate baud rate themselves.
         mode: ``"mount"`` (default) or ``"copy"``.
         runner: Callable that executes subprocess commands.  Accepts
@@ -230,7 +230,7 @@ class MicropythonTransport:
         #: Wall-clock budget (10 s default) for the soft-reboot read
         #: in :meth:`deploy_files` ``follow="soft_reboot"``.  Sized for
         #: the partial-output window for ``while True`` app code.
-        #: ``follow="exec"`` ignores this — that path uses
+        #: ``follow="exec"`` ignores this: that path uses
         #: :data:`_EXECUTE_IDLE_TIMEOUT` (an inter-byte idle timeout,
         #: not a wall-clock budget) for raw-REPL EOF reception.
         self.timeout = timeout
@@ -312,8 +312,8 @@ class MicropythonTransport:
                 lands at that absolute path.  **Mount mode raises**
                 :class:`UnsupportedExtraFilesError`: mpremote
                 ``mount_local`` lands the staging tree at ``/remote``, so
-                the bytes would appear at ``/remote/runtime_config.msgpack``
-                — invisible to a reader that opens the absolute
+                the bytes would appear at ``/remote/runtime_config.msgpack``,
+                invisible to a reader that opens the absolute
                 ``/runtime_config.msgpack``.
 
         Raises:
@@ -324,7 +324,7 @@ class MicropythonTransport:
         if extra_files and self.mode == "mount":
             raise UnsupportedExtraFilesError(
                 "MicropythonTransport(mode='mount') cannot stage extra_files "
-                f"({sorted(extra_files.keys())!r}) — mpremote mount_local "
+                f"({sorted(extra_files.keys())!r}): mpremote mount_local "
                 "lands the staging tree at /remote, so a file staged for an "
                 "absolute device path like /runtime_config.msgpack would "
                 "appear at /remote/runtime_config.msgpack and stay invisible "
@@ -396,9 +396,9 @@ class MicropythonTransport:
         # transfer so libraries, tests, and the harness land as code only.
         minify_python_tree(staging_path)
         if self.mode == "copy":
-            # Subprocess `fs cp -r` — release the serial port if held.
+            # Subprocess `fs cp -r`, so release the serial port if held.
             self._close_serial()
-            # `mpremote fs cp` only adds/overwrites — no deletion — so
+            # `mpremote fs cp` only adds/overwrites, never deletes, so
             # a stale tree must be cleared or LittleFS fills and `fs cp`
             # hits ENOSPC.  The first stage may meet residue from a
             # prior killed run that no in-process tracking saw, so it
@@ -420,7 +420,7 @@ class MicropythonTransport:
                 entry.name for entry in staging_path.iterdir()
             )
         else:
-            # Mount mode — open the persistent transport now and mount
+            # Mount mode: open the persistent transport now and mount
             # the staging dir so every subsequent execute() reuses both.
             self._ensure_serial()
             self._serial.mount_local(str(staging_path))
@@ -448,7 +448,7 @@ class MicropythonTransport:
                 straight into mpremote's ``data_consumer`` hook on
                 ``exec_raw``, which fires per byte during the stdout
                 read phase and stops at the ``\\x04`` end-of-stdout
-                marker — the dispatcher discards that terminator byte
+                marker.  The dispatcher discards that terminator byte
                 so callbacks only see board content.
 
         Returns:
@@ -747,7 +747,7 @@ class MicropythonTransport:
                 raise MicropythonTransportError(
                     "follow='soft_reboot' requires mode='copy'; got "
                     f"mode={self.mode!r}.  The soft-reboot pattern auto-runs "
-                    "/main.py from flash — mount mode (mpremote mount_local) "
+                    "/main.py from flash, and mount mode (mpremote mount_local) "
                     "lands files at /remote and the runtime won't auto-run "
                     "them on soft-reboot."
                 )
@@ -755,7 +755,7 @@ class MicropythonTransport:
                 raise MicropythonTransportError(
                     "follow='soft_reboot' requires entrypoint '/main.py'; "
                     f"got {entrypoint!r}.  MicroPython auto-runs /main.py "
-                    "(after /boot.py) on soft-reboot — other entrypoint "
+                    "(after /boot.py) on soft-reboot, so other entrypoint "
                     "names won't run automatically."
                 )
 
@@ -889,7 +889,7 @@ class MicropythonTransport:
         is ``None``, ``dir()`` empty) and shadows the populated
         ``/lib/<pkg>/`` deeper in the path.  ``rmdir`` only removes
         an empty directory so live packages are never touched.
-        Dot-prefixed entries are skipped — they're not ours to reap.
+        Dot-prefixed entries are skipped: they're not ours to reap.
         """
         if not paths:
             return
@@ -907,8 +907,8 @@ class MicropythonTransport:
 
         Copy mode only.  Mount (RAM) mode never writes a persistent
         entrypoint.  Runs ``os.remove`` *on the device* (authoritative
-        immediately — unlike the CIRCUITPY host-FAT path there is no
-        flush lag) and, in the same raw-REPL script, re-``stat``s each
+        immediately, since unlike the CIRCUITPY host-FAT path there is
+        no flush lag) and, in the same raw-REPL script, re-``stat``s each
         path so a still-present entrypoint raises on the device and
         surfaces as a loud error.  Call once before a soft-reset so
         the reboot cannot race a stale entrypoint left by a prior
@@ -991,7 +991,7 @@ class MicropythonTransport:
         Opens the serial transport if needed, then ``exec_raw``s the
         script.  Any failure is re-raised as a
         :class:`MicropythonTransportError` whose message starts with
-        *failure_context* — these prefixes are load-bearing:
+        *failure_context*.  These prefixes are load-bearing:
         :func:`chumicro_deploy.recovery.classify_deploy_failure`
         pattern-matches them, so pass the existing per-op wording, not
         new phrasing.
@@ -1027,13 +1027,13 @@ class MicropythonTransport:
 
         Sequence:
 
-        1. Send ``\\r\\x02`` (Ctrl-B) — exit raw REPL into friendly REPL.
-        2. Send ``\\x04`` (Ctrl-D) — soft-reboot.  MicroPython prints
+        1. Send ``\\r\\x02`` (Ctrl-B) to exit raw REPL into friendly REPL.
+        2. Send ``\\x04`` (Ctrl-D) to soft-reboot.  MicroPython prints
            ``MPY: soft reboot``, runs ``boot.py`` (if present), then
            auto-runs ``/main.py``.
         3. Read serial bytes via ``mpremote.SerialTransport.read_until``
-           with ``ending=b"\\r\\n>>> "`` (friendly-REPL prompt — the
-           end-of-execution marker).  ``timeout_overall=self.timeout``
+           with ``ending=b"\\r\\n>>> "`` (the friendly-REPL prompt, which
+           is the end-of-execution marker).  ``timeout_overall=self.timeout``
            bounds the wait, and for ``while True`` bodies the prompt
            never appears and the read returns whatever accumulated.
 
@@ -1056,7 +1056,7 @@ class MicropythonTransport:
         )
         port.write(b"\x04")
         # Long inter-byte timeout (we don't care about idle gaps within
-        # main.py output — only the overall budget); ``timeout_overall``
+        # main.py output, only the overall budget); ``timeout_overall``
         # caps the total wait.
         raw = self._serial.read_until(
             1, b"\r\n>>> ",
@@ -1092,14 +1092,14 @@ class MicropythonTransport:
                 text = text[trailing_newline + 1:]
         # Trim trailing friendly-REPL output.  Two anchors, whichever
         # appears first wins:
-        #   * ``\nMicroPython v`` — start of the friendly-REPL banner
+        #   * ``\nMicroPython v``, the start of the friendly-REPL banner
         #     line (``MicroPython v1.28.0 on ...; <board>``).  Cuts
         #     before the banner so any preceding traceback is
         #     preserved.  Hits on every clean return or exception.
-        #   * ``\n>>> `` (or bare ``>>> `` at start) — friendly-REPL
+        #   * ``\n>>> `` (or bare ``>>> `` at start), the friendly-REPL
         #     prompt.  Backstop for cases where the banner wasn't
         #     captured (e.g. a quick return whose banner straddled
-        #     the read window) — without this, the trailing prompt
+        #     the read window).  Without this, the trailing prompt
         #     leaks into the returned text.
         candidates: list[int] = []
         for anchor in ("\nMicroPython v", "\n>>> "):
@@ -1183,7 +1183,7 @@ class MicropythonTransport:
 
         Raises:
             MicropythonTransportError: If the command exits non-zero, or
-                runs past ``_MPREMOTE_SUBPROCESS_TIMEOUT`` — a board whose
+                runs past ``_MPREMOTE_SUBPROCESS_TIMEOUT``.  A board whose
                 USB-CDC wedged mid-command would otherwise hang the deploy
                 forever.
         """

@@ -3,16 +3,16 @@
 Every field in a ``devices.yml`` device entry falls in one of three
 zones:
 
-* **user-owned** — workspace-identity stuff the user wrote by hand
+* **user-owned**: workspace-identity stuff the user wrote by hand
   (``id``, ``description``, ``deploy_mode`` preference,
   ``serial_baudrate``).  Never overwritten without ``--force``.
-* **hardware-once** — written on first probe, then frozen in place
+* **hardware-once**: written on first probe, then frozen in place
   to avoid clobbering on every routine probe (``hardware.uid``,
   ``hardware.machine``, ``hardware.board_id``,
   ``hardware.firmware_source``).  Reprobing a different value raises
   :class:`HardwareOverwriteError` unless the caller passes
   ``force=True`` (``add-device --force``).
-* **probed-always** — fully tool-owned, refreshed every probe
+* **probed-always**: fully tool-owned, refreshed every probe
   (``address``, ``firmware_version``).  Silent overwrites, because
   these *should* drift across deploys.
 
@@ -59,7 +59,7 @@ def read_devices_yml_template() -> str:
     """
     return _DEVICES_YML_TEMPLATE_PATH.read_text(encoding="utf-8")
 
-#: Field classification — see module docstring.  Top-level entry keys
+#: Field classification; see module docstring.  Top-level entry keys
 #: only.  The nested ``hardware:`` block is classified separately by
 #: :data:`HARDWARE_BLOCK_ZONES` since each leaf has its own zone.
 USER_OWNED_FIELDS: frozenset[str] = frozenset({
@@ -121,7 +121,7 @@ class HardwareOverwriteError(RuntimeError):
 
     Carries the offending field name + old/new values so the caller
     can show the user a precise message ("uid was A1B2 but probe
-    returned C3D4 — did you swap boards?").
+    returned C3D4; did you swap boards?").
     """
 
     def __init__(self, field_name: str, old_value: Any, new_value: Any) -> None:
@@ -152,7 +152,7 @@ def _yaml() -> YAML:
 def load_devices(path: Path) -> CommentedMap:
     """Load *path* with comments + key order preserved.
 
-    Returns an empty :class:`CommentedMap` when *path* doesn't exist —
+    Returns an empty :class:`CommentedMap` when *path* doesn't exist,
     the "fresh workspace, no add-device run yet" case.  Empty file
     behaves the same way.
 
@@ -280,10 +280,10 @@ def add_device(
         data: The full ``devices.yml`` document (from :func:`load_devices`).
         device_id: User-friendly id (e.g. ``"back-porch"``).
         runtime: ``"circuitpython"`` or ``"micropython"``.
-        address: Serial port path.  Treated as probed-always — gets
+        address: Serial port path.  Treated as probed-always, so it gets
             silently refreshed by :func:`update_device_address`.
         hardware: Probed hardware info.  Each leaf is in the
-            hardware-once zone — passed once at registration and
+            hardware-once zone, passed once at registration and
             should not change unless the board is physically swapped.
         description: Free-form user note.
         deploy_mode: ``"ram"`` or ``"flash"`` preference.
@@ -448,7 +448,7 @@ def rename_device(
         raise DeviceNotFoundError(old_id)
     if find_device(data, new_id) is not None:
         raise DeviceAlreadyExistsError(
-            f"cannot rename {old_id!r} to {new_id!r} — already exists",
+            f"cannot rename {old_id!r} to {new_id!r}: already exists",
         )
     entry["id"] = new_id
     defaults = data.get("defaults") or {}

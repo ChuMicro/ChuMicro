@@ -38,7 +38,7 @@ def parse_or_syntax_finding(
                 line=line,
                 code=code,
                 message=(
-                    f"file skipped: syntax error ({error.msg}) — {code} "
+                    f"file skipped: syntax error ({error.msg}); {code} "
                     f"could not check this file"
                 ),
             )

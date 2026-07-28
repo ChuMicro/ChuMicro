@@ -551,7 +551,7 @@ def _add_deploy_example_parser(subparsers: argparse._SubParsersAction) -> None:
         metavar="example",
         help=(
             "Example file stem under libraries/<lib>/examples/ "
-            "(e.g. 'circuitpython_blink' or 'circuitpython_blink.py' — "
+            "(e.g. 'circuitpython_blink' or 'circuitpython_blink.py'; "
             "trailing .py is optional)."
         ),
     )
@@ -572,7 +572,7 @@ def _add_deploy_example_parser(subparsers: argparse._SubParsersAction) -> None:
         default=True,
         help=(
             "Refuse to fall into the bootstrap wizard when no device is "
-            "registered for the example's runtime — exit 3 with a "
+            "registered for the example's runtime: exit 3 with a "
             "structured stderr hint instead.  Default behavior is to "
             "fall through into the wizard in interactive mode."
         ),
@@ -602,8 +602,8 @@ def _add_deploy_example_parser(subparsers: argparse._SubParsersAction) -> None:
         default=True,
         help=(
             "Additive mode: leave board files that aren't this "
-            "example's payload in place.  The default is clean-slate "
-            "— the deploy removes anything that isn't the new payload "
+            "example's payload in place.  The default is clean-slate: "
+            "the deploy removes anything that isn't the new payload "
             "or a device-required keep-set file (boot.py, "
             "boot_out.txt, _chu_kv.msgpack); a board-resident "
             "settings.toml is evicted (it competes with config-driven "
@@ -616,7 +616,7 @@ def _add_deploy_example_parser(subparsers: argparse._SubParsersAction) -> None:
         "--wipe",
         action="store_true",
         help=(
-            "Erase the *entire* device filesystem before deploying — "
+            "Erase the *entire* device filesystem before deploying, "
             "the keep set (boot.py, boot_out.txt, _chu_kv.msgpack) "
             "included.  Stricter than the clean-slate default; for "
             "corruption recovery.  No-op in RAM mode."
@@ -632,7 +632,7 @@ def _add_deploy_example_parser(subparsers: argparse._SubParsersAction) -> None:
             "ignores this).  Default uses the transport's built-in "
             "timeout (10 s).  Raise it for slow-wifi boards (Pi Pico W "
             "cyw43 wifi-up + first network call takes 5-10 s) so the "
-            "first prints don't land outside the capture window — "
+            "first prints don't land outside the capture window, "
             "common in --non-interactive --no-tail use (sweep harness, "
             "CI runs).  Set to 0 to skip the capture entirely and "
             "return as soon as the soft-reboot has been triggered, "

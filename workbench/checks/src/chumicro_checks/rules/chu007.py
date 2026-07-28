@@ -102,7 +102,7 @@ def _check_file(filepath: Path, library_packages: set[str]) -> list[Finding]:
                 code=_RULE_CODE,
                 message=(
                     f"workbench package imports library package "
-                    f"'{package_name}' — workbench is host-only; libraries "
+                    f"'{package_name}': workbench is host-only; libraries "
                     f"target devices.  Use a third-party PyPI equivalent."
                 ),
             )

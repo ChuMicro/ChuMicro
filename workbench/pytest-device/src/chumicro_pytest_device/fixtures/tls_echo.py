@@ -35,7 +35,7 @@ def generate_self_signed_cert(
     """Write a self-signed cert + key into *workdir*; return `(cert_path, key_path)`.
 
     The cert covers `common_name` as a DNS SAN and 127.0.0.1 as an IP
-    SAN. Validity window: 2000-01-01 to +1 day — the notBefore sits at
+    SAN. Validity window: 2000-01-01 to +1 day. The notBefore sits at
     the MicroPython epoch because a board with an unset RTC boots
     there, and mbedTLS rejects a cert whose validity "starts in the
     future" (found on a real Pico W bake; a -5min skew window only

@@ -59,7 +59,7 @@ class TestList:
         assert [entry.name for entry in model.entries] == [
             "chumicro_mqtt", "chumicro_timing",
         ]
-        assert "stable @ stable-tag — 2 libraries" in model.status
+        assert "stable @ stable-tag: 2 libraries" in model.status
 
     def test_move_wraps(self):
         model = _model()

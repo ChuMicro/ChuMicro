@@ -1,8 +1,8 @@
-"""Line-mode REPL — prompt_toolkit-driven input + per-device history.
+"""Line-mode REPL: prompt_toolkit-driven input + per-device history.
 
 `chumicro-repl`'s default loop on a TTY interposes a
 `prompt_toolkit.PromptSession` between the user and the device,
-adding the host-side affordances every modern shell ships — cursor
+adding the host-side affordances every modern shell ships: cursor
 edit, history search, persistent up-arrow recall.  The
 byte-passthrough sibling (:mod:`chumicro_repl.tui`) covers
 raw-REPL framing, paste-mode, and other byte-exact flows; the CLI's
@@ -20,11 +20,11 @@ Per-line:
 
 Key bindings mirror ``mpremote repl`` and the passthrough TUI:
 
-- ``Ctrl-C`` forwards ``\\x03`` to the device — interrupts a
-  runaway loop, returns the friendly REPL to ``>>>``.  The local
+- ``Ctrl-C`` forwards ``\\x03`` to the device, which interrupts a
+  runaway loop and returns the friendly REPL to ``>>>``.  The local
   input buffer is cleared at the same time.
-- ``Ctrl-D`` at an empty prompt forwards ``\\x04`` — soft-reboots
-  the runtime.
+- ``Ctrl-D`` at an empty prompt forwards ``\\x04``, which
+  soft-reboots the runtime.
 - ``Ctrl-X`` exits line mode without touching the device.
 
 History is persistent at
@@ -55,7 +55,7 @@ if TYPE_CHECKING:  # pragma: no cover -type-only
     from prompt_toolkit import PromptSession
     from prompt_toolkit.key_binding import KeyBindings, KeyPressEvent
 
-#: Per-line drain window — how long to wait after sending a line
+#: Per-line drain window: how long to wait after sending a line
 #: for the device to print its response before re-prompting.  The
 #: friendly REPL on a healthy board responds in tens of ms; a slow
 #: import or long computation can take seconds.  We poll throughout
@@ -75,11 +75,11 @@ _DRAIN_SETTLE_SECONDS: float = 0.05
 
 #: Default location for per-device history files.  Each device gets
 #: its own subdirectory keyed off a sanitized form of the serial
-#: address — ``/dev/cu.usbmodem1101`` → ``dev_cu_usbmodem1101``.
+#: address (``/dev/cu.usbmodem1101`` → ``dev_cu_usbmodem1101``).
 DEFAULT_HISTORY_ROOT: Path = Path.home() / ".chumicro-repl" / "history"
 
 #: Default location for ``:save`` / ``:load`` snippet files.  Flat
-#: directory keyed by name — ``:save back-porch-bringup`` lands at
+#: directory keyed by name: ``:save back-porch-bringup`` lands at
 #: ``~/.chumicro-repl/snippets/back-porch-bringup.py``.
 DEFAULT_SNIPPETS_ROOT: Path = Path.home() / ".chumicro-repl" / "snippets"
 
@@ -116,8 +116,8 @@ def history_path_for(
 ) -> Path:
     """Return the persistent-history path for *address*.
 
-    Creates the parent directory if needed (mode 0o700 — the file
-    may carry session secrets so reusing the user's home defaults
+    Creates the parent directory if needed (mode 0o700, because the
+    file may carry session secrets so reusing the user's home defaults
     is safer than dropping it world-readable in a temp dir).
     """
     base = root if root is not None else DEFAULT_HISTORY_ROOT
@@ -184,14 +184,14 @@ CommandHandler = Callable[["LineModeContext", str], bool]
 
 
 def _cmd_quit(_context: LineModeContext, _rest: str) -> bool:
-    """``:quit`` — exit the line-mode loop without rebooting the device."""
+    """``:quit``: exit the line-mode loop without rebooting the device."""
     _context.output.write("line-mode: bye\n")
     _context.output.flush()
     return False
 
 
 def _cmd_help(context: LineModeContext, _rest: str) -> bool:
-    """``:help`` — list registered commands."""
+    """``:help``: list registered commands."""
     context.output.write("commands:\n")
     for name, handler in sorted(BUILTIN_COMMANDS.items()):
         doc = (handler.__doc__ or "").splitlines()[0].strip()
@@ -210,18 +210,18 @@ _SNIPPET_TAIL_LINES: int = 10
 def _snippet_path(context: LineModeContext, name: str) -> Path:
     """Resolve a snippet name to its on-disk path.
 
-    Names go through :func:`sanitize_address`'s rules — keeps the
-    snippet root flat without surprises from path-separator bytes
-    in user-supplied names.
+    Names go through :func:`sanitize_address`'s rules, which keeps
+    the snippet root flat without surprises from path-separator
+    bytes in user-supplied names.
     """
     return context.snippets_root / f"{sanitize_address(name)}.py"
 
 
 def _cmd_save(context: LineModeContext, rest: str) -> bool:
-    """``:save <name>`` — write the last 10 input lines to a snippet."""
+    """``:save <name>``: write the last 10 input lines to a snippet."""
     name = rest.strip()
     if not name:
-        context.output.write("line-mode: usage — :save <name>\n")
+        context.output.write("line-mode: usage: :save <name>\n")
         context.output.flush()
         return True
     context.snippets_root.mkdir(parents=True, exist_ok=True)
@@ -229,7 +229,7 @@ def _cmd_save(context: LineModeContext, rest: str) -> bool:
     tail = context.input_history[-_SNIPPET_TAIL_LINES:]
     if not tail:
         context.output.write(
-            "line-mode: nothing to save — type a line first.\n",
+            "line-mode: nothing to save; type a line first.\n",
         )
         context.output.flush()
         return True
@@ -242,10 +242,10 @@ def _cmd_save(context: LineModeContext, rest: str) -> bool:
 
 
 def _cmd_load(context: LineModeContext, rest: str) -> bool:
-    """``:load <name>`` — replay a saved snippet line-by-line to the device."""
+    """``:load <name>``: replay a saved snippet line-by-line to the device."""
     name = rest.strip()
     if not name:
-        context.output.write("line-mode: usage — :load <name>\n")
+        context.output.write("line-mode: usage: :load <name>\n")
         context.output.flush()
         return True
     target = _snippet_path(context, name)
@@ -267,7 +267,7 @@ def _cmd_load(context: LineModeContext, rest: str) -> bool:
 
 
 def _cmd_snippets(context: LineModeContext, _rest: str) -> bool:
-    """``:snippets`` — list saved snippets."""
+    """``:snippets``: list saved snippets."""
     if not context.snippets_root.is_dir():
         context.output.write("line-mode: no snippets saved yet\n")
         context.output.flush()
@@ -295,7 +295,7 @@ def _open_editor(*, editor: str, file_path: Path) -> int:
             via ``shlex.split`` so projects like ``"code -w"`` work.
         file_path: File the editor opens.
 
-    Indirection point — tests stub this so they don't shell out.
+    Indirection point: tests stub this so they don't shell out.
     """
     argv = shlex.split(editor) + [str(file_path)]
     completed = subprocess.run(argv, check=False)  # noqa: S603 - shlex-parsed user editor
@@ -303,7 +303,7 @@ def _open_editor(*, editor: str, file_path: Path) -> int:
 
 
 def _cmd_edit(context: LineModeContext, _rest: str) -> bool:
-    """``:edit`` — open ``$EDITOR``; ship the saved buffer to the device.
+    """``:edit``: open ``$EDITOR``; ship the saved buffer to the device.
 
     Match IPython's ``%edit`` semantics: the editor opens with the
     last input prefilled (so the user can polish a multi-line block
@@ -358,9 +358,9 @@ def _cmd_edit(context: LineModeContext, _rest: str) -> bool:
 
 
 def _cmd_rescan(context: LineModeContext, _rest: str) -> bool:
-    """``:rescan`` — drop the cached ``dir()`` so the next Tab re-queries.
+    """``:rescan``: drop the cached ``dir()`` so the next Tab re-queries.
 
-    Use after ``import``-ing a new module or defining new names — the
+    Use after ``import``-ing a new module or defining new names.  The
     completer otherwise serves the snapshot it took on first Tab.
     No-op (with a status line) when the loop is running without
     device-side completion.
@@ -403,7 +403,7 @@ def _split_command(line: str) -> tuple[str, str]:
 
 
 # ---------------------------------------------------------------------------
-# Key bindings — mirror passthrough TUI / mpremote conventions
+# Key bindings: mirror passthrough TUI / mpremote conventions
 # ---------------------------------------------------------------------------
 
 
@@ -426,8 +426,8 @@ def _forward_ctrl_c(port: SerialPort) -> None:
 def _forward_ctrl_d(port: SerialPort) -> None:
     """Send ``\\x04`` to the device.
 
-    Triggers a soft reboot of the runtime — MicroPython prints
-    ``MPY: soft reboot``, CircuitPython rewinds silently.  Only bound
+    Triggers a soft reboot of the runtime.  MicroPython prints
+    ``MPY: soft reboot``; CircuitPython rewinds silently.  Only bound
     when the local input buffer is empty (matches every shell on
     earth: Ctrl-D on a non-empty line is a no-op).
     """
@@ -560,7 +560,7 @@ def run_line_mode(
         port: Open :class:`SerialPort`.  Caller owns close.
         output: Where rendered serial output goes (stdout in normal
             use; tests inject a StringIO).
-        address: Serial address — used to derive the per-device
+        address: Serial address, used to derive the per-device
             persistent history file.
         history_root: Override the history root.  Defaults to
             :data:`DEFAULT_HISTORY_ROOT`; tests pass a tmp_path.
@@ -591,7 +591,7 @@ def run_line_mode(
     decoder = Utf8StreamDecoder()
     detector = StreamingPatternDetector()
     # When tests inject their own prompt_session we leave the cache
-    # unwired — the test owns its completer.  Otherwise we build the
+    # unwired: the test owns its completer.  Otherwise we build the
     # device-completer cache here so :rescan can invalidate it.
     completion_cache: CompletionCache | None = (
         None if prompt_session is not None else CompletionCache()
@@ -615,7 +615,7 @@ def run_line_mode(
         output.flush()
 
     # Print whatever the device has already buffered before we
-    # block on input — usually the friendly REPL banner / prompt
+    # block on input, usually the friendly REPL banner or prompt
     # the device emitted in response to the connect.
     _drain_serial(
         port,
@@ -650,7 +650,7 @@ def run_line_mode(
         except (EOFError, KeyboardInterrupt):
             # EOFError fires when the underlying stdin closes (test stub
             # exhausting its script, no controlling tty).  KeyboardInterrupt
-            # only reaches here if a SIGINT slips past our key binding —
+            # only reaches here if a SIGINT slips past our key binding;
             # the c-c handler normally converts it to an empty-line return.
             output.write("\nline-mode: bye\n")
             output.flush()
@@ -670,13 +670,13 @@ def run_line_mode(
             except OSError as error:
                 # A port drop mid-command (``:load`` / ``:edit`` replay)
                 # is fatal to the session the same way a dropped plain
-                # line is — the port is gone.  Report and exit non-zero.
+                # line is: the port is gone.  Report and exit non-zero.
                 output.write(f"line-mode: write failed: {error!r}\n")
                 output.flush()
                 return 1
             except Exception as error:
                 # A buggy command handler must not tear down the whole
-                # session — coach with a one-liner and return to the
+                # session.  Coach with a one-liner and return to the
                 # prompt so in-progress history survives.
                 output.write(
                     f"line-mode: :{name} failed: "
@@ -695,7 +695,7 @@ def run_line_mode(
                 return 1
         # Empty line (Enter on blank, or Ctrl-C / Ctrl-D forwarded a byte
         # via the key binding) falls through to drain so the device's
-        # response — KeyboardInterrupt traceback, soft-reboot banner —
+        # response (KeyboardInterrupt traceback, soft-reboot banner)
         # surfaces before the next prompt.
         _drain_serial(
             port,
@@ -722,7 +722,7 @@ def _build_prompt_session(
     Imported lazily so the module-level cost of `chumicro_repl` doesn't
     pay for prompt_toolkit unless line mode is actually entered.
 
-    The completer is wired to the live *port* — Tab queries
+    The completer is wired to the live *port*.  Tab queries
     ``dir()`` on the device and caches the result in *cache*; the
     line-mode ``:rescan`` builtin invalidates the cache when the
     user wants to refresh after a new ``import``.
@@ -753,7 +753,7 @@ def format_line_mode_banner(*, address: str) -> str:
     """
     history = history_path_for(address)
     return (
-        f"chumicro-repl line mode — {address}\n"
+        f"chumicro-repl line mode: {address}\n"
         f"history: {history}\n"
         f"  :help     list commands\n"
         f"  :quit     exit\n"

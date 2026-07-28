@@ -5,7 +5,7 @@ running a demo against real hardware.  Two contracts
 hold for any file under ``demos/<name>/`` (driver or otherwise):
 
 1. **Forbidden imports.**  A demo file may not reach across the
-   workspace boundary into the deploy plumbing — that's exactly the
+   workspace boundary into the deploy plumbing.  That's exactly the
    duplication ``chumicro_workspace.deploy_api`` exists to absorb.
    The demo's surface is the public API + a small allow-list of
    host helpers, never the internal modules below it.
@@ -15,7 +15,7 @@ hold for any file under ``demos/<name>/`` (driver or otherwise):
    override in the user's ``devices.yml`` flips the demo to RAM mode,
    the demo is no longer demonstrating the production path.  Any
    ``deploy_project(...)`` call inside a demo file must pass
-   ``deploy_mode="flash"`` as a literal — non-literal values (e.g.
+   ``deploy_mode="flash"`` as a literal.  Non-literal values (e.g.
    ``deploy_mode=args.mode``) are allowed (the demo author has taken
    explicit responsibility) but missing the kwarg entirely is not (the
    default of ``None`` defers to devices.yml).
@@ -35,7 +35,7 @@ Allowed imports (in addition to the stdlib):
 - ``chumicro_workspace.markers`` (for ``Marker`` / ``MarkerTimeoutError``
   type imports in ``except`` clauses).
 - ``chumicro_pytest_device.fixtures.*`` (the Mosquitto spawner, the
-  LAN-IP detector — host helpers, not deploy plumbing).
+  LAN-IP detector: host helpers, not deploy plumbing).
 - Any device-side library imported as a CPython counterparty
   (``chumicro_mqtt``, ``chumicro_sockets``, ``chumicro_http_server``,
   etc.) plus their substrate (``chumicro_timing``, ``chumicro_config``).
@@ -127,7 +127,7 @@ def _check_deploy_mode_kwarg(node: ast.Call) -> str | None:
     if deploy_mode_arg is None:
         return (
             "deploy_project(...) in a demo must pass deploy_mode=\"flash\" "
-            "explicitly — the None default defers to devices.yml resolution, "
+            "explicitly; the None default defers to devices.yml resolution, "
             "which can flip the demo to RAM mode."
         )
 
@@ -136,7 +136,7 @@ def _check_deploy_mode_kwarg(node: ast.Call) -> str | None:
             return None
         return (
             f"deploy_project(deploy_mode={deploy_mode_arg.value!r}) in a "
-            f"demo must pass deploy_mode=\"flash\" — demos exist to show "
+            f"demo must pass deploy_mode=\"flash\"; demos exist to show "
             f"the production-shaped path."
         )
 
@@ -168,7 +168,7 @@ def _check_file(filepath: Path) -> list[Finding]:
                             line=node.lineno,
                             code=_RULE_CODE,
                             message=(
-                                f"demo imports {alias.name!r} — use "
+                                f"demo imports {alias.name!r}: use "
                                 f"{replacement} instead"
                             ),
                         ),
@@ -185,7 +185,7 @@ def _check_file(filepath: Path) -> list[Finding]:
                             line=node.lineno,
                             code=_RULE_CODE,
                             message=(
-                                f"demo imports from {node.module!r} — use "
+                                f"demo imports from {node.module!r}: use "
                                 f"{replacement} instead"
                             ),
                         ),
@@ -207,7 +207,7 @@ def _check_file(filepath: Path) -> list[Finding]:
                             line=node.lineno,
                             code=_RULE_CODE,
                             message=(
-                                f"demo imports {qualified!r} — use "
+                                f"demo imports {qualified!r}: use "
                                 f"{replacement} instead"
                             ),
                         ),

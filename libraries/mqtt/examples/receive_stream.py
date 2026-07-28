@@ -3,12 +3,12 @@
 Brings wifi up via the local ``helpers`` module, connects to a
 configured MQTT broker, subscribes to one command topic, then receives
 every inbound message with a ``yield from mqtt.next_message()`` loop
-driven by ``Runner.add_generator`` — wait for a message, act on it,
+driven by ``Runner.add_generator``: wait for a message, act on it,
 wait for the next.
 
 Pair with ``telemetry.py``, which uses the ``on_message`` callback and
 pattern handlers for multi-topic fan-out; this one shows the linear
-receive loop for a single-subscription consumer — the session and the
+receive loop for a single-subscription consumer.  The session and the
 consumer are both registered with the runner.  Pick one inbound
 surface per client, not both: the first ``next_message()`` call
 switches data delivery from the callbacks to the stream.
@@ -21,7 +21,7 @@ Reads the deployed ``runtime_config.msgpack`` via the flat-key API:
 * WiFi (read by ``helpers.wifi_up``): ``wifi.ssid`` / ``wifi.password``.
 * MQTT (read by ``MQTTClient.from_config``): ``mqtt.broker.host`` /
   ``mqtt.broker.port`` / ``mqtt.client_id``.
-* App-level: ``mqtt.command_topic`` — the topic this consumer drains
+* App-level: ``mqtt.command_topic``, the topic this consumer drains
   (defaults to ``chumicro-demo/cmd``).
 
 Deploying

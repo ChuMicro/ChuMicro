@@ -4,11 +4,11 @@ Generates inline code blocks that can be sent through the
 CircuitPython raw REPL.  Two builders share the same helper-function
 prefix:
 
-- :func:`build_circuitpython_bootstrap_scripts` — test-harness
+- :func:`build_circuitpython_bootstrap_scripts` is the test-harness
   flavor.  Registers library modules via the class-as-module
   pattern (no ``types.ModuleType`` on CircuitPython), inlines a test
   file, and runs it through ``chumicro_test_harness.runner.run_module``.
-- :func:`build_circuitpython_deploy_scripts` — deploy flavor.
+- :func:`build_circuitpython_deploy_scripts` is the deploy flavor.
   Registers every non-entrypoint file as an importable module, then
   ``exec()``-s the entrypoint as ``__main__``.  No test-harness
   dependency is needed, and the deploy tail is two lines long, kept
@@ -179,7 +179,7 @@ def _decode_file_content(content: bytes | str) -> str:
 def _derive_module_name(device_path: str) -> str | None:
     """Convert an on-device path to a dotted Python module name.
 
-    Returns ``None`` for paths that cannot be imported inline —
+    Returns ``None`` for paths that cannot be imported inline:
     non-``.py`` files (assets, ``.toml``, ``.json``) and paths that
     reduce to an empty name.
 

@@ -15,7 +15,7 @@ The false-positive guard is the exemption, in two halves:
 
 * A negator (``not`` / ``never`` / ``rather than`` / ``n't`` /
   ``no``) that sits within a few tokens **before** the overclaim
-  phrase — ``does not cover all code``, ``never full coverage`` — is
+  phrase (``does not cover all code``, ``never full coverage``) is
   an honest negated claim.  A negator elsewhere in the sentence does
   not exempt: ``95% of shipped code, no exceptions`` still fires, since
   the ``no`` strengthens the overclaim rather than negating it.
@@ -147,7 +147,7 @@ def _check_file(filepath: Path) -> list[Finding]:
                 line=line,
                 code=_RULE_CODE,
                 message=(
-                    f"coverage figure cited as {overclaim.group(0)!r} — the "
+                    f"coverage figure cited as {overclaim.group(0)!r}; the "
                     f"gate is a CPython-reachable, post-pragma figure with "
                     f"no device-execution signal; state that scope or drop "
                     f"the whole-codebase framing"

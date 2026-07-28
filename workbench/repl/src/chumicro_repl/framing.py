@@ -2,7 +2,7 @@
 
 Serial reads arrive in arbitrary-sized chunks.  A single UTF-8
 code-point can span up to four bytes, and a read boundary can fall in
-the middle of a multi-byte sequence — so naive ``bytes.decode("utf-8")``
+the middle of a multi-byte sequence, so naive ``bytes.decode("utf-8")``
 on each chunk raises :class:`UnicodeDecodeError` on anything above
 ASCII.  :class:`Utf8StreamDecoder` buffers the tail bytes of a chunk
 that look like the start of a not-yet-complete sequence and prepends
@@ -17,7 +17,7 @@ crash.
 from __future__ import annotations
 
 #: The maximum number of bytes that can form a single UTF-8 code point.
-#: A chunk-tail longer than this cannot be "partial" — it must contain
+#: A chunk-tail longer than this cannot be "partial": it must contain
 #: an invalid byte, so we flush it through the standard error-replace
 #: path rather than holding it indefinitely.
 _MAX_UTF8_SEQUENCE_BYTES = 4
@@ -49,7 +49,7 @@ def _utf8_continuation_start(chunk: bytes) -> int:
         if (byte_value & 0b1100_0000) != 0b1000_0000:
             # Found the leading byte of the last sequence.
             if byte_value < 0x80:
-                # ASCII — one-byte sequence, complete by definition.
+                # ASCII, a one-byte sequence, complete by definition.
                 return chunk_length
             if (byte_value & 0b1110_0000) == 0b1100_0000:
                 expected_length = 2
@@ -58,7 +58,7 @@ def _utf8_continuation_start(chunk: bytes) -> int:
             elif (byte_value & 0b1111_1000) == 0b1111_0000:
                 expected_length = 4
             else:
-                # Malformed leading byte — let decode error-replace it
+                # Malformed leading byte: let decode error-replace it
                 # on the next pass rather than buffering indefinitely.
                 return chunk_length
             have_length = chunk_length - walk_index
@@ -66,7 +66,7 @@ def _utf8_continuation_start(chunk: bytes) -> int:
                 return walk_index
             return chunk_length
         walk_index -= 1
-    # No leading byte found within the look-back window — chunk is all
+    # No leading byte found within the look-back window, so the chunk is all
     # continuation bytes, which is malformed.  Flush the lot and let
     # decode error-replace the garbage.
     return chunk_length

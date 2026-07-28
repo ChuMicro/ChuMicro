@@ -2,14 +2,14 @@
 
 Public API:
 
-* :func:`resolve_deploy_mode` — pure policy: given the configured mode
+* :func:`resolve_deploy_mode` is pure policy: given the configured mode
   and the resolution unit's inputs, return the effective mode plus an
   optional human-readable message when a requested RAM mode was
   overridden to flash.  One rule across every shape: the
   unit/functional distinction is expressed by how ``staged_files`` and
   ``resolution_unit`` are scoped, never by a branch in the policy.
-* :class:`DeviceCaps` — static board capabilities the policy reads.
-* :func:`find_libraries_requiring_flash` — walks a list of host paths
+* :class:`DeviceCaps` holds the static board capabilities the policy reads.
+* :func:`find_libraries_requiring_flash` walks a list of host paths
   to find every unique containing ``pyproject.toml``, reads
   ``[tool.chumicro].requires_flash`` from each, returns the names
   of the libraries flagged ``true``.  Host-paths-in /
@@ -51,14 +51,14 @@ def resolve_deploy_mode(
 ) -> tuple[str, str | None]:
     """Resolve the effective deploy mode for one resolution unit.
 
-    Pure policy — no I/O, no emission.  The caller computes the inputs
+    Pure policy: no I/O, no emission.  The caller computes the inputs
     (the dependency-closure walk for *requires_flash_libs*, the staged
     file set for *staged_files*), surfaces the returned message, and
     applies the mode.  A *resolution unit* is one deploy or one
     library's test suite.
 
-    Two inputs have opposite scoping rules, and that — not a branch —
-    is the whole subtlety:
+    Two inputs have opposite scoping rules, and that (not a branch) is
+    the whole subtlety:
 
     * *requires_flash_libs* is **always the full transitive dependency
       closure**.  ``requires_flash`` means "OOMs on import in RAM on a
@@ -77,7 +77,7 @@ def resolve_deploy_mode(
 
     Returns ``(mode, message_or_None)``.  The message is non-``None``
     only when a requested RAM mode was overridden to flash, and the
-    caller emits it and continues — never a silent skip.
+    caller emits it and continues.  Never a silent skip.
 
     Resolution order:
 
@@ -107,13 +107,13 @@ def resolve_deploy_mode(
 
     if not device_caps.supports_ram_mode:
         return DeployMode.FLASH, (
-            "chumicro-deploy: switching to flash mode — this device does "
+            "chumicro-deploy: switching to flash mode, because this device does "
             "not support RAM mode."
         )
 
     if requires_flash_libs:
         message = (
-            f"chumicro-deploy: switching to flash mode — "
+            f"chumicro-deploy: switching to flash mode: "
             f"{', '.join(requires_flash_libs)} declare `[tool.chumicro] "
             f"requires_flash = true` (heavy parsers / state machines / "
             f"recv buffers often OOM in RAM mode on smaller boards). "
@@ -122,7 +122,7 @@ def resolve_deploy_mode(
         if resolution_unit is not None and resolution_unit not in requires_flash_libs:
             message += (
                 f" {resolution_unit} pulls a flash-only library in via its "
-                f"dependency closure — declare `[tool.chumicro] "
+                f"dependency closure, so declare `[tool.chumicro] "
                 f"requires_flash = true` in its pyproject.toml so future "
                 f"runs skip this discovery."
             )
@@ -131,7 +131,7 @@ def resolve_deploy_mode(
     data_files = sorted(name for name in staged_files if not name.endswith(".py"))
     if data_files:
         return DeployMode.FLASH, (
-            f"chumicro-deploy: switching to flash mode — staged set "
+            f"chumicro-deploy: switching to flash mode: the staged set "
             f"includes non-.py data file(s) ({', '.join(data_files)}) "
             f"that RAM-mode deploy cannot reliably carry to the device. "
             f"Pass force_deploy_mode='ram' to bypass."

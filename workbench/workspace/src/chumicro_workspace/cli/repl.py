@@ -119,7 +119,7 @@ def _add_repl_parser(subparsers: argparse._SubParsersAction) -> None:
             "editor with persistent history, `:edit` editor handoff, "
             "`:save`/`:load`/`:snippets`, and Tab completion against "
             "the on-device namespace.  `passthrough` forwards "
-            "keystrokes byte-by-byte (mpremote-style — needed for "
+            "keystrokes byte-by-byte (mpremote-style, needed for "
             "raw REPL framing or paste mode).  `auto` (default) "
             "picks `line` when stdin is a TTY and `passthrough` "
             "otherwise.  No effect with `--tail` (tail mode uses the "

@@ -1,4 +1,4 @@
-"""Drive-less CircuitPython transport — deploy over the serial raw REPL.
+"""Drive-less CircuitPython transport: deploy over the serial raw REPL.
 
 A classic ESP32 (no native USB) running CircuitPython exposes **no
 CIRCUITPY drive**: the board reaches the host only through a UART-USB
@@ -8,9 +8,9 @@ flash mode copies files to that drive, so it cannot reach such a board.
 
 This transport fills the gap.  It **subclasses**
 :class:`CircuitpythonTransport` so every pyserial raw-REPL primitive is
-reused verbatim — ``connect``, ``execute``, ``execute_scripts``,
+reused verbatim (``connect``, ``execute``, ``execute_scripts``,
 ``soft_reset``, ``recover``, ``disconnect``, the probes,
-``_read_until`` / ``_send_repl_command`` / ``_read_code_py_output`` — and
+``_read_until`` / ``_send_repl_command`` / ``_read_code_py_output``) and
 overrides only the six methods that used to touch the CIRCUITPY drive
 (:meth:`stage`, :meth:`deploy_files`, :meth:`list_files_in_scope`,
 :meth:`delete_files`, :meth:`clear_entrypoints`, :meth:`wipe_filesystem`).
@@ -21,12 +21,12 @@ Two mechanics carry it:
 
 - **File write over the raw REPL** (the spike's ``open('/f','wb').write``
   path).  Content is base64-chunked and streamed as
-  ``_f.write(binascii.a2b_base64(...))`` submissions — base64 is 1.33x
+  ``_f.write(binascii.a2b_base64(...))`` submissions.  Base64 is 1.33x
   (vs. ~4x for a Python ``bytes`` repr of binary msgpack) and pure-ASCII,
   so it never trips raw-REPL escaping.  Large files span multiple
   submissions against a file handle persisted in the raw-REPL globals.
 - **Device-side scope / delete / clear scripts** reused from
-  :mod:`._device_scripts` — the same stdlib-only generators the
+  :mod:`._device_scripts`, the same stdlib-only generators the
   MicroPython transport runs over *its* raw REPL.  They are runtime
   neutral (``os.listdir`` / ``os.stat`` / ``os.remove``), so the diff
   primitives share one implementation across both runtimes.
@@ -47,7 +47,7 @@ tinypico-cp, CP 10.2.0, 2026-07-05):
 3. **Soft-reboot semantics.**  A Ctrl-D from *raw* REPL re-enters raw
    REPL without running ``code.py``.  :meth:`deploy_files` exits to the
    friendly REPL (Ctrl-B) first, then Ctrl-D, so the freshly-written
-   ``code.py`` actually runs — reusing the parent's
+   ``code.py`` actually runs, reusing the parent's
    :meth:`_read_code_py_output`.
 4. **Autoreload.**  :meth:`_disable_autoreload` turns autoreload off
    before a multi-file push, handling both the CP 8+
@@ -115,8 +115,8 @@ _HAS_SETTINGS_MARKER = "__CHU_HAS_SETTINGS__"
 #: Marker line the safe-mode probe prints its reason behind.
 _SAFE_MODE_MARKER = "__CHU_SAFE__:"
 
-#: Matches an ANSI OSC sequence (``ESC ] ... BEL`` or ``ESC ] ... ST``) —
-#: CircuitPython's terminal title / status-bar writes — and a CSI
+#: Matches an ANSI OSC sequence (``ESC ] ... BEL`` or ``ESC ] ... ST``),
+#: which is CircuitPython's terminal title / status-bar writes, and a CSI
 #: sequence (``ESC [ ... final-byte``).  Both are stripped from serial
 #: reads so they never contaminate parsed stdout or the raw-REPL framing.
 _TERMINAL_NOISE_RE = re.compile(
@@ -133,7 +133,7 @@ def _strip_terminal_noise(data: bytes) -> bytes:
 class CircuitpythonSerialTransport(CircuitpythonTransport):
     """Drive-less CircuitPython transport writing files over the raw REPL.
 
-    Constructed with ``mode="serial"`` — a third mode label alongside
+    Constructed with ``mode="serial"``, a third mode label alongside
     the parent's ``"ram"`` / ``"flash"``.  ``mode`` is deliberately not
     a :class:`~chumicro_deploy.protocol.DeployMode` value: serial is a
     *transport variant* orthogonal to the ram/flash deploy-mode axis
@@ -171,14 +171,14 @@ class CircuitpythonSerialTransport(CircuitpythonTransport):
         Mirrors flash mode's clean-slate + push, but the "push" is a
         raw-REPL file-write instead of a drive rsync: assemble the same
         host-side staging tree flash mode builds
-        (:meth:`_build_local_staging_tree` — libs + harness under
+        (:meth:`_build_local_staging_tree`, with libs + harness under
         ``lib/``, test files and ``extra_files`` at the root), then
         stream every file to the matching absolute device path.  The
         board's importer sees the files immediately because the VM that
         wrote them owns the filesystem (no USB-MSC cache to refresh).
 
         Unlike RAM mode, ``extra_files`` (a ``runtime_config.msgpack``)
-        is fully supported — a drive-less board still has a writable
+        is fully supported: a drive-less board still has a writable
         device filesystem.
         """
         if self._port is None:
@@ -226,8 +226,8 @@ class CircuitpythonSerialTransport(CircuitpythonTransport):
         Files are minified, streamed to their absolute device paths over
         the raw REPL, and then the entrypoint runs.  When it is
         ``code.py`` / ``main.py`` the board is soft-rebooted into it
-        (Ctrl-B to the friendly REPL, then Ctrl-D — a bare raw-REPL
-        Ctrl-D would re-enter raw REPL without running it), and the
+        (Ctrl-B to the friendly REPL, then Ctrl-D, because a bare
+        raw-REPL Ctrl-D re-enters raw REPL without running it), and the
         parent's :meth:`_read_code_py_output` captures the boot output.
         Any other entrypoint is ``exec(open(...).read())``-ed over the
         live raw REPL and its stdout returned.
@@ -348,7 +348,7 @@ class CircuitpythonSerialTransport(CircuitpythonTransport):
 
         The CircuitPython nuclear option: reformat the flash volume and
         hard-reset.  Unlike the parent (which then polls for a CIRCUITPY
-        *drive* to remount — one that never appears on a drive-less
+        *drive* to remount, one that never appears on a drive-less
         board), this reconnects over serial only.  The UART-USB bridge
         keeps the host port enumerated across the CP reset, so a settle
         pause plus a fresh raw-REPL entry is all that's needed.
@@ -391,8 +391,8 @@ class CircuitpythonSerialTransport(CircuitpythonTransport):
     def _extract_code_output(raw_boot_output: bytes) -> str:  # type: ignore[override]
         """Strip CP terminal noise before extracting soft-reboot output.
 
-        The soft-reboot capture is the noisiest path — CP writes its
-        status bar as it re-runs ``code.py`` — so noise is stripped here
+        The soft-reboot capture is the noisiest path, because CP writes
+        its status bar as it re-runs ``code.py``, so noise is stripped here
         before the parent's ``code.py output:`` / ``Code done running.``
         boundary logic runs.
         """
@@ -426,7 +426,7 @@ class CircuitpythonSerialTransport(CircuitpythonTransport):
         if reason and reason not in ("None",) and not reason.endswith("NONE"):
             raise CircuitpythonTransportError(
                 f"CircuitPython board {self.address} is in safe mode "
-                f"({reason}) — it will answer the REPL but run no code.  "
+                f"({reason}).  It will answer the REPL but run no code.  "
                 "Clear the safe-mode cause (check boot.py / a brownout / a "
                 "hard fault) and reset the board, then redeploy.",
             )
@@ -437,7 +437,7 @@ class CircuitpythonSerialTransport(CircuitpythonTransport):
         CP 8+ exposes ``supervisor.runtime.autoreload`` (a writable
         attribute); older builds expose ``supervisor.disable_autoreload()``.
         Autoreload watches for *host* filesystem writes, which a
-        drive-less board never sees — but a multi-file push is exactly
+        drive-less board never sees, but a multi-file push is exactly
         the window where a stray reset would wedge things, so it is
         disabled defensively either way.
         """
@@ -563,7 +563,7 @@ class CircuitpythonSerialTransport(CircuitpythonTransport):
         away a stale ``/lib`` tree, an old ``code.py``, or a board
         ``settings.toml`` before writing the new payload, preserving only
         :data:`flash_drive.DEVICE_KEEP_SET` (``boot.py`` / ``boot_out.txt``
-        / ``_chu_kv.msgpack``).  Best-effort — a hard failure here would
+        / ``_chu_kv.msgpack``).  Best-effort, since a hard failure here would
         mask the staging it precedes.
         """
         try:
@@ -577,7 +577,7 @@ class CircuitpythonSerialTransport(CircuitpythonTransport):
         A board-resident ``settings.toml`` is a competing wifi authority
         against chumicro's config-driven wifi
         (``runtime_config.msgpack`` from the host ``secrets.toml``), so it
-        is evicted on every clean push — correct, but invisible unless a
+        is evicted on every clean push.  Correct, but invisible unless a
         user who hand-edited it is told.  Emitted at most once per
         transport instance.
         """
@@ -598,7 +598,7 @@ class CircuitpythonSerialTransport(CircuitpythonTransport):
             return
         self._settings_eviction_notified = True
         print(
-            "WARNING: removing the board's settings.toml — chumicro "
+            "WARNING: removing the board's settings.toml.  chumicro "
             "drives wifi from the host-side secrets.toml "
             "(runtime_config.msgpack), and a board-resident "
             "settings.toml is a competing authority.  Put credentials "

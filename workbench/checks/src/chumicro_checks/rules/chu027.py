@@ -16,12 +16,12 @@ duplication is a signal rather than coincidence.
 Calibration parameters (set conservative, bench against real corpus
 before tightening):
 
-* ``_MIN_TOKENS = 12`` — short blocks share idiom language (``Returns
+* ``_MIN_TOKENS = 12``: short blocks share idiom language (``Returns
   the parsed result``) without being duplicative. The floor keeps the
   rule off that noise.
-* ``_INTRA_PACKAGE_THRESHOLD = 3`` — three matching blocks inside one
+* ``_INTRA_PACKAGE_THRESHOLD = 3``: three matching blocks inside one
   package is the AGENTS.md "repeated across many sites" shape.
-* ``_CROSS_PACKAGE_THRESHOLD = 2`` — two matching blocks across two
+* ``_CROSS_PACKAGE_THRESHOLD = 2``: two matching blocks across two
   packages indicate one package should own the explanation and the
   other should cross-reference, rather than restating the same fact.
 
@@ -271,7 +271,7 @@ def _group_duplicates(blocks: list[_Block]) -> list[list[_Block]]:
 class CHU027_CrossSiteDuplicate(Rule):
     code = _RULE_CODE
     description = (
-        "no cross-site duplicate comment / docstring blocks — explain "
+        "no cross-site duplicate comment / docstring blocks: explain "
         "once in a canonical home and cross-reference"
     )
 
@@ -296,7 +296,7 @@ class CHU027_CrossSiteDuplicate(Rule):
                         message=(
                             f"duplicate comment / docstring block "
                             f"({len(group)} sites, "
-                            f"{len({block.package for block in group})} packages) — "
+                            f"{len({block.package for block in group})} packages); "
                             f"explain once and cross-reference.  Sites: {sites}"
                         ),
                     )

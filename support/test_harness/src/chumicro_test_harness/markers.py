@@ -3,7 +3,7 @@
 A board signals checkpoints to the host by printing ``NAME key=value
 key=value ...`` lines; the host's marker parser
 (``chumicro_workspace.markers``) drops the *entire* line when any
-value contains whitespace or ``=`` — a demo lost its ``ECHO_RECEIVED``
+value contains whitespace or ``=``.  A demo lost its ``ECHO_RECEIVED``
 marker to exactly that and burned a 10 s wait budget with no
 diagnostic.  :func:`marker` makes the constraint structural instead of
 documented: ``bytes`` values ride as hex, everything else must
@@ -25,7 +25,7 @@ def marker(name, **values):
     Args:
         name: Uppercase marker identifier (``ECHO_RECEIVED``).  The
             result-parser names (``PASS`` / ``FAIL`` / ``SKIP`` /
-            ``SUMMARY`` / ``HEAP``) are rejected — the host never
+            ``SUMMARY`` / ``HEAP``) are rejected, since the host never
             reads them as markers.
         **values: Marker values.  ``bytes`` / ``bytearray`` /
             ``memoryview`` are hex-encoded (the only whitespace-safe
@@ -36,9 +36,9 @@ def marker(name, **values):
 
     Raises:
         ValueError: *name* is reserved or not uppercase-led, or a
-            value stringifies with whitespace / ``=`` in it — loud at
-            develop time instead of a silently dropped marker at run
-            time.
+            value stringifies with whitespace / ``=`` in it.  This is
+            loud at develop time instead of a silently dropped marker
+            at run time.
     """
     if not name or not ("A" <= name[0] <= "Z"):
         raise ValueError(f"marker name must be uppercase-led: {name!r}")

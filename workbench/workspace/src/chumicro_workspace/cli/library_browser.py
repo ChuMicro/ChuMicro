@@ -79,7 +79,7 @@ class BrowserModel:
         )
         self.cursor = min(self.cursor, max(len(self.entries) - 1, 0))
         self.status = (
-            f"{self.channel} @ {self._snapshot.tag} — "
+            f"{self.channel} @ {self._snapshot.tag}: "
             f"{len(self.entries)} libraries"
         )
 
@@ -224,7 +224,7 @@ def run_library_browser(model: BrowserModel) -> list[str] | None:  # pragma: no 
 
     def render_status() -> str:
         if model.view == "list":
-            return f" ChuMicro libraries — {model.status}"
+            return f" ChuMicro libraries: {model.status}"
         entry = model.current
         if entry is None:
             return ""
@@ -232,15 +232,15 @@ def run_library_browser(model: BrowserModel) -> list[str] | None:  # pragma: no 
             if entry.examples:
                 selected_name = entry.examples[model.example_cursor]
                 return (
-                    f" {entry.name} — README   "
+                    f" {entry.name}: README   "
                     f"(example {model.example_cursor + 1}/"
                     f"{len(entry.examples)}: {selected_name})"
                 )
-            return f" {entry.name} — README   (no examples)"
+            return f" {entry.name}: README   (no examples)"
         # example view: show which example file is on screen
         if entry.examples:
             selected_name = entry.examples[model.example_cursor]
-            return f" {entry.name} — {selected_name}"
+            return f" {entry.name}: {selected_name}"
         return f" {entry.name}"
 
     def render_help() -> str:

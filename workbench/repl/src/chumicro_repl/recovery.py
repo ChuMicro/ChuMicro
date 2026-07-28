@@ -10,14 +10,14 @@ loop that prints the plan and retries the session start.
 
 Public surface:
 
-- :class:`ReplFailureKind` — enum of session-start failure modes.
-- :class:`RecoveryPlan` — headline + ordered fix-steps for one kind.
-- :func:`classify_session_failure` — map a session-start exception
+- :class:`ReplFailureKind`: enum of session-start failure modes.
+- :class:`RecoveryPlan`: headline + ordered fix-steps for one kind.
+- :func:`classify_session_failure`: map a session-start exception
   to a :class:`ReplFailureKind`.
-- :func:`recovery_plan_for` — look up the plan registered for a kind.
-- :func:`coached_session_start` — reusable classify-render-retry
+- :func:`recovery_plan_for`: look up the plan registered for a kind.
+- :func:`coached_session_start`: reusable classify-render-retry
   loop around any zero-arg session-opening callable.
-- :class:`InteractiveReplSession` — context manager that applies
+- :class:`InteractiveReplSession`: context manager that applies
   the coaching loop around a :class:`ReplSession`.
 
 Mid-session disconnects do not route through this module.  The
@@ -58,23 +58,23 @@ class ReplFailureKind(Enum):
     :data:`_PLANS`; :func:`recovery_plan_for` is the typed accessor.
     """
 
-    #: Port path does not exist (errno ENOENT) — typically the
+    #: Port path does not exist (errno ENOENT).  Typically the
     #: board isn't plugged in, the cable is bad, or the path is
     #: wrong.
     PORT_NOT_FOUND = "port_not_found"
 
-    #: Port path exists but another process holds it (errno EBUSY) —
-    #: typically mpremote, screen, the Mu editor, or the Arduino IDE
+    #: Port path exists but another process holds it (errno EBUSY).
+    #: Typically mpremote, screen, the Mu editor, or the Arduino IDE
     #: still has it open.
     PORT_BUSY = "port_busy"
 
     #: Port path exists and is free, but the user lacks permission
-    #: to open it (errno EACCES) — typically a Linux ``dialout``
+    #: to open it (errno EACCES).  Typically a Linux ``dialout``
     #: group issue.
     PORT_PERMISSION_DENIED = "port_permission_denied"
 
     #: Port opened successfully, but the board didn't respond to the
-    #: raw-REPL handshake — the device may be hung in tight code
+    #: raw-REPL handshake.  The device may be hung in tight code
     #: that ignores Ctrl-C, in safe mode, or running firmware that
     #: doesn't speak the raw-REPL protocol.
     RAW_REPL_UNRESPONSIVE = "raw_repl_unresponsive"
@@ -124,17 +124,17 @@ def classify_session_failure(error: Exception) -> ReplFailureKind:
     - :class:`OSError` (including :class:`serial.SerialException`,
       which subclasses :class:`OSError` in modern pyserial).  The
       classifier inspects ``errno`` first, then falls back to
-      substring matching on the message — pyserial sometimes wraps
-      the OS error and re-formats the message, so neither alone is
-      reliable.
-    - :class:`ReplSessionDisconnected` — the device dropped during
+      substring matching on the message, because pyserial sometimes
+      wraps the OS error and re-formats the message, so neither
+      alone is reliable.
+    - :class:`ReplSessionDisconnected`: the device dropped during
       the handshake write.  Treated as :attr:`PORT_NOT_FOUND`
       because the user-facing fix is the same ("plug the device
       in and retry").
-    - :class:`ReplSessionError` — the handshake completed without a
+    - :class:`ReplSessionError`: the handshake completed without a
       raw-REPL prompt response.  Mapped to
       :attr:`RAW_REPL_UNRESPONSIVE`.
-    - Anything else — :attr:`UNKNOWN`.
+    - Anything else maps to :attr:`UNKNOWN`.
 
     Args:
         error: The exception caught from
@@ -204,7 +204,7 @@ _PLANS: dict[ReplFailureKind, RecoveryPlan] = {
         headline="The serial port path does not exist.",
         fix_steps=(
             "Confirm the board is plugged into USB.",
-            "Check the address is right — `ls /dev/cu.*` (macOS) or "
+            "Check the address is right: `ls /dev/cu.*` (macOS) or "
             "`ls /dev/ttyACM* /dev/ttyUSB*` (Linux) lists the "
             "current ports.",
             "If the cable is suspect, swap to a known-good data "
@@ -216,7 +216,7 @@ _PLANS: dict[ReplFailureKind, RecoveryPlan] = {
     ReplFailureKind.PORT_BUSY: RecoveryPlan(
         headline="The serial port is held by another process.",
         fix_steps=(
-            "Close any other tool that may have the port open — "
+            "Close any other tool that may have the port open: "
             "Mu, Thonny, the Arduino IDE, screen / minicom, "
             "another mpremote, PyCharm or VS Code serial console.",
             "On macOS / Linux, `lsof <port>` shows the holding "
@@ -232,7 +232,7 @@ _PLANS: dict[ReplFailureKind, RecoveryPlan] = {
             "out and back in: "
             "`sudo usermod -a -G dialout $USER`.",
             "macOS: this is rare; check ownership with "
-            "`ls -l <port>` — if the device is owned by `root`, "
+            "`ls -l <port>`.  If the device is owned by `root`, "
             "unplug + replug to reset to your user.",
             "If running inside a container, ensure the device "
             "node is mounted into the container with the right "
@@ -260,7 +260,7 @@ _PLANS: dict[ReplFailureKind, RecoveryPlan] = {
         headline="The session-start failure didn't match a known kind.",
         fix_steps=(
             "Check the underlying exception above for clues.",
-            "Retry — transient USB hiccups sometimes clear on "
+            "Retry: transient USB hiccups sometimes clear on "
             "their own.",
             "If the failure repeats, file a chumicro-repl issue "
             "with the exception message and platform details.",
@@ -310,10 +310,10 @@ def coached_session_start(
 
     Used by:
 
-    * :class:`InteractiveReplSession` — which wraps a
+    * :class:`InteractiveReplSession`, which wraps a
       :class:`ReplSession` context manager around the coaching loop
       so programmatic callers get the same retry behavior.
-    * The workspace ``repl`` CLI — which wraps the
+    * The workspace ``repl`` CLI, which wraps the
       :func:`~chumicro_repl.tui.interactive_line` /
       :func:`~chumicro_repl.tui.interactive` calls so port-busy /
       port-not-found / permission-denied errors get the
@@ -321,7 +321,7 @@ def coached_session_start(
 
     Args:
         factory: Zero-arg callable performing the session start.
-            Returns any value on success (caller's choice — could
+            Returns any value on success (caller's choice: could
             be a :class:`ReplSession`, an int exit code, ``None``,
             etc.); raises on connect failure.
         output: Sink for plan rendering.  Defaults to :func:`print`.
@@ -368,7 +368,7 @@ def coached_session_start(
             ):
                 raise
             continue
-    # Unreachable in practice — the except branch always raises
+    # Unreachable in practice: the except branch always raises
     # once attempts are exhausted.  Deterministic fallback for the
     # type checker.
     assert last_error is not None
@@ -425,7 +425,7 @@ class InteractiveReplSession:
     On a session-start failure, classifies the exception, prints
     the matching :class:`RecoveryPlan` to *output*, prompts the
     user to fix the condition + press Enter to retry, and tries
-    again — up to *max_attempts* times.
+    again, up to *max_attempts* times.
 
     Use as a context manager that yields a live :class:`ReplSession`::
 
@@ -435,7 +435,7 @@ class InteractiveReplSession:
             session.exec("print('hello')")
 
     Mid-session disconnects (after the handshake completed) do NOT
-    route through this wrapper — those are handled by the
+    route through this wrapper; those are handled by the
     auto-reconnect loop in :func:`tail` and :func:`run_loop`.
 
     Args:

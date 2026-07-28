@@ -1,12 +1,12 @@
-"""File sources — plug-in input types that feed the Deployer.
+"""File sources: plug-in input types that feed the Deployer.
 
 A :class:`FileSource` produces two things: a mapping of on-device
 paths to byte contents, and the name of the entrypoint file the
 runtime should boot into.  Three built-ins cover the common cases:
 
-- :class:`FileMapSource` — caller already has an in-memory dict.
-- :class:`DirectorySource` — ship a directory tree from disk.
-- :class:`ImportGraphSource` — walk imports from an entrypoint file
+- :class:`FileMapSource` when the caller already has an in-memory dict.
+- :class:`DirectorySource` to ship a directory tree from disk.
+- :class:`ImportGraphSource` to walk imports from an entrypoint file
   and ship exactly the transitively-reachable modules.
 
 Custom sources implement the :class:`FileSource` protocol.  The
@@ -55,7 +55,7 @@ class UnresolvedImportError(Exception):
     def __init__(self, unresolved: list[tuple[Path, str]]) -> None:
         self.unresolved = list(unresolved)
         lines = [
-            f"  {importing_file} imports {module_name!r} — resolves to no "
+            f"  {importing_file} imports {module_name!r}, which resolves to no "
             "deployed file and is not a known device built-in"
             for importing_file, module_name in self.unresolved
         ]
@@ -65,7 +65,7 @@ class UnresolvedImportError(Exception):
             f"{'s' if len(self.unresolved) != 1 else ''}.\n"
             f"{body}\n"
             "Register the module under a deploy search path, fix the typo, "
-            "or — if it is a genuine runtime built-in — list it in the "
+            "or, if it is a genuine runtime built-in, list it in the "
             "CHUMICRO_DEPLOY_EXTRA_BUILTINS environment variable "
             "(comma-separated top-level names).  An ImportError-guarded "
             "import (try/except ImportError) is treated as optional and "
@@ -148,7 +148,7 @@ class DirectorySource:
     Args:
         root: Host directory whose contents are deployed.
         entrypoint: On-device entrypoint path.  Must end up as a key
-            in the produced file map — i.e. must be a file under
+            in the produced file map, i.e. must be a file under
             *root* (relative to *resource_prefix*).
         resource_prefix: On-device prefix prepended to each file's
             path.  Defaults to ``/`` (files land at the top of the
@@ -239,12 +239,12 @@ def _exists_case_strict(path: Path) -> bool:
 
     Necessary on case-insensitive host filesystems (default macOS
     APFS, NTFS) where :meth:`Path.is_file` returns True for case-
-    mismatched lookups — a ``Heartbeat.py`` probe matches an on-disk
+    mismatched lookups: a ``Heartbeat.py`` probe matches an on-disk
     ``heartbeat.py``.  Without this strictness :class:`ImportGraphSource`
     can't tell ``from chumicro_timing import Heartbeat`` (a *class*
-    import — Heartbeat lives inside ``heartbeat.py``) apart from
-    ``from chumicro_timing import heartbeat`` (a *submodule* import
-    — pulls in the file).  The class case isn't a module the walker
+    import, where Heartbeat lives inside ``heartbeat.py``) apart from
+    ``from chumicro_timing import heartbeat`` (a *submodule* import,
+    which pulls in the file).  The class case isn't a module the walker
     should follow; treating it as one stages a ``Heartbeat.py`` path
     that breaks on the device's case-sensitive filesystem (LittleFS).
     """
@@ -269,7 +269,7 @@ class ImportGraphSource:
     either a device-runtime built-in (``gc``, ``time``, ``board``)
     the host can't provide, or a library the walk should have found
     but didn't (missing from the search paths, or a typo).  The two
-    look identical at the AST level — both are bare module names.
+    look identical at the AST level, since both are bare module names.
     :class:`ImportGraphSource` distinguishes them by an explicit
     allowlist: a name on
     :data:`chumicro_deploy.import_allowlist.DEVICE_BUILTIN_MODULES`
@@ -281,7 +281,7 @@ class ImportGraphSource:
     import guarded by ``try: ... except ImportError`` (a deliberate
     optional fallback), and the speculative ``module.name`` probe the
     walk uses to resolve ``from module import name`` against a real
-    submodule — when ``name`` is a function or class in
+    submodule.  When ``name`` is a function or class in
     ``module/__init__.py`` instead, the probe doesn't resolve and is
     silently dropped.
 
@@ -302,14 +302,14 @@ class ImportGraphSource:
             / ``"cpython"``), modules carrying a ``__chumicro_runtimes__``
             marker for a different runtime are dropped, and their
             imports are not walked further.  ``None`` (the default)
-            ships every reachable module — the right setting when the
+            ships every reachable module, the right setting when the
             runtime selector reaches both adapters at import time and
             you want the unmatched one available so the selector can
             fail loudly on misclassification.  The entrypoint itself
             is never filtered.
 
     Honors a module-level ``__chumicro_skip_factories__`` opt-out on
-    *entrypoint* — see :mod:`chumicro_deploy.skip_factories` for the
+    *entrypoint*; see :mod:`chumicro_deploy.skip_factories` for the
     marker shape and matching rules.  Diagnostics (direct-import
     overrides, dead-skip notices) surface through
     :attr:`skip_factories_warnings`.
@@ -560,7 +560,7 @@ class ImportGraphSource:
         speculative ``x.name`` probe that resolves ``from x import name``
         against a possible submodule.  An import nested in a
         ``try: ... except ImportError`` (or bare ``except``) block is omitted
-        entirely — it is a deliberate optional fallback, so a device that
+        entirely, because it is a deliberate optional fallback and a device that
         can't import it isn't broken.  Returns an empty list on a syntax
         error (the file still ships as bytes; its imports just contribute no
         walk targets).
@@ -604,7 +604,7 @@ class ImportGraphSource:
         """Return module names imported inside an ``ImportError``-guarded block.
 
         ``ast.walk`` flattens the tree, so a ``try: import foo`` /
-        ``except ImportError:`` guard is invisible to the flat import scan —
+        ``except ImportError:`` guard is invisible to the flat import scan:
         the guarded ``import foo`` looks identical to a top-level one.  This
         re-reads the structure: every ``ast.Try`` whose handlers catch
         ``ImportError`` (or are bare, or catch ``Exception``) contributes the
@@ -639,7 +639,7 @@ class ImportGraphSource:
 
         A bare ``except:`` (``handler.type is None``) catches everything, so
         it counts.  Otherwise the caught type must name ``ImportError`` or its
-        broader parents ``Exception`` / ``BaseException`` — directly or inside
+        broader parents ``Exception`` / ``BaseException``, directly or inside
         an ``except (ImportError, OSError):`` tuple.
         """
         caught = handler.type

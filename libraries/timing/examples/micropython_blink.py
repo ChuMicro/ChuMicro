@@ -1,4 +1,4 @@
-"""Periodic LED blink — MicroPython.
+"""Periodic LED blink on MicroPython.
 
 Toggles the onboard LED once per second using a non-blocking
 ``Rate`` timer (drift-free, phase-aligned cadence).  Prints a line
@@ -9,8 +9,8 @@ Setup:
 1. Install ``chumicro_timing``
    (``mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_timing``
    or copy the package to the board).
-2. No extra wiring — uses pin 2, the built-in LED on most ESP32
-   dev boards.  Change ``Pin(2)`` to match your board.
+2. No extra wiring needed.  Uses pin 2, the built-in LED on most
+   ESP32 dev boards.  Change ``Pin(2)`` to match your board.
 3. Save this file as ``main.py`` on the board.
 
 Example output::
@@ -24,7 +24,7 @@ Example output::
 Runs on MicroPython.
 """
 
-#: MicroPython-only — uses ``machine.Pin`` (MP API).
+#: MicroPython-only.  Uses ``machine.Pin`` (MP API).
 #: Pair: ``circuitpython_blink.py`` for the CP equivalent (``board`` + ``digitalio``).
 __chumicro_runtimes__ = ("micropython",)
 

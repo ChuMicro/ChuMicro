@@ -2,14 +2,14 @@
 
 Exports resolve lazily (PEP 562): a board app importing only the tiny
 :mod:`chumicro_test_harness.markers` helper must not pull the runner /
-discovery machinery into RAM or onto flash — the deploy walker stages
+discovery machinery into RAM or onto flash.  The deploy walker stages
 whatever the package ``__init__`` imports, so eager re-exports here
 would ride every such deploy.
 """
 
 # ``skip`` stays eager: the export shares its name with its submodule,
 # and importing ``chumicro_test_harness.skip`` anywhere binds the module
-# onto the package — after which ``__getattr__`` never fires for the
+# onto the package, after which ``__getattr__`` never fires for the
 # name and callers would receive the module instead of the function.
 # Binding the function here (after the submodule import) wins durably;
 # skip.py is a few hundred bytes, so eagerness costs nothing.
@@ -35,7 +35,7 @@ def __getattr__(name):
 
 
 __all__ = [
-    # pyright: ignore[reportUnsupportedDunderAll] — every export is
+    # pyright: ignore[reportUnsupportedDunderAll] - every export is
     # PEP-562 lazy via __getattr__.
     "discover_source_roots",
     "marker",

@@ -1,4 +1,4 @@
-"""Device — transport-agnostic configuration for a target board.
+"""Device: transport-agnostic configuration for a target board.
 
 A :class:`Device` bundles the runtime identity (``circuitpython`` /
 ``micropython``), the host-side connection details (serial address,
@@ -57,7 +57,7 @@ class Device:
     ``chumicro_deploy.config_loaders`` entry-point group.
 
     Attributes:
-        transport: Runtime identifier — ``"circuitpython"`` or
+        transport: Runtime identifier, ``"circuitpython"`` or
             ``"micropython"``.
         address: Serial port path (``"/dev/cu.usbmodem..."`` on macOS,
             ``"/dev/ttyACM0"`` on Linux, ``"COM3"`` on Windows).
@@ -69,7 +69,7 @@ class Device:
             (``mount``/``copy`` on MP, ``ram``/``flash`` on CP).
         entrypoint_name: Top-level script the runtime executes on
             boot.  Defaults vary per runtime (``"code.py"`` on
-            CircuitPython, ``"main.py"`` on MicroPython) — pass
+            CircuitPython, ``"main.py"`` on MicroPython).  Pass
             ``None`` to use the runtime default.
         resource_prefix: On-device directory where library files land
             at deploy time.
@@ -132,7 +132,7 @@ class Device:
     def from_dict(cls, data: Mapping[str, Any]) -> Device:
         """Construct a :class:`Device` from a mapping of field names.
 
-        Accepts the same keys as the constructor — ``transport``,
+        Accepts the same keys as the constructor: ``transport``,
         ``address``, and optional ``baudrate``, ``deploy_mode``,
         ``entrypoint_name``, and ``resource_prefix``.  Unknown keys
         are ignored so YAML / TOML / JSON inputs with extra metadata
@@ -193,8 +193,8 @@ class Device:
         # supported runtimes, so we can assume circuitpython here.
         #
         # ``deploy_transport == "serial"`` selects the drive-less
-        # raw-REPL transport (a board with no CIRCUITPY volume — classic
-        # ESP32 without native USB).  ``"auto"`` / ``"drive"`` keep the
+        # raw-REPL transport (a board with no CIRCUITPY volume, such as a
+        # classic ESP32 without native USB).  ``"auto"`` / ``"drive"`` keep the
         # CIRCUITPY-drive transport: this method is pure construction and
         # cannot probe for a drive, so the auto → serial fallback is
         # resolved one layer up in

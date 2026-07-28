@@ -61,7 +61,7 @@ def _is_workspace_root(path: Path) -> bool:
     marker.  Every package directory in the mono-repo has a
     ``pyproject.toml`` but neither of those, so nearest-ancestor
     discovery run from inside a package lands on the package, not the
-    workspace — a green exit against a tree with no ``libraries/`` /
+    workspace, a green exit against a tree with no ``libraries/`` /
     ``plans/`` / ``AGENTS.md`` to lint.  This distinguishes the two.
     """
     return (path / ".git").exists() or (path / "workspace.yml").is_file()

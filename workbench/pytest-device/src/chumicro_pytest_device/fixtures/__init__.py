@@ -7,9 +7,9 @@ themselves never touch pytest state.
 
 Submodules:
 
-* `lan` — `detect_lan_ip()`, `find_free_port()`, `wait_until_listening()`.
-* `mosquitto` — `start_mosquitto_broker()` (spawns a Mosquitto subprocess
+* `lan`: `detect_lan_ip()`, `find_free_port()`, `wait_until_listening()`.
+* `mosquitto`: `start_mosquitto_broker()` (spawns a Mosquitto subprocess
   bound to a LAN interface for chumicro-mqtt's functional tests).
-* `udp_echo` — `start_udp_echo_server()` (daemon-thread UDP echo for
+* `udp_echo`: `start_udp_echo_server()` (daemon-thread UDP echo for
   chumicro-sockets' transport smoke tests).
 """

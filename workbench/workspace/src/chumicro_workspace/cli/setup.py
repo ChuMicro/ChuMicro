@@ -86,7 +86,7 @@ def _setup_pip_install_editable(
     pyproject = workspace.root / "pyproject.toml"
     if not pyproject.is_file():
         print(
-            f"setup: no pyproject.toml at {workspace.root} — "
+            f"setup: no pyproject.toml at {workspace.root}; "
             "skipping editable install.",
         )
         return 0
@@ -133,7 +133,7 @@ def _setup_sync_chumicro_dev(workspace: WorkspaceLayout) -> None:
         return
     if not chumicro_path.is_dir():
         print(
-            f"setup: warning — chumicro-dev.toml points at "
+            f"setup: warning: chumicro-dev.toml points at "
             f"{chumicro_path} which doesn't exist; "
             "skipping library_sources sync.",
             file=sys.stderr,
@@ -142,7 +142,7 @@ def _setup_sync_chumicro_dev(workspace: WorkspaceLayout) -> None:
     libraries = discover_chumicro_libraries(chumicro_path)
     if not libraries:
         print(
-            f"setup: warning — no chumicro libraries found at "
+            f"setup: warning: no chumicro libraries found at "
             f"{chumicro_path}/libraries/; "
             "skipping library_sources sync.",
             file=sys.stderr,
@@ -197,7 +197,7 @@ def _cmd_setup(args: argparse.Namespace) -> int:
 
     ``setup`` materializes ``workspace.yml`` on a fresh clone, so it
     cannot rely on :func:`_resolve_workspace`'s walk-up-and-find-marker
-    discovery — the marker isn't there yet.  Resolve the workspace
+    discovery, because the marker isn't there yet.  Resolve the workspace
     root directly from ``--workspace-dir`` or ``cwd``.  Every other
     command keeps using marker-based discovery and works from any
     subdirectory inside an already-set-up workspace.
@@ -273,12 +273,12 @@ def _validate_project_name(name: str) -> None:
         if not segment:
             raise SystemExit(
                 f"error: project name {name!r} has an empty path segment "
-                "— check for stray '/' or '.' separators.",
+                "(check for stray '/' or '.' separators).",
             )
         if not segment.isidentifier():
             raise SystemExit(
                 f"error: project name segment {segment!r} (in {name!r}) "
-                "is not a valid Python identifier — project directories "
+                "is not a valid Python identifier: project directories "
                 "are imported as modules, so each segment must use "
                 "snake_case (letters, digits, underscores; no hyphens "
                 "or spaces; no leading digit).",
@@ -286,7 +286,7 @@ def _validate_project_name(name: str) -> None:
         if segment.startswith("_"):
             raise SystemExit(
                 f"error: project name segment {segment!r} (in {name!r}) "
-                "starts with '_' — leading underscore is reserved for "
+                "starts with '_'; leading underscore is reserved for "
                 "workspace-internal directories (e.g. _template).",
             )
         if keyword.iskeyword(segment):
@@ -343,7 +343,7 @@ def _resolve_new_source(
         template = workspace.projects_dir / "_template"
         if not template.is_dir():
             raise SystemExit(
-                f"error: template {template} not found — run "
+                f"error: template {template} not found; run "
                 "`python3 run.py update` to re-flow it from the "
                 "shipped template, or create `projects/_template/` "
                 "by hand.",
@@ -370,7 +370,7 @@ def _resolve_new_source(
     if not has_entry_point:
         raise SystemExit(
             f"error: --from source {candidate} has no entry-point "
-            "file (app.py / code.py / main.py) — pick a project "
+            "file (app.py / code.py / main.py); pick a project "
             "directory, not a namespace.",
         )
     return candidate
@@ -405,14 +405,14 @@ def _cmd_new(args: argparse.Namespace) -> int:
         if args.from_path is not None:
             print(
                 "new: --from / --library / --workbench are mutually "
-                "exclusive — package scaffolding uses the built-in "
+                "exclusive: package scaffolding uses the built-in "
                 "template.",
                 file=sys.stderr,
             )
             return 2
         if args.library and args.workbench:
             print(
-                "new: --library and --workbench are mutually exclusive — "
+                "new: --library and --workbench are mutually exclusive: "
                 "pick one (libraries/ for cross-runtime device libs; "
                 "workbench/ for host-only CPython tools).",
                 file=sys.stderr,

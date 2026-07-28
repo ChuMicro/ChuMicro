@@ -26,11 +26,11 @@ stream = StreamHandler()
 buffered = BufferedHandler(downstream=stream, capacity=16)
 logger = Logger("sensor", level=DEBUG, handlers=[buffered])
 
-# Hot loop emits cheaply — no I/O until handle() drains the buffer.
+# Hot loop emits cheaply: no I/O until handle() drains the buffer.
 for index in range(1, 4):
     logger.info(f"reading {index}")
 
-# Runner cadence — once per tick.
+# Runner cadence, once per tick.
 if buffered.check(now_ms=0):
     flushed = buffered.handle(now_ms=0)
     print(f"flushed {flushed} records this tick")

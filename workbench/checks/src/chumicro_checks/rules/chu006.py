@@ -91,14 +91,14 @@ def _outside_runpy_owners(filepath: Path) -> bool:
 
     Three trees legitimately name the workspace's command-runner script:
 
-    * ``workbench/workspace/`` — the chumicro_workspace package
+    * ``workbench/workspace/``: the chumicro_workspace package
       generates the shim (covered by :func:`_outside_chumicro_workspace`).
-    * ``workbench/checks/`` — this package's own source legitimately
+    * ``workbench/checks/``: this package's own source legitimately
       describes the rule and the literal it flags
       (covered by :func:`_outside_chumicro_checks`).
     * Template / workspace user-content trees whose repo-root directory
       is ``packages/``, ``projects/``, ``shared/``, ``examples/``, or
-      ``tests/`` — in a workspace cloned from the template, the shim IS
+      ``tests/``.  In a workspace cloned from the template, the shim IS
       the command runner.  Only the leading repo-relative segment is
       consulted, so a publishable package's own ``examples/`` or
       ``tests/`` subdirectory stays in scope.
@@ -161,27 +161,27 @@ def _publishable_package_dirs(repo_root: Path) -> list[Path]:
 _PATTERNS: tuple[LeakPattern, ...] = (
     (
         re.compile(r"\b(?:Decision|ADR)\s*0\d{3}\b"),
-        "Decision/ADR NNNN ref — ADRs live in plans/decisions/, not shipped to consumers",
+        "Decision/ADR NNNN ref: ADRs live in plans/decisions/, not shipped to consumers",
         everywhere,
     ),
     (
         re.compile(r"\bplans/[A-Za-z0-9_./-]*\.md\b"),
-        "plans/...md path — mono-repo planning tree, not on consumer machines",
+        "plans/...md path: mono-repo planning tree, not on consumer machines",
         _outside_chumicro_checks,
     ),
     (
         re.compile(r"\bplans/(?:decisions|workstreams|next-up|patterns|learnings)\b"),
-        "plans/... path — mono-repo planning tree, not on consumer machines",
+        "plans/... path: mono-repo planning tree, not on consumer machines",
         _outside_chumicro_checks,
     ),
     (
         re.compile(r"\bscripts/run\.py\b"),
-        "scripts/run.py ref — mono-repo command runner, not on consumer machines",
+        "scripts/run.py ref: mono-repo command runner, not on consumer machines",
         _outside_chumicro_checks,
     ),
     (
         re.compile(r"(?<!scripts/)\brun\.py\b"),  # noqa: CHU006  rule-pattern data: the regex flags this exact literal
-        "bare run.py ref — name the installable CLI (chumicro-deploy, etc.) "  # noqa: CHU006  same reason
+        "bare run.py ref: name the installable CLI (chumicro-deploy, etc.) "  # noqa: CHU006  same reason
         "instead of the workspace shim",
         _outside_runpy_owners,
     ),
@@ -191,19 +191,19 @@ _PATTERNS: tuple[LeakPattern, ...] = (
             r"|micropython|workbench-functional)|verify-(?:examples|demos)"
             r"|prepare-(?:circuitpython|micropython|mpy-cross))\b"
         ),  # noqa: CHU006  rule-pattern data: the regex names the tasks it flags
-        "mono-repo task name — a scripts/run.py task (e.g. "  # noqa: CHU006  same reason
+        "mono-repo task name: a scripts/run.py task (e.g. "  # noqa: CHU006  same reason
         "test-libraries-functional) a consumer with no mono-repo task "  # noqa: CHU006  same reason
         "runner can't invoke; name the user-facing action instead",
         _outside_runpy_owners,
     ),
     (
         re.compile(r"\bchumicro\s+mono[\s-]?repo\b", re.IGNORECASE),
-        "'chumicro mono-repo' framing — consumer reads this without that context",
+        "'chumicro mono-repo' framing: consumer reads this without that context",
         _outside_chumicro_checks,
     ),
     (
         re.compile(r"\bCHU\d{3}\b"),
-        "CHU lint code in prose — workspace-internal jargon; name the "
+        "CHU lint code in prose: workspace-internal jargon; name the "
         "rule's intent (e.g. 'silent test skips') rather than the code.  "
         "Legitimate matches inside ``# noqa: CHU0NN`` directives are "
         "already exempt",
@@ -211,14 +211,14 @@ _PATTERNS: tuple[LeakPattern, ...] = (
     ),
     (
         re.compile(r"\b(?:AGENTS(?:\.notes)?|CONTRIBUTING)\.md\b"),  # noqa: CHU006  rule-pattern data: the regex flags this exact literal
-        "AGENTS.md / CONTRIBUTING.md ref — mono-repo / template "
+        "AGENTS.md / CONTRIBUTING.md ref: mono-repo / template "
         "governance file, meaningless to a PyPI consumer reading the "
         "shipped source",
         _outside_chumicro_checks,
     ),
     (
         re.compile(r"\.scratch/"),  # noqa: CHU006  rule-pattern data: the regex flags this exact literal
-        ".scratch/ path — agent-scratch convention, not on consumer "
+        ".scratch/ path: agent-scratch convention, not on consumer "
         "machines; publishable code writes build artifacts to _generated/",
         _outside_chumicro_checks,
     ),

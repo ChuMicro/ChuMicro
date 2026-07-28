@@ -3,7 +3,7 @@
 Two sub-checks against ``plans/next-up.md``:
 
 1. Every top-level ``- `` bullet contains at most ONE list marker
-   (the lead line itself).  Sub-bullets are forbidden — counted markers
+   (the lead line itself).  Sub-bullets are forbidden; counted markers
    include dash / star / plus bullets and ``1.`` / ``2)`` ordered
    items, so an ordered sub-list doesn't slip the cap.  Anything that
    needs structure should be promoted to a workstream file under
@@ -110,7 +110,7 @@ def _check_bullets(filepath: Path, lines: list[str]) -> list[Finding]:
                     code=_RULE_CODE,
                     message=(
                         f"top-level bullet has {marker_count} bullet markers "
-                        f"(cap {_BULLET_CAP} — one bullet per item, no "
+                        f"(cap {_BULLET_CAP}: one bullet per item, no "
                         f"sub-bullets).  Promote detail to a workstream under "
                         f"plans/workstreams/ (open) or "
                         f"plans/workstreams/archive/ (shipped) and replace this "
@@ -133,7 +133,7 @@ def _check_done_heading_absent(filepath: Path, lines: list[str]) -> list[Finding
                 line=index + 1,
                 code=_RULE_CODE,
                 message=(
-                    f"`## Done` heading is not allowed — next-up.md tracks "
+                    f"`## Done` heading is not allowed; next-up.md tracks "
                     f"status only.  Recent landings live in `git log`; longer "
                     f"detail in plans/workstreams/archive/.  Suppress with "
                     f"'{_NOQA_TAG}' on the heading line if genuinely needed."

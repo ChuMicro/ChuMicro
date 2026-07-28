@@ -121,7 +121,7 @@ class CHU026_OrphanGovernanceDoc(Rule):
                         message=(
                             f"governance doc `{filename}` exists and is "
                             f"referenced here, but is not reachable from "
-                            f"CLAUDE.md's @-include chain — agents never "
+                            f"CLAUDE.md's @-include chain, so agents never "
                             f"auto-load it.  Either remove the file, drop "
                             f"the reference, or add `@{filename}` to "
                             f"CLAUDE.md."

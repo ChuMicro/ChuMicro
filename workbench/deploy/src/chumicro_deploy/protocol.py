@@ -6,16 +6,16 @@ both satisfy, in a form type checkers can enforce.
 
 Two protocols are defined:
 
-- :class:`TransportProtocol` — the minimum every transport must
+- :class:`TransportProtocol` is the minimum every transport must
   implement: ``connect``, ``stage``, ``execute``, ``soft_reset``,
   ``reset``, ``recover``, ``disconnect``.
-- :class:`ExtendedTransportProtocol` — adds the
+- :class:`ExtendedTransportProtocol` adds the
   CircuitPython-specific RAM-mode chunking helpers
   (``execute_scripts``, ``probe_free_memory``,
   ``inline_script_budget_bytes``).  ``MicropythonTransport`` does not
   need these, because there is no per-script RAM budget on mpremote.
 
-CPython-only — these protocols ride on ``typing.Protocol``, which only
+CPython-only: these protocols ride on ``typing.Protocol``, which only
 the workbench tooling uses (the cross-runtime device libraries that
 satisfy the contract don't import this module).
 """
@@ -83,11 +83,11 @@ class DeviceImplementation:
     without a mount-order-dependent path.
 
     Attributes:
-        name: ``sys.implementation.name`` — ``"circuitpython"`` or
+        name: ``sys.implementation.name``, either ``"circuitpython"`` or
             ``"micropython"``.
         version: Dotted version from ``sys.implementation.version``
             (e.g. ``"10.1.4"`` or ``"1.26.0"``).
-        machine: ``sys.implementation._machine`` on both runtimes —
+        machine: ``sys.implementation._machine`` on both runtimes,
             a free-form string describing the board (e.g.
             ``"Raspberry Pi Pico W with rp2040"``).  Empty when the
             firmware does not expose it.
@@ -109,10 +109,10 @@ class DeviceImplementation:
 
 #: On-device probe script.  Prints two marker lines:
 #:
-#: - ``__CHU_IMPL__:name|version|machine`` — parsed unchanged from its
+#: - ``__CHU_IMPL__:name|version|machine``, parsed unchanged from its
 #:   original three-field contract so a machine string that itself
 #:   contains ``|`` (rare but legal) still round-trips intact.
-#: - ``__CHU_UID__:<hex>`` — emitted on a best-effort basis from
+#: - ``__CHU_UID__:<hex>``, emitted on a best-effort basis from
 #:   ``microcontroller.cpu.uid`` (CircuitPython) or
 #:   ``machine.unique_id()`` (MicroPython).  An empty value means the
 #:   probe couldn't read a UID on this firmware.
@@ -123,8 +123,8 @@ class DeviceImplementation:
 PROBE_IMPLEMENTATION_SCRIPT = (
     "import sys\n"
     # CircuitPython and MicroPython both ship a 4-tuple
-    # ``(major, minor, micro, marker)`` from ``sys.implementation.version``
-    # — ``marker`` is ``''`` on a tagged build and ``'preview'`` on a
+    # ``(major, minor, micro, marker)`` from ``sys.implementation.version``,
+    # where ``marker`` is ``''`` on a tagged build and ``'preview'`` on a
     # pre-release / dev build.  Slot 3 is a string in every shipped build,
     # so a ``[:3]`` slice keeps just the dotted ints and drops the marker.
     # Host CPython's 5-tuple ``(major, minor, micro, releaselevel, serial)``
@@ -178,10 +178,10 @@ def is_in_deploy_scope(device_path: str) -> bool:
     * The four entrypoint / state files in :data:`DEPLOY_SCOPE_FILES`
       (``/code.py``, ``/main.py``, ``/active.py``,
       ``/runtime_config.msgpack``).
-    * Everything under ``/lib/`` — see :data:`DEPLOY_SCOPE_PREFIXES`.
+    * Everything under ``/lib/``; see :data:`DEPLOY_SCOPE_PREFIXES`.
 
-    Anything else — user-uploaded images, manually-edited
-    ``boot.py`` overrides, hand-tuned ``settings.toml`` knobs — is
+    Anything else (user-uploaded images, manually-edited
+    ``boot.py`` overrides, hand-tuned ``settings.toml`` knobs) is
     out of scope and survives every diff-deploy untouched.
 
     The check is path-shape only: callers should normalize their
@@ -276,8 +276,8 @@ class TimeSource(Protocol):
 class DeviceTransportError(Exception):
     """Base for both runtimes' transport errors.
 
-    Orchestration that treats the transports uniformly — the
-    ``RecoveringDeployer`` retry loop, the failure classifier —
+    Orchestration that treats the transports uniformly (the
+    ``RecoveringDeployer`` retry loop, the failure classifier)
     catches this instead of enumerating per-runtime subclasses, so
     adding a runtime doesn't mean auditing every catch site.
     """
@@ -383,11 +383,11 @@ class TransportProtocol(Protocol):
         before :meth:`execute` returns.  Lines are dispatched without
         their trailing newline; ``\\r\\n`` is normalized to ``\\n``.
         When *on_line* is ``None`` (the default), behaviour is the
-        request/response shape every existing call site assumes —
+        request/response shape every existing call site assumes, and
         captured stdout still comes back as the return value.
 
-        Streaming dispatch lets a host-side consumer react mid-execute
-        — for example, a test fixture that opens a TCP connection only
+        Streaming dispatch lets a host-side consumer react mid-execute:
+        for example, a test fixture that opens a TCP connection only
         once the board prints a "server ready" line, or a long-running
         bake harness that surfaces board output as it lands instead of
         after the bootstrap finishes.
@@ -398,7 +398,7 @@ class TransportProtocol(Protocol):
         """Run *script* on the device without staging and return captured stdout.
 
         Sibling of :meth:`execute` for short, self-contained scripts
-        that don't need any staged sources / test files / harness —
+        that don't need any staged sources / test files / harness:
         e.g. a feature-detection probe (``try: import esp32`` etc.),
         a quick ``sys.implementation`` query, an inline diagnostic.
         Bypasses the ``stage()-must-be-called-first`` precondition
@@ -406,7 +406,7 @@ class TransportProtocol(Protocol):
 
         Args:
             script: Self-contained Python source to run via the raw
-                REPL.  No imports of staged modules — only built-ins
+                REPL.  No imports of staged modules, only built-ins
                 and runtime-provided modules.
             timeout: Idle-timeout for the script's output, in seconds.
 
@@ -475,7 +475,7 @@ class TransportProtocol(Protocol):
                 the on-device path as each file is written.
             on_execute_line: Optional callback invoked once per line
                 of captured execute output, in order.  Not guaranteed
-                to stream live — transports may call it after
+                to stream live, since transports may call it after
                 execute() completes.
 
         Returns:
@@ -514,7 +514,7 @@ class TransportProtocol(Protocol):
 
         No-op when *paths* is empty.  Each path must be in the same
         leading-slash form :meth:`deploy_files` accepts; transports
-        normalize internally.  Missing paths are tolerated silently —
+        normalize internally.  Missing paths are tolerated silently:
         a previous deploy may have already removed something, so
         re-deleting shouldn't error.
 
@@ -541,7 +541,7 @@ class TransportProtocol(Protocol):
     def wipe_filesystem(self) -> None:
         """Erase the device's user filesystem before the next deploy.
 
-        Destructive — wipes *every* file the runtime can see, both
+        Destructive: wipes *every* file the runtime can see, both
         in-scope (``/lib/*``, ``/code.py`` / ``/main.py`` / etc.) and
         out-of-scope (``/settings.toml``, hand-edited ``boot.py``,
         user-uploaded assets).  Use for clean-slate / corruption-

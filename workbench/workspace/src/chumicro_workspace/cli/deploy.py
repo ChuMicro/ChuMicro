@@ -180,7 +180,8 @@ def _resolve_deploy_layout(
     # (imported and run every boot); code.py / main.py are the plain-mode
     # entrypoints.
     # Scope: these three entrypoints get the strict scan (any reset,
-    # even inside a function — an entrypoint has no business resetting).
+    # even inside a function, since an entrypoint has no business
+    # resetting).
     # The rest of the staged closure gets the top-level-only scan in
     # resolve_project_deploy_source, so an imported module may keep a
     # reset inside a deliberate-condition function but not at module
@@ -252,7 +253,7 @@ def _resolve_deploy_layout(
             f"project {project_dir.name!r} defines `async def run()` in "
             "app.py, which chumicro can't run: the boot shim calls "
             "run() synchronously, so an async run() becomes a coroutine "
-            "that is never awaited — the board boots and does nothing, "
+            "that is never awaited, so the board boots and does nothing, "
             "with no error.\n"
             "  chumicro projects don't use async/await at all.  Make "
             "run() a plain `def run()` and drive long-running work with "
@@ -293,8 +294,8 @@ def resolve_project_deploy_source(*args, **kwargs):
     level runs at boot, so a ``machine.reset()`` /
     ``microcontroller.reset()`` there crash-loops the board exactly
     like one in the entrypoint (which its own stricter scan already
-    refuses).  Resets inside function bodies stay allowed — that is
-    the recommended deliberate-condition pattern.
+    refuses).  Resets inside function bodies stay allowed, since that
+    is the recommended deliberate-condition pattern.
     """
     layout, source = _resolve_project_deploy_source_unchecked(*args, **kwargs)
     for staged_path, content in source.files().items():
@@ -307,7 +308,7 @@ def resolve_project_deploy_source(*args, **kwargs):
             raise _DeployLayoutError(
                 f"staged module {staged_path!r} calls a board hard reset "
                 f"(microcontroller.reset() / machine.reset()) at module "
-                f"top level, line {reset_line} — top-level code runs on "
+                f"top level, line {reset_line}: top-level code runs on "
                 f"every boot, so this crash-loops the board until it is "
                 f"wiped.  Move the reset inside a function called only on "
                 f"a deliberate condition.",
@@ -821,7 +822,7 @@ def _add_deploy_parser(subparsers: argparse._SubParsersAction) -> None:
     """``deploy``: the workspace's main command.  Single project per call."""
     deploy_parser = subparsers.add_parser(
         "deploy",
-        help="Deploy one or more projects — app code + merged runtime config msgpack.",
+        help="Deploy one or more projects: app code + merged runtime config msgpack.",
     )
     _add_workspace_arg(deploy_parser)
     _add_device_selector(deploy_parser)
@@ -831,7 +832,7 @@ def _add_deploy_parser(subparsers: argparse._SubParsersAction) -> None:
         metavar="name",
         help=(
             "Name of the project under projects/ to deploy.  Optional when "
-            "the workspace contains exactly one project — that project is "
+            "the workspace contains exactly one project; that project is "
             "deployed by default.  One positional per `deploy` call."
         ),
     )
@@ -863,7 +864,7 @@ def _add_deploy_parser(subparsers: argparse._SubParsersAction) -> None:
             "app.py must export run().  Combines with --import-graph "
             "to also ship libraries the project imports.  Auto-detected "
             "when the project ships app.py with run() and no code.py / "
-            "main.py — passing --boot-shim explicitly is rarely needed."
+            "main.py, so passing --boot-shim explicitly is rarely needed."
         ),
     )
     deploy_parser.add_argument(
@@ -881,7 +882,7 @@ def _add_deploy_parser(subparsers: argparse._SubParsersAction) -> None:
         help=(
             "Deploy to every device in devices.yml in sequence.  "
             "Mutually exclusive with --device / --runtime.  "
-            "Per-device failures don't abort the loop — every device "
+            "Per-device failures don't abort the loop: every device "
             "gets a chance, exit code reflects whether any failed."
         ),
     )
@@ -905,7 +906,7 @@ def _add_deploy_parser(subparsers: argparse._SubParsersAction) -> None:
             "Additive mode: reconcile only the entrypoint / state "
             "files + /lib, leaving every other board file "
             "(settings.toml, uploaded assets, hand-installed circup "
-            "libs) in place.  The default is clean-slate — the deploy "
+            "libs) in place.  The default is clean-slate: the deploy "
             "removes anything that isn't the new payload or a "
             "device-required keep-set file (boot.py, boot_out.txt, "
             "_chu_kv.msgpack); a board-resident settings.toml is "
@@ -918,7 +919,7 @@ def _add_deploy_parser(subparsers: argparse._SubParsersAction) -> None:
         "--wipe",
         action="store_true",
         help=(
-            "Erase the *entire* device filesystem before deploying — "
+            "Erase the *entire* device filesystem before deploying, "
             "the keep set (boot.py, boot_out.txt, _chu_kv.msgpack) "
             "included.  Stricter than the clean-slate default (which "
             "preserves the keep set); for corruption recovery.  No-op "
@@ -944,7 +945,7 @@ def _add_deploy_parser(subparsers: argparse._SubParsersAction) -> None:
         default=None,
         help=(
             "Override the deploy-time runtime filter.  Defaults to "
-            "the device's configured runtime — files marked for a "
+            "the device's configured runtime; files marked for a "
             "different runtime via __chumicro_runtimes__ are filtered "
             "out.  Set this to override the auto-derived value."
         ),
@@ -968,7 +969,7 @@ def _add_deploy_parser(subparsers: argparse._SubParsersAction) -> None:
         default=None,
         help=(
             "Set the mode for this run AND bypass the requires_flash "
-            "pre-flight — `ram` stays ram even when a flagged library "
+            "pre-flight: `ram` stays ram even when a flagged library "
             "is in the import graph.  For debugging the auto-switch "
             "behavior itself; prefer --deploy-mode otherwise."
         ),
@@ -984,7 +985,7 @@ def _add_deploy_parser(subparsers: argparse._SubParsersAction) -> None:
             "After a successful deploy, tail the board's serial output "
             f"for SECONDS (default {_DEFAULT_TAIL_SECONDS:g} when the "
             "value is omitted), then exit.  Replaces the old "
-            "`repl <project>` deploy-then-watch shortcut — one deploy "
+            "`repl <project>` deploy-then-watch shortcut: one deploy "
             "path, the watch is a flag on it.  Requires exactly one "
             "(project, device) target."
         ),

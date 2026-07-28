@@ -12,12 +12,13 @@ are held to the same rule so the codebase carries one concurrency model;
 servers reach asyncio through a PyPI package (the websocket echo server
 does) and never run on a device.
 
-Flags, via AST (so the same keywords inside a string literal — e.g. a
-boot-shim error message that *rejects* ``async def run`` — are not hit):
+Flags, via AST (so the same keywords inside a string literal, for
+example a boot-shim error message that *rejects* ``async def run``, are
+not hit):
 ``async def``, ``await``, ``async with``, ``async for``, and
 ``import`` / ``from`` of ``asyncio`` / ``uasyncio`` / ``_asyncio``.
 
-``scripts/`` is not scanned — it is loose dev tooling, not a packaged
+``scripts/`` is not scanned: it is loose dev tooling, not a packaged
 tree.  Suppress with ``# noqa: CHU033`` for a genuine host-only exception.
 """
 
@@ -109,7 +110,7 @@ def _check_file(filepath: Path, repo_root: Path) -> list[Finding]:
                 line=lineno,
                 code=_RULE_CODE,
                 message=(
-                    f"{what} is banned — use generators (def + yield from) "
+                    f"{what} is banned; use generators (def + yield from) "
                     f"driven by the runner, not coroutines"
                 ),
             )
@@ -120,7 +121,7 @@ def _check_file(filepath: Path, repo_root: Path) -> list[Finding]:
 class CHU033_NoAsyncAwait(Rule):
     code = _RULE_CODE
     description = (
-        "no async / await / asyncio in first-party package code — use generators"
+        "no async / await / asyncio in first-party package code: use generators"
     )
 
     def check(self, repo_root: Path) -> list[Finding]:

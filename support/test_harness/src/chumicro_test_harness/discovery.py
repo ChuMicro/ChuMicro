@@ -190,10 +190,10 @@ def run_one_file(test_file, root_dir=".", chunk_boundaries=None):
     """Set up sys.path, exec the file, run its tests, return 0/1 exit code.
 
     Inserts the test file's own directory on ``sys.path`` before exec so
-    a ``from _socket_stubs import ...`` line — pulling in an
+    a ``from _socket_stubs import ...`` line (pulling in an
     underscore-prefixed sibling helper module that lives next to the
-    test file — resolves on the host and unix-port runs (on a device the
-    sibling is staged into the import root instead).
+    test file) resolves on the host and unix-port runs.  On a device the
+    sibling is staged into the import root instead.
 
     Returns 1 for ImportError during load (with a FAIL line whose
     message names the runtime markers the file needs to declare), for
@@ -209,7 +209,7 @@ def run_one_file(test_file, root_dir=".", chunk_boundaries=None):
         test_module = _exec_as_namespace(test_file, chunk_boundaries=chunk_boundaries)
     except ImportError as error:
         print(
-            f"FAIL {test_file} — import failed: {error} "
+            f"FAIL {test_file}: import failed: {error} "
             f"(declare __chumicro_runtimes__ = (\"cpython\",) if "
             f"intentionally CPython-only, or __chumicro_host_only__ = "
             f"True if it drives runtime-specific source via host fakes)"

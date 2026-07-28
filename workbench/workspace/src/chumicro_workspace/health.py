@@ -249,7 +249,7 @@ def check_python_version() -> HealthFinding:
             level=HealthLevel.ERROR,
             message=f"got {short}, need {required}+",
             hint=(
-                f"upgrade Python — the workspace's deps target "
+                f"upgrade Python; the workspace's deps target "
                 f"{required}+.  Your current interpreter: {sys.executable}"
             ),
         )
@@ -326,7 +326,7 @@ def check_project_run_functions(workspace: WorkspaceLayout) -> HealthFinding:
             level=HealthLevel.ERROR,
             message=f"{len(missing)} of {checked} projects missing run(): {listed}",
             hint=(
-                "define `def run():` in app.py — the synthesised boot "
+                "define `def run():` in app.py; the synthesised boot "
                 "shim imports `app.run` and calls it."
             ),
         )

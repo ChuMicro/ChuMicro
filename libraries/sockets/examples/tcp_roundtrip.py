@@ -1,7 +1,7 @@
-"""TCP round-trip example — connect, send, receive, close.
+"""TCP round-trip example: connect, send, receive, close.
 
 Demonstrates driving `connector` to a terminal state inline (the
-one-shot connect form — no runner needed), then a round-trip against
+one-shot connect form, no runner needed), then a round-trip against
 `example.com:80` (HTTP GET, plain TCP, globally reachable).
 
 Edit `WIFI_SSID` / `WIFI_PASSWORD` below for raw deploys, or set
@@ -22,8 +22,8 @@ import time
 from chumicro_sockets import connector
 from helpers import wifi_up
 
-WIFI_SSID = "your-wifi-ssid"  # noqa: S105 — replace before deploying
-WIFI_PASSWORD = "your-wifi-password"  # noqa: S105 — replace before deploying
+WIFI_SSID = "your-wifi-ssid"  # noqa: S105 - replace before deploying
+WIFI_PASSWORD = "your-wifi-password"  # noqa: S105 - replace before deploying
 
 radio, ip = wifi_up(WIFI_SSID, WIFI_PASSWORD)
 print(f"WIFI_OK ip={ip}")

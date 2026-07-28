@@ -42,7 +42,7 @@ if TYPE_CHECKING:  # pragma: no cover -type-only
 
 #: Callable signature for the fetcher that backs a :class:`DeviceCompleter`.
 #: Returns the device's top-level ``dir()`` names, or ``None`` on a soft
-#: failure (timeout / parse error) — callers retry on the next Tab.
+#: failure (timeout / parse error).  Callers retry on the next Tab.
 NamespaceFetcher = Callable[[], Iterable[str] | None]
 
 
@@ -156,7 +156,7 @@ class CompletionCache:
         self._names = tuple(sorted(set(names)))
 
     def clear(self) -> None:
-        """Drop the cached names — call on device reset."""
+        """Drop the cached names; call on device reset."""
         self._names = None
 
 
@@ -252,7 +252,7 @@ class PromptToolkitCompleter:
 
 
 # ---------------------------------------------------------------------------
-# Device-side fetcher — the friendly→raw→dir()→friendly round-trip
+# Device-side fetcher: the friendly→raw→dir()→friendly round-trip
 # ---------------------------------------------------------------------------
 
 
@@ -363,7 +363,7 @@ def fetch_device_names(
 def _parse_dir_response(response: bytes) -> list[str] | None:
     """Extract the ``dir()`` list from a raw-REPL ``OK<stdout>\\x04<stderr>\\x04>``.
 
-    Returns ``None`` on any parse failure — caller treats that as
+    Returns ``None`` on any parse failure, which the caller treats as
     "retry on next Tab" rather than poisoning the cache.
     """
     if b"OK" not in response:
@@ -404,7 +404,7 @@ def build_default_completer(
     Composes :class:`KeywordCompleter` (always on) with a
     :class:`DeviceCompleter` wired to :func:`fetch_device_names` when
     *port* is given.  When *port* is ``None``, only the static
-    keyword/builtins catalog is offered — useful for tests and for
+    keyword/builtins catalog is offered, which is useful for tests and for
     calling code that hasn't opened a port yet.
 
     Args:

@@ -12,7 +12,7 @@ RP2040 and an ESP32-S2).
 The call form ``x.__setitem__(k, v)`` and a bare reference ``h =
 x.__setitem__`` both fail: the ``AttributeError`` is raised at the
 attribute access, whether it is called inline or captured and called
-later.  A ``super()`` / ``self`` / ``cls`` receiver is exempt — those
+later.  A ``super()`` / ``self`` / ``cls`` receiver is exempt, since those
 bind a user-defined class, which does expose its own dunders on-device
 (and if the class did not define the dunder the access would already
 fail on CPython, which the host suites catch).
@@ -95,8 +95,8 @@ def _has_safe_receiver(receiver: ast.expr) -> bool:
 
     ``super()`` delegates to a user-defined parent method rather than a
     built-in attribute; ``self`` / ``cls`` bind a user-defined class, which
-    exposes its own dunders.  Any other receiver — a bare name, a subscript,
-    another attribute — could be a built-in list / dict / bytearray, which
+    exposes its own dunders.  Any other receiver (a bare name, a subscript,
+    another attribute) could be a built-in list / dict / bytearray, which
     does not, so it stays in scope.
     """
     if _is_super_call(receiver):
@@ -108,7 +108,7 @@ def _banned_dunder_lines(tree: ast.AST) -> list[int]:
     """Return the line of every ``<receiver>.<banned dunder>`` reference.
 
     Catches both the call form ``x.__setitem__(k, v)`` and a bare attribute
-    reference such as ``handler = x.__setitem__`` — both raise
+    reference such as ``handler = x.__setitem__``.  Both raise
     ``AttributeError`` on a built-in receiver on-device, whether the
     attribute is invoked immediately or captured and called later.
     Receivers whose dunders are attribute-accessible on-device are excluded

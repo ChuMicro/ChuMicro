@@ -23,7 +23,7 @@ Example output::
       [209 ms] not ready...
       [315 ms] not ready...
       [421 ms] not ready...
-      TIMEOUT — sensor not ready after 500 ms
+      TIMEOUT: sensor not ready after 500 ms
 
       ...
 
@@ -107,7 +107,7 @@ while True:
     if result >= 0:
         print(f"    sensor ready after {result} ms\n")
     else:
-        print(f"    TIMEOUT — sensor not ready after "
+        print(f"    TIMEOUT: sensor not ready after "
               f"{TIMEOUT_MS} ms\n")
 
     _cycle_index += 1

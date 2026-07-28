@@ -7,8 +7,8 @@ resumes it when the deadline passes.  Sequential code that would
 otherwise need an explicit per-state ``check`` / ``handle`` object
 reads top-to-bottom.
 
-This example uses only ``sleep_until`` — the simplest helper, no
-sockets needed.  Real use lands when ``connect`` / ``send_all`` /
+This example uses only ``sleep_until`` (the simplest helper, no
+sockets needed).  Real use lands when ``connect`` / ``send_all`` /
 ``recv_until`` from ``chumicro_sockets.generators`` orchestrate
 non-blocking socket I/O between the sleep checkpoints.
 

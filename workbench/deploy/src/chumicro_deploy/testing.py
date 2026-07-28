@@ -1,7 +1,7 @@
 """Test fakes for the device transport layer.
 
 Exports :class:`FakeTransport`, :class:`FakeSerialPort`,
-:class:`FakeTime`, and :func:`isolate_from_host_filesystem` — see
+:class:`FakeTime`, and :func:`isolate_from_host_filesystem`.  See
 each one's docstring for shape and usage.  Typical injection::
 
     from chumicro_deploy.testing import FakeSerialPort, FakeTime
@@ -246,7 +246,7 @@ class FakeTransport:
     outputs: list[str] = field(default_factory=list)
     #: Deploy mode label (``"ram"``, ``"flash"``, ``"mount"``, ``"copy"``).
     mode: str = "ram"
-    #: Default ~64 KB — a realistic floor for the boards this fake stands in for.
+    #: Default ~64 KB, a realistic floor for the boards this fake stands in for.
     free_memory_bytes: int = 64 * 1024
     #: Canned return value for ``probe_implementation``.  ``None``
     #: simulates a probe that couldn't complete.
@@ -319,7 +319,7 @@ class FakeTransport:
         Raises:
             UnsupportedExtraFilesError: ``mode == "ram"`` and
                 *extra_files* is non-empty.  RAM mode bypasses the
-                device filesystem entirely — there's nowhere to land
+                device filesystem entirely, so there's nowhere to land
                 bytes.  Switch the device's ``deploy_mode`` to
                 ``"flash"`` before calling.
         """
@@ -337,7 +337,7 @@ class FakeTransport:
         if extra_files:
             if self.mode == "ram":
                 raise UnsupportedExtraFilesError(
-                    "FakeTransport(mode='ram') cannot stage extra_files — "
+                    "FakeTransport(mode='ram') cannot stage extra_files: "
                     "RAM mode has no writable device-side filesystem.  "
                     "Set mode='flash' before calling stage(extra_files=...).",
                 )
@@ -358,7 +358,7 @@ class FakeTransport:
 
         When *on_line* is provided, dispatches one call per line of the
         returned string (split via :meth:`str.splitlines`) before
-        returning — same shape the real transports use, so a test can
+        returning, the same shape the real transports use, so a test can
         drive marker-style stdout coordination against the fake without
         wiring a real serial stream.
         """
@@ -380,12 +380,12 @@ class FakeTransport:
         Args:
             script: Self-contained Python source to run with no
                 staging.
-            timeout: Recorded with the call but not enforced — the
+            timeout: Recorded with the call but not enforced, since the
                 fake transport's "device" responds instantly.
 
         Returns:
             The configured ``execute_output`` (``run_script`` shares
-            the same canned-response slot — tests that need separate
+            the same canned-response slot; tests that need separate
             run_script / execute outputs can override after
             construction).
         """

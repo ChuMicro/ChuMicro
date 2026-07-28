@@ -163,7 +163,7 @@ def _resolve_device(workspace: WorkspaceLayout, args: argparse.Namespace) -> Dev
     """
     if not workspace.devices_yaml.is_file():
         raise SystemExit(
-            f"error: {workspace.devices_yaml} not found — run "
+            f"error: {workspace.devices_yaml} not found; run "
             "'add-device' to register a board first.",
         )
     try:
@@ -174,7 +174,7 @@ def _resolve_device(workspace: WorkspaceLayout, args: argparse.Namespace) -> Dev
         )
     except ValueError as error:
         raise SystemExit(
-            f"error: {error} — run 'add-device' to register a board, "
+            f"error: {error}; run 'add-device' to register a board, "
             "or pass --device <id> to pick a registered one.",
         ) from error
 
@@ -190,7 +190,7 @@ def _resolve_all_devices(workspace: WorkspaceLayout) -> list[Device]:
     """
     if not workspace.devices_yaml.is_file():
         raise SystemExit(
-            f"error: {workspace.devices_yaml} not found — run "
+            f"error: {workspace.devices_yaml} not found; run "
             "'add-device' to register a board first.",
         )
     device_ids = list_device_ids(load_devices(workspace.devices_yaml))
@@ -255,7 +255,7 @@ def _emit_probe_failure(
         )
     else:
         print(
-            f"{command_name}: auto-detect failed — "
+            f"{command_name}: auto-detect failed: "
             "no runtime returned a probe marker.",
             file=sys.stderr,
         )
@@ -448,7 +448,7 @@ def _resolve_serial_port(
         return None
     if len(ports) == 1:
         only_port = ports[0]
-        print(f"{command_name}: only one port found — using {only_port.device}.")
+        print(f"{command_name}: only one port found, using {only_port.device}.")
         return only_port.device
     print(f"{command_name}: pick a board:")
     for index, port in enumerate(ports, start=1):
@@ -504,7 +504,7 @@ def _resolve_project_name(workspace: WorkspaceLayout, name: str) -> str:
     if len(candidates) > 1:
         candidate_list = "\n".join(f"  {path}" for path in candidates)
         raise SystemExit(
-            f"deploy: {name!r} is ambiguous — multiple projects match:\n"
+            f"deploy: {name!r} is ambiguous.  Multiple projects match:\n"
             f"{candidate_list}\n"
             f"specify the path: `python3 run.py deploy {candidates[0]}`",
         )

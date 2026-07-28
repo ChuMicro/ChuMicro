@@ -2,8 +2,8 @@
 
 Brings wifi up via the local ``helpers`` module, connects to a
 configured server, then receives every message with a
-``yield from ws.next_message()`` loop driven by ``Runner.add_generator``
-— wait for a message, print it, wait for the next, until the server
+``yield from ws.next_message()`` loop driven by ``Runner.add_generator``:
+wait for a message, print it, wait for the next, until the server
 closes the stream.
 
 Pair with ``client.py``, which uses the ``on_text`` / ``on_binary``
@@ -26,7 +26,7 @@ Configuration
 Reads the deployed ``runtime_config.msgpack`` via the flat-key API:
 
 * WiFi (read by ``helpers.wifi_up``): ``wifi.ssid`` / ``wifi.password``.
-* App-level: ``websockets.client.connect_url`` — the server to connect
+* App-level: ``websockets.client.connect_url``, the server to connect
   to, passed to ``ws.connect(url)``.
 
 Deploying
@@ -51,8 +51,8 @@ config = runtime_config()
 connect_url = config.get("websockets.client.connect_url")
 if not connect_url:
     print("SETUP: this example needs a reachable websocket server.")
-    print("       Set `websockets.client.connect_url` in secrets.toml —")
-    print("       e.g. ws://192.168.1.42:8765/ — and redeploy.")
+    print("       Set `websockets.client.connect_url` in secrets.toml")
+    print("       (e.g. ws://192.168.1.42:8765/) and redeploy.")
     raise SystemExit(0)
 
 radio, ip = wifi_up(WIFI_SSID, WIFI_PASSWORD)

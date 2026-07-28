@@ -1,12 +1,12 @@
-"""chumicro-deploy — host-side device transports and deploy tooling.
+"""chumicro-deploy: host-side device transports and deploy tooling.
 
 Publishable workbench tool for deploying code and running tests on
 MicroPython and CircuitPython hardware.
 
 Transport contract is captured in :mod:`protocol`:
 
-- :class:`TransportProtocol` — minimum every transport must implement.
-- :class:`ExtendedTransportProtocol` — adds the CircuitPython RAM-mode
+- :class:`TransportProtocol` is the minimum every transport implements.
+- :class:`ExtendedTransportProtocol` adds the CircuitPython RAM-mode
   chunking helpers (``execute_scripts``, ``probe_free_memory``,
   ``inline_script_budget_bytes``).
 

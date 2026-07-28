@@ -1,4 +1,4 @@
-"""probe_device — one-shot runtime-identity probe over a transport.
+"""probe_device: one-shot runtime-identity probe over a transport.
 
 Thin wrapper over :meth:`TransportProtocol.probe_implementation` that
 owns the transport lifecycle (connect / probe / disconnect) and
@@ -30,7 +30,7 @@ class DeviceInfo:
     Attributes:
         implementation: Parsed ``sys.implementation`` fields (runtime
             name, version, machine string).  ``None`` when the probe
-            script ran but no marker came back — almost always a
+            script ran but no marker came back, almost always a
             hardware or connection issue.
         board_id: Normalized board identifier (e.g.
             ``"raspberry_pi_pico_w"``).  Empty string when no
@@ -48,7 +48,7 @@ class DeviceInfo:
 
 
 def probe_device(device: Device) -> DeviceInfo:
-    """Connect, probe, disconnect — return what the board reports.
+    """Connect, probe, disconnect, and return what the board reports.
 
     Exceptions during the probe propagate.  Wrap the call when a
     soft-failure shape is needed.  The transport is always

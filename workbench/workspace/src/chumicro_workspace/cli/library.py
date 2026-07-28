@@ -142,7 +142,7 @@ def _print_install_summary(
     *primary* (what the user asked for) prints as the headline.  The
     rest of *closure* came along through ``[project].dependencies`` and
     prints with a ``  + `` prefix.  Sentinel-held trees show their
-    on-disk version with a ``(kept local edits — sentinel)`` marker so
+    on-disk version with a ``(kept local edits: sentinel)`` marker so
     a closure member that kept the user's edits is distinguishable
     from one that tracked the channel.  Printing one line per library
     rather than a comma-joined list is what makes that distinction
@@ -158,7 +158,7 @@ def _print_install_summary(
             continue
         version = read_installed_version(workspace_root, name) or "?"
         if is_locally_held(workspace_root, name):
-            print(f"  + {name} v{version} (kept local edits — sentinel)")
+            print(f"  + {name} v{version} (kept local edits: sentinel)")
         else:
             print(f"  + {name} v{version}")
 
@@ -444,7 +444,7 @@ def _cmd_library_switch_channel(args: argparse.Namespace) -> int:
         write_curated_libraries(workspace.workspace_yaml, table)
         print(
             f"{args.name}: recorded channel {args.channel} "
-            "(declined — nothing fetched).",
+            "(declined: nothing fetched).",
         )
         return 0
 

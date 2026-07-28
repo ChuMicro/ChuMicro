@@ -66,7 +66,7 @@ def read_runtime_marker(python_file: Path) -> frozenset[str] | None:
 
     The marker is a top-level tuple/list assignment of runtime name
     strings.  Returns ``None`` when no marker is declared (file is
-    universal — ships everywhere).  Returns an empty frozenset only if
+    universal and ships everywhere).  Returns an empty frozenset only if
     the marker is explicitly empty (unusual but legal).
     """
     value = _top_level_assignment_value(python_file, "__chumicro_runtimes__")
@@ -102,7 +102,7 @@ def is_host_only_test(python_file: Path) -> bool:
     a runtime-specific source module through host fakes and asserts
     off-target behaviour (e.g. ``RuntimeError`` because the device
     module is absent on the host).  On real silicon both branches
-    fail — the wrong-runtime device-side filter strips the imported
+    fail: the wrong-runtime device-side filter strips the imported
     module, and a matching board fails the off-target assertion.
 
     Orthogonal to ``__chumicro_runtimes__`` (the files run on every

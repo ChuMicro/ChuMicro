@@ -1,6 +1,6 @@
-"""TLS example — connect with a custom CA bundle.
+"""TLS example: connect with a custom CA bundle.
 
-Demonstrates :func:`ssl_context_with_ca` — the "default everything
+Demonstrates :func:`ssl_context_with_ca`, the "default everything
 except the trust anchor" recipe for TLS clients.  Useful when
 talking to a self-hosted HTTPS / MQTT / etc. server with its own
 CA, when you don't want to add the CA to the device's system trust
@@ -8,8 +8,8 @@ store.
 
 This example uses ``letsencrypt.org:443`` + an embedded ISRG Root
 X1 PEM as a stable public test target.  ``ssl_context_with_ca``
-builds an SSL context whose only trust anchor is what you pass —
-the device's system trust store is *not* consulted.  REPLACE
+builds an SSL context whose only trust anchor is what you pass.
+The device's system trust store is *not* consulted.  REPLACE
 ``CA_PEM`` with your homelab CA bytes and the host string with
 your own server when adapting.
 
@@ -61,10 +61,10 @@ import time
 from chumicro_sockets import connector, ssl_context_with_ca
 from helpers import wifi_up
 
-WIFI_SSID = "your-wifi-ssid"  # noqa: S105 — replace before deploying
-WIFI_PASSWORD = "your-wifi-password"  # noqa: S105 — replace before deploying
+WIFI_SSID = "your-wifi-ssid"  # noqa: S105 - replace before deploying
+WIFI_PASSWORD = "your-wifi-password"  # noqa: S105 - replace before deploying
 
-# ISRG Root X1 — the trust anchor for letsencrypt.org's cert chain.
+# ISRG Root X1, the trust anchor for letsencrypt.org's cert chain.
 # Self-signed; valid through 2035-06-04.  Replace with your real CA
 # bundle bytes when adapting to a homelab / self-hosted endpoint.
 CA_PEM = (

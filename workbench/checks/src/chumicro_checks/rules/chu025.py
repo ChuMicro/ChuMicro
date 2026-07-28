@@ -75,7 +75,7 @@ def _check_file(
     if status == "accepted" and superseded_line is not None:
         flag(
             _line_of(text, superseded_line.start()),
-            "ADR has `Status: accepted` but also a `Superseded by:` line — "
+            "ADR has `Status: accepted` but also a `Superseded by:` line; "
             "flip the status to `superseded` or remove the field",
         )
 

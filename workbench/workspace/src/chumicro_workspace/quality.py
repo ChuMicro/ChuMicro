@@ -2,7 +2,7 @@
 
 Two sources, merged per key:
 
-* ``quality.toml`` at the workspace root — the committed policy.
+* ``quality.toml`` at the workspace root: the committed policy.
   Travels with the workspace's git history, so a shared repo carries
   its own gates.  TOML mirror of the block below, without the
   ``quality:`` wrapper:
@@ -16,7 +16,7 @@ Two sources, merged per key:
       tools = ["ruff", "chumicro-checks"]
       select = ["E", "F", "I"]
 
-* the ``quality:`` block on ``workspace.yml`` — the per-machine
+* the ``quality:`` block on ``workspace.yml``: the per-machine
   override (the file is gitignored).  Any key set here wins over
   the same key in ``quality.toml``:
 
