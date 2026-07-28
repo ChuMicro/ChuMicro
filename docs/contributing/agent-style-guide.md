@@ -106,7 +106,7 @@ Beyond the forward-reference test above, three common `the`-related shapes degra
 
 A sentence names a category or abstraction, an em-dash bridges, then the same thing gets said concretely.  The clause after the em-dash is the real content.  The opener adds nothing, and often mislabels (an artifact called a "rule", a file called a "policy").  Delete the opener and lead with the concrete.
 
-Before: *"The config is declarative — you list your devices in a YAML file."*
+Before: *"The config is declarative — you list your devices in a YAML file."* <!-- noqa: CHU037 -->
 
 After: *"List your devices in `devices.yml`."*
 
@@ -137,7 +137,7 @@ Sentence-opener filler usually adds nothing.  "It is worth noting that", "It sho
 
 ### CHU lint codes in prose
 
-In publishable trees, don't cite CHU lint codes in prose.  Name the rule's intent instead.  For example, write "silent test skips" rather than "CHU009".
+In publishable trees, don't cite CHU lint codes in prose.  Name the rule's intent instead.  For example, write "silent test skips" rather than "CHU999".
 
 Enforced by `CHU006`.  The `# noqa: CHUNNN` directive is exempt.
 
