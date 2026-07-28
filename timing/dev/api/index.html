@@ -343,10 +343,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#tick-functions" class="md-nav__link">
+  <a href="#chumicro_timingticks" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
-        Tick Functions
+        <code>chumicro_timing.ticks</code>
       </span>
     </span>
   </a>
@@ -404,10 +404,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#value-objects" class="md-nav__link">
+  <a href="#chumicro_timingdeadline" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
-        Value Objects
+        <code>chumicro_timing.deadline</code>
       </span>
     </span>
   </a>
@@ -521,10 +521,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#wait-vocabulary" class="md-nav__link">
+  <a href="#chumicro_timingwaits" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
-        Wait vocabulary
+        <code>chumicro_timing.waits</code>
       </span>
     </span>
   </a>
@@ -696,10 +696,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#tick-functions" class="md-nav__link">
+  <a href="#chumicro_timingticks" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
-        Tick Functions
+        <code>chumicro_timing.ticks</code>
       </span>
     </span>
   </a>
@@ -757,10 +757,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#value-objects" class="md-nav__link">
+  <a href="#chumicro_timingdeadline" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
-        Value Objects
+        <code>chumicro_timing.deadline</code>
       </span>
     </span>
   </a>
@@ -874,10 +874,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#wait-vocabulary" class="md-nav__link">
+  <a href="#chumicro_timingwaits" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
-        Wait vocabulary
+        <code>chumicro_timing.waits</code>
       </span>
     </span>
   </a>
@@ -992,7 +992,8 @@
 
 
 <h1 id="api-reference">API Reference<a class="headerlink" href="#api-reference" title="Permanent link">&para;</a></h1>
-<h2 id="tick-functions">Tick Functions<a class="headerlink" href="#tick-functions" title="Permanent link">&para;</a></h2>
+<h2 id="chumicro_timingticks"><code>chumicro_timing.ticks</code><a class="headerlink" href="#chumicro_timingticks" title="Permanent link">&para;</a></h2>
+<p>Wrap-safe millisecond arithmetic.  <code>ticks_ms()</code> reads the runtime's own counter, and <code>ticks_diff</code> and <code>ticks_add</code> compare and advance those readings correctly across a rollover.</p>
 
 
 <div class="doc doc-object doc-module">
@@ -1145,8 +1146,8 @@
 
     </div>
 
-</div><h2 id="value-objects">Value Objects<a class="headerlink" href="#value-objects" title="Permanent link">&para;</a></h2>
-<p><code>Deadline</code> (a single armed timeout) and <code>Rate</code> (a drift-free periodic cadence).</p>
+</div><h2 id="chumicro_timingdeadline"><code>chumicro_timing.deadline</code><a class="headerlink" href="#chumicro_timingdeadline" title="Permanent link">&para;</a></h2>
+<p>The value objects re-exported from <code>chumicro_timing</code>: <code>Deadline</code> (a single armed timeout) and <code>Rate</code> (a drift-free periodic cadence).</p>
 
 
 <div class="doc doc-object doc-module">
@@ -1371,8 +1372,8 @@
 
     </div>
 
-</div><h2 id="wait-vocabulary">Wait vocabulary<a class="headerlink" href="#wait-vocabulary" title="Permanent link">&para;</a></h2>
-<p><code>Signal</code> and <code>wait_for</code> — the opt-in completion-wait vocabulary for generator flows. Import explicitly from <code>chumicro_timing.waits</code>.</p>
+</div><h2 id="chumicro_timingwaits"><code>chumicro_timing.waits</code><a class="headerlink" href="#chumicro_timingwaits" title="Permanent link">&para;</a></h2>
+<p>The completion-wait vocabulary for generator flows: <code>Signal</code> connects a callback-style service to a generator task, and <code>wait_for</code> suspends the generator until the signal is set or its deadline passes.  Import it explicitly from <code>chumicro_timing.waits</code>.</p>
 
 
 <div class="doc doc-object doc-module">
@@ -1670,7 +1671,10 @@
 </div><hr />
 <div class="chumicro-footer">
 <p><a href="../">← Home</a></p>
-<p><a href="https://github.com/ChuMicro/ChuMicro/tree/main/libraries/timing">Source</a> · <a href="https://pypi.org/project/chumicro-timing/">PyPI</a> · <a href="https://github.com/ChuMicro/ChuMicro-Bundle">Bundle</a> · <a href="https://github.com/ChuMicro/ChuMicro-Bundle-Experimental">Experimental Bundle</a></p>
+<p><a href="https://github.com/ChuMicro/ChuMicro/tree/main/libraries/timing">Source</a> · \
+<a href="https://pypi.org/project/chumicro-timing/">PyPI</a> · \
+<a href="https://github.com/ChuMicro/ChuMicro-Bundle">Bundle</a> · \
+<a href="https://github.com/ChuMicro/ChuMicro-Bundle-Experimental">Experimental Bundle</a></p>
 </div>
 
 

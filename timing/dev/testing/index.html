@@ -379,10 +379,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#usage-from-other-libraries" class="md-nav__link">
+  <a href="#using-these-fakes-in-your-own-tests" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
-        Usage from other libraries
+        Using these fakes in your own tests
       </span>
     </span>
   </a>
@@ -481,6 +481,17 @@
         
       </ul>
     </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_timing.testing.sleep_ms" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        sleep_ms
+      </span>
+    </span>
+  </a>
   
 </li>
         
@@ -549,10 +560,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#usage-from-other-libraries" class="md-nav__link">
+  <a href="#using-these-fakes-in-your-own-tests" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
-        Usage from other libraries
+        Using these fakes in your own tests
       </span>
     </span>
   </a>
@@ -654,6 +665,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#chumicro_timing.testing.sleep_ms" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        sleep_ms
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -678,9 +700,9 @@
 
 
 <h1 id="testing-helpers">Testing Helpers<a class="headerlink" href="#testing-helpers" title="Permanent link">&para;</a></h1>
-<p><code>chumicro_timing.testing</code> provides deterministic fakes for host-side tests.</p>
+<p><code>chumicro_timing.testing</code> provides <code>FakeTicks</code>, a hand-driven clock that only moves when you tell it to, plus a <code>sleep_ms</code> shim for host code that really does want to block.  The module declares itself test support, so the deploy walker and the bundle builder drop it and it never lands on a microcontroller.</p>
 <h2 id="usage-with-rate-and-deadline">Usage with Rate and Deadline<a class="headerlink" href="#usage-with-rate-and-deadline" title="Permanent link">&para;</a></h2>
-<p>The value objects take the current time as an explicit <code>now_ms</code> argument, so there is nothing to inject — hand them <code>FakeTicks.ticks_ms()</code> at construction and on each poll, and use <code>FakeTicks.advance()</code> to move time forward:</p>
+<p>The value objects take the current time as an explicit <code>now_ms</code> argument, so there is nothing to inject.  Hand them <code>FakeTicks.ticks_ms()</code> at construction and on each poll, then use <code>FakeTicks.advance()</code> to move time forward:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_timing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Rate</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_timing.testing</span><span class="w"> </span><span class="kn">import</span> <span class="n">FakeTicks</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
@@ -696,7 +718,7 @@
 </span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>
 </span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>    <span class="n">fake</span><span class="o">.</span><span class="n">advance</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
 </span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>    <span class="k">assert</span> <span class="n">rate</span><span class="o">.</span><span class="n">due</span><span class="p">(</span><span class="n">fake</span><span class="o">.</span><span class="n">ticks_ms</span><span class="p">())</span> <span class="ow">is</span> <span class="kc">True</span>
-</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>    <span class="c1"># The schedule has advanced — polling again at the same time returns False</span>
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>    <span class="c1"># The schedule has advanced, so polling again at the same time returns False.</span>
 </span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>    <span class="k">assert</span> <span class="n">rate</span><span class="o">.</span><span class="n">due</span><span class="p">(</span><span class="n">fake</span><span class="o">.</span><span class="n">ticks_ms</span><span class="p">())</span> <span class="ow">is</span> <span class="kc">False</span>
 </span></code></pre></div>
 <p>A <code>Deadline</code> is driven the same way:</p>
@@ -715,10 +737,10 @@
 </span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>    <span class="k">assert</span> <span class="n">deadline</span><span class="o">.</span><span class="n">expired</span><span class="p">(</span><span class="n">fake</span><span class="o">.</span><span class="n">ticks_ms</span><span class="p">())</span> <span class="ow">is</span> <span class="kc">True</span>
 </span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>    <span class="k">assert</span> <span class="n">deadline</span><span class="o">.</span><span class="n">remaining</span><span class="p">(</span><span class="n">fake</span><span class="o">.</span><span class="n">ticks_ms</span><span class="p">())</span> <span class="o">==</span> <span class="mi">0</span>
 </span></code></pre></div>
-<h2 id="usage-from-other-libraries">Usage from other libraries<a class="headerlink" href="#usage-from-other-libraries" title="Permanent link">&para;</a></h2>
-<p>Libraries that depend on <code>chumicro-timing</code> can import <code>FakeTicks</code> directly:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># In another library&#39;s test file</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_timing.testing</span><span class="w"> </span><span class="kn">import</span> <span class="n">FakeTicks</span>
+<p><code>FakeTicks</code> also answers <code>sleep_ms(duration_ms)</code> by advancing itself, so a <code>Runner</code> built with <code>ticks=FakeTicks()</code> idles instantly instead of stalling your test suite.</p>
+<h2 id="using-these-fakes-in-your-own-tests">Using these fakes in your own tests<a class="headerlink" href="#using-these-fakes-in-your-own-tests" title="Permanent link">&para;</a></h2>
+<p>Your test suite imports the fake straight from the installed package, the same way this library's own tests do:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_timing.testing</span><span class="w"> </span><span class="kn">import</span> <span class="n">FakeTicks</span>
 </span></code></pre></div>
 <p>Project convention: libraries that expose injectable services ship their own test fakes alongside the production code.</p>
 <h2 id="api-reference">API Reference<a class="headerlink" href="#api-reference" title="Permanent link">&para;</a></h2>
@@ -894,6 +916,24 @@
 </div>
 
 
+<div class="doc doc-object doc-function">
+
+
+<h3 id="chumicro_timing.testing.sleep_ms" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">sleep_ms</span><span class="p">(</span><span class="n">duration_ms</span><span class="p">)</span></code>
+
+<a href="#chumicro_timing.testing.sleep_ms" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Sleeps for <code>duration_ms</code> via <code>time.sleep_ms</code> when present, otherwise <code>time.sleep</code> in seconds.</p>
+
+
+    </div>
+
+</div>
+
 
 
   </div>
@@ -903,7 +943,10 @@
 </div><hr />
 <div class="chumicro-footer">
 <p><a href="../">← Home</a></p>
-<p><a href="https://github.com/ChuMicro/ChuMicro/tree/main/libraries/timing">Source</a> · <a href="https://pypi.org/project/chumicro-timing/">PyPI</a> · <a href="https://github.com/ChuMicro/ChuMicro-Bundle">Bundle</a> · <a href="https://github.com/ChuMicro/ChuMicro-Bundle-Experimental">Experimental Bundle</a></p>
+<p><a href="https://github.com/ChuMicro/ChuMicro/tree/main/libraries/timing">Source</a> · \
+<a href="https://pypi.org/project/chumicro-timing/">PyPI</a> · \
+<a href="https://github.com/ChuMicro/ChuMicro-Bundle">Bundle</a> · \
+<a href="https://github.com/ChuMicro/ChuMicro-Bundle-Experimental">Experimental Bundle</a></p>
 </div>
 
 
