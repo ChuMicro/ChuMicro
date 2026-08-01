@@ -628,6 +628,12 @@ CSS = _KIT_PALETTE + kit.TOKENS_CSS + """
  .selbar button.primary{background:linear-gradient(135deg,var(--accent),var(--accent2));border-color:var(--accent);color:#fff;box-shadow:0 2px 12px var(--glow)}
  .selbar button.primary:hover{filter:brightness(1.07)}
  .selbar button:disabled{opacity:.5;cursor:not-allowed;filter:saturate(.4)}
+ .selbar button.blocked{opacity:.55;filter:saturate(.4)}
+ .ffield.missing{border-left:3px solid var(--bad);padding-left:10px;margin-left:-13px}
+ .ffield.missing .proselabel{color:var(--bad)}
+ .ffield.pulse{animation:fieldpulse 1.6s ease-out}
+ @keyframes fieldpulse{0%,30%{background:color-mix(in srgb,var(--bad) 8%,transparent);
+  box-shadow:0 0 0 2px var(--bad)}100%{background:transparent;box-shadow:0 0 0 0 transparent}}
  .selbar button.confirm{background:var(--good);border-color:var(--good);color:#fff;transition:none}
  .selbar #copybtn,.selbar #resetbtn{border-color:transparent;background:none;color:var(--faint)}
  .selbar #copybtn:hover,.selbar #resetbtn:hover{color:var(--fg);border-color:var(--border)}
@@ -874,19 +880,29 @@ SCRIPT = """
     });
     return lines.join('\\n');
   }
-  // a required field (data-req) gates Submit until it holds an answer; the count line and the
-  // button's hover text name what is still missing, so the block explains itself
+  // a required field (data-req) gates Submit until it holds an answer. The gate explains
+  // itself in three places at once: the unanswered field lights up (.missing), the count line
+  // names how many remain, and the blocked Submit stays CLICKABLE: clicking it scrolls to the
+  // first missing field and pulses it, so finding what to fill in never takes a hunt.
+  function requiredFields() {
+    return Array.prototype.slice.call(document.querySelectorAll(
+      '.fld-text[data-req],.fld-menu[data-req],.fchkrow[data-req],.fld-drop[data-req]'));
+  }
+  function fieldAnswered(el) {
+    if (el.classList.contains('fchkrow')) return !!el.querySelector('input:checked');
+    if (el.classList.contains('fld-drop')) {
+      var key = el.dataset.item + '.' + el.dataset.fid;
+      return !!(uploads[key] && uploads[key].length);
+    }
+    return !!el.value.trim();
+  }
   function missingRequired() {
     var missing = [];
-    document.querySelectorAll('.fld-text[data-req],.fld-menu[data-req]').forEach(function (el) {
-      if (!el.value.trim()) missing.push(el.dataset.item + '.' + el.dataset.fid);
-    });
-    document.querySelectorAll('.fchkrow[data-req]').forEach(function (group) {
-      if (!group.querySelector('input:checked')) missing.push(group.dataset.item + '.' + group.dataset.fid);
-    });
-    document.querySelectorAll('.fld-drop[data-req]').forEach(function (drop) {
-      var key = drop.dataset.item + '.' + drop.dataset.fid;
-      if (!(uploads[key] && uploads[key].length)) missing.push(key);
+    requiredFields().forEach(function (el) {
+      var open = !fieldAnswered(el);
+      var wrap = el.closest('.ffield');
+      if (wrap) wrap.classList.toggle('missing', open);
+      if (open) missing.push(el.dataset.item + '.' + el.dataset.fid);
     });
     return missing;
   }
@@ -910,8 +926,10 @@ SCRIPT = """
     var summary = Object.keys(byValue).map(function (v) { return byValue[v] + ' ' + v; }).join(' \\u00b7 ');
     var sb = document.getElementById('submitbtn');
     sb.textContent = summary ? 'Submit \\u2014 ' + summary : 'Submit to session';
-    sb.disabled = missing.length > 0;
-    sb.title = missing.length ? ('answer the required fields first: ' + missing.join(', ')) : '';
+    sb.classList.toggle('blocked', missing.length > 0);
+    sb.title = missing.length
+      ? ('required first: ' + missing.join(', ') + ' \\u00b7 click to jump there')
+      : '';
     var b = document.getElementById('blob'); if (b) b.value = buildBlob();
   }
   // one acknowledgment for every selbar button: swap the label, hold a green confirm tint,
@@ -943,7 +961,24 @@ SCRIPT = """
   }
   function submitSel() {
     var sb = document.getElementById('submitbtn');
-    if (sb.disabled) return;   // required fields still unanswered; the button's title names them
+    var missing = missingRequired();
+    if (missing.length) {
+      // the blocked submit is a guide, not a wall: take the human to the first missing field
+      var wrap = document.querySelector('.ffield.missing');
+      if (wrap) {
+        var card = wrap.closest('.card');
+        if (card) card.classList.remove('collapsed');
+        wrap.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        wrap.classList.remove('pulse');
+        void wrap.offsetWidth;
+        wrap.classList.add('pulse');
+        var target = wrap.querySelector('.fld-text,.fld-menu');
+        if (target) target.focus({ preventScroll: true });
+      }
+      var st = document.getElementById('substate');
+      if (st) st.textContent = missing.length + ' required field(s) to answer first';
+      return;
+    }
     var fail = function () { var o = sb.textContent; sb.textContent = 'failed: use Copy selection'; setTimeout(function () { sb.textContent = o; }, 2200); };
     fetch('selection', { method: 'POST', body: buildBlob() })
       .then(function (r) {

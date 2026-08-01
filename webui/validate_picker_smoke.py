@@ -132,13 +132,17 @@ def main():
                 problems.append(f'blob missing "2 = alt" after the candidate pick; blob was:\n{blob_text}')
 
             # item 7 carries every structured field kind. The empty required text field must
-            # hold Submit disabled; answering it releases the gate.
-            if not page.evaluate("document.getElementById('submitbtn').disabled"):
-                problems.append("Submit is not disabled while the required text field is empty")
+            # mark Submit blocked AND light itself up; answering it clears both.
+            if not page.evaluate("document.getElementById('submitbtn').classList.contains('blocked')"):
+                problems.append("Submit is not marked blocked while the required text field is empty")
+            if page.locator(".ffield.missing").count() != 1:
+                problems.append("the unanswered required field does not carry the .missing highlight")
             card7 = page.locator('.card[data-id="7"]')
             card7.locator(".fld-text").fill("PMA-1234")
-            if page.evaluate("document.getElementById('submitbtn').disabled"):
-                problems.append("Submit stayed disabled after the required text field was filled")
+            if page.evaluate("document.getElementById('submitbtn').classList.contains('blocked')"):
+                problems.append("Submit stayed blocked after the required text field was filled")
+            if page.locator(".ffield.missing").count() != 0:
+                problems.append("the .missing highlight did not clear after answering")
             blob_text = blob.input_value()
             if "field 7.key: PMA-1234" not in blob_text:
                 problems.append(f'blob missing the text field line; blob was:\n{blob_text}')
