@@ -154,11 +154,11 @@ def _hub():
     release, withdraw a second surface and see its page answer 410."""
     import json
 
-    from webui.hub import HubServer
+    from webui.hub import HubServer, _state_dir
 
     with tempfile.TemporaryDirectory() as tmp:
-        state = os.path.join(tmp, "state")
-        os.makedirs(os.path.join(state, "surfaces"), exist_ok=True)
+        # the hub owns its state layout; never hardcode its store subdir here
+        state = _state_dir(os.path.join(tmp, "state"))
         server = HubServer(state, port=0, idle=0)
         thread = threading.Thread(target=server.serve, daemon=True)
         thread.start()

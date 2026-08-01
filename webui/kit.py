@@ -98,10 +98,10 @@ AFFORD_CSS = """
 .chu-busy{opacity:.6;cursor:progress;}
 """
 
-# ── The re-serve channel webui (toast + progress), extracted so a surface that opts into the
+# ── The re-serve channel surfaces (toast + progress), extracted so a surface that opts into the
 #    live canvas gets them WITHOUT pulling in the kit's layout CSS. ──
 CHANNEL_CSS = """
-/* re-serve channel webui */
+/* re-serve channel surfaces */
 .chu-toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(12px);background:var(--panel);color:var(--fg);border:1px solid var(--border);box-shadow:0 8px 28px var(--shadow);padding:10px 16px;border-radius:10px;opacity:0;pointer-events:none;transition:.18s;z-index:9999;}
 .chu-toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
 .chu-toast.good{border-color:var(--good);} .chu-toast.bad{border-color:var(--bad);}
