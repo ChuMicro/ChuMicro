@@ -1,4 +1,4 @@
-"""The surface hub: one server, one tab, many surfaces.
+"""The surface hub: one server, one tab, many webui.
 
 Before the hub, every question owned a server and every server opened a tab. Ask five
 questions across a session and the human holds five tabs, four of them dead. Run two
@@ -32,7 +32,7 @@ Transport only: the hub never parses or applies a submission; it writes the blob
 the surface's sink and the session reads it. Pages stay self-contained kit pages; the
 shell embeds them in an iframe, and their relative POST (`selection` / `submit` /
 `answers`) lands scoped under /s/<id>/, so the same page works served alone or hubbed.
-Pure stdlib. State (lock, log, surfaces) lives under STATE_DIR, gitignored.
+Pure stdlib. State (lock, log, webui) lives under STATE_DIR, gitignored.
 
 Routes: GET / (the shell) . GET /events (shell SSE) . GET /api/state . GET /s/<id>/
 (the surface page) . GET /s/<id>/a/<path> (registered assets, Range-capable) . GET
@@ -51,7 +51,7 @@ CLI (module form, from the repo root):
   push <id> --toast TEXT | --progress 0..1 [--text T]
   status                             one line per surface + client/waiter counts
   open                               reopen the browser tab on the live hub
-  stop                               shut the hub down (surfaces persist for the next one)
+  stop                               shut the hub down (webui persist for the next one)
 """
 from __future__ import annotations
 
@@ -84,7 +84,7 @@ DEFAULT_PORT = 17871                  # stable per repo, so a reopened hub reviv
 IDLE_SECONDS = 900                    # no tab + no pending + no waiter this long -> exit
 PENDING_TTL = 24 * 3600               # a pending surface older than this expires
 ENV_NO_OPEN = "HUB_NO_OPEN"           # set on a poster to forbid the auto-open for its post
-KEEP_RESOLVED = 20                    # answered/withdrawn surfaces kept for the shell's history
+KEEP_RESOLVED = 20                    # answered/withdrawn webui kept for the shell's history
 
 _ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{2,40}$")
 
@@ -96,7 +96,7 @@ def _now():
 
 def _state_dir(override=None):
     d = os.path.abspath(override or os.environ.get("HUB_STATE_DIR") or STATE_DIR)
-    os.makedirs(os.path.join(d, "surfaces"), exist_ok=True)
+    os.makedirs(os.path.join(d, "webui"), exist_ok=True)
     return d
 
 
@@ -147,7 +147,7 @@ class Surface:
 
 
 class Registry:
-    """In-memory surface table, mirrored to <state>/surfaces/<id>/ so a hub restart
+    """In-memory surface table, mirrored to <state>/webui/<id>/ so a hub restart
     reloads history and still-pending questions instead of orphaning their waiters."""
 
     def __init__(self, state):
@@ -158,10 +158,10 @@ class Registry:
         self._load()
 
     def _dir(self, sid):
-        return os.path.join(self.state, "surfaces", sid)
+        return os.path.join(self.state, "webui", sid)
 
     def _load(self):
-        root = os.path.join(self.state, "surfaces")
+        root = os.path.join(self.state, "webui")
         for sid in sorted(os.listdir(root)):
             meta_path = os.path.join(root, sid, "meta.json")
             try:
@@ -333,7 +333,7 @@ class HubServer:
                 if path == "/api/state":
                     return self._json({"hub": HUB_NAME, "port": hub.port,
                                        "clients": hub.client_count(),
-                                       "surfaces": [s.to_meta() for s in hub.registry.ordered()]})
+                                       "webui": [s.to_meta() for s in hub.registry.ordered()]})
                 m = re.match(r"^/s/([a-z0-9-]+)(/.*)?$", path)
                 if m:
                     return self._surface_get(m.group(1), m.group(2) or "/")
@@ -527,6 +527,9 @@ class HubServer:
                 return self._json({"ok": True, "first": first})
 
             def _withdraw(self, p):
+                # two terminal moves share this door: withdrawn (cancelled, nothing owed the
+                # human) and done (a status/report run that FINISHED; the page stays readable)
+                final = "done" if p.get("done") else "withdrawn"
                 targets = []
                 if p.get("id"):
                     s = hub.registry.by_id.get(p["id"])
@@ -534,13 +537,14 @@ class HubServer:
                 elif p.get("tag"):
                     targets = [s for s in hub.registry.pending() if s.tag == p["tag"]
                                and (not p.get("session") or s.session == p["session"])]
-                done = []
+                resolved = []
                 for s in targets:
                     if s and s.status == "pending":
-                        hub.registry.resolve(s.id, "withdrawn", p.get("reason", "the session moved on"))
-                        hub.surface_event(s, "withdrawn")
-                        done.append(s.id)
-                return self._json({"ok": True, "withdrawn": done})
+                        hub.registry.resolve(s.id, final,
+                                             p.get("reason", "the session moved on"))
+                        hub.surface_event(s, final)
+                        resolved.append(s.id)
+                return self._json({"ok": True, "withdrawn": resolved})
 
         return H
 
@@ -606,46 +610,54 @@ class HubServer:
 
 # ---- the shell page --------------------------------------------------------------------------
 SHELL_CSS = """
-body{padding:0;margin:0;overflow:hidden}
-.hubbar{display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--border);
- background:var(--panel);flex-wrap:wrap}
-.hubbar .brand{font-weight:700;letter-spacing:.2px}
-.hubbar .brand .dot{display:inline-block;width:9px;height:9px;border-radius:99px;background:var(--accent);
- margin-right:7px;box-shadow:0 0 8px var(--glow)}
-.chips{display:flex;gap:6px;flex-wrap:wrap;flex:1;min-width:0}
-.chip-s{font:inherit;font-size:12.5px;padding:4px 11px;border-radius:999px;border:1px solid var(--border);
- background:var(--panel);color:var(--faint);cursor:pointer;display:flex;align-items:center;gap:6px;max-width:260px}
+html,body{height:100%}
+body{padding:0;margin:0;overflow:hidden;display:flex;flex-direction:column}
+.hubbar{flex:none;display:flex;align-items:center;gap:var(--s4);padding:0 var(--s4);height:44px;
+ border-bottom:1px solid var(--border);background:var(--panel)}
+.hubbar .brand{flex:none;display:flex;align-items:center;gap:8px;
+ font:650 var(--t-micro)/1 var(--mono);text-transform:uppercase;letter-spacing:.08em;color:var(--fg)}
+.hubbar .brand .dot{width:8px;height:8px;border-radius:99px;background:var(--accent);box-shadow:0 0 8px var(--glow)}
+.hubbar .brand .n{color:var(--faint);font-weight:500}
+.chips{flex:1;display:flex;gap:var(--s2);min-width:0;overflow-x:auto;scrollbar-width:none;align-items:center}
+.chips::-webkit-scrollbar{display:none}
+.chip-s{flex:0 1 auto;min-width:0;font:inherit;font-size:12.5px;padding:5px 12px;border-radius:999px;
+ border:1px solid var(--border);background:var(--bg);color:var(--faint);cursor:pointer;
+ display:flex;align-items:center;gap:7px;max-width:360px;transition:border-color .12s,color .12s}
+.chip-s:hover{color:var(--fg);border-color:var(--accent)}
 .chip-s .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.chip-s .st{width:8px;height:8px;border-radius:99px;flex:0 0 auto;background:var(--faint)}
-.chip-s.pending .st{background:var(--warn)}
+.chip-s .st{width:7px;height:7px;border-radius:99px;flex:0 0 auto;background:var(--faint)}
+.chip-s.pending .st{background:var(--warn)}                    /* an ask waiting on the human */
+.chip-s.k-status.pending .st,.chip-s.k-report.pending .st{background:var(--accent)}  /* live, not waiting */
 .chip-s.answered .st{background:var(--good)}
+.chip-s.done .st{background:var(--faint)}                      /* a run that finished; nothing owed */
 .chip-s.withdrawn .st,.chip-s.expired .st{background:var(--bad)}
-.chip-s.focused{border-color:var(--accent);color:var(--fg);box-shadow:0 0 0 1px var(--accent)}
+.chip-s.focused{border-color:var(--accent);color:var(--fg);background:var(--panel);box-shadow:0 0 0 1px var(--accent)}
 .chip-s.withdrawn .t,.chip-s.expired .t{text-decoration:line-through;opacity:.7}
-.stage{position:relative;height:calc(100vh - 46px)}
+button#themebtn{position:static;top:auto;right:auto;flex:none;font-size:12.5px;padding:5px 12px;border-radius:999px}
+.stage{flex:1;min-height:0;position:relative}
 .stage iframe{border:0;width:100%;height:100%;background:var(--bg)}
 .banner{position:absolute;left:50%;top:14px;transform:translateX(-50%);background:var(--panel);
- border:1px solid var(--border);border-radius:10px;padding:8px 16px;font-size:13.5px;
+ border:1px solid var(--border);border-radius:var(--r2);padding:var(--s2) var(--s4);font-size:var(--t-small);
  box-shadow:0 6px 24px var(--shadow);display:none;z-index:5}
 .banner.show{display:block}
 .banner.good{border-color:var(--good)} .banner.bad{border-color:var(--bad)}
 .empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
- color:var(--faint);font-size:15px}
-#themebtn{position:static}
+ color:var(--faint);font-size:var(--t-body)}
 """
 
 SHELL_JS = """
 (function(){
-var surfaces={}, focused=null, baseTitle=document.title, rev={};
+var webui={}, focused=null, baseTitle=document.title, rev={};
 var chips=document.getElementById('chips'), frame=document.getElementById('frame');
 var banner=document.getElementById('banner'), empty=document.getElementById('empty');
 function fmt(ts){var d=new Date(ts*1000);return d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});}
-function pendingCount(){var n=0;Object.values(surfaces).forEach(function(s){if(s.status==='pending')n++;});return n;}
-function setTitle(){var n=pendingCount();document.title=(n?('('+n+') '):'')+baseTitle;}
+function pendingCount(){var n=0;Object.values(webui).forEach(function(s){if(s.status==='pending')n++;});return n;}
+function setTitle(){var n=pendingCount();document.title=(n?('('+n+') '):'')+baseTitle;
+ var pc=document.getElementById('pcount');if(pc)pc.textContent=n?(n+' pending'):'idle';}
 function showBanner(text,kind){banner.textContent=text;banner.className='banner show '+(kind||'');
  clearTimeout(banner._t);banner._t=setTimeout(function(){banner.classList.remove('show');},3200);}
 function focus(id){
- var s=surfaces[id];if(!s)return;focused=id;
+ var s=webui[id];if(!s)return;focused=id;
  if(s.status==='withdrawn'||s.status==='expired'){
    frame.removeAttribute('src');frame.style.display='none';empty.style.display='flex';
    empty.textContent=s.status+': '+(s.reason||'the session moved on');
@@ -654,50 +666,59 @@ function focus(id){
    var want='/s/'+id+'/?rev='+(s.rev||1);
    if(frame.dataset.at!==want){frame.src=want;frame.dataset.at=want;}
    if(s.status==='answered')showBanner('answered at '+fmt(s.resolved)+'; the session has it','good');
+   else if(s.status==='done')showBanner('run complete: '+(s.reason||'finished'),'good');
  }
  render();
 }
 function render(){
  chips.innerHTML='';
- var list=Object.values(surfaces).sort(function(a,b){return a.created-b.created;});
+ var list=Object.values(webui).sort(function(a,b){return a.created-b.created;});
  list.forEach(function(s){
    var b=document.createElement('button');
-   b.className='chip-s '+s.status+(s.id===focused?' focused':'');
+   b.className='chip-s '+s.status+' k-'+(s.kind||'ask')+(s.id===focused?' focused':'');
    b.innerHTML='<span class="st"></span><span class="t"></span>';
    b.querySelector('.t').textContent=s.title;
    b.title=s.kind+' · '+s.status+(s.session?(' · '+s.session):'');
    b.onclick=function(){focus(s.id);};
    chips.appendChild(b);
  });
- if(!list.length){empty.style.display='flex';empty.textContent='no surfaces yet; the session will post here.';
+ if(!list.length){empty.style.display='flex';empty.textContent='no webui yet; the session will post here.';
   frame.style.display='none';}
  setTitle();
 }
 function autoFocus(s){
  // a new pending surface takes the stage unless the human is mid-decision on another pending one
- var cur=surfaces[focused];
+ var cur=webui[focused];
  if(!cur||cur.status!=='pending'||cur.id===s.id)focus(s.id);else render();
 }
 function apply(s,op){
- surfaces[s.id]=s;
+ webui[s.id]=s;
  if(op==='added'){autoFocus(s);showBanner('new: '+s.title,'');}
  else if(op==='updated'&&s.id===focused){frame.dataset.at='';focus(s.id);}
  else if(op==='answered'&&s.id===focused){focus(s.id);}
  else if((op==='withdrawn'||op==='expired')&&s.id===focused){focus(s.id);}
  else render();
 }
-fetch('/api/state').then(function(r){return r.json();}).then(function(st){
- st.surfaces.forEach(function(s){surfaces[s.id]=s;});
- var pend=st.surfaces.filter(function(s){return s.status==='pending';});
- var last=st.surfaces[st.surfaces.length-1];
- render();
- if(pend.length)focus(pend[pend.length-1].id);else if(last)focus(last.id);
-});
+function sync(){
+ fetch('/api/state').then(function(r){return r.json();}).then(function(st){
+  webui={};
+  st.webui.forEach(function(s){webui[s.id]=s;});
+  var pend=st.webui.filter(function(s){return s.status==='pending';});
+  var last=st.webui[st.webui.length-1];
+  render();
+  if(focused&&webui[focused]){focus(focused);}
+  else if(pend.length){focus(pend[pend.length-1].id);}
+  else if(last){focus(last.id);}
+  else{focused=null;render();}
+ });
+}
 var es=new EventSource('/events');
+es.onopen=sync;   // initial load AND every reconnect: a restarted hub or a stale tab self-heals
 es.onmessage=function(ev){var m;try{m=JSON.parse(ev.data);}catch(e){return;}
  if(m.type==='surface')apply(m.surface,m.op);
  else if(m.type==='toast')showBanner(m.text,'good');
  else if(m.type==='progress'){showBanner((m.text||'working')+' '+Math.round((m.value||0)*100)+'%','');}
+ else if(m.type==='reload'){location.reload();}
 };
 })();
 """
@@ -707,9 +728,9 @@ def shell_page(hub):
     body = (
         '<div class="hubbar"><span class="brand"><span class="dot"></span>'
         + kit._esc(HUB_NAME) +
-        '</span><div class="chips" id="chips"></div>'
+        '<span class="n" id="pcount"></span></span><div class="chips" id="chips"></div>'
         '<button id="themebtn" type="button"></button></div>'
-        '<div class="stage"><div class="empty" id="empty">no surfaces yet.</div>'
+        '<div class="stage"><div class="empty" id="empty">no webui yet.</div>'
         '<iframe id="frame" title="surface"></iframe>'
         '<div class="banner" id="banner"></div></div>'
     )
@@ -799,7 +820,7 @@ def wait(port, sid, timeout=None, state_dir=None):
 
 # ---- CLI -------------------------------------------------------------------------------------
 def main(argv=None):
-    ap = argparse.ArgumentParser(description="surface hub: one server, one tab, many surfaces")
+    ap = argparse.ArgumentParser(description="surface hub: one server, one tab, many webui")
     ap.add_argument("--state", default=None, help="state dir override (default: repo .scratch/hub)")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
@@ -813,7 +834,7 @@ def main(argv=None):
     sp.add_argument("--title", default=None)
     sp.add_argument("--tag", default="")
     sp.add_argument("--assets", default="", help="directory served under the surface's a/ path")
-    sp.add_argument("--supersede-tag", default="", help="withdraw my older pending surfaces with this tag")
+    sp.add_argument("--supersede-tag", default="", help="withdraw my older pending webui with this tag")
     sp.add_argument("--timeout", type=float, default=None, help="seconds before giving up (exit 4)")
 
     sp = sub.add_parser("post", help="post a surface without waiting (status boards, reports)")
@@ -829,10 +850,14 @@ def main(argv=None):
     sp.add_argument("id")
     sp.add_argument("page")
 
-    sp = sub.add_parser("withdraw", help="resolve a pending surface as withdrawn")
+    sp = sub.add_parser("withdraw", help="resolve a pending surface as withdrawn (cancelled)")
     sp.add_argument("id", nargs="?", default="")
     sp.add_argument("--tag", default="")
     sp.add_argument("--reason", default="the session moved on")
+
+    sp = sub.add_parser("done", help="resolve a status/report surface as done (finished, stays readable)")
+    sp.add_argument("id")
+    sp.add_argument("--reason", default="run complete")
 
     sp = sub.add_parser("push", help="toast or progress on the open shell")
     sp.add_argument("id", nargs="?", default="")
@@ -840,9 +865,9 @@ def main(argv=None):
     sp.add_argument("--progress", type=float, default=None)
     sp.add_argument("--text", default="")
 
-    sub.add_parser("status", help="list surfaces and client/waiter counts")
+    sub.add_parser("status", help="list webui and client/waiter counts")
     sub.add_parser("open", help="reopen the browser tab on the live hub")
-    sub.add_parser("stop", help="shut the hub down (surfaces persist)")
+    sub.add_parser("stop", help="shut the hub down (webui persist)")
 
     args = ap.parse_args(argv)
 
@@ -902,6 +927,9 @@ def main(argv=None):
                      {"id": args.id, "tag": args.tag, "session": _session_id() if args.tag else "",
                       "reason": args.reason})
         print(f"WITHDRAWN {' '.join(reply.get('withdrawn', [])) or '(nothing pending matched)'}", flush=True)
+    elif args.cmd == "done":
+        reply = _api(port, "/api/withdraw", {"id": args.id, "done": True, "reason": args.reason})
+        print(f"DONE {' '.join(reply.get('withdrawn', [])) or '(not pending)'}", flush=True)
     elif args.cmd == "push":
         if args.toast is not None:
             _api(port, "/api/push", {"kind": "toast", "id": args.id, "text": args.toast})
@@ -911,7 +939,7 @@ def main(argv=None):
     elif args.cmd == "status":
         st = _api(port, "/api/state")
         print(f"hub http://127.0.0.1:{port}/  clients={st['clients']}", flush=True)
-        for s in st["surfaces"]:
+        for s in st["webui"]:
             print(f"  {s['id']}  {s['status']:<9} {s['kind']:<7} {s['title']}"
                   + (f"  [{s['tag']}]" if s.get("tag") else ""), flush=True)
     elif args.cmd == "open":

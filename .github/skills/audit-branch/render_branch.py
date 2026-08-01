@@ -196,13 +196,16 @@ def main():
         "key": f"audit-branch:{os.path.basename(rundir)}",
         "blob_header": f"audit-branch apply ({label})",
         "subtitle": " · ".join(intro_bits),
+        "brief": (f"The audit of branch {label}: one card per finding across the changed files, "
+                  "with evidence and the generated patch. Applying runs the patch in-session "
+                  "behind tests; discussing holds it; skipping closes it for this run."),
         "options": ["apply", "discuss", "skip"],
         "default": "skip",
         "expand_on": ["discuss"],
         "option_help": {
-            "apply": "apply the generated patch in-session, gated by the file's tests and a shown diff — a note adjusts it",
+            "apply": "apply the generated patch in-session, gated by the file's tests and a shown diff; a note adjusts it",
             "discuss": "no change yet; talk it through in the session first (unconfirmed findings start here)",
-            "skip": "leave as is",
+            "skip": "leave the finding as it stands with no change made this run",
         },
         "facets": facets,
         "sections": sections,
