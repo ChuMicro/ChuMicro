@@ -1295,7 +1295,7 @@ def main():
     has_suggestions = any(it.get("suggested") for it in spec.get("items", []))
     accept_btn = ('<button id="acceptall" title="select every suggested pick (respects the filter)">'
                   '★ accept suggested</button>') if has_suggestions else ""
-    # `live` (spec field or --live) lets this page be DRIVEN through the live canvas (webui.session):
+    # `live` (spec field or --live) lets this page be DRIVEN through the live canvas (surfaces.session):
     # inject the kit's re-serve channel (toast/progress CSS; the picker is --shadow-clash-free) + the
     # SSE client, so the agent can push reload/toast into the open picker tab. Default off = unchanged.
     live = bool(spec.get("live")) or ("--live" in sys.argv)
