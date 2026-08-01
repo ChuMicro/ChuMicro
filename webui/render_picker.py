@@ -627,6 +627,7 @@ CSS = _KIT_PALETTE + kit.TOKENS_CSS + """
   background:var(--card);color:var(--fg);cursor:pointer;transition:background .5s,color .5s,border-color .5s}
  .selbar button.primary{background:linear-gradient(135deg,var(--accent),var(--accent2));border-color:var(--accent);color:#fff;box-shadow:0 2px 12px var(--glow)}
  .selbar button.primary:hover{filter:brightness(1.07)}
+ .selbar button:disabled{opacity:.5;cursor:not-allowed;filter:saturate(.4)}
  .selbar button.confirm{background:var(--good);border-color:var(--good);color:#fff;transition:none}
  .selbar #copybtn,.selbar #resetbtn{border-color:transparent;background:none;color:var(--faint)}
  .selbar #copybtn:hover,.selbar #resetbtn:hover{color:var(--fg);border-color:var(--border)}
