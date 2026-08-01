@@ -231,6 +231,18 @@ def _hub():
             with urllib.request.urlopen(f"{base}/s/{sid3}/a/tone.m4a", timeout=5) as resp:
                 _check("hub/asset-m4a-mime", resp.headers.get("Content-Type") == "audio/mp4",
                        f"got {resp.headers.get('Content-Type')}")
+            # a page's OWN relative ref must resolve too: the renderer stages media under
+            # assets/ and the page says src="assets/x", so /s/<id>/assets/x serves the file
+            # (the 2026-08-01 round-3 breakage: only the a/ route worked and every artifact
+            # on a hub-served page 404ed)
+            os.makedirs(os.path.join(asset_dir, "assets"), exist_ok=True)
+            with open(os.path.join(asset_dir, "assets", "pic.png"), "wb") as handle:
+                handle.write(b"png-bytes")
+            with urllib.request.urlopen(f"{base}/s/{sid3}/assets/pic.png", timeout=5) as resp:
+                _check("hub/asset-page-relative",
+                       resp.status == 200 and resp.headers.get("Content-Type") == "image/png",
+                       f"{resp.status} {resp.headers.get('Content-Type')}")
+                _check("hub/asset-page-relative-bytes", resp.read() == b"png-bytes")
             req = urllib.request.Request(f"{base}/api/withdraw",
                                          data=json.dumps({"id": sid3, "reason": "check done"}).encode(),
                                          headers={"Content-Type": "application/json"}, method="POST")

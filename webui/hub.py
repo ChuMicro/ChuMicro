@@ -35,7 +35,9 @@ shell embeds them in an iframe, and their relative POST (`selection` / `submit` 
 Pure stdlib. State (lock, log, surfaces) lives under STATE_DIR, gitignored.
 
 Routes: GET / (the shell) . GET /events (shell SSE) . GET /api/state . GET /s/<id>/
-(the surface page) . GET /s/<id>/a/<path> (registered assets, Range-capable) . GET
+(the surface page) . GET /s/<id>/a/<path> (registered assets, Range-capable; any other
+surface-relative path falls back to the same asset dir, so a page's own relative refs
+work under the hub exactly as from file://) . GET
 /s/<id>/wait?timeout=N (long-poll a resolution) . POST /api/post . POST /api/update .
 POST /api/withdraw . POST /api/push (toast/progress) . POST /s/<id>/submit (aliases:
 selection, answers) . POST /s/<id>/upload?name=<filename> (the human hands a file TO
@@ -360,7 +362,10 @@ class HubServer:
                     return self._wait(s)
                 if rest.startswith("/a/"):
                     return self._asset(s, rest[3:])
-                self._text(404, "not found\n")
+                # any other surface-relative path falls back to the registered asset dir, so a
+                # page's own relative refs (assets/shot.png, a media src the renderer staged)
+                # resolve served under the hub exactly as they do from file://
+                return self._asset(s, rest.lstrip("/"))
 
             def _wait(self, s):
                 with hub.waiters_lock:
