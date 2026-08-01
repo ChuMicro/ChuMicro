@@ -38,7 +38,10 @@ Routes: GET / (the shell) . GET /events (shell SSE) . GET /api/state . GET /s/<i
 (the surface page) . GET /s/<id>/a/<path> (registered assets, Range-capable) . GET
 /s/<id>/wait?timeout=N (long-poll a resolution) . POST /api/post . POST /api/update .
 POST /api/withdraw . POST /api/push (toast/progress) . POST /s/<id>/submit (aliases:
-selection, answers) . POST /api/shutdown.
+selection, answers) . POST /s/<id>/upload?name=<filename> (the human hands a file TO
+the session: raw body streamed to <state>/surfaces/<id>/in/, absolute path returned;
+the page rides that path in its blob and the session copies the file out promptly,
+because resolved surfaces are eventually pruned) . POST /api/shutdown.
 
 CLI (module form, from the repo root):
   serve [--port N] [--idle SECS]     run the hub in the foreground (ensure() spawns this)
@@ -378,9 +381,14 @@ class HubServer:
                 if not full.startswith(base + os.sep) or not os.path.isfile(full):
                     return self._text(404, "not found\n")
                 ctype = "application/octet-stream"
-                for ext, t in ((".wav", "audio/wav"), (".mp3", "audio/mpeg"), (".png", "image/png"),
-                               (".jpg", "image/jpeg"), (".jpeg", "image/jpeg"), (".svg", "image/svg+xml"),
-                               (".json", "application/json"), (".txt", "text/plain"), (".mp4", "video/mp4")):
+                for ext, t in ((".wav", "audio/wav"), (".mp3", "audio/mpeg"), (".m4a", "audio/mp4"),
+                               (".aac", "audio/aac"), (".ogg", "audio/ogg"), (".flac", "audio/flac"),
+                               (".png", "image/png"), (".jpg", "image/jpeg"), (".jpeg", "image/jpeg"),
+                               (".gif", "image/gif"), (".webp", "image/webp"), (".svg", "image/svg+xml"),
+                               (".mp4", "video/mp4"), (".m4v", "video/mp4"), (".webm", "video/webm"),
+                               (".mov", "video/quicktime"), (".pdf", "application/pdf"),
+                               (".zip", "application/zip"), (".json", "application/json"),
+                               (".txt", "text/plain"), (".md", "text/plain"), (".log", "text/plain")):
                     if full.lower().endswith(ext):
                         ctype = t
                         break
@@ -456,6 +464,9 @@ class HubServer:
                     return
                 hub.last_activity = _now()
                 path = self.path.split("?")[0]
+                m = re.match(r"^/s/([a-z0-9-]+)/upload$", path)
+                if m:
+                    return self._upload(m.group(1))   # binary lane: stream, never read as text
                 raw = self._body()
                 m = re.match(r"^/s/([a-z0-9-]+)/(submit|selection|answers)$", path)
                 if m:
@@ -525,6 +536,51 @@ class HubServer:
                 hub.surface_event(s, "answered")
                 print(f"ANSWERED {sid} -> {s.sink or '(no sink)'}", flush=True)
                 return self._json({"ok": True, "first": first})
+
+            def _upload(self, sid):
+                # the human->session file lane: the page POSTs raw file bytes here and rides the
+                # returned absolute path in its submit blob. Files land under the surface's own
+                # state dir (in/), so they live and die with the surface; the session copies them
+                # out promptly. Streamed in chunks: a dragged capture can be hundreds of MB.
+                s = hub.registry.by_id.get(sid)
+                if s is None:
+                    return self._json({"ok": False, "error": "no such surface"}, 404)
+                if s.status != "pending":
+                    return self._json({"ok": False, "error": f"surface is {s.status}"}, 409)
+                query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+                raw_name = os.path.basename((query.get("name") or ["upload.bin"])[0])
+                safe = re.sub(r"[^\w.\- ()]", "_", raw_name).strip() or "upload.bin"
+                length = int(self.headers.get("Content-Length", 0))
+                if length <= 0:
+                    return self._json({"ok": False, "error": "empty upload"}, 400)
+                if length > (1 << 30):
+                    return self._json({"ok": False, "error": "over the 1 GiB upload cap"}, 413)
+                in_dir = os.path.join(hub.registry._dir(sid), "in")
+                os.makedirs(in_dir, exist_ok=True)
+                stem, ext = os.path.splitext(safe)
+                full, n = os.path.join(in_dir, safe), 1
+                while os.path.exists(full):
+                    full = os.path.join(in_dir, f"{stem}-{n}{ext}")
+                    n += 1
+                remaining = length
+                try:
+                    with open(full, "wb") as fh:
+                        while remaining > 0:
+                            chunk = self.rfile.read(min(65536, remaining))
+                            if not chunk:
+                                break
+                            fh.write(chunk)
+                            remaining -= len(chunk)
+                except OSError as error:
+                    return self._json({"ok": False, "error": str(error)}, 500)
+                if remaining:
+                    try:
+                        os.remove(full)
+                    except OSError:
+                        pass
+                    return self._json({"ok": False, "error": "upload truncated"}, 400)
+                return self._json({"ok": True, "path": full, "name": os.path.basename(full),
+                                   "bytes": length})
 
             def _withdraw(self, p):
                 # two terminal moves share this door: withdrawn (cancelled, nothing owed the

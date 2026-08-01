@@ -206,6 +206,44 @@ def _hub():
             except urllib.error.HTTPError as error:
                 code = error.code
             _check("hub/withdrawn-410", code == 410, f"got {code}")
+
+            # the upload lane: raw bytes in -> absolute path back -> the file is on disk,
+            # byte-identical; a resolved surface refuses further uploads (409)
+            asset_dir = os.path.join(tmp, "assets")
+            os.makedirs(asset_dir, exist_ok=True)
+            with open(os.path.join(asset_dir, "tone.m4a"), "wb") as handle:
+                handle.write(b"m4a-bytes")
+            payload = json.dumps({"html": "<html><head><title>u</title></head><body>3</body></html>",
+                                  "title": "upload check", "kind": "ask", "session": "check",
+                                  "asset_dir": asset_dir, "open": False}).encode()
+            req = urllib.request.Request(f"{base}/api/post", data=payload,
+                                         headers={"Content-Type": "application/json"}, method="POST")
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                sid3 = json.loads(resp.read())["id"]
+            req = urllib.request.Request(f"{base}/s/{sid3}/upload?name=probe.txt",
+                                         data=b"upload-bytes", method="POST")
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                reply = json.loads(resp.read())
+            _check("hub/upload-ok", reply.get("ok") and reply.get("name") == "probe.txt", f"{reply}")
+            with open(reply["path"], "rb") as handle:
+                _check("hub/upload-on-disk", handle.read() == b"upload-bytes", reply["path"])
+            # the new media MIME coverage: an .m4a asset serves as audio/mp4
+            with urllib.request.urlopen(f"{base}/s/{sid3}/a/tone.m4a", timeout=5) as resp:
+                _check("hub/asset-m4a-mime", resp.headers.get("Content-Type") == "audio/mp4",
+                       f"got {resp.headers.get('Content-Type')}")
+            req = urllib.request.Request(f"{base}/api/withdraw",
+                                         data=json.dumps({"id": sid3, "reason": "check done"}).encode(),
+                                         headers={"Content-Type": "application/json"}, method="POST")
+            with urllib.request.urlopen(req, timeout=5):
+                pass
+            try:
+                req = urllib.request.Request(f"{base}/s/{sid3}/upload?name=late.txt",
+                                             data=b"too late", method="POST")
+                with urllib.request.urlopen(req, timeout=5) as resp:
+                    code = resp.status
+            except urllib.error.HTTPError as error:
+                code = error.code
+            _check("hub/upload-refused-after-resolve", code == 409, f"got {code}")
         finally:
             server.stop()
 

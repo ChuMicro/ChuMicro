@@ -14,6 +14,14 @@ into a line-oriented paste-back blob:
     2 = edit
       edit 2: <the edit box's exact text, newlines as literal \\n, backslashes doubled>
     3 = skip
+      other 3: <the write-in text when the pick is the allow_other seat>
+      field 3.key: <a text field's answer, escaped like edit>
+      multi 3.areas = alpha, beta            (checked values, comma-joined)
+      scale 3.confidence = 4/5               (always rides: a range always has a value)
+      menu 3.component = playback
+      upload 3.shot = /abs/path/under/hub/state/surfaces/<sid>/in/shot.png
+                                             (one line per file; copy it out promptly,
+                                              resolved surfaces are eventually pruned)
 
 A note on an applied item is the user's wording adjustment: on a default-strategy
 page there is no separate "edit" option, so the orchestrator honors apply-with-note as
@@ -121,6 +129,47 @@ Spec schema:
              "placeholder": "a paragraph or two",         // Each rides the blob as its own line:
              "seed": "", "rows": 4}                       //   prose <item>.<id>: <text, \\n-escaped>
           ],
+          "allow_other": true,                            // radio-row cards only: append an "other"
+                                                          // write-in seat (radio + text box; typing
+                                                          // selects it). Needs option_help["other"].
+          "media": [                                      // artifacts ON the card: shown inline AND
+            {"kind": "image", "src": "shot.png",          // downloadable. src paths resolve relative
+             "caption": "the failing screen",             // to the spec file and are COPIED into
+             "alt": "settings screen"},                   // <outdir>/assets/, so the page dir stays
+            {"kind": "compare",                           // self-contained (file:// and hub alike;
+             "before": {"src": "a.png", "label": "88.0"}, // the hub serves assets Range-capable, so
+             "after":  {"src": "b.png", "label": "fix"},  // audio/video scrub). Kinds:
+             "caption": "same screen, both builds"},      //   image  : gallery tile + lightbox
+            {"kind": "audio", "src": "mix.m4a",           //   compare: before/after opacity slider
+             "caption": "the rendered alert tone"},       //   audio  : player + download
+            {"kind": "video", "src": "run.webm",          //   video  : player + download
+             "caption": "capture of the flow"},           //   file   : a plain download card for
+            {"kind": "file", "src": "evidence.zip",       //             anything (zip, pdf, logs…)
+             "note": "full run bundle for the ticket"}    // consecutive images share one gallery row
+          ],
+          "fields": [                                     // structured short-form asks beyond radios
+            {"kind": "text", "id": "key",                 //   text : one line, seedable (pre-filled)
+             "label": "Jira issue key",
+             "help": "The issue this run's evidence should attach to when it posts.",
+             "seed": "PMA-", "placeholder": "PMA-…",
+             "required": true},                           // required fields gate Submit until answered
+            {"kind": "multi", "id": "areas",              //   multi: checkboxes, many picks;
+             "label": "Which rooms showed the symptom?",  //           `default` pre-checks values;
+             "options": ["bedroom pair", "office"],       //           blob line is comma-joined
+             "option_help": {"office": "the Five"},       //           (comma banned in values)
+             "default": ["office"]},
+            {"kind": "scale", "id": "confidence",         //   scale: a labeled range; BOTH end
+             "label": "How confident are you it fixed?",  //           labels are floor-required so
+             "min": 1, "max": 5, "default": 3,            //           the number carries meaning
+             "low": "not at all", "high": "fully"},
+            {"kind": "menu", "id": "component",           //   menu : one pick from a LONG list (a
+             "label": "Which component owns this?",       //           radio row past ~6 options);
+             "options": ["playback", "setup", "voice"],   //           option_help becomes hover text
+             "default": ""},
+            {"kind": "upload", "id": "shot",              //   upload: the human hands files TO the
+             "label": "Drop the screenshot you took",     //           session (drag or browse; needs
+             "accept": "image/*", "multiple": true}       //           the page served via the hub)
+          ],
           "collapsed": true,                              // optional: start the card folded to a strip (title
                                                           // row + radios + summary + diff if present). Every
                                                           // card folds/expands on a title-row click; this sets
@@ -195,8 +244,14 @@ is being decided and what happens with the answer), every decision card needs a 
 cold reader can decide from (60+ characters when the options are bare letters like A/B/tie,
 whose meaning the summary must define), every radio-row option needs a full-sentence
 option_help entry, prose prompts must be real questions, and fragment-joiners are banned
-outside quoted spans. A failing spec prints one FLOOR line per defect and exits 2; fix the
-spec and re-render. `"floor_waived": "<reason, 20+ chars>"` skips the floor, loudly.
+outside quoted spans. Fields hold the same line: every field carries a label, and a short
+label needs a help sentence (8+ words) saying what belongs in the answer; a scale names
+both of its ends; multi/menu need two or more options (multi values carry no commas); an
+allow_other card explains its "other" seat in option_help; an image without a caption or
+alt says nothing to a cold reader. Media src paths must exist on disk at render time
+(checked after the floor, as MEDIA lines). A failing spec prints one FLOOR line per defect
+and exits 2; fix the spec and re-render. `"floor_waived": "<reason, 20+ chars>"` skips the
+floor, loudly.
 
 Usage: render_picker.py <spec.json> [<output-dir>]    (default output dir: the spec's directory)
 Stdout: `RENDERED <path>/picker.html` on success. Floor defects go to stderr, exit 2.
@@ -211,6 +266,7 @@ import html
 import json
 import os
 import re
+import shutil
 import sys
 
 _REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
@@ -248,6 +304,78 @@ def _first_joiner(text):
         if token in scannable:
             return name
     return None
+
+
+_FIELD_KINDS = ("text", "multi", "scale", "menu", "upload")
+_MEDIA_KINDS = ("image", "compare", "audio", "video", "file")
+
+
+def _field_failures(item_id, fields):
+    """Floor defects in an item's `fields` list: unlabeled asks, meaningless scales,
+    option sets the blob format cannot carry."""
+    problems = []
+    for index, field in enumerate(fields, 1):
+        fid = field.get("id", index)
+        where = f"item {item_id}: field {fid!r}"
+        kind = field.get("kind", "text")
+        if kind not in _FIELD_KINDS:
+            problems.append(f"{where} has unknown kind {kind!r}; one of {list(_FIELD_KINDS)}")
+            continue
+        label = (field.get("label") or "").strip()
+        help_text = (field.get("help") or "").strip()
+        if not label:
+            problems.append(f"{where} has no label; every field names what it collects")
+        elif len(label.split()) < 8 and len(help_text.split()) < 8:
+            problems.append(
+                f"{where}: a short label needs a help sentence (8+ words) saying what "
+                "belongs in the answer and what the session does with it")
+        for text, name in ((label, "label"), (help_text, "help")):
+            joiner = _first_joiner(text)
+            if joiner:
+                problems.append(f"{where}: {name} glues fragments with {joiner}: "
+                                "write plain sentences (quoted spans are exempt)")
+        if kind in ("multi", "menu"):
+            options = [str(option) for option in field.get("options") or []]
+            if len(options) < 2:
+                problems.append(f"{where}: {kind} needs at least two options")
+            for option in options:
+                if kind == "multi" and "," in option:
+                    problems.append(f"{where}: option {option!r} contains a comma, which the "
+                                    "comma-joined multi blob line cannot carry")
+                if "\n" in option:
+                    problems.append(f"{where}: option {option!r} contains a newline, which a "
+                                    "line-oriented blob cannot carry")
+        if kind == "scale":
+            low, high = field.get("min", 1), field.get("max", 5)
+            if not (isinstance(low, int) and isinstance(high, int)
+                    and low < high and high - low <= 10):
+                problems.append(f"{where}: scale needs integer min < max spanning at most 10 steps")
+            if not str(field.get("low") or "").strip() or not str(field.get("high") or "").strip():
+                problems.append(f"{where}: a scale's numbers mean nothing alone; label both "
+                                "ends (low and high)")
+    return problems
+
+
+def _media_failures(item_id, media):
+    """Floor defects in an item's `media` list (existence on disk is checked at render
+    time, after the floor, because the floor is a pure function of the spec)."""
+    problems = []
+    for index, entry in enumerate(media, 1):
+        where = f"item {item_id}: media {index}"
+        kind = entry.get("kind")
+        if kind not in _MEDIA_KINDS:
+            problems.append(f"{where} has unknown kind {kind!r}; one of {list(_MEDIA_KINDS)}")
+            continue
+        if kind == "compare":
+            for side in ("before", "after"):
+                if not (entry.get(side) or {}).get("src"):
+                    problems.append(f"{where}: compare needs before.src and after.src")
+        elif not entry.get("src"):
+            problems.append(f"{where}: {kind} entry has no src")
+        if kind == "image" and not (entry.get("caption") or entry.get("alt")):
+            problems.append(f"{where}: an image with no caption and no alt says nothing to "
+                            "a cold reader; say what the image shows")
+    return problems
 
 
 def floor_failures(spec):
@@ -310,6 +438,13 @@ def floor_failures(spec):
             if joiner:
                 problems.append(f"item {item_id}: prose prompt {field.get('id', index)!r} "
                                 f"glues fragments with {joiner}: write plain sentences")
+        if item.get("allow_other") and (item.get("pick_ui") or {}).get("style") != "columns":
+            if len(option_help.get("other", "").split()) < 8:
+                problems.append(
+                    f"item {item_id}: allow_other adds an 'other' seat, so option_help "
+                    "needs an 'other' entry (8+ words) saying what a write-in should carry")
+        problems += _field_failures(item_id, item.get("fields") or [])
+        problems += _media_failures(item_id, item.get("media") or [])
     for option, help_text in option_help.items():
         joiner = _first_joiner(help_text)
         if joiner:
@@ -508,7 +643,32 @@ CSS = _KIT_PALETTE + kit.TOKENS_CSS + """
  .hint{font-size:12px;color:var(--faint);margin:6px 0 0}
  #blob{width:100%;box-sizing:border-box;margin-top:8px;font:12.5px/1.5 ui-monospace,Menlo,monospace;
   border:1px solid var(--border);border-radius:8px;padding:8px;min-height:46px;background:var(--blob-bg);color:var(--fg)}
-"""
+ .mediablock{margin:10px 0 0}
+ .ffield{margin-top:12px}
+ .card.collapsed>.ffield{display:none}
+ .flhead{display:flex;align-items:baseline;gap:6px}
+ .freq{color:var(--bad);font-weight:700;cursor:help}
+ .fhelp{font-size:12.5px;color:var(--faint);margin:2px 0 6px;max-width:80ch}
+ .fld-text{width:100%;box-sizing:border-box;font:inherit;font-size:14.5px;border:1px solid var(--border);
+  border-radius:8px;padding:7px 10px;background:var(--note-bg);color:var(--fg)}
+ .fchkrow{display:flex;gap:14px;flex-wrap:wrap}
+ .fchk{cursor:pointer;display:flex;align-items:center;gap:6px;font-size:14.5px}
+ .fchk input{accent-color:var(--accent)}
+ .fld-menu{font:inherit;font-size:14px;padding:6px 10px;border-radius:8px;border:1px solid var(--border);
+  background:var(--note-bg);color:var(--fg);max-width:100%}
+ .scalewrap{display:flex;align-items:center;gap:10px}
+ .scale-end{font-size:12px;color:var(--faint);flex:0 0 auto;max-width:14ch}
+ .scalewrap input{flex:1;accent-color:var(--accent)}
+ .scaleval{font:600 13px ui-monospace,Menlo,monospace;color:var(--accent);min-width:34px;text-align:center}
+ .otherwrap{display:flex;align-items:center;gap:6px}
+ .otherbox{font:inherit;font-size:14px;border:1px solid var(--border);border-radius:8px;padding:4px 8px;
+  background:var(--note-bg);color:var(--fg);min-width:180px}
+ .uplist{list-style:none;margin:8px 0 0;padding:0;font-size:13px;text-align:left}
+ .uplist li{display:flex;align-items:center;gap:8px;padding:3px 0;color:var(--fg)}
+ .uplist .rm{border:none;background:none;color:var(--bad);cursor:pointer;font-size:13px;padding:0 4px}
+ .upmsg{font-size:12px;margin-top:6px}
+ .upmsg.bad{color:var(--bad)}
+""" + kit.MEDIA_CSS
 
 SCRIPT = """
 <script>
@@ -560,6 +720,45 @@ SCRIPT = """
     if (state[key] !== undefined) t.value = state[key];
     t.addEventListener('input', function () { persist(); });
   });
+  // structured fields (text / multi / scale / menu) restore the same way; uploads restore their
+  // saved {name, path, bytes} lists (the files themselves live under the hub's surface state)
+  var uploads = {};
+  Object.keys(state).forEach(function (k) { if (k.slice(0, 2) === 'u:') uploads[k.slice(2)] = state[k]; });
+  document.querySelectorAll('.fld-text,.fld-scale,.fld-menu').forEach(function (el) {
+    var key = 'f:' + el.dataset.item + '.' + el.dataset.fid;
+    if (state[key] !== undefined) el.value = state[key];
+  });
+  document.querySelectorAll('.fchkrow').forEach(function (group) {
+    var key = 'm:' + group.dataset.item + '.' + group.dataset.fid;
+    if (state[key] !== undefined) {
+      group.querySelectorAll('.fld-multi').forEach(function (cb) {
+        cb.checked = state[key].indexOf(cb.value) !== -1;
+      });
+    }
+  });
+  function syncScales() {
+    document.querySelectorAll('.fld-scale').forEach(function (r) {
+      var out = r.closest('.scalewrap').querySelector('.scaleval');
+      if (out) out.textContent = r.value + '/' + r.max;
+    });
+  }
+  syncScales();
+  document.querySelectorAll('.fld-text').forEach(function (el) { el.addEventListener('input', persist); });
+  document.querySelectorAll('.fld-scale').forEach(function (el) {
+    el.addEventListener('input', function () { syncScales(); persist(); });
+  });
+  document.querySelectorAll('.fld-menu').forEach(function (el) { el.addEventListener('change', persist); });
+  document.querySelectorAll('.fld-multi').forEach(function (el) { el.addEventListener('change', persist); });
+  // the allow_other write-in: typing in the box is choosing it, same gesture as the edit box
+  document.querySelectorAll('.otherbox').forEach(function (box) {
+    var key = 'o:' + box.closest('.card').dataset.id;
+    if (state[key] !== undefined) box.value = state[key];
+    box.addEventListener('input', function () {
+      var r = box.closest('.card').querySelector('input[value="' + box.dataset.val + '"]');
+      if (r && !r.checked) { r.checked = true; r.dispatchEvent(new Event('change', { bubbles: true })); }
+      persist();
+    });
+  });
   // every card folds on a title-row click; spec sets the initial state (data-fold). A saved
   // 'e:' key (1 = opened, 0 = folded) is a deviation from that default restored on reload.
   document.querySelectorAll('.card.collapsible').forEach(function (c) {
@@ -587,11 +786,54 @@ SCRIPT = """
     proseBoxes.forEach(function (t) {
       if (t.value !== t.defaultValue) s['r:' + t.dataset.item + '.' + t.dataset.pid] = t.value;
     });
+    document.querySelectorAll('.fld-text,.fld-scale').forEach(function (el) {
+      if (el.value !== el.defaultValue) s['f:' + el.dataset.item + '.' + el.dataset.fid] = el.value;
+    });
+    document.querySelectorAll('.fld-menu').forEach(function (el) {
+      if (el.value !== (el.dataset.def || '')) s['f:' + el.dataset.item + '.' + el.dataset.fid] = el.value;
+    });
+    document.querySelectorAll('.fchkrow').forEach(function (group) {
+      var vals = [], defs = [];
+      group.querySelectorAll('.fld-multi').forEach(function (cb) {
+        if (cb.checked) vals.push(cb.value);
+        if (cb.defaultChecked) defs.push(cb.value);
+      });
+      if (vals.join('\\u0000') !== defs.join('\\u0000')) {
+        s['m:' + group.dataset.item + '.' + group.dataset.fid] = vals;
+      }
+    });
+    Object.keys(uploads).forEach(function (k) { if (uploads[k] && uploads[k].length) s['u:' + k] = uploads[k]; });
+    document.querySelectorAll('.otherbox').forEach(function (box) {
+      if (box.value.trim()) s['o:' + box.closest('.card').dataset.id] = box.value;
+    });
     document.querySelectorAll('.card.collapsible').forEach(function (c) {
       var folded = c.classList.contains('collapsed');
       if (folded !== (c.dataset.fold === '1')) s['e:' + c.dataset.id] = folded ? 0 : 1;
     });
     save(s); refresh();
+  }
+  function besc(text) { return text.replace(/\\\\/g, '\\\\\\\\').replace(/\\n/g, '\\\\n'); }
+  // every structured field rides the blob as its own kind-named line under its card
+  function fieldLines(c, lines) {
+    c.querySelectorAll('.fld-text').forEach(function (el) {
+      if (el.value.trim()) lines.push('  field ' + el.dataset.item + '.' + el.dataset.fid + ': ' + besc(el.value));
+    });
+    c.querySelectorAll('.fchkrow').forEach(function (group) {
+      var vals = [];
+      group.querySelectorAll('.fld-multi').forEach(function (cb) { if (cb.checked) vals.push(cb.value); });
+      if (vals.length) lines.push('  multi ' + group.dataset.item + '.' + group.dataset.fid + ' = ' + vals.join(', '));
+    });
+    c.querySelectorAll('.fld-scale').forEach(function (el) {
+      lines.push('  scale ' + el.dataset.item + '.' + el.dataset.fid + ' = ' + el.value + '/' + el.max);
+    });
+    c.querySelectorAll('.fld-menu').forEach(function (el) {
+      if (el.value) lines.push('  menu ' + el.dataset.item + '.' + el.dataset.fid + ' = ' + el.value);
+    });
+    c.querySelectorAll('.fld-drop').forEach(function (drop) {
+      (uploads[drop.dataset.item + '.' + drop.dataset.fid] || []).forEach(function (u) {
+        lines.push('  upload ' + drop.dataset.item + '.' + drop.dataset.fid + ' = ' + u.path);
+      });
+    });
   }
   function buildBlob() {
     var lines = [HEADER];
@@ -605,26 +847,47 @@ SCRIPT = """
       // line-oriented blob survives a multiline replacement (the consuming parser decodes)
       var e = c.querySelector('.editbox');
       if (e && r && r.value === e.dataset.val && e.value.trim()) {
-        lines.push('  edit ' + id + ': ' + e.value.replace(/\\\\/g, '\\\\\\\\').replace(/\\n/g, '\\\\n'));
+        lines.push('  edit ' + id + ': ' + besc(e.value));
+      }
+      // the allow_other write-in rides only when the "other" seat is the pick
+      var ob = c.querySelector('.otherbox');
+      if (ob && r && r.value === ob.dataset.val && ob.value.trim()) {
+        lines.push('  other ' + id + ': ' + besc(ob.value));
       }
       c.querySelectorAll('.prose').forEach(function (t) {
         if (t.value.trim()) {
-          lines.push('  prose ' + t.dataset.item + '.' + t.dataset.pid + ': '
-            + t.value.replace(/\\\\/g, '\\\\\\\\').replace(/\\n/g, '\\\\n'));
+          lines.push('  prose ' + t.dataset.item + '.' + t.dataset.pid + ': ' + besc(t.value));
         }
       });
+      fieldLines(c, lines);
     });
-    // an informational card carries no radios, so its prose rides after the decision lines
+    // an informational card carries no radios, so its prose and fields ride after the decision lines
     document.querySelectorAll('#cardlist .card').forEach(function (c) {
       if (c.querySelector('input[type=radio]')) return;
       c.querySelectorAll('.prose').forEach(function (t) {
         if (t.value.trim()) {
-          lines.push('  prose ' + t.dataset.item + '.' + t.dataset.pid + ': '
-            + t.value.replace(/\\\\/g, '\\\\\\\\').replace(/\\n/g, '\\\\n'));
+          lines.push('  prose ' + t.dataset.item + '.' + t.dataset.pid + ': ' + besc(t.value));
         }
       });
+      fieldLines(c, lines);
     });
     return lines.join('\\n');
+  }
+  // a required field (data-req) gates Submit until it holds an answer; the count line and the
+  // button's hover text name what is still missing, so the block explains itself
+  function missingRequired() {
+    var missing = [];
+    document.querySelectorAll('.fld-text[data-req],.fld-menu[data-req]').forEach(function (el) {
+      if (!el.value.trim()) missing.push(el.dataset.item + '.' + el.dataset.fid);
+    });
+    document.querySelectorAll('.fchkrow[data-req]').forEach(function (group) {
+      if (!group.querySelector('input:checked')) missing.push(group.dataset.item + '.' + group.dataset.fid);
+    });
+    document.querySelectorAll('.fld-drop[data-req]').forEach(function (drop) {
+      var key = drop.dataset.item + '.' + drop.dataset.fid;
+      if (!(uploads[key] && uploads[key].length)) missing.push(key);
+    });
+    return missing;
   }
   function refresh() {
     var unpicked = 0, changed = 0, byValue = {};
@@ -636,13 +899,18 @@ SCRIPT = """
         byValue[r.value] = (byValue[r.value] || 0) + 1;
       }
     });
+    var missing = missingRequired();
     var t = cards.length + ' item(s)';
     if (changed) t += ' \\u00b7 ' + changed + ' changed from default';
     if (unpicked) t += ' \\u00b7 ' + unpicked + ' unpicked';
+    if (missing.length) t += ' \\u00b7 ' + missing.length + ' required missing';
     document.getElementById('count').textContent = t;
     // the Submit label carries what would be sent, so the moment of commitment shows the commitment
     var summary = Object.keys(byValue).map(function (v) { return byValue[v] + ' ' + v; }).join(' \\u00b7 ');
-    document.getElementById('submitbtn').textContent = summary ? 'Submit \\u2014 ' + summary : 'Submit to session';
+    var sb = document.getElementById('submitbtn');
+    sb.textContent = summary ? 'Submit \\u2014 ' + summary : 'Submit to session';
+    sb.disabled = missing.length > 0;
+    sb.title = missing.length ? ('answer the required fields first: ' + missing.join(', ')) : '';
     var b = document.getElementById('blob'); if (b) b.value = buildBlob();
   }
   // one acknowledgment for every selbar button: swap the label, hold a green confirm tint,
@@ -674,6 +942,7 @@ SCRIPT = """
   }
   function submitSel() {
     var sb = document.getElementById('submitbtn');
+    if (sb.disabled) return;   // required fields still unanswered; the button's title names them
     var fail = function () { var o = sb.textContent; sb.textContent = 'failed: use Copy selection'; setTimeout(function () { sb.textContent = o; }, 2200); };
     fetch('selection', { method: 'POST', body: buildBlob() })
       .then(function (r) {
@@ -801,6 +1070,8 @@ SCRIPT = """
       if (!document.getElementById('submitbtn').hidden) { e.preventDefault(); submitSel(); }
       return;
     }
+    var lbOpen = document.getElementById('lightbox');
+    if (lbOpen && !lbOpen.hidden) return;   // the lightbox owns the keys while it is up
     var tag = e.target.tagName;
     if (tag === 'TEXTAREA' || tag === 'INPUT' || tag === 'SELECT') return;   // don't hijack typing
     if (e.key === 'j' || e.key === 'ArrowDown') { e.preventDefault(); kbFocus(kbi + 1); }
@@ -835,6 +1106,13 @@ SCRIPT = """
       c.classList.remove('done');
     });
     proseBoxes.forEach(function (t) { t.value = t.defaultValue; });
+    document.querySelectorAll('.fld-text,.fld-scale').forEach(function (el) { el.value = el.defaultValue; });
+    document.querySelectorAll('.fld-menu').forEach(function (el) { el.value = el.dataset.def || ''; });
+    document.querySelectorAll('.fld-multi').forEach(function (cb) { cb.checked = cb.defaultChecked; });
+    document.querySelectorAll('.otherbox').forEach(function (box) { box.value = ''; });
+    uploads = {};
+    document.querySelectorAll('.fld-drop').forEach(function (drop) { if (drop._render) drop._render(); });
+    syncScales();
     doneSet.clear();
     dirtyEdits.clear();
     // fold state returns to spec defaults too, cards and sections both: Reset means "as first rendered"
@@ -968,6 +1246,104 @@ SCRIPT = """
   }
   window.addEventListener('hashchange', revealHash);
   revealHash();
+  // media: the gallery lightbox (a click opens; arrows move between the page's images; Esc or
+  // a click anywhere closes). The overlay is rendered by the page, one per document.
+  var lb = document.getElementById('lightbox');
+  if (lb) {
+    var lbImg = lb.querySelector('img');
+    var lbCap = lb.querySelector('.cap');
+    var lbLinks = Array.prototype.slice.call(document.querySelectorAll('a.lbimg'));
+    var lbAt = -1;
+    var lbShow = function (i) {
+      lbAt = (i + lbLinks.length) % lbLinks.length;
+      lbImg.src = lbLinks[lbAt].getAttribute('href');
+      lbCap.textContent = lbLinks[lbAt].dataset.cap || '';
+      lb.hidden = false;
+    };
+    lbLinks.forEach(function (a, i) {
+      a.addEventListener('click', function (e) { e.preventDefault(); lbShow(i); });
+    });
+    lb.addEventListener('click', function () { lb.hidden = true; });
+    document.addEventListener('keydown', function (e) {
+      if (lb.hidden) return;
+      if (e.key === 'Escape') lb.hidden = true;
+      else if (e.key === 'ArrowRight') { e.preventDefault(); lbShow(lbAt + 1); }
+      else if (e.key === 'ArrowLeft') { e.preventDefault(); lbShow(lbAt - 1); }
+    });
+  }
+  // media: the before/after compare frame (the slider blends the top image over the bottom one)
+  document.querySelectorAll('.cmprange').forEach(function (range) {
+    var top = range.closest('.chu-compare').querySelector('img.top');
+    var applyBlend = function () { top.style.opacity = range.value / 100; };
+    range.addEventListener('input', applyBlend);
+    applyBlend();
+  });
+  // the upload lane: files the HUMAN hands the session. Served through the hub, the page POSTs
+  // raw bytes to its own scoped upload route and rides the returned absolute path in the blob;
+  // from file:// there is no hub behind the page, so the zone says so and stays inert.
+  function fmtSize(n) {
+    if (!(n > 0)) return '';
+    var units = ['B', 'KB', 'MB', 'GB'], i = 0;
+    while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
+    return (i ? n.toFixed(1) : n) + ' ' + units[i];
+  }
+  var SERVED = (location.protocol === 'http:' || location.protocol === 'https:');
+  document.querySelectorAll('.fld-drop').forEach(function (drop) {
+    var key = drop.dataset.item + '.' + drop.dataset.fid;
+    var list = drop.querySelector('.uplist');
+    var msg = drop.querySelector('.upmsg');
+    var input = drop.querySelector('input[type=file]');
+    function renderList() {
+      list.innerHTML = '';
+      (uploads[key] || []).forEach(function (u, i) {
+        var li = document.createElement('li');
+        var name = document.createElement('span');
+        name.textContent = u.name + (u.bytes ? ' (' + fmtSize(u.bytes) + ')' : '');
+        var rm = document.createElement('button');
+        rm.type = 'button';
+        rm.classList.add('rm');
+        rm.textContent = 'remove';
+        rm.addEventListener('click', function () { uploads[key].splice(i, 1); renderList(); persist(); });
+        li.appendChild(name); li.appendChild(rm); list.appendChild(li);
+      });
+    }
+    drop._render = renderList;
+    renderList();
+    if (!SERVED) {
+      drop.classList.add('off');
+      msg.hidden = false;
+      msg.textContent = 'attaching files needs this page served through the hub; hand the path over in chat instead.';
+      return;
+    }
+    function send(files) {
+      var chosen = Array.prototype.slice.call(files);
+      if (!drop.dataset.multiple) chosen = chosen.slice(0, 1);
+      chosen.forEach(function (f) {
+        msg.hidden = false; msg.classList.remove('bad'); msg.textContent = 'uploading ' + f.name + '\\u2026';
+        fetch('upload?name=' + encodeURIComponent(f.name), { method: 'POST', body: f })
+          .then(function (r) { return r.json(); })
+          .then(function (j) {
+            if (!j.ok) { msg.classList.add('bad'); msg.textContent = 'upload failed: ' + (j.error || 'refused'); return; }
+            if (!drop.dataset.multiple) uploads[key] = [];
+            (uploads[key] = uploads[key] || []).push({ name: j.name, path: j.path, bytes: j.bytes });
+            msg.hidden = true;
+            renderList(); persist();
+          })
+          .catch(function () { msg.classList.add('bad'); msg.textContent = 'upload failed: network error'; });
+      });
+    }
+    drop.querySelector('.browse').addEventListener('click', function () { input.click(); });
+    input.addEventListener('change', function () { if (input.files.length) send(input.files); input.value = ''; });
+    ['dragover', 'dragenter'].forEach(function (evt) {
+      drop.addEventListener(evt, function (e) { e.preventDefault(); drop.classList.add('armed'); });
+    });
+    ['dragleave', 'drop'].forEach(function (evt) {
+      drop.addEventListener(evt, function (e) { e.preventDefault(); drop.classList.remove('armed'); });
+    });
+    drop.addEventListener('drop', function (e) {
+      if (e.dataTransfer && e.dataTransfer.files.length) send(e.dataTransfer.files);
+    });
+  });
   refresh();
 })();
 </script>
@@ -1058,7 +1434,189 @@ def pick_area_html(item, options, default, option_help, suggested=None):
             f'<label{cls}{help_attr}><input type="radio" name="pick:{html.escape(item_id)}" '
             f'value="{html.escape(option)}"{checked}> {html.escape(option)}{mark}</label>'
         )
+    if item.get("allow_other"):
+        # the write-in seat: a radio plus a text box; typing in the box selects the radio and
+        # the text rides back as its own `other <id>:` blob line
+        help_attr = (f' title="{html.escape(option_help["other"])}"'
+                     if "other" in option_help else "")
+        checked = " checked" if default == "other" else ""
+        radio_labels.append(
+            f'<span class="otherwrap"><label{help_attr}>'
+            f'<input type="radio" name="pick:{html.escape(item_id)}" value="other"{checked}> '
+            f'other:</label><input type="text" class="otherbox" data-val="other"'
+            f' aria-label="the write-in answer" spellcheck="true"></span>'
+        )
     return f'<div class="opts">{"".join(radio_labels)}</div>'
+
+
+def _human_size(nbytes):
+    for unit in ("B", "KB", "MB", "GB"):
+        if nbytes < 1024 or unit == "GB":
+            return f"{nbytes:.0f} {unit}" if unit == "B" else f"{nbytes / 1.0:.1f} {unit}"
+        nbytes /= 1024.0
+    return f"{nbytes:.1f} GB"
+
+
+def _dl_link(src):
+    return f'<a href="{html.escape(src)}" download>download</a>'
+
+
+def _caption_line(entry, size):
+    parts = []
+    if entry.get("caption"):
+        parts.append(html.escape(entry["caption"]))
+    if size:
+        parts.append(html.escape(size))
+    parts.append(_dl_link(entry["src"]))
+    return '<div class="chu-figcap">' + " &middot; ".join(parts) + "</div>"
+
+
+def media_html(item):
+    """The card's artifact area: galleries (consecutive images share a row), a before/after
+    compare frame, audio/video players, and file download cards. Every entry's src has been
+    staged into <outdir>/assets/ (stage_assets) before this runs, so src is page-relative and
+    `_size` carries the staged byte count. Everything shown is also downloadable."""
+    entries = item.get("media") or []
+    if not entries:
+        return ""
+    blocks, gallery = [], []
+
+    def flush_gallery():
+        if gallery:
+            blocks.append('<div class="chu-gallery">' + "".join(gallery) + "</div>")
+            del gallery[:]
+
+    for entry in entries:
+        kind = entry["kind"]
+        size = entry.get("_size", "")
+        if kind == "image":
+            src = html.escape(entry["src"])
+            caption = entry.get("caption") or ""
+            alt = entry.get("alt") or caption or "image"
+            gallery.append(
+                f'<figure class="chu-fig"><a href="{src}" class="lbimg"'
+                f' data-cap="{html.escape(caption, quote=True)}">'
+                f'<img src="{src}" alt="{html.escape(alt)}" loading="lazy"></a>'
+                f'<figcaption class="chu-figcap">'
+                + (html.escape(caption) + " &middot; " if caption else "")
+                + (html.escape(size) + " &middot; " if size else "")
+                + _dl_link(entry["src"]) + "</figcaption></figure>")
+            continue
+        flush_gallery()
+        if kind == "compare":
+            before, after = entry["before"], entry["after"]
+            caption = (f'<div class="chu-figcap">{html.escape(entry["caption"])}</div>'
+                       if entry.get("caption") else "")
+            blocks.append(
+                f'<div class="chu-compare"><div class="frame">'
+                f'<img src="{html.escape(before["src"])}" alt="{html.escape(before.get("label", "before"))}">'
+                f'<img class="top" src="{html.escape(after["src"])}"'
+                f' alt="{html.escape(after.get("label", "after"))}" style="opacity:.5"></div>'
+                f'<div class="chu-comparebar"><span>{html.escape(before.get("label", "before"))}</span>'
+                f'<input type="range" class="cmprange" min="0" max="100" value="50"'
+                f' aria-label="blend between the two images">'
+                f'<span>{html.escape(after.get("label", "after"))}</span></div>{caption}</div>')
+        elif kind in ("audio", "video"):
+            tag = ("audio" if kind == "audio" else "video")
+            blocks.append(
+                f'<div class="chu-player"><{tag} controls preload="metadata"'
+                f' src="{html.escape(entry["src"])}"></{tag}>'
+                + _caption_line(entry, size) + "</div>")
+        elif kind == "file":
+            name = os.path.basename(entry["src"])
+            ext = (os.path.splitext(name)[1].lstrip(".") or "file").upper()
+            note = (f'<p class="chu-filenote">{html.escape(entry["note"])}</p>'
+                    if entry.get("note") else "")
+            blocks.append(
+                f'<div class="chu-filecard"><span class="chu-fileext">{html.escape(ext)}</span>'
+                f'<span class="chu-filename">{html.escape(name)}</span>'
+                f'<span class="chu-filesize">{html.escape(size)}</span>'
+                f'<a class="chu-dl" href="{html.escape(entry["src"])}" download>download</a>'
+                f"{note}</div>")
+    flush_gallery()
+    return '<div class="mediablock">' + "".join(blocks) + "</div>"
+
+
+def fields_html(item):
+    """The card's structured short-form asks: text (seedable), multi checkboxes, a labeled
+    scale, a menu for long option lists, and the upload drop zone (the human->session file
+    lane; needs the page served through the hub). Each field rides the blob as its own
+    kind-named line; `required: true` gates Submit until the field is answered."""
+    item_id = str(item["id"])
+    out = []
+    for index, field in enumerate(item.get("fields") or [], 1):
+        fid = str(field.get("id") or index)
+        kind = field.get("kind", "text")
+        box_id = f"{anchor_id(item_id)}-fld-{re.sub(r'[^A-Za-z0-9_-]', '-', fid)}"
+        required = (' <span class="freq" title="required before submit">*</span>'
+                    if field.get("required") else "")
+        data = (f' data-item="{html.escape(item_id)}" data-fid="{html.escape(fid)}"'
+                + (' data-req="1"' if field.get("required") else ""))
+        label_text = html.escape(field.get("label", ""))
+        # a <label for> must point at a labelable element; group controls get a span head
+        label_for = (f'<div class="flhead"><label class="proselabel" for="{box_id}">'
+                     f"{label_text}</label>{required}</div>")
+        label_span = (f'<div class="flhead"><span class="proselabel">{label_text}</span>'
+                      f"{required}</div>")
+        help_html = (f'<p class="fhelp">{html.escape(field["help"])}</p>'
+                     if field.get("help") else "")
+        if kind == "text":
+            placeholder = (f' placeholder="{html.escape(field["placeholder"], quote=True)}"'
+                           if field.get("placeholder") else "")
+            control = (f'<input type="text" class="fld-text" id="{box_id}"{data}'
+                       f' value="{html.escape(field.get("seed", ""), quote=True)}"{placeholder}'
+                       f' spellcheck="true">')
+            head = label_for
+        elif kind == "multi":
+            defaults = set(field.get("default") or [])
+            help_map = field.get("option_help", {})
+            boxes = []
+            for option in field.get("options") or []:
+                option = str(option)
+                title = (f' title="{html.escape(help_map[option], quote=True)}"'
+                         if option in help_map else "")
+                checked = " checked" if option in defaults else ""
+                boxes.append(f'<label class="fchk"{title}><input type="checkbox" class="fld-multi"'
+                             f' value="{html.escape(option)}"{checked}> {html.escape(option)}</label>')
+            control = f'<div class="fchkrow" id="{box_id}"{data}>{"".join(boxes)}</div>'
+            head = label_span
+        elif kind == "scale":
+            low, high = int(field.get("min", 1)), int(field.get("max", 5))
+            value = int(field.get("default", low))
+            control = (
+                f'<div class="scalewrap"><span class="scale-end">{html.escape(str(field.get("low", "")))}</span>'
+                f'<input type="range" class="fld-scale" id="{box_id}"{data} min="{low}" max="{high}"'
+                f' step="1" value="{value}">'
+                f'<span class="scaleval">{value}/{high}</span>'
+                f'<span class="scale-end">{html.escape(str(field.get("high", "")))}</span></div>')
+            head = label_for
+        elif kind == "menu":
+            default = str(field.get("default", ""))
+            help_map = field.get("option_help", {})
+            options = ['<option value="">(unanswered)</option>']
+            for option in field.get("options") or []:
+                option = str(option)
+                title = (f' title="{html.escape(help_map[option], quote=True)}"'
+                         if option in help_map else "")
+                selected = " selected" if option == default else ""
+                options.append(f'<option value="{html.escape(option)}"{title}{selected}>'
+                               f"{html.escape(option)}</option>")
+            control = (f'<select class="fld-menu" id="{box_id}"{data}'
+                       f' data-def="{html.escape(default, quote=True)}">{"".join(options)}</select>')
+            head = label_for
+        else:  # upload
+            accept = (f' accept="{html.escape(field["accept"], quote=True)}"'
+                      if field.get("accept") else "")
+            multiple_attr = " multiple" if field.get("multiple") else ""
+            multiple_data = ' data-multiple="1"' if field.get("multiple") else ""
+            control = (
+                f'<div class="chu-drop fld-drop" id="{box_id}"{data}{multiple_data}>'
+                f'<input type="file" hidden{accept}{multiple_attr}>'
+                f'<span>drop a file here, or <button type="button" class="browse">browse</button></span>'
+                f'<ul class="uplist"></ul><p class="upmsg" hidden></p></div>')
+            head = label_span
+        out.append(f'<div class="ffield">{head}{help_html}{control}</div>')
+    return "".join(out)
 
 
 def card_html(item, page_options, page_default, option_help):
@@ -1153,8 +1711,8 @@ def card_html(item, page_options, page_default, option_help):
         f'<div class="cardhead">{chevron}<span class="cardid">{html.escape(item_id)}</span>{badge}{warn_flag}{source}{status}'
         f'<span class="cardtitle">{html.escape(item.get("title", ""))}</span></div>'
         f"{summary}"
-        f'<div class="cardfold">{meta}{fields}{evidence}{detail}{warning}{body}</div>'
-        f"{diff_html}{opts}{prose_html}{notes}</div>"
+        f'<div class="cardfold">{meta}{fields}{evidence}{detail}{warning}{body}{media_html(item)}</div>'
+        f"{diff_html}{opts}{prose_html}{fields_html(item)}{notes}</div>"
     )
 
 
@@ -1165,6 +1723,57 @@ def legend_html(option_help):
         f"<b>{html.escape(option)}</b>: {html.escape(meaning)}" for option, meaning in option_help.items()
     )
     return f'<div class="legend">{parts}</div>'
+
+
+def stage_assets(spec, spec_dir, output_dir):
+    """Copy every media src into <output_dir>/assets/ and rewrite each entry's src to the
+    page-relative path (adding `_size`, the human-readable byte count the templates show), so
+    the rendered directory is self-contained: the page works from file:// and the hub serves
+    the same files Range-capably under the surface's a/ path. Idempotent across re-renders;
+    two different sources sharing a basename get numbered. Returns problem sentences (missing
+    files) rather than raising, so main prints MEDIA lines and exits 2 the way the floor does."""
+    problems, staged, used = [], {}, set()
+    assets_dir = os.path.join(output_dir, "assets")
+
+    def stage(src, where):
+        if not src:
+            return None
+        full = os.path.abspath(src if os.path.isabs(src) else os.path.join(spec_dir, src))
+        if not os.path.isfile(full):
+            problems.append(f"{where}: {src} does not exist (paths resolve against the "
+                            "spec's directory)")
+            return None
+        if full in staged:
+            return staged[full]
+        os.makedirs(assets_dir, exist_ok=True)
+        name = os.path.basename(full)
+        stem, ext = os.path.splitext(name)
+        n = 1
+        while name in used:
+            name = f"{stem}-{n}{ext}"
+            n += 1
+        used.add(name)
+        dest = os.path.join(assets_dir, name)
+        if not (os.path.exists(dest) and os.path.samefile(full, dest)):
+            shutil.copy2(full, dest)
+        staged[full] = ("assets/" + name, os.path.getsize(full))
+        return staged[full]
+
+    for item in spec.get("items", []):
+        for index, entry in enumerate(item.get("media") or [], 1):
+            where = f"item {item.get('id', '?')}: media {index}"
+            if entry.get("kind") == "compare":
+                for side in ("before", "after"):
+                    part = entry.get(side) or {}
+                    result = stage(part.get("src", ""), where)
+                    if result:
+                        part["src"] = result[0]
+            else:
+                result = stage(entry.get("src", ""), where)
+                if result:
+                    entry["src"] = result[0]
+                    entry["_size"] = _human_size(result[1])
+    return problems
 
 
 def main():
@@ -1186,6 +1795,14 @@ def main():
                   "skips this only when the floor genuinely cannot apply).",
                   file=sys.stderr, flush=True)
             sys.exit(2)
+
+    media_problems = stage_assets(spec, os.path.dirname(spec_path), output_dir)
+    if media_problems:
+        for problem in media_problems:
+            print(f"MEDIA {problem}", file=sys.stderr, flush=True)
+        print("MEDIA: page not rendered; every media src must exist on disk at render time.",
+              file=sys.stderr, flush=True)
+        sys.exit(2)
 
     page_options = spec.get("options", ["apply", "discuss", "skip"])
     page_default = spec.get("default")
@@ -1229,7 +1846,8 @@ def main():
     if decision_items and spec.get("picked_facet", len(decision_items) >= 5):
         picked_values = list(page_options)
         for item in decision_items:
-            for option in item_options(item, page_options):
+            extra = ["other"] if item.get("allow_other") else []
+            for option in list(item_options(item, page_options)) + extra:
                 if option not in picked_values:
                     picked_values.append(option)
         # server-side counts reflect the spec defaults; the page recomputes from the live
@@ -1295,11 +1913,17 @@ def main():
     has_suggestions = any(it.get("suggested") for it in spec.get("items", []))
     accept_btn = ('<button id="acceptall" title="select every suggested pick (respects the filter)">'
                   '★ accept suggested</button>') if has_suggestions else ""
-    # `live` (spec field or --live) lets this page be DRIVEN through the live canvas (surfaces.session):
+    # `live` (spec field or --live) lets this page be DRIVEN through the live canvas (webui.session):
     # inject the kit's re-serve channel (toast/progress CSS; the picker is --shadow-clash-free) + the
     # SSE client, so the agent can push reload/toast into the open picker tab. Default off = unchanged.
     live = bool(spec.get("live")) or ("--live" in sys.argv)
     live_block = (f"<style>{kit.live_css()}</style><script>{kit.sse_client_js()}</script>") if live else ""
+    # the gallery lightbox overlay: one per document, only when an image media entry exists
+    has_images = any(entry.get("kind") == "image"
+                     for item in spec.get("items", []) for entry in item.get("media") or [])
+    lightbox = ('<div class="chu-lightbox" id="lightbox" hidden>'
+                '<img src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="'
+                ' alt="expanded view"><div class="cap"></div></div>') if has_images else ""
     page_width = int(spec.get("page_width", 920))
     page = f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8">
@@ -1317,6 +1941,7 @@ def main():
 </div>
 {sections}
 {cards}
+{lightbox}
 <div class="selbar">
  <div class="row">
   <span id="count"></span>
