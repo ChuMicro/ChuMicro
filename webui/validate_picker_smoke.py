@@ -131,6 +131,64 @@ def main():
             if "2 = alt" not in blob_text:
                 problems.append(f'blob missing "2 = alt" after the candidate pick; blob was:\n{blob_text}')
 
+            # item 7 carries every structured field kind. The empty required text field must
+            # hold Submit disabled; answering it releases the gate.
+            if not page.evaluate("document.getElementById('submitbtn').disabled"):
+                problems.append("Submit is not disabled while the required text field is empty")
+            card7 = page.locator('.card[data-id="7"]')
+            card7.locator(".fld-text").fill("PMA-1234")
+            if page.evaluate("document.getElementById('submitbtn').disabled"):
+                problems.append("Submit stayed disabled after the required text field was filled")
+            blob_text = blob.input_value()
+            if "field 7.key: PMA-1234" not in blob_text:
+                problems.append(f'blob missing the text field line; blob was:\n{blob_text}')
+
+            # multi: checking a second box joins the default in one comma-joined line
+            card7.locator('.fld-multi[value="setup flow"]').check()
+            blob_text = blob.input_value()
+            if "multi 7.areas = playback, setup flow" not in blob_text:
+                problems.append(f'blob missing the multi line; blob was:\n{blob_text}')
+
+            # scale: moving the range updates the live value chip and the always-riding line
+            page.eval_on_selector(
+                ".fld-scale",
+                "el => { el.value = 4; el.dispatchEvent(new Event('input', {bubbles: true})); }")
+            blob_text = blob.input_value()
+            if "scale 7.confidence = 4/5" not in blob_text:
+                problems.append(f'blob missing the scale line; blob was:\n{blob_text}')
+            if page.locator(".scaleval").text_content() != "4/5":
+                problems.append("the scale's live value chip did not follow the slider")
+
+            # menu: a picked option rides; the empty (unanswered) default rides nothing
+            card7.locator(".fld-menu").select_option("ui shell")
+            blob_text = blob.input_value()
+            if "menu 7.component = ui shell" not in blob_text:
+                problems.append(f'blob missing the menu line; blob was:\n{blob_text}')
+
+            # the upload zone is inert from file:// and says so (the hub lane is check_kit's job)
+            drop_class = page.locator(".fld-drop").get_attribute("class") or ""
+            if "off" not in drop_class:
+                problems.append("the upload drop zone is not marked .off on a file:// page")
+            if "served through the hub" not in (page.locator(".upmsg").text_content() or ""):
+                problems.append("the upload zone does not explain why it is inert from file://")
+
+            # allow_other on item 4: typing in the write-in box selects its radio and the text
+            # rides as an `other 4:` line (this deliberately overrides the earlier apply pick)
+            card4.locator(".otherbox").fill("hold it for the next release train")
+            blob_text = blob.input_value()
+            if "4 = other" not in blob_text:
+                problems.append(f'typing in the write-in box did not select the other seat; blob was:\n{blob_text}')
+            if "other 4: hold it for the next release train" not in blob_text:
+                problems.append(f'blob missing the write-in line; blob was:\n{blob_text}')
+
+            # the gallery lightbox: a click opens the overlay, Escape closes it
+            page.locator("a.lbimg").first.click()
+            if page.evaluate("document.getElementById('lightbox').hidden"):
+                problems.append("clicking a gallery image did not open the lightbox")
+            page.keyboard.press("Escape")
+            if not page.evaluate("document.getElementById('lightbox').hidden"):
+                problems.append("Escape did not close the lightbox")
+
             browser.close()
     except SystemExit:
         raise
@@ -144,8 +202,9 @@ def main():
         print(f"fixture page: {page_path}", flush=True)
         sys.exit(FAIL_EXIT)
 
-    print("OK smoke (radio pick, notes, and candidate pick all reach the blob; "
-          ".done marks decided cards)", flush=True)
+    print("OK smoke (radio pick, notes, candidate pick, text/multi/scale/menu fields, the "
+          "write-in seat, required gating, the lightbox, and the inert file:// upload zone "
+          "all behave; .done marks decided cards)", flush=True)
     print(f"fixture page: {page_path}", flush=True)
     sys.exit(PASS_EXIT)
 

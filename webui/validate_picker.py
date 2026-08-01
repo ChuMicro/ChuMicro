@@ -53,6 +53,8 @@ takes an owned directory, never the caller's argument.
 Stdout: one `OK <gate>` / `SKIPPED <gate> (...)` / `FAIL <gate>: <finding>` line per result.
 Exit 0 when no gate failed (skips allowed); exit 1 otherwise.
 """
+import base64
+import io
 import json
 import os
 import re
@@ -60,6 +62,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import wave
+import zipfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -74,6 +78,43 @@ USAGE = """Usage: a validator never mutates its subject:
   validate_picker.py --fixture-out DIR   fixture lane into a DIR you name; refuses loud when DIR
                                          already holds files"""
 
+
+# ── tiny REAL asset files for the media pipeline: the fixture must exercise stage_assets
+#    (copy + rewrite + size), the players, the gallery, and the download cards with bytes
+#    that actually exist on disk ──
+_PNG = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==")
+
+
+def _wav_bytes():
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as handle:
+        handle.setnchannels(1)
+        handle.setsampwidth(2)
+        handle.setframerate(8000)
+        handle.writeframes(b"\x00\x00" * 400)
+    return buf.getvalue()
+
+
+def _zip_bytes():
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as handle:
+        handle.writestr("readme.txt", "fixture bundle")
+    return buf.getvalue()
+
+
+# a minimal mp4 header: enough for the structure gates (no gate asserts playback)
+_MP4 = b"\x00\x00\x00\x20ftypisom\x00\x00\x02\x00isomiso2avc1mp41" + b"\x00" * 64
+
+FIXTURE_ASSETS = {
+    "srcmedia/tiny1.png": _PNG,
+    "srcmedia/tiny2.png": _PNG,
+    "srcmedia/before.png": _PNG,
+    "srcmedia/after.png": _PNG,
+    "srcmedia/tone.wav": _wav_bytes(),
+    "srcmedia/clip.mp4": _MP4,
+    "srcmedia/bundle.zip": _zip_bytes(),
+}
 
 FIXTURE = {
     "title": "validator fixture: every renderer feature",
@@ -100,6 +141,7 @@ FIXTURE = {
         "apply": "make the proposed change exactly as the card presents it",
         "discuss": "hold the change and talk it through in the session first",
         "skip": "leave the finding exactly as it stands with no change",
+        "other": "write in a different disposition when none of the fixed options fits the finding",
     },
     "items": [
         {
@@ -167,6 +209,7 @@ FIXTURE = {
                        "prompt": "What context should the next reviewer have before re-running this?",
                        "rows": 3}],
             "suggested": "discuss",            # triage bulk layer: ★ marker + the accept-all button
+            "allow_other": True,               # the write-in seat (radio + text box)
             "facets": {"severity": "med", "angle": "trap", "file": "a.py"},
         },
         {
@@ -177,6 +220,55 @@ FIXTURE = {
             "status": "persisting",            # renders a .statuschip in the card head
             "muted": True,                     # greys the card (.card.muted)
             "facets": {"severity": "low", "angle": "trap", "file": "a.py", "status": "persisting"},
+        },
+        {
+            "id": "6",
+            "title": "media exhibit: everything the agent can hand over",
+            "options": [],
+            "summary": "gallery, before/after compare, audio, video, and a file download card",
+            "media": [
+                {"kind": "image", "src": "srcmedia/tiny1.png", "caption": "first fixture image"},
+                {"kind": "image", "src": "srcmedia/tiny2.png", "caption": "second fixture image",
+                 "alt": "a tiny screenshot"},
+                {"kind": "compare",
+                 "before": {"src": "srcmedia/before.png", "label": "before"},
+                 "after": {"src": "srcmedia/after.png", "label": "after"},
+                 "caption": "the same pixel, blended by the slider"},
+                {"kind": "audio", "src": "srcmedia/tone.wav", "caption": "a fixture tone"},
+                {"kind": "video", "src": "srcmedia/clip.mp4", "caption": "a fixture clip"},
+                {"kind": "file", "src": "srcmedia/bundle.zip",
+                 "note": "the run bundle a session would attach to the ticket"},
+            ],
+            "facets": {"severity": "low", "angle": "craft", "file": "b.py"},
+        },
+        {
+            "id": "7",
+            "title": "structured fields: text, multi, scale, menu, upload",
+            "badge": "MINOR",
+            "summary": ("every field kind once, so the validators can assert each one lands "
+                        "in the page and in the blob"),
+            "fields": [
+                {"kind": "text", "id": "key", "label": "Jira issue key",
+                 "help": "The issue this run's evidence should attach to when it posts.",
+                 "placeholder": "PMA-1234", "required": True},
+                {"kind": "multi", "id": "areas",
+                 "label": "Which of these areas did the failure touch when you saw it?",
+                 "options": ["playback", "setup flow", "voice control"],
+                 "option_help": {"playback": "anything audible"},
+                 "default": ["playback"]},
+                {"kind": "scale", "id": "confidence",
+                 "label": "How confident are you that the proposed fix is the right one?",
+                 "min": 1, "max": 5, "default": 3, "low": "not at all", "high": "fully"},
+                {"kind": "menu", "id": "component",
+                 "label": "Owning component",
+                 "help": "The component that should carry the follow-up story for this finding.",
+                 "options": ["playback", "system", "ui shell"]},
+                {"kind": "upload", "id": "shot",
+                 "label": "Screenshots you took while reproducing this",
+                 "help": "Dropped files ride back to the session as paths it can copy out.",
+                 "accept": "image/*", "multiple": True},
+            ],
+            "facets": {"severity": "med", "angle": "craft", "file": "a.py"},
         },
     ],
     "facets": [
@@ -213,7 +305,7 @@ def check_structure(page):
         ('class="cedit"', 1, "edit box (item 2)"),
         ('class="editbox"', 1, "edit textarea"),
         ('class="cnone"', 1, "empty-candidate placeholder"),
-        ('class="opts"', 3, "default radio rows (items 1 + 4 + 5)"),
+        ('class="opts"', 4, "default radio rows (items 1 + 4 + 5 + 7)"),
         ('class="dline dold"', 2, "diff old lines"),
         ('class="dline dnew"', 2, "diff new lines"),
         ("--pagew:1280px", 1, "page_width override"),
@@ -223,13 +315,36 @@ def check_structure(page):
         ('data-key="decided"', 2, "decided facet chips"),
         ('class="badge b-critical"', 1, "CRITICAL badge"),
         ('class="badge b-important"', 1, "IMPORTANT badge"),
-        ('class="badge b-minor"', 2, "MINOR badge (items 2 + 5)"),
+        ('class="badge b-minor"', 3, "MINOR badge (items 2 + 5 + 7)"),
         ('class="badge b-ambiguous"', 1, "AMBIGUOUS badge"),
         ('class="statuschip"', 1, "status chip (item 5)"),
         ("card collapsible muted", 1, "greyed carried card (item 5)"),
         ('class="prose"', 2, "prose textareas (items 3 + 4)"),
         ('class="prosefield"', 2, "prose field wrappers"),
         ('id="substate"', 1, "submitted-state line"),
+        ('class="otherwrap"', 1, "allow_other write-in seat (item 4)"),
+        ('class="otherbox"', 1, "allow_other text box"),
+        ('class="chu-gallery"', 1, "image gallery row (item 6)"),
+        ('class="lbimg"', 2, "lightbox-wired gallery images"),
+        ('class="chu-compare"', 1, "before/after compare frame"),
+        ('class="cmprange"', 1, "compare blend slider"),
+        ('class="chu-player"', 2, "audio + video players"),
+        ('class="chu-filecard"', 1, "file download card"),
+        ('class="chu-fileext"', 1, "file extension chip"),
+        ('class="chu-filenote"', 1, "file note line"),
+        ('id="lightbox"', 1, "the one lightbox overlay"),
+        ('class="mediablock"', 1, "media area on the exhibit card"),
+        ('class="fld-text"', 1, "text field (item 7)"),
+        ('class="fld-multi"', 3, "multi checkboxes (item 7)"),
+        ('class="fld-scale"', 1, "scale slider (item 7)"),
+        ('class="scaleval"', 1, "scale live value"),
+        ('class="fld-menu"', 1, "menu select (item 7)"),
+        ('class="chu-drop fld-drop"', 1, "upload drop zone (item 7)"),
+        ('class="freq"', 1, "required-field marker (item 7 text field)"),
+        ('data-multiple="1"', 1, "multi-file upload flag"),
+        ('src="assets/tone.wav"', 1, "staged audio src rewritten to assets/"),
+        ('src="assets/clip.mp4"', 1, "staged video src rewritten to assets/"),
+        ('href="assets/bundle.zip"', 1, "staged file download href"),
     ]
     problems = []
     for needle, count, label in expectations:
@@ -321,26 +436,78 @@ def _resolve_vnu():
     return None
 
 
+def _probe(outdir, name, spec):
+    """Render a planted-bad spec into its own subdir; return (returncode, stderr, wrote_page)."""
+    probe_dir = os.path.join(outdir, name)
+    os.makedirs(probe_dir, exist_ok=True)
+    spec_path = os.path.join(probe_dir, "spec.json")
+    with open(spec_path, "w") as handle:
+        json.dump(spec, handle)
+    result = subprocess.run([sys.executable, os.path.join(HERE, "render_picker.py"),
+                             spec_path, probe_dir], capture_output=True, text=True)
+    return result.returncode, result.stderr, os.path.exists(os.path.join(probe_dir, "picker.html"))
+
+
 def check_floor(outdir):
     """The content floor actually gates: a planted thin spec (bare A/B options, no summary,
-    no brief, no option_help) must refuse to render, with FLOOR defect lines on stderr."""
-    bad = {"title": "who wins", "blob_header": "floor probe", "options": ["A", "B"],
-           "items": [{"id": "1", "title": "who wins"}]}
-    bad_dir = os.path.join(outdir, "floor-probe")
-    os.makedirs(bad_dir, exist_ok=True)
-    bad_path = os.path.join(bad_dir, "spec.json")
-    with open(bad_path, "w") as handle:
-        json.dump(bad, handle)
-    result = subprocess.run([sys.executable, os.path.join(HERE, "render_picker.py"), bad_path, bad_dir],
-                            capture_output=True, text=True)
+    no brief, no option_help) must refuse to render, with FLOOR defect lines on stderr; so
+    must a spec whose fields break the field floor (no label, an unlabeled scale, a comma
+    in a multi value)."""
     problems = []
-    if result.returncode != 2:
-        problems.append(f"planted floor violation rendered anyway (exit {result.returncode})")
-    if "FLOOR" not in result.stderr:
+    code, stderr, wrote = _probe(outdir, "floor-probe", {
+        "title": "who wins", "blob_header": "floor probe", "options": ["A", "B"],
+        "items": [{"id": "1", "title": "who wins"}]})
+    if code != 2:
+        problems.append(f"planted floor violation rendered anyway (exit {code})")
+    if "FLOOR" not in stderr:
         problems.append("floor defects did not reach stderr")
-    if os.path.exists(os.path.join(bad_dir, "picker.html")):
+    if wrote:
         problems.append("a floor-failing spec still wrote picker.html")
+    code, stderr, wrote = _probe(outdir, "field-floor-probe", {
+        "title": "field floor probe", "blob_header": "field floor probe",
+        "items": [{"id": "1", "title": "bad fields", "options": [], "fields": [
+            {"kind": "text", "id": "t"},
+            {"kind": "scale", "id": "s", "label": "short", "min": 1, "max": 5},
+            {"kind": "multi", "id": "m", "label": "also short", "options": ["a,b", "c"]},
+        ]}]})
+    if code != 2:
+        problems.append(f"planted field-floor violation rendered anyway (exit {code})")
+    for needle in ("no label", "label both", "comma"):
+        if needle not in stderr:
+            problems.append(f"field floor missed the {needle!r} defect")
+    if wrote:
+        problems.append("a field-floor-failing spec still wrote picker.html")
     gate("floor", problems)
+
+
+def check_media_gate(outdir):
+    """A media src that does not exist on disk refuses to render, loudly (MEDIA lines)."""
+    code, stderr, wrote = _probe(outdir, "media-probe", {
+        "title": "media probe", "blob_header": "media probe",
+        "items": [{"id": "1", "title": "missing asset", "options": [], "media": [
+            {"kind": "image", "src": "missing-file.png",
+             "caption": "a screenshot that does not exist on disk"}]}]})
+    problems = []
+    if code != 2:
+        problems.append(f"a missing media src rendered anyway (exit {code})")
+    if "MEDIA" not in stderr:
+        problems.append("the missing-src defect did not reach stderr as a MEDIA line")
+    if wrote:
+        problems.append("a media-failing spec still wrote picker.html")
+    gate("media", problems)
+
+
+def check_assets(outdir, page):
+    """stage_assets actually staged: every fixture asset exists under assets/ and the page
+    references the rewritten path."""
+    problems = []
+    for rel in FIXTURE_ASSETS:
+        name = os.path.basename(rel)
+        if not os.path.isfile(os.path.join(outdir, "assets", name)):
+            problems.append(f"staged asset missing on disk: assets/{name}")
+        if f"assets/{name}" not in page:
+            problems.append(f"page never references assets/{name}")
+    gate("assets", problems)
 
 
 def check_vnu(page_path):
@@ -367,6 +534,11 @@ def render_fixture(outdir):
     Raises RuntimeError carrying the renderer's stderr when the render fails.
     """
     os.makedirs(outdir, exist_ok=True)
+    for rel, data in FIXTURE_ASSETS.items():
+        asset_path = os.path.join(outdir, rel)
+        os.makedirs(os.path.dirname(asset_path), exist_ok=True)
+        with open(asset_path, "wb") as handle:
+            handle.write(data)
     spec_path = os.path.join(outdir, "spec.json")
     with open(spec_path, "w") as handle:
         json.dump(FIXTURE, handle, indent=1, ensure_ascii=False)
@@ -442,9 +614,11 @@ def main():
         gate("render", [])
         page = open(page_path).read()
         gate("structure", check_structure(page))
+        check_assets(outdir, page)
         check_js(outdir, page)
         check_drift(page)
         check_floor(outdir)
+        check_media_gate(outdir)
         check_vnu(page_path)
         print(f"fixture page: {page_path}", flush=True)
         sys.exit(1 if findings else 0)
@@ -455,6 +629,7 @@ def main():
     fixture_only = "fixture-only gate: run with no argument to exercise it"
     skip("render", "read-only lane: validating the page exactly as it stands")
     skip("structure", fixture_only)
+    skip("assets", fixture_only)
     scratch = tempfile.mkdtemp(prefix="picker-validate-scratch-")
     try:
         check_js(scratch, page)

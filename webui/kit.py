@@ -90,6 +90,59 @@ COMPONENTS_CSS = """
  padding:var(--s2) var(--s4);margin-top:var(--s5);box-shadow:0 -6px 22px var(--shadow);}
 """
 
+# ── Media hand-off components: how an agent puts artifacts in front of the human and hands
+#    them over: image galleries (with a lightbox where the page wires one), a before/after
+#    compare frame, audio/video players, and file cards whose download link works both from
+#    file:// and through the hub's Range-capable asset route. One home; the picker and every
+#    hand-built kit page draw the SAME classes, so an artifact looks identical everywhere. ──
+MEDIA_CSS = """
+.chu-gallery{display:flex;flex-wrap:wrap;gap:var(--s3);margin:var(--s3) 0 0;}
+.chu-fig{margin:0;flex:0 1 260px;min-width:180px;}
+.chu-fig>a{display:block;border:1px solid var(--border);border-radius:var(--r2);overflow:hidden;
+ background:var(--bg);}
+.chu-fig img{display:block;width:100%;height:auto;cursor:zoom-in;}
+.chu-figcap{font-size:var(--t-micro);color:var(--faint);margin-top:var(--s1);line-height:1.6;}
+.chu-figcap a{color:var(--accent);text-decoration:none;}
+.chu-player{margin:var(--s3) 0 0;}
+.chu-player audio{display:block;width:100%;max-width:520px;}
+.chu-player video{display:block;width:100%;max-height:420px;border:1px solid var(--border);
+ border-radius:var(--r2);}
+.chu-filecard{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s2) var(--s3);
+ border:1px solid var(--border);border-radius:var(--r2);background:var(--bg);
+ padding:var(--s2) var(--s3);margin:var(--s3) 0 0;font-size:var(--t-small);}
+.chu-fileext{flex:none;font:700 var(--t-micro)/1 var(--mono);letter-spacing:.06em;color:var(--accent);
+ border:1px solid var(--border);border-radius:var(--r1);padding:5px 7px;background:var(--panel);
+ text-transform:uppercase;}
+.chu-filename{font-weight:620;overflow-wrap:anywhere;}
+.chu-filesize{color:var(--faint);flex:none;}
+.chu-filecard .chu-dl{margin-left:auto;}
+.chu-filenote{flex:1 1 100%;color:var(--faint);font-size:var(--t-micro);margin:0;}
+.chu-dl{display:inline-block;font:inherit;font-size:var(--t-micro);border:1px solid var(--border);
+ border-radius:999px;padding:3px 10px;background:var(--panel);color:var(--fg);text-decoration:none;
+ cursor:pointer;white-space:nowrap;}
+.chu-dl:hover{border-color:var(--accent);color:var(--accent);}
+.chu-compare{margin:var(--s3) 0 0;max-width:640px;}
+.chu-compare .frame{position:relative;border:1px solid var(--border);border-radius:var(--r2);
+ overflow:hidden;}
+.chu-compare img{display:block;width:100%;height:auto;}
+.chu-compare img.top{position:absolute;inset:0;}
+.chu-comparebar{display:flex;align-items:center;gap:var(--s2);font-size:var(--t-micro);
+ color:var(--faint);margin-top:var(--s1);}
+.chu-comparebar input{flex:1;accent-color:var(--accent);}
+.chu-lightbox{position:fixed;inset:0;background:rgba(8,10,16,.88);z-index:99;display:flex;
+ flex-direction:column;align-items:center;justify-content:center;gap:var(--s3);padding:var(--s5);
+ cursor:zoom-out;}
+.chu-lightbox[hidden]{display:none;}
+.chu-lightbox img{max-width:92vw;max-height:82vh;border-radius:var(--r2);
+ box-shadow:0 12px 48px rgba(0,0,0,.6);}
+.chu-lightbox .cap{color:#fff;font-size:var(--t-small);max-width:80ch;text-align:center;}
+.chu-drop{border:1.5px dashed var(--border);border-radius:var(--r2);background:var(--bg);
+ padding:var(--s4);text-align:center;color:var(--faint);font-size:var(--t-small);
+ transition:border-color .15s,background .15s;}
+.chu-drop.armed{border-color:var(--accent);background:var(--glow);color:var(--fg);}
+.chu-drop.off{opacity:.6;}
+"""
+
 # ── The affordance rules, extracted so any surface (even a JS-rendered one) gets the SAME
 #    press / confirm-flash / busy feedback ("a button press must show something"). ──
 AFFORD_CSS = """
@@ -110,7 +163,9 @@ CHANNEL_CSS = """
 .chu-prog span{position:absolute;right:8px;top:6px;font:11px system-ui;color:var(--faint);}
 """
 
-# ── Base CSS: tokens + layout + components + affordance + channel. Vars only, no raw hex. ──
+# ── Base CSS: tokens + layout + components + media + affordance + channel. Vars only for
+#    theme-sensitive color (the lightbox scrim and its caption are intentionally the same
+#    dark overlay in both themes). ──
 BASE_CSS = TOKENS_CSS + """
 *{box-sizing:border-box}
 body{margin:0;font:var(--t-body)/1.55 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);
@@ -133,7 +188,7 @@ button#themebtn{position:fixed;top:12px;right:12px;z-index:50;}
 textarea,input,select{font:inherit;color:var(--fg);}
 .chip{display:inline-block;background:var(--chip);color:var(--chip-fg);border-radius:999px;padding:2px 10px;font-size:12px;}
 @media (prefers-reduced-motion:reduce){*{transition-duration:.01ms!important;animation-duration:.01ms!important;}}
-""" + COMPONENTS_CSS + AFFORD_CSS + CHANNEL_CSS
+""" + COMPONENTS_CSS + MEDIA_CSS + AFFORD_CSS + CHANNEL_CSS
 
 # ── One theme model: THEME_KEY in localStorage is the single source of truth. A top-level
 #    page shows the toggle; an EMBEDDED page (an iframe under the hub shell) hides its own
