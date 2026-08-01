@@ -14,21 +14,24 @@ static gates cannot see:
 
 Playwright and the chromium browser binary are heavy host-only deps absent from a fresh
 checkout. When either is missing this exits SKIP_EXIT (3) with a one-line reason naming the
-install step, never a silent pass that would let a JS regression ship unobserved.
+install step: never a silent pass that would let a JS regression ship unobserved.
 
-Usage: validate_picker_smoke.py [<output-dir>]   (default: a fresh temp dir)
+This is a FIXTURE-ONLY lane: every assertion below names a card the fixture defines (ids 2 and
+4), so there is nothing to point at a real page. It therefore renders only into a directory it
+owns, exactly like validate_picker.py: no argument = a fresh temp dir, `--fixture-out DIR` names
+one and REFUSES loud when DIR already holds files. A validator never overwrites its subject.
+
+Usage: validate_picker_smoke.py [--fixture-out DIR]   (default: a fresh temp dir)
 Exit 0 all behavior assertions held; 2 a behavior assertion failed; 3 playwright or chromium
 is unavailable (loud skip).
 """
-import json
 import os
-import subprocess
 import sys
 import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-import validate_picker  # noqa: E402  reuse the same all-feature fixture
+import validate_picker  # noqa: E402  reuse the same all-feature fixture + its render/ownership rules
 
 PASS_EXIT = 0
 FAIL_EXIT = 2
@@ -36,32 +39,40 @@ SKIP_EXIT = 3
 
 
 def _render_page(outdir):
-    """Write the shared fixture spec and render it to picker.html; return the file path.
+    """Render the shared fixture into our own `outdir`; return the page path.
 
-    Reuses validate_picker.FIXTURE so the smoke and the static gates assert against one page,
-    never two that can drift apart.
+    Delegates to validate_picker.render_fixture so the smoke and the static gates assert against
+    ONE page built one way, never two that can drift apart (WS17 E1).
     """
-    os.makedirs(outdir, exist_ok=True)
-    spec_path = os.path.join(outdir, "spec.json")
-    with open(spec_path, "w") as handle:
-        json.dump(validate_picker.FIXTURE, handle, indent=1, ensure_ascii=False)
-    render = subprocess.run(
-        [sys.executable, os.path.join(HERE, "render_picker.py"), spec_path, outdir],
-        capture_output=True, text=True,
-    )
-    if render.returncode != 0:
-        print(f"FAIL smoke: renderer exited {render.returncode}: {render.stderr.strip()}", flush=True)
+    try:
+        return validate_picker.render_fixture(outdir)
+    except RuntimeError as error:
+        print(f"FAIL smoke: {error}", flush=True)
         sys.exit(FAIL_EXIT)
-    return os.path.join(outdir, "picker.html")
+
+
+def _parse_argv(argv):
+    """-> the fixture output dir. Only `--fixture-out DIR` is accepted; anything else exits loud."""
+    if argv and argv[0] in ("-h", "--help"):
+        print("Usage: validate_picker_smoke.py [--fixture-out DIR]", flush=True)
+        sys.exit(0)
+    if argv and argv[0] == "--fixture-out":
+        if len(argv) != 2:
+            sys.exit("--fixture-out takes exactly one directory")
+        return validate_picker.own_fixture_dir(argv[1])
+    if argv:
+        sys.exit(f"unexpected argument {argv[0]!r}: this lane only drives the built-in fixture.\n"
+                 f"Usage: validate_picker_smoke.py [--fixture-out DIR]")
+    return tempfile.mkdtemp(prefix="picker-smoke-")
 
 
 def main():
-    outdir = os.path.abspath(sys.argv[1]) if len(sys.argv) > 1 else tempfile.mkdtemp(prefix="picker-smoke-")
+    outdir = _parse_argv(sys.argv[1:])
 
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:
-        print("SKIPPED smoke (playwright not installed; `pip install playwright`)", flush=True)
+        print("SKIPPED smoke (playwright not installed: `pip install playwright`)", flush=True)
         sys.exit(SKIP_EXIT)
 
     page_path = _render_page(outdir)
@@ -73,9 +84,9 @@ def main():
             try:
                 browser = playwright.chromium.launch(headless=True)
             except Exception as error:
-                # A missing browser binary surfaces here, not at import, meaning `playwright install
+                # A missing browser binary surfaces here, not at import: `playwright install
                 # chromium` has not been run. Skip loudly rather than fail the gate.
-                print(f"SKIPPED smoke (chromium unavailable; `playwright install chromium`): "
+                print(f"SKIPPED smoke (chromium unavailable: `playwright install chromium`): "
                       f"{type(error).__name__}: {error}", flush=True)
                 sys.exit(SKIP_EXIT)
             page = browser.new_page()
@@ -107,6 +118,7 @@ def main():
             blob_text = blob.input_value()
             if "prose 4.context: first paragraph.\\nsecond paragraph." not in blob_text:
                 problems.append(f'blob missing the prose line; blob was:\n{blob_text}')
+
 
             # item 2 is the columns pick_ui card; its default is "suggested". Pick a different
             # candidate ("alt") so the change actually fires: a non-default, non-edit pick that

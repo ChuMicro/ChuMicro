@@ -27,9 +27,29 @@ preflight wiring is assumed.  Gates, in order:
                  `font:14.5px/1.5 inherit`, which drops the whole declaration).
 
 Gates 3 and 5 need an external binary (node / java+jar) and SKIP loudly when it is missing;
-gates 1, 2, and 4 are pure Python and always run.
+gates 1, 2, and 4 are pure Python and always run. A sixth gate, floor, proves the content
+floor gates: a planted thin spec (bare A/B, no summary, no brief) must refuse to render.
 
-Usage: validate_picker.py [<output-dir>]   (default: a fresh temp dir, kept for inspection)
+THE CLI CONTRACT: a validator never mutates its subject. The fixture lane renders only into
+a directory this file OWNS; the subject lane only ever READS the page it was handed:
+
+  validate_picker.py                     fixture lane: render the all-feature fixture into a
+                                         fresh temp dir and run every gate (what the edit hook
+                                         and a hand-run after a renderer change want);
+  validate_picker.py <page.html|dir>     subject lane: READ-ONLY checks against an already
+                                         rendered page (a directory resolves <dir>/picker.html).
+                                         Nothing under the argument is written or re-rendered;
+                                         the fixture-shaped gates (render/structure/drift) SKIP
+                                         loudly because they can only assert about the fixture;
+  validate_picker.py --fixture-out DIR   fixture lane into a DIR you name; REFUSES loud when DIR
+                                         already holds files rather than overwriting them.
+
+Until 2026-07-27 the positional argument WAS the fixture's output dir: pointing it at a real
+rendered decision page silently replaced that page's spec.json and picker.html with the fixture
+(the human then opened the served page and saw "some generic template"), and pointing it at a
+.html file crashed in os.makedirs. Both are structurally impossible now: the fixture render
+takes an owned directory, never the caller's argument.
+
 Stdout: one `OK <gate>` / `SKIPPED <gate> (...)` / `FAIL <gate>: <finding>` line per result.
 Exit 0 when no gate failed (skips allowed); exit 1 otherwise.
 """
@@ -44,6 +64,16 @@ import tempfile
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import render_picker  # noqa: E402
+
+USAGE = """Usage: a validator never mutates its subject:
+  validate_picker.py                     fixture lane: render the all-feature fixture into a temp
+                                         dir this file owns and run every gate
+  validate_picker.py <page.html|dir>     subject lane: READ-ONLY checks against an already
+                                         rendered page (a dir resolves <dir>/picker.html);
+                                         nothing under the argument is written or re-rendered
+  validate_picker.py --fixture-out DIR   fixture lane into a DIR you name; refuses loud when DIR
+                                         already holds files"""
+
 
 FIXTURE = {
     "title": "validator fixture: every renderer feature",
@@ -326,29 +356,113 @@ def check_vnu(page_path):
     gate("vnu", errors)
 
 
-def main():
-    outdir = os.path.abspath(sys.argv[1]) if len(sys.argv) > 1 else tempfile.mkdtemp(prefix="picker-validate-")
+def render_fixture(outdir):
+    """Write FIXTURE into `outdir` and render it; return the page path (WS17 E1).
+
+    The ONE place either validator turns the shared fixture into a page: validate_picker_smoke
+    calls this too, so the smoke and the static gates cannot drift onto two different pages.
+
+    `outdir` MUST be a directory the validator owns (a temp dir, or an empty --fixture-out): this
+    writes spec.json and picker.html into it. Never pass a caller-supplied path here.
+    Raises RuntimeError carrying the renderer's stderr when the render fails.
+    """
     os.makedirs(outdir, exist_ok=True)
     spec_path = os.path.join(outdir, "spec.json")
     with open(spec_path, "w") as handle:
         json.dump(FIXTURE, handle, indent=1, ensure_ascii=False)
-
     render = subprocess.run([sys.executable, os.path.join(HERE, "render_picker.py"), spec_path, outdir],
                             capture_output=True, text=True)
     if render.returncode != 0:
-        gate("render", [render.stderr.strip() or "renderer exited non-zero"])
-        sys.exit(1)
-    gate("render", [])
-    page_path = os.path.join(outdir, "picker.html")
+        raise RuntimeError(render.stderr.strip() or f"renderer exited {render.returncode}")
+    return os.path.join(outdir, "picker.html")
+
+
+def own_fixture_dir(requested):
+    """A directory the validator OWNS to render the fixture into: a fresh temp dir by default.
+
+    An explicitly requested one must be absent or empty. The fixture render overwrites spec.json
+    and picker.html; doing that to a directory that already holds someone's real decision page is
+    the exact data loss this contract exists to prevent, so a non-empty target EXITS LOUD instead
+    of being cleaned, merged into, or silently used.
+    """
+    if requested is None:
+        return tempfile.mkdtemp(prefix="picker-validate-")
+    outdir = os.path.abspath(requested)
+    if os.path.exists(outdir) and not os.path.isdir(outdir):
+        sys.exit(f"--fixture-out {outdir} is a file, not a directory")
+    existing = sorted(os.listdir(outdir)) if os.path.isdir(outdir) else []
+    if existing:
+        sys.exit(f"--fixture-out {outdir} already holds {', '.join(existing[:5])}: rendering the "
+                 f"fixture there would overwrite spec.json and picker.html. Name an empty/new "
+                 f"directory, or drop the flag to render into a temp dir.")
+    os.makedirs(outdir, exist_ok=True)
+    return outdir
+
+
+def subject_page(argument):
+    """Resolve the read-only subject: a rendered picker.html, or the directory holding one."""
+    path = os.path.abspath(argument)
+    if os.path.isdir(path):
+        page_path = os.path.join(path, "picker.html")
+        if not os.path.isfile(page_path):
+            sys.exit(f"no rendered page at {page_path}: render one first:\n"
+                     f"  render_picker.py <spec.json> {path}\n"
+                     f"(this lane never renders for you: it validates a page as it stands)")
+        return page_path
+    if os.path.isfile(path):
+        return path
+    sys.exit(f"{path} does not exist: pass a rendered picker.html, the directory holding one, "
+             f"or no argument at all to run the fixture lane.")
+
+
+def _parse_argv(argv):
+    """-> (subject_argument | None, fixture_out | None). Anything else exits loud with the usage."""
+    if argv and argv[0] in ("-h", "--help"):
+        print(USAGE, flush=True)
+        sys.exit(0)
+    if argv and argv[0] == "--fixture-out":
+        if len(argv) != 2:
+            sys.exit(f"--fixture-out takes exactly one directory\n{USAGE}")
+        return None, argv[1]
+    if len(argv) > 1:
+        sys.exit(f"expected at most one argument, got {len(argv)}: {argv}\n{USAGE}")
+    return (argv[0] if argv else None), None
+
+
+def main():
+    subject, fixture_out = _parse_argv(sys.argv[1:])
+
+    if subject is None:                                   # fixture lane: our directory, our files
+        outdir = own_fixture_dir(fixture_out)
+        try:
+            page_path = render_fixture(outdir)
+        except RuntimeError as error:
+            gate("render", [str(error)])
+            sys.exit(1)
+        gate("render", [])
+        page = open(page_path).read()
+        gate("structure", check_structure(page))
+        check_js(outdir, page)
+        check_drift(page)
+        check_floor(outdir)
+        check_vnu(page_path)
+        print(f"fixture page: {page_path}", flush=True)
+        sys.exit(1 if findings else 0)
+
+    # subject lane: the page is read, never written; even node's scratch copies go to our temp dir
+    page_path = subject_page(subject)
     page = open(page_path).read()
-
-    gate("structure", check_structure(page))
-    check_js(outdir, page)
-    check_drift(page)
-    check_floor(outdir)
+    fixture_only = "fixture-only gate: run with no argument to exercise it"
+    skip("render", "read-only lane: validating the page exactly as it stands")
+    skip("structure", fixture_only)
+    scratch = tempfile.mkdtemp(prefix="picker-validate-scratch-")
+    try:
+        check_js(scratch, page)
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
+    skip("drift", fixture_only)
     check_vnu(page_path)
-
-    print(f"fixture page: {page_path}", flush=True)
+    print(f"validated read-only (unchanged): {page_path}", flush=True)
     sys.exit(1 if findings else 0)
 
 
