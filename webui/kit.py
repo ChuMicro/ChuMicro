@@ -19,16 +19,16 @@ from .theme import THEME_KEY, assert_full_dark_override
 # Light on :root, FULLY overridden under :root[data-theme=dark] (the one hard theming rule).
 # Same KEYS in both dicts is the invariant the dark-lint enforces; check_kit asserts it too.
 PALETTE_LIGHT = {
-    "--bg": "#f3f5f9", "--panel": "#ffffff", "--fg": "#1b2130", "--faint": "#69707e",
+    "--bg": "#f4f6fa", "--panel": "#ffffff", "--fg": "#171d2b", "--faint": "#5f6878",
     "--border": "#e1e6ef", "--accent": "#6d5cf0", "--accent-fg": "#ffffff",
     "--accent2": "#8b5cf6", "--glow": "rgba(109,92,240,.18)",
     "--good": "#15803d", "--warn": "#b45309", "--bad": "#dc2626",
     "--chip": "#eef0f7", "--chip-fg": "#3a4252", "--shadow": "rgba(20,24,40,.10)",
 }
 PALETTE_DARK = {
-    "--bg": "#12151c", "--panel": "#1b2030", "--fg": "#e7ebf3", "--faint": "#9aa3b4",
-    "--border": "#2a3142", "--accent": "#8b7cf6", "--accent-fg": "#0c0e14",
-    "--accent2": "#a78bfa", "--glow": "rgba(139,124,246,.20)",
+    "--bg": "#0f1219", "--panel": "#181d2a", "--fg": "#e9edf5", "--faint": "#9aa4b6",
+    "--border": "#293144", "--accent": "#8b7cf6", "--accent-fg": "#0c0e14",
+    "--accent2": "#a78bfa", "--glow": "rgba(139,124,246,.22)",
     "--good": "#54d98a", "--warn": "#f0b357", "--bad": "#f3756b",
     "--chip": "#232a3a", "--chip-fg": "#c2cad9", "--shadow": "rgba(0,0,0,.45)",
 }
@@ -73,15 +73,24 @@ CHANNEL_CSS = """
 # ── Base CSS: layout + the affordance + the re-serve toast/progress. Vars only, no raw hex. ──
 BASE_CSS = """
 *{box-sizing:border-box}
-body{margin:0;font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--fg);}
+body{margin:0;font:15px/1.55 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);
+ color:var(--fg);-webkit-font-smoothing:antialiased;}
 .wrap{max-width:860px;margin:0 auto;padding:32px 20px 80px;}
-h1,h2,h3{color:var(--fg);line-height:1.2;} a{color:var(--accent);}
+h1,h2,h3{color:var(--fg);line-height:1.2;letter-spacing:-.01em;} a{color:var(--accent);}
+h1{font-size:24px;font-weight:650;}
+code,pre{font:.92em ui-monospace,Menlo,monospace;}
+::selection{background:var(--accent);color:var(--accent-fg);}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
 .card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:18px 20px;margin:14px 0;box-shadow:0 2px 10px var(--shadow);}
 .faint{color:var(--faint);}
-button,.chu-act{font:inherit;border:1px solid var(--border);background:var(--panel);color:var(--fg);padding:8px 14px;border-radius:10px;cursor:pointer;transition:transform .1s,filter .1s,background .12s;}
-button.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent);}
+button,.chu-act{font:inherit;border:1px solid var(--border);background:var(--panel);color:var(--fg);padding:8px 15px;border-radius:10px;cursor:pointer;transition:transform .1s,filter .1s,background .12s,border-color .12s;}
+button:hover{border-color:var(--accent);}
+button.primary{background:linear-gradient(135deg,var(--accent),var(--accent2));color:var(--accent-fg);border-color:var(--accent);box-shadow:0 2px 12px var(--glow);}
+button.primary:hover{filter:brightness(1.07);}
 button#themebtn{position:fixed;top:12px;right:12px;z-index:50;}
+textarea,input,select{font:inherit;color:var(--fg);}
 .chip{display:inline-block;background:var(--chip);color:var(--chip-fg);border-radius:999px;padding:2px 10px;font-size:12px;}
+@media (prefers-reduced-motion:reduce){*{transition-duration:.01ms!important;animation-duration:.01ms!important;}}
 """ + AFFORD_CSS + CHANNEL_CSS
 
 # ── One theme toggle (single THEME_KEY → the choice follows the human across every surface) ─────

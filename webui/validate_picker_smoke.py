@@ -102,6 +102,12 @@ def main():
             if "note 4: smoke note text" not in blob_text:
                 problems.append(f'blob missing the typed note line; blob was:\n{blob_text}')
 
+            # a prose answer rides as its own "prose <item>.<id>: <text>" line, newline-escaped
+            card4.locator(".prose").fill("first paragraph.\nsecond paragraph.")
+            blob_text = blob.input_value()
+            if "prose 4.context: first paragraph.\\nsecond paragraph." not in blob_text:
+                problems.append(f'blob missing the prose line; blob was:\n{blob_text}')
+
             # item 2 is the columns pick_ui card; its default is "suggested". Pick a different
             # candidate ("alt") so the change actually fires: a non-default, non-edit pick that
             # also marks the card decided.

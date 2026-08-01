@@ -16,6 +16,7 @@ import sys
 import tempfile
 import threading
 import time
+import urllib.error
 import urllib.request
 
 # Run-anywhere: importable both as `python3 -m webui.check_kit` and as a bare gate script
@@ -148,6 +149,67 @@ def _canvas_cli():
             server.stop()
 
 
+def _hub():
+    """The surface hub: post a surface, read it back, submit to its sink, watch the wait
+    release, withdraw a second surface and see its page answer 410."""
+    import json
+
+    from webui.hub import HubServer
+
+    with tempfile.TemporaryDirectory() as tmp:
+        state = os.path.join(tmp, "state")
+        os.makedirs(os.path.join(state, "surfaces"), exist_ok=True)
+        server = HubServer(state, port=0, idle=0)
+        thread = threading.Thread(target=server.serve, daemon=True)
+        thread.start()
+        for _ in range(50):
+            if server.httpd is not None and server.port:
+                break
+            time.sleep(0.05)
+        time.sleep(0.2)
+        base = f"http://127.0.0.1:{server.port}"
+        try:
+            sink = os.path.join(tmp, "answer.txt")
+            payload = json.dumps({"html": "<html><head><title>q</title></head><body>hub-q</body></html>",
+                                  "title": "hub check", "kind": "ask", "session": "check",
+                                  "sink": sink, "open": False}).encode()
+            req = urllib.request.Request(f"{base}/api/post", data=payload,
+                                         headers={"Content-Type": "application/json"}, method="POST")
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                reply = json.loads(resp.read())
+            _check("hub/post", reply.get("ok") and reply.get("id"), f"{reply}")
+            sid = reply["id"]
+            with urllib.request.urlopen(f"{base}/s/{sid}/", timeout=5) as resp:
+                _check("hub/page-served", b"hub-q" in resp.read())
+            req = urllib.request.Request(f"{base}/s/{sid}/selection", data=b"picked", method="POST")
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                _check("hub/submit-ok", json.loads(resp.read()).get("ok") is True)
+            with open(sink) as handle:
+                _check("hub/sink-written", handle.read() == "picked")
+            with urllib.request.urlopen(f"{base}/s/{sid}/wait", timeout=5) as resp:
+                _check("hub/wait-released", json.loads(resp.read()).get("status") == "answered")
+            payload = json.dumps({"html": "<html><head><title>x</title></head><body>2</body></html>",
+                                  "title": "stale", "kind": "ask", "session": "check",
+                                  "open": False}).encode()
+            req = urllib.request.Request(f"{base}/api/post", data=payload,
+                                         headers={"Content-Type": "application/json"}, method="POST")
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                sid2 = json.loads(resp.read())["id"]
+            req = urllib.request.Request(f"{base}/api/withdraw",
+                                         data=json.dumps({"id": sid2, "reason": "negated in chat"}).encode(),
+                                         headers={"Content-Type": "application/json"}, method="POST")
+            with urllib.request.urlopen(req, timeout=5):
+                pass
+            try:
+                with urllib.request.urlopen(f"{base}/s/{sid2}/", timeout=5) as resp:
+                    code = resp.status
+            except urllib.error.HTTPError as error:
+                code = error.code
+            _check("hub/withdrawn-410", code == 410, f"got {code}")
+        finally:
+            server.stop()
+
+
 def main():
     print("webui kit + session smoke:")
     _palette()
@@ -155,7 +217,8 @@ def main():
     _content_key()
     _session()
     _canvas_cli()
-    print("GREEN: webui kit + re-serve session server + live-canvas CLI")
+    _hub()
+    print("GREEN: webui kit + re-serve session server + live-canvas CLI + surface hub")
 
 
 if __name__ == "__main__":

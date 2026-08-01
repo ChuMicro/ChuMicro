@@ -115,6 +115,12 @@ Spec schema:
                                                           // + edit.value and the options field is ignored
           "notes": true,                                  // notes box (default: true on decision cards,
                                                           // false on informational ones)
+          "prose": [                                      // prompted paragraph answers, when the real
+            {"id": "impact",                              // answer is sentences rather than a pick; an
+             "prompt": "What did you observe when …?",    // informational card may carry only these.
+             "placeholder": "a paragraph or two",         // Each rides the blob as its own line:
+             "seed": "", "rows": 4}                       //   prose <item>.<id>: <text, \\n-escaped>
+          ],
           "collapsed": true,                              // optional: start the card folded to a strip (title
                                                           // row + radios + summary + diff if present). Every
                                                           // card folds/expands on a title-row click; this sets
@@ -183,8 +189,17 @@ decision state) survive it.
 body_html and intro_html are written into the page unescaped, because the spec author
 is the orchestrating session, not an untrusted source.
 
+A CONTENT FLOOR runs before rendering (floor_failures below): a page with decision items
+must carry a brief (intro_html or a plain-text `brief` field, 120+ characters, naming what
+is being decided and what happens with the answer), every decision card needs a summary a
+cold reader can decide from (60+ characters when the options are bare letters like A/B/tie,
+whose meaning the summary must define), every radio-row option needs a full-sentence
+option_help entry, prose prompts must be real questions, and fragment-joiners are banned
+outside quoted spans. A failing spec prints one FLOOR line per defect and exits 2; fix the
+spec and re-render. `"floor_waived": "<reason, 20+ chars>"` skips the floor, loudly.
+
 Usage: render_picker.py <spec.json> [<output-dir>]    (default output dir: the spec's directory)
-Stdout: `RENDERED <path>/picker.html` on success.
+Stdout: `RENDERED <path>/picker.html` on success. Floor defects go to stderr, exit 2.
 
 validate_picker.py (same directory) is this renderer's gate: it renders a full-feature fixture
 and checks structure, JS syntax, CSS/JS/HTML namespace drift, and (when vnu is available) markup
@@ -201,7 +216,7 @@ import sys
 _REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 sys.path.insert(0, _REPO)   # repo root, so `from webui import kit` resolves when run as a script
 from webui import kit  # the ONE shared palette + content-key
-from webui.theme import assert_full_dark_override
+from webui.theme import THEME_KEY, assert_full_dark_override
 
 BADGE_CLASSES = {
     "critical": "b-critical",
@@ -213,6 +228,100 @@ BADGE_CLASSES = {
     "med": "b-important",
     "low": "b-minor",
 }
+
+# ── The content floor: rich chrome must carry rich content ──────────────────────────────
+# The ask gate holds AskUserQuestion to a wording floor; this is the same floor for picker
+# specs, checked at render time. A decision page whose spec is too thin for a cold reader
+# ("who wins" over bare letters, options with no help, no brief) prints one FLOOR line per
+# defect and exits 2; the author fixes the spec and re-renders. A purely informational
+# page passes untouched. `floor_waived` (a reason of at least 20 characters) skips the
+# check, loudly, for the rare page the floor genuinely cannot fit.
+_JOINER_NAMES = {"—": "an em-dash", " -- ": "' -- '", "→": "an arrow", "·": "a middot"}
+_QUOTED_SPANS = re.compile(r'"[^"\n]*"|“[^”\n]*”|`[^`\n]*`')
+_TAG_RE = re.compile(r"<[^>]+>")
+
+
+def _first_joiner(text):
+    """The first banned fragment-joiner in text with quoted spans blanked out, or None."""
+    scannable = _QUOTED_SPANS.sub(" ", text or "")
+    for token, name in _JOINER_NAMES.items():
+        if token in scannable:
+            return name
+    return None
+
+
+def floor_failures(spec):
+    """Every content-floor defect in the spec, one plain sentence each."""
+    page_options = spec.get("options", ["apply", "discuss", "skip"])
+    items = spec.get("items", [])
+    decision_items = [item for item in items if item_options(item, page_options)]
+    problems = []
+    if decision_items:
+        brief = spec.get("brief") or _TAG_RE.sub(" ", spec.get("intro_html") or "")
+        brief = " ".join(brief.split())
+        if len(brief) < 120:
+            problems.append(
+                f"page brief is {len(brief)} characters: intro_html (or brief) must say in two "
+                "or three plain sentences what is being decided, why it surfaced, and what "
+                "happens with the answer (at least 120 characters)")
+        joiner = _first_joiner(brief)
+        if joiner:
+            problems.append(f"page brief glues fragments with {joiner}: write plain sentences "
+                            "(quoted spans are exempt)")
+    option_help = spec.get("option_help", {})
+    for item in decision_items:
+        item_id = item.get("id", "?")
+        context = " ".join(f'{item.get("summary", "")} {item.get("why", "")}'.split())
+        options = item_options(item, page_options)
+        all_short = bool(options) and all(len(str(option)) <= 3 for option in options)
+        need = 60 if all_short else 40
+        if len(context) < need:
+            if all_short:
+                problems.append(
+                    f"item {item_id}: choices {options} carry no meaning on their own; the "
+                    "summary must name the axis (what winning means here, what each choice "
+                    f"implies, what happens next), at least {need} characters, found {len(context)}")
+            else:
+                problems.append(
+                    f"item {item_id}: summary (or why) is {len(context)} characters; a cold "
+                    "reader decides from the card alone, so say what is being decided and what "
+                    f"hangs on it (at least {need} characters)")
+        if (item.get("pick_ui") or {}).get("style") != "columns":
+            for option in options:
+                if len(option_help.get(option, "").split()) < 8:
+                    problems.append(
+                        f"option {option!r} needs an option_help sentence: at least 8 words on "
+                        "what picking it does and when it is the right pick")
+        for key in ("summary", "why", "fix"):
+            joiner = _first_joiner(item.get(key) or "")
+            if joiner:
+                problems.append(f"item {item_id}: {key} glues fragments with {joiner}: write "
+                                "plain sentences (quoted spans are exempt)")
+    for item in items:
+        item_id = item.get("id", "?")
+        for index, field in enumerate(item.get("prose") or [], 1):
+            prompt = (field.get("prompt") or "").strip()
+            if len(prompt.split()) < 8:
+                problems.append(
+                    f"item {item_id}: prose prompt {field.get('id', index)!r} is "
+                    f"{len(prompt.split())} words; ask a real question the human can answer "
+                    "in paragraphs (at least 8 words)")
+            joiner = _first_joiner(prompt)
+            if joiner:
+                problems.append(f"item {item_id}: prose prompt {field.get('id', index)!r} "
+                                f"glues fragments with {joiner}: write plain sentences")
+    for option, help_text in option_help.items():
+        joiner = _first_joiner(help_text)
+        if joiner:
+            problems.append(f"option_help for {option!r} glues fragments with {joiner}: "
+                            "write plain sentences")
+    seen = set()
+    unique = []
+    for problem in problems:
+        if problem not in seen:
+            seen.add(problem)
+            unique.append(problem)
+    return unique
 
 # The palette is the ONE kit source. These local names ALIAS the kit's semantic
 # vars. Alias values are var(...), so they are theme-correct (resolve per active theme) AND
@@ -365,6 +474,13 @@ CSS = _KIT_PALETTE + """
  .notes{width:100%;box-sizing:border-box;margin-top:10px;font:inherit;font-size:14.5px;line-height:1.5;
   border:1px solid var(--border);border-radius:8px;padding:7px 9px;min-height:36px;background:var(--note-bg);
   color:var(--fg);resize:vertical}
+ .prosefield{margin-top:12px}
+ .proselabel{display:block;font-size:13.5px;font-weight:650;color:var(--fg);margin-bottom:5px}
+ .prose{width:100%;box-sizing:border-box;font:inherit;font-size:14.5px;line-height:1.55;
+  border:1px solid var(--border);border-radius:8px;padding:8px 10px;min-height:84px;
+  background:var(--note-bg);color:var(--fg);resize:vertical}
+ .card.collapsed>.prosefield{display:none}
+ #substate{color:var(--fix);font-size:12.5px}
  .selbar{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:calc(100% - 24px);max-width:var(--pagew,920px);
   box-sizing:border-box;background:var(--bar);backdrop-filter:blur(10px);border:1px solid var(--border);
   border-bottom:none;border-radius:13px 13px 0 0;padding:8px 16px;font-size:14px;
@@ -397,12 +513,12 @@ SCRIPT = """
   var HEADER = 'PICKS \\u2014 ' + (window.SPEC.blob_header || window.SPEC.key || 'selection');
   var root = document.documentElement;
   var savedTheme = null;
-  try { savedTheme = localStorage.getItem('chumicro:theme'); } catch (e) {}
+  try { savedTheme = localStorage.getItem('__THEME_KEY__'); } catch (e) {}
   var dark = savedTheme ? savedTheme === 'dark' : (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
   function setTheme(d) {
     root.dataset.theme = d ? 'dark' : 'light';
     document.getElementById('themebtn').textContent = d ? 'light mode' : 'dark mode';
-    try { localStorage.setItem('chumicro:theme', d ? 'dark' : 'light'); } catch (e) {}
+    try { localStorage.setItem('__THEME_KEY__', d ? 'dark' : 'light'); } catch (e) {}
   }
   function load() { try { return JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) { return {}; } }
   function save(s) { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch (e) {} }
@@ -423,6 +539,13 @@ SCRIPT = """
     if (state['d:' + id] !== undefined) { var e = c.querySelector('.editbox'); if (e) e.value = state['d:' + id]; }
     if (state['k:' + id]) { doneSet.add(id); c.classList.add('done'); }
     if (state['dd:' + id]) dirtyEdits.add(id);
+  });
+  // prose fields live on any card, informational ones included; deviations restore per field
+  var proseBoxes = Array.prototype.slice.call(document.querySelectorAll('.prose'));
+  proseBoxes.forEach(function (t) {
+    var key = 'r:' + t.dataset.item + '.' + t.dataset.pid;
+    if (state[key] !== undefined) t.value = state[key];
+    t.addEventListener('input', function () { persist(); });
   });
   // every card folds on a title-row click; spec sets the initial state (data-fold). A saved
   // 'e:' key (1 = opened, 0 = folded) is a deviation from that default restored on reload.
@@ -448,6 +571,9 @@ SCRIPT = """
       if (doneSet.has(id)) s['k:' + id] = 1;
       if (dirtyEdits.has(id)) s['dd:' + id] = 1;
     });
+    proseBoxes.forEach(function (t) {
+      if (t.value !== t.defaultValue) s['r:' + t.dataset.item + '.' + t.dataset.pid] = t.value;
+    });
     document.querySelectorAll('.card.collapsible').forEach(function (c) {
       var folded = c.classList.contains('collapsed');
       if (folded !== (c.dataset.fold === '1')) s['e:' + c.dataset.id] = folded ? 0 : 1;
@@ -468,6 +594,22 @@ SCRIPT = """
       if (e && r && r.value === e.dataset.val && e.value.trim()) {
         lines.push('  edit ' + id + ': ' + e.value.replace(/\\\\/g, '\\\\\\\\').replace(/\\n/g, '\\\\n'));
       }
+      c.querySelectorAll('.prose').forEach(function (t) {
+        if (t.value.trim()) {
+          lines.push('  prose ' + t.dataset.item + '.' + t.dataset.pid + ': '
+            + t.value.replace(/\\\\/g, '\\\\\\\\').replace(/\\n/g, '\\\\n'));
+        }
+      });
+    });
+    // an informational card carries no radios, so its prose rides after the decision lines
+    document.querySelectorAll('#cardlist .card').forEach(function (c) {
+      if (c.querySelector('input[type=radio]')) return;
+      c.querySelectorAll('.prose').forEach(function (t) {
+        if (t.value.trim()) {
+          lines.push('  prose ' + t.dataset.item + '.' + t.dataset.pid + ': '
+            + t.value.replace(/\\\\/g, '\\\\\\\\').replace(/\\n/g, '\\\\n'));
+        }
+      });
     });
     return lines.join('\\n');
   }
@@ -520,8 +662,13 @@ SCRIPT = """
   function submitSel() {
     var sb = document.getElementById('submitbtn');
     var fail = function () { var o = sb.textContent; sb.textContent = 'failed: use Copy selection'; setTimeout(function () { sb.textContent = o; }, 2200); };
-    fetch('/selection', { method: 'POST', body: buildBlob() })
-      .then(function (r) { if (r.ok) confirmFlash(sb, 'Submitted \\u2713 (return to the session)'); else fail(); })
+    fetch('selection', { method: 'POST', body: buildBlob() })
+      .then(function (r) {
+        if (!r.ok) { fail(); return; }
+        confirmFlash(sb, 'Submitted \\u2713 (return to the session)');
+        var st = document.getElementById('substate');
+        if (st) st.textContent = 'submitted ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' \\u2713';
+      })
       .catch(fail);
   }
   setTheme(dark);
@@ -636,6 +783,11 @@ SCRIPT = """
     c.scrollIntoView({ block: 'center', behavior: 'smooth' });
   }
   document.addEventListener('keydown', function (e) {
+    // cmd/ctrl+Enter submits from anywhere, textareas included: commit without a mouse trip
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      if (!document.getElementById('submitbtn').hidden) { e.preventDefault(); submitSel(); }
+      return;
+    }
     var tag = e.target.tagName;
     if (tag === 'TEXTAREA' || tag === 'INPUT' || tag === 'SELECT') return;   // don't hijack typing
     if (e.key === 'j' || e.key === 'ArrowDown') { e.preventDefault(); kbFocus(kbi + 1); }
@@ -669,6 +821,7 @@ SCRIPT = """
       var e = c.querySelector('.editbox'); if (e) e.value = e.defaultValue;
       c.classList.remove('done');
     });
+    proseBoxes.forEach(function (t) { t.value = t.defaultValue; });
     doneSet.clear();
     dirtyEdits.clear();
     // fold state returns to spec defaults too, cards and sections both: Reset means "as first rendered"
@@ -956,6 +1109,21 @@ def card_html(item, page_options, page_default, option_help):
         if item.get("notes", bool(options))
         else ""
     )
+    # prose fields: prompted paragraph answers that ride the blob as their own lines, for the
+    # cards whose real answer is sentences, not a pick (an informational card may carry only these)
+    prose_html = ""
+    for index, field in enumerate(item.get("prose") or [], 1):
+        pid = str(field.get("id") or index)
+        box = f"{anchor_id(item_id)}-prose-{re.sub(r'[^A-Za-z0-9_-]', '-', pid)}"
+        placeholder = (f' placeholder="{html.escape(field["placeholder"])}"'
+                       if field.get("placeholder") else "")
+        prose_html += (
+            f'<div class="prosefield"><label class="proselabel" for="{box}">'
+            f'{html.escape(field.get("prompt", ""))}</label>'
+            f'<textarea class="prose" id="{box}" data-item="{html.escape(item_id)}"'
+            f' data-pid="{html.escape(pid)}" rows="{int(field.get("rows", 4))}"{placeholder}'
+            f' spellcheck="true">{html.escape(field.get("seed", ""))}</textarea></div>'
+        )
     collapsed = bool(item.get("collapsed"))
     card_classes = "card collapsible collapsed" if collapsed else "card collapsible"
     if item.get("muted"):
@@ -973,7 +1141,7 @@ def card_html(item, page_options, page_default, option_help):
         f'<span class="cardtitle">{html.escape(item.get("title", ""))}</span></div>'
         f"{summary}"
         f'<div class="cardfold">{meta}{fields}{evidence}{detail}{warning}{body}</div>'
-        f"{diff_html}{opts}{notes}</div>"
+        f"{diff_html}{opts}{prose_html}{notes}</div>"
     )
 
 
@@ -991,6 +1159,20 @@ def main():
     with open(spec_path) as handle:
         spec = json.load(handle)
     output_dir = os.path.abspath(sys.argv[2]) if len(sys.argv) > 2 else os.path.dirname(spec_path)
+
+    waiver = spec.get("floor_waived")
+    if isinstance(waiver, str) and len(waiver.strip()) >= 20:
+        print(f"FLOOR WAIVED: {waiver.strip()}", file=sys.stderr, flush=True)
+    else:
+        problems = floor_failures(spec)
+        if problems:
+            for problem in problems:
+                print(f"FLOOR {problem}", file=sys.stderr, flush=True)
+            print("FLOOR: page not rendered. A decision surface must explain itself to a cold "
+                  "reader; fix the spec and re-render (floor_waived, a reason of 20+ characters, "
+                  "skips this only when the floor genuinely cannot apply).",
+                  file=sys.stderr, flush=True)
+            sys.exit(2)
 
     page_options = spec.get("options", ["apply", "discuss", "skip"])
     page_default = spec.get("default")
@@ -1117,6 +1299,7 @@ def main():
 <div class="selbar">
  <div class="row">
   <span id="count"></span>
+  <span id="substate"></span>
   <button class="primary" id="submitbtn" hidden>Submit to session</button>
   <button id="copybtn">Copy selection</button>
   <button id="resetbtn">Reset</button>
@@ -1129,7 +1312,7 @@ def main():
  </div>
 </div>
 <script>window.SPEC = {client_spec};</script>
-{SCRIPT}
+{SCRIPT.replace("__THEME_KEY__", THEME_KEY)}
 {live_block}
 </body></html>
 """
