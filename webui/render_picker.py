@@ -1790,7 +1790,20 @@ def stage_assets(spec, spec_dir, output_dir):
             n += 1
         used.add(name)
         dest = os.path.join(assets_dir, name)
-        if not (os.path.exists(dest) and os.path.samefile(full, dest)):
+        if os.path.exists(dest):
+            try:
+                unchanged = os.path.samefile(full, dest)
+            except OSError:
+                unchanged = False
+            if not unchanged:
+                # copy2 preserves mtime, so an unchanged source skips the copy on every
+                # re-render; large audio/video artifacts stop costing O(bytes) per render
+                src_stat, dest_stat = os.stat(full), os.stat(dest)
+                unchanged = (dest_stat.st_size == src_stat.st_size
+                             and int(dest_stat.st_mtime) == int(src_stat.st_mtime))
+            if not unchanged:
+                shutil.copy2(full, dest)
+        else:
             shutil.copy2(full, dest)
         staged[full] = ("assets/" + name, os.path.getsize(full))
         return staged[full]

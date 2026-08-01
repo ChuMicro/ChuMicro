@@ -17,6 +17,7 @@ import tempfile
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 # Run-anywhere: importable both as `python3 -m webui.check_kit` and as a bare gate script
@@ -227,6 +228,34 @@ def _hub():
             _check("hub/upload-ok", reply.get("ok") and reply.get("name") == "probe.txt", f"{reply}")
             with open(reply["path"], "rb") as handle:
                 _check("hub/upload-on-disk", handle.read() == b"upload-bytes", reply["path"])
+            # an empty body is refused loud (400), never written
+            try:
+                req = urllib.request.Request(f"{base}/s/{sid3}/upload?name=empty.txt",
+                                             data=b"", method="POST")
+                with urllib.request.urlopen(req, timeout=5) as resp:
+                    code = resp.status
+            except urllib.error.HTTPError as error:
+                code = error.code
+            _check("hub/upload-empty-400", code == 400, f"got {code}")
+            # a duplicate filename allocates a numbered sibling; the first file stays intact
+            req = urllib.request.Request(f"{base}/s/{sid3}/upload?name=probe.txt",
+                                         data=b"second-bytes", method="POST")
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                second = json.loads(resp.read())
+            _check("hub/upload-dedup-name", second.get("name") == "probe-1.txt", f"{second}")
+            with open(reply["path"], "rb") as handle:
+                _check("hub/upload-first-intact", handle.read() == b"upload-bytes")
+            with open(second["path"], "rb") as handle:
+                _check("hub/upload-second-bytes", handle.read() == b"second-bytes")
+            # a hostile filename is sanitized to a basename inside the surface's in/ dir
+            req = urllib.request.Request(f"{base}/s/{sid3}/upload?name=" + urllib.parse.quote("../../escape.txt"),
+                                         data=b"contained", method="POST")
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                hostile = json.loads(resp.read())
+            in_dir = os.path.join(state, "surfaces", sid3, "in")
+            _check("hub/upload-name-sanitized",
+                   os.path.dirname(hostile["path"]) == in_dir and ".." not in hostile["name"],
+                   f"{hostile}")
             # the new media MIME coverage: an .m4a asset serves as audio/mp4
             with urllib.request.urlopen(f"{base}/s/{sid3}/a/tone.m4a", timeout=5) as resp:
                 _check("hub/asset-m4a-mime", resp.headers.get("Content-Type") == "audio/mp4",
