@@ -336,17 +336,18 @@ _KIT_PALETTE = (
     " :root[data-theme=dark]{color-scheme:dark}\n"
 )
 
-CSS = _KIT_PALETTE + """
- body{font:16px/1.55 -apple-system,'Segoe UI',sans-serif;background:var(--bg);color:var(--fg);
-  margin:0;padding:26px 20px 110px;max-width:var(--pagew,920px);margin-inline:auto}
- h1{font-size:24px;font-weight:600;margin:0 44px 6px 0}
+CSS = _KIT_PALETTE + kit.TOKENS_CSS + """
+ body{font:15px/1.55 -apple-system,'Segoe UI',sans-serif;background:var(--bg);color:var(--fg);
+  margin:0;padding:var(--s5) var(--s4) 110px;max-width:var(--pagew,920px);margin-inline:auto}
+ .phead{display:flex;flex-direction:column;gap:var(--s2);margin:0 96px var(--s4) 0}
+ h1{font-size:var(--t-title);font-weight:650;letter-spacing:-.01em;line-height:1.3;margin:0}
  .themebtn{position:fixed;top:14px;right:16px;font:inherit;font-size:13px;padding:6px 12px;border-radius:999px;
   border:1px solid var(--border);background:var(--card);color:var(--fg);cursor:pointer;z-index:10}
- .subtitle{color:var(--faint);font-size:13.5px;margin:0 0 16px}
- .intro{color:var(--faint);font-size:15px;margin-bottom:10px}
+ .readout{display:flex;flex-wrap:wrap;gap:var(--s1) var(--s4);font:500 var(--t-micro)/1.7 var(--mono);
+  color:var(--faint);text-transform:uppercase;letter-spacing:.07em}
+ .intro{color:var(--faint);font-size:var(--t-body);margin:0;max-width:76ch}
  .intro pre{white-space:pre-wrap}
- .legend{font-size:14.5px;color:var(--faint);background:var(--card);border:1px solid var(--border);
-  border-radius:10px;padding:9px 14px;margin-bottom:16px}
+ .legend{font-size:var(--t-small);color:var(--faint);margin:0;max-width:90ch}
  details.section{background:var(--card);border:1px solid var(--border);border-radius:12px;
   padding:10px 16px;margin:10px 0}
  details.section>summary{cursor:pointer;font-weight:620;font-size:15px}
@@ -483,21 +484,24 @@ CSS = _KIT_PALETTE + """
  #substate{color:var(--fix);font-size:12.5px}
  .selbar{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:calc(100% - 24px);max-width:var(--pagew,920px);
   box-sizing:border-box;background:var(--bar);backdrop-filter:blur(10px);border:1px solid var(--border);
-  border-bottom:none;border-radius:13px 13px 0 0;padding:8px 16px;font-size:14px;
+  border-bottom:none;border-radius:var(--r2) var(--r2) 0 0;padding:var(--s2) var(--s4);font-size:var(--t-small);
   box-shadow:0 -8px 28px rgba(0,0,0,.20)}
  :root[data-theme=dark] .selbar{box-shadow:0 -8px 28px rgba(0,0,0,.55)}
- .selbar .row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
- .selbar button{font:inherit;padding:7px 16px;border-radius:8px;border:1px solid var(--border);
+ .selbar .row{display:flex;align-items:center;gap:var(--s3);flex-wrap:wrap}
+ .selbar button{font:inherit;font-size:var(--t-small);padding:7px 15px;border-radius:var(--r2);border:1px solid var(--border);
   background:var(--card);color:var(--fg);cursor:pointer;transition:background .5s,color .5s,border-color .5s}
  .selbar button.primary{background:linear-gradient(135deg,var(--accent),var(--accent2));border-color:var(--accent);color:#fff;box-shadow:0 2px 12px var(--glow)}
  .selbar button.primary:hover{filter:brightness(1.07)}
  .selbar button.confirm{background:var(--good);border-color:var(--good);color:#fff;transition:none}
- .selbar #acceptall{border-color:var(--accent);color:var(--accent)}
+ .selbar #copybtn,.selbar #resetbtn{border-color:transparent;background:none;color:var(--faint)}
+ .selbar #copybtn:hover,.selbar #resetbtn:hover{color:var(--fg);border-color:var(--border)}
+ .selbar #copybtn.primary{border-color:var(--accent);background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff}
+ .selbar #acceptall{border-color:var(--accent);color:var(--accent);background:none}
  .opts label.issugg{outline:2px solid color-mix(in srgb,var(--accent) 45%,transparent);outline-offset:1px;border-radius:6px}
  .sugg{color:var(--accent);font-size:11px;margin-left:3px}
  .card.kbfocus{box-shadow:0 0 0 2px var(--accent)}
  .kbhint{color:var(--faint);font-size:12px;margin-left:4px}
- #count{color:var(--faint)}
+ #count{font:500 var(--t-micro)/1.7 var(--mono);color:var(--faint);text-transform:uppercase;letter-spacing:.07em}
  .blobwrap{margin-left:auto}
  .blobwrap[open]{flex-basis:100%;margin-left:0}
  .blobwrap>summary{font-size:12px;color:var(--faint);cursor:pointer}
@@ -512,14 +516,23 @@ SCRIPT = """
   var KEY = 'picker:' + (window.SPEC.key || 'x');
   var HEADER = 'PICKS \\u2014 ' + (window.SPEC.blob_header || window.SPEC.key || 'selection');
   var root = document.documentElement;
+  // one theme model: THEME_KEY is the single source of truth. Embedded under the hub shell
+  // (framed), this page hides its own toggle and follows the shell live via storage events.
+  var framed = (window.self !== window.top);
   var savedTheme = null;
   try { savedTheme = localStorage.getItem('__THEME_KEY__'); } catch (e) {}
   var dark = savedTheme ? savedTheme === 'dark' : (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
-  function setTheme(d) {
+  function applyTheme(d) {
     root.dataset.theme = d ? 'dark' : 'light';
-    document.getElementById('themebtn').textContent = d ? 'light mode' : 'dark mode';
+    var tb = document.getElementById('themebtn');
+    tb.hidden = framed;
+    tb.textContent = d ? 'light mode' : 'dark mode';
+  }
+  function setTheme(d) {
+    applyTheme(d);
     try { localStorage.setItem('__THEME_KEY__', d ? 'dark' : 'light'); } catch (e) {}
   }
+  window.addEventListener('storage', function (e) { if (e.key === '__THEME_KEY__') applyTheme(e.newValue === 'dark'); });
   function load() { try { return JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) { return {}; } }
   function save(s) { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch (e) {} }
   // informational cards (options: []) carry no radios; they stay out of the blob, tally, and Reset
@@ -1211,7 +1224,9 @@ def main():
             )
             facet_rows.append(f'<div class="fgroup"><span class="fglabel">{label}</span>{chips}</div>')
     decision_items = [item for item in spec["items"] if item_options(item, page_options)]
-    if decision_items and spec.get("picked_facet", True):
+    # the picked row earns its space only on real batches; a page of a few cards reads
+    # faster without a filter bar tracking it (explicit "picked_facet": true forces it)
+    if decision_items and spec.get("picked_facet", len(decision_items) >= 5):
         picked_values = list(page_options)
         for item in decision_items:
             for option in item_options(item, page_options):
@@ -1252,7 +1267,11 @@ def main():
                    '<button id="nomatchclear">clear filters</button></div>')
     cards = f'{facetbar}<div id="cardlist">\n{card_list}\n</div>{nomatch}'
 
-    subtitle = f'<p class="subtitle">{html.escape(spec["subtitle"])}</p>' if spec.get("subtitle") else ""
+    readout = ""
+    if spec.get("subtitle"):
+        # the readout strip: the page's vitals as one mono line (middot-separated in the spec)
+        parts = [html.escape(part.strip()) for part in str(spec["subtitle"]).split("·") if part.strip()]
+        readout = '<div class="readout">' + "".join(f"<span>{part}</span>" for part in parts) + "</div>"
     intro = f'<div class="intro">{spec["intro_html"]}</div>' if spec.get("intro_html") else ""
 
     def section_html(section):
@@ -1290,10 +1309,12 @@ def main():
 :root{{--pagew:{page_width}px}}</style></head>
 <body>
 <button class="themebtn" id="themebtn">dark mode</button>
+<div class="phead">
 <h1>{html.escape(spec.get("title", "decision page"))}</h1>
-{subtitle}
+{readout}
 {intro}
 {legend}
+</div>
 {sections}
 {cards}
 <div class="selbar">

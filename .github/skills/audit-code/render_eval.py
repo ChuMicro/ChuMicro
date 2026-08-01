@@ -194,7 +194,7 @@ def resolved_ghost_item(finding, namespace=None):
         "muted": True,
         "options": [],
         "where": {"place": place, "code": finding.get("site", "")},
-        "summary": "Resolved — present in the baseline audit, no longer found this run.",
+        "summary": "Resolved: present in the baseline audit, no longer found this run.",
         "why": finding.get("bite", ""),
         "facets": {"severity": severity, "angle": angle, "status": "resolved"},
         "collapsed": True,
@@ -407,13 +407,16 @@ def main_single(rundir, target, baseline=None):
         "key": f"audit-code:{file_name}:{os.path.basename(room['rundir'])}",
         "blob_header": f"audit-code apply ({file_name})",
         "subtitle": " · ".join(intro_bits),
+        "brief": (f"The audit of {file_name}: one card per finding, with its evidence and the "
+                  "generated patch. Applying runs the patch in-session behind the file's tests; "
+                  "discussing holds it for the session; skipping closes it for this run."),
         "options": ["apply", "discuss", "skip"],
         "default": "skip",
         "expand_on": ["discuss"],
         "option_help": {
-            "apply": "apply the generated patch in-session, gated by the file's tests and a shown diff — a note adjusts it",
+            "apply": "apply the generated patch in-session, gated by the file's tests and a shown diff; a note adjusts it",
             "discuss": "no change yet; talk it through in the session first (unconfirmed findings start here)",
-            "skip": "leave as is",
+            "skip": "leave the finding as it stands with no change made this run",
         },
         "facets": facets,
         "sections": sections,
@@ -501,13 +504,16 @@ def main_merge(output_dir, room_args, library_facts):
         "key": f"audit-code:merged:{os.path.basename(output_dir)}",
         "blob_header": f"audit-code apply ({len(rooms)} files)",
         "subtitle": " · ".join(intro_bits),
+        "brief": (f"The merged audit of {title_scope}: every room's findings on one page, one card "
+                  "per finding with its evidence and generated patch. Applying runs a patch "
+                  "in-session behind its file's tests; skipping closes it for this run."),
         "options": ["apply", "discuss", "skip"],
         "default": "skip",
         "expand_on": ["discuss"],
         "option_help": {
-            "apply": "apply the generated patch in-session, gated by the file's tests and a shown diff — a note adjusts it",
+            "apply": "apply the generated patch in-session, gated by the file's tests and a shown diff; a note adjusts it",
             "discuss": "no change yet; talk it through in the session first (unconfirmed findings start here)",
-            "skip": "leave as is",
+            "skip": "leave the finding as it stands with no change made this run",
         },
         "facets": facets,
         "sections": sections,

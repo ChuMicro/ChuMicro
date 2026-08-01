@@ -50,6 +50,46 @@ def content_key(content, *, prefix="page"):
     return f"{prefix}:{hashlib.sha1(content.encode()).hexdigest()[:12]}"
 
 
+# ── Design tokens: the ONE spacing/type/radius scale every surface derives from. Lengths
+#    only (no colors), so the dark-lint has nothing to check here; a template that hardcodes
+#    a px value instead of a token is the drift this kills. ──
+TOKENS_CSS = """
+:root{--s1:4px;--s2:8px;--s3:12px;--s4:16px;--s5:24px;--s6:36px;
+--r1:6px;--r2:10px;--r3:14px;
+--t-title:17px;--t-body:14.5px;--t-small:13px;--t-micro:11px;
+--mono:ui-monospace,Menlo,monospace;}
+"""
+
+# ── Shared components: the standard every surface builds from. A template styles ONLY its
+#    own template-specific selectors, thinly, on top of these; it never redefines a chu-*
+#    class or a primitive below. The readout strip (.chu-read) is the house signature: every
+#    surface carries its vitals as one mono strip under the title. ──
+COMPONENTS_CSS = """
+.chu-head{display:flex;flex-direction:column;gap:var(--s2);margin:0 0 var(--s4);}
+.chu-title{font-size:var(--t-title);font-weight:650;letter-spacing:-.01em;margin:0;line-height:1.3;}
+.chu-read{display:flex;flex-wrap:wrap;gap:var(--s1) var(--s4);font:500 var(--t-micro)/1.7 var(--mono);
+ color:var(--faint);text-transform:uppercase;letter-spacing:.07em;}
+.chu-read b{color:var(--fg);font-weight:650;}
+.chu-brief{margin:0;max-width:76ch;font-size:var(--t-body);color:var(--fg);}
+.chu-brief.faint{color:var(--faint);}
+.chu-label{display:inline-block;font:700 var(--t-micro)/1.5 var(--mono);letter-spacing:.07em;
+ text-transform:uppercase;color:var(--faint);background:var(--chip);border-radius:var(--r1);
+ padding:2px 7px;}
+.chu-mono{white-space:pre-wrap;overflow-wrap:break-word;background:var(--bg);border:1px solid var(--border);
+ border-radius:var(--r2);padding:var(--s2) var(--s3);font:var(--t-small)/1.6 var(--mono);color:var(--fg);}
+.chu-table{width:100%;border-collapse:collapse;font-size:var(--t-body);}
+.chu-table th{text-align:left;font:700 var(--t-micro)/1.5 var(--mono);text-transform:uppercase;
+ letter-spacing:.07em;color:var(--faint);padding:var(--s1) var(--s3);}
+.chu-table td{padding:var(--s2) var(--s3);border-top:1px solid var(--border);}
+.chu-pass{color:var(--good);font-weight:700;} .chu-fail{color:var(--bad);font-weight:700;}
+.chu-run{color:var(--warn);font-weight:700;} .chu-na{color:var(--faint);}
+.chu-tl{font:var(--t-small)/1.8 var(--mono);padding:1px 0;}
+.chu-tl .t{color:var(--faint);margin-right:var(--s3);}
+.chu-actions{position:sticky;bottom:0;display:flex;align-items:center;gap:var(--s3);flex-wrap:wrap;
+ background:var(--panel);border:1px solid var(--border);border-radius:var(--r2);
+ padding:var(--s2) var(--s4);margin-top:var(--s5);box-shadow:0 -6px 22px var(--shadow);}
+"""
+
 # ── The affordance rules, extracted so any surface (even a JS-rendered one) gets the SAME
 #    press / confirm-flash / busy feedback ("a button press must show something"). ──
 AFFORD_CSS = """
@@ -58,10 +98,10 @@ AFFORD_CSS = """
 .chu-busy{opacity:.6;cursor:progress;}
 """
 
-# ── The re-serve channel surfaces (toast + progress), extracted so a surface that opts into the
+# ── The re-serve channel webui (toast + progress), extracted so a surface that opts into the
 #    live canvas gets them WITHOUT pulling in the kit's layout CSS. ──
 CHANNEL_CSS = """
-/* re-serve channel surfaces */
+/* re-serve channel webui */
 .chu-toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(12px);background:var(--panel);color:var(--fg);border:1px solid var(--border);box-shadow:0 8px 28px var(--shadow);padding:10px 16px;border-radius:10px;opacity:0;pointer-events:none;transition:.18s;z-index:9999;}
 .chu-toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
 .chu-toast.good{border-color:var(--good);} .chu-toast.bad{border-color:var(--bad);}
@@ -70,36 +110,43 @@ CHANNEL_CSS = """
 .chu-prog span{position:absolute;right:8px;top:6px;font:11px system-ui;color:var(--faint);}
 """
 
-# ── Base CSS: layout + the affordance + the re-serve toast/progress. Vars only, no raw hex. ──
-BASE_CSS = """
+# ── Base CSS: tokens + layout + components + affordance + channel. Vars only, no raw hex. ──
+BASE_CSS = TOKENS_CSS + """
 *{box-sizing:border-box}
-body{margin:0;font:15px/1.55 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);
+body{margin:0;font:var(--t-body)/1.55 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);
  color:var(--fg);-webkit-font-smoothing:antialiased;}
-.wrap{max-width:860px;margin:0 auto;padding:32px 20px 80px;}
-h1,h2,h3{color:var(--fg);line-height:1.2;letter-spacing:-.01em;} a{color:var(--accent);}
-h1{font-size:24px;font-weight:650;}
-code,pre{font:.92em ui-monospace,Menlo,monospace;}
+.wrap{max-width:880px;margin:0 auto;padding:var(--s5) var(--s4) var(--s6);}
+h1,h2,h3{color:var(--fg);line-height:1.3;letter-spacing:-.01em;} a{color:var(--accent);}
+h1{font-size:var(--t-title);font-weight:650;}
+code,pre{font:.92em var(--mono);}
 ::selection{background:var(--accent);color:var(--accent-fg);}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
-.card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:18px 20px;margin:14px 0;box-shadow:0 2px 10px var(--shadow);}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:var(--r3);padding:var(--s4) var(--s4);margin:var(--s3) 0;box-shadow:0 2px 10px var(--shadow);}
 .faint{color:var(--faint);}
-button,.chu-act{font:inherit;border:1px solid var(--border);background:var(--panel);color:var(--fg);padding:8px 15px;border-radius:10px;cursor:pointer;transition:transform .1s,filter .1s,background .12s,border-color .12s;}
+button,.chu-act{font:inherit;font-size:var(--t-small);border:1px solid var(--border);background:var(--panel);color:var(--fg);padding:7px 14px;border-radius:var(--r2);cursor:pointer;transition:transform .1s,filter .1s,background .12s,border-color .12s;}
 button:hover{border-color:var(--accent);}
 button.primary{background:linear-gradient(135deg,var(--accent),var(--accent2));color:var(--accent-fg);border-color:var(--accent);box-shadow:0 2px 12px var(--glow);}
 button.primary:hover{filter:brightness(1.07);}
+button.quiet{border-color:transparent;background:none;color:var(--faint);}
+button.quiet:hover{color:var(--fg);border-color:var(--border);}
 button#themebtn{position:fixed;top:12px;right:12px;z-index:50;}
 textarea,input,select{font:inherit;color:var(--fg);}
 .chip{display:inline-block;background:var(--chip);color:var(--chip-fg);border-radius:999px;padding:2px 10px;font-size:12px;}
 @media (prefers-reduced-motion:reduce){*{transition-duration:.01ms!important;animation-duration:.01ms!important;}}
-""" + AFFORD_CSS + CHANNEL_CSS
+""" + COMPONENTS_CSS + AFFORD_CSS + CHANNEL_CSS
 
-# ── One theme toggle (single THEME_KEY → the choice follows the human across every surface) ─────
+# ── One theme model: THEME_KEY in localStorage is the single source of truth. A top-level
+#    page shows the toggle; an EMBEDDED page (an iframe under the hub shell) hides its own
+#    toggle and follows the shell live via the storage event, so the shell's one switch
+#    re-themes every surface at once: never a dark bar over a light body. ──
 _THEME_JS = ("""
-(function(){var root=document.documentElement,K='__THEME_KEY__';
+(function(){var root=document.documentElement,K='__THEME_KEY__',framed=(window.self!==window.top);
 function get(){try{return localStorage.getItem(K);}catch(e){return null;}}
-function set(d){root.dataset.theme=d?'dark':'light';var b=document.getElementById('themebtn');
- if(b)b.textContent=d?'\\u2600 light':'\\u263e dark';try{localStorage.setItem(K,d?'dark':'light');}catch(e){}}
-var s=get();set(s?s==='dark':(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches));
+function apply(d){root.dataset.theme=d?'dark':'light';var b=document.getElementById('themebtn');
+ if(b){b.hidden=framed;b.textContent=d?'\\u2600 light':'\\u263e dark';}}
+function set(d){apply(d);try{localStorage.setItem(K,d?'dark':'light');}catch(e){}}
+var s=get();apply(s?s==='dark':(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches));
+window.addEventListener('storage',function(e){if(e.key===K)apply(e.newValue==='dark');});
 document.addEventListener('click',function(e){if(e.target&&e.target.id==='themebtn')set(root.dataset.theme!=='dark');});})();
 """.replace("__THEME_KEY__", THEME_KEY))
 
