@@ -1,69 +1,121 @@
 #!/usr/bin/env python3
-"""Serve a rendered decision page over localhost and loop its Submit button back to the session.
+"""Put a rendered decision page in front of the human and loop Submit back to the session.
 
-A page from render_picker.py carries a selection bar whose blob the human can always
-copy and paste back into the session. Served over http, the same bar also shows a
-**Submit to session** button: it POSTs the blob here, and this server writes it to
-<dir>/selection.txt, prints one `SELECTION RECEIVED -> <path>` line, and **shuts down**,
-since a picker session is one submission. Run it in the background; the process *completing*
-is itself the submit signal (read selection.txt then), so no separate stdout watch is
-needed. Off-server, Copy/paste is the no-server fallback. The server is transport only:
-it never parses or applies a selection.
+Default transport: the surface hub (webui/hub.py). The page is posted as a surface on the
+repo's ONE hub, which owns the ONE browser tab: no per-question server, no new tab per
+round, no port fights between concurrent sessions. This command then blocks until the
+surface resolves, so the process completing is still the submit signal:
 
-Binds 127.0.0.1 on a free port. Tries to auto-open the page unless PICKER_NO_OPEN is
-set, a convenience for a human running this directly. An orchestrating session sets
-PICKER_NO_OPEN=1 and runs `open <url>` on the printed SERVING line itself: from a
-sandboxed background process the auto-open either fails silently or lands late as a
-duplicate tab, so the session must be the only opener.
+    SERVING <surface url>                       on post
+    SELECTION RECEIVED -> <dir>/selection.txt   then exit 0    (answered)
+    PICKER WITHDRAWN (no selection)             then exit 3    (this session moved on)
+    PICKER EXPIRED (no selection)               then exit 4    (ttl or --timeout hit)
+    HUB UNREACHABLE ...                         then exit 5
 
-A refresh always shows the current spec: on each GET of the page, when <dir>/spec.json
-or render_picker.py is newer than the rendered page, the server re-renders before
-serving and prints one `RERENDERED <path>` line.
+When the conversation negates a pending question, withdraw it instead of abandoning it:
+`python3 -m webui.hub withdraw <id>` (the ASKED line names the id), or re-ask with
+`--supersede` so the replacement retires the original in place. `--tag` groups a
+session's rounds; re-asking with the same tag plus `--supersede` swaps the round the
+human sees instead of stacking a second one.
 
-Usage: serve_picker.py <dir> [<page>]      (default page: picker.html)
-Stdout: `SERVING <url>` once on start, `RERENDERED <path>` per stale-refresh, then on
-the (single) submit `SELECTION RECEIVED -> <path>` and `PICKER CLOSED …`, then exit.
+`--oneshot` keeps the legacy transport (a private one-shot server and its own tab) for a
+host with no hub or a flow that truly wants an isolated page; the stdout contract there
+is unchanged (SERVING / SELECTION RECEIVED / PICKER CLOSED).
+
+A stale page re-renders once before serving: when <dir>/spec.json (or the renderer) is
+newer than picker.html, the page is rebuilt so the human never decides on an old render.
+
+Usage: serve_picker.py <dir> [<page>] [--tag TAG] [--supersede] [--timeout SECS] [--oneshot]
 """
+import argparse
+import json
 import os
 import subprocess
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # repo root, for the shared webui toolkit
-from webui.server import serve_oneshot
 
 RENDERER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "render_picker.py")
 
 
-def main():
-    directory = os.path.abspath(sys.argv[1])
-    page = sys.argv[2] if len(sys.argv) > 2 else "picker.html"
+def rerender_if_stale(directory, page):
     spec_path = os.path.join(directory, "spec.json")
     page_path = os.path.join(directory, page)
-
-    def rerender_if_stale():
-        if not os.path.exists(spec_path):
+    if not os.path.exists(spec_path):
+        return
+    try:
+        page_mtime = os.path.getmtime(page_path) if os.path.exists(page_path) else 0
+        if max(os.path.getmtime(spec_path), os.path.getmtime(RENDERER)) <= page_mtime:
             return
-        try:
-            page_mtime = os.path.getmtime(page_path)
-            if max(os.path.getmtime(spec_path), os.path.getmtime(RENDERER)) <= page_mtime:
-                return
-            result = subprocess.run(
-                [sys.executable, RENDERER, spec_path, directory],
-                capture_output=True, text=True, timeout=30,
-            )
-            if result.returncode == 0:
-                print(f"RERENDERED {page_path}", flush=True)
-            else:
-                tail = result.stderr.strip().splitlines()[-1] if result.stderr.strip() else "unknown error"
-                print(f"RENDER FAILED (serving stale page): {tail}", flush=True)
-        except OSError:
-            pass
+        result = subprocess.run(
+            [sys.executable, RENDERER, spec_path, directory],
+            capture_output=True, text=True, timeout=30,
+        )
+        if result.returncode == 0:
+            print(f"RERENDERED {page_path}", flush=True)
+        else:
+            tail = result.stderr.strip().splitlines()[-1] if result.stderr.strip() else "unknown error"
+            print(f"RENDER FAILED (serving what exists): {tail}", flush=True)
+    except OSError:
+        pass
 
-    # the picker's surface of the shared one-shot server; on_get re-renders a stale page
-    serve_oneshot(directory, page, post_path="/selection", sink_name="selection.txt",
-                  env_no_open="PICKER_NO_OPEN", label_received="SELECTION RECEIVED",
-                  label_closed="PICKER CLOSED: selection saved to", on_get=rerender_if_stale)
+
+def main():
+    parser = argparse.ArgumentParser(description="serve a decision page and loop Submit back")
+    parser.add_argument("directory")
+    parser.add_argument("page", nargs="?", default="picker.html")
+    parser.add_argument("--tag", default="picker", help="groups this session's rounds on the hub")
+    parser.add_argument("--supersede", action="store_true",
+                        help="withdraw my older pending surfaces with the same tag first")
+    parser.add_argument("--timeout", type=float, default=None, help="seconds before giving up (exit 4)")
+    parser.add_argument("--oneshot", action="store_true",
+                        help="legacy transport: a private one-shot server and its own tab")
+    args = parser.parse_args()
+
+    directory = os.path.abspath(args.directory)
+    rerender_if_stale(directory, args.page)
+    page_path = os.path.join(directory, args.page)
+    if not os.path.exists(page_path):
+        print(f"refusing to serve: {page_path} does not exist", flush=True)
+        raise SystemExit(2)
+    sink = os.path.join(directory, "selection.txt")
+
+    if args.oneshot:
+        from webui.server import serve_oneshot
+        serve_oneshot(directory, args.page, post_path="/selection", sink_name="selection.txt",
+                      env_no_open="PICKER_NO_OPEN", label_received="SELECTION RECEIVED",
+                      label_closed="PICKER CLOSED: selection saved to",
+                      on_get=lambda: rerender_if_stale(directory, args.page))
+        return
+
+    from webui import hub
+    title = "decision: " + os.path.basename(directory)
+    spec_path = os.path.join(directory, "spec.json")
+    if os.path.exists(spec_path):
+        try:
+            with open(spec_path) as handle:
+                title = json.load(handle).get("title", title)
+        except (OSError, ValueError):
+            pass
+    port, sid, url = hub.post(page_path, title=title, kind="ask", tag=args.tag, sink=sink,
+                              assets=directory,
+                              supersede_tag=args.tag if args.supersede else "")
+    print(f"ASKED {sid}", flush=True)
+    print(f"SERVING {url}", flush=True)
+    status = hub.wait(port, sid, timeout=args.timeout)
+    if status == "answered":
+        print(f"SELECTION RECEIVED -> {sink}", flush=True)
+        print(f"PICKER CLOSED: selection saved to {sink}", flush=True)
+        sys.exit(0)
+    if status == "withdrawn":
+        print("PICKER WITHDRAWN (no selection)", flush=True)
+        sys.exit(3)
+    if status in ("expired", "timeout"):
+        print("PICKER EXPIRED (no selection)", flush=True)
+        sys.exit(4)
+    print(f"HUB UNREACHABLE; if the human submitted, the blob is at {sink}", flush=True)
+    sys.exit(5)
 
 
 if __name__ == "__main__":

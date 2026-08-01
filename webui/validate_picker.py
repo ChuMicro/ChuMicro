@@ -50,7 +50,9 @@ FIXTURE = {
     "key": "validate-fixture",
     "blob_header": "validator fixture picks",
     "subtitle": "4 findings · 1 high · fixture",
-    "intro_html": '<p>Intro block with <a href="#card-3">a deep link</a> and <code>inline code</code>.</p>',
+    "intro_html": ('<p>Intro block with <a href="#card-3">a deep link</a> and <code>inline code</code>. '
+                   "This fixture decides nothing real: it exists so the validator can render every "
+                   "renderer feature once and assert each one landed in the emitted HTML.</p>"),
     "sections": [
         {"title": "What this file does", "html": "<p>Top-level section body.</p>", "open": True},
         {"title": "Per-file understanding (2 files)",
@@ -65,9 +67,9 @@ FIXTURE = {
     "page_width": 1280,
     "expand_on": ["discuss"],
     "option_help": {
-        "apply": "make the proposed change",
-        "discuss": "talk it through first",
-        "skip": "leave as is",
+        "apply": "make the proposed change exactly as the card presents it",
+        "discuss": "hold the change and talk it through in the session first",
+        "skip": "leave the finding exactly as it stands with no change",
     },
     "items": [
         {
@@ -121,13 +123,19 @@ FIXTURE = {
             "badge": "AMBIGUOUS",
             "summary": "informational only",
             "where": "bare-string where · one mono line",
+            "prose": [{"id": "impact",
+                       "prompt": "Describe anything this report misses about the failure's real impact.",
+                       "placeholder": "a paragraph or two"}],
             "facets": {"severity": "low", "angle": "craft", "file": "b.py"},
         },
         {
             "id": "4",
             "title": "plain decision card on the page-wide option set",
             "badge": "IMPORTANT",
-            "summary": "page options, page default, notes box",
+            "summary": "page options, page default, a notes box, and the suggested-pick star marker",
+            "prose": [{"id": "context",
+                       "prompt": "What context should the next reviewer have before re-running this?",
+                       "rows": 3}],
             "suggested": "discuss",            # triage bulk layer: ★ marker + the accept-all button
             "facets": {"severity": "med", "angle": "trap", "file": "a.py"},
         },
@@ -189,6 +197,9 @@ def check_structure(page):
         ('class="badge b-ambiguous"', 1, "AMBIGUOUS badge"),
         ('class="statuschip"', 1, "status chip (item 5)"),
         ("card collapsible muted", 1, "greyed carried card (item 5)"),
+        ('class="prose"', 2, "prose textareas (items 3 + 4)"),
+        ('class="prosefield"', 2, "prose field wrappers"),
+        ('id="substate"', 1, "submitted-state line"),
     ]
     problems = []
     for needle, count, label in expectations:
@@ -280,6 +291,28 @@ def _resolve_vnu():
     return None
 
 
+def check_floor(outdir):
+    """The content floor actually gates: a planted thin spec (bare A/B options, no summary,
+    no brief, no option_help) must refuse to render, with FLOOR defect lines on stderr."""
+    bad = {"title": "who wins", "blob_header": "floor probe", "options": ["A", "B"],
+           "items": [{"id": "1", "title": "who wins"}]}
+    bad_dir = os.path.join(outdir, "floor-probe")
+    os.makedirs(bad_dir, exist_ok=True)
+    bad_path = os.path.join(bad_dir, "spec.json")
+    with open(bad_path, "w") as handle:
+        json.dump(bad, handle)
+    result = subprocess.run([sys.executable, os.path.join(HERE, "render_picker.py"), bad_path, bad_dir],
+                            capture_output=True, text=True)
+    problems = []
+    if result.returncode != 2:
+        problems.append(f"planted floor violation rendered anyway (exit {result.returncode})")
+    if "FLOOR" not in result.stderr:
+        problems.append("floor defects did not reach stderr")
+    if os.path.exists(os.path.join(bad_dir, "picker.html")):
+        problems.append("a floor-failing spec still wrote picker.html")
+    gate("floor", problems)
+
+
 def check_vnu(page_path):
     command = _resolve_vnu()
     if not command:
@@ -312,6 +345,7 @@ def main():
     gate("structure", check_structure(page))
     check_js(outdir, page)
     check_drift(page)
+    check_floor(outdir)
     check_vnu(page_path)
 
     print(f"fixture page: {page_path}", flush=True)
