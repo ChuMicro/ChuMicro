@@ -563,13 +563,21 @@ class HubServer:
                 in_dir = os.path.join(hub.registry._dir(sid), "in")
                 os.makedirs(in_dir, exist_ok=True)
                 stem, ext = os.path.splitext(safe)
-                full, n = os.path.join(in_dir, safe), 1
-                while os.path.exists(full):
-                    full = os.path.join(in_dir, f"{stem}-{n}{ext}")
-                    n += 1
+                # O_EXCL allocates the name atomically: two concurrent uploads of the same
+                # filename (a multi-file drop, two clients) each get their own numbered file
+                # instead of both passing an exists() check and truncating one another
+                full, n, fd = os.path.join(in_dir, safe), 1, None
+                while fd is None:
+                    try:
+                        fd = os.open(full, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+                    except FileExistsError:
+                        full = os.path.join(in_dir, f"{stem}-{n}{ext}")
+                        n += 1
+                    except OSError as error:
+                        return self._json({"ok": False, "error": str(error)}, 500)
                 remaining = length
                 try:
-                    with open(full, "wb") as fh:
+                    with os.fdopen(fd, "wb") as fh:
                         while remaining > 0:
                             chunk = self.rfile.read(min(65536, remaining))
                             if not chunk:

@@ -25,13 +25,18 @@ Usage: validate_picker_smoke.py [--fixture-out DIR]   (default: a fresh temp dir
 Exit 0 all behavior assertions held; 2 a behavior assertion failed; 3 playwright or chromium
 is unavailable (loud skip).
 """
+import json
 import os
 import sys
 import tempfile
+import threading
+import time
+import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import validate_picker  # noqa: E402  reuse the same all-feature fixture + its render/ownership rules
+import render_picker  # noqa: E402  its _REPO bootstrap locates the repo's toolkit package
 
 PASS_EXIT = 0
 FAIL_EXIT = 2
@@ -64,6 +69,61 @@ def _parse_argv(argv):
         sys.exit(f"unexpected argument {argv[0]!r}: this lane only drives the built-in fixture.\n"
                  f"Usage: validate_picker_smoke.py [--fixture-out DIR]")
     return tempfile.mkdtemp(prefix="picker-smoke-")
+
+
+def _hub_lane(browser, page_path, outdir):
+    """Post the rendered fixture onto a REAL hub (port 0, private state) and assert the
+    browser contract that only exists when the page is hub-served: the page's own relative
+    media refs resolve, set_input_files drives a real upload through /s/<id>/upload, the
+    uploaded name lands in the list, the blob rides an `upload 7.shot = <path>` line whose
+    path holds the bytes, and the file lives under the surface's own in/ dir."""
+    sys.path.insert(0, render_picker._REPO)
+    from webui.hub import HubServer, _state_dir
+    state = _state_dir(os.path.join(outdir, "hubstate"))
+    server = HubServer(state, port=0, idle=0)
+    threading.Thread(target=server.serve, daemon=True).start()
+    for _ in range(50):
+        if server.httpd is not None and server.port:
+            break
+        time.sleep(0.05)
+    problems = []
+    page = None
+    try:
+        with open(page_path) as fh:
+            html = fh.read()
+        payload = json.dumps({"html": html, "title": "smoke hub lane", "kind": "ask",
+                              "session": "smoke", "sink": os.path.join(outdir, "hub-answer.txt"),
+                              "asset_dir": os.path.dirname(page_path), "open": False}).encode()
+        req = urllib.request.Request(f"http://127.0.0.1:{server.port}/api/post", data=payload,
+                                     headers={"Content-Type": "application/json"}, method="POST")
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            sid = json.loads(resp.read())["id"]
+        page = browser.new_page()
+        page.goto(f"http://127.0.0.1:{server.port}/s/{sid}/")
+        page.wait_for_selector(".mediablock img", timeout=5000)
+        if not page.evaluate("Array.from(document.querySelectorAll('.mediablock img'))"
+                             ".every(function(i){return i.naturalWidth > 0;})"):
+            problems.append("the page's own relative media refs did not load when hub-served")
+        handback = os.path.join(outdir, "handback.txt")
+        with open(handback, "w") as fh:
+            fh.write("smoke handback")
+        page.set_input_files('.fld-drop input[type=file]', handback)
+        page.wait_for_selector(".uplist li", timeout=5000)
+        blob = page.locator("#blob").input_value()
+        if "upload 7.shot = " not in blob:
+            problems.append(f"blob missing the upload line after a real hub upload; blob was:\n{blob}")
+        else:
+            stored = blob.split("upload 7.shot = ", 1)[1].splitlines()[0].strip()
+            in_dir = os.path.join(state, "surfaces", sid, "in")
+            if os.path.dirname(stored) != in_dir:
+                problems.append(f"uploaded file landed outside the surface's in/ dir: {stored}")
+            elif not (os.path.isfile(stored) and open(stored).read() == "smoke handback"):
+                problems.append(f"the uploaded bytes are not on disk at {stored}")
+    finally:
+        if page is not None:
+            page.close()
+        server.stop()
+    return problems
 
 
 def main():
@@ -193,6 +253,11 @@ def main():
             if not page.evaluate("document.getElementById('lightbox').hidden"):
                 problems.append("Escape did not close the lightbox")
 
+            # ---- the hub lane: serve the SAME page through a live hub and drive the upload
+            # path end to end. Round 3 shipped broken links because every gate exercised the
+            # page from file:// only; this lane keeps that class of miss locked down.
+            problems.extend(_hub_lane(browser, page_path, outdir))
+
             browser.close()
     except SystemExit:
         raise
@@ -208,7 +273,8 @@ def main():
 
     print("OK smoke (radio pick, notes, candidate pick, text/multi/scale/menu fields, the "
           "write-in seat, required gating, the lightbox, and the inert file:// upload zone "
-          "all behave; .done marks decided cards)", flush=True)
+          "all behave; .done marks decided cards; the hub lane serves the page's own media "
+          "refs and carries a real browser upload end to end)", flush=True)
     print(f"fixture page: {page_path}", flush=True)
     sys.exit(PASS_EXIT)
 
