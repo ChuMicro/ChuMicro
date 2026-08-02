@@ -214,7 +214,7 @@ def _cmd_serve(args):
     canvas = os.path.join(server.directory, "canvas.html")
     if not os.path.exists(canvas):
         with open(canvas, "w") as handle:
-            handle.write(kit.page("ChuMicro", "<div class='wrap'><h1>ready</h1>"
+            handle.write(kit.page("Surfaces", "<div class='wrap'><h1>ready</h1>"
                                   "<p class='faint'>the agent will present here.</p></div>", live=True))
     with open(os.path.join(server.directory, PORT_FILE), "w") as handle:
         handle.write(str(server.port))
@@ -245,7 +245,7 @@ def _cmd_show(args):
     directory = os.path.abspath(args.directory)
     src = open(args.file).read() if args.file else sys.stdin.read()
     if args.wrap:
-        src = kit.page(args.title or "ChuMicro", src, live=True)
+        src = kit.page(args.title or "Surfaces", src, live=True)
     elif "EventSource" not in src:
         print("warning: page has no SSE client (build it with kit.page(live=True) or pass --wrap): "
               "the reload push won't reach it", flush=True)
@@ -287,7 +287,7 @@ def main(argv=None):
     """
     import argparse
 
-    ap = argparse.ArgumentParser(description="ChuMicro surfaces live canvas (persistent tab + SSE re-serve)")
+    ap = argparse.ArgumentParser(description="Surfaces live canvas (persistent tab + SSE re-serve)")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     sp = sub.add_parser("serve", help="run the bg session server (keep one tab live)")
