@@ -89,6 +89,8 @@ DEFAULT_PORT = 17874                  # stable per repo, so a reopened hub reviv
 IDLE_SECONDS = 900                    # no tab + no pending + no waiter this long -> exit
 PENDING_TTL = 24 * 3600               # a pending surface older than this expires
 ENV_NO_OPEN = "HUB_NO_OPEN"           # set on a poster to forbid the auto-open for its post
+SSE_RETRY_MS = 2000                   # told to the browser, so a reconnect is bounded, not its 3s default
+RECONNECT_GRACE = 6                   # a dropped tab gets this long to come back before a new one opens
 KEEP_RESOLVED = 20                    # answered/withdrawn surfaces kept for the shell's history
 
 _ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{2,40}$")
@@ -256,6 +258,7 @@ class HubServer:
         self.waiters_lock = threading.Lock()
         self.last_activity = _now()
         self.last_open = 0.0
+        self.last_client_left = 0.0     # when the last tab's SSE dropped (see maybe_open)
         self.httpd = None
         self.port = port
 
@@ -284,6 +287,18 @@ class HubServer:
             return                       # a tab is live; the SSE push is the notification
         if _now() - self.last_open < 10:
             return                       # an open is already in flight; never double-tab
+        # A tab whose SSE merely DROPPED is reconnecting, not gone: browsers throttle and
+        # disconnect backgrounded tabs, so client_count() reads 0 while the human's tab is
+        # still sitting right there. Opening on that reading is what piles tabs up, because
+        # the old one reconnects a moment later and now there are two. Wait out the
+        # reconnect before deciding. A genuinely closed tab never comes back and still gets
+        # its open, only RECONNECT_GRACE later.
+        if _now() - self.last_client_left < RECONNECT_GRACE:
+            deadline = _now() + RECONNECT_GRACE
+            while _now() < deadline:
+                time.sleep(0.2)
+                if self.client_count() > 0:
+                    return
         self.last_open = _now()
         try:
             webbrowser.open(f"http://127.0.0.1:{self.port}/")
@@ -446,6 +461,7 @@ class HubServer:
                     self.send_header("Content-Type", "text/event-stream")
                     self.send_header("Cache-Control", "no-cache")
                     self.end_headers()
+                    self.wfile.write(f"retry: {SSE_RETRY_MS}\n\n".encode())
                     self.wfile.write(b": connected\n\n")
                     self.wfile.flush()
                     while True:
@@ -461,6 +477,8 @@ class HubServer:
                     with hub.clients_lock:
                         if q in hub.clients:
                             hub.clients.remove(q)
+                        if not hub.clients:
+                            hub.last_client_left = _now()
                     hub.last_activity = _now()
 
             # ---- POST ----
