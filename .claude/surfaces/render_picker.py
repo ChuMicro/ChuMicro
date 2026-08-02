@@ -1513,6 +1513,21 @@ _MD_BOLD = re.compile(r"\*\*(.+?)\*\*")
 _MD_EM = re.compile(r"(?<!\*)\*([^*\n]+)\*(?!\*)")
 
 
+def _safe_href(url):
+    """A link target safe to emit into a surface, or None.
+
+    A staged .md artifact is untrusted input: the agent did not write it, it was pulled
+    from a diag, a repo, or handed over by the human. Escaping alone still lets
+    `javascript:` (or `data:`) through, and one click then runs script in the surface's
+    own origin, where the submit blob and the session live. Relative targets and the
+    handful of inert schemes are allowed; everything else renders as plain text.
+    """
+    probe = url.strip().lower().replace("\t", "").replace("\n", "")
+    if ":" not in probe.split("/")[0].split("?")[0].split("#")[0]:
+        return url                      # relative: no scheme to abuse
+    return url if probe.startswith(("http://", "https://", "mailto:")) else None
+
+
 def _md_inline(text):
     """Inline markdown on already-escaped text: code spans held out first so
     nothing inside them transforms, then links, bold, em."""
@@ -1523,14 +1538,19 @@ def _md_inline(text):
         spans.append(match.group(1))
         return f"\x00{len(spans) - 1}\x00"
 
+    def link(match):
+        label, target = match.group(1), _safe_href(match.group(2))
+        if target is None:
+            return f"{label} ({html.escape(match.group(2), quote=False)})"
+        return f'<a href="{html.escape(target, quote=True)}">{label}</a>'
+
     text = _MD_CODE.sub(hold, text)
-    text = _MD_LINK.sub(
-        lambda m: f'<a href="{html.escape(m.group(2), quote=True)}">{m.group(1)}</a>',
-        text)
+    text = _MD_LINK.sub(link, text)
     text = _MD_BOLD.sub(r"<strong>\1</strong>", text)
     text = _MD_EM.sub(r"<em>\1</em>", text)
-    for index, span in enumerate(spans):
-        text = text.replace(f"\x00{index}\x00", f"<code>{span}</code>")
+    # one pass, not one full-string scan per span: a 400 KB doc with thousands of code
+    # spans is O(doc x spans) the other way, and the picker hangs before it serves
+    text = re.sub(r"\x00(\d+)\x00", lambda m: f"<code>{spans[int(m.group(1))]}</code>", text)
     return text
 
 

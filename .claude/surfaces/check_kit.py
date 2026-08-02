@@ -289,6 +289,104 @@ def _hub():
             server.stop()
 
 
+def _oneshot_server(directory, **kwargs):
+    """Run serve_oneshot in a thread and hand back its base URL. `on_serving` fires once
+    the socket is bound, so nothing has to poll for readiness."""
+    from surfaces.server import serve_oneshot
+    ready, box = threading.Event(), {}
+
+    def note(url, port):
+        box["port"] = port
+        ready.set()
+
+    thread = threading.Thread(target=serve_oneshot, kwargs=dict(
+        directory=directory, page="page.html", post_path="/selection",
+        sink_name="selection.txt", env_no_open="HUB_NO_OPEN",
+        label_received="RECEIVED", label_closed="CLOSED", persistent=True,
+        on_serving=note, **kwargs), daemon=True)
+    os.environ["HUB_NO_OPEN"] = "1"
+    thread.start()
+    if not ready.wait(6):
+        raise SystemExit("FAIL [server] one-shot server never bound")
+    return f"http://127.0.0.1:{box['port']}"
+
+
+def _ranges():
+    """HTTP Range on the one-shot transport. This is what makes served media seekable:
+    without it a seek, or an A/B switch to an unbuffered position, snaps back to zero."""
+    with tempfile.TemporaryDirectory() as directory:
+        with open(os.path.join(directory, "page.html"), "w") as handle:
+            handle.write(kit.page("t", "<p>x</p>"))
+        with open(os.path.join(directory, "media.bin"), "wb") as handle:
+            handle.write(b"0123456789")
+        base = _oneshot_server(directory)
+
+        def get(header):
+            req = urllib.request.Request(f"{base}/media.bin")
+            if header:
+                req.add_header("Range", header)
+            try:
+                with urllib.request.urlopen(req, timeout=5) as resp:
+                    return resp.status, resp.read(), resp.headers.get("Content-Range")
+            except urllib.error.HTTPError as err:
+                return err.code, err.read(), err.headers.get("Content-Range")
+
+        status, body, rng = get("bytes=2-5")
+        _check("server/range-bounded", (status, body, rng) == (206, b"2345", "bytes 2-5/10"),
+               f"{status} {body!r} {rng!r}")
+        status, body, _ = get("bytes=3-")
+        _check("server/range-open-ended", (status, body) == (206, b"3456789"), f"{status} {body!r}")
+        status, body, _ = get("bytes=-4")
+        _check("server/range-suffix", (status, body) == (206, b"6789"), f"{status} {body!r}")
+        status, _, rng = get("bytes=99-200")
+        _check("server/range-unsatisfiable", status == 416 and rng == "bytes */10",
+               f"{status} {rng!r}")
+        status, body, _ = get("bytes=abc")
+        _check("server/range-malformed-falls-back", status == 200 and body == b"0123456789",
+               f"{status} {body!r}")
+        status, body, _ = get(None)
+        _check("server/no-range-is-whole", status == 200 and body == b"0123456789",
+               f"{status} {body!r}")
+
+
+def _exclusive_page():
+    """exclusive_page: one round, one page. Without it the directory's every stale page
+    answers 200, so a wrong URL from another round reads as correct to the human."""
+    with tempfile.TemporaryDirectory() as directory:
+        for name in ("page.html", "stale.html"):
+            with open(os.path.join(directory, name), "w") as handle:
+                handle.write(kit.page("t", f"<p>{name}</p>"))
+        with open(os.path.join(directory, "tone.bin"), "wb") as handle:
+            handle.write(b"asset")
+        base = _oneshot_server(directory, exclusive_page=True)
+
+        def code(path, redirects=True):
+            opener = (urllib.request.build_opener() if redirects
+                      else urllib.request.build_opener(_NoRedirect))
+            try:
+                with opener.open(f"{base}{path}", timeout=5) as resp:
+                    return resp.status, resp.read()
+            except urllib.error.HTTPError as err:
+                return err.code, err.read()
+
+        status, body = code("/page.html")
+        _check("server/exclusive-live-page-serves", status == 200 and b"page.html" in body,
+               f"{status}")
+        status, body = code("/stale.html")
+        _check("server/exclusive-stale-410", status == 410 and b"DIFFERENT round" in body,
+               f"{status} {body[:60]!r}")
+        status, _ = code("/", redirects=False)
+        _check("server/exclusive-root-redirects", status == 302, f"{status}")
+        status, body = code("/tone.bin")
+        _check("server/exclusive-asset-unaffected", status == 200 and body == b"asset",
+               f"{status} {body!r}")
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *_args, **_kwargs):
+        return None
+
+
 def main():
     print("surfaces kit + session smoke:")
     _palette()
@@ -296,8 +394,11 @@ def main():
     _content_key()
     _session()
     _canvas_cli()
+    _ranges()
+    _exclusive_page()
     _hub()
-    print("GREEN: surfaces kit + re-serve session server + live-canvas CLI + surface hub")
+    print("GREEN: surfaces kit + one-shot transport + re-serve session server "
+          "+ live-canvas CLI + surface hub")
 
 
 if __name__ == "__main__":
