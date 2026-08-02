@@ -123,7 +123,9 @@ renderer or validator.
 ## This package is generated
 
 `.claude/surfaces/` and this skill are one synced unit across every repo that carries them.
-The canonical is `upstream-workspace/.claude/surfaces/`; `bin/sync-surfaces` regenerates each
-repo's variant and `verify` proves they match. Fix the canonical, never a downstream copy:
+The canonical is `upstream-workspace/.claude/surfaces/`. The syncer lives outside every repo,
+because a tool that spans repos belongs to none of them: `sync-surfaces` on PATH, rostered
+in `~/.config/surfaces-sync/roster.json`, regenerates each repo's variant and `verify`
+proves they match. Fix the canonical, never a downstream copy:
 a local edit is overwritten on the next emit. Per-repo variance is limited to the palette,
 the JS name prefix, and the hub constants, which are spliced from the repo's own file.
