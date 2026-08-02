@@ -304,10 +304,19 @@ def _oneshot_server(directory, **kwargs):
         sink_name="selection.txt", env_no_open="HUB_NO_OPEN",
         label_received="RECEIVED", label_closed="CLOSED", persistent=True,
         on_serving=note, **kwargs), daemon=True)
+    # Scoped, not global: leaving HUB_NO_OPEN set would silently disable the auto-open in
+    # every later check in this process, and a test that cannot open is not a test of opening.
+    prior = os.environ.get("HUB_NO_OPEN")
     os.environ["HUB_NO_OPEN"] = "1"
-    thread.start()
-    if not ready.wait(6):
-        raise SystemExit("FAIL [server] one-shot server never bound")
+    try:
+        thread.start()
+        if not ready.wait(6):
+            raise SystemExit("FAIL [server] one-shot server never bound")
+    finally:
+        if prior is None:
+            os.environ.pop("HUB_NO_OPEN", None)
+        else:
+            os.environ["HUB_NO_OPEN"] = prior
     return f"http://127.0.0.1:{box['port']}"
 
 
@@ -387,6 +396,64 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
+def _one_tab():
+    """One tab, ever. A backgrounded tab drops its SSE, so client_count() reads zero while
+    the human's tab is still sitting there; opening on that reading is what piles tabs up,
+    because the old one reconnects a moment later. The hub must tell "reconnecting" from
+    "gone" before it opens anything."""
+    import queue as _queue
+
+    from surfaces import hub as hubmod
+
+    opens = []
+    real_open, real_grace = hubmod.webbrowser.open, hubmod.RECONNECT_GRACE
+    hubmod.webbrowser.open = lambda url: opens.append(url)
+    hubmod.RECONNECT_GRACE = 1.5          # keep the smoke quick; the logic is the subject
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            state = hubmod._state_dir(os.path.join(tmp, "state"))
+            server = hubmod.HubServer(state, port=0)
+
+            # no tab has ever connected: nothing to wait for, open at once
+            server.maybe_open(allow=True)
+            _check("hub/opens-when-no-tab-ever", len(opens) == 1, f"{opens}")
+
+            # a tab dropped and comes back inside the grace: no second tab
+            server.last_open = 0
+            server.last_client_left = hubmod._now()
+            back = _queue.Queue()
+
+            def reconnect():
+                time.sleep(0.4)
+                with server.clients_lock:
+                    server.clients.append(back)
+
+            thread = threading.Thread(target=reconnect, daemon=True)
+            thread.start()
+            server.maybe_open(allow=True)
+            thread.join()
+            _check("hub/no-tab-for-a-reconnect", len(opens) == 1, f"{opens}")
+
+            # the tab is genuinely gone: it still gets its open, only a grace later
+            with server.clients_lock:
+                server.clients.remove(back)
+            server.last_open = 0
+            server.last_client_left = hubmod._now()
+            server.maybe_open(allow=True)
+            _check("hub/opens-when-tab-really-gone", len(opens) == 2, f"{opens}")
+
+            # an env-forbidden open never fires whatever the tab state
+            server.last_open = 0
+            os.environ[hubmod.ENV_NO_OPEN] = "1"
+            try:
+                server.maybe_open(allow=True)
+            finally:
+                del os.environ[hubmod.ENV_NO_OPEN]
+            _check("hub/no-open-when-forbidden", len(opens) == 2, f"{opens}")
+    finally:
+        hubmod.webbrowser.open, hubmod.RECONNECT_GRACE = real_open, real_grace
+
+
 def main():
     print("surfaces kit + session smoke:")
     _palette()
@@ -396,6 +463,7 @@ def main():
     _canvas_cli()
     _ranges()
     _exclusive_page()
+    _one_tab()
     _hub()
     print("GREEN: surfaces kit + one-shot transport + re-serve session server "
           "+ live-canvas CLI + surface hub")
