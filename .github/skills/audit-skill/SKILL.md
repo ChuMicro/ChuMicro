@@ -219,14 +219,14 @@ Render the report per [Output format](#output-format), write it to
 on disk at `<report-dir>/spec.json`:
 
 ```bash
-python3 webui/render_picker.py <report-dir>/spec.json
-python3 webui/serve_picker.py <report-dir>   # run_in_background; posts to the surface hub
+python3 .claude/surfaces/render_picker.py <report-dir>/spec.json
+python3 .claude/surfaces/serve_picker.py <report-dir>   # run_in_background; posts to the surface hub
 ```
 
 The hub owns the one browser tab: it opens the browser only when no tab is connected and
 pushes the new surface into the open shell otherwise — never `open` the URL yourself and
 never set `PICKER_NO_OPEN`. If the conversation moves past the question, withdraw it
-(`python3 -m webui.hub withdraw <id>`, the id from the `ASKED` line) or re-serve with
+(`python3 -m surfaces.hub withdraw <id>`, the id from the `ASKED` line) or re-serve with
 `--supersede` instead of stacking a second round.
 
 Watch the server's stdout with `Monitor` — a browser submit prints `SELECTION RECEIVED -> <path>`;

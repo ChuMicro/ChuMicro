@@ -72,7 +72,7 @@ the extraction report):
 - `.github/skills/_shared/speak_wf.js` — consumed by `audit-skill`.
 - `.github/skills/_shared/run_trigger_evals.py` — consumed by `audit-branch`, `audit-skill`,
   `new-skill`.
-- Top-level `webui/` kit → vendored into the new repo as an intentional fork frozen at
+- Top-level `.claude/surfaces/` kit → vendored into the new repo as an intentional fork frozen at
   `391c349d` (the monorepo kit keeps serving in-repo skills; the two may diverge).
 - `plans/workstreams/deferred-clean-room-benches.md` (mixed regen + audit benches): copied;
   the monorepo original carries a top note that the regen round-35 item now lives in the
@@ -81,7 +81,7 @@ the extraction report):
 **Branch `voice-writers-validation`:** NOT merged, NOT deleted. Its two unique commits
 (`b61f6df2` shared theming, `52934e58` render_compare collapse) are exported as patch files
 in the new repo's `reference/branch-patches/`. Both are already independently re-landed on
-main (theming → `webui/theme.py`; the collapse → `render_compare.py` is the 176-line
+main (theming → `.claude/surfaces/theme.py`; the collapse → `render_compare.py` is the 176-line
 spec-builder), so neither was applied — the branch is ready for the user to **retire after
 review**. The branch's voices revert (`0385432a`) is obsolete (who-form retained, 2026-06-20).
 

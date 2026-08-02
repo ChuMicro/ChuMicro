@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Put a rendered decision page in front of the human and loop Submit back to the session.
 
-Default transport: the surface hub (webui/hub.py). The page is posted as a surface on the
+Default transport: the surface hub (surfaces/hub.py). The page is posted as a surface on the
 repo's ONE hub, which owns the ONE browser tab: no per-question server, no new tab per
 round, no port fights between concurrent sessions. This command then blocks until the
 surface resolves, so the process completing is still the submit signal:
@@ -13,7 +13,7 @@ surface resolves, so the process completing is still the submit signal:
     HUB UNREACHABLE ...                         then exit 5
 
 When the conversation negates a pending question, withdraw it instead of abandoning it:
-`python3 -m webui.hub withdraw <id>` (the ASKED line names the id), or re-ask with
+`python3 -m surfaces.hub withdraw <id>` (the ASKED line names the id), or re-ask with
 `--supersede` so the replacement retires the original in place. `--tag` groups a
 session's rounds; re-asking with the same tag plus `--supersede` swaps the round the
 human sees instead of stacking a second one.
@@ -34,7 +34,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # repo root, for the shared webui toolkit
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # repo root, for the shared surfaces toolkit
 
 RENDERER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "render_picker.py")
 
@@ -82,14 +82,14 @@ def main():
     sink = os.path.join(directory, "selection.txt")
 
     if args.oneshot:
-        from webui.server import serve_oneshot
+        from surfaces.server import serve_oneshot
         serve_oneshot(directory, args.page, post_path="/selection", sink_name="selection.txt",
                       env_no_open="PICKER_NO_OPEN", label_received="SELECTION RECEIVED",
                       label_closed="PICKER CLOSED: selection saved to",
                       on_get=lambda: rerender_if_stale(directory, args.page))
         return
 
-    from webui import hub
+    from surfaces import hub
     title = "decision: " + os.path.basename(directory)
     spec_path = os.path.join(directory, "spec.json")
     if os.path.exists(spec_path):

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""PostToolUse gate: an agent edit to the webui picker's renderer or validator re-runs
+"""PostToolUse gate: an agent edit to the surfaces picker's renderer or validator re-runs
 validate_picker.py immediately, so a structure, JS-syntax, namespace-drift, or validity
 regression surfaces in the same turn as the edit instead of waiting for a hand-run.
 Wired in .claude/settings.json (hooks → PostToolUse on Edit|Write|MultiEdit).
@@ -15,7 +15,7 @@ import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-WATCHED = re.compile(r"webui/(render_picker|validate_picker)\.py$")
+WATCHED = re.compile(r"surfaces/(render_picker|validate_picker)\.py$")
 
 
 def main():
@@ -26,9 +26,15 @@ def main():
     file_path = (event.get("tool_input") or {}).get("file_path", "")
     if not WATCHED.search(file_path.replace(os.sep, "/")):
         sys.exit(0)
-    repo_root = os.path.abspath(os.path.join(HERE, os.pardir))
+    # The dir that HOLDS the package, so `import surfaces` resolves from cwd. Not the repo
+    # root: the package sits under .claude/, and that is what has to be importable.
+    pkg_parent = os.path.abspath(os.path.join(HERE, os.pardir))
+    # NO ARGUMENT, deliberately. Bare = the fixture lane: the validator renders the
+    # all-feature fixture into a temp dir it owns. Never pass a directory here: the
+    # positional argument is the read-only SUBJECT lane (validate an already-rendered
+    # page), which skips exactly the fixture-shaped gates this hook exists to run.
     result = subprocess.run([sys.executable, os.path.join(HERE, "validate_picker.py")],
-                            capture_output=True, text=True, cwd=repo_root, timeout=120)
+                            capture_output=True, text=True, cwd=pkg_parent, timeout=120)
     if result.returncode != 0:
         sys.stderr.write("validate_picker.py failed after this edit; fix before moving on:\n"
                          + result.stdout + result.stderr)

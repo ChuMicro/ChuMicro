@@ -34,7 +34,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR/.github/skills/_shared/ask_gate.py\""
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/surfaces/ask_gate.py\""
           }
         ]
       }
@@ -45,7 +45,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR/webui/picker_edit_gate.py\""
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/surfaces/picker_edit_gate.py\""
           }
         ]
       }

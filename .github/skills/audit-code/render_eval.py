@@ -3,7 +3,7 @@
 
 Reads each run room's eval.json + written.json + summary.json + validation.json + patches.json +
 phase1.json, joins the writer's prose onto the fact ledger by id, and writes spec.json in the
-shared picker schema (webui/render_picker.py), then invokes that renderer to produce
+shared picker schema (.claude/surfaces/render_picker.py), then invokes that renderer to produce
 picker.html.
 
 The mapping: one decision card per finding — severity badge, angle chip, effort/confidence meta
@@ -32,7 +32,7 @@ Defaults encode the apply policy: a validator-confirmed high-severity finding pr
 an unconfirmed finding pre-selects discuss (invariant 7's push-back, encoded in the page), and
 everything else pre-selects skip.
 
-This script renders only. The orchestrator serves the page with webui/serve_picker.py
+This script renders only. The orchestrator serves the page with .claude/surfaces/serve_picker.py
 (PICKER_NO_OPEN=1, background), opens the printed SERVING url itself, and watches the server's
 stdout for the submitted selection.
 
@@ -74,7 +74,8 @@ ANGLE_HELP = {
     "path": "usage-path lens — transitive callers (callers of callers, optionally in consumer repos) judged in-session on full commented code, in feature terms; no clean room on purpose",
 }
 RENDERER = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                        os.pardir, os.pardir, os.pardir, "webui", "render_picker.py")
+                        os.pardir, os.pardir, os.pardir,
+                        ".claude", "surfaces", "render_picker.py")
 USAGE = (
     "usage: render_eval.py <rundir> <target.py> [--baseline <prior eval.json>]\n"
     "       render_eval.py --merge <outdir> <rundir> <target.py> [<rundir> <target.py> ...] [--lib <LIBRARY_FACTS.md>]"

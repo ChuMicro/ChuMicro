@@ -107,7 +107,7 @@ adversarial verify → triage → fix → commit, before the next area starts.
    see; device now FAILs them and the host collector recognizes async defs), all fixed
    2026-07-03; report at
    [reviews/2026-07-03-test-harness-audit.md](../reviews/2026-07-03-test-harness-audit.md).
-6. **DONE** `workbench/repl` + 7. `webui/` — combined tail hunt: 5 repl findings (top: TUI
+6. **DONE** `workbench/repl` + 7. `.claude/surfaces/` — combined tail hunt: 5 repl findings (top: TUI
    Ctrl-X wedge against a streaming board; CLI connect now wrapped in the Decision-0053 coaching
    loop) + webui clean bar one escaping nit, all fixed 2026-07-03; report at
    [reviews/2026-07-03-repl-webui-audit.md](../reviews/2026-07-03-repl-webui-audit.md).

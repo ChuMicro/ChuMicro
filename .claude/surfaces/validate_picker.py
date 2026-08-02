@@ -106,6 +106,13 @@ def _zip_bytes():
 # a minimal mp4 header: enough for the structure gates (no gate asserts playback)
 _MP4 = b"\x00\x00\x00\x20ftypisom\x00\x00\x02\x00isomiso2avc1mp41" + b"\x00" * 64
 
+_MD_DOC = (
+    "# Fixture doc\n\nA paragraph with **bold**, *em*, `code`, and "
+    "[a link](https://example.invalid).\n\n## Table\n\n"
+    "| Unit | Status |\n|---|---|\n| a | ok |\n| b | ok |\n\n"
+    "- first bullet\n- second bullet\n\n1. ordered\n2. steps\n\n"
+    "> a quote line\n\n---\n\n```\nfenced code\n```\n").encode()
+
 FIXTURE_ASSETS = {
     "srcmedia/tiny1.png": _PNG,
     "srcmedia/tiny2.png": _PNG,
@@ -114,6 +121,7 @@ FIXTURE_ASSETS = {
     "srcmedia/tone.wav": _wav_bytes(),
     "srcmedia/clip.mp4": _MP4,
     "srcmedia/bundle.zip": _zip_bytes(),
+    "srcmedia/notes.md": _MD_DOC,
 }
 
 FIXTURE = {
@@ -238,6 +246,8 @@ FIXTURE = {
                 {"kind": "video", "src": "srcmedia/clip.mp4", "caption": "a fixture clip"},
                 {"kind": "file", "src": "srcmedia/bundle.zip",
                  "note": "the run bundle a session would attach to the ticket"},
+                {"kind": "file", "src": "srcmedia/notes.md",
+                 "note": "a markdown artifact; it renders on the card"},
             ],
             "facets": {"severity": "low", "angle": "craft", "file": "b.py"},
         },
@@ -329,9 +339,9 @@ def check_structure(page):
         ('class="chu-compare"', 1, "before/after compare frame"),
         ('class="cmprange"', 1, "compare blend slider"),
         ('class="chu-player"', 2, "audio + video players"),
-        ('class="chu-filecard"', 1, "file download card"),
-        ('class="chu-fileext"', 1, "file extension chip"),
-        ('class="chu-filenote"', 1, "file note line"),
+        ('class="chu-filecard"', 2, "file cards: the zip and the md doc header"),
+        ('class="chu-fileext"', 2, "file extension chips"),
+        ('class="chu-filenote"', 2, "file note lines"),
         ('id="lightbox"', 1, "the one lightbox overlay"),
         ('class="mediablock"', 1, "media area on the exhibit card"),
         ('class="fld-text"', 1, "text field (item 7)"),
@@ -345,6 +355,11 @@ def check_structure(page):
         ('src="assets/tone.wav"', 1, "staged audio src rewritten to assets/"),
         ('src="assets/clip.mp4"', 1, "staged video src rewritten to assets/"),
         ('href="assets/bundle.zip"', 1, "staged file download href"),
+        ('class="chu-doc"', 1, "markdown artifact doc panel"),
+        ('class="chu-docbody"', 1, "rendered doc body"),
+        ("<th>Unit</th>", 1, "md table header rendered"),
+        ("<h2>Fixture doc</h2>", 1, "md heading downshifted to h2"),
+        ('href="assets/notes.md"', 1, "doc download link kept"),
     ]
     problems = []
     for needle, count, label in expectations:

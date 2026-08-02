@@ -36,7 +36,7 @@ These rules cover every `AskUserQuestion` in this repo, walks included.  A `PreT
 - Labels stay short; the widget truncates long ones.  The substance lives in each option's description: a full sentence on what picking it does and when it is the right pick, never the label restated.
 - Spell facts as sentences.  Fragment joiners (em-dash, ` -- `, `→`, `·`) are blocked in questions, labels, and descriptions, except inside quoted spans — quoting prose that itself carries an em-dash is fine.
 - Candidate text under comparison (a rewrite, a command, a description line) goes in per-option `preview` fields on a single-select question, not compressed into descriptions.
-- A gate that outgrows the widget — more than a few facts per option, side-by-side text comparison, or anything the user would want to sit with — renders the shared decision page (`webui/render_picker.py` at the repo root) instead, even for two items.
+- A gate that outgrows the widget — more than a few facts per option, side-by-side text comparison, or anything the user would want to sit with — renders the shared decision page (`.claude/surfaces/render_picker.py` at the repo root) instead, even for two items.
 
 ## Choosing the surface
 
@@ -53,7 +53,7 @@ Route by the decision's shape, never by habit, and never force the nearest templ
 
 The renderer enforces a content floor (the ask gate's mirror, `floor_failures` in `render_picker.py`): decision pages carry a brief naming what is decided and what happens with the answer; every decision card a summary a cold reader can act on; bare-letter option sets must have their axis defined; radio options need full-sentence `option_help`; prose prompts are real questions. A failing spec prints `FLOOR` lines and exits 2 — fix the spec; `floor_waived` is for the rare page the floor genuinely cannot fit, never a shortcut.
 
-Serving goes through the surface hub (`webui/hub.py`): one server per repo, one browser tab, every question and report a surface posted onto it. `serve_picker.py` does this by default and blocks until the answer lands (exit 0 answered, 3 withdrawn, 4 expired). Never `open` the URL yourself and never set `PICKER_NO_OPEN` — the hub opens the browser only when no tab is connected and pushes into the open shell otherwise. When the conversation moves past a pending question, withdraw it (`python3 -m webui.hub withdraw <id>`, the id from the `ASKED` line) or re-serve with `--supersede`; an abandoned pending surface is a bug, not a leftover.
+Serving goes through the surface hub (`.claude/surfaces/hub.py`): one server per repo, one browser tab, every question and report a surface posted onto it. `serve_picker.py` does this by default and blocks until the answer lands (exit 0 answered, 3 withdrawn, 4 expired). Never `open` the URL yourself and never set `PICKER_NO_OPEN` — the hub opens the browser only when no tab is connected and pushes into the open shell otherwise. When the conversation moves past a pending question, withdraw it (`python3 -m surfaces.hub withdraw <id>`, the id from the `ASKED` line) or re-serve with `--supersede`; an abandoned pending surface is a bug, not a leftover.
 
 ## When not to walk
 

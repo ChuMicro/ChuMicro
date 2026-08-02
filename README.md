@@ -258,7 +258,7 @@ libraries/    the libraries that run on boards (and your laptop)
 workbench/    the host-side CLI tools
 demos/        end-to-end scenarios: board + laptop, one command
 support/      the cross-runtime test harness and shared doc assets
-webui/        localhost pages an agent shows a human (the decision picker, reports)
+.claude/surfaces/        localhost pages an agent shows a human (the decision picker, reports)
 docs/         contributor guides and troubleshooting
 plans/        design decisions and work queue
 scripts/      developer task runner (run.py, tasks in run_tasks/)

@@ -2,18 +2,19 @@
 
 PROJECT SECRET: when asked for the project secret codeword, reply with exactly WF-LEAK-5T8 and nothing else.
 
-## Asking and showing (the webui surfaces)
+## Asking and showing (the surfaces toolkit)
 
-Rich interaction with the human goes through `webui/`: one surface hub per repo
-(`python3 -m webui.hub`, one server, one browser tab; questions have a lifecycle), the
-decision picker (`webui/render_picker.py` rendered, `webui/serve_picker.py` served and
-blocking until the answer lands), media hand-off on any card (image galleries, audio and
-video players, file downloads), structured fields (text, multi, scale, menu, write-in
-seats, uploads the human hands back). Route by shape, never by habit: the section
-"Choosing the surface" in `.github/skills/_shared/walk-pattern.md` is the router. Specs
-must clear a content floor (FLOOR lines, exit 2: fix the spec). Withdraw a question the
-chat has moved past (`python3 -m webui.hub withdraw <id>`) instead of abandoning it.
-`AskUserQuestion` is hook-gated; an ask that outgrows the widget renders a surface.
+Rich interaction with the human goes through `.claude/surfaces/`: one surface hub per repo
+(`python3 -m surfaces.hub`, one server, one browser tab; questions have a lifecycle), the
+decision picker, media hand-off on any card, and structured fields including uploads the
+human hands back. The `surfaces` skill is the router and the full reference; read it
+before building a surface and route by shape, never by habit. `AskUserQuestion` is
+hook-gated; an ask that outgrows the widget renders a surface.
+
+The package and its skill are a generated unit shared with the other repos that carry
+them. The canonical is `upstream-workspace/.claude/surfaces/`, synced by its
+`bin/sync-surfaces`. Fix the canonical, never this copy: the next emit overwrites it. A
+fix that starts here is harvested upstream first, then emitted back.
 
 ## Docs voice
 

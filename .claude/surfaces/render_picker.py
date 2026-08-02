@@ -270,9 +270,9 @@ import shutil
 import sys
 
 _REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-sys.path.insert(0, _REPO)   # repo root, so `from webui import kit` resolves when run as a script
-from webui import kit  # the ONE shared palette + content-key
-from webui.theme import THEME_KEY, assert_full_dark_override
+sys.path.insert(0, _REPO)   # the dir HOLDING the package, so `from surfaces import kit` resolves as a script
+from surfaces import kit  # the ONE shared palette + content-key
+from surfaces.theme import THEME_KEY, assert_full_dark_override
 
 BADGE_CLASSES = {
     "critical": "b-critical",
@@ -1507,11 +1507,136 @@ def _caption_line(entry, size):
     return '<div class="chu-figcap">' + " &middot; ".join(parts) + "</div>"
 
 
+_MD_CODE = re.compile(r"`([^`]+)`")
+_MD_LINK = re.compile(r"\[([^\]]+)\]\(([^)\s]+)\)")
+_MD_BOLD = re.compile(r"\*\*(.+?)\*\*")
+_MD_EM = re.compile(r"(?<!\*)\*([^*\n]+)\*(?!\*)")
+
+
+def _md_inline(text):
+    """Inline markdown on already-escaped text: code spans held out first so
+    nothing inside them transforms, then links, bold, em."""
+    text = html.escape(text, quote=False)
+    spans = []
+
+    def hold(match):
+        spans.append(match.group(1))
+        return f"\x00{len(spans) - 1}\x00"
+
+    text = _MD_CODE.sub(hold, text)
+    text = _MD_LINK.sub(
+        lambda m: f'<a href="{html.escape(m.group(2), quote=True)}">{m.group(1)}</a>',
+        text)
+    text = _MD_BOLD.sub(r"<strong>\1</strong>", text)
+    text = _MD_EM.sub(r"<em>\1</em>", text)
+    for index, span in enumerate(spans):
+        text = text.replace(f"\x00{index}\x00", f"<code>{span}</code>")
+    return text
+
+
+def _markdown_html(text):
+    """A rendered view of a markdown artifact: the subset the desk writes
+    (headings, lists, tables, fenced code, quotes, rules). Headings downshift
+    two levels so a document's h1 sits under the card's own heading. Unknown
+    shapes degrade to paragraphs; everything is escaped."""
+    out, para = [], []
+    lines = text.splitlines()
+    i = 0
+
+    def flush_para():
+        if para:
+            out.append("<p>" + _md_inline(" ".join(para)) + "</p>")
+            del para[:]
+
+    while i < len(lines):
+        stripped = lines[i].strip()
+        if stripped.startswith("```"):
+            flush_para()
+            i += 1
+            code = []
+            while i < len(lines) and not lines[i].strip().startswith("```"):
+                code.append(lines[i])
+                i += 1
+            out.append("<pre><code>" + html.escape("\n".join(code)) + "</code></pre>")
+            i += 1
+            continue
+        if not stripped:
+            flush_para()
+            i += 1
+            continue
+        heading = re.match(r"(#{1,4})\s+(.*)", stripped)
+        if heading:
+            flush_para()
+            level = min(len(heading.group(1)) + 1, 6)
+            out.append(f"<h{level}>" + _md_inline(heading.group(2)) + f"</h{level}>")
+            i += 1
+            continue
+        if re.fullmatch(r"(-{3,}|\*{3,}|_{3,})", stripped):
+            flush_para()
+            out.append("<hr>")
+            i += 1
+            continue
+        if stripped.startswith("|"):
+            flush_para()
+            rows = []
+            while i < len(lines) and lines[i].strip().startswith("|"):
+                rows.append([c.strip() for c in
+                             lines[i].strip().strip("|").split("|")])
+                i += 1
+            header = None
+            if len(rows) >= 2 and all(re.fullmatch(r":?-{3,}:?", c)
+                                      for c in rows[1] if c):
+                header, rows = rows[0], rows[2:]
+            table = []
+            if header:
+                table.append("<tr>" + "".join(
+                    "<th>" + _md_inline(c) + "</th>" for c in header) + "</tr>")
+            for row in rows:
+                table.append("<tr>" + "".join(
+                    "<td>" + _md_inline(c) + "</td>" for c in row) + "</tr>")
+            out.append("<table>" + "".join(table) + "</table>")
+            continue
+        listed = re.match(r"([-*]|\d+\.)\s+", stripped)
+        if listed:
+            flush_para()
+            ordered = listed.group(1)[0].isdigit()
+            pattern = r"\d+\.\s+" if ordered else r"[-*]\s+"
+            items = []
+            while i < len(lines):
+                s = lines[i].strip()
+                if re.match(pattern, s):
+                    items.append(re.sub(pattern, "", s, count=1))
+                elif s and lines[i][:1] in (" ", "\t") and items:
+                    items[-1] += " " + s
+                else:
+                    break
+                i += 1
+            tag = "ol" if ordered else "ul"
+            out.append(f"<{tag}>" + "".join(
+                "<li>" + _md_inline(it) + "</li>" for it in items) + f"</{tag}>")
+            continue
+        if stripped.startswith(">"):
+            flush_para()
+            quote = []
+            while i < len(lines) and lines[i].strip().startswith(">"):
+                quote.append(lines[i].strip().lstrip(">").strip())
+                i += 1
+            out.append("<blockquote><p>" + _md_inline(" ".join(quote))
+                       + "</p></blockquote>")
+            continue
+        para.append(stripped)
+        i += 1
+    flush_para()
+    return "".join(out)
+
+
 def media_html(item):
     """The card's artifact area: galleries (consecutive images share a row), a before/after
-    compare frame, audio/video players, and file download cards. Every entry's src has been
-    staged into <outdir>/assets/ (stage_assets) before this runs, so src is page-relative and
-    `_size` carries the staged byte count. Everything shown is also downloadable."""
+    compare frame, audio/video players, and file cards. A markdown or text file renders ON
+    the card (a scrollable doc panel under its file header); everything else is a download
+    card. Every entry's src has been staged into <outdir>/assets/ (stage_assets) before this
+    runs, so src is page-relative and `_size` carries the staged byte count. Everything shown
+    is also downloadable."""
     entries = item.get("media") or []
     if not entries:
         return ""
@@ -1563,12 +1688,21 @@ def media_html(item):
             ext = (os.path.splitext(name)[1].lstrip(".") or "file").upper()
             note = (f'<p class="chu-filenote">{html.escape(entry["note"])}</p>'
                     if entry.get("note") else "")
-            blocks.append(
+            card = (
                 f'<div class="chu-filecard"><span class="chu-fileext">{html.escape(ext)}</span>'
                 f'<span class="chu-filename">{html.escape(name)}</span>'
                 f'<span class="chu-filesize">{html.escape(size)}</span>'
                 f'<a class="chu-dl" href="{html.escape(entry["src"])}" download>download</a>'
                 f"{note}</div>")
+            text = entry.get("_text")
+            if text is not None and ext in ("MD", "MARKDOWN"):
+                blocks.append(f'<div class="chu-doc">{card}<div class="chu-docbody">'
+                              + _markdown_html(text) + "</div></div>")
+            elif text is not None:
+                blocks.append(f'<div class="chu-doc">{card}<div class="chu-docbody">'
+                              f"<pre>{html.escape(text)}</pre></div></div>")
+            else:
+                blocks.append(card)
     flush_gallery()
     return '<div class="mediablock">' + "".join(blocks) + "</div>"
 
@@ -1822,6 +1956,15 @@ def stage_assets(spec, spec_dir, output_dir):
                 if result:
                     entry["src"] = result[0]
                     entry["_size"] = _human_size(result[1])
+                    ext = os.path.splitext(entry["src"])[1].lower()
+                    if (entry.get("kind") == "file" and result[1] <= 400_000
+                            and ext in (".md", ".markdown", ".txt")):
+                        dest = os.path.join(output_dir, entry["src"])
+                        try:
+                            entry["_text"] = open(dest, encoding="utf-8",
+                                                  errors="replace").read()
+                        except OSError:
+                            pass
     return problems
 
 
@@ -1962,7 +2105,7 @@ def main():
     has_suggestions = any(it.get("suggested") for it in spec.get("items", []))
     accept_btn = ('<button id="acceptall" title="select every suggested pick (respects the filter)">'
                   '★ accept suggested</button>') if has_suggestions else ""
-    # `live` (spec field or --live) lets this page be DRIVEN through the live canvas (webui.session):
+    # `live` (spec field or --live) lets this page be DRIVEN through the live canvas (surfaces.session):
     # inject the kit's re-serve channel (toast/progress CSS; the picker is --shadow-clash-free) + the
     # SSE client, so the agent can push reload/toast into the open picker tab. Default off = unchanged.
     live = bool(spec.get("live")) or ("--live" in sys.argv)
