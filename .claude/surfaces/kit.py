@@ -1,4 +1,4 @@
-"""The webui kit: one palette, one page shell, one affordance helper, one content-key, and the
+"""The surfaces kit: one palette, one page shell, one affordance helper, one content-key, and the
 SSE re-serve client. The shared construction layer beneath every browser surface an agent renders
 for a human (the decision picker, a report, an A/B compare), so a palette, affordance, or theme fix
 lands once and every surface inherits it.
@@ -117,6 +117,30 @@ MEDIA_CSS = """
 .chu-filesize{color:var(--faint);flex:none;}
 .chu-filecard .chu-dl{margin-left:auto;}
 .chu-filenote{flex:1 1 100%;color:var(--faint);font-size:var(--t-micro);margin:0;}
+.chu-doc{margin:var(--s3) 0 0;}
+.chu-doc .chu-filecard{margin:0;border-bottom-left-radius:0;border-bottom-right-radius:0;}
+.chu-docbody{border:1px solid var(--border);border-top:0;border-radius:0 0 var(--r2) var(--r2);
+ background:var(--panel);padding:var(--s3);max-height:32rem;overflow:auto;
+ font-size:var(--t-small);line-height:1.65;}
+.chu-docbody h2,.chu-docbody h3,.chu-docbody h4,.chu-docbody h5,.chu-docbody h6{
+ margin:var(--s3) 0 var(--s1);line-height:1.3;font-size:var(--t-small);}
+.chu-docbody h2{font-size:var(--t-body,1rem);}
+.chu-docbody h2:first-child{margin-top:0;}
+.chu-docbody p,.chu-docbody ul,.chu-docbody ol{margin:0 0 var(--s2);}
+.chu-docbody li{margin:0 0 4px;}
+.chu-docbody pre{background:var(--bg);border:1px solid var(--border);border-radius:var(--r1);
+ padding:var(--s2);overflow-x:auto;font:400 var(--t-micro)/1.5 var(--mono);}
+.chu-docbody code{font:400 .92em/1.2 var(--mono);background:var(--bg);border-radius:4px;
+ padding:1px 4px;}
+.chu-docbody pre code{background:none;border:0;padding:0;}
+.chu-docbody table{border-collapse:collapse;margin:0 0 var(--s2);display:block;
+ overflow-x:auto;max-width:100%;font-size:var(--t-micro);}
+.chu-docbody th,.chu-docbody td{border:1px solid var(--border);padding:4px 8px;
+ text-align:left;vertical-align:top;}
+.chu-docbody th{background:var(--bg);}
+.chu-docbody blockquote{border-left:3px solid var(--border);padding-left:var(--s3);
+ color:var(--faint);margin:0 0 var(--s2);}
+.chu-docbody hr{border:0;border-top:1px solid var(--border);margin:var(--s3) 0;}
 .chu-dl{display:inline-block;font:inherit;font-size:var(--t-micro);border:1px solid var(--border);
  border-radius:999px;padding:3px 10px;background:var(--panel);color:var(--fg);text-decoration:none;
  cursor:pointer;white-space:nowrap;}

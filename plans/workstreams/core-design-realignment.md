@@ -70,7 +70,7 @@ removed callable-registration section was fixed on closure.
 
 ## Documentation debt surfaced (not gated on the menu)
 
-Missing ADRs: the ~2,500-line `webui/` picker subsystem, the ship-channel manifest
+Missing ADRs: the ~2,500-line `.claude/surfaces/` picker subsystem, the ship-channel manifest
 contract, `Runner.run_until`, CHU029/031/032.  Numbering gap at 0050 (leave it).
 
 ## Report index

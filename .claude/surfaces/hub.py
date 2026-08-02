@@ -78,14 +78,14 @@ import webbrowser
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(_HERE))
-from webui import kit  # noqa: E402  (one palette, one shell; ADR/decision record in this repo)
+from surfaces import kit  # noqa: E402  (one palette, one shell; ADR/decision record in this repo)
 
 # ---- repo constants (the catered part) --------------------------------------------------
-HUB_NAME = "chumicro"                      # shown in the shell header and the tab title
-SPAWN_CWD = os.path.dirname(_HERE)    # the dir holding the webui package (spawned server's cwd)
-REPO_ROOT = os.path.dirname(_HERE)
+HUB_NAME = "ChuMicro"                      # shown in the shell header and the tab title
+SPAWN_CWD = os.path.dirname(_HERE)    # .claude, the dir holding the surfaces package (spawned server's cwd)
+REPO_ROOT = os.path.dirname(os.path.dirname(_HERE))
 STATE_DIR = os.path.join(REPO_ROOT, ".scratch", "hub")
-DEFAULT_PORT = 17871                  # stable per repo, so a reopened hub revives the old tab
+DEFAULT_PORT = 17874                  # stable per repo, so a reopened hub revives the old tab
 IDLE_SECONDS = 900                    # no tab + no pending + no waiter this long -> exit
 PENDING_TTL = 24 * 3600               # a pending surface older than this expires
 ENV_NO_OPEN = "HUB_NO_OPEN"           # set on a poster to forbid the auto-open for its post
@@ -839,7 +839,7 @@ def ensure(state_dir=None, port=None):
             os.close(fd)
             log = open(os.path.join(state, "hub.log"), "ab")
             subprocess.Popen(
-                [sys.executable, "-m", "webui.hub", "--state", state, "serve", "--port", str(want)],
+                [sys.executable, "-m", "surfaces.hub", "--state", state, "serve", "--port", str(want)],
                 cwd=SPAWN_CWD, stdout=log, stderr=log, start_new_session=True)
         time.sleep(0.25)
     raise SystemExit(f"hub did not come up; see {os.path.join(state, 'hub.log')}")

@@ -1,4 +1,4 @@
-"""One light/dark theming contract for every webui surface.
+"""One light/dark theming contract for every surfaces surface.
 
 THEME_KEY is the single localStorage namespace every page reads and writes its light/dark choice
 under, so a human who toggles dark on one surface still lands in dark on the next one the agent hands
@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import re
 
-# The localStorage key every webui surface persists its light/dark choice under. One key means the
+# The localStorage key every surfaces surface persists its light/dark choice under. One key means the
 # choice follows the human across surfaces; per-surface keys would leave a dark toggle on one page
 # invisible to the next.
 THEME_KEY = "chumicro:theme"

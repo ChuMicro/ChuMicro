@@ -1,7 +1,7 @@
-"""Smoke test for the webui kit + the session server.
+"""Smoke test for the surfaces kit + the session server.
 
-Pure stdlib, no browser, no external imports (webui stays a neutral top-level package).
-Run: `python3 -m webui.check_kit`  (exit 0 = green). Covers:
+Pure stdlib, no browser, no external imports (surfaces stays a neutral top-level package).
+Run: `python3 -m surfaces.check_kit`  (exit 0 = green). Covers:
   1. the one palette passes the dark-override contract + light/dark have identical keys;
   2. `page()` emits a self-contained, dark-clean doc with the theme toggle, and the SSE
      client only when `live=True`;
@@ -20,12 +20,12 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-# Run-anywhere: importable both as `python3 -m webui.check_kit` and as a bare gate script
-# (`<venv>/python webui/check_kit.py`). Put the repo root on the path either way.
+# Run-anywhere: importable both as `python3 -m surfaces.check_kit` and as a bare gate script
+# (`<venv>/python surfaces/check_kit.py`). Put the repo root on the path either way.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from webui import kit
-from webui.session import SessionServer, push_to
+from surfaces import kit
+from surfaces.session import SessionServer, push_to
 
 
 def _check(name, cond, detail=""):
@@ -127,7 +127,7 @@ def _canvas_cli():
     """The live-canvas CLI: `show --wrap` writes a live page and pushes reload into the open tab."""
     import types
 
-    from webui import session
+    from surfaces import session
     with tempfile.TemporaryDirectory() as tmp:
         server = SessionServer(tmp).start()
         try:
@@ -155,7 +155,7 @@ def _hub():
     release, withdraw a second surface and see its page answer 410."""
     import json
 
-    from webui.hub import HubServer, _state_dir
+    from surfaces.hub import HubServer, _state_dir
 
     with tempfile.TemporaryDirectory() as tmp:
         # the hub owns its state layout; never hardcode its store subdir here
@@ -256,14 +256,14 @@ def _hub():
             _check("hub/upload-name-sanitized",
                    os.path.dirname(hostile["path"]) == in_dir and ".." not in hostile["name"],
                    f"{hostile}")
-            # the new media MIME coverage: an .m4a asset serves as audio/mp4
+            # the media MIME coverage: an .m4a asset serves as audio/mp4
             with urllib.request.urlopen(f"{base}/s/{sid3}/a/tone.m4a", timeout=5) as resp:
                 _check("hub/asset-m4a-mime", resp.headers.get("Content-Type") == "audio/mp4",
                        f"got {resp.headers.get('Content-Type')}")
             # a page's OWN relative ref must resolve too: the renderer stages media under
             # assets/ and the page says src="assets/x", so /s/<id>/assets/x serves the file
-            # (the 2026-08-01 round-3 breakage: only the a/ route worked and every artifact
-            # on a hub-served page 404ed)
+            # (the round-3 breakage: only the a/ route worked and every artifact on a
+            # hub-served page 404ed)
             os.makedirs(os.path.join(asset_dir, "assets"), exist_ok=True)
             with open(os.path.join(asset_dir, "assets", "pic.png"), "wb") as handle:
                 handle.write(b"png-bytes")
@@ -290,14 +290,14 @@ def _hub():
 
 
 def main():
-    print("webui kit + session smoke:")
+    print("surfaces kit + session smoke:")
     _palette()
     _page()
     _content_key()
     _session()
     _canvas_cli()
     _hub()
-    print("GREEN: webui kit + re-serve session server + live-canvas CLI + surface hub")
+    print("GREEN: surfaces kit + re-serve session server + live-canvas CLI + surface hub")
 
 
 if __name__ == "__main__":

@@ -78,7 +78,7 @@ def _hub_lane(browser, page_path, outdir):
     uploaded name lands in the list, the blob rides an `upload 7.shot = <path>` line whose
     path holds the bytes, and the file lives under the surface's own in/ dir."""
     sys.path.insert(0, render_picker._REPO)
-    from webui.hub import HubServer, _state_dir
+    from surfaces.hub import HubServer, _state_dir
     state = _state_dir(os.path.join(outdir, "hubstate"))
     server = HubServer(state, port=0, idle=0)
     threading.Thread(target=server.serve, daemon=True).start()

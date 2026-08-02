@@ -2,8 +2,8 @@
 
 Status: `accepted`
 Date: `2026-08-01`
-Summary: `webui/hub.py is the default transport for every browser surface an agent puts in front of a human: a single per-repo server on a stable port owning a single browser tab; questions, reports, and status boards are posted surfaces with a pending → answered | withdrawn | expired lifecycle; a content floor gates decision-page specs the way ask_gate gates AskUserQuestion.`
-Related: Decision [0100](0100-webui-browser-surface-toolkit.md) (the webui toolkit this extends), the ask-gate floor (`.github/skills/_shared/ask_gate.py`).
+Summary: `.claude/surfaces/hub.py is the default transport for every browser surface an agent puts in front of a human: a single per-repo server on a stable port owning a single browser tab; questions, reports, and status boards are posted surfaces with a pending → answered | withdrawn | expired lifecycle; a content floor gates decision-page specs the way ask_gate gates AskUserQuestion.`
+Related: Decision [0100](0100-surfaces-browser-toolkit.md) (the surfaces toolkit this extends), the ask-gate floor (`.claude/surfaces/ask_gate.py`).
 
 ## Context
 
@@ -18,7 +18,7 @@ reader nothing.
 
 ## Decision
 
-- **One hub per repo.** `webui/hub.py` runs a single localhost server on a stable
+- **One hub per repo.** `.claude/surfaces/hub.py` runs a single localhost server on a stable
   per-repo port (17871 here), found or race-safely started by `ensure()` (an O_EXCL
   lockfile under `.scratch/hub/`; losers use the winner). Agents are clients, never
   owners: nothing kills the hub to take its place, and no verb can resolve another
@@ -37,7 +37,7 @@ reader nothing.
   session moved on: `withdraw <id>`, or `--supersede` on the replacement) | expired
   (ttl). A withdrawn surface's page answers 410, naming the reason. The hub exits on
   its own after 15 idle minutes with no tab, no pending surface, and no waiter.
-- **Exit-as-signal, kept.** `serve_picker.py` (and `python3 -m webui.hub ask`) posts
+- **Exit-as-signal, kept.** `serve_picker.py` (and `python3 -m surfaces.hub ask`) posts
   the surface and blocks until it resolves; the waiting process completing is still
   the submit signal, with exit codes 0 answered / 3 withdrawn / 4 expired / 5 hub
   unreachable. Pages submit to a relative path, so the same self-contained page works
@@ -53,7 +53,7 @@ reader nothing.
 ## Rejected
 
 - **A server per question, kept.** The one-shot transport survives behind
-  `serve_picker.py --oneshot` and `webui/server.py` for a hubless host, but it is no
+  `serve_picker.py --oneshot` and `.claude/surfaces/server.py` for a hubless host, but it is no
   longer the documented path: the per-question-server shape is the direct cause of the
   tab pile and the port fights.
 - **The session as the opener.** Distributing "who opens the tab" across every skill

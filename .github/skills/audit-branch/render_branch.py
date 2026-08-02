@@ -17,7 +17,7 @@ back-links.
 Defaults encode the apply policy: a validator-confirmed high-severity finding pre-selects apply,
 an unconfirmed finding pre-selects discuss, everything else pre-selects skip.
 
-This script renders only. The orchestrator serves the page with webui/serve_picker.py
+This script renders only. The orchestrator serves the page with .claude/surfaces/serve_picker.py
 (PICKER_NO_OPEN=1, background), opens the printed SERVING url itself, and watches the server's
 stdout for the submitted selection.
 

@@ -197,7 +197,7 @@ def _port(directory):
     path = os.path.join(os.path.abspath(directory), PORT_FILE)
     if not os.path.exists(path):
         raise SystemExit(
-            f"no live session in {directory!r}; start one: python3 -m webui.session serve {directory}")
+            f"no live session in {directory!r}; start one: python3 -m surfaces.session serve {directory}")
     with open(path) as handle:
         return int(handle.read().strip())
 
@@ -208,7 +208,7 @@ def _cmd_serve(args):
     serves until SIGINT or POST /shutdown, cleaning up the port file on the way out."""
     import webbrowser
 
-    from webui import kit
+    from surfaces import kit
     os.makedirs(os.path.abspath(args.directory), exist_ok=True)
     server = SessionServer(args.directory, page="canvas.html").start(args.port)
     canvas = os.path.join(server.directory, "canvas.html")
@@ -240,7 +240,7 @@ def _cmd_serve(args):
 def _cmd_show(args):
     """Set the live canvas to a page and push 'reload' into the open tab (the re-serve step).
     `--wrap` wraps a body fragment in kit.page(live=True); a full page must already be `live`."""
-    from webui import kit
+    from surfaces import kit
 
     directory = os.path.abspath(args.directory)
     src = open(args.file).read() if args.file else sys.stdin.read()
@@ -287,7 +287,7 @@ def main(argv=None):
     """
     import argparse
 
-    ap = argparse.ArgumentParser(description="ChuMicro webui live canvas (persistent tab + SSE re-serve)")
+    ap = argparse.ArgumentParser(description="ChuMicro surfaces live canvas (persistent tab + SSE re-serve)")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     sp = sub.add_parser("serve", help="run the bg session server (keep one tab live)")

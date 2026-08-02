@@ -46,10 +46,14 @@ _library-backups/
 # * `settings.json` — team-shared agent permissions for chumicro dev tooling
 #   (chumicro-workspace / chumicro-deploy / chumicro-repl).  `.local.json`
 #   stays ignored for per-user overrides.
+# * `surfaces/` - the browser-surface toolkit (Decision 0100).  It is a generated
+#   copy of a canonical shared with sibling repos, so it must stay tracked to be
+#   diffable against that canonical.
 .claude/*
 !.claude/agents
 !.claude/skills
 !.claude/settings.json
+!.claude/surfaces
 
 # .agents/ — install tree the add-skill tool writes when pulling downloaded
 # marketplace skills from `skills-lock.json`.  The canonical, tracked copy of
