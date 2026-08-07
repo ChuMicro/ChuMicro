@@ -189,6 +189,60 @@ class TestAlreadyPromoted:
 
         assert [e["library_name"] for e in entries] == ["mqtt"]
 
+    def test_include_tagged_checks_the_kept_package_as_a_republish(
+        self, stub_validation, monkeypatch,
+    ):
+        """A kept package must be validated with resume semantics.
+
+        Regression: passing resume=False for every tag made include_tagged
+        unusable — the precondition check demands the stable tag be absent,
+        which is false by construction for exactly the packages
+        include_tagged exists to keep, so the whole wave died at validation.
+        """
+        seen: dict[str, bool] = {}
+
+        def record_preconditions(_tag, parsed, *, resume):
+            seen["preconditions"] = resume
+
+        def record_monotonicity(_parsed, *, allow_downgrade, resume):
+            seen["monotonicity"] = resume
+
+        stub_validation(
+            {"t-mqtt": _entry("mqtt", "1.0.0", "library", "aaa")},
+            existing_stable={"chumicro-mqtt-v1.0.0"},
+        )
+        monkeypatch.setattr(promote_validate, "_check_preconditions", record_preconditions)
+        monkeypatch.setattr(promote_validate, "_check_monotonicity", record_monotonicity)
+
+        promote_matrix._build_entries(
+            ["t-mqtt"], allow_downgrade=False, include_tagged=True,
+        )
+
+        assert seen == {"preconditions": True, "monotonicity": True}
+
+    def test_absent_stable_tag_is_checked_as_a_fresh_promotion(
+        self, stub_validation, monkeypatch,
+    ):
+        """include_tagged must not force resume onto packages not yet promoted."""
+        seen: dict[str, bool] = {}
+        # stub_validation installs its own no-op checks, so the recorders
+        # must be attached after it or they get clobbered.
+        stub_validation({"t-ntp": _entry("ntp", "2.0.0", "library", "aaa")})
+        monkeypatch.setattr(
+            promote_validate, "_check_preconditions",
+            lambda _tag, _parsed, *, resume: seen.update(preconditions=resume),
+        )
+        monkeypatch.setattr(
+            promote_validate, "_check_monotonicity",
+            lambda _parsed, *, allow_downgrade, resume: seen.update(monotonicity=resume),
+        )
+
+        promote_matrix._build_entries(
+            ["t-ntp"], allow_downgrade=False, include_tagged=True,
+        )
+
+        assert seen == {"preconditions": False, "monotonicity": False}
+
     def test_fully_promoted_wave_emits_nothing_to_do(self, stub_validation):
         stub_validation(
             {"t-mqtt": _entry("mqtt", "1.0.0", "library", "aaa")},
