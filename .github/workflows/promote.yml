@@ -1,20 +1,26 @@
 name: Promote to stable
 
-# Promotes an experimental release to stable.
+# Promotes experimental releases to stable.
 #
-# HOW TO USE: run this workflow from the "main" branch.  Enter the
-# experimental tag to promote (e.g. chumicro-timing-v0.3.0-experimental) as input.
+# HOW TO USE: run this workflow from the "main" branch.  Enter one or
+# more experimental tags to promote, comma-separated (e.g.
+# chumicro-timing-v0.3.0-experimental,chumicro-mqtt-v0.28.1-experimental).
+# A whole wave goes in one run (Decision 0117): the publishes fan out as
+# a matrix, then the bundle, channel and docs writes happen once each.
 #
-# The library source comes from the source archive attached to the
+# The library source comes from the source archive attached to each
 # experimental GitHub Release.  All scripts and build tooling come from
 # main.  This guarantees CI improvements land in stable promotions
 # without re-tagging.  See Decision 0023.
+#
+# A tag whose stable tag already exists drops out of the matrix, so
+# re-dispatching a failed wave's full tag list is the resume path.
 
 on:
   workflow_dispatch:
     inputs:
-      experimental_tag:
-        description: "Experimental tag to promote (e.g. chumicro-timing-v0.3.0-experimental, chumicro-deploy-v0.0.1-experimental)"
+      experimental_tags:
+        description: "Experimental tag(s) to promote, comma-separated (e.g. chumicro-timing-v0.3.0-experimental,chumicro-mqtt-v0.28.1-experimental)"
         type: string
         required: true
       dry_run:
@@ -25,8 +31,8 @@ on:
         description: "Skip the version-monotonicity guard. Only for a hotfix that intentionally republishes an older version as stable."
         type: boolean
         default: false
-      resume:
-        description: "Re-run a promotion that died after the stable tag was written. Requires the stable tag to exist; every downstream leg is idempotent. If a newer stable shipped meanwhile, add allow_downgrade to finish deliberately."
+      include_tagged:
+        description: "Keep packages whose stable tag already exists (deliberate re-publish; every downstream leg is idempotent). Normally leave off — already-promoted tags drop out on their own, which is what makes re-dispatching a failed wave safe."
         type: boolean
         default: false
 
@@ -35,12 +41,12 @@ on:
 # experimental release.  Same repo-scoped group name as release.yml's
 # `release` group — GitHub Actions queues across workflows that share it.
 #
-# TRAP: GitHub keeps one RUNNING plus at most one PENDING run per group;
-# queuing another run CANCELS the previously pending one with no failure
-# signal (cancel-in-progress only protects the running run).  Never
-# bulk-dispatch promotions — a back-to-back wave of N dispatches silently
-# loses all but two.  Use scripts/promote_wave.py, which dispatches
-# strictly one at a time in dependency order.
+# The old one-run-per-package shape made this group a hazard: GitHub keeps
+# one RUNNING plus at most one PENDING run per group, so bulk-dispatching a
+# wave silently cancelled all but two, and scripts/promote_wave.py existed
+# to dispatch strictly one at a time.  A wave is now a single run, so there
+# is nothing to queue behind and the trap is unreachable rather than
+# managed (Decision 0117).
 concurrency:
   group: release
   cancel-in-progress: false
@@ -55,23 +61,26 @@ defaults:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Parse the tag, verify preconditions, confirm the source archive exists.
+  # Parse and validate every tag, emit the matrices the wave fans out over.
   # ---------------------------------------------------------------------------
   validate:
     name: Parse and validate
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     outputs:
-      library_name: ${{ steps.validate.outputs.library_name }}
-      version: ${{ steps.validate.outputs.version }}
-      stable_tag: ${{ steps.validate.outputs.stable_tag }}
-      library_dir: ${{ steps.validate.outputs.library_dir }}
-      package_kind: ${{ steps.validate.outputs.package_kind }}
-      source_zip: ${{ steps.validate.outputs.source_zip }}
-      has_docs: ${{ steps.validate.outputs.has_docs }}
+      matrix: ${{ steps.validate.outputs.matrix }}
+      library_matrix: ${{ steps.validate.outputs.library_matrix }}
+      gate_commits: ${{ steps.validate.outputs.gate_commits }}
+      docs_libraries: ${{ steps.validate.outputs.docs_libraries }}
+      has_promotions: ${{ steps.validate.outputs.has_promotions }}
+      has_library_promotions: ${{ steps.validate.outputs.has_library_promotions }}
+      has_docs_promotions: ${{ steps.validate.outputs.has_docs_promotions }}
     steps:
       - uses: actions/checkout@v6
         with:
+          # Full history AND tags: promote_matrix resolves each tag to the
+          # commit the preflight gate checks out, and reads local refs to
+          # decide whether a stable tag already exists.
           fetch-depth: 0
 
       - uses: actions/setup-python@v6
@@ -79,45 +88,47 @@ jobs:
           python-version: "3.13"
 
       - id: validate
-        name: Parse, locate, validate preconditions
-        # promote_validate.py parses the experimental tag, locates the
-        # source package under libraries/ or workbench/, and verifies
-        # the experimental tag exists, the stable tag does not (unless
-        # resume, which inverts that check), the source archive is
-        # attached to the experimental GitHub Release, and the version
-        # is newer than the newest stable release (unless allow_downgrade).
-        # Workbench packages (Decision 0032 rule 3) get package_kind=workbench
-        # so the bundle + validate-mip jobs further down skip them, and
-        # packages without a mkdocs.yml get has_docs=false so the docs
-        # job skips them.
+        name: Validate tags, build promotion matrix
+        # promote_matrix.py loops promote_validate.py over every tag, so a
+        # one-tag promotion and a seventeen-tag wave apply identical rules:
+        # the experimental tag exists, the source archive is attached, the
+        # version is newer than the newest stable (unless allow_downgrade).
+        # Packages already on stable drop out unless include_tagged.
+        # Workbench and support packages (Decisions 0032 and 0111) carry
+        # package_kind != library so the bundle, mip and channel jobs skip
+        # them; packages without a mkdocs.yml stay out of docs_libraries.
         env:
-          TAG: ${{ inputs.experimental_tag }}
+          TAGS: ${{ inputs.experimental_tags }}
           ALLOW_DOWNGRADE: ${{ inputs.allow_downgrade }}
-          RESUME: ${{ inputs.resume }}
+          INCLUDE_TAGGED: ${{ inputs.include_tagged }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: python scripts/promote_validate.py
+        run: python scripts/promote_matrix.py
 
   # ---------------------------------------------------------------------------
   # Re-run the full local gate before an immutable stable PyPI publish.
   # Stable's source is the frozen experimental source zip, but it is rebuilt
-  # here with current tooling, so it must be provably green.  This gate
-  # checks out the EXPERIMENTAL TAG being promoted (not main): the source
-  # zip was frozen from that ref, so gating on that exact tree with its own
-  # pinned tooling re-validates precisely what ships.  Mirrors release.yml's
-  # preflight-gate step-for-step (Python 3.14, .tools cache, run.py setup,
-  # lane prep on cache miss, preflight --coverage-threshold 94).
+  # with current tooling, so it must be provably green.  This gate checks out
+  # the EXPERIMENTAL TAG's commit (not main): the source zip was frozen from
+  # that ref, so gating that exact tree re-validates precisely what ships.
+  #
+  # The matrix is over DISTINCT commits, not over tags.  A wave cut from one
+  # push gates once instead of once per package (Decision 0117); a wave
+  # mixing commits gates once per commit.  Mirrors release.yml's
+  # preflight-gate step-for-step otherwise.
   # ---------------------------------------------------------------------------
   preflight-gate:
+    name: "Gate ${{ matrix.commit }}"
     needs: validate
+    if: needs.validate.outputs.has_promotions == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.validate.outputs.gate_commits) }}
     steps:
       - uses: actions/checkout@v6
         with:
-          # The experimental tag being promoted — the exact frozen tree,
-          # NOT main.  promote_validate.py (the validate job) already
-          # confirmed this tag exists.
-          ref: ${{ inputs.experimental_tag }}
+          ref: ${{ matrix.commit }}
           fetch-depth: 0
 
       - uses: actions/setup-python@v6
@@ -125,14 +136,15 @@ jobs:
           python-version: "3.14"
           cache: "pip"
 
+      # tools-full-: this job builds all three toolsets.  Keys are split
+      # per produced toolset so a lighter job's save cannot poison this
+      # restore with a circuitpython-less .tools whose cache "hit" also
+      # skips the build-deps install needed to self-heal (see ci.yml
+      # preflight for the full story).
       - uses: actions/cache@v6
         id: tools-cache
         with:
           path: .tools
-          # tools-full-: this job produces the full toolset (micropython
-          # + circuitpython + mpy-cross).  Keyed per produced toolset so
-          # a cache hit from a lighter job can't satisfy this one with a
-          # partial .tools/ tree.
           key: tools-full-${{ hashFiles('target-runtimes.toml', 'scripts/prepare_*.py', 'scripts/shared.py') }}
 
       - name: Install unix-port build dependencies
@@ -155,14 +167,28 @@ jobs:
         run: python scripts/run.py preflight --coverage-threshold 94
 
   # ---------------------------------------------------------------------------
-  # Build and publish the stable package to PyPI.
+  # Build and publish each stable package to PyPI, in parallel.
+  #
+  # Every package is its own PyPI project with its own trusted publisher and
+  # its own git tag, so the legs share no mutable state.  fail-fast: false
+  # lets each leg report independently; the batched jobs below require the
+  # whole matrix to have succeeded, so a partial wave publishes to PyPI but
+  # never pushes a bundle describing a state that did not fully ship.
   # ---------------------------------------------------------------------------
   release:
-    name: "Release ${{ needs.validate.outputs.library_name }} v${{ needs.validate.outputs.version }} (stable)"
+    name: "Release ${{ matrix.library_name }} v${{ matrix.version }} (stable)"
     needs: [validate, preflight-gate]
+    if: needs.validate.outputs.has_promotions == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.validate.outputs.matrix) }}
+
+    # The "pypi" environment must be configured in repository settings with
+    # trusted-publisher (OIDC) credentials so the publish step can authenticate.
     environment: pypi
+
     steps:
       - uses: actions/checkout@v6
 
@@ -174,63 +200,73 @@ jobs:
       - name: Download and unpack source archive
         # release_source.py replaces main's package source with the
         # frozen experimental source from the GitHub Release archive.
-        # Works for both libraries/<name>/ and workbench/<name>/.
+        # Works for libraries/, workbench/ and support/ alike.
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python scripts/release_source.py \
-            --tag "${{ inputs.experimental_tag }}" \
-            --source-zip "${{ needs.validate.outputs.source_zip }}" \
-            --library-dir "${{ needs.validate.outputs.library_dir }}"
+            --tag "${{ matrix.experimental_tag }}" \
+            --source-zip "${{ matrix.source_zip }}" \
+            --library-dir "${{ matrix.library_dir }}"
 
       - name: Install build tooling
         run: python -m pip install --upgrade pip build
 
       - name: Build distribution
-        run: python -m build "${{ needs.validate.outputs.library_dir }}"
+        run: python -m build "${{ matrix.library_dir }}"
 
       - name: Publish to PyPI
         if: ${{ !inputs.dry_run }}
         uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b  # v1.14.0
         with:
-          packages-dir: "${{ needs.validate.outputs.library_dir }}/dist/"
+          packages-dir: "${{ matrix.library_dir }}/dist/"
           attestations: true
           # Same idempotency contract as release.yml: PyPI is immutable, so
           # a re-run after a partial failure must treat an already-present
           # file as success to reach the tag write below.
           skip-existing: true
 
-      # The GitHub Release is the LAST write and it creates the stable tag
-      # (mirrors release.yml).  promote_validate.py requires the stable tag
-      # to be absent, so writing it last keeps a partially-failed promotion
-      # re-runnable end to end.
+      # The GitHub Release is the LAST write and it creates the stable tag.
+      # promote_matrix drops packages whose stable tag exists, so writing it
+      # last keeps a partially-failed wave re-runnable by re-dispatching the
+      # same tag list.
       - name: Create GitHub Release and tag
         if: ${{ !inputs.dry_run }}
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ needs.validate.outputs.stable_tag }}
+          tag_name: ${{ matrix.stable_tag }}
           # Pin the tag to the exact commit this promotion ran from.
           target_commitish: ${{ github.sha }}
-          name: ${{ needs.validate.outputs.stable_tag }}
+          name: ${{ matrix.stable_tag }}
           prerelease: false
           body: |
-            Release of **chumicro-${{ needs.validate.outputs.library_name }}** version **${{ needs.validate.outputs.version }}**.
-            Promoted from experimental tag `${{ inputs.experimental_tag }}`.
+            Release of **chumicro-${{ matrix.library_name }}** version **${{ matrix.version }}**.
+            Promoted from experimental tag `${{ matrix.experimental_tag }}`.
           # No file attachments — dist artifacts are already on PyPI and
           # CircuitPython/MicroPython users install from the bundle repo.
           generate_release_notes: true
 
   # ---------------------------------------------------------------------------
-  # Publish to the stable bundle repository for mip and circup distribution.
+  # Publish the whole wave to the stable bundle repository in ONE snapshot.
+  #
+  # Staging every library before validating and pushing is what removes the
+  # dependency-ordering requirement the per-package shape had: the merged
+  # tree contains the whole wave, and finalize-tag pins every manifest to
+  # the one snapshot tag, so no library can reference a snapshot that does
+  # not yet carry its deps (Decision 0117).
+  #
+  # Workbench and support packages (Decision 0032 rule 3, Decision 0111) are
+  # already filtered out of library_matrix — they are CPython-only and have
+  # nothing to ship to circup / mip.
   # ---------------------------------------------------------------------------
   bundle:
     name: Publish to ChuMicro/ChuMicro-Bundle
     needs: [validate, release]
-    # Workbench packages (Decision 0032 rule 3) skip the bundle path —
-    # they're CPython-only and have nothing to ship to circup / mip.
-    if: ${{ !inputs.dry_run && needs.validate.outputs.package_kind == 'library' }}
+    if: ${{ !inputs.dry_run && needs.validate.outputs.has_library_promotions == 'true' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
+    env:
+      MATRIX_JSON: ${{ needs.validate.outputs.library_matrix }}
     steps:
       - uses: actions/checkout@v6
 
@@ -239,17 +275,18 @@ jobs:
           python-version: "3.13"
           cache: "pip"
 
-      # Intentionally duplicates the download+unpack from the release job.
-      # Each job runs on a separate runner, and artifact-passing would add
-      # complexity for a lightweight download that only happens on promotion.
-      - name: Download and unpack source archive
+      - name: Download and unpack every source archive
+        # Each promoted library's frozen source replaces main's copy before
+        # staging, so the bundle ships exactly what PyPI got.
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          python scripts/release_source.py \
-            --tag "${{ inputs.experimental_tag }}" \
-            --source-zip "${{ needs.validate.outputs.source_zip }}" \
-            --library-dir "${{ needs.validate.outputs.library_dir }}"
+          jq -c '.include[]' <<< "$MATRIX_JSON" | while read -r entry; do
+            python scripts/release_source.py \
+              --tag "$(jq -r '.experimental_tag' <<< "$entry")" \
+              --source-zip "$(jq -r '.source_zip' <<< "$entry")" \
+              --library-dir "$(jq -r '.library_dir' <<< "$entry")"
+          done
 
       # Single unified cache for all .tools/ artifacts (mpy-cross + unix-port).
       # Using separate cache actions for the same path causes the second
@@ -273,10 +310,8 @@ jobs:
 
       - name: Stage bundle artifacts
         run: |
-          python scripts/bundle_manager.py stage \
-            "${{ needs.validate.outputs.library_dir }}" \
-            "${{ needs.validate.outputs.version }}" \
-            .bundle-staging
+          python scripts/bundle_manager.py stage-matrix .bundle-staging \
+            --matrix "$MATRIX_JSON"
 
       - name: Install unix-port build dependencies
         if: steps.tools-cache.outputs.cache-hit != 'true'
@@ -301,22 +336,15 @@ jobs:
           cp -r .bundle-staging/* .bundle-repo/
           cp LICENSE .bundle-repo/LICENSE
 
-      # ---------------------------------------------------------------
-      # Pre-publish validation: verify mip install + import works BEFORE
-      # pushing to the live bundle repo.  Runs against the MERGED tree
-      # (clone + overlay), not .bundle-staging alone: a single promoted
-      # library's package.json references its intra-workspace deps by
-      # bundle URL, and those deps only exist in the clone — staging-only
-      # validation import-fails every library with such deps.  The FIRST
-      # promotion wave must still be dependency-ordered (the clone starts
-      # empty); scripts/promote_wave.py handles that.
-      # ---------------------------------------------------------------
-
+      # Validate against the MERGED tree (clone + overlay), not the staging
+      # dir alone: a staged library's package.json references its deps by
+      # bundle URL, and deps outside this wave only exist in the clone.
       - name: Validate merged bundle locally
         run: |
+          libraries=$(jq -r '[.include[].library_name] | join(",")' <<< "$MATRIX_JSON")
           python scripts/run.py validate-mip \
             --staging-dir .bundle-repo \
-            --libraries "${{ needs.validate.outputs.library_name }}"
+            --libraries "$libraries"
 
       - name: Generate bundle README
         run: |
@@ -325,48 +353,43 @@ jobs:
             -o .bundle-repo/README.md
 
       - name: Create circup zips
-        # finalize-tag pins the staged manifests' dep placeholders to the
-        # release tag (installs resolve deps at the validated snapshot,
-        # not the bundle repo's future HEAD).  --reuse-if-clean: on a
-        # resume re-run the pinned overlay changes nothing (the bundle
-        # already carries the promoted files), so it reuses HEAD's
-        # existing date tag instead of minting a duplicate.
+        id: circup
         run: |
+          # finalize-tag pins the staged manifests' dep placeholders to the
+          # release tag, so installs resolve deps at the snapshot they were
+          # validated with instead of the bundle repo's future HEAD.
+          # --reuse-if-clean: a re-run after "push succeeded, release create
+          # failed" reprints the already-pushed tag instead of minting a
+          # fresh one on identical content (which would orphan the original).
           date_tag=$(python scripts/bundle_manager.py finalize-tag .bundle-repo --reuse-if-clean)
           echo "date_tag=${date_tag}" >> "$GITHUB_ENV"
-
           python scripts/bundle_manager.py circup-zip .bundle-repo .circup-zips \
-            --repo-name ChuMicro-Bundle --date-tag "$date_tag"
+            --repo-name "ChuMicro-Bundle" --date-tag "$date_tag"
 
       - name: Push to bundle repository
         run: |
           python scripts/bundle_push.py \
             --bundle-dir .bundle-repo \
             --tag "${{ env.date_tag }}" \
-            --commit-message "Update: ${{ needs.validate.outputs.library_name }} v${{ needs.validate.outputs.version }}"
+            --matrix "$MATRIX_JSON"
 
       - name: Create bundle release
-        # Idempotent: a resume re-run reuses HEAD's date tag when restaging
-        # is byte-identical (tooling or metadata drift on main mints a
-        # fresh tag instead — harmless).  `gh release create` writes the
-        # release BEFORE uploading assets and does not roll back, so when
-        # the release already exists the re-run reconciles the circup zips
-        # with --clobber instead of short-circuiting past an asset-less
-        # release.
         run: |
-          library_name="${{ needs.validate.outputs.library_name }}"
-          version="${{ needs.validate.outputs.version }}"
-          body=$(printf "## Updated libraries\n\n- **%s** v%s" "$library_name" "$version")
+          body=$(jq -r '"## Promoted libraries\n\n" + ([.include[] | "- **" + .library_name + "** v" + .version] | join("\n"))' <<< "$MATRIX_JSON")
 
-          TAG="${{ env.date_tag }}"
-          REPO_SLUG="ChuMicro/ChuMicro-Bundle"
-          if gh release view "$TAG" --repo "$REPO_SLUG" >/dev/null 2>&1; then
-            gh release upload "$TAG" --repo "$REPO_SLUG" --clobber .circup-zips/*.zip
+          # Idempotent: `gh release create` writes the release BEFORE
+          # uploading assets and does not roll back on upload failure, so a
+          # re-run must still reconcile the circup zips.  --clobber makes
+          # the upload a no-op-safe overwrite; --verify-tag prevents an
+          # orphaned release if the push above failed.
+          if gh release view "${{ env.date_tag }}" --repo "ChuMicro/ChuMicro-Bundle" >/dev/null 2>&1; then
+            gh release upload "${{ env.date_tag }}" --repo "ChuMicro/ChuMicro-Bundle" \
+              --clobber .circup-zips/*.zip
           else
-            gh release create "$TAG" \
-              --repo "$REPO_SLUG" \
+            gh release create "${{ env.date_tag }}" \
+              --repo "ChuMicro/ChuMicro-Bundle" \
               --verify-tag \
-              --title "Bundle $TAG" \
+              --title "Bundle ${{ env.date_tag }}" \
               --notes "$body" \
               .circup-zips/*.zip
           fi
@@ -374,18 +397,20 @@ jobs:
           GH_TOKEN: ${{ secrets.BUNDLE_TOKEN }}
 
   # ---------------------------------------------------------------------------
-  # Post-publish smoke test: validate mip install from the live stable
-  # bundle repo.  The bundle job already validated locally before pushing;
-  # this confirms the published artifacts are accessible via the github:
-  # URL scheme that end users actually use.
+  # Post-publish smoke test: validate mip install from the live bundle repo.
+  # The bundle job already validated locally before pushing; this confirms
+  # the published artifacts are reachable via the github: URL scheme end
+  # users actually use.  CDN propagation delays may cause transient
+  # failures, hence the retry logic in validate_mip_install.py.
   # ---------------------------------------------------------------------------
   validate-mip:
     name: Validate mip install (stable)
     needs: [validate, bundle]
-    # Same library-only filter as the bundle job above.
-    if: ${{ !inputs.dry_run && needs.validate.outputs.package_kind == 'library' }}
+    if: ${{ !inputs.dry_run && needs.validate.outputs.has_library_promotions == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      MATRIX_JSON: ${{ needs.validate.outputs.library_matrix }}
     steps:
       - uses: actions/checkout@v6
 
@@ -393,11 +418,12 @@ jobs:
         with:
           python-version: "3.13"
 
+      # tools-mp-: this job builds only the micropython unix-port (see
+      # ci.yml preflight for why keys are split per produced toolset).
       - uses: actions/cache@v6
         id: tools-cache
         with:
           path: .tools
-          # tools-mp-: this job produces micropython only.
           key: tools-mp-${{ hashFiles('target-runtimes.toml', 'scripts/prepare_*.py', 'scripts/shared.py') }}
 
       - name: Install unix-port build dependencies
@@ -412,103 +438,93 @@ jobs:
 
       - name: Validate mip install and import
         run: |
+          libraries=$(jq -r '[.include[].library_name] | join(",")' <<< "$MATRIX_JSON")
           python scripts/run.py validate-mip \
-            --bundle-repo ChuMicro-Bundle \
-            --libraries "${{ needs.validate.outputs.library_name }}"
+            --bundle-repo "ChuMicro-Bundle" \
+            --libraries "$libraries"
 
   # ---------------------------------------------------------------------------
-  # Deploy stable docs inline.
+  # Deploy stable docs for the whole wave in ONE gh-pages push.
   #
-  # Previously this job used fire-and-forget `gh workflow run` to trigger
-  # docs-deploy.yml.  That workflow shares the `documentation-deploy`
-  # concurrency group with push-triggered experimental deploys.  When a
-  # new run enters the group while a stable deploy is pending, GitHub
-  # Actions silently cancels the pending run — so the stable version
-  # never reaches gh-pages.
+  # Inlined rather than dispatching docs-deploy.yml: that workflow shares
+  # the `documentation-deploy` concurrency group with push-triggered
+  # experimental deploys, and a new run entering the group while a stable
+  # deploy is pending silently cancels the pending one — so the stable
+  # version never reaches gh-pages.  Running it here makes it part of the
+  # promotion and immune to that cancellation.  A retry loop handles
+  # transient push conflicts with concurrent experimental deploys.
   #
-  # Inlining the deployment here makes it part of the promote workflow
-  # and immune to that cancellation.  A retry loop handles transient
-  # push conflicts with concurrent experimental deploys.
+  # One pass for the wave replaces N racing pushes; docs_libraries already
+  # excludes packages without a mkdocs.yml.
   # ---------------------------------------------------------------------------
   docs:
     name: Deploy stable docs
     needs: [validate, release]
-    # has_docs gate: packages without a mkdocs.yml (workbench checks,
-    # pytest-device) have nothing to deploy, so an unconditional run would
-    # fail permanently after the PyPI publish, unfixable by re-run.
-    if: ${{ !inputs.dry_run && needs.validate.outputs.has_docs == 'true' }}
+    if: ${{ !inputs.dry_run && needs.validate.outputs.has_docs_promotions == 'true' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
+    env:
+      MATRIX_JSON: ${{ needs.validate.outputs.matrix }}
     steps:
       - uses: actions/checkout@v6
         with:
+          # mike inspects existing version aliases on gh-pages.
           fetch-depth: 0
-          ssh-key: ${{ secrets.GH_PAGES_DEPLOY_KEY }}
 
       - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
+          cache: "pip"
 
-      - name: Cache pip packages
-        uses: actions/cache@v6
-        with:
-          path: ~/.cache/pip
-          key: docs-pip-${{ hashFiles('requirements-docs.txt') }}
-          restore-keys: |
-            docs-pip-
+      - name: Install workspace tooling
+        run: python scripts/run.py setup
 
-      - name: Install tooling
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements-docs.txt
-
-      - name: Configure git
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-      # Replay the frozen experimental source before building: docs_deploy
-      # labels the stable deploy with read_version(library_dir), i.e. the
-      # VERSION file on this checkout.  Without the replay, main HEAD's
-      # current VERSION (and docs tree) would be published as "stable"
-      # instead of the promoted version's.
-      - name: Download and unpack source archive
+      - name: Download and unpack every source archive
+        # docs-deploy labels each version with read_version(library_dir),
+        # so the tree must carry the promoted source, not main's current
+        # VERSION — otherwise a package that moved on since the tag would
+        # publish the wrong version as "stable".
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          python scripts/release_source.py \
-            --tag "${{ inputs.experimental_tag }}" \
-            --source-zip "${{ needs.validate.outputs.source_zip }}" \
-            --library-dir "${{ needs.validate.outputs.library_dir }}"
+          jq -c '.include[]' <<< "$MATRIX_JSON" | while read -r entry; do
+            python scripts/release_source.py \
+              --tag "$(jq -r '.experimental_tag' <<< "$entry")" \
+              --source-zip "$(jq -r '.source_zip' <<< "$entry")" \
+              --library-dir "$(jq -r '.library_dir' <<< "$entry")"
+          done
 
-      - name: Deploy and push stable docs
-        # docs_deploy_retry.py fetches gh-pages, runs run.py docs-deploy,
-        # and pushes — retrying when a concurrent experimental deploy
-        # forces a re-base.
+      - name: Configure git identity
         run: |
-          python scripts/docs_deploy_retry.py \
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Deploy stable docs for the wave
+        run: |
+          python scripts/run.py docs-deploy \
             --channel stable \
-            --libraries "${{ needs.validate.outputs.library_name }}"
+            --libraries "${{ needs.validate.outputs.docs_libraries }}"
 
   # ---------------------------------------------------------------------------
   # Publish the host-side libraries channel to the STABLE source repo
   # (B4, Decision 0078).  Mirrors release.yml's libraries-channel job but
   # targets ChuMicro/ChuMicro-Libraries via LIBRARIES_DEPLOY_KEY.  Gated to
-  # library promotions — a workbench promotion changes no libraries/ tree,
+  # library promotions — a workbench-only wave changes no libraries/ tree,
   # so there is nothing to re-snapshot.
   #
   # Behavior note: the producer re-snapshots the WHOLE current libraries/
   # tree from main (the snapshot model wants one self-consistent set; it
   # has no per-library overlay mode).  So the stable channel is refreshed
-  # to main's current source on each library promotion — that refresh
-  # cadence is what makes it lag the experimental channel.  It is NOT a
-  # per-library overlay of the frozen promoted source; see the
-  # release-fabric-readiness workstream note.
+  # to main's current source on each promotion wave — that refresh cadence
+  # is what makes it lag the experimental channel.  It is NOT a per-library
+  # overlay of the frozen promoted source; see the release-fabric-readiness
+  # workstream note.  Running once per wave rather than once per package
+  # replaces N identical snapshots with one.
   # ---------------------------------------------------------------------------
   libraries-channel:
     name: Publish libraries channel (stable)
     needs: [validate, release]
-    if: ${{ !inputs.dry_run && needs.validate.outputs.package_kind == 'library' }}
+    if: ${{ !inputs.dry_run && needs.validate.outputs.has_library_promotions == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

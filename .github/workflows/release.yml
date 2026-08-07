@@ -38,8 +38,10 @@ on:
 # TRAP: GitHub keeps one RUNNING plus at most one PENDING run per group;
 # queuing another run CANCELS the previously pending one with no failure
 # signal (cancel-in-progress only protects the running run).  Never
-# bulk-dispatch runs sharing this group — for promotion waves use
-# scripts/promote_wave.py, which dispatches strictly one at a time.
+# bulk-dispatch runs sharing this group.  Both workflows in the group
+# release a whole wave per run, so nothing here needs to be dispatched in
+# a loop: release.yml fans out over its detected matrix, and promote.yml
+# takes a tag list (Decision 0117).
 concurrency:
   group: release
   cancel-in-progress: false
