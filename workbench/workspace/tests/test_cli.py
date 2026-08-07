@@ -3565,6 +3565,28 @@ class TestLintCommand:
         # of any extra args the user passed.
         assert ruff_args[-1] == "."
 
+    def test_separator_is_not_forwarded_to_ruff(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        """The `--` the help asks for must not reach ruff.
+
+        argparse.REMAINDER keeps the separator, and ruff reads everything
+        after its own `--` as file paths, so forwarding it made
+        `lint -- --fix` hunt for a file named `--fix` and report a bogus
+        E902 alongside the real findings.  The sibling test above asserts
+        only that `--fix` arrives, which is true either way; that is how
+        this survived.
+        """
+        root = seed_workspace(tmp_path)
+        runner = FakeSubprocessRunner()
+        exit_code = cli.main(
+            ["lint", "--workspace-dir", str(root), "--", "--fix"],
+            env=cli.CliEnv(subprocess_runner=runner),
+        )
+        assert exit_code == 0
+        assert "--" not in runner.calls[0].args
+
     def test_ruff_failure_short_circuits_chumicro_checks(
         self,
         tmp_path: Path,
