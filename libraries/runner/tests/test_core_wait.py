@@ -24,6 +24,54 @@ class _AdapterWrapper:
         self.sock = sock
 
 
+class _ClosableSocket:
+    """Socket-shaped stand-in that answers -1 from ``fileno()`` once
+    closed, the way a CPython socket does."""
+
+    def __init__(self, descriptor: int) -> None:
+        self._descriptor = descriptor
+
+    def fileno(self) -> int:
+        return self._descriptor
+
+    def close(self) -> None:
+        self._descriptor = -1
+
+
+class _DescriptorKeyedPoller(FakePoller):
+    """Stand-in for CPython's ``select.poll``, whose set is keyed by file
+    descriptor rather than by object: every call reads ``fileno()`` off
+    the object it is handed, and a closed socket answers -1, which the
+    poller rejects.  ``FakePoller`` keys by ``id(obj)`` and so cannot
+    show a descriptor being stranded."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        #: Descriptor -> eventmask, the poll set as the OS holds it.
+        self.descriptors: dict = {}
+
+    def register(self, obj: object, eventmask: int) -> None:
+        super().register(obj, eventmask)
+        self.descriptors[self._descriptor_of(obj)] = eventmask
+
+    def modify(self, obj: object, eventmask: int) -> None:
+        super().modify(obj, eventmask)
+        self.descriptors[self._descriptor_of(obj)] = eventmask
+
+    def unregister(self, obj: object) -> None:
+        super().unregister(obj)
+        self.descriptors.pop(self._descriptor_of(obj))
+
+    @staticmethod
+    def _descriptor_of(obj: object) -> int:
+        descriptor = obj if isinstance(obj, int) else obj.fileno()
+        if descriptor < 0:
+            raise ValueError(
+                "file descriptor cannot be a negative integer (-1)",
+            )
+        return descriptor
+
+
 # -- Runner.wait --
 
 
@@ -249,6 +297,71 @@ def test_wait_swallows_valueerror_unregistering_closed_socket() -> None:
     runner.wait(0)  # must not propagate the unregister ValueError
 
     assert sock in poller.unregister_calls
+
+
+def test_wait_drops_a_closed_socket_from_a_descriptor_keyed_poll_set() -> None:
+    """A service that closes its socket and then leaves the runner — the
+    shape of a finished fetch generator — takes its descriptor out of the
+    poll set.  A closed socket can no longer name its own descriptor, so
+    the object-keyed unregister is refused; stopping there leaves the
+    descriptor registered, poll() answers POLLNVAL for it without ever
+    blocking, and every later wait() busy-spins instead of idling."""
+    poller = _DescriptorKeyedPoller()
+    runner = Runner(ticks=FakeTicks(), poller=poller)
+    kept = _IOService(sock=_ClosableSocket(3), wants_read=True)
+    finished = _IOService(sock=_ClosableSocket(5), wants_read=True)
+    runner.add(kept, period_ms=100)
+    finished_handle = runner.add(finished, period_ms=100)
+    runner.wait(0)
+    assert sorted(poller.descriptors) == [3, 5]
+
+    finished.io_socket.close()
+    finished_handle.remove()
+    runner.wait(0)
+
+    assert sorted(poller.descriptors) == [3]
+
+
+def test_wait_leaves_a_reused_descriptor_registered_for_its_new_socket() -> None:
+    """The OS hands a freed descriptor straight to the next socket the
+    process opens, so a closed socket's descriptor can already belong to a
+    live one by the time the drop sweep runs.  The sweep leaves that
+    registration alone: taking it out would blind the new socket, which
+    would then never wake."""
+    poller = _DescriptorKeyedPoller()
+    runner = Runner(ticks=FakeTicks(), poller=poller)
+    finished = _IOService(sock=_ClosableSocket(5), wants_read=True)
+    finished_handle = runner.add(finished, period_ms=100)
+    runner.wait(0)
+
+    # One sweep sees both: the old socket closed and left, a new one took
+    # its descriptor and registered for the opposite direction.
+    finished.io_socket.close()
+    finished_handle.remove()
+    accepted = _IOService(sock=_ClosableSocket(5), wants_write=True)
+    runner.add(accepted, period_ms=100)
+    runner.wait(0)
+
+    assert poller.descriptors == {5: select.POLLOUT}
+
+
+def test_wait_survives_a_descriptor_the_poller_has_already_forgotten() -> None:
+    """The descriptor retry is best-effort.  A poll set that diverged
+    out-of-band refuses the descriptor too, and wait() treats that refusal
+    the way it treats the refused object unregister — the runner's own
+    bookkeeping is the source of truth — rather than letting it escape."""
+    poller = _DescriptorKeyedPoller()
+    runner = Runner(ticks=FakeTicks(), poller=poller)
+    service = _IOService(sock=_ClosableSocket(5), wants_read=True)
+    handle = runner.add(service, period_ms=100)
+    runner.wait(0)
+
+    poller.descriptors.clear()  # the poll set diverged behind the runner's back
+    service.io_socket.close()
+    handle.remove()
+    runner.wait(0)  # must not raise
+
+    assert runner._registered_interest == {}
 
 
 def test_wait_unregisters_when_service_drops_to_no_interest() -> None:
