@@ -18,6 +18,27 @@ Libraries ship to boards with ~100–200 K free heap and ~800 K usable flash, ye
 3. **Audit north star inverted for `libraries/`**: audit-embedded's lens (flash, import RAM, allocations, class/def/exception count, string weight) is primary; standards lenses advisory there.  Standards remain primary for scripts/, workbench/, webui/, skills.  (Landed 2026-07-05, see inversion commit.)
 4. **Sequencing: CI stands up first**, so the whole campaign runs with CI + the size gate protecting it.
 
+## The mqtt client.py split is subsumed by phase 0 (measured 2026-08-07)
+
+The queued "mqtt `client.py` split (import-floor lever)" should **not** be built.  Measured on the MP and CP unix proxies with the real `strip_source` + pinned `mpy-cross`, using a heap-bisect (`-X heapsize=NNNk`) to read the import floor directly rather than infer it:
+
+| variant | stripped | mpy | retained heap | import floor |
+|---|--:|--:|--:|--:|
+| baseline (1 file) | 57,748 | 20,733 | 44,736 | **151 K** |
+| mechanical x2 | 59,101 | 22,873 | 46,112 | 109 K |
+| mechanical x3 | 59,681 | 23,794 | 47,040 | 90 K |
+| baseline shipped as `.mpy` | — | 20,733 | 40,352 | **47 K** |
+
+The floor is a *compile* cost, so shipping `.mpy` removes it outright: **−69 % floor against −40 % for the most aggressive split**, plus −4,384 B retained heap and −64 % flash, with zero library edits and no ceiling movement.  After `.mpy` ships the split inverts to a net loss on every axis (floor 47 K → 54 K, retained +5,952 B, mpy +3,061 B), because per-module overhead has nowhere to hide.  The two items queued together in `next-up.md` are in tension and the ordering already written there is the right one.
+
+Correct the earlier claim that splitting drops the floor "with zero API change": it is right about the floor and wrong about zero cost.  A 3-way split costs +3,061 B mpy and +2,304 B retained heap, breaches both committed mqtt ceilings (stripped 59,412 / mpy 21,516, the latter with 783 B headroom), and all of that survives phase 0 while the floor benefit does not.
+
+The publish-only vs subscribe *usage* seam was tested by ablation and is not worth building: the best seam frees ~2.1 KB of proxy heap (~1.3 KB on a board, about 1 % of a Pico W), because a publish-only client still needs the decoder, `_read_inbound`, `_handle_ack`, keepalive, deadlines, the tx queue and self-heal — the "publish-only" side is ~85 % of the file.  It would also cost 1,390 B of mpy on every board forever, land over the ceiling, and move a compile into `on_connect`, where the heap is already fragmented by wifi and TLS.  First use is universal in this repo's own corpus anyway: every shipped mqtt example and demo subscribes.
+
+Worth landing on its own merits, not as a floor lever: lazily loading `from_config` + `default_client_id` into a private `_boot.py`.  Measured mpy 20,963 (still under ceiling), −1,888 B retained heap for direct-constructor users, −8 K floor, 259/259 tests green, griffe clean.  It is a factory rather than protocol logic, so nothing coherent fractures, and Decision 0062's `__chumicro_skip_factories__` users already pay a lazy import at that exact point.  Ride it along with other mqtt work; do not schedule a session for it.
+
+**Unverified:** the `.mpy` rows have no hardware anchor, because no board has ever received `.mpy` from this deploy path (`sources.py` has no `.mpy`; every transport stages stripped `.py` via `minify_python_tree`).  The `.py` rows calibrate to the Pico W anchors at a consistent 1.60x, but `.mpy` loading is read-and-relocate rather than parse and will not scale with pointer size the same way.  The direction is not in doubt; the magnitude is the first thing the phase-0 bench must measure.  CP boards taking `.mpy` at all is the mpy-ABI question parked under Decision 0112 — if they cannot, a 2-way split becomes live for the CP half of the fleet only.
+
 ## Baseline (2026-07-05, per library: stripped B / mpy B / MP import heap B / shipped classes / defs)
 
 | library | stripped | mpy | MP heap | classes | defs |

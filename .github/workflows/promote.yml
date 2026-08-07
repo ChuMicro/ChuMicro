@@ -499,9 +499,15 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Deploy stable docs for the wave
+      - name: Deploy and push stable docs for the wave
+        # docs_deploy_retry.py fetches gh-pages, runs run.py docs-deploy,
+        # and PUSHES — retrying when a concurrent experimental deploy
+        # forces a re-base.  Calling `run.py docs-deploy` directly instead
+        # commits to the local branch, never pushes, and still exits 0, so
+        # the job goes green having shipped nothing (observed on the first
+        # live run of this workflow, promoting workspace 0.52.1).
         run: |
-          python scripts/run.py docs-deploy \
+          python scripts/docs_deploy_retry.py \
             --channel stable \
             --libraries "${{ needs.validate.outputs.docs_libraries }}"
 
