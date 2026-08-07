@@ -103,10 +103,18 @@ def _cmd_lint(args: argparse.Namespace) -> int:
         quality_flags: list[str] = []
         if quality.lint.select:
             quality_flags.extend(["--select", ",".join(quality.lint.select)])
+        # argparse.REMAINDER keeps the `--` the help tells users to type,
+        # and ruff reads everything after its OWN `--` as file paths — so
+        # forwarding the separator turned `lint -- --fix` into a hunt for a
+        # file named `--fix` (a bogus E902 on top of the real findings),
+        # which meant the documented passthrough worked for no flag at all.
+        ruff_args = args.ruff_args
+        if ruff_args and ruff_args[0] == "--":
+            ruff_args = ruff_args[1:]
         ruff_completed = args._env.subprocess_runner(  # noqa: S603 - args fully controlled
             [
                 sys.executable, "-m", "ruff", "check",
-                *quality_flags, *args.ruff_args, ".",
+                *quality_flags, *ruff_args, ".",
             ],
             cwd=workspace.root,
             check=False,
