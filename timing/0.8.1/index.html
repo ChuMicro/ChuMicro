@@ -479,7 +479,7 @@
 
 <h1 id="chumicro-timing">chumicro-timing<a class="headerlink" href="#chumicro-timing" title="Permanent link">&para;</a></h1>
 <p><strong>Cross-runtime millisecond tick helpers and periodic timing for CircuitPython, MicroPython, and CPython.</strong></p>
-<p>All timing is non-blocking — nothing in this library calls <code>time.sleep()</code>.</p>
+<p>Capture <code>ticks_ms()</code> once per pass through your loop and hand it to a <code>Rate</code> (a drift-free periodic cadence) or a <code>Deadline</code> (a single armed timeout).  Both are built on wrap-safe tick arithmetic, so the counter rollover on a board that has been up for weeks changes nothing.  All timing is non-blocking: nothing in this library calls <code>time.sleep()</code>.</p>
 <h2 id="quick-example">Quick example<a class="headerlink" href="#quick-example" title="Permanent link">&para;</a></h2>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_timing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Rate</span><span class="p">,</span> <span class="n">ticks_ms</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
@@ -491,12 +491,11 @@
 </span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;one second elapsed&quot;</span><span class="p">)</span>
 </span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="c1"># ... do other work ...</span>
 </span></code></pre></div>
-<p>The value objects — <code>Deadline</code> (a single armed timeout) and <code>Rate</code> (drift-free periodic cadence) — build on the wrap-safe tick helpers.</p>
 <h2 id="documentation">Documentation<a class="headerlink" href="#documentation" title="Permanent link">&para;</a></h2>
 <ul>
-<li><a href="guide/">User Guide</a> — getting started, usage patterns, platform notes</li>
-<li><a href="api/">API Reference</a> — full API documentation</li>
-<li><a href="testing/">Testing Helpers</a> — using <code>FakeTicks</code> in your tests</li>
+<li><a href="guide/">User Guide</a>: periodic cadence with <code>Rate</code>, sharing one timestamp across a loop, deadlines, choosing a wait, using the tick helpers directly, wraparound details, pairing with <code>chumicro-runner</code></li>
+<li><a href="api/">API Reference</a>: the wrap-safe <code>ticks_ms</code> / <code>ticks_diff</code> / <code>ticks_add</code> helpers, the <code>Deadline</code> and <code>Rate</code> value objects, and the <code>Signal</code> / <code>wait_for</code> wait vocabulary</li>
+<li><a href="testing/">Testing Helpers</a>: using <code>FakeTicks</code> in your tests</li>
 </ul>
 <hr />
 <div class="chumicro-footer">
