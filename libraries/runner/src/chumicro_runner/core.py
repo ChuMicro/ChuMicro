@@ -43,6 +43,21 @@ def _pollable_of(io_socket: object) -> object:
     return getattr(io_socket, "sock", io_socket)
 
 
+def _fileno_of(pollable: object) -> int | None:
+    # CPython keys its poll set by file descriptor and reads that descriptor back off
+    # the object at unregister time, when a closed socket answers -1.  Record the
+    # descriptor while the socket is still open so the drop sweep has a valid key.
+    # MicroPython and CircuitPython key by object and never need this.
+    fileno = getattr(pollable, "fileno", None)
+    if fileno is None:
+        return None
+    try:
+        descriptor = fileno()
+    except (OSError, ValueError):  # pragma: no cover - closed before its first sweep
+        return None
+    return descriptor if descriptor >= 0 else None
+
+
 def _sleep_ms(timeout_ms: int) -> None:
     if _native_sleep_ms is not None:
         _native_sleep_ms(timeout_ms)
@@ -149,8 +164,9 @@ class Runner:
         # Cache the tick source's sleep_ms (else the module one) so the socket-less wait allocates nothing.
         self._sleep_ms = getattr(self._ticks, "sleep_ms", _sleep_ms)
         self._poller = poller
-        # Each id(sock) slot is [sock, registered_mask, sweep_mask, sweep_generation];
-        # _sync_poll_set reuses it in place so a steady-state sync allocates nothing.
+        # Each id(sock) slot is [sock, registered_mask, sweep_mask, sweep_generation,
+        # descriptor]; _sync_poll_set reuses it in place so a steady-state sync
+        # allocates nothing.
         self._registered_interest: dict = {}
         self._sweep_generation = 0
 
@@ -451,7 +467,9 @@ class Runner:
             sock_id = id(sock)
             slot = registered.get(sock_id)
             if slot is None:
-                registered[sock_id] = [sock, 0, eventmask, generation]
+                registered[sock_id] = [
+                    sock, 0, eventmask, generation, _fileno_of(sock),
+                ]
                 wanted_count += 1
             elif slot[3] != generation:
                 slot[2] = eventmask
@@ -488,9 +506,32 @@ class Runner:
                     try:
                         poller.unregister(slot[0])
                     except (KeyError, OSError, ValueError):
-                        # The socket was already closed or unregistered out-of-band
-                        # (CPython raises ValueError on a closed fileno); not an error here.
-                        pass
+                        # A socket closed before this sweep (a finished fetch is the
+                        # common case) can no longer name its own descriptor, so
+                        # CPython rejects the unregister and the descriptor would stay
+                        # in the poll set, where poll() reports POLLNVAL the instant it
+                        # is called and every later wait() busy-spins.  Retry with the
+                        # descriptor recorded while the socket was open.
+                        self._unregister_descriptor(poller, slot[4])
+
+    def _unregister_descriptor(self, poller: object, descriptor: int | None) -> None:
+        if descriptor is None:
+            # No descriptor was ever available, so the poller keys by object and the
+            # refused unregister was benign divergence rather than a stranded entry.
+            return
+        registered = self._registered_interest
+        for sock_id in registered:
+            # A freed descriptor is handed straight back to the next socket the
+            # process opens, and that socket registered earlier in this same sweep.
+            # Dropping the descriptor now would blind a live connection.
+            if registered[sock_id][4] == descriptor:
+                return
+        try:
+            poller.unregister(descriptor)
+        except (KeyError, OSError, ValueError):
+            # Nothing else can name this descriptor; a poller that still refuses it
+            # has already forgotten it.
+            pass
 
     def _compute_timeout(self, now_ms: int) -> int | None:
         ticks_diff = self._ticks.ticks_diff
