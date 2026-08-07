@@ -353,7 +353,7 @@
   <a href="#tls-default-secure-on-every-runtime" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
-        TLS — default-secure on every runtime
+        TLS: default-secure on every runtime
       </span>
     </span>
   </a>
@@ -577,7 +577,7 @@
   <a href="#tls-default-secure-on-every-runtime" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
-        TLS — default-secure on every runtime
+        TLS: default-secure on every runtime
       </span>
     </span>
   </a>
@@ -681,7 +681,7 @@
 
 <h1 id="user-guide">User Guide<a class="headerlink" href="#user-guide" title="Permanent link">&para;</a></h1>
 <h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
-<p><code>chumicro-sockets</code> provides a single TCP + TLS client API that works the same way on CircuitPython, MicroPython, and CPython.  The runtimes diverge in ways the library can't paper over — CircuitPython has no <code>socket</code> module, only <code>socketpool(radio)</code>; MicroPython has stdlib socket + mbedTLS-backed ssl on current builds; CPython has the full stdlib stack — so the library exposes one duck-typed TCP socket surface (<code>send</code> / <code>recv_into</code> / <code>close</code> / <code>setblocking</code>) and routes <a href="../api/#chumicro_sockets.connector"><code>connector</code></a> to a runtime-appropriate adapter.  There is one connect state machine per runtime: <code>connector()</code> returns a tick-driven object a runner drives (or a one-shot script drives inline).</p>
+<p><code>chumicro-sockets</code> provides one TCP, TLS, and UDP socket API (<code>connector</code>, <code>listener</code>, <code>udp_socket</code>) that works the same way on CircuitPython, MicroPython, and CPython.  The runtimes diverge in ways the library can't paper over: CircuitPython has no <code>socket</code> module, only <code>socketpool(radio)</code>; MicroPython has stdlib socket + mbedTLS-backed ssl on current builds; CPython has the full stdlib stack.  So the library exposes one duck-typed TCP socket surface (<code>send</code> / <code>recv_into</code> / <code>close</code> / <code>setblocking</code>) and routes <a href="../api/#chumicro_sockets.connector"><code>connector</code></a> to a runtime-appropriate adapter.  There is one connect state machine per runtime: <code>connector()</code> returns a tick-driven object a runner drives (or a one-shot script drives inline).</p>
 <p><code>chumicro-mqtt</code>, <code>chumicro-requests</code>, <code>chumicro-http-server</code>, and <code>chumicro-websockets</code> all build on this library; none of them import <code>socketpool</code>, <code>socket</code>, or <code>ssl</code> directly.</p>
 <h2 id="getting-started">Getting started<a class="headerlink" href="#getting-started" title="Permanent link">&para;</a></h2>
 <h3 id="plain-tcp">Plain TCP<a class="headerlink" href="#plain-tcp" title="Permanent link">&para;</a></h3>
@@ -702,7 +702,7 @@
 </span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="k">finally</span><span class="p">:</span>
 </span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>    <span class="n">sock</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
 </span></code></pre></div>
-<h3 id="tls-default-secure-on-every-runtime">TLS — default-secure on every runtime<a class="headerlink" href="#tls-default-secure-on-every-runtime" title="Permanent link">&para;</a></h3>
+<h3 id="tls-default-secure-on-every-runtime">TLS: default-secure on every runtime<a class="headerlink" href="#tls-default-secure-on-every-runtime" title="Permanent link">&para;</a></h3>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_sockets</span><span class="w"> </span><span class="kn">import</span> <span class="n">connector</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">dial</span> <span class="o">=</span> <span class="n">connector</span><span class="p">(</span><span class="s2">&quot;api.example.com&quot;</span><span class="p">,</span> <span class="mi">443</span><span class="p">,</span> <span class="n">tls</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">radio</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
@@ -724,7 +724,7 @@
 </tr>
 <tr>
 <td>CPython</td>
-<td><code>ssl.create_default_context()</code> — host OS trust store.</td>
+<td><code>ssl.create_default_context()</code> (host OS trust store).</td>
 </tr>
 <tr>
 <td>MicroPython</td>
@@ -732,7 +732,7 @@
 </tr>
 </tbody>
 </table>
-<p>For explicit no-verification (dev against self-signed brokers, captive-portal probes), pass <code>context=ssl_context_no_verify()</code> — the opt-out is named so a code reviewer can grep for it.</p>
+<p>For explicit no-verification (dev against self-signed brokers, captive-portal probes), pass <code>context=ssl_context_no_verify()</code>.  The opt-out is named so a code reviewer can grep for it.</p>
 <h3 id="tls-with-a-custom-ca">TLS with a custom CA<a class="headerlink" href="#tls-with-a-custom-ca" title="Permanent link">&para;</a></h3>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_sockets</span><span class="w"> </span><span class="kn">import</span> <span class="n">connector</span><span class="p">,</span> <span class="n">ssl_context_with_ca</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
@@ -742,20 +742,20 @@
 </span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="n">context</span> <span class="o">=</span> <span class="n">ssl_context_with_ca</span><span class="p">(</span><span class="n">ca_pem</span><span class="p">)</span>
 </span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="n">dial</span> <span class="o">=</span> <span class="n">connector</span><span class="p">(</span><span class="s2">&quot;api.example.com&quot;</span><span class="p">,</span> <span class="mi">443</span><span class="p">,</span> <span class="n">tls</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">context</span><span class="o">=</span><span class="n">context</span><span class="p">,</span> <span class="n">radio</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
 </span></code></pre></div>
-<p><code>ssl_context_with_ca</code> works on every supported runtime — chumicro's minimum supported board class (256 KB MCU RAM / 2 MB physical / ~800 KB usable flash; Pi Pico W, ESP32-S2, ESP32-S3, ESP32-S3 Feather, plus any current-LTS MP/CPython host) all ships the on-board <code>ssl</code> module on current firmware, so the call shape is uniform.  Older legacy radios that lack the <code>ssl</code> module (AirLift, WIZNET5K-pre-mbedTLS) aren't in scope for this library; users on those boards should pin to the existing <code>adafruit_connection_manager</code> ecosystem instead.</p>
+<p><code>ssl_context_with_ca</code> works on every supported runtime: chumicro's minimum supported board class (256 KB MCU RAM / 2 MB physical / ~800 KB usable flash; Pi Pico W, ESP32-S2, ESP32-S3, ESP32-S3 Feather, plus any current-LTS MP/CPython host) all ships the on-board <code>ssl</code> module on current firmware, so the call shape is uniform.  Older legacy radios that lack the <code>ssl</code> module (AirLift, WIZNET5K-pre-mbedTLS) aren't in scope for this library; users on those boards should pin to the existing <code>adafruit_connection_manager</code> ecosystem instead.</p>
 <h2 id="runner-pattern">Runner pattern<a class="headerlink" href="#runner-pattern" title="Permanent link">&para;</a></h2>
-<p><code>chumicro-sockets</code> is a passive transport — it doesn't drive its own lifecycle.  Use it through <a href="../../../../runner/"><code>chumicro-runner</code></a>, which handles <code>select.poll</code> registration, readiness dispatch, and tick budgeting.  The downstream library that owns the connection (e.g. <code>chumicro-mqtt</code>, <code>chumicro-requests</code>) exposes the runner-service contract — <code>io_socket</code>, <code>io_interest(now_ms)</code>, <code>next_deadline(now_ms)</code> — and Runner reads those each tick to decide which sockets to register with <code>poll</code>.  User code calls <code>runner.add(client)</code> and never touches <code>poll</code> directly.</p>
-<p>Without a Runner, drive the same machine yourself: call <code>connector.tick(now_ms)</code> from your own loop and read <code>connector.socket</code> once <code>connector.state == "ready"</code>, then call the connected socket's <code>recv_into</code> / <code>send</code> as usual.  <code>OSError(errno.EAGAIN)</code> is the cross-runtime "would block" signal — re-loop, don't re-raise.</p>
+<p><code>chumicro-sockets</code> is a passive transport; it doesn't drive its own lifecycle.  Use it through <a href="https://chumicro.github.io/ChuMicro/runner/stable/"><code>chumicro-runner</code></a>, which handles <code>select.poll</code> registration, readiness dispatch, and tick budgeting.  The downstream library that owns the connection (e.g. <code>chumicro-mqtt</code>, <code>chumicro-requests</code>) exposes the runner-service contract (<code>io_socket</code>, <code>io_interest(now_ms)</code>, <code>next_deadline(now_ms)</code>), and Runner reads those each tick to decide which sockets to register with <code>poll</code>.  User code calls <code>runner.add(client)</code> and never touches <code>poll</code> directly.</p>
+<p>Without a Runner, drive the same machine yourself: call <code>connector.tick(now_ms)</code> from your own loop and read <code>connector.socket</code> once <code>connector.state == "ready"</code>, then call the connected socket's <code>recv_into</code> / <code>send</code> as usual.  <code>OSError(errno.EAGAIN)</code> is the cross-runtime "would block" signal: re-loop, don't re-raise.</p>
 <p>The socket read/write waits a generator yields (<code>ReadWait</code> / <code>WriteWait</code> from <code>chumicro_sockets.waits</code>) sit alongside the timer and completion waits in one place: the timing guide's <a href="https://chumicro.github.io/ChuMicro/timing/stable/guide/#choosing-a-wait">Choosing a wait</a> table maps each question to its primitive.</p>
 <h2 id="memory-notes">Memory notes<a class="headerlink" href="#memory-notes" title="Permanent link">&para;</a></h2>
-<p>The socket itself doesn't allocate — the protocol surface is <code>recv_into(buffer, nbytes)</code> and <code>send(bytes_or_memoryview)</code> so callers control buffer lifetimes.  Pre-allocate one <code>bytearray</code> per connection and reuse it:</p>
+<p>The socket itself doesn't allocate: the protocol surface is <code>recv_into(buffer, nbytes)</code> and <code>send(bytes_or_memoryview)</code>, so callers control buffer lifetimes.  Pre-allocate one <code>bytearray</code> per connection and reuse it:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">RX_BUFFER</span> <span class="o">=</span> <span class="nb">bytearray</span><span class="p">(</span><span class="mi">256</span><span class="p">)</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="k">def</span><span class="w"> </span><span class="nf">read</span><span class="p">(</span><span class="n">sock</span><span class="p">):</span>
 </span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="n">nbytes</span> <span class="o">=</span> <span class="n">sock</span><span class="o">.</span><span class="n">recv_into</span><span class="p">(</span><span class="n">RX_BUFFER</span><span class="p">,</span> <span class="mi">256</span><span class="p">)</span>
 </span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="k">return</span> <span class="nb">memoryview</span><span class="p">(</span><span class="n">RX_BUFFER</span><span class="p">)[:</span><span class="n">nbytes</span><span class="p">]</span>
 </span></code></pre></div>
-<p><code>FakeSocket</code> does keep an internal <code>bytearray(sent)</code> log — useful for tests, but don't hold the fake across long-running scenarios; replace it for each test.</p>
+<p><code>FakeSocket</code> does keep an internal <code>sent</code> bytearray log, useful for tests, but don't hold the fake across long-running scenarios; replace it for each test.</p>
 <h2 id="platform-notes">Platform notes<a class="headerlink" href="#platform-notes" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -792,9 +792,9 @@
 </tbody>
 </table>
 <p>CircuitPython requires a <code>radio=</code> kwarg pointing at the board's wifi radio (typically <code>wifi.radio</code>).  MicroPython and CPython ignore the kwarg.</p>
-<p>The TLS surface is uniform across runtimes because every supported board (256 KB MCU RAM / 2 MB physical / ~800 KB usable flash, current-LTS firmware — Pi Pico W, ESP32-S2, ESP32-S3, ESP32-S3 Feather native wifi) ships the on-board <code>ssl</code> module.  Legacy radios without <code>ssl</code> (AirLift, WIZNET5K-pre-mbedTLS) aren't supported by this library.</p>
+<p>The TLS surface is uniform across runtimes because every supported board (256 KB MCU RAM / 2 MB physical / ~800 KB usable flash, current-LTS firmware: Pi Pico W, ESP32-S2, ESP32-S3, ESP32-S3 Feather native wifi) ships the on-board <code>ssl</code> module.  Legacy radios without <code>ssl</code> (AirLift, WIZNET5K-pre-mbedTLS) aren't supported by this library.</p>
 <h3 id="runtime-chip-quirks">Runtime + chip quirks<a class="headerlink" href="#runtime-chip-quirks" title="Permanent link">&para;</a></h3>
-<p>Live-AP acceptance runs against the supported boards surfaced four limitations that aren't bugs in this library — they constrain how you build certs and shape your TLS handshakes:</p>
+<p>Live-AP acceptance runs against the supported boards surfaced four limitations that aren't bugs in this library.  They constrain how you build certs and shape your TLS handshakes:</p>
 <table>
 <thead>
 <tr>
@@ -805,7 +805,7 @@
 </thead>
 <tbody>
 <tr>
-<td>CircuitPython on rp2 (Pi Pico W / Pi Pico 2 W) — TLS <em>server</em></td>
+<td>CircuitPython on rp2 (Pi Pico W / Pi Pico 2 W), TLS <em>server</em></td>
 <td><code>listener(tls=True)</code> raises <code>UnsupportedSSLConfigError</code> up-front. The CYW43 TLS handshake path raises <code>OSError(32)</code> mid-handshake AND wedges the chip's station-mode state until you unplug-and-replug USB power.</td>
 <td>Use an ESP32-family board for HTTPS server, or run MicroPython on the same Pi Pico W (verified working). TLS <em>client</em> on CircuitPython rp2 is unaffected.</td>
 </tr>
@@ -846,7 +846,7 @@
 </tr>
 <tr>
 <td><a href="https://github.com/ChuMicro/ChuMicro/tree/main/libraries/sockets/examples/udp_echo_client.py"><code>udp_echo_client.py</code></a></td>
-<td>Board-side UDP echo client — wifi up, send datagram, read echo back.  Cross-runtime (CP + MP).</td>
+<td>Board-side UDP echo client: wifi up, send datagram, read echo back.  Cross-runtime (CP + MP).</td>
 </tr>
 </tbody>
 </table>
