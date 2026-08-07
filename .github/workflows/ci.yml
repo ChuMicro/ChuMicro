@@ -73,6 +73,13 @@ jobs:
         # (the human gate, Decision 0025). Agents self-enforce 94 on their
         # own invocations per AGENTS.md; CI is the same gate a contributor
         # runs locally, so "preflight passed" means CI passes.
+        env:
+          # The commit main pointed at before this push, so check-version
+          # and check-api see every commit it carries.  Their origin/main
+          # default is the pushed commit itself here, which leaves them
+          # diffing HEAD^ and grading only the tip.  Empty on
+          # pull_request, where the origin/main default is already right.
+          CHUMICRO_DIFF_BASE: ${{ github.event.before }}
         run: python scripts/run.py preflight
 
       - name: Upload build artifacts

@@ -752,17 +752,54 @@ def changed_files(base_reference: str) -> list[str]:
     return [line for line in result.stdout.strip().splitlines() if line]
 
 
-def effective_diff_base(base_reference: str) -> str:
-    """Return *base_reference*, or ``HEAD^`` when it points at HEAD.
+#: Environment variable naming the commit a CI push started from.  The
+#: workflow sets it to ``github.event.before``; see ``effective_diff_base``.
+DIFF_BASE_ENVIRONMENT_VARIABLE = "CHUMICRO_DIFF_BASE"
 
-    On a direct-to-main CI push ``origin/main`` IS the pushed commit, so
-    an ``origin/main...HEAD`` diff is empty and every changed-file gate
-    (check-version, check-api) silently passes.  Diffing against HEAD's
-    first parent instead covers the pushed commit itself.  The original
-    reference is kept when it doesn't resolve, when it differs from
-    HEAD, or when HEAD has no parent (root commit) — callers keep their
-    existing empty-diff behavior in those cases.
+#: What GitHub sends as ``github.event.before`` for a branch's first
+#: push.  There is no prior commit to diff against, so it is ignored.
+_ZERO_SHA = "0" * 40
+
+
+def effective_diff_base(base_reference: str) -> str:
+    """Return the ref the changed-file gates should diff HEAD against.
+
+    Resolved in three steps:
+
+    1. ``$CHUMICRO_DIFF_BASE`` when it names a commit this clone holds.
+       CI sets it to ``github.event.before``, the commit the branch
+       pointed at before the push, so a push carrying several commits
+       is examined whole.  Without it the ``HEAD^`` fallback below sees
+       only the tip commit, and release-relevant changes in a push's
+       earlier commits skip the VERSION and API gates entirely: on
+       2026-07-28 seventeen ``pyproject.toml`` descriptions landed
+       unbumped two commits back in a five-commit push, under a green
+       CI, and reached neither channel until the next wave.  The
+       override is ignored when unset, empty, the all-zero SHA of a
+       first push, or a SHA this clone cannot resolve (force-pushed
+       away), each of which falls through to step 2.
+    2. ``HEAD^`` when *base_reference* IS HEAD.  On a direct-to-main
+       push ``origin/main`` is the pushed commit, so an
+       ``origin/main...HEAD`` diff is empty and every gate silently
+       passes.  The first parent at least covers the tip commit.
+    3. *base_reference* unchanged — when it doesn't resolve, when it
+       differs from HEAD, or when HEAD has no parent (root commit).
+       Callers keep their existing empty-diff behavior in those cases.
     """
+    override = os.environ.get(DIFF_BASE_ENVIRONMENT_VARIABLE, "").strip()
+    if override and override != _ZERO_SHA:
+        resolved = run_git("rev-parse", "--verify", f"{override}^{{commit}}")
+        if resolved.returncode == 0:
+            print(
+                f"NOTE: diffing against ${DIFF_BASE_ENVIRONMENT_VARIABLE} "
+                f"({override}) — the commit this push started from."
+            )
+            return override
+        print(
+            f"NOTE: ${DIFF_BASE_ENVIRONMENT_VARIABLE} ({override}) does not "
+            f"resolve here — falling back to {base_reference}."
+        )
+
     base = run_git("rev-parse", "--verify", f"{base_reference}^{{commit}}")
     head = run_git("rev-parse", "--verify", "HEAD^{commit}")
     if base.returncode != 0 or head.returncode != 0:

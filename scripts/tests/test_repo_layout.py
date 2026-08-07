@@ -994,6 +994,17 @@ class TestEffectiveDiffBase:
             cwd=cwd, capture_output=True, check=True, env=merged,
         )
 
+    def _head_sha(self, cwd: Path) -> str:
+        """Return the full SHA at HEAD, the shape GitHub sends as before."""
+        import os
+        import subprocess
+
+        merged = {**os.environ, **self._GIT_ENV}
+        return subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=cwd, capture_output=True, text=True, check=True, env=merged,
+        ).stdout.strip()
+
     def _repo_with_commits(self, tmp_path: Path, monkeypatch, count: int) -> Path:
         """Init a repo at tmp_path with *count* empty commits; pin ROOT to it."""
         self._git("init", cwd=tmp_path)
@@ -1030,3 +1041,49 @@ class TestEffectiveDiffBase:
         self._repo_with_commits(tmp_path, monkeypatch, count=2)
 
         assert effective_diff_base("origin/nonexistent") == "origin/nonexistent"
+
+    def test_environment_override_wins_over_parent_fallback(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        """$CHUMICRO_DIFF_BASE covers a whole push, not just its tip.
+
+        The regression this guards: a push of three commits leaves
+        origin/main at the tip, so the HEAD^ fallback grades only the
+        last one and release-relevant edits in the earlier two escape
+        the VERSION and API gates.
+        """
+        repo = self._repo_with_commits(tmp_path, monkeypatch, count=1)
+        before = self._head_sha(repo)
+        for index in range(3):
+            self._git("commit", "--allow-empty", "-m", f"pushed{index}", cwd=repo)
+        self._git("branch", "pushed-main", cwd=repo)
+        monkeypatch.setenv(repo_layout.DIFF_BASE_ENVIRONMENT_VARIABLE, before)
+
+        assert effective_diff_base("pushed-main") == before
+        assert "the commit this push started from" in capsys.readouterr().out
+
+    def test_zero_sha_override_is_ignored(self, tmp_path, monkeypatch):
+        """A branch's first push sends the all-zero SHA; ignore it."""
+        repo = self._repo_with_commits(tmp_path, monkeypatch, count=2)
+        self._git("branch", "pushed-main", cwd=repo)
+        monkeypatch.setenv(repo_layout.DIFF_BASE_ENVIRONMENT_VARIABLE, "0" * 40)
+
+        assert effective_diff_base("pushed-main") == "HEAD^"
+
+    def test_unresolvable_override_falls_back(self, tmp_path, monkeypatch, capsys):
+        """A force-pushed-away SHA this clone lacks falls through."""
+        repo = self._repo_with_commits(tmp_path, monkeypatch, count=2)
+        self._git("branch", "pushed-main", cwd=repo)
+        monkeypatch.setenv(repo_layout.DIFF_BASE_ENVIRONMENT_VARIABLE, "d" * 40)
+
+        assert effective_diff_base("pushed-main") == "HEAD^"
+        assert "does not resolve here" in capsys.readouterr().out
+
+    def test_empty_override_is_ignored(self, tmp_path, monkeypatch):
+        """pull_request sends no before-SHA; the default path still runs."""
+        repo = self._repo_with_commits(tmp_path, monkeypatch, count=1)
+        self._git("branch", "old-main", cwd=repo)
+        self._git("commit", "--allow-empty", "-m", "newer", cwd=repo)
+        monkeypatch.setenv(repo_layout.DIFF_BASE_ENVIRONMENT_VARIABLE, "")
+
+        assert effective_diff_base("old-main") == "old-main"
