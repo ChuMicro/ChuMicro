@@ -94,16 +94,23 @@ def _build_entries(
 
         # Already promoted → drop out rather than fail, so re-dispatching
         # a failed wave's full tag list finishes only what is left.
-        if promote_validate._tag_exists(parsed["stable_tag"]) and not include_tagged:
+        stable_exists = promote_validate._tag_exists(parsed["stable_tag"])
+        if stable_exists and not include_tagged:
             print(
                 f"Stable tag {parsed['stable_tag']} already exists — "
                 f"skipping {parsed['library_name']}."
             )
             continue
 
-        promote_validate._check_preconditions(tag, parsed, resume=False)
+        # A package that survives with its stable tag present is a
+        # deliberate re-publish, which is exactly the shape
+        # promote_validate calls `resume`: the stable-tag precondition
+        # inverts to "must exist", and the monotonicity guard excludes
+        # the package's own stable tag so its own release does not read
+        # as a downgrade of itself.
+        promote_validate._check_preconditions(tag, parsed, resume=stable_exists)
         promote_validate._check_monotonicity(
-            parsed, allow_downgrade=allow_downgrade, resume=False,
+            parsed, allow_downgrade=allow_downgrade, resume=stable_exists,
         )
 
         entries.append({

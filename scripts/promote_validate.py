@@ -148,8 +148,9 @@ def _check_preconditions(
         )
     if not resume and stable_exists:
         raise PromoteValidationError(
-            f"Stable tag {parsed['stable_tag']} already exists.  If a previous promotion "
-            "of this version died after the tag write, re-dispatch with resume=true.",
+            f"Stable tag {parsed['stable_tag']} already exists.  Promoting through "
+            "promote.yml drops an already-promoted package from the wave instead; "
+            "pass include_tagged to re-publish it deliberately.",
         )
     if not _release_has_source_archive(experimental_tag, parsed["source_zip"]):
         raise PromoteValidationError(
