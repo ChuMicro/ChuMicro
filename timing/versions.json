@@ -12,35 +12,5 @@
     "aliases": [
       "stable"
     ]
-  },
-  {
-    "version": "0.1.25",
-    "title": "0.1.25",
-    "aliases": []
-  },
-  {
-    "version": "0.1.23",
-    "title": "0.1.23",
-    "aliases": []
-  },
-  {
-    "version": "0.1.21",
-    "title": "0.1.21",
-    "aliases": []
-  },
-  {
-    "version": "0.1.14",
-    "title": "0.1.14",
-    "aliases": []
-  },
-  {
-    "version": "0.1.13",
-    "title": "0.1.13",
-    "aliases": []
-  },
-  {
-    "version": "0.1.8",
-    "title": "0.1.8",
-    "aliases": []
   }
 ]
