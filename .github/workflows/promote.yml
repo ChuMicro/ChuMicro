@@ -470,6 +470,12 @@ jobs:
         with:
           # mike inspects existing version aliases on gh-pages.
           fetch-depth: 0
+          # The gh-pages ruleset blocks every ref update and bypasses only
+          # OrganizationAdmin, DeployKey and the admin role, so GITHUB_TOKEN
+          # cannot push here — the push is rejected with GH013 after the
+          # PyPI publish has already happened.  Check out over the deploy
+          # key so the later push carries an identity the rule lets through.
+          ssh-key: ${{ secrets.GH_PAGES_DEPLOY_KEY }}
 
       - uses: actions/setup-python@v6
         with:
