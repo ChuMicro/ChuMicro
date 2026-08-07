@@ -68,11 +68,15 @@ A failed publish leg also skips the bundle, libraries-channel, and manifest jobs
 
 What maintainers look for: preflight passes, ideally tested on hardware, no known regressions, docs are complete, and the API is intentional (breaking changes after stable require a major bump).
 
-**Promoting several packages at once:** never dispatch `promote.yml` back to back. The shared `release` concurrency group holds one running plus at most one pending run and silently cancels the rest. Run the wave through the dispatcher instead, which orders packages so dependencies promote first and watches each run to completion:
+**Promoting several packages at once:** put every experimental tag in the `experimental_tags` input, comma-separated. A wave is one workflow run:
 
-```bash
-python scripts/promote_wave.py <experimental-tag> [<experimental-tag> ...]
 ```
+chumicro-timing-v0.8.2-experimental,chumicro-mqtt-v0.28.2-experimental
+```
+
+The publishes run in parallel, and the bundle push, docs deploy, and libraries-channel write each happen once for the whole wave. That produces one bundle snapshot describing the wave rather than one per package.
+
+If a publish leg fails, the packages that succeeded keep their tags, and the bundle, docs, and channel jobs do not run. Fix the failure and dispatch the same tag list again: packages already on stable drop out of the matrix on their own, so the re-run finishes only what is left.
 
 ### Promotion flags
 
@@ -80,7 +84,7 @@ python scripts/promote_wave.py <experimental-tag> [<experimental-tag> ...]
 
 **`allow_downgrade`** skips the check that the promoted version must be newer than the newest stable release. Without it, promoting an older experimental tag fails validation instead of quietly rolling the stable bundle and docs back to the older version. Set it only when a hotfix intentionally republishes an older version as stable.
 
-**`resume`** re-runs a promotion that failed after the stable tag was written. Validation then requires the stable tag to exist, and every downstream step is safe to repeat, so the whole pipeline runs again to completion. If a newer stable version shipped in the meantime, the resume fails the version check on purpose; add `allow_downgrade` to finish it deliberately.
+**`include_tagged`** keeps packages whose stable tag already exists, instead of dropping them from the matrix. Every downstream step is safe to repeat, so this is how you deliberately republish something already on stable. A normal re-run does not need it.
 
 ## Versioning
 
