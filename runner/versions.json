@@ -7,11 +7,16 @@
     ]
   },
   {
-    "version": "0.19.1",
-    "title": "0.19.1",
+    "version": "0.19.2",
+    "title": "0.19.2",
     "aliases": [
       "stable"
     ]
+  },
+  {
+    "version": "0.19.1",
+    "title": "0.19.1",
+    "aliases": []
   },
   {
     "version": "0.19.0",
