@@ -2,7 +2,7 @@
 
 Status: `accepted`
 Date: `2026-07-04`
-Summary: `.claude/surfaces/` is a pure-stdlib toolkit for the browser surfaces an agent renders for a human: one shared kit, a one-shot submit transport, an SSE live-canvas server, a spec-driven picker, and (Decision 0116) the surface hub that now fronts them all.
+Summary: `.claude/surfaces/` is a pure-stdlib toolkit for the browser surfaces an agent renders for a human: a shared kit, a submit transport, an SSE live-canvas server, a picker, and the hub fronting them.
 Related: Decision [0032](0032-workbench-host-tools.md) (the workbench folder is PyPI-publishable, surfaces deliberately is not), Decision [0052](0052-workbench-no-library-imports.md) (no-library-imports, a rule surfaces has no reason to satisfy), Decision [0066](0066-agent-runnable-clis.md) (TTY-aware agent-runnable front doors), Decision [0116](0116-surface-hub.md) (the surface hub: one server, one tab, surface lifecycle).
 
 ## Context

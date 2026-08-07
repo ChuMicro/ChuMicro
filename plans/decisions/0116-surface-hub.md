@@ -2,7 +2,7 @@
 
 Status: `accepted`
 Date: `2026-08-01`
-Summary: `.claude/surfaces/hub.py is the default transport for every browser surface an agent puts in front of a human: a single per-repo server on a stable port owning a single browser tab; questions, reports, and status boards are posted surfaces with a pending → answered | withdrawn | expired lifecycle; a content floor gates decision-page specs the way ask_gate gates AskUserQuestion.`
+Summary: `.claude/surfaces/hub.py` is the default transport for browser surfaces: one per-repo server owning one tab, surfaces posted with a pending/answered/withdrawn/expired lifecycle, and a content floor.
 Related: Decision [0100](0100-surfaces-browser-toolkit.md) (the surfaces toolkit this extends), the ask-gate floor (`.claude/surfaces/ask_gate.py`).
 
 ## Context
