@@ -29,6 +29,13 @@ classifiers = [
 dependencies = [
     "mpremote>=1.26",
     "pyserial>=3.5",
+    # esptool; the ESP32-family flash backend ``firmware.py`` shells
+    # out to.  Declared rather than left to the host so
+    # ``install-firmware --method esptool`` works straight out of a
+    # fresh workspace setup on every platform.  The 5.2 floor is the
+    # first release declaring Python 3.14 support, and the flash
+    # commands use v5's hyphenated subcommand names, which v4 rejects.
+    "esptool>=5.2",
     # ruamel.yaml; preserves comments + key order on round-trip writes
     # for ``chumicro_deploy.config.devices_yaml``; reads use the same
     # parser via ``YAML(typ="safe")``.  Standardized on a single YAML
