@@ -83,6 +83,42 @@ Build your client at startup. The first `MQTTClient` reference imports the clien
 
 `MQTTClient` actually enforces non-blocking mode on every socket it acquires (force-`setblocking(False)`), so the explicit `sock.setblocking(False)` line above is belt-and-suspenders.  Don't omit it.  MP plain TCP defaults to blocking, and a blocking `recv` against a silent peer (broker that's hung mid-handshake, network blackholing returning packets) stalls the tick loop indefinitely on Pi Pico W RP2.  Bench-tested with a stalled TCP listener: recv was still blocked at the 3-minute mark, with no TCP keepalive timeout fired within that window.  Whole-app freeze, not a recoverable hiccup.
 
+## Client ids
+
+Every MQTT connection carries a client id, and brokers treat it as the
+identity of the session.  Pass your own when you have a meaningful name
+for the device:
+
+```python
+client = MQTTClient(sock, client_id="greenhouse-sensor-1")
+```
+
+When you don't, `default_client_id()` builds one from the board's
+hardware UID, which is what `MQTTClient.from_config` uses:
+
+```python
+from chumicro_mqtt import default_client_id
+
+default_client_id()               # "chumicro-e8db84a1b2c3"
+default_client_id("greenhouse")   # "greenhouse-e8db84a1b2c3"
+```
+
+The id is unique across devices and stable across reboots, so a
+persistent session resumes after a power cycle instead of colliding with
+its own previous connection.  The UID comes from
+`microcontroller.cpu.uid` on CircuitPython, `machine.unique_id()` on
+MicroPython, and the host MAC via `uuid.getnode()` on CPython.
+
+Each of those lookups is guarded, and when none of them works the
+function falls back to `<prefix>-mqtt`.  That fallback is worth knowing
+about, because it is a fixed string: two boards that both hit it connect
+as the same client, and an MQTT broker resolves a duplicate client id by
+disconnecting the earlier session.  The symptom is a pair of devices that
+keep kicking each other off the broker while each one looks healthy on
+its own.  If you see that, print `default_client_id()` on both boards.
+Getting `chumicro-mqtt` back means the UID lookup failed and you should
+pass an explicit `client_id` per device.
+
 ## Publishing
 
 ```python
