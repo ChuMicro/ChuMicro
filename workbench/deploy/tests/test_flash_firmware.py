@@ -356,20 +356,24 @@ class TestEsptoolPath:
         device = Device(transport="micropython", address="/dev/ttyUSB0")
         firmware = tmp_path / "fw.bin"
         firmware.write_bytes(b"x")
-        with pytest.raises(FlashFirmwareError, match="Install it with"):
+        with pytest.raises(FlashFirmwareError, match="esptool not found"):
             _flash_firmware_esptool(firmware, device, on_progress=None)
 
-    def test_prefers_esptool_py_over_esptool(
+    def test_prefers_esptool_over_esptool_py(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
     ) -> None:
-        """When both names resolve, the ``.py`` flavor (esptool v4.x)
-        wins.  esptool v5 has a regression with the ESP32-S2 USB-OTG
-        ROM bootloader on macOS, so v4 is the safer default."""
+        """When both names resolve, the bare ``esptool`` wins.
+
+        The flash commands use the hyphenated v5 subcommand names, so
+        v5 is the only branch that can run them; only v5 installs the
+        bare name, while ``esptool.py`` may still be a v4 install from
+        an IDF environment.
+        """
         monkeypatch.setattr(
             "shutil.which",
             lambda name: {
                 "esptool.py": "/fake/idf-env/esptool.py",
-                "esptool": "/fake/homebrew/esptool",
+                "esptool": "/fake/venv/esptool",
             }.get(name),
         )
         monkeypatch.delenv("CHUMICRO_ESPTOOL_BINARY", raising=False)
@@ -386,7 +390,7 @@ class TestEsptoolPath:
             firmware, device, on_progress=None, erase_flash=False,
             runner=fake_runner,
         )
-        assert runner_calls[0][0] == "/fake/idf-env/esptool.py"
+        assert runner_calls[0][0] == "/fake/venv/esptool"
 
     def test_env_override_wins_over_both(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
@@ -474,13 +478,13 @@ class TestEsptoolPath:
     ) -> None:
         """Erase and write are separate esptool calls.
 
-        Both calls pass ``--before no_reset`` because the caller put
+        Both calls pass ``--before no-reset`` because the caller put
         the chip in ROM bootloader before we got here; esptool's
         default DTR/RTS reset dance on port open can knock an
         already-in-bootloader chip back out of bootloader, especially
         on ESP32-S2 with native USB-OTG.
 
-        Only the erase call passes ``--after no_reset`` so the chip
+        Only the erase call passes ``--after no-reset`` so the chip
         stays in ROM bootloader for the write that follows; the write
         call uses esptool's default hard_reset so the board boots the
         new firmware once writing completes.
@@ -515,10 +519,10 @@ class TestEsptoolPath:
                 return None
 
         assert "erase-flash" in erase_command
-        assert _flag_value(erase_command, "--before") == "no_reset"
-        assert _flag_value(erase_command, "--after") == "no_reset"
+        assert _flag_value(erase_command, "--before") == "no-reset"
+        assert _flag_value(erase_command, "--after") == "no-reset"
         assert "write-flash" in write_command
-        assert _flag_value(write_command, "--before") == "no_reset"
+        assert _flag_value(write_command, "--before") == "no-reset"
         assert _flag_value(write_command, "--after") is None
 
     def test_erase_flash_failure_surfaces_step_name(
