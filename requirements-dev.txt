@@ -29,7 +29,7 @@ pyserial==3.5
 pyyaml==6.0.3
 paho-mqtt==2.1.0
 mpremote==1.28.0
-cryptography==47.0.0
+cryptography==50.0.0
 mike @ git+https://github.com/squidfunk/mike.git@2d4ad799442f4592db8ad53b179bfb33db8c69ac
 mkdocstrings[python]==1.0.4
 jedi==0.20.0
