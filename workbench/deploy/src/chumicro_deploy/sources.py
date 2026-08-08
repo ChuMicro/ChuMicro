@@ -613,11 +613,14 @@ class ImportGraphSource:
         refuse a deploy over a device that can't import it.
         """
         guarded: set[str] = set()
+        alias_bindings = ImportGraphSource._catching_tuple_aliases(tree)
         for node in ast.walk(tree):
             if not isinstance(node, ast.Try):
                 continue
             if not any(
-                ImportGraphSource._handler_catches_import_error(handler)
+                ImportGraphSource._handler_catches_import_error(
+                    handler, alias_bindings,
+                )
                 for handler in node.handlers
             ):
                 continue
@@ -633,24 +636,77 @@ class ImportGraphSource:
                         guarded.add(inner.module)
         return guarded
 
+    #: Exception names whose capture makes a guarded import optional.
+    _CATCHING_NAMES = frozenset({
+        "ImportError", "ModuleNotFoundError", "Exception", "BaseException",
+    })
+
     @staticmethod
-    def _handler_catches_import_error(handler: ast.ExceptHandler) -> bool:
+    def _catching_tuple_aliases(tree: ast.Module) -> frozenset[str]:
+        """Return names bound *only* to tuples that catch ``ImportError``.
+
+        ``except guarded:`` where ``guarded = (ImportError, OSError)`` is a
+        real ImportError guard, but the handler's type is an ``ast.Name`` that
+        says nothing on its own.  This collects the names a file binds to an
+        exception tuple so the handler check can see through the alias.
+
+        The rule is deliberately conservative: a name qualifies only when
+        EVERY assignment to it in the file is a tuple literal containing a
+        catching name.  Rebinding the same name to, say, ``(ValueError,)``
+        elsewhere disqualifies it entirely, because guessing wrong in the
+        permissive direction ships an import that fails at boot on the
+        device — exactly what this refusal exists to prevent.
+        """
+        bound: dict[str, bool] = {}
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Assign):
+                targets = node.targets
+                value = node.value
+            elif isinstance(node, ast.AnnAssign) and node.value is not None:
+                targets = [node.target]
+                value = node.value
+            else:
+                continue
+            catches = isinstance(value, ast.Tuple) and any(
+                isinstance(element, ast.Name)
+                and element.id in ImportGraphSource._CATCHING_NAMES
+                for element in value.elts
+            )
+            for target in targets:
+                if isinstance(target, ast.Name):
+                    # Any non-qualifying rebinding poisons the name for good.
+                    bound[target.id] = bound.get(target.id, True) and catches
+        return frozenset(name for name, catches in bound.items() if catches)
+
+    @staticmethod
+    def _handler_catches_import_error(
+        handler: ast.ExceptHandler,
+        alias_bindings: frozenset[str] = frozenset(),
+    ) -> bool:
         """Return whether *handler* catches ``ImportError``.
 
         A bare ``except:`` (``handler.type is None``) catches everything, so
         it counts.  Otherwise the caught type must name ``ImportError`` or its
         broader parents ``Exception`` / ``BaseException``, directly or inside
         an ``except (ImportError, OSError):`` tuple.
+
+        *alias_bindings* carries the names the enclosing file binds to a
+        catching tuple (see :meth:`_catching_tuple_aliases`), so an
+        ``except guarded:`` written against a named tuple is recognized too.
         """
         caught = handler.type
         if caught is None:
             return True
-        catching_names = {"ImportError", "ModuleNotFoundError", "Exception", "BaseException"}
+        catching_names = ImportGraphSource._CATCHING_NAMES
         if isinstance(caught, ast.Name):
-            return caught.id in catching_names
+            return caught.id in catching_names or caught.id in alias_bindings
         if isinstance(caught, ast.Tuple):
             return any(
-                isinstance(element, ast.Name) and element.id in catching_names
+                isinstance(element, ast.Name)
+                and (
+                    element.id in catching_names
+                    or element.id in alias_bindings
+                )
                 for element in caught.elts
             )
         return False

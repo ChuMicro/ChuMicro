@@ -730,6 +730,91 @@ class TestImportGraphSourceRefusesUnresolvedImports:
         source = ImportGraphSource(entrypoint, search_paths=[libs])
         assert "optional_pkg" not in " ".join(source.files())
 
+    def test_aliased_exception_tuple_guard_is_not_refused(
+        self, tmp_path: Path,
+    ) -> None:
+        """``except guarded:`` against a named tuple still reads as a guard.
+
+        Binding the exception tuple to a name is ordinary Python, and
+        ``chumicro_mqtt.client`` writes its hardware-UID fallback chain that
+        way.  Before the handler check resolved aliases, the ``ast.Name`` said
+        nothing on its own and every mqtt deploy was refused over the guarded
+        ``import uuid``.
+        """
+        libs = tmp_path / "libs"
+        libs.mkdir()
+        entrypoint = tmp_path / "app.py"
+        entrypoint.write_text(
+            "guarded = (ImportError, AttributeError, OSError)\n"
+            "try:\n"
+            "    import optional_uid\n"
+            "except guarded:\n"
+            "    optional_uid = None\n"
+        )
+        source = ImportGraphSource(entrypoint, search_paths=[libs])
+        assert "optional_uid" not in " ".join(source.files())
+
+    def test_function_local_aliased_guard_is_not_refused(
+        self, tmp_path: Path,
+    ) -> None:
+        """The alias binding is found wherever it sits, including in a def."""
+        libs = tmp_path / "libs"
+        libs.mkdir()
+        entrypoint = tmp_path / "app.py"
+        entrypoint.write_text(
+            "def client_id():\n"
+            "    guarded = (ImportError, OSError)\n"
+            "    try:\n"
+            "        import optional_uid\n"
+            "    except guarded:\n"
+            "        return None\n"
+            "    return optional_uid\n"
+        )
+        source = ImportGraphSource(entrypoint, search_paths=[libs])
+        assert "optional_uid" not in " ".join(source.files())
+
+    def test_alias_bound_to_unrelated_tuple_still_refuses(
+        self, tmp_path: Path,
+    ) -> None:
+        """An alias that never names ImportError exempts nothing."""
+        libs = tmp_path / "libs"
+        libs.mkdir()
+        entrypoint = tmp_path / "app.py"
+        entrypoint.write_text(
+            "guarded = (ValueError, TypeError)\n"
+            "try:\n"
+            "    import missing_thing\n"
+            "except guarded:\n"
+            "    missing_thing = None\n"
+        )
+        with pytest.raises(UnresolvedImportError) as caught:
+            ImportGraphSource(entrypoint, search_paths=[libs])
+        assert caught.value.unresolved == [(entrypoint, "missing_thing")]
+
+    def test_alias_rebound_to_unrelated_tuple_still_refuses(
+        self, tmp_path: Path,
+    ) -> None:
+        """A rebinding that stops catching ImportError poisons the alias.
+
+        Resolving aliases must not guess in the permissive direction: were the
+        first binding taken on its own, the deploy would ship an import that
+        raises at boot on the device.
+        """
+        libs = tmp_path / "libs"
+        libs.mkdir()
+        entrypoint = tmp_path / "app.py"
+        entrypoint.write_text(
+            "guarded = (ImportError, OSError)\n"
+            "guarded = (ValueError,)\n"
+            "try:\n"
+            "    import missing_thing\n"
+            "except guarded:\n"
+            "    missing_thing = None\n"
+        )
+        with pytest.raises(UnresolvedImportError) as caught:
+            ImportGraphSource(entrypoint, search_paths=[libs])
+        assert caught.value.unresolved == [(entrypoint, "missing_thing")]
+
     def test_bare_except_guard_exempts_import(self, tmp_path: Path) -> None:
         """A bare ``except:`` catches everything, so its import is optional."""
         libs = tmp_path / "libs"
