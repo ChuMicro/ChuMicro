@@ -50,7 +50,7 @@ Candidate approaches:
 
 Windows host note:
 
-- per [Decision 0005](../decisions/0005-INERT-windows-wsl2-unix-port-validation.md), Windows contributors should use WSL2 for unix-port-based MicroPython and CircuitPython validation rather than native-Windows unix-port workflows in this phase
+- per [Decision 0005](../../decisions/0005-INERT-windows-wsl2-unix-port-validation.md), Windows contributors should use WSL2 for unix-port-based MicroPython and CircuitPython validation rather than native-Windows unix-port workflows in this phase
 
 ### Layer 3: functional tests on real devices
 

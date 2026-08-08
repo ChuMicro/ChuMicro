@@ -131,7 +131,7 @@ status changes — all stay `accepted`.
 **Phase 2 — 0017 split (class D). DONE.** 0017 slimmed from ~149 to
 ~45 lines (Context / Decision incl. the "why not the coverage
 variant" rejected-alternative / Consequences). Forensics relocated to
-[`../../docs/troubleshooting/circuitpython-ringio.md`](../../docs/troubleshooting/circuitpython-ringio.md),
+[`../../docs/troubleshooting/circuitpython-ringio.md`](../../../docs/troubleshooting/circuitpython-ringio.md),
 listed in that directory's README (Guides + Related-ADR, mirroring
 the 0033 ↔ macos-circuitpy precedent). 0017 stays `accepted` and
 keeps its filename, so the `scripts/prepare_circuitpython.py` comment

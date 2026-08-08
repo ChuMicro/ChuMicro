@@ -75,7 +75,7 @@ Reinvented in `requests/test_requests.py:78-86`, `mqtt/test_client.py:38-43`, `h
 
 Open question raised during the audit: should cross-cutting helpers (generic `fake_subprocess_runner`, `seed_tmp_workspace`) move to a `support/test_helpers/` package?  **No.**  When a library is copied into the [workspace-template](https://github.com/ChuMicro/ChuMicro-Workspace-Template) starter repo, anything under `support/` does not come with it.  Accept per-package duplication of test helpers.  If a pattern becomes load-bearing across 3+ packages, the path is to publish it as a real PyPI dependency, not to add an internal-only `support/` module.
 
-Consistent with [Decision 0010](../decisions/0010-library-testability.md)'s "fakes co-located with the production code they fake" framing.
+Consistent with [Decision 0010](../../decisions/0010-library-testability.md)'s "fakes co-located with the production code they fake" framing.
 
 ## Phases
 

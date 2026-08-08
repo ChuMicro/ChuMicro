@@ -1,14 +1,14 @@
 # Workstream: non-blocking-connect implementation
 
-Status: **shipped.**  Implements [Decision 0081](../decisions/0081-non-blocking-connect-via-tick-driven-connector.md).  Surfaced 2026-05-23 by the A1+A2 negative bake against the convergence-steps-1-7 fix set on Pi Pico W CP custom firmware: self-heal correctly detected broker death + reconnected, but each outage burned ~10 s of full-tick-rate ECONNRESET retries against the wifi radio, fully stalling the runner during the outage window.  Recovery worked; runner-shape was violated for ~10 s per outage.
+Status: **shipped.**  Implements [Decision 0081](../../decisions/0081-non-blocking-connect-via-tick-driven-connector.md).  Surfaced 2026-05-23 by the A1+A2 negative bake against the convergence-steps-1-7 fix set on Pi Pico W CP custom firmware: self-heal correctly detected broker death + reconnected, but each outage burned ~10 s of full-tick-rate ECONNRESET retries against the wifi radio, fully stalling the runner during the outage window.  Recovery worked; runner-shape was violated for ~10 s per outage.
 
 All client-side phases shipped; A1 bake-validated on Pi Pico W CP (max_tick_ms 63 ms during outage + recovery, ~160× drop from the pre-Phase-2 ~10 s stall).  Phase 6 (server-side accept-connector analog) closed out of scope — see the Phase-6 row in the validation history for the deferral rationale.  A future bake observation can reopen it as a separate workstream.
 
 ## Problem
 
-The synchronous-factory promise from [Decision 0031](../decisions/0031-chumicro-sockets-factories.md) §2 — *"`connect()` happens inside the factory — the returned socket is already connected"* — predates the runner-shaped rule from [Decision 0051](../decisions/0051-runner-shape-as-project-policy.md).  Every library that uses the synchronous factory (`chumicro_mqtt`, `chumicro_requests`, `chumicro_websockets`, `chumicro_http_server`) calls it from a runner-tick handler somewhere — for self-heal, for lazy-connect-on-demand, for a session-establishment step — and each such call stalls the runner for the full DNS + TCP + TLS round-trip.
+The synchronous-factory promise from [Decision 0031](../../decisions/0031-chumicro-sockets.md) §2 — *"`connect()` happens inside the factory — the returned socket is already connected"* — predates the runner-shaped rule from [Decision 0051](../../decisions/0051-runner-shaped-as-project-policy.md).  Every library that uses the synchronous factory (`chumicro_mqtt`, `chumicro_requests`, `chumicro_websockets`, `chumicro_http_server`) calls it from a runner-tick handler somewhere — for self-heal, for lazy-connect-on-demand, for a session-establishment step — and each such call stalls the runner for the full DNS + TCP + TLS round-trip.
 
-[Decision 0081](../decisions/0081-non-blocking-connect-via-tick-driven-connector.md) lays down the invariant (library network I/O doesn't block) and the carve-out (synchronous factory stays for non-runner contexts).  This workstream covers the mechanism.
+[Decision 0081](../../decisions/0081-non-blocking-connect-via-tick-driven-connector.md) lays down the invariant (library network I/O doesn't block) and the carve-out (synchronous factory stays for non-runner contexts).  This workstream covers the mechanism.
 
 ## Connector contract
 

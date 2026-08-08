@@ -12,7 +12,6 @@
     "libraries/config/src",
     "libraries/http_server/src",
     "libraries/kvstore/src",
-    "libraries/logging/src",
     "libraries/mqtt/src",
     "libraries/msgpack/src",
     "libraries/ntp/src",

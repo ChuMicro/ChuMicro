@@ -220,7 +220,7 @@ def _check(base_reference: str) -> int:
             print(
                 f"NOTE: {parent_dir}/{package_name}/ has no release tags — "
                 "this appears to be a new package.  Before merging, "
-                "ask @chux.maker to create the PyPI project "
+                "ask a maintainer to create the PyPI project "
                 f"(chumicro-{package_name}) so the release workflow can publish."
             )
 

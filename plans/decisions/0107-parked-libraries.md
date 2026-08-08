@@ -2,22 +2,23 @@
 
 Status: `accepted`
 Date: `2026-07-05`
-Summary: A `PARKED` marker file holds a library out of the publish set (release, bundle, channel, landing page) while it stays in-tree and tested; `chumicro_logging` is the first parked library.
+Summary: A `PARKED` marker file holds a library out of the publish set (release, bundle, channel, landing page) while it stays in-tree and tested.
 Related: 0002 (per-library VERSION files), 0032 (publishable roots), 0038 §6 (pre-release floor), 0092 (no backwards-compat before publication), 0096 (remove events — the delete verdict this softens)
 
 ## Context
 
-`chumicro_logging` audits clean but has zero adopters in either repo as of the
-2026-07-04 fleet audit.  Decision 0096 deleted `events` under the same
-zero-consumer finding; logging instead earns a softer verdict — keep it in-tree
-and maintained, but stop advertising and shipping it until a real consumer shows
-up.  The publish set was until now implicit: a library qualifies when it has both
-`VERSION` and `pyproject.toml` at its root, a gate re-enumerated in
+A library that audits clean but has no adopters is not obviously a delete: the
+code is good, and a consumer may still show up.  Decision 0096 deleted `events`
+under a zero-consumer finding, and the cost of that verdict is that reviving the
+library later means recovering it from git.  A softer verdict is worth having
+available — keep the library in-tree and maintained, but stop advertising and
+shipping it.  The publish set was until now implicit: a library qualifies when it
+has both `VERSION` and `pyproject.toml` at its root, a gate re-enumerated in
 `release_matrix`, `find_publishable_packages`, `libraries_channel`,
 `bundle_manager`, the landing page, and mip validation.  There was no way to say
 "in the tree but not in the publish set."  The pre-release floor (Decision 0038 §6,
-`VERSION == 0.0.0`) does not apply — logging is at `0.5.1` — and overloading `0.0.0`
-to mean "parked" would conflate two unrelated states.
+`VERSION == 0.0.0`) does not express this either: a parked library sits at a real
+version, and overloading `0.0.0` would conflate two unrelated states.
 
 ## Decision
 
@@ -43,7 +44,7 @@ Parking excludes a library from the **publish set** only:
   bump discipline; keeping VERSION accurate is what keeps it release-ready, so
   un-parking is one step rather than a version-archaeology exercise.
 
-`chumicro_logging` is parked as the first instance.
+No library is parked at present.
 
 ## Consequences
 

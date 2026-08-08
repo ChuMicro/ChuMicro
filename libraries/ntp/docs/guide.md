@@ -25,7 +25,7 @@ A few notes on dependencies:
 
 - `chumicro-sockets` is a hard dependency: `pip install chumicro-ntp` brings the whole stack.
 - `NTPClient.from_config` builds the default UDP wiring through the shared `chumicro_sockets.sockets_factory` module, imported lazily.  Apps that supply their own UDP socket never trigger that import, so `chumicro-sockets` doesn't get deployed to the device for those apps.
-- No `chumicro-logging` dep.  The library exposes no callbacks: the result handle returned by `query()` is the observation surface.
+- No logging dependency.  The library exposes no callbacks: the result handle returned by `query()` is the observation surface.
 
 ## Getting started
 

@@ -123,7 +123,7 @@ renderer or validator.
 ## This package is generated
 
 `.claude/surfaces/` and this skill are one synced unit across every repo that carries them.
-The canonical is `upstream-workspace/.claude/surfaces/`. The syncer lives outside every repo,
+The canonical lives upstream, outside this repo. The syncer lives outside every repo too,
 because a tool that spans repos belongs to none of them: `sync-surfaces` on PATH, rostered
 in `~/.config/surfaces-sync/roster.json`, regenerates each repo's variant and `verify`
 proves they match. Fix the canonical, never a downstream copy:

@@ -1,0 +1,15 @@
+# Dependabot keeps the CI action pins current.  Python dependencies are
+# deliberately not tracked here: the device libraries declare no runtime
+# dependencies, and the host tooling floors live in requirements-dev.txt,
+# which preflight already exercises against the latest resolvable set.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci"
+    labels:
+      - dependencies

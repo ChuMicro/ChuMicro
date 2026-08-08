@@ -114,7 +114,7 @@ Estimated count if we per-line-ignore: **~22 source errors silenced, runtime byt
 
 ### D. Duck-typed polymorphic seams (the big bucket — needs ADR)
 
-The largest single category.  Affects every `from_config` factory shipped during the [config-aware refactor](archive/library-config-aware-refactor.md), plus the runner's tick source, every library's socket parameter, the `connection_factory` seams, and the radio parameter.
+The largest single category.  Affects every `from_config` factory shipped during the [config-aware refactor](library-config-aware-refactor.md), plus the runner's tick source, every library's socket parameter, the `connection_factory` seams, and the radio parameter.
 
 The pattern, as it stands today:
 
@@ -126,7 +126,7 @@ def from_config(cls, config: object, *, radio: object | None = None, ...) -> "Ht
     )
 ```
 
-`object` is on the signature deliberately — these factories accept any duck-typed config-like / socket-like / radio-like, including the [`RuntimeConfig`](../../libraries/config/src/chumicro_config/runtime.py) the workbench produces and the test fakes in each library's `testing.py`.  `Protocol` would solve it cleanly, but [Decision 0021](../decisions/0021-docstring-type-policy.md) bans `from typing import …` in library code because the `typing` module doesn't exist on CircuitPython or MicroPython.
+`object` is on the signature deliberately — these factories accept any duck-typed config-like / socket-like / radio-like, including the [`RuntimeConfig`](../../../libraries/config/src/chumicro_config/runtime.py) the workbench produces and the test fakes in each library's `testing.py`.  `Protocol` would solve it cleanly, but [Decision 0021](../../decisions/0021-docstring-type-policy.md) bans `from typing import …` in library code because the `typing` module doesn't exist on CircuitPython or MicroPython.
 
 Three plausible answers:
 
@@ -146,7 +146,7 @@ Three plausible answers:
     Annotations become string-quoted (`config: "ConfigLike"`).  Cost: a small Protocol library per `from_config` seam (one ConfigLike, one SocketLike, one RadioLike, one TickSourceLike, one ConnectionFactoryLike — most are reused across libraries so they could live in a shared `chumicro_compat.protocols` module).  Benefit: pyright sees the seam shape, IDE auto-complete starts to work, all 80 errors evaporate.
 3. **Concrete types where one exists.**  `RuntimeConfig` is concrete and the only thing the workbench passes to `from_config` in production.  Annotate `config: "RuntimeConfig"` (string-quoted to dodge the import cycle) and let test fakes either subclass or use `cast`.  Cost: less flexible API; tests need adjusting; doesn't address `socket: object` / `radio: object` which have no concrete type.
 
-Recommendation in this workstream: **option 2**.  Cleanest typing story, smallest API change (annotations are stripped at runtime — every existing caller continues to work), and a single 5–10-line "shim" idiom to learn.  Needs a new ADR (use the [`new-decision`](../../.github/skills/new-decision/SKILL.md) skill) ratifying the TYPE_CHECKING-guarded Protocol pattern as the official answer to "I want a protocol shape on a library seam."  Estimated count once the pattern lands and seams are typed: **~80 source-side errors gone**.
+Recommendation in this workstream: **option 2**.  Cleanest typing story, smallest API change (annotations are stripped at runtime — every existing caller continues to work), and a single 5–10-line "shim" idiom to learn.  Needs a new ADR (use the [`new-decision`](../../../.github/skills/new-decision/SKILL.md) skill) ratifying the TYPE_CHECKING-guarded Protocol pattern as the official answer to "I want a protocol shape on a library seam."  Estimated count once the pattern lands and seams are typed: **~80 source-side errors gone**.
 
 ### E. Test-fixture noise (the 653 in `tests/`)
 

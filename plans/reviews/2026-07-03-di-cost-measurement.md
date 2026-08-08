@@ -278,4 +278,4 @@ and integration for less than they cost.
   + a 200k-iter `time.ticks_us` micro-bench (bound-method call vs +1 closure
   frame) on both binaries.
 - Scratch (temp copies, probes, stripped trees) under
-  `/Users/chuxor/.claude/jobs/994c1c6c/tmp/` — not committed.
+  a scratch job directory outside the repo — not committed.

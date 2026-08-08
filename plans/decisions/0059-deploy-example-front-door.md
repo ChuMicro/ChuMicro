@@ -15,7 +15,7 @@ Phase 3 of `library-config-aware-refactor` proposed `python scripts/run.py deplo
 
 ### 1. Command shape and home
 
-A new subcommand `chumicro-workspace deploy-example <lib> <name>` lives in [workbench/workspace/src/chumicro_workspace/cli.py](../../workbench/workspace/src/chumicro_workspace/cli.py) and uses a new `chumicro_workspace.example_source(library_name, example_name, *, runtime, secrets_toml, project_config=None, library_roots=...)` `FileSource`.  `python scripts/run.py deploy-example` is a thin mono-repo shim that calls into it with `library_roots=<repo>/libraries/`.  Mirrors how `python scripts/run.py add-device` shims `chumicro-workspace add-device` today.
+A new subcommand `chumicro-workspace deploy-example <lib> <name>` lives in [workbench/workspace/src/chumicro_workspace/cli.py](../../workbench/workspace/src/chumicro_workspace/cli/) and uses a new `chumicro_workspace.example_source(library_name, example_name, *, runtime, secrets_toml, project_config=None, library_roots=...)` `FileSource`.  `python scripts/run.py deploy-example` is a thin mono-repo shim that calls into it with `library_roots=<repo>/libraries/`.  Mirrors how `python scripts/run.py add-device` shims `chumicro-workspace add-device` today.
 
 The example is staged through the *one* device-staging path, not a parallel `example_source` implementation: an example is a project through the unified pipeline (a thin shim), per [Decision 0077](0077-one-device-staging-path.md). Example-path resolution (`libraries/<lib>/examples/<name>.py`) and entrypoint renaming (the example file becomes `code.py` on CircuitPython / `main.py` on MicroPython) are the example-specific resolution in front of that shared source + clean-slate + keep-set primitive — they do not fork the stage/delete/keep policy. The rest of this ADR (the precheck stack, the four first-touch board states, exit codes, recovery coaching, `--list`) is unaffected and stands.
 
@@ -40,7 +40,7 @@ Every `deploy-example` run resolves to one of these four states.  Behavior for e
 
 | State | Detection | Interactive | Non-interactive |
 |---|---|---|---|
-| **(1) No device registered for runtime** | empty `devices.yml` for runtime | bootstrap wizard ([cli.py:1709](../../workbench/workspace/src/chumicro_workspace/cli.py:1709)) → continue deploy | exit 3 + structured stderr hint |
+| **(1) No device registered for runtime** | empty `devices.yml` for runtime | bootstrap wizard ([cli.py:1709](../../workbench/workspace/src/chumicro_workspace/cli/)) → continue deploy | exit 3 + structured stderr hint |
 | **(2) Registered, port reachable, probe succeeds** | happy path | deploy + tail | deploy + exit |
 | **(3) Registered, port reachable, probe fails** (Arduino / non-Python firmware) | REPL banner doesn't match CP/MP | sub-wizard offers `install-firmware` after explicit consent | exit 6 + structured stderr hint |
 | **(4) Registered, port unreachable / busy** | port enumeration | recovery coaching ([recovery.py:48](../../workbench/deploy/src/chumicro_deploy/recovery.py:48)) | exit 4 + recovery hint on stderr |

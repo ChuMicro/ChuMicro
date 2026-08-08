@@ -17,8 +17,8 @@ Agents present decisions, audit reports, and A/B compares to a human in a browse
 - **Skills drive it through a spec.** A skill writes a JSON spec; `render_picker.py` renders it to a self-contained `picker.html`; `serve_picker.py` loops the Submit POST back to the session as `selection.txt`. Copy-paste of the line-oriented blob is the always-available no-server fallback; the Submit button appears only over http. The agent is the trusted spec author, so `intro_html` / `body_html` ride unescaped.
 - **In-repo, not a library.** surfaces is host-side agent/human tooling: never written to a board, never imported by a device library or a publishable workbench package. It lives under `.claude/` with the rest of the agent tooling, not under `libraries/` or `workbench/`. Pure stdlib, so any interpreter, skill, or live session drives it identically.
 - **A generated copy, not a local original.** The package and its `surfaces` skill are one
-  synced unit shared with the other repos that carry them; the canonical is
-  `upstream-workspace/.claude/surfaces/`, emitted by its `bin/sync-surfaces`. Per-repo variance
+  synced unit shared with the other repos that carry them; the canonical lives upstream,
+  outside this repo, emitted by `sync-surfaces`. Per-repo variance
   is limited to the palette, the hub name, the theme key, and the JS prefix. Fix the
   canonical: a local edit is overwritten by the next emit, and an improvement that starts
   here is harvested upstream before it is emitted back.

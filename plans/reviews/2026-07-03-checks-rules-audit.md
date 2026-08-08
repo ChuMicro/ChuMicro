@@ -1,6 +1,6 @@
 # Correctness hunt: workbench/checks (CHU rule engine)
 
-Repo: `/Users/chuxor/circuitpython/chumicro` @ audit time (tree mid-churn in libraries/demos; workbench/checks untouched).
+Repo: mono-repo root @ audit time (tree mid-churn in libraries/demos; workbench/checks untouched).
 Method: read engine + all 30 registered rules; every finding below was confirmed by a minimal probe run against the real rule implementation (probe harness in `.scratch/hunt-checks/probe_all.py`, `probe_refined.py`, `probe_engine.py`, `probe_last.py`; probe repos under `.scratch/hunt-checks/repos*/`). Unit lane `python -m pytest workbench/checks/tests -q` is green (532 passed), so none of these are covered by existing tests.
 
 Excluded per brief: the audit-skill voice-question craft-check item and the CHU033-scripts/-rationale item (both tracked in `plans/next-up.md`); rule-policy debates.

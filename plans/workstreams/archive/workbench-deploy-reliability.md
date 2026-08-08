@@ -1,6 +1,6 @@
 # Workstream: Workbench Deploy + Tail Reliability
 
-Status: **closed.**  Root cause for the silent-deploys on `while True:` examples found 2026-05-09: `deploy_files` actively interrupted the running `code.py` on its way out by sending Ctrl-C × 2 (via the trailing `_enter_raw_repl()` call); the explicit Ctrl-D soft-reboot we triggered ourselves also raised the S2 FAT-RO race risk.  All six steps (1, 1b, 2, 2b, 3, 4) shipped 2026-05-09 + bench-validated across the canonical 4-board sweep (Lolin S2 CP, Pi Pico W CP, Lolin S2 MP, Pi Pico W MP).  Two follow-ups surfaced during the sweep are tracked separately in [`archive/deploy-multi-board-and-fskit-followups.md`](archive/deploy-multi-board-and-fskit-followups.md).  Every step in §"4-step plan" is flipped to ✅.
+Status: **closed.**  Root cause for the silent-deploys on `while True:` examples found 2026-05-09: `deploy_files` actively interrupted the running `code.py` on its way out by sending Ctrl-C × 2 (via the trailing `_enter_raw_repl()` call); the explicit Ctrl-D soft-reboot we triggered ourselves also raised the S2 FAT-RO race risk.  All six steps (1, 1b, 2, 2b, 3, 4) shipped 2026-05-09 + bench-validated across the canonical 4-board sweep (Lolin S2 CP, Pi Pico W CP, Lolin S2 MP, Pi Pico W MP).  Two follow-ups surfaced during the sweep are tracked separately in [`archive/deploy-multi-board-and-fskit-followups.md`](deploy-multi-board-and-fskit-followups.md).  Every step in §"4-step plan" is flipped to ✅.
 
 ## Purpose
 
