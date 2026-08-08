@@ -606,7 +606,7 @@ socket directly from <code>chumicro_sockets.udp_socket</code>.</p>
 <ul>
 <li><code>chumicro-sockets</code> is a hard dependency: <code>pip install chumicro-ntp</code> brings the whole stack.</li>
 <li><code>NTPClient.from_config</code> builds the default UDP wiring through the shared <code>chumicro_sockets.sockets_factory</code> module, imported lazily.  Apps that supply their own UDP socket never trigger that import, so <code>chumicro-sockets</code> doesn't get deployed to the device for those apps.</li>
-<li>No <code>chumicro-logging</code> dep.  The library exposes no callbacks: the result handle returned by <code>query()</code> is the observation surface.</li>
+<li>No logging dependency.  The library exposes no callbacks: the result handle returned by <code>query()</code> is the observation surface.</li>
 </ul>
 <h2 id="getting-started">Getting started<a class="headerlink" href="#getting-started" title="Permanent link">&para;</a></h2>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_ntp</span><span class="w"> </span><span class="kn">import</span> <span class="n">NTPClient</span>
