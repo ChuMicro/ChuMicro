@@ -4,6 +4,7 @@ import json
 import os
 import stat
 import subprocess
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -1687,3 +1688,114 @@ class TestMpyDependencyReferenceFollowsItsFolder:
             assert f"/{MPY_FORMAT_FOLDER}/" in reference
         for _target, source in manifest["urls"]:
             assert f"/{MPY_FORMAT_FOLDER}/" in source
+
+
+class TestCircupRequirementsMetadata:
+    """The circup zips carry the dependency metadata circup reads.
+
+    circup resolves a library's dependencies from
+    ``requirements/<library>/requirements.txt`` inside the bundle.  Ours
+    shipped only ``lib/``, so `circup install chumicro_mqtt` installed mqtt
+    alone and the board raised ImportError on first import.  mip carries
+    deps in package.json and was the only install path with coverage, which
+    is why the whole CircuitPython side shipped dependency-less.
+    """
+
+    def _bundle_with_dependency(self, tmp_path: Path) -> Path:
+        library_dir = _make_test_library(tmp_path)
+        (library_dir / "pyproject.toml").write_text(
+            "[project]\n"
+            'name = "chumicro-fakelib"\n'
+            'version = "0.1.0"\n'
+            'dependencies = ["chumicro-timing>=0.1", "chumicro-config"]\n',
+        )
+        staging_dir = tmp_path / "staging"
+        staging_dir.mkdir()
+        fake_mpy = _make_fake_mpy_cross(tmp_path / "tools")
+        build_bundle(
+            library_dir, "0.1.0", staging_dir, cp_mpy_cross=str(fake_mpy),
+        )
+        output_dir = tmp_path / "zips"
+        build_circup_zips(
+            staging_dir, output_dir, "ChuMicro-Bundle", date_tag="20260808",
+        )
+        return output_dir
+
+    def test_source_zip_carries_requirements(self, tmp_path: Path) -> None:
+        output_dir = self._bundle_with_dependency(tmp_path)
+        zip_path = output_dir / "chumicro-bundle-py-20260808.zip"
+        with zipfile.ZipFile(zip_path) as archive:
+            body = archive.read(
+                "chumicro-bundle-py-20260808/requirements"
+                "/chumicro_fakelib/requirements.txt",
+            ).decode()
+        assert body.split() == ["chumicro_config", "chumicro_timing"]
+
+    def test_bytecode_zip_carries_requirements(self, tmp_path: Path) -> None:
+        """A user who registered only the mpy bundle resolves deps too."""
+        output_dir = self._bundle_with_dependency(tmp_path)
+        zip_path = output_dir / "chumicro-bundle-10.x-mpy-20260808.zip"
+        with zipfile.ZipFile(zip_path) as archive:
+            names = archive.namelist()
+        assert any("/requirements/chumicro_fakelib/" in name for name in names)
+
+    def test_names_are_import_names_not_pypi_names(self, tmp_path: Path) -> None:
+        """circup matches against lib/ directory names, which are underscored.
+
+        A hyphenated ``chumicro-config`` line parses to a name circup finds
+        no module for, and it is skipped in silence.
+        """
+        output_dir = self._bundle_with_dependency(tmp_path)
+        with zipfile.ZipFile(output_dir / "chumicro-bundle-py-20260808.zip") as archive:
+            body = archive.read(
+                "chumicro-bundle-py-20260808/requirements"
+                "/chumicro_fakelib/requirements.txt",
+            ).decode()
+        assert "-" not in body
+        for line in body.split():
+            assert line.startswith("chumicro_")
+
+    def test_dependency_free_package_gets_no_requirements_file(
+        self, tmp_path: Path,
+    ) -> None:
+        """Nothing to declare means no file, matching circup's absent lookup."""
+        library_dir = _make_test_library(tmp_path)
+        staging_dir = tmp_path / "staging"
+        staging_dir.mkdir()
+        build_bundle(library_dir, "0.1.0", staging_dir)
+        output_dir = tmp_path / "zips"
+        build_circup_zips(
+            staging_dir, output_dir, "ChuMicro-Bundle", date_tag="20260808",
+        )
+        with zipfile.ZipFile(output_dir / "chumicro-bundle-py-20260808.zip") as archive:
+            names = archive.namelist()
+        assert not [name for name in names if "requirements" in name]
+
+    def test_requirements_agree_with_the_mip_manifest(self, tmp_path: Path) -> None:
+        """Both install paths project the same deps, so they cannot drift."""
+        library_dir = _make_test_library(tmp_path)
+        (library_dir / "pyproject.toml").write_text(
+            "[project]\n"
+            'name = "chumicro-fakelib"\n'
+            'version = "0.1.0"\n'
+            'dependencies = ["chumicro-timing>=0.1"]\n',
+        )
+        staging_dir = tmp_path / "staging"
+        staging_dir.mkdir()
+        build_bundle(library_dir, "0.1.0", staging_dir)
+        manifest = json.loads(
+            (staging_dir / "chumicro_fakelib" / "package.json").read_text(),
+        )
+        mip_deps = {
+            reference.rsplit("/", 1)[-1] for reference, _pin in manifest["deps"]
+        }
+        output_dir = tmp_path / "zips"
+        build_circup_zips(
+            staging_dir, output_dir, "ChuMicro-Bundle", date_tag="20260808",
+        )
+        with zipfile.ZipFile(output_dir / "chumicro-bundle-py-20260808.zip") as archive:
+            body = archive.read(
+                "chumicro-bundle-py-20260808/requirements"
+                "/chumicro_fakelib/requirements.txt",
+            ).decode()
+        assert set(body.split()) == mip_deps
