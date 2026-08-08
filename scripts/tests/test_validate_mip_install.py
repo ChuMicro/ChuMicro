@@ -224,12 +224,23 @@ class TestBundleLayout:
         assert EXPERIMENTAL_BUNDLE_REPO == "ChuMicro-Bundle-Experimental"
 
     def test_validate_mip_uses_bundle_layout(self):
-        """validate_mip_install consumes the same MPY_FORMAT_FOLDER as bundle_manager."""
-        from bundle_layout import MPY_FORMAT_FOLDER as canonical
-        from bundle_manager import MPY_FORMAT_FOLDER as via_bundle_manager
-        from validate_mip_install import _MPY_FORMAT_FOLDER as via_validator
+        """The validator reads its formats from the shared layout module.
 
-        assert canonical == via_bundle_manager == via_validator
+        It consumes the ``mpy_format_folders()`` tuple rather than the single
+        ``MPY_FORMAT_FOLDER`` constant the producer stages into, so a second
+        live ABI folder is validated without touching the validator.  Both
+        still resolve to the same source of truth.
+        """
+        from bundle_layout import MPY_FORMAT_FOLDER as canonical
+        from bundle_layout import mpy_format_folders
+        from bundle_manager import MPY_FORMAT_FOLDER as via_bundle_manager
+        from validate_mip_install import (
+            mpy_format_folders as via_validator,
+        )
+
+        assert canonical == via_bundle_manager
+        assert via_validator is mpy_format_folders
+        assert canonical in via_validator()
 
     def test_folder_helpers_return_tuples(self):
         """mpy_format_folders/cp_mpy_folders return single-element tuples today."""
@@ -237,3 +248,20 @@ class TestBundleLayout:
 
         assert mpy_format_folders() == ("mpy6",)
         assert cp_mpy_folders() == ("circuitpython-10.x-mpy",)
+
+    def test_validator_covers_every_live_mpy_format(self, monkeypatch):
+        """Adding an ABI folder adds validations without a validator edit.
+
+        This is the property the layout module promises.  With the constant
+        inlined the second format silently went unvalidated; the loop makes
+        the count follow the tuple.
+        """
+        import bundle_layout
+        import validate_mip_install as validator
+
+        monkeypatch.setattr(
+            validator, "mpy_format_folders", lambda: ("mpy6", "mpy7"),
+        )
+        assert len(validator.mpy_format_folders()) == 2
+        # The real tuple is untouched by the patch above.
+        assert bundle_layout.mpy_format_folders() == ("mpy6",)

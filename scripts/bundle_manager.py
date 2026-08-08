@@ -193,15 +193,27 @@ def _dependency_to_mip_reference(dependency: str, bundle_repo: str) -> str:
     return f"github:{GITHUB_ORG}/{bundle_repo}/{package}"
 
 
-def _dependency_to_mpy_mip_reference(dependency: str, bundle_repo: str) -> str:
-    """Convert 'chumicro-timing>=0.1' to an mpy6 mip github reference.
+def _dependency_to_mpy_mip_reference(
+    dependency: str,
+    bundle_repo: str,
+    mpy_folder: str = MPY_FORMAT_FOLDER,
+) -> str:
+    """Convert 'chumicro-timing>=0.1' to an mpy mip github reference.
+
+    *mpy_folder* is the format folder the manifest being written lives in,
+    so a package's deps resolve inside its own ABI generation.  It is a
+    parameter rather than the module constant because the bundle carries a
+    folder per live ABI once one bumps (Decision 0112): a manifest staged
+    into a newer folder whose deps pointed at the older one would install a
+    mixed-format tree onto the board.
 
     Args:
         dependency: PyPI dependency string (e.g. ``"chumicro-timing>=0.1"``).
         bundle_repo: Bundle repository name (e.g. ``"ChuMicro-Bundle"``).
+        mpy_folder: Format folder to resolve the dependency within.
     """
     package = strip_pip_dependency_version(dependency).replace("-", "_")
-    return f"github:{GITHUB_ORG}/{bundle_repo}/{MPY_FORMAT_FOLDER}/{package}"
+    return f"github:{GITHUB_ORG}/{bundle_repo}/{mpy_folder}/{package}"
 
 
 def _compile_mpy(python_file: Path, mpy_file: Path, mpy_cross: str) -> None:
@@ -377,7 +389,12 @@ def build_bundle(
         _, _, mp_python_files = _find_bundle_modules(
             library_dir, target_runtime="micropython",
         )
-        mpy_manifest_dir = staging_dir / MPY_FORMAT_FOLDER / package_name
+        # The folder this pass stages into.  One compiler is pinned, so one
+        # folder is produced; naming it locally keeps every path and every
+        # dep reference below agreeing with each other rather than each
+        # reaching for the module constant on its own.
+        mpy_folder = MPY_FORMAT_FOLDER
+        mpy_manifest_dir = staging_dir / mpy_folder / package_name
         mpy_manifest_dir.mkdir(parents=True, exist_ok=True)
 
         mpy_urls = []
@@ -390,7 +407,7 @@ def build_bundle(
             target = f"{package_name}/{mpy_relative_path}"
             source = (
                 f"github:{GITHUB_ORG}/{bundle_repo}"
-                f"/{MPY_FORMAT_FOLDER}/{package_name}/{mpy_relative_path}"
+                f"/{mpy_folder}/{package_name}/{mpy_relative_path}"
             )
             mpy_urls.append([target, source])
 
@@ -405,13 +422,18 @@ def build_bundle(
             target = f"{package_name}/{data_relative_path}"
             source = (
                 f"github:{GITHUB_ORG}/{bundle_repo}"
-                f"/{MPY_FORMAT_FOLDER}/{package_name}/{data_relative_path}"
+                f"/{mpy_folder}/{package_name}/{data_relative_path}"
             )
             mpy_urls.append([target, source])
 
         mpy_manifest: dict = {"urls": mpy_urls, "version": version}
         mpy_mip_dependencies = [
-            [_dependency_to_mpy_mip_reference(dependency, bundle_repo), _STAGE_TIME_DEP_PIN]
+            [
+                _dependency_to_mpy_mip_reference(
+                    dependency, bundle_repo, mpy_folder,
+                ),
+                _STAGE_TIME_DEP_PIN,
+            ]
             for dependency in _read_chumicro_dependencies(library_dir)
         ]
         if mpy_mip_dependencies:
@@ -421,7 +443,7 @@ def build_bundle(
             json.dump(mpy_manifest, mpy_manifest_file, indent=2)
             mpy_manifest_file.write("\n")
 
-        print(f"Staged {MPY_FORMAT_FOLDER}/{package_name} (MicroPython) -> {mpy_manifest_dir}")
+        print(f"Staged {mpy_folder}/{package_name} (MicroPython) -> {mpy_manifest_dir}")
 
 
 def stage_matrix(

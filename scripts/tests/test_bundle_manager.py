@@ -1622,3 +1622,68 @@ class TestBuildBundle:
             assert "No importable package" in str(exit_signal)
         else:  # pragma: no cover - test should never reach here
             raise AssertionError("expected SystemExit for empty package")
+
+
+class TestMpyDependencyReferenceFollowsItsFolder:
+    """The mpy dep reference resolves inside the folder being staged.
+
+    Decision 0112 puts a folder per live mpy ABI side by side in the one
+    bundle repo.  A manifest staged into a newer folder whose deps still
+    pointed at the older one would have mip assemble a mixed-format tree on
+    the board, so the folder is threaded in rather than read from the module
+    constant at the point of use.
+    """
+
+    def test_defaults_to_the_current_format_folder(self):
+        from bundle_manager import _dependency_to_mpy_mip_reference
+
+        reference = _dependency_to_mpy_mip_reference(
+            "chumicro-timing>=0.1", "ChuMicro-Bundle",
+        )
+        assert reference == (
+            f"github:ChuMicro/ChuMicro-Bundle/{MPY_FORMAT_FOLDER}/chumicro_timing"
+        )
+
+    def test_uses_the_folder_it_is_given(self):
+        from bundle_manager import _dependency_to_mpy_mip_reference
+
+        reference = _dependency_to_mpy_mip_reference(
+            "chumicro-timing>=0.1", "ChuMicro-Bundle", "mpy7",
+        )
+        assert reference == (
+            "github:ChuMicro/ChuMicro-Bundle/mpy7/chumicro_timing"
+        )
+        assert MPY_FORMAT_FOLDER not in reference
+
+    def test_staged_manifest_deps_match_the_staged_folder(
+        self, tmp_path: Path,
+    ) -> None:
+        """Every dep in a staged manifest points at that manifest's folder.
+
+        Guards the whole path rather than the helper alone: staging names the
+        folder once, and every URL and dependency below it agrees.
+        """
+        library_dir = _make_test_library(tmp_path)
+        (library_dir / "pyproject.toml").write_text(
+            "[project]\n"
+            'name = "chumicro-fakelib"\n'
+            'version = "0.1.0"\n'
+            'dependencies = ["chumicro-timing>=0.1"]\n',
+        )
+        staging_dir = tmp_path / "staging"
+        staging_dir.mkdir()
+        fake_mpy = _make_fake_mpy_cross(tmp_path / "tools")
+        build_bundle(
+            library_dir, "0.1.0", staging_dir, mp_mpy_cross=str(fake_mpy),
+        )
+
+        manifest_path = (
+            staging_dir / MPY_FORMAT_FOLDER / "chumicro_fakelib" / "package.json"
+        )
+        manifest = json.loads(manifest_path.read_text())
+        deps = manifest.get("deps", [])
+        assert deps, "expected the staged mpy manifest to carry a dependency"
+        for reference, _pin in deps:
+            assert f"/{MPY_FORMAT_FOLDER}/" in reference
+        for _target, source in manifest["urls"]:
+            assert f"/{MPY_FORMAT_FOLDER}/" in source
