@@ -132,13 +132,40 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
+    # argparse's `required` only proves the flag was passed, and every tag
+    # here arrives as a workflow expression: an unset job output, a renamed
+    # step id, or a skipped upstream job all expand to the empty string
+    # rather than failing.  Without this check the run records a row keyed
+    # on "" and prints a success line, which reads as a published manifest
+    # while resolving nothing -- the same silent-success shape as a docs
+    # job that commits and never pushes.
+    for flag, value in (
+        ("--bundle-tag", args.bundle_tag),
+        ("--libraries-tag", args.libraries_tag),
+        ("--published-at", args.published_at),
+    ):
+        if not value.strip():
+            parser.error(
+                f"{flag} is empty.  It comes from a workflow job output; "
+                "check that the producing job ran and still exports it.",
+            )
+
+    matrix = json.loads(args.matrix)
     entry = build_entry(
-        json.loads(args.matrix),
+        matrix,
         args.channel,
         args.bundle_tag,
         args.libraries_tag,
         args.published_at,
     )
+    # An entry with no packages correlates nothing.  The workflows gate this
+    # job on having library releases, so an empty matrix here means that gate
+    # and this call disagree; say so instead of committing a hollow row.
+    if not entry["packages"]:
+        parser.error(
+            "--matrix carries no packages, so there is nothing to correlate.  "
+            "This job should be gated on the channel having library releases.",
+        )
     index_path = Path(args.index)
     index = update_index(_load_index(index_path), entry)
     # Trailing newline so the committed file is POSIX-clean and diffs sanely.
