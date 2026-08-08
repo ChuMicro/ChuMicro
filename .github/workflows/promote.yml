@@ -265,6 +265,9 @@ jobs:
     if: ${{ !inputs.dry_run && needs.validate.outputs.has_library_promotions == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # The date tag this job mints is the manifest job's correlation key.
+    outputs:
+      date_tag: ${{ steps.circup.outputs.date_tag }}
     env:
       MATRIX_JSON: ${{ needs.validate.outputs.library_matrix }}
     steps:
@@ -363,6 +366,8 @@ jobs:
           # fresh one on identical content (which would orphan the original).
           date_tag=$(python scripts/bundle_manager.py finalize-tag .bundle-repo --reuse-if-clean)
           echo "date_tag=${date_tag}" >> "$GITHUB_ENV"
+          # Also a job output so the manifest job can key on it.
+          echo "date_tag=${date_tag}" >> "$GITHUB_OUTPUT"
           python scripts/bundle_manager.py circup-zip .bundle-repo .circup-zips \
             --repo-name "ChuMicro-Bundle" --date-tag "$date_tag"
 
@@ -539,6 +544,9 @@ jobs:
     if: ${{ !inputs.dry_run && needs.validate.outputs.has_library_promotions == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # The snapshot tag this job mints is recorded by the manifest job.
+    outputs:
+      snapshot_tag: ${{ steps.stage.outputs.snapshot_tag }}
     steps:
       - uses: actions/checkout@v6
 
@@ -555,6 +563,7 @@ jobs:
         run: git clone "git@github.com:ChuMicro/ChuMicro-Libraries.git" .libraries-repo
 
       - name: Stage and push libraries channel
+        id: stage
         # A UTC timestamp is the snapshot tag — unique per run without a
         # next-date-tag call (that lives in bundle_manager, which pulls the
         # chumicro_deploy import chain this light job doesn't install).
@@ -563,7 +572,75 @@ jobs:
         # then bundle_push commits + tags + pushes main.
         run: |
           snapshot_tag="$(date -u +%Y%m%d.%H%M%S)"
+          # Job output so the manifest job can pair it with the bundle tag.
+          echo "snapshot_tag=${snapshot_tag}" >> "$GITHUB_OUTPUT"
           python scripts/libraries_channel.py \
             --staging-dir .libraries-repo \
             --tag "$snapshot_tag" \
             --push
+
+  # ---------------------------------------------------------------------------
+  # Correlation manifest (Decision 0112), stable half.  release.yml writes the
+  # experimental channel's releases.json; without this job the stable channel
+  # — the one every documented install path points at — had no correlation
+  # index at all, so a stable bundle tag resolved to no package versions and a
+  # stable PyPI version resolved to no snapshot.  Same shape as release.yml's
+  # manifest job: runs after both channel publishers so it has both snapshot
+  # tags, gated on library promotions (a workbench-only wave has no bundle or
+  # libraries snapshot to correlate), and writes to the bundle repo because it
+  # overlays rather than wiping — the libraries repo rebuilds its tree each run
+  # and would drop the accumulated index.
+  # ---------------------------------------------------------------------------
+  manifest:
+    name: Publish release manifest
+    needs: [validate, bundle, libraries-channel]
+    if: ${{ !inputs.dry_run && needs.validate.outputs.has_library_promotions == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      MATRIX_JSON: ${{ needs.validate.outputs.library_matrix }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Configure SSH for bundle repository
+        uses: webfactory/ssh-agent@v0.10.0
+        with:
+          ssh-private-key: ${{ secrets.BUNDLE_DEPLOY_KEY }}
+
+      - name: Clone bundle repository
+        run: git clone "git@github.com:ChuMicro/ChuMicro-Bundle.git" .bundle-repo
+
+      - name: Record and push releases.json
+        # release_manifest replaces this run's entry in place (keyed by
+        # channel + bundle tag), so a re-run rewrites its row and the push is
+        # a clean no-op when nothing changed — idempotent like the other legs.
+        # The clone follows the bundle job, so it already carries this wave's
+        # bundle tree; only releases.json changes here.
+        run: |
+          published_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          python scripts/release_manifest.py \
+            --index .bundle-repo/releases.json \
+            --channel stable \
+            --matrix "$MATRIX_JSON" \
+            --bundle-tag "${{ needs.bundle.outputs.date_tag }}" \
+            --libraries-tag "${{ needs.libraries-channel.outputs.snapshot_tag }}" \
+            --published-at "$published_at"
+          cd .bundle-repo
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          # Stage first, then diff the index: `git diff` alone ignores an
+          # untracked file, so the first-ever run (releases.json absent — the
+          # stable case until this job lands) would otherwise read "unchanged"
+          # and never push.  --cached sees the new file, and stays a clean
+          # no-op on a byte-identical re-run.
+          git add releases.json
+          if git diff --cached --quiet; then
+            echo "releases.json unchanged — nothing to push."
+          else
+            git commit -m "release manifest: ${{ needs.bundle.outputs.date_tag }}"
+            git push origin HEAD:main
+          fi
