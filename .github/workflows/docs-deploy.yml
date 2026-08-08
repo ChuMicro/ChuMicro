@@ -44,7 +44,7 @@ jobs:
           # gh-pages when branch protection or deploy-key rules are active.
           ssh-key: ${{ secrets.GH_PAGES_DEPLOY_KEY }}
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
 
