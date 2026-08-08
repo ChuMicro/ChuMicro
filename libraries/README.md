@@ -28,7 +28,6 @@ Small, focused libraries for microcontrollers and laptops.  Every library instal
 | **[mqtt](mqtt/)** | Non-blocking MQTT 3.1.1 client (QoS 0 and 1).  Runner-shaped, no threads or async.  Concurrent QoS 1 publishes, configurable oversized-message policy, last will and retain. |
 | **[websockets](websockets/)** | Non-blocking WebSocket client and server.  RFC 6455 framing and masking, runner-shaped, plays alongside [`http_server`](http_server/) for combined HTTP/WS deployments. |
 
-One more library, [logging](logging/), is published but parked: it works as documented, no other library integrates with it, and its README says whether it's worth adopting.
 
 Hardware-validated on the project bench: RP2040 (Raspberry Pi Pico W, both runtimes) and ESP32 boards from the classic, S2, and S3 families.  ESP32-C3 / C6 and RP2350 are supported architectures that haven't had bench time yet.  Boards beyond these (STM32, nRF52840, and anything else running CircuitPython or MicroPython with at least 256 KB of RAM and 2 MB physical / ~800 KB usable flash) should work but haven't been validated.
 

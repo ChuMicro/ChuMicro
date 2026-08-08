@@ -4,7 +4,7 @@ Status: `closed` — both strategies shipped.  Strategy B shipped 2026-05-04 (`c
 Filed: 2026-05-04
 Strategy B shipped: 2026-05-04
 Strategy C shipped: 2026-05-06
-Related: [Decision 0057](../decisions/0057-two-file-config.md) covers the file shape this strategy reconciles against — currently three files (`workspace.yml` machinery + `secrets.toml` device-bound credentials/defaults + `<project>/project_config.toml` per-project knobs) post the config-shape-beginner-ergonomics workstream.  The schema-reconciliation contract here applies to both the gitignored root files (`workspace.yml`, `secrets.toml`); per-project `project_config.toml` drift is still out of scope.
+Related: [Decision 0057](../../decisions/0057-two-file-config.md) covers the file shape this strategy reconciles against — currently three files (`workspace.yml` machinery + `secrets.toml` device-bound credentials/defaults + `<project>/project_config.toml` per-project knobs) post the config-shape-beginner-ergonomics workstream.  The schema-reconciliation contract here applies to both the gitignored root files (`workspace.yml`, `secrets.toml`); per-project `project_config.toml` drift is still out of scope.
 
 ## Goal
 

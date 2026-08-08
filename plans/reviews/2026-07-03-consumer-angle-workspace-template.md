@@ -2,8 +2,8 @@
 
 Date: 2026-07-03
 Reviewer angle: the template is the consumer face — users clone it to write chumicro
-projects. Read `/Users/chuxor/circuitpython/ChuMicro-Workspace-Template` (last commit
-`c4b69f6`, 2026-05-24) against monorepo `/Users/chuxor/circuitpython/chumicro` main
+projects. Read the sibling `ChuMicro-Workspace-Template` checkout (last commit
+`c4b69f6`, 2026-05-24) against this mono-repo's main
 (`80760e7a`), which has taken a 394-commit June–July wave since the template synced.
 
 Both repos were read-only. Evidence is `file:line`; template paths are under

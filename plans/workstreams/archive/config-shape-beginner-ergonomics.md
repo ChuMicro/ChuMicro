@@ -2,7 +2,7 @@
 
 Status: **shipped 2026-05-06**.  Research + design pass landed in the same session (Q1–Q11 resolved); implementation followed in five commits across the mono-repo and workspace-template repo, then four-board hardware validation closed the loop.  See **Implementation log** at the foot for the rollout summary.
 
-The previous unification (`scripts-workbench-config-unification`, closed 2026-05-04) and Decision [0057](../decisions/0057-two-file-config.md) (`!secret` retired, two-file split) collapsed the *plumbing*; this workstream revisited the *shape* through a beginner-ergonomics lens and shipped it.
+The previous unification (`scripts-workbench-config-unification`, closed 2026-05-04) and Decision [0057](../../decisions/0057-two-file-config.md) (`!secret` retired, two-file split) collapsed the *plumbing*; this workstream revisited the *shape* through a beginner-ergonomics lens and shipped it.
 
 > **One-line rubric:** "plug in a board and go, tweak and go, be happy with results and deploy for real."  Every decision in this workstream gets weighed against it.
 
@@ -382,7 +382,7 @@ A fresh-clone user follows the README, runs `python3 run.py setup`, and gets:
 error: no workspace.yml found in $WORKSPACE_TEMPLATE_ROOT or any parent
 ```
 
-Root cause: [`_cmd_setup`](workbench/workspace/src/chumicro_workspace/cli.py:250) calls `_resolve_workspace(args)`, which in turn calls `WorkspaceLayout.from_dir()` — and that walks up looking for `workspace.yml` and raises `WorkspaceNotFoundError` when it's absent.  But setup itself is what *creates* `workspace.yml` (via `materialize_workbench_starters` ten lines later).  The bootstrap fails before reaching the materializer.
+Root cause: [`_cmd_setup`](../../../workbench/workspace/src/chumicro_workspace/cli/) calls `_resolve_workspace(args)`, which in turn calls `WorkspaceLayout.from_dir()` — and that walks up looking for `workspace.yml` and raises `WorkspaceNotFoundError` when it's absent.  But setup itself is what *creates* `workspace.yml` (via `materialize_workbench_starters` ten lines later).  The bootstrap fails before reaching the materializer.
 
 This is a textbook "plug-in-and-go" regression: the very first command a beginner runs after `git clone` blocks with a confusing error about a file they shouldn't even need to know exists yet.
 
@@ -813,8 +813,8 @@ Q8 resolved.
 The design pass is **complete** as of 2026-05-06 — all eleven questions resolved (see status table above).  A fresh agent picking this up is implementing, not designing.
 
 1. Read this file end-to-end.  Treat the **Status of all eleven questions** table + the **Direction set 2026-05-06** section as the spec; the upstream design discussion is context, not negotiable.
-2. Read [Decision 0057](../decisions/0057-two-file-config.md) (current two-file shape) — note that step 5 of the Q8 sequence either updates or supersedes this decision; an ADR pass is part of that step.
-3. Read [Decision 0036](../decisions/0036-chumicro-config-library.md) (`chumicro-config` library API) — the flat-accessor work in step 1 of the Q8 sequence extends this surface.
+2. Read [Decision 0057](../../decisions/0057-two-file-config.md) (current two-file shape) — note that step 5 of the Q8 sequence either updates or supersedes this decision; an ADR pass is part of that step.
+3. Read [Decision 0036](../../decisions/0036-chumicro-config-library.md) (`chumicro-config` library API) — the flat-accessor work in step 1 of the Q8 sequence extends this surface.
 4. Read [`scripts-workbench-config-unification.md`](scripts-workbench-config-unification.md) (the unification that froze today's plumbing).
 5. Read [`setup-schema-reconciliation.md`](setup-schema-reconciliation.md) — strategy C is now the canonical contract per Q10; that workstream's open question 4 (comment preservation in YAML/TOML round-trip) is the critical implementation challenge for Q8 step 8.
 6. Skim the workspace-template repo's `examples/wifi_only/` and `projects/example_sensor/` to see what migrating to `project_config.toml` looks like in practice.

@@ -29,7 +29,7 @@ invoked too late to catch pre-commit slips), or stand alone as a slash
 command.  Open sub-question: can the grounding discipline be encoded in skill
 text, or does it need a verifier agent reading the transcript blind to the
 agent's own draft?  Source observations:
-[`plans/2026-05-26-agent-collaboration-reflections.md`](2026-05-26-agent-collaboration-reflections.md).
+the 2026-05-26 agent-collaboration reflections, since removed from the tree (`git log --diff-filter=D` finds them).
 
 ### `chumicro-presence` design from Decision 0042 §167-168 — re-audit before anything rides on its shape
 

@@ -1,7 +1,7 @@
 # Workstream: regen-comments / voice tooling — extraction from the monorepo
 
 Status: **EXTRACTED 2026-07-04.** Destination: sibling repo
-`/Users/chuxor/circuitpython/regen-voice-tools` (branch `main`, carved at monorepo commit
+the sibling `regen-voice-tools` repo (branch `main`, carved at monorepo commit
 `391c349d`). The regen-comments skill + parked items below now live there; this file stays
 in the monorepo as the record of the move. See "Extraction executed" at the bottom.
 
@@ -13,7 +13,7 @@ with the tooling.
 ## Items parked (formerly next-up entries, verbatim state as of 2026-07-04)
 
 - **Comment-generation round 18 (guided vs bare no-guidance control) — built, awaiting
-  dispatch + analysis.**  [`../handoffs/2026-05-30-comment-generation-round18-guided-vs-bare.md`](../handoffs/2026-05-30-comment-generation-round18-guided-vs-bare.md)
+  dispatch + analysis.**  The round-18 handoff moved to the extraction repo with the rest of regen-comments.
   Deferred earlier as user-present clean-room spend.
 - **Deferred clean-room and audit benches, gated on bench-token spend.**
   [`deferred-clean-room-benches.md`](deferred-clean-room-benches.md) — regen-comments
@@ -30,7 +30,7 @@ with the tooling.
   ask-wording craft check — reword whenever the menu-UX pass happens, wherever that
   work then lives.
 - **regen-comments: voiced speaker for the report's prose bits.**
-  [`regen-report-voiced-speaker.md`](regen-report-voiced-speaker.md) — G (domain-fluent
+  `regen-report-voiced-speaker.md`, now in the extraction repo — G (domain-fluent
   learn-then-speak) leads pending the user's voice verdict.
 - **Reconcile + retire the `voice-writers-validation` branch.**  Commits `b61f6df2`
   (shared dark-override theming) + `52934e58` (voice-compare onto the shared picker)
@@ -50,7 +50,7 @@ continuity, the `/audit-library` retrofit, the usage-path lens) — those remain
 
 ## Extraction executed (2026-07-04)
 
-Destination: `/Users/chuxor/circuitpython/regen-voice-tools` (git `main`, carved at monorepo
+Destination: the sibling `regen-voice-tools` repo (git `main`, carved at monorepo
 commit `391c349d`).
 
 **Moved** (copied to the new repo, deleted from the monorepo working tree):

@@ -16,12 +16,10 @@ Agents present decisions, audit reports, and A/B compares to a human in a browse
 - **Two server shapes, one per interaction.** `server.py`'s `serve_oneshot` is submit-once: the first POST is written verbatim to a sink file and the process shuts down, so the process *completing* is itself the submit signal. `session.py`'s `SessionServer` is the persistent canvas: one stable URL opened once plus a server→browser SSE push channel, so each turn the agent overwrites the page and pushes `reload` / `toast` / `progress` into the same tab. SSE-down plus POST-up covers everything turn-based.
 - **Skills drive it through a spec.** A skill writes a JSON spec; `render_picker.py` renders it to a self-contained `picker.html`; `serve_picker.py` loops the Submit POST back to the session as `selection.txt`. Copy-paste of the line-oriented blob is the always-available no-server fallback; the Submit button appears only over http. The agent is the trusted spec author, so `intro_html` / `body_html` ride unescaped.
 - **In-repo, not a library.** surfaces is host-side agent/human tooling: never written to a board, never imported by a device library or a publishable workbench package. It lives under `.claude/` with the rest of the agent tooling, not under `libraries/` or `workbench/`. Pure stdlib, so any interpreter, skill, or live session drives it identically.
-- **A generated copy, not a local original.** The package and its `surfaces` skill are one
-  synced unit shared with the other repos that carry them; the canonical is
-  `upstream-workspace/.claude/surfaces/`, emitted by its `bin/sync-surfaces`. Per-repo variance
-  is limited to the palette, the hub name, the theme key, and the JS prefix. Fix the
-  canonical: a local edit is overwritten by the next emit, and an improvement that starts
-  here is harvested upstream before it is emitted back.
+- **The package and its skill move together.** `.claude/surfaces/` and the `surfaces` skill
+  are one unit: a renderer or kit change usually needs a matching skill change, and the
+  validators are what prove the pair still agree. The palette, the hub name, the theme key,
+  and the JS prefix live in the repo's own theme file rather than at each call site.
 - **Agent-edited, gated.** A PostToolUse hook (`picker_edit_gate.py`) re-runs `validate_picker.py` on any agent edit to the renderer or validator, so a structure or JS-syntax regression surfaces in the same turn as the edit.
 
 ## Rejected

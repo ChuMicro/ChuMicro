@@ -25,7 +25,8 @@ def __getattr__(name):
     # Lazy import keeps the ~25 KB client module out of RAM for boards
     # that use only the wire helpers.
     if name in ("HttpClient", "RequestHandle", "Response", "WhenOversized"):
-        # Pre-compile sweep; rationale in chumicro_mqtt.__getattr__.
+        # Collect before the import so the client module compiles into a
+        # swept heap rather than a fragmented one.
         gc.collect()
         import chumicro_requests.client as _client  # noqa: PLC0415
 

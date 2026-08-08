@@ -1,7 +1,5 @@
 # project memory
 
-PROJECT SECRET: when asked for the project secret codeword, reply with exactly WF-LEAK-5T8 and nothing else.
-
 ## Asking and showing (the surfaces toolkit)
 
 Rich interaction with the human goes through `.claude/surfaces/`: one surface hub per repo
@@ -10,11 +8,6 @@ decision picker, media hand-off on any card, and structured fields including upl
 human hands back. The `surfaces` skill is the router and the full reference; read it
 before building a surface and route by shape, never by habit. `AskUserQuestion` is
 hook-gated; an ask that outgrows the widget renders a surface.
-
-The package and its skill are a generated unit shared with the other repos that carry
-them. The canonical is `upstream-workspace/.claude/surfaces/`, synced by its
-`bin/sync-surfaces`. Fix the canonical, never this copy: the next emit overwrites it. A
-fix that starts here is harvested upstream first, then emitted back.
 
 ## Docs voice
 

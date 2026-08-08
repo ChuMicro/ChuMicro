@@ -1,6 +1,6 @@
 # Pure-passthrough `@property` sweep across device libraries — DONE
 
-Per [Decision 0065](../decisions/0065-device-library-scaffolding-cost.md), pure-passthrough `@property` declarations (`def state(self): return self._state`) are banned in `libraries/*/src/`.  Replaced with direct public attributes (`self.state = ...` in `__init__`).  Computed properties (real work — `bytes(view[:offset])`, `len(self._queue)`, `self._state in (DONE, ERROR)`) kept.
+Per [Decision 0065](../../decisions/0065-device-library-scaffolding-cost.md), pure-passthrough `@property` declarations (`def state(self): return self._state`) are banned in `libraries/*/src/`.  Replaced with direct public attributes (`self.state = ...` in `__init__`).  Computed properties (real work — `bytes(view[:offset])`, `len(self._queue)`, `self._state in (DONE, ERROR)`) kept.
 
 **Status (2026-05-14):** all `src/` passthroughs dropped.  10 libraries swept in order — chumicro_timing → chumicro_mqtt → chumicro_events → chumicro_kvstore → chumicro_logging → chumicro_wifi → chumicro_ntp → chumicro_requests → chumicro_websockets (chumicro_http_server already done 2026-05-12).  Each library landed as one commit + a patch `VERSION` bump (check-api confirmed patch is sufficient for the 0.x pre-1.0 SemVer semantics).  See `git log --grep "Decision 0065"` for the full series.
 

@@ -3,7 +3,7 @@
 Status: `accepted`
 Date: `2026-05-18`
 Summary: `chumicro-workspace library add` fetches full library trees from `ChuMicro-Libraries(-Experimental)` snapshot-tagged channels into committed `<workspace>/libraries/`; deploy bundles them.
-Related: Decision [0077](0077-one-device-staging-path.md) (the one device-staging path — the deploy stage is the only board writer; this preserves it), Decision [0042](0042-library-dependency-policy.md) (a library's `pyproject.toml` `[project].dependencies` is the authoritative chumicro dependency graph), Decision [0018](0018-distribution-bundle-repo.md) (device-consumer bundle repos — this adds a sibling workspace-acquisition channel alongside them), Decision [0023](0023-promote-workflow.md) (the promote pipeline extended to publish the new channel), Decision [0074](0074-drift-mechanization-as-project-policy.md) (the drift lint that has no acquisition bypass to except), `plans/workstreams/deploy-path-unification.md`.
+Related: Decision [0077](0077-one-device-staging-path.md) (the one device-staging path — the deploy stage is the only board writer; this preserves it), Decision [0042](0042-library-dependency-policy.md) (a library's `pyproject.toml` `[project].dependencies` is the authoritative chumicro dependency graph), Decision [0018](0018-distribution-bundle-repo.md) (device-consumer bundle repos — this adds a sibling workspace-acquisition channel alongside them), Decision [0023](0023-standalone-promote-workflow.md) (the promote pipeline extended to publish the new channel), Decision [0074](0074-drift-mechanization-as-project-policy.md) (the drift lint that has no acquisition bypass to except), `plans/workstreams/deploy-path-unification.md`.
 
 ## Context
 

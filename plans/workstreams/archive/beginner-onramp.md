@@ -56,11 +56,11 @@ A fresh agent picking this up should NOT re-do anything.  The body below is pres
 
 ### Related decisions + workstreams
 
-* [Decision 0039](../decisions/0039-firmware-version-floor.md) — codified the firmware floor + warn-not-block policy this workstream proposed.
-* [Decision 0040](../decisions/0040-chumicro-requests.md) — `chumicro-requests` design (factory helper pattern).
-* [Decision 0041](../decisions/0041-chumicro-http-server.md) — `chumicro-http-server` design (runner-shaped non-blocking server).
-* [`library-pipeline.md`](library-pipeline.md) — references `chumicro-requests` + `chumicro-http-server` (both shipped) as Tier-A demo dependencies; future Tier B (input/pixels/tone) + `chumicro-presence` work would feed into the same beginner flow.
-* [`archive/project-workspace.md`](archive/project-workspace.md) — Phases 1–7 of the umbrella workstream this builds on (every phase complete).
+* [Decision 0039](../../decisions/0039-firmware-version-floor.md) — codified the firmware floor + warn-not-block policy this workstream proposed.
+* [Decision 0040](../../decisions/0040-chumicro-requests.md) — `chumicro-requests` design (factory helper pattern).
+* [Decision 0041](../../decisions/0041-chumicro-http-server.md) — `chumicro-http-server` design (runner-shaped non-blocking server).
+* [`library-pipeline.md`](../library-pipeline.md) — references `chumicro-requests` + `chumicro-http-server` (both shipped) as Tier-A demo dependencies; future Tier B (input/pixels/tone) + `chumicro-presence` work would feed into the same beginner flow.
+* [`archive/project-workspace.md`](project-workspace.md) — Phases 1–7 of the umbrella workstream this builds on (every phase complete).
 * [`ota.md`](ota.md) — Phase 8 OTA, deferred from this workstream.
 
 ## Audit verdict (2026-04-26 — historical)
@@ -177,7 +177,7 @@ Reasonable to do steps 1+2 immediately as a small, self-contained slice.  Step 3
 
 - Bootstrap command name: `bootstrap`?  `onboard`?  `setup` (already taken — does `pip install -e .`)?  `start`?  `init` is taken.
 - Demo thing: ship inside `chumicro-workspace` as data, or as a thing in the template repo that `bootstrap` deploys?  Lean: inside the tool, so it works pre-template-customization.
-- ~~Firmware-version-floor enforcement strictness~~ — resolved by [Decision 0039](../decisions/0039-firmware-version-floor.md): warn-not-block at registration, no hard error today.
+- ~~Firmware-version-floor enforcement strictness~~ — resolved by [Decision 0039](../../decisions/0039-firmware-version-floor.md): warn-not-block at registration, no hard error today.
 - Two-thing demo with no second board: build a host-side server in `workbench/`, or assume the user has two boards?  Lean: host-side server — lower friction.
 - Should `chumicro-requests` and `chumicro-http-server` get their own decision docs, or share one?  Lean: separate, since they have different design constraints (client buffering vs server lifecycle).
 

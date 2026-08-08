@@ -622,11 +622,11 @@ one-staging-path non-negotiable cross-references it; `chu034` tests in
 ## Explicitly NOT in this workstream
 
 - Flash-vs-RAM deploy *mode* — that's
-  [`deploy-mode-unification.md`](deploy-mode-unification.md) /
+  [`deploy-mode-unification.md`](archive/deploy-mode-unification.md) /
   Decision 0072, a different axis (mode, not path). Cross-reference,
   don't absorb.
 - General deploy reliability / FSKit wedges —
-  [`workbench-deploy-reliability.md`](workbench-deploy-reliability.md)
+  [`workbench-deploy-reliability.md`](archive/workbench-deploy-reliability.md)
   and [`archive/deploy-multi-board-and-fskit-followups.md`](archive/deploy-multi-board-and-fskit-followups.md).
 - Publishing chumicro to PyPI — a release decision, not a path-
   unification task (see "depended-on" above).

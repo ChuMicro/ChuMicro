@@ -90,14 +90,16 @@ The earlier reading of this sub-rule — that placing the helper in its own subm
 ### Class 2 — decoration / observability: callbacks only, never imported
 
 A library is *decoration* if the library it observes functions perfectly
-when the decoration is absent. Today that is `chumicro-logging`,
-`chumicro-events`, and the future `chumicro-presence`.
+when the decoration is absent. Logging, an event bus, and a presence
+layer are the shapes this covers; none currently ships (logging and
+events were both removed for want of a consumer), so the rule below
+binds any future one.
 
 **Rule:**
 
-1. **No chumicro library declares `chumicro-logging`, `chumicro-events`, or
-   `chumicro-presence` in `[project].dependencies`.** Ever.
-2. **No chumicro library `import`s any of them.** Not at module level,
+1. **No chumicro library declares a decoration library in
+   `[project].dependencies`.** Ever.
+2. **No chumicro library `import`s one.** Not at module level,
    not inside functions, not behind `try`/`except ImportError`. The
    absence must be invisible at runtime.
 3. Libraries expose hooks where decoration would naturally attach.  Two shapes are in use today:
@@ -107,7 +109,7 @@ when the decoration is absent. Today that is `chumicro-logging`,
    Plus an optional `logger=None` constructor parameter accepting any
    callable with the shape `logger(level: str, message: str) -> None`.
    Default: a no-op. The application bridges this to whatever logging
-   backend it wants — `chumicro-logging`, stdlib `logging`, `print`.
+   backend it wants — stdlib `logging`, `adafruit_logging`, `print`.
 4. The decoration libraries themselves consume those hooks — the
    *application* wires them up.  `bus.publisher(topic)` returns a `*args`-accepting closure that adapts to either shape without an inline adapter:
 
@@ -118,9 +120,8 @@ when the decoration is absent. Today that is `chumicro-logging`,
    mqtt.on_connect = bus.publisher("mqtt.connected")    # replaceable-attribute
    ```
 
-   This keeps the dep graph a strict DAG: `presence → events → (nothing
-   chumicro)`; `logging → (nothing chumicro)`; everything else
-   independent of these three.
+   This keeps the dep graph a strict DAG: a decoration library depends on
+   nothing else in chumicro, and everything else stays independent of it.
 
 ### Naming convention for factory helpers
 
@@ -140,10 +141,10 @@ the upstream-side counterpart to the downstream-side factory helper.
 
 - **Single-command install.** `pip install chumicro-mqtt` brings the
   stack. No more "wait, what else?" surprise.
-- **Decoration stays optional.** Apps that don't want events / logging
-  / presence don't pay for them in flash, RAM, import time, or
-  conceptual overhead. A user shipping a tiny sensor on a Pi Pico can
-  ignore those three libraries entirely and nothing breaks.
+- **Decoration stays optional.** Apps that don't want an observability
+  layer don't pay for one in flash, RAM, import time, or conceptual
+  overhead. A user shipping a tiny sensor on a Pi Pico can ignore that
+  whole class of library and nothing breaks.
 - **Test isolation preserved.** Constructor injection still required;
   fakes still mandatory; the factory helper is bypassed in tests by
   construction.

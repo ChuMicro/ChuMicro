@@ -120,12 +120,9 @@ A validator never mutates its subject: no argument = fixture into its own temp d
 `picker_edit_gate.py` runs `validate_picker.py` automatically after any edit to the
 renderer or validator.
 
-## This package is generated
+## Editing the package
 
-`.claude/surfaces/` and this skill are one synced unit across every repo that carries them.
-The canonical is `upstream-workspace/.claude/surfaces/`. The syncer lives outside every repo,
-because a tool that spans repos belongs to none of them: `sync-surfaces` on PATH, rostered
-in `~/.config/surfaces-sync/roster.json`, regenerates each repo's variant and `verify`
-proves they match. Fix the canonical, never a downstream copy:
-a local edit is overwritten on the next emit. Per-repo variance is limited to the palette,
-the JS name prefix, and the hub constants, which are spliced from the repo's own file.
+`.claude/surfaces/` and this skill are one unit: a change to the renderer or the kit
+usually needs a matching change here, and the validators above are what prove the pair
+still agree. Keep the palette, the JS name prefix, and the hub constants in the repo's own
+theme file rather than inlining them at each call site.
