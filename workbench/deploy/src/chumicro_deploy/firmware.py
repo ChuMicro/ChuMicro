@@ -699,7 +699,7 @@ def _flash_firmware_esptool(
 
     Runs as two separate esptool invocations: an optional
     ``erase-flash`` followed by ``write-flash``.  The erase step uses
-    ``--after no_reset`` so the chip stays in ROM bootloader for the
+    ``--after no-reset`` so the chip stays in ROM bootloader for the
     write that follows.  Erase defaults to on because leftover
     partitions or half-written sectors from a failed previous flash
     routinely produce "boots weird" outcomes.
@@ -726,28 +726,29 @@ def _flash_firmware_esptool(
             messages carry recovery guidance (hold GPIO0 / press BOOT
             while re-plugging).
     """
-    # Prefer ``esptool.py`` (esptool v4.x) over ``esptool`` (v5.x).
-    # esptool v5 has a regression with the ESP32-S2 USB-OTG ROM
-    # bootloader on macOS where the chip drops off the USB bus during
-    # port configuration, surfacing as "Could not configure port:
-    # Device not configured" before any flash command runs.  v4.x in
-    # the IDF python env still works.  ``CHUMICRO_ESPTOOL_BINARY`` is
-    # an env-var escape hatch for boards or hosts where the v4/v5
-    # preference should be inverted.
+    # This function speaks esptool v5: the subcommands below use the
+    # hyphenated v5 names (``erase-flash``, ``write-flash``), which v4
+    # rejects with "invalid choice".  Prefer the bare ``esptool``
+    # name, which only v5 installs.  v5 also ships an ``esptool.py``
+    # deprecation shim, so the fallback still lands on v5 for a host
+    # whose PATH carries only the old name.
+    # ``CHUMICRO_ESPTOOL_BINARY`` pins one binary when a host has
+    # several (an IDF environment alongside the workspace venv).
     esptool_binary = (
         os.environ.get("CHUMICRO_ESPTOOL_BINARY")
-        or shutil.which("esptool.py")
         or shutil.which("esptool")
+        or shutil.which("esptool.py")
     )
     if esptool_binary is None:
         raise FlashFirmwareError(
-            "esptool not found on PATH.  Install it with "
-            "`pip install esptool` (or `pipx install esptool`) and "
-            "retry."
+            "esptool not found on PATH.  It ships as a dependency of "
+            "chumicro-deploy, so a missing binary usually means a "
+            "half-built environment: reinstall chumicro-deploy, or "
+            "install it directly with `pip install 'esptool>=5.2'`."
         )
 
     # Erase and write-flash run as two separate esptool calls.  Add
-    # `--after no_reset` to the erase step so the chip stays in ROM
+    # `--after no-reset` to the erase step so the chip stays in ROM
     # bootloader for the write step.  esptool's default
     # `--after hard_reset` after erase would leave an empty-flash
     # chip without firmware to boot, and ESP32-S2 does not
@@ -772,7 +773,7 @@ def _flash_firmware_esptool(
                 f"while re-plugging the USB cable, then retry."
             )
 
-    # ``--before no_reset`` tells esptool the chip is already in ROM
+    # ``--before no-reset`` tells esptool the chip is already in ROM
     # bootloader and to skip the DTR/RTS reset dance on port open.  On
     # ESP32-S2 boards with native USB-OTG, the default DTR/RTS pulses
     # can knock an already-in-bootloader chip back out of bootloader
@@ -784,8 +785,8 @@ def _flash_firmware_esptool(
                 esptool_binary,
                 "--port", device.address,
                 "--baud", "460800",
-                "--before", "no_reset",
-                "--after", "no_reset",
+                "--before", "no-reset",
+                "--after", "no-reset",
                 "erase-flash",
             ],
             step_name="erase-flash",
@@ -806,7 +807,7 @@ def _flash_firmware_esptool(
             esptool_binary,
             "--port", device.address,
             "--baud", "460800",
-            "--before", "no_reset",
+            "--before", "no-reset",
             "write-flash", flash_offset, str(firmware_path),
         ],
         step_name="write-flash",
