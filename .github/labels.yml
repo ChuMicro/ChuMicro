@@ -118,3 +118,7 @@
 - name: blocked
   color: "000000"
   description: "Blocked on external dependency or decision"
+
+- name: dependencies
+  color: "0366d6"
+  description: "Dependency or CI action version bump"

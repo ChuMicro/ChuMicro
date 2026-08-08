@@ -11,10 +11,10 @@ references are to the tree at that commit; a sibling agent may be editing the
 self-heal path concurrently, so treat any drift in `handle` / `_attempt_self_heal`
 as newer-than-this-read.
 
-Reference located: `/Users/chuxor/circuitpython/pythonProject3/basefilesystem/lib/basefs/mqtt_client.py`
+Reference located: the pre-chumicro `basefs/mqtt_client.py` in a local scratch project
 — **exactly 1043 lines**, the monolithic `loop()` (476-557) the convergence
-workstream cites. (Two near-siblings exist — `mqtt_client/.../mqtt_client.py`
-1165 and `pythonProject3 2/.../mqtt_client.py` 1061 — the 1043 file is the one
+workstream cites. (Two near-siblings exist in that scratch tree at 1165 and
+1061 lines — the 1043 file is the one
 the workstream's line numbers resolve against.)
 
 ---

@@ -561,7 +561,7 @@ git commit -m "deploy docs + budgets: one shared sockets_factory module"
 
 ### Task 8: Workspace template migration (sister repo)
 
-**Files (in `~/circuitpython/ChuMicro-Workspace-Template`, NOT the worktree):**
+**Files (in the sibling `ChuMicro-Workspace-Template` checkout, NOT the worktree):**
 - Any file matching `grep -rn "sockets_factory" --include="*.py" --include="*.md" .` in that repo.
 
 - [ ] **Step 1:** Run the grep above in the template clone. If zero hits, record that in the Task 9 decision record and skip to Task 9.
@@ -710,7 +710,7 @@ def test_inert_object_fails():
 - Modify: `libraries/README.md` Primitives line for compat if the check below proves it unused
 
 - [ ] **Step 1:** Remove the logging rows/entries listed above. The library itself stays in-tree and parked; only the advertising goes.
-- [ ] **Step 2:** Compat check: `grep -rln "chumicro_compat" libraries workbench support demos scripts ~/circuitpython/ChuMicro-Workspace-Template 2>/dev/null | grep -v "libraries/compat\|site/\|dist/\|__pycache__"`. Zero external hits were found in src trees during planning; this wider sweep is the confirmation. If still zero: edit the `libraries/README.md` line 44 claim ("Depended on by most others") so it no longer names compat or logging, and add one sentence to `libraries/compat/README.md` stating it is a standalone polyfill no chumicro library currently requires. If hits exist: leave everything and note the finding in the commit body.
+- [ ] **Step 2:** Compat check: `grep -rln "chumicro_compat" libraries workbench support demos scripts "$WORKSPACE_TEMPLATE_ROOT" 2>/dev/null | grep -v "libraries/compat\|site/\|dist/\|__pycache__"`. Zero external hits were found in src trees during planning; this wider sweep is the confirmation. If still zero: edit the `libraries/README.md` line 44 claim ("Depended on by most others") so it no longer names compat or logging, and add one sentence to `libraries/compat/README.md` stating it is a standalone polyfill no chumicro library currently requires. If hits exist: leave everything and note the finding in the commit body.
 - [ ] **Step 3:** Preflight, commit: `readme: stop advertising parked logging, true up compat claims`
 
 ---

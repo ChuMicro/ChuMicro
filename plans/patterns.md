@@ -794,10 +794,10 @@ self._queue = deque((), self._capacity)
 - The deque's `maxlen` enforces drop-oldest at append time without any
   explicit pop.  Track the drop count in a sibling `_dropped` integer if
   the count is part of the public surface (chumicro-events and
-  chumicro-logging both expose this).
+  a buffered handler both expose this).
 
 Used today by: `chumicro-events.EventBus._queue`,
-`chumicro-logging.BufferedHandler._buffer`.  Apply the same pattern to any
+a buffered log handler's internal `_buffer`.  Apply the same pattern to any
 new bounded FIFO — including subscriber backlogs, request queues, and tick
 buffers.  Subscriber lists keyed by topic are *not* FIFO and stay as
 `list` (membership matters more than head/tail performance).

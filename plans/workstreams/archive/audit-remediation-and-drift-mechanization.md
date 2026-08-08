@@ -67,7 +67,7 @@ take the complete fix there.
 
 Three findings were structural decisions, not bugs.  All three resolved:
 
-1. **msgpack decode trust boundary** → **[Decision 0073](../decisions/0073-msgpack-decode-trust-boundary.md)**
+1. **msgpack decode trust boundary** → **[Decision 0073](../../decisions/0073-msgpack-decode-trust-boundary.md)**
    (accepted).  `unpackb` is a *trusting* decoder, hardened with
    ~15–20 cheap lines against truncation / over-length /
    trailing-garbage / unbounded recursion; **not** a spec validator.
@@ -77,8 +77,8 @@ Three findings were structural decisions, not bugs.  All three resolved:
    confirmed, not amended.  → Phase 1 item 1 narrows to the decoder
    hardening only; no `_backends/` change.
 2. **Coverage-gate honesty** → **correct the ADRs + document residual**.
-   [Decision 0009](../decisions/0009-per-library-test-runs.md) and
-   [Decision 0025](../decisions/0025-dual-coverage-thresholds.md) edited
+   [Decision 0009](../../decisions/0009-per-library-test-runs.md) and
+   [Decision 0025](../../decisions/0025-dual-coverage-thresholds.md) edited
    in place: per-library gating fires only when `--coverage-threshold`
    is passed (bare CI `test --all` = post-`combine` repo-wide 85 %
    aggregate, no per-library `pyproject.toml` coverage config); 94 % is
@@ -87,7 +87,7 @@ Three findings were structural decisions, not bugs.  All three resolved:
    threshold + a device-adapter coverage signal) stays as Phase 1
    item 2 — the ADRs now make the scope honest, they do not claim it
    closed.
-3. **Prose-lockstep → mechanization principle** → **[Decision 0074](../decisions/0074-drift-mechanization-as-project-policy.md)**
+3. **Prose-lockstep → mechanization principle** → **[Decision 0074](../../decisions/0074-drift-mechanization-as-project-policy.md)**
    (accepted): a drift class that *can* be deterministically linted
    *must* be.  Charters Phase 4; AGENTS.md "docs in lockstep" rule
    reframed as the backstop for the un-mechanizable remainder.

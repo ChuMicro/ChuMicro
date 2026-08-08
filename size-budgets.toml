@@ -50,9 +50,6 @@ mpy = 19405
 stripped = 13470
 mpy = 6815
 
-[logging]
-stripped = 5582
-mpy = 2652
 
 [mqtt]
 stripped = 59412

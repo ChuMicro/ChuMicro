@@ -1,6 +1,6 @@
 # Workstream: Workspace library curation — chumicro-workspace as library host
 
-Status: `accepted` — Phases 1 + 2 **complete and validated** 2026-05-17 (sdist-content + build guard + PyPI fetch backend; then the `library` CLI: managed-block writer, `libraries:` table, dep resolver, six verbs incl. per-dep deselect + the Q4 remove/forget machine).  Acceptance met modulo one CI-gated residual (live-PyPI end-to-end — see Acceptance).  Phases 3 (non-chumicro upstreams) + 4 (`run-example`/`test`) stay **demand-gated by design** with explicit trigger conditions — not built, not blocking; this workstream is closed for active work and reopens only when a trigger fires.  Surfaced 2026-05-12 during the DI audit (Tier 2 follow-up to [Decision 0062](../decisions/0062-entrypoint-factory-skip.md)); design fully resolved 2026-05-12.
+Status: `accepted` — Phases 1 + 2 **complete and validated** 2026-05-17 (sdist-content + build guard + PyPI fetch backend; then the `library` CLI: managed-block writer, `libraries:` table, dep resolver, six verbs incl. per-dep deselect + the Q4 remove/forget machine).  Acceptance met modulo one CI-gated residual (live-PyPI end-to-end — see Acceptance).  Phases 3 (non-chumicro upstreams) + 4 (`run-example`/`test`) stay **demand-gated by design** with explicit trigger conditions — not built, not blocking; this workstream is closed for active work and reopens only when a trigger fires.  Surfaced 2026-05-12 during the DI audit (Tier 2 follow-up to [Decision 0062](../../decisions/0062-entrypoint-factory-skip.md)); design fully resolved 2026-05-12.
 
 ## Purpose
 
@@ -8,7 +8,7 @@ Today's chumicro library distribution leans on `mip` (MicroPython) and `circup` 
 
 Layer FAT-stability concerns on top: `mip`/`circup` write files to `CIRCUITPY` through the host filesystem, which has been a recurring source of wedges (Decision 0033) that we now work around in chumicro-workspace via rsync + auto-reload toggling.  Two tools with separate failure modes are harder to support than one tool we control.
 
-Direction: chumicro-workspace becomes the library host for chumicro libraries.  Curated libraries land in the user's workspace `libraries/<name>/` folder (a feature chumicro-workspace already supports for local development).  The deploy walker (Decision 0029) treats them identically to mono-repo libraries — same import-graph rules, same opt-out mechanism via [Decision 0062](../decisions/0062-entrypoint-factory-skip.md), same FAT-safe deploy path.
+Direction: chumicro-workspace becomes the library host for chumicro libraries.  Curated libraries land in the user's workspace `libraries/<name>/` folder (a feature chumicro-workspace already supports for local development).  The deploy walker (Decision 0029) treats them identically to mono-repo libraries — same import-graph rules, same opt-out mechanism via [Decision 0062](../../decisions/0062-entrypoint-factory-skip.md), same FAT-safe deploy path.
 
 `mip`/`circup` remain supported for users who prefer them, but the chumicro-workspace happy path uses neither.
 
@@ -47,7 +47,7 @@ Pin state lives in `workspace.yml` under a new `libraries:` table — see Q2 bel
 
 **Landing location** — `chumicro_workspace`'s CLI is now a package (`workbench/workspace/src/chumicro_workspace/cli/` with `__init__.py` + `_common.py` + `setup.py` + `devices.py`).  The `library` subcommand surface lands as a new `cli/library.py` module following the same shape as `cli/setup.py` and `cli/devices.py` — subparser builder + `_cmd_<verb>` functions + thin handoff into a `chumicro_workspace.library` core module.  Subparser registration in `cli/__init__.py`'s `build_parser`.
 
-**Agent-runnable surface** — the transitive-deps prompt is an interactive seam, so per [Decision 0066](../decisions/0066-agent-runnable-clis.md) the subcommand needs `--non-interactive` behavior.  When non-interactive: `library add` must not prompt; it either installs the full transitive set (recommended default) or fails with a distinct exit code naming the unresolved choice.  The decline-all-transitive option (`--decline-transitive` or similar) can be added later if a real workflow needs it.  Interactivity defaults to `sys.stdin.isatty()` with `--non-interactive` as the explicit override (Decision 0066 §1–2) — `cli/examples.py` (`non_interactive = not sys.stdin.isatty()`) and `cli/devices.py` (`args.non_interactive` + exit-2 on missing required arg) are the two precedents to mirror.
+**Agent-runnable surface** — the transitive-deps prompt is an interactive seam, so per [Decision 0066](../../decisions/0066-agent-runnable-clis.md) the subcommand needs `--non-interactive` behavior.  When non-interactive: `library add` must not prompt; it either installs the full transitive set (recommended default) or fails with a distinct exit code naming the unresolved choice.  The decline-all-transitive option (`--decline-transitive` or similar) can be added later if a real workflow needs it.  Interactivity defaults to `sys.stdin.isatty()` with `--non-interactive` as the explicit override (Decision 0066 §1–2) — `cli/examples.py` (`non_interactive = not sys.stdin.isatty()`) and `cli/devices.py` (`args.non_interactive` + exit-2 on missing required arg) are the two precedents to mirror.
 
 #### `switch-channel <name> <channel>` semantics
 
@@ -212,7 +212,7 @@ Two consequences worth naming:
 
 ## Out of scope
 
-- **`__chumicro_skip_factories__` mechanism itself** — covered by [Decision 0062](../decisions/0062-entrypoint-factory-skip.md).
+- **`__chumicro_skip_factories__` mechanism itself** — covered by [Decision 0062](../../decisions/0062-entrypoint-factory-skip.md).
 - **Duck-typed factory contract clarification** — separate ADR (planned 0063).
 - **mip/circup deprecation** — both stay supported indefinitely.  This workstream provides an alternative, not a replacement.
 

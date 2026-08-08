@@ -1,6 +1,6 @@
 # Deploy-mode unification + on-device unit sweeps
 
-Implements [Decision 0068](../decisions/0068-unified-deploy-mode-resolution.md).
+Implements [Decision 0068](../../decisions/0068-unified-deploy-mode-resolution.md).
 Charters the `plans/open-questions.md` "two deploy-mode resolvers"
 gap (now removed from that file — this workstream + the ADR are the
 record).
@@ -296,7 +296,7 @@ to avoid churning the inbound links from Decisions 0068/0070/0071/0072.
     per-device so "explicitly set" is unknowable and the sweep's whole
     purpose is RAM validation.  4 dispatch + grouping tests; preflight
     green.  Hardware end-to-end rides with 4d.
-  - [x] **4b.1 — test-support staging gap → [Decision 0069](../decisions/0069-test-support-module-marker.md). DONE.**
+  - [x] **4b.1 — test-support staging gap → [Decision 0069](../../decisions/0069-test-support-module-marker.md). DONE.**
     21/37 cross-runtime unit files import a `*.testing` fake;
     `testing.py`'s false `__chumicro_runtimes__=("cpython",)` marker
     made the 0044 device filter strip it → every fake-using suite
@@ -314,7 +314,7 @@ to avoid churning the inbound links from Decisions 0068/0070/0071/0072.
     "independent" framing was correct and is now *verified*, not
     assumed.
 
-    **(i) Host-lane test-classification gap → [Decision 0070](../decisions/0070-host-only-test-marker.md) (accepted, implemented, hardware-verified).**
+    **(i) Host-lane test-classification gap → [Decision 0070](../../decisions/0070-host-only-test-marker.md) (accepted, implemented, hardware-verified).**
     The 6 `test_{mp,cp}_{adapter,*backend}.py` files drive
     runtime-specific source through host fakes and assert off-target
     behaviour — host-lane by construction, never device-eligible.
@@ -325,7 +325,7 @@ to avoid churning the inbound links from Decisions 0068/0070/0071/0072.
     were untouched, proving (ii) independent.
 
     **(ii) Cumulative-`sys.modules` MemoryError on the never-soft-reset
-    flash session → [Decision 0071](../decisions/0071-per-library-soft-reset-flash-sweep.md) (accepted, implemented).**
+    flash session → [Decision 0071](../../decisions/0071-per-library-soft-reset-flash-sweep.md) (accepted, implemented).**
     Not transport death, not FAT churn, not a leak.  The probe showed
     free memory declining to a stable ~70 KB plateau (stable = all
     *live* imported modules; `gc.collect()` reclaims nothing) and the

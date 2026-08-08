@@ -133,7 +133,7 @@ Issues, bug reports, and pull requests are welcome, and so is "I ran it on this 
 
 ## Docs
 
-📖 **[Stable docs](https://chumicro.github.io/ChuMicro/http-server/stable/)** · **[Experimental docs](https://chumicro.github.io/ChuMicro/http-server/experimental/)**
+📖 **[Stable docs](https://chumicro.github.io/ChuMicro/http_server/stable/)** · **[Experimental docs](https://chumicro.github.io/ChuMicro/http_server/experimental/)**
 
 ## Find this library
 

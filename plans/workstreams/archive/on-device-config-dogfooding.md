@@ -2,14 +2,14 @@
 
 Status: **shipped end-to-end 2026-05-06.**  The migration happened incrementally as adjacent workstreams landed: Decision 0056 shipped the transport API (2026-05-04), the `scripts-workbench-config-unification` workstream landed the conftest-side compose pipeline (2026-05-04), and the `config-shape-beginner-ergonomics` workstream's flat-key + `secrets.toml` migration (2026-05-06, mono-repo commits `30e2878` / `8303d17`) carried the on-device test rewrites along with it.  Hardware validation across all four boards (wifi acceptance 12/12 + MQTT round-trip 4/4) closed during the same session.  Closing-paperwork pass on 2026-05-06: dropped the dead `**/_test_creds.py` line from the mono-repo `.gitignore`, refreshed `docs/contributing/device-testing.md` to describe the `secrets.toml` → `compose_runtime_config` → `set_runtime_config` → `transport.stage` pipeline positively, confirmed the workspace-template repo's `.gitignore` was already clean, and deferred the late-binding fixture design until a real consumer needs it (existing `pytest.Config.stash` is already mutable, so a future fixture can overwrite the registered dict at fixture-resolve time without changing the plugin's API).
 
-(Originally filed as Phase 4.5b of the [`scripts-workbench-config-unification`](archive/scripts-workbench-config-unification.md) workstream; promoted to peer status 2026-05-05.  The `setup-schema-reconciliation` workstream — which this one used to wait on — is now closed end-to-end ([`archive/setup-schema-reconciliation.md`](archive/setup-schema-reconciliation.md)).)
+(Originally filed as Phase 4.5b of the [`scripts-workbench-config-unification`](scripts-workbench-config-unification.md) workstream; promoted to peer status 2026-05-05.  The `setup-schema-reconciliation` workstream — which this one used to wait on — is now closed end-to-end ([`archive/setup-schema-reconciliation.md`](setup-schema-reconciliation.md)).)
 
 ## Findings from the 2026-05-06 session
 
 The session that landed `config-shape-beginner-ergonomics` swept up most of this workstream's deliverables.  Concrete state on disk now:
 
 * **`_test_creds.py` shim is gone everywhere.**  No files anywhere in the repo; the legacy import block in on-device tests is replaced by `from chumicro_config import config` + `WifiConfig.try_from_config(config)`.  The `**/_test_creds.py` gitignore line remains in `.gitignore` as a leftover (line 69) — drop it as housekeeping.
-* **Plugin staging API shipped** as [`workbench/pytest-device/src/chumicro_pytest_device/runtime_config.py`](../../workbench/pytest-device/src/chumicro_pytest_device/runtime_config.py).  Public surface: `set_runtime_config(config, payload_dict)` from a conftest's `pytest_configure` hook; the plugin msgpack-encodes once per session and stages via `transport.stage(extra_files={"/runtime_config.msgpack": <bytes>})`.  Storage is `pytest.Config.stash`, which is mutable, so a session-scoped fixture *could* overwrite later for late-binding — but no current consumer does (see below).
+* **Plugin staging API shipped** as [`workbench/pytest-device/src/chumicro_pytest_device/runtime_config.py`](../../../workbench/pytest-device/src/chumicro_pytest_device/runtime_config.py).  Public surface: `set_runtime_config(config, payload_dict)` from a conftest's `pytest_configure` hook; the plugin msgpack-encodes once per session and stages via `transport.stage(extra_files={"/runtime_config.msgpack": <bytes>})`.  Storage is `pytest.Config.stash`, which is mutable, so a session-scoped fixture *could* overwrite later for late-binding — but no current consumer does (see below).
 * **All seven library conftests migrated** to call `set_runtime_config(config, compose_runtime_config(secrets_toml=…, project_config=…))`.  The wifi/mqtt/sockets/requests/http_server/ntp/websockets conftests are all using the new pipeline today.
 * **All seven on-device test files migrated** to flat-key access — `config["wifi.ssid"]`, `config["mqtt.broker.host"]`, `config["sockets.echo.host"]`, `config["websockets.server.host"]`, `config["requests.now_utc_tuple"]`.  `WifiConfig.from_config(config)` / `try_from_config(config)` replaced the old `from_dict(config["wifi"])` shape.
 * **Hardware validation completed.**  Pi Pico W CP/MP + Lolin S2 CP/MP all pass `libraries/wifi/functional_tests/test_acceptance.py` (3 tests × 4 boards = 12) and `libraries/mqtt/functional_tests/test_real_broker.py` (1 test × 4 boards = 4) end-to-end against the new flat-key wire format.  The Step 1 round-trip test that this workstream specified — "stage a known-good msgpack, boot, read it back, assert byte-for-byte equality" — is implicitly covered by these passing tests, since both depend on the host-side compose flowing through unchanged.
@@ -37,11 +37,11 @@ A fresh agent picking this up should treat the workstream as **closing-paperwork
 
 ### Related workstreams
 
-* [`archive/config-shape-beginner-ergonomics.md`](archive/config-shape-beginner-ergonomics.md) — shipped the flat-key wire format that the on-device tests now read; same migration touched the seven conftests.
-* [`archive/scripts-workbench-config-unification.md`](archive/scripts-workbench-config-unification.md) — shipped the host-side `compose_runtime_config` pipeline this workstream consumes.
-* [`archive/setup-schema-reconciliation.md`](archive/setup-schema-reconciliation.md) — Strategy C shipped 2026-05-06; the additive setup re-apply works on `secrets.toml` (the same file these conftests now read).
-* [Decision 0056](../decisions/0056-transport-extra-files-staging.md) — the `transport.stage(extra_files=...)` API foundation that powers the plugin's staging.
-* [Decision 0057](../decisions/0057-two-file-config.md) — the file-shape ADR (now describes three files: workspace.yml + secrets.toml + project_config.toml after the config-shape workstream's update).
+* [`archive/config-shape-beginner-ergonomics.md`](config-shape-beginner-ergonomics.md) — shipped the flat-key wire format that the on-device tests now read; same migration touched the seven conftests.
+* [`archive/scripts-workbench-config-unification.md`](scripts-workbench-config-unification.md) — shipped the host-side `compose_runtime_config` pipeline this workstream consumes.
+* [`archive/setup-schema-reconciliation.md`](setup-schema-reconciliation.md) — Strategy C shipped 2026-05-06; the additive setup re-apply works on `secrets.toml` (the same file these conftests now read).
+* [Decision 0056](../../decisions/0056-transport-extra-files-staging.md) — the `transport.stage(extra_files=...)` API foundation that powers the plugin's staging.
+* [Decision 0057](../../decisions/0057-two-file-config.md) — the file-shape ADR (now describes three files: workspace.yml + secrets.toml + project_config.toml after the config-shape workstream's update).
 
 ## Premise
 
@@ -49,14 +49,14 @@ Decision 0055 (config pipeline unification) shipped half the dogfooding goal: ev
 
 The other half — having on-device test code call `chumicro_config.load_runtime_config()` instead of importing `_test_creds` — needs to land too.  That's the migration this workstream covers.
 
-The transport-API foundation already shipped (Decision 0056): `transport.stage()` accepts `extra_files: dict[str, bytes]` keyed by absolute device paths, so pytest-device can stage `runtime_config.msgpack` onto the device alongside library + harness + test sources.  Per-mode semantics: CP RAM raises `UnsupportedExtraFilesError`; CP flash, MP copy, and MP mount all write the bytes through their existing staging tree.  Host-side unit coverage at [`workbench/deploy/tests/test_extra_files_staging.py`](../../workbench/deploy/tests/test_extra_files_staging.py); no end-to-end functional test yet — see Pre-condition 3.
+The transport-API foundation already shipped (Decision 0056): `transport.stage()` accepts `extra_files: dict[str, bytes]` keyed by absolute device paths, so pytest-device can stage `runtime_config.msgpack` onto the device alongside library + harness + test sources.  Per-mode semantics: CP RAM raises `UnsupportedExtraFilesError`; CP flash, MP copy, and MP mount all write the bytes through their existing staging tree.  Host-side unit coverage at [`workbench/deploy/tests/test_extra_files_staging.py`](../../../workbench/deploy/tests/test_extra_files_staging.py); no end-to-end functional test yet — see Pre-condition 3.
 
 ## Pre-conditions for the new session
 
 A fresh agent picking this up cold should:
 
 1. Read this file end to end.
-2. Read [Decision 0055](../decisions/0055-config-pipeline-unification.md) (the unification target this work consumes), [Decision 0056](../decisions/0056-transport-extra-files-staging.md) (the transport-API foundation — what each mode raises / writes), and [Decision 0057](../decisions/0057-two-file-config.md) (the current 2-file input shape).
+2. Read [Decision 0055](../../decisions/0055-config-pipeline-unification.md) (the unification target this work consumes), [Decision 0056](../../decisions/0056-transport-extra-files-staging.md) (the transport-API foundation — what each mode raises / writes), and [Decision 0057](../../decisions/0057-two-file-config.md) (the current 2-file input shape).
 3. Hardware-validate the transport-API foundation end-to-end on the four-board canonical matrix *before* touching any conftest.  Stage a known-good `runtime_config.msgpack`, boot, read it back via `load_runtime_config()`, assert the dict round-trips byte-for-byte.  No such functional test exists today — the existing coverage is unit-only against `FakeTransport`.  This is the first deliverable of Step 1 below.
 4. Audit every conftest in the repo (find under `libraries/`, `workbench/`, `support/`) for `_test_creds.py` materialization or other static-secrets shims beyond the seven networking libraries.  The seven listed in Step 2 are the known set; confirm or extend.
 5. **Boards required.**  Hardware-in-the-loop validation is mandatory; CPython unit tests can't catch the failure modes.  The four-board matrix is `pi-pico-w-circuitpython-board`, `pi-pico-w-micropython-board`, `lolin-s2-circuitpython-board`, `lolin-s2-micropython-board` (one of each runtime × two RP2040/ESP32 boards).

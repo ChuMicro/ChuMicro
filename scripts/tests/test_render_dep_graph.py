@@ -24,7 +24,7 @@ class TestDiscoverStrictDeps:
         deps = discover_strict_deps()
         assert "timing" in deps
         assert "compat" in deps
-        assert "logging" in deps
+        assert "sockets" in deps
 
     def test_no_chumicro_deps_for_leaf_libraries(self):
         """Libraries with no chumicro deps return an empty list."""
@@ -154,11 +154,11 @@ class TestRenderSvg:
         assert "typical wiring" in svg
 
     def test_marks_standalone_libraries(self):
-        """compat / logging get the standalone CSS class."""
+        """A library with no edges gets the standalone CSS class."""
         deps = discover_strict_deps()
         svg = render_svg(deps, DI_DEPS)
         # Each standalone library appears in a `node standalone` group.
-        for standalone_name in ("compat", "logging"):
+        for standalone_name in ("compat",):
             assert 'class="node standalone"' in svg
             assert f">chumicro-{standalone_name}<" in svg
 

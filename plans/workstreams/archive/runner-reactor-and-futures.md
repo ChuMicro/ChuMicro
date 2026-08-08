@@ -4,8 +4,8 @@ Opened 2026-05-21, out of a design conversation about the `requests`
 completion model. Two separable axes surfaced. This workstream designs
 both, with axis 2 (the runner reactor) as the deeper change.
 **ADR-before-code**: the axis-2 wait model is recorded in
-[Decision 0080](../decisions/0080-runner-reactor.md), which re-scopes
-[Decision 0051](../decisions/0051-runner-shaped-as-project-policy.md)'s
+[Decision 0080](../../decisions/0080-runner-reactor.md), which re-scopes
+[Decision 0051](../../decisions/0051-runner-shaped-as-project-policy.md)'s
 `select.poll(timeout > 0)` ban to carve out the runner's central wait.
 
 ## The two axes (do not conflate them)
@@ -596,7 +596,7 @@ further design here.
 
 ## Sequencing
 
-1. **ADR for axis 2**, done 2026-05-21: [Decision 0080](../decisions/0080-runner-reactor.md)
+1. **ADR for axis 2**, done 2026-05-21: [Decision 0080](../../decisions/0080-runner-reactor.md)
    records the central-wait model, the register-the-object primitive, the
    `next_deadline` hint, and the chumicro-sockets raw-socket accessor, and
    re-scopes Decision 0051's leaf-vs-loop blocking rule.
@@ -624,7 +624,7 @@ across all four boards (Pico W + Lolin S2, MicroPython and CircuitPython):
 object registration, real readiness, idle `poll` blocks the full timeout
 (CPU sleeps), negligible heap drift, and poll tracks the TLS buffer rather
 than lying. The design's load-bearing claims are device-confirmed and the
-axis-2 ADR ([Decision 0080](../decisions/0080-runner-reactor.md)) has
+axis-2 ADR ([Decision 0080](../../decisions/0080-runner-reactor.md)) has
 landed. A second device pass validated the production poll shape (`ipoll`
 on one reused poller, the combined socket-or-timer wake) on all four boards,
 and the four pre-code gaps are researched (see "Before code" above): the

@@ -1,6 +1,6 @@
 # Workstream: scripts/ ↔ workbench/ ↔ workspace-template config unification
 
-Status: **closed** — Phases 1, 2, 3, 4, 5 shipped 2026-05-04 (mono-repo) plus the matching workspace-template repo half ([`a9bb4bd`](https://github.com/ChuMicro/ChuMicro-Workspace-Template/commit/a9bb4bd)).  Phase 4.5a (`!secret` simplification) closed by [Decision 0057](../decisions/0057-two-file-config.md).  Phase 4.5b (on-device test code dropping `_test_creds.py`) carved out as its own peer workstream 2026-05-05 once this parent closed and the upstream config-shape questions landed; transport `extra_files` API foundation shipped via [Decision 0056](../decisions/0056-transport-extra-files-staging.md); conftest + plugin + on-device migration covered in [`plans/workstreams/on-device-config-dogfooding.md`](../on-device-config-dogfooding.md).
+Status: **closed** — Phases 1, 2, 3, 4, 5 shipped 2026-05-04 (mono-repo) plus the matching workspace-template repo half ([`a9bb4bd`](https://github.com/ChuMicro/ChuMicro-Workspace-Template/commit/a9bb4bd)).  Phase 4.5a (`!secret` simplification) closed by [Decision 0057](../../decisions/0057-two-file-config.md).  Phase 4.5b (on-device test code dropping `_test_creds.py`) carved out as its own peer workstream 2026-05-05 once this parent closed and the upstream config-shape questions landed; transport `extra_files` API foundation shipped via [Decision 0056](../../decisions/0056-transport-extra-files-staging.md); conftest + plugin + on-device migration covered in [`plans/workstreams/on-device-config-dogfooding.md`](on-device-config-dogfooding.md).
 
 ## Premise
 
@@ -44,7 +44,7 @@ The two flows are **different solutions to the same problem**: "what wifi (or mq
 
 ## Decision record
 
-The decision this workstream executed has been promoted to [Decision 0055](../decisions/0055-config-pipeline-unification.md) (`accepted`, 2026-05-04).  Phase 4.5a (`!secret` simplification) was promoted to its own [Decision 0057](../decisions/0057-two-file-config.md).  Phase 4.5b on-device dogfooding is now its own peer workstream — [`../on-device-config-dogfooding.md`](../on-device-config-dogfooding.md) — with transport `extra_files` API foundation shipped via [Decision 0056](../decisions/0056-transport-extra-files-staging.md).  This workstream document captures the per-phase execution detail; the ADRs capture the durable why.
+The decision this workstream executed has been promoted to [Decision 0055](../../decisions/0055-config-pipeline-unification.md) (`accepted`, 2026-05-04).  Phase 4.5a (`!secret` simplification) was promoted to its own [Decision 0057](../../decisions/0057-two-file-config.md).  Phase 4.5b on-device dogfooding is now its own peer workstream — [`../on-device-config-dogfooding.md`](on-device-config-dogfooding.md) — with transport `extra_files` API foundation shipped via [Decision 0056](../../decisions/0056-transport-extra-files-staging.md).  This workstream document captures the per-phase execution detail; the ADRs capture the durable why.
 
 ---
 
@@ -188,8 +188,8 @@ Two paths the user is weighing:
 A fresh agent picking up this workstream cold should:
 
 1. Read this file end-to-end.
-2. Read [`plans/now.md`](../now.md) for the current snapshot.
-3. Read [`plans/decisions/0030-config-and-state.md`](../decisions/0030-config-and-state.md), [`plans/decisions/0035-runtime-config-structure.md`](../decisions/0035-SUPERSEDED-BY-0036-runtime-config-structure.md), [`plans/decisions/0036-chumicro-config-library.md`](../decisions/0036-chumicro-config-library.md).
+2. Read [`plans/now.md`](../../next-up.md) for the current snapshot.
+3. Read [`plans/decisions/0030-config-and-state.md`](../../decisions/0030-config-and-state.md), [`plans/decisions/0035-runtime-config-structure.md`](../../decisions/0035-SUPERSEDED-BY-0036-runtime-config-structure.md), [`plans/decisions/0036-chumicro-config-library.md`](../../decisions/0036-chumicro-config-library.md).
 4. Skim the workspace-template repo's [`workspace.yml`](https://github.com/ChuMicro/ChuMicro-Workspace-Template/blob/main/workspace.yml), [`projects/_template/config.toml`](https://github.com/ChuMicro/ChuMicro-Workspace-Template/blob/main/projects/_template/config.toml), and [`_workspace_template/devices.yml`](https://github.com/ChuMicro/ChuMicro-Workspace-Template/blob/main/_workspace_template/devices.yml) to internalize the target shapes.
 5. Check whether the ADR-cleanup agent's work has landed.  If yes, promote the embedded ADR section above into `plans/decisions/NNNN-config-pipeline-unification.md` (next available number) and update its status to `accepted`.
 6. Pick up the next unstarted phase.  Phases must be done in order — Phase 4 specifically depends on Phase 2's manifests + Phase 3's `workspace.yml` to deliver useful validation messages.

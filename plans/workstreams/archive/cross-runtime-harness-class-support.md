@@ -129,7 +129,7 @@ on CP+MP.
    (no PEP 448 set unpacking — this runs on-device).  Verified: the
    device now compiles the big module and proceeds into execution.
 
-2. **Resident co-residency — RESOLVED by [Decision 0072](../decisions/0072-large-test-modules-on-constrained-boards.md).**  Past
+2. **Resident co-residency — RESOLVED by [Decision 0072](../../decisions/0072-large-test-modules-on-constrained-boards.md).**  Past
    compile, the OOM moves to importing the library while one large
    test module's defs are resident.  A single big file on a *freshly
    reset* board still OOMs, so this is **not** cumulative `sys.modules`

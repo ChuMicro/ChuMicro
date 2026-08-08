@@ -9,7 +9,7 @@
 The body below was written 2026-04-27 when the doc said "captured, no implementation yet."  Most of Tier A and the prereqs have shipped since.  Concrete state:
 
 * **Tier A — all three libraries shipped:**
-  * `chumicro-logging` — VERSION 0.1.1.  Leveled logging, runner-friendly, optional callable injection rather than required dep (the rule the workstream proposed).
+  * `chumicro-logging` — shipped, then removed before the public release: it never gained a consumer and was never published.  The optional-callable-injection rule it proved out survives as Decision 0042.
   * `chumicro-ntp` — VERSION 0.1.1.  Runner-shaped SNTP client over an injected UDP socket; cross-runtime.
   * `chumicro-events` — VERSION 0.1.0.  Runner-shaped pub/sub event bus (bounded, drop-oldest); zero chumicro deps and no other library imports it (per [Decision 0042](../decisions/0042-library-dependency-policy.md)).
 * **Dependency policy resolved as [Decision 0042](../decisions/0042-library-dependency-policy.md)** (`proposed`, 2026-04-27).  The "core infrastructure = hard dep + factory helper" / "decoration = optional callback" split this workstream proposed is now the formal contract.  `chumicro-requests` (Decision 0040) had already established the workable shape: hard `chumicro-sockets` dep + `chumicro_sockets_factory(radio=…)` helper + explicit constructor parameter.  Each new library starts under the right rules.

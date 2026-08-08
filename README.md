@@ -180,7 +180,7 @@ Each library installs independently and pulls in as little as possible.  Install
 | **[msgpack](libraries/msgpack/)** | Binary serialization, smaller than JSON for typical sensor payloads.  Compatible with the wider `msgpack` ecosystem. |
 | **[compat](libraries/compat/)** | The few standard-library pieces the device runtimes don't ship, so one file of code can run everywhere. |
 
-For a dependency graph and a "pick a library by problem" index, see [`libraries/README.md`](libraries/).  One more library, [logging](libraries/logging/), is published but parked: it works as documented, nothing else integrates with it, and its README says whether it's for you.
+For a dependency graph and a "pick a library by problem" index, see [`libraries/README.md`](libraries/).
 
 ## Try an example on a board
 

@@ -14,6 +14,11 @@ on:
       - main
   pull_request:
 
+# CI only reads the repo.  Nothing here publishes, tags, or comments, so the
+# token stays read-only even when a fork's pull request runs it.
+permissions:
+  contents: read
+
 defaults:
   run:
     shell: bash
