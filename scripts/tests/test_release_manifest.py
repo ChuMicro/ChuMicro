@@ -114,3 +114,65 @@ class TestMain:
                 "--matrix", json.dumps(_MATRIX), "--bundle-tag", "t",
                 "--libraries-tag", "t", "--published-at", "ts",
             ])
+
+    @pytest.mark.parametrize(
+        "flag",
+        ["--bundle-tag", "--libraries-tag", "--published-at"],
+    )
+    def test_rejects_empty_workflow_supplied_value(
+        self, tmp_path: Path, flag: str,
+    ):
+        """An unset job output expands to "", which must not record a row.
+
+        Every one of these arrives as a workflow expression.  A renamed step
+        id or a skipped upstream job yields the empty string rather than an
+        error, so without this the index gains an entry keyed on "" and the
+        step still reports success.
+        """
+        index_path = tmp_path / "releases.json"
+        argv = {
+            "--index": str(index_path), "--channel": "stable",
+            "--matrix": json.dumps(_MATRIX), "--bundle-tag": "20260808",
+            "--libraries-tag": "20260808.120000",
+            "--published-at": "2026-08-08T12:00:00Z",
+        }
+        argv[flag] = ""
+        flat = [item for pair in argv.items() for item in pair]
+        with pytest.raises(SystemExit):
+            main(flat)
+        assert not index_path.exists()
+
+    def test_rejects_whitespace_only_value(self, tmp_path: Path):
+        """Whitespace is as empty as "" for a tag the index keys on."""
+        index_path = tmp_path / "releases.json"
+        with pytest.raises(SystemExit):
+            main([
+                "--index", str(index_path), "--channel", "stable",
+                "--matrix", json.dumps(_MATRIX), "--bundle-tag", "   ",
+                "--libraries-tag", "t", "--published-at", "ts",
+            ])
+        assert not index_path.exists()
+
+    def test_rejects_matrix_with_no_packages(self, tmp_path: Path):
+        """An empty matrix means the job's gate and this call disagree."""
+        index_path = tmp_path / "releases.json"
+        with pytest.raises(SystemExit):
+            main([
+                "--index", str(index_path), "--channel", "stable",
+                "--matrix", json.dumps({"include": []}), "--bundle-tag", "t",
+                "--libraries-tag", "t", "--published-at", "ts",
+            ])
+        assert not index_path.exists()
+
+    def test_valid_run_still_writes(self, tmp_path: Path):
+        """The guard rejects only empties; a normal invocation is unchanged."""
+        index_path = tmp_path / "releases.json"
+        assert main([
+            "--index", str(index_path), "--channel", "stable",
+            "--matrix", json.dumps(_MATRIX), "--bundle-tag", "20260808.12",
+            "--libraries-tag", "20260808.120000",
+            "--published-at", "2026-08-08T12:00:00Z",
+        ]) == 0
+        entry = json.loads(index_path.read_text())["releases"][0]
+        assert entry["bundle_tag"] == "20260808.12"
+        assert entry["packages"]
