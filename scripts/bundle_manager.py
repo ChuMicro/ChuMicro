@@ -518,6 +518,48 @@ def _manifest_current_relpaths(package_dir: Path) -> set[Path] | None:
     return relpaths
 
 
+def _manifest_dependency_packages(package_dir: Path) -> list[str]:
+    """Return the chumicro package names *package_dir* depends on.
+
+    Read from the staged ``package.json`` rather than from pyproject, so
+    the circup requirements and the mip manifest can never disagree: both
+    project the same ``deps`` list.  Each dep is a mip reference whose
+    last path segment is the package name (``github:Org/Repo/chumicro_x``).
+    """
+    manifest_path = package_dir / "package.json"
+    if not manifest_path.is_file():
+        return []
+    with open(manifest_path) as manifest_file:
+        manifest = json.load(manifest_file)
+    packages = []
+    for entry in manifest.get("deps", []):
+        if not isinstance(entry, list) or not entry:
+            continue
+        reference = entry[0]
+        if isinstance(reference, str) and reference:
+            packages.append(reference.rstrip("/").rsplit("/", 1)[-1])
+    return sorted(set(packages))
+
+
+def _circup_requirements_text(package_dir: Path) -> str | None:
+    """Return the circup ``requirements.txt`` body for *package_dir*.
+
+    circup resolves a library's dependencies by reading
+    ``requirements/<library>/requirements.txt`` out of the bundle and
+    splitting each line on pip version specifiers
+    (``libraries_from_requirements``).  It matches the result against the
+    module names in ``lib/``, which are underscored, so the names written
+    here are the import names rather than the hyphenated PyPI ones.
+
+    Returns None when the package has no chumicro dependencies, so no
+    file is written and circup's lookup simply finds nothing.
+    """
+    packages = _manifest_dependency_packages(package_dir)
+    if not packages:
+        return None
+    return "".join(f"{package}\n" for package in packages)
+
+
 def build_circup_zips(
     bundle_dir: Path,
     output_dir: Path,
@@ -598,6 +640,20 @@ def build_circup_zips(
                 archive_path = f"{source_bundle_name}/lib/{package_name}/{relative_path}"
                 source_zip.write(source_file, archive_path)
 
+            # circup reads dependencies from requirements/<library>/ beside
+            # lib/, the layout Adafruit's bundles use.  Without it circup
+            # installs the named library alone and the board raises
+            # ImportError on its first import: mip carries deps in
+            # package.json and was the only install path with any coverage,
+            # so the whole CircuitPython side shipped dependency-less.
+            requirements = _circup_requirements_text(package_dir)
+            if requirements is not None:
+                source_zip.writestr(
+                    f"{source_bundle_name}/requirements/{package_name}"
+                    "/requirements.txt",
+                    requirements,
+                )
+
         # .mpy bytecode bundle: CircuitPython .mpy from circuitpython-10.x-mpy/,
         # plus any raw data files staged alongside them (non-.mpy siblings).
         # The CP mpy folder carries no manifest of its own, so derive the
@@ -623,6 +679,16 @@ def build_circup_zips(
                     continue
                 archive_path = f"{bytecode_bundle_name}/lib/{package_name}/{relative_path}"
                 bytecode_zip.write(staged_file, archive_path)
+
+            # Adafruit ships requirements/ in the mpy bundles too, and a
+            # user who registered only this one should still resolve deps.
+            requirements = _circup_requirements_text(bundle_dir / package_name)
+            if requirements is not None:
+                bytecode_zip.writestr(
+                    f"{bytecode_bundle_name}/requirements/{package_name}"
+                    "/requirements.txt",
+                    requirements,
+                )
 
     created = [source_zip_path, bytecode_zip_path]
     for zip_path in created:
