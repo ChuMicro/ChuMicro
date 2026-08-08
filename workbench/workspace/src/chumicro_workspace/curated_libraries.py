@@ -44,7 +44,14 @@ CURATED_LIBRARIES_MARKER = (
     "managed by chumicro-workspace library — edit via the library subcommands"
 )
 
-#: The two PyPI channels a curated library can track.
+#: The two libraries-channel snapshots a curated library can track.
+#: These name git channel repos, not PyPI projects:
+#: :func:`chumicro_workspace.library_channel.channel_repo` maps them to
+#: ``ChuMicro/ChuMicro-Libraries`` and its ``-Experimental`` sibling, and
+#: ``library add`` vendors a whole source tree from the snapshot tarball.
+#: A workspace does use PyPI, but for its host-side tooling in
+#: ``requirements.txt`` (``chumicro-workspace`` and friends), which is a
+#: separate channel pair this table says nothing about.
 VALID_CHANNELS = ("stable", "experimental")
 
 #: Channel a fresh workspace acquires from when the user does not pass
