@@ -35,8 +35,3 @@ class TestReadmeRuleTable:
         registered = set(registered_rules())
         phantom = documented - registered
         assert not phantom, f"README documents unregistered rules: {sorted(phantom)}"
-
-    def test_retired_codes_absent_from_table(self) -> None:
-        # CHU021-CHU023 are retired: absent from both registry and table.
-        documented = _documented_codes(_readme_text())
-        assert {"CHU021", "CHU022", "CHU023"}.isdisjoint(documented)

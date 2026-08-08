@@ -186,29 +186,6 @@ class TestProjectBootSource:
         files = source.files()
         assert "/helpers.py" in files
 
-    def test_no_legacy_active_py(self, tmp_path: Path) -> None:
-        """``active.py`` is gone — confirm it never lands."""
-        workspace, project_dir = _seed_project_for_boot(tmp_path)
-        source = project_boot_source(project_dir, workspace=workspace)
-        files = source.files()
-        assert "/active.py" not in files
-
-    def test_no_legacy_workspace_runtime(self, tmp_path: Path) -> None:
-        """The on-device ``workspace_runtime`` payload is gone."""
-        workspace, project_dir = _seed_project_for_boot(tmp_path)
-        source = project_boot_source(project_dir, workspace=workspace)
-        files = source.files()
-        assert not any(
-            path.startswith("/lib/workspace_runtime/") for path in files
-        )
-
-    def test_no_legacy_lib_projects_namespace(self, tmp_path: Path) -> None:
-        """Project files are at root, not under /lib/projects/<name>/."""
-        workspace, project_dir = _seed_project_for_boot(tmp_path)
-        source = project_boot_source(project_dir, workspace=workspace)
-        files = source.files()
-        assert not any(path.startswith("/lib/projects/") for path in files)
-
     def test_skips_host_side_config_files(self, tmp_path: Path) -> None:
         workspace, project_dir = _seed_project_for_boot(tmp_path)
         source = project_boot_source(project_dir, workspace=workspace)

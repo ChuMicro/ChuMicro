@@ -55,8 +55,7 @@ from pathlib import Path
 
 # Bundle repository names and mpy folder layout live in
 # ``scripts/bundle_layout`` so the producer (this module) and the
-# consumer (``validate_mip_install``) cannot drift.  Re-export the
-# names here for backward compatibility with existing call sites.
+# consumer (``validate_mip_install``) cannot drift.
 from bundle_layout import (
     CP_MPY_FOLDER,
     EXPERIMENTAL_BUNDLE_REPO,
