@@ -76,7 +76,7 @@ jobs:
       has_library_promotions: ${{ steps.validate.outputs.has_library_promotions }}
       has_docs_promotions: ${{ steps.validate.outputs.has_docs_promotions }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           # Full history AND tags: promote_matrix resolves each tag to the
           # commit the preflight gate checks out, and reads local refs to
@@ -126,7 +126,7 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJson(needs.validate.outputs.gate_commits) }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ matrix.commit }}
           fetch-depth: 0
@@ -190,7 +190,7 @@ jobs:
     environment: pypi
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-python@v6
         with:
@@ -271,7 +271,7 @@ jobs:
     env:
       MATRIX_JSON: ${{ needs.validate.outputs.library_matrix }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-python@v6
         with:
@@ -417,7 +417,7 @@ jobs:
     env:
       MATRIX_JSON: ${{ needs.validate.outputs.library_matrix }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-python@v6
         with:
@@ -471,7 +471,7 @@ jobs:
     env:
       MATRIX_JSON: ${{ needs.validate.outputs.matrix }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           # mike inspects existing version aliases on gh-pages.
           fetch-depth: 0
@@ -548,7 +548,7 @@ jobs:
     outputs:
       snapshot_tag: ${{ steps.stage.outputs.snapshot_tag }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-python@v6
         with:
@@ -600,7 +600,7 @@ jobs:
     env:
       MATRIX_JSON: ${{ needs.validate.outputs.library_matrix }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-python@v6
         with:

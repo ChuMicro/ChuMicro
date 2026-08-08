@@ -68,7 +68,7 @@ jobs:
       suffix: ${{ steps.channel.outputs.suffix }}
       bundle_repository: ${{ steps.channel.outputs.bundle_repository }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -120,7 +120,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -174,7 +174,7 @@ jobs:
     environment: pypi
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-python@v6
         with:
@@ -312,7 +312,7 @@ jobs:
       # ship to circup / mip.
       MATRIX_JSON: ${{ needs.detect.outputs.library_matrix }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-python@v6
         with:
@@ -475,7 +475,7 @@ jobs:
       # Same library-only filter as the bundle job.
       MATRIX_JSON: ${{ needs.detect.outputs.library_matrix }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-python@v6
         with:
@@ -536,7 +536,7 @@ jobs:
     outputs:
       snapshot_tag: ${{ steps.stage.outputs.snapshot_tag }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-python@v6
         with:
@@ -591,7 +591,7 @@ jobs:
     env:
       MATRIX_JSON: ${{ needs.detect.outputs.library_matrix }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-python@v6
         with:
