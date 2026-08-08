@@ -2,9 +2,15 @@
 
 Both ``bundle_manager`` (the producer) and ``validate_mip_install`` (the
 consumer) need to agree on where compiled bytecode lives in the bundle
-repos.  Keeping the constants in one module makes "add another mpy
-format version" (see plans/open-questions.md) a one-file change instead
-of grepping for string literals.
+repos.  Keeping the names here means nobody greps for string literals to
+find them.
+
+"Add another mpy format version" is not a one-file change, and this
+module used to claim it was.  Reading the bundle is covered: the
+validator iterates :func:`mpy_format_folders`, so a longer tuple
+validates the new folder on its own.  Writing it is bounded by the
+toolchain instead of by this file, because each folder needs its own
+pinned mpy-cross.  :func:`mpy_format_folders` carries the current split.
 
 See [Decision 0024](../plans/decisions/0024-mip-mpy-folder-serving.md)
 for the folder-naming scheme and the rationale for separate
@@ -44,9 +50,18 @@ def mpy_format_folders() -> tuple[str, ...]:
     """Return all supported MicroPython mpy-format folder names.
 
     Returns a single-element tuple today.  When the workspace gains
-    multi-mpy-version support (see plans/open-questions.md), this is
-    where the list expands.  Every consumer iterates over this tuple
-    instead of referencing :data:`MPY_FORMAT_FOLDER` directly.
+    multi-mpy-version support (Decision 0112), this is where the list
+    expands.
+
+    Consumers that *read* the bundle iterate this tuple, so a new folder
+    is covered without editing them: ``validate_mip_install`` validates
+    every entry it returns.  The producer is not symmetric and cannot be.
+    ``bundle_manager`` stages one folder per pinned mpy-cross binary, so
+    adding a format means pinning another compiler in
+    ``target-runtimes.toml`` and giving ``stage`` a second pass, not just
+    lengthening this tuple.  Within a pass every path and dependency
+    reference is threaded from the folder being staged, so the two ABI
+    generations cannot cross-reference each other's packages.
     """
     return (MPY_FORMAT_FOLDER,)
 

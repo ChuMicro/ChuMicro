@@ -54,7 +54,7 @@ import time
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 
-from bundle_layout import MPY_FORMAT_FOLDER as _MPY_FORMAT_FOLDER
+from bundle_layout import mpy_format_folders
 from repo_layout import (
     GITHUB_ORG,
     ROOT,
@@ -327,13 +327,20 @@ def validate_mip_install(
         else:
             failed_tests.append(f"{package_name} (py)")
 
-        # .mpy6 format (bytecode)
-        mpy_url = f"github:{GITHUB_ORG}/{bundle_repo}/{_MPY_FORMAT_FOLDER}/{package_name}"
-        total += 1
-        if _validate_single(resolved_binary, bundle_repo, library_name, "mpy6", mpy_url):
-            passed += 1
-        else:
-            failed_tests.append(f"{package_name} (mpy6)")
+        # Every live mpy format folder (bytecode).  One today; when an
+        # incompatible ABI lands the bundle carries the formats side by
+        # side (Decision 0112), and each one has to install on its own.
+        for mpy_folder in mpy_format_folders():
+            mpy_url = (
+                f"github:{GITHUB_ORG}/{bundle_repo}/{mpy_folder}/{package_name}"
+            )
+            total += 1
+            if _validate_single(
+                resolved_binary, bundle_repo, library_name, mpy_folder, mpy_url,
+            ):
+                passed += 1
+            else:
+                failed_tests.append(f"{package_name} ({mpy_folder})")
 
         print()
 
@@ -427,15 +434,17 @@ def validate_local_staging(
                 else:
                     failed_tests.append(f"{package_name} (py)")
 
-                # .mpy6 format (bytecode)
-                mpy_url = f"{base_url}/{_MPY_FORMAT_FOLDER}/{package_name}"
-                total += 1
-                if _validate_single(
-                    resolved_binary, "local", library_name, "mpy6", mpy_url,
-                ):
-                    passed += 1
-                else:
-                    failed_tests.append(f"{package_name} (mpy6)")
+                # Every live mpy format folder (bytecode), as above.
+                for mpy_folder in mpy_format_folders():
+                    mpy_url = f"{base_url}/{mpy_folder}/{package_name}"
+                    total += 1
+                    if _validate_single(
+                        resolved_binary, "local", library_name,
+                        mpy_folder, mpy_url,
+                    ):
+                        passed += 1
+                    else:
+                        failed_tests.append(f"{package_name} ({mpy_folder})")
 
                 print()
         finally:
