@@ -780,10 +780,14 @@ def _force_full_flush_to_media(drive_path: Path) -> None:
         )
         return
     try:
-        if _sys_module.platform == "darwin":
-            import fcntl
+        # Capability probe, not a platform check: F_FULLFSYNC exists on
+        # Darwin's fcntl and nowhere else, and probing the attribute
+        # keeps this import-safe on every POSIX host CI runs on.
+        import fcntl
+        full_fsync_command = getattr(fcntl, "F_FULLFSYNC", None)
+        if full_fsync_command is not None:
             try:
-                fcntl.fcntl(descriptor, fcntl.F_FULLFSYNC)
+                fcntl.fcntl(descriptor, full_fsync_command)
                 return
             except OSError:
                 pass
