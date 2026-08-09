@@ -2182,6 +2182,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#chumicro_deploy.flash_drive.FatVolumeCorruptionError" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        FatVolumeCorruptionError
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#chumicro_deploy.flash_drive.compute_rsync_timeout_seconds" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -2219,6 +2230,28 @@
     <span class="md-ellipsis">
       <span class="md-typeset">
         verify_rsync
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_deploy.flash_drive.format_fat_corruption_error" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        format_fat_corruption_error
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_deploy.flash_drive.scan_for_torn_directory_entries" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        scan_for_torn_directory_entries
       </span>
     </span>
   </a>
@@ -4587,6 +4620,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#chumicro_deploy.flash_drive.FatVolumeCorruptionError" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        FatVolumeCorruptionError
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#chumicro_deploy.flash_drive.compute_rsync_timeout_seconds" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -4624,6 +4668,28 @@
     <span class="md-ellipsis">
       <span class="md-typeset">
         verify_rsync
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_deploy.flash_drive.format_fat_corruption_error" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        format_fat_corruption_error
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_deploy.flash_drive.scan_for_torn_directory_entries" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        scan_for_torn_directory_entries
       </span>
     </span>
   </a>
@@ -13102,9 +13168,11 @@ never blocks the real test run.</p>
     <div class="doc doc-contents ">
 
         <p>Soft-reset the interpreter and re-enter raw REPL.</p>
-<p>Exits raw REPL (Ctrl-B), sends Ctrl-D to trigger a soft reboot
-(which clears <code>sys.modules</code> and all interpreter state), waits
-for the reboot to complete, then re-enters raw REPL.</p>
+<p>Flushes any host-cached FAT writes to the CIRCUITPY volume
+(flash mode only), exits raw REPL (Ctrl-B), sends Ctrl-D to
+trigger a soft reboot (which clears <code>sys.modules</code> and all
+interpreter state), waits for the reboot to complete, then
+re-enters raw REPL.</p>
 <p>Leaves the interpreter clean, with previous modules evicted
 from RAM.</p>
 
@@ -13983,6 +14051,86 @@ an injected sleep callable so tests can skip the real settle delay.</p>
 
 </div>
 
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="chumicro_deploy.flash_drive.FatVolumeCorruptionError" class="doc doc-heading">
+            <code>FatVolumeCorruptionError</code>
+
+
+<a href="#chumicro_deploy.flash_drive.FatVolumeCorruptionError" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+            <p class="doc doc-class-bases">
+              Bases: <code><a class="autorefs autorefs-internal" href="./#chumicro_deploy.flash_drive.FlashDriveError">FlashDriveError</a></code></p>
+
+
+
+        <p>Raised when a FAT volume carries torn directory entries.</p>
+<p>A torn entry is one the host can list via <code>readdir</code> but whose
+<code>stat</code> fails with <code>EINVAL</code> and which cannot be unlinked, the
+state a FAT directory is left in when cached host-side metadata
+writes land across a board reset.  The volume cannot be repaired
+in place; recovery is a full board-filesystem reformat.</p>
+
+
+<p><span class="doc-section-title">Attributes:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td><code><span title="chumicro_deploy.flash_drive.FatVolumeCorruptionError.corrupted_paths">corrupted_paths</span></code></td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Volume-relative paths of the torn entries,
+as enumerated by :func:<code>scan_for_torn_directory_entries</code>.
+May be empty when only rsync's stderr identified the
+corruption.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
 
 <div class="doc doc-object doc-function">
 
@@ -14480,6 +14628,204 @@ shows up in stdout, not as a non-zero exit).</p>
 <div class="doc doc-object doc-function">
 
 
+<h3 id="chumicro_deploy.flash_drive.format_fat_corruption_error" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">format_fat_corruption_error</span><span class="p">(</span><span class="n">drive_path</span><span class="p">,</span> <span class="n">corrupted_paths</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="s1">&#39;&#39;</span><span class="p">)</span></code>
+
+<a href="#chumicro_deploy.flash_drive.format_fat_corruption_error" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Build the single actionable message for a torn-FAT volume.</p>
+<p>Names every corrupted path plus the one recovery command that
+works, so a sweep fails once with instructions instead of every
+test failing with repeated rsync stderr noise.  The lead phrase
+<code>FAT directory entries</code> is load-bearing: the recovery
+classifier's <code>FAT_VOLUME_CORRUPT</code> pattern matches on it, so
+reword only together with the matching pattern in <code>recovery.py</code>.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>drive_path</code>
+            </td>
+            <td>
+                  <code><span title="pathlib.Path">Path</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Mount point of the corrupted volume.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>corrupted_paths</code>
+            </td>
+            <td>
+                  <code><span title="collections.abc.Iterable">Iterable</span>[<span title="str">str</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Volume-relative paths of the torn entries.
+May be empty when only rsync stderr identified the state.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>detail</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional raw diagnostic (typically rsync stderr) to
+embed for the report.</p>
+              </div>
+            </td>
+            <td>
+                  <code>&#39;&#39;</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="chumicro_deploy.flash_drive.scan_for_torn_directory_entries" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">scan_for_torn_directory_entries</span><span class="p">(</span><span class="n">drive_path</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">scandir</span><span class="o">=</span><span class="n">os</span><span class="o">.</span><span class="n">scandir</span><span class="p">)</span></code>
+
+<a href="#chumicro_deploy.flash_drive.scan_for_torn_directory_entries" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Stat every entry under <em>drive_path</em> and collect EINVAL casualties.</p>
+<p>Walks the volume with <code>scandir</code> and calls <code>stat</code> on each entry.
+A healthy entry stats cleanly; a torn FAT directory entry is
+listed by <code>readdir</code> but fails <code>stat</code> with <code>EINVAL</code>, so any
+<code>EINVAL</code> here is the corruption signature.  Directories whose
+own listing fails with <code>EINVAL</code> are recorded the same way.
+Other per-entry <code>OSError</code> values (a file deleted mid-walk, a
+kernel-locked macOS noise directory) are skipped: they are not
+the torn-entry state this scan exists to find.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>drive_path</code>
+            </td>
+            <td>
+                  <code><span title="pathlib.Path">Path</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Mount point to walk.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>scandir</code>
+            </td>
+            <td>
+                  <code><span title="collections.abc.Callable">Callable</span>[[<span title="pathlib.Path">Path</span>], <span title="collections.abc.Iterable">Iterable</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Directory-listing callable, <code>os.scandir</code> by
+default.  Injectable so tests can model the torn-entry
+behavior (<code>readdir</code> succeeds, <code>stat</code> raises
+<code>EINVAL</code>) without a real corrupted FAT volume.</p>
+              </div>
+            </td>
+            <td>
+                  <code><span title="os.scandir">scandir</span></code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="list">list</span>[<span title="str">str</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Sorted volume-relative paths of every torn entry.  Empty on a</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="list">list</span>[<span title="str">str</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>healthy volume.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
 <h3 id="chumicro_deploy.flash_drive.strip_extended_attributes" class="doc doc-heading">
             <code class="highlight language-python"><span class="n">strip_extended_attributes</span><span class="p">(</span><span class="n">path</span><span class="p">)</span></code>
 
@@ -14710,9 +15056,16 @@ no-op.</p>
     <div class="doc doc-contents ">
 
         <p>Flush pending writes to the volume containing <em>drive_path</em>.</p>
-<p>On macOS, calls the <code>sync</code> command; on other platforms, uses
-<code>os.sync()</code>.  Always waits briefly afterward to let the USB
-controller finish writing to FAT32 media.</p>
+<p>Three layers, weakest to strongest: the <code>sync</code> command (or
+<code>os.sync()</code> off macOS) schedules every volume's dirty buffers;
+<code>F_FULLFSYNC</code> on the mount point (via
+:func:<code>_force_full_flush_to_media</code>) waits until this volume's
+writes have actually reached the medium; the settle delay gives
+the board's USB-MSC controller time to finish its own FAT
+bookkeeping.  All three must have completed before anything
+resets the board, because a reset that lands while host-side FAT
+metadata is still cached can tear directory entries into an
+unreadable, undeletable state.</p>
 <p>The settle delay goes through the injected <em>sleep</em> callable so
 tests can use a fake time source to skip it without sleeping
 for real.</p>
