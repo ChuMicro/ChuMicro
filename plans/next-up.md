@@ -4,7 +4,7 @@
 
 ## Now
 
-- [ ] **Public repo mode — process flip landed on the `public-repo-mode` branch, settings flips pending (user call 2026-08-09).**  [workstreams/public-repo-mode.md](workstreams/public-repo-mode.md) — Decision 0120 (main is PR-only), workflow least-privilege + SHA pins, `@claude /review`, maintainer runbook, and the contributor-docs updates ride one PR; the one-time maintainer settings flips (ruleset bypass to PR-mode, Actions default to read, fork-PR approval to all outside collaborators, pypi environment branch policy, `ANTHROPIC_API_KEY` with a spend cap) are listed in the workstream and the PR body.
+- [ ] **Public repo mode — process and settings BOTH LANDED 2026-08-09; punch list remains.**  [workstreams/public-repo-mode.md](workstreams/public-repo-mode.md) — PR #11 merged (Decision 0120 main-is-PR-only, workflow least-privilege + SHA pins, `@claude /review`, maintainer runbook, contributor-docs updates), and the five settings flips are done and verified: ruleset bypass actors to PR-mode, workflow-token default back to read, fork-PR CI approval for all outside collaborators, pypi environment restricted to main, and private vulnerability reporting ENABLED (found disabled while flipping — SECURITY.md's only reporting channel pointed at a switched-off feature).  `ANTHROPIC_API_KEY` verified live: the first `@claude /review` ran end to end on PR #14 and its findings were applied there.  Dependabot #7/#9 closed as superseded by #11's SHA pins.  Open: the workstream punch list (changelogs, py.typed, labeler, provenance, chunraid hardware lane someday) and the repo-level require-SHA-pinning setting.
 
 ## Next
 
