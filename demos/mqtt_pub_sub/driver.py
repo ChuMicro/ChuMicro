@@ -24,13 +24,11 @@ import shutil
 import socket
 import subprocess
 import sys
-import tempfile
 import time
 from pathlib import Path
 
 from chumicro_mqtt import MQTTClient, ProtocolState
-from chumicro_pytest_device.fixtures.lan import detect_lan_ip
-from chumicro_pytest_device.fixtures.mosquitto import start_mosquitto_broker
+from chumicro_pytest_device.fixtures.mosquitto import provision_lan_broker
 from chumicro_timing import ticks_ms
 from chumicro_workspace.deploy_api import (
     DeployApiError,
@@ -51,33 +49,6 @@ _BOARD_CLIENT_ID = "chumicro-mqtt-demo-board"
 #: differ from the board's so the broker doesn't kick one of them off
 #: on the duplicate-client-id rule.
 _HOST_CLIENT_ID = "chumicro-mqtt-demo-driver"
-
-
-def _resolve_broker() -> tuple[subprocess.Popen[bytes], Path, str, int]:
-    """Spin up Mosquitto bound to the host's LAN IP, return the handle."""
-    if shutil.which("mosquitto") is None:
-        raise SystemExit(
-            "driver: `mosquitto` is not on PATH.  Install it "
-            "(`brew install mosquitto` / `apt install mosquitto`) so the "
-            "demo can run a broker locally for the board to reach over wifi.",
-        )
-    lan_ip = detect_lan_ip()
-    if lan_ip is None:
-        raise SystemExit(
-            "driver: couldn't detect a LAN IP: the board needs an "
-            "address it can reach over wifi.  Check that the host is "
-            "connected to the same network the board will join.",
-        )
-    workdir = Path(tempfile.mkdtemp(prefix="chumicro_mqtt_demo_broker_"))
-    broker = start_mosquitto_broker(lan_ip, workdir)
-    if broker is None:
-        shutil.rmtree(workdir, ignore_errors=True)
-        raise SystemExit(
-            f"driver: failed to start mosquitto on {lan_ip}.  Check "
-            f"{workdir}/broker.log for the broker's own output.",
-        )
-    process, port = broker
-    return process, workdir, lan_ip, port
 
 
 def _new_host_client(broker_host: str, broker_port: int) -> MQTTClient:
@@ -104,31 +75,13 @@ def _drive_host(client: MQTTClient, predicate, *, timeout_s: float) -> bool:
     return True
 
 
-def _await_marker_while_driving_host(
-    session, host_client: MQTTClient, marker_name: str, *, timeout_s: float,
-):
-    """Wait for *marker_name* while keeping the host MQTT client ticking.
-
-    The marker queue's wait_for is a blocking get; if the host MQTT
-    client doesn't tick during that wait, its inbound stream stalls and
-    later publishes (e.g. the board's QoS 1 telemetry) are missed.
-    ``MarkerQueue.poll`` checks without blocking, so the loop ticks the
-    host client between polls until the marker arrives or the timeout
-    fires.
-    """
-    deadline = time.monotonic() + timeout_s
-    while True:
-        marker = session.runner.marker_queue.poll(marker_name)
-        if marker is not None:
-            return marker
-        if time.monotonic() >= deadline:
-            raise MarkerTimeoutError(
-                f"driver: timed out after {timeout_s:.1f}s waiting for "
-                f"marker {marker_name!r}",
-            )
-        if host_client.check(ticks_ms()):
-            host_client.handle(ticks_ms())
-        time.sleep(0.02)
+def _reactor_pump(client: MQTTClient):
+    """One-tick pump for ``session.wait_for(pump=...)``: keeps the host
+    MQTT client's inbound stream draining while a marker wait blocks."""
+    def pump() -> None:
+        if client.check(ticks_ms()):
+            client.handle(ticks_ms())
+    return pump
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -163,7 +116,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    broker_process, broker_workdir, broker_host, broker_port = _resolve_broker()
+    try:
+        broker_process, broker_workdir, broker_host, broker_port = (
+            provision_lan_broker(workdir_prefix="chumicro_mqtt_demo_broker_")
+        )
+    except RuntimeError as broker_error:
+        raise SystemExit(f"driver: {broker_error}") from broker_error
     print(f"driver: started mosquitto on {broker_host}:{broker_port}")
 
     session = None
@@ -252,9 +210,9 @@ def main(argv: list[str] | None = None) -> int:
             f"driver: waiting for board MQTT_CONNECTED "
             f"(up to {args.connect_timeout_s}s)...",
         )
-        connected_marker = _await_marker_while_driving_host(
-            session, host_client, "MQTT_CONNECTED",
-            timeout_s=args.connect_timeout_s,
+        pump = _reactor_pump(host_client)
+        connected_marker = session.wait_for(
+            "MQTT_CONNECTED", timeout_s=args.connect_timeout_s, pump=pump,
         )
         print(
             f"driver: board MQTT_CONNECTED "
@@ -266,9 +224,7 @@ def main(argv: list[str] | None = None) -> int:
         # subscriber sees the retained payload on SUBACK (the state
         # subscribe below deliberately happens AFTER this marker: it
         # pins retained-delivery-on-SUBACK semantics).
-        _await_marker_while_driving_host(
-            session, host_client, "RETAINED_STATE_SENT", timeout_s=15.0,
-        )
+        session.wait_for("RETAINED_STATE_SENT", timeout_s=15.0, pump=pump)
 
         state_subscribed = [False]
         host_client.subscribe(
@@ -296,9 +252,7 @@ def main(argv: list[str] | None = None) -> int:
             return 4
 
         # Board prints SUBSCRIBED after its own SUBACK lands.
-        _await_marker_while_driving_host(
-            session, host_client, "SUBSCRIBED", timeout_s=15.0,
-        )
+        session.wait_for("SUBSCRIBED", timeout_s=15.0, pump=pump)
 
         command_topic = f"demo/{_BOARD_CLIENT_ID}/cmd"
         command_acked = [False]
@@ -320,9 +274,7 @@ def main(argv: list[str] | None = None) -> int:
         )
 
         # The board's on_message fires when the command lands.
-        _await_marker_while_driving_host(
-            session, host_client, "CMD_RECEIVED", timeout_s=15.0,
-        )
+        session.wait_for("CMD_RECEIVED", timeout_s=15.0, pump=pump)
 
         # Drive host until all three telemetry samples have arrived.
         if not _drive_host(
@@ -337,9 +289,8 @@ def main(argv: list[str] | None = None) -> int:
             return 7
         print(f"driver: telemetry {len(telemetry_received)}/3 received")
 
-        _await_marker_while_driving_host(
-            session, host_client, "DEMO_COMPLETE",
-            timeout_s=args.completion_timeout_s,
+        session.wait_for(
+            "DEMO_COMPLETE", timeout_s=args.completion_timeout_s, pump=pump,
         )
 
         print("driver: demo completed cleanly.")

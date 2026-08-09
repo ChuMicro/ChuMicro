@@ -36,6 +36,7 @@ classifiers = [
 test = [
     "pytest",
     "chumicro-test-harness",
+    "chumicro-runner",
     "chumicro-pytest-device",
     "chumicro-workspace",
     "chumicro-requests",

@@ -34,8 +34,9 @@ from chumicro_sockets import connector
 # One connect state machine per runtime.  Runner-shaped apps register
 # the connector with the runner (it exposes check / handle / io_*);
 # one-shot scripts drive it to terminal inline.  On CircuitPython pass
-# radio=wifi.radio; the kwarg is ignored on MicroPython / CPython.
-dial = connector("broker.example.com", 1883, radio=wifi.radio)
+# the board radio (with chumicro-wifi, radio=wifi.adapter.radio); the
+# kwarg is ignored on MicroPython / CPython.
+dial = connector("broker.example.com", 1883, radio=None)
 while dial.state not in ("ready", "failed"):
     dial.tick(0)
 if dial.state == "failed":
@@ -56,7 +57,7 @@ sock.close()
 dial = connector("api.example.com", 443, tls=True)
 ```
 
-> **CircuitPython** always needs an explicit `radio=`.  The socketpool is built from it (`socketpool.SocketPool(radio)`).  Pass `wifi.radio`, or whatever radio object your board exposes.  MicroPython and CPython ignore the kwarg.
+> **CircuitPython** always needs an explicit `radio=`.  The socketpool is built from it (`socketpool.SocketPool(radio)`).  Pass `wifi.adapter.radio` from a `chumicro-wifi` `WifiService`, or whatever radio object your board exposes.  MicroPython and CPython ignore the kwarg.
 
 For tests, `chumicro_sockets.testing.FakeSocket` implements the same
 protocol against in-memory bytearrays, so downstream libraries
@@ -81,7 +82,7 @@ handling without hitting the network.
 
 ## Where this fits
 
-No runtime dependencies.  On CircuitPython the caller passes a radio (e.g. `wifi.radio`, or `chumicro-wifi`'s adapter radio) from which the socketpool is built.  Substrate for every networked library that follows: [`chumicro-requests`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/requests), [`chumicro-http-server`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/http_server), [`chumicro-mqtt`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/mqtt), [`chumicro-websockets`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/websockets), and [`chumicro-ntp`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/ntp).
+No runtime dependencies.  On CircuitPython the caller passes a radio (`wifi.adapter.radio` from a `chumicro-wifi` `WifiService`, or any radio object the board exposes) from which the socketpool is built.  Substrate for every networked library that follows: [`chumicro-requests`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/requests), [`chumicro-http-server`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/http_server), [`chumicro-mqtt`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/mqtt), [`chumicro-websockets`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/websockets), and [`chumicro-ntp`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/ntp).
 
 ## Platform support
 
@@ -91,7 +92,7 @@ Works on CPython, MicroPython, and CircuitPython.
 
 | Example | What it shows |
 |---|---|
-| [`tcp_roundtrip.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/sockets/examples/tcp_roundtrip.py) | Real TCP connect → send → recv → close.  Same shape on every runtime; pass `radio=wifi.radio` on CircuitPython. |
+| [`tcp_roundtrip.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/sockets/examples/tcp_roundtrip.py) | Real TCP connect → send → recv → close.  Same shape on every runtime; pass the board radio via `radio=` on CircuitPython. |
 | [`tls_with_custom_ca.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/sockets/examples/tls_with_custom_ca.py) | Custom-CA TLS via `ssl_context_with_ca`.  Documents the substrate quirks observed on Pi Pico W mbedTLS in the docstring. |
 | [`udp_echo_client.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/sockets/examples/udp_echo_client.py) | Board-side UDP echo client: wifi up, send datagram to a host echo server, read echo back, non-blocking.  Cross-runtime (CP + MP). |
 

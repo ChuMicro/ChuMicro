@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import errno
 import subprocess
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 from chumicro_deploy import flash_drive
-from chumicro_deploy.flash_drive import FlashDriveError
+from chumicro_deploy.flash_drive import FatVolumeCorruptionError, FlashDriveError
 
 
 class TestMergePackages:
@@ -373,6 +374,276 @@ class TestRsync:
         assert "--exclude=settings.toml" not in captured[0]
 
 
+class TestRsyncCorruptionClassification:
+    """Tests for the EINVAL-in-stderr corruption classification.
+
+    ``rsync`` / ``verify_rsync`` run fixed command lines, so an
+    ``Invalid argument`` in stderr is the torn-FAT-entry signature
+    (macOS renders a failed ``fstatat`` on a torn directory entry
+    that way), not a flag problem.
+    """
+
+    def test_rsync_invalid_argument_raises_corruption_error(
+        self, tmp_path: Path,
+    ) -> None:
+        """`fstatat: Invalid argument` in rsync stderr raises the
+        FatVolumeCorruptionError with the reset-board recovery command.
+        """
+        source = tmp_path / "source"
+        source.mkdir()
+        destination = tmp_path / "destination"
+        destination.mkdir()
+
+        with patch(
+            "chumicro_deploy.flash_drive.subprocess.run",
+            side_effect=subprocess.CalledProcessError(
+                23, "rsync",
+                stderr=(
+                    'rsync: [sender] link_stat '
+                    '"/Volumes/CIRCUITPY/lib/chumicro_config/section.py" '
+                    "failed: Invalid argument (22)"
+                ),
+            ),
+        ):
+            with pytest.raises(FatVolumeCorruptionError) as exc_info:
+                flash_drive.rsync(source, destination)
+        message = str(exc_info.value)
+        assert "FAT directory entries" in message
+        assert "reset-board" in message
+
+    def test_verify_rsync_invalid_argument_raises_corruption_error(
+        self, tmp_path: Path,
+    ) -> None:
+        """The verification dry-run classifies the same EINVAL signature."""
+        source = tmp_path / "source"
+        source.mkdir()
+        destination = tmp_path / "destination"
+        destination.mkdir()
+
+        with patch(
+            "chumicro_deploy.flash_drive.subprocess.run",
+            side_effect=subprocess.CalledProcessError(
+                23, "rsync", stderr="rsync: fstatat: Invalid argument",
+            ),
+        ):
+            with pytest.raises(FatVolumeCorruptionError) as exc_info:
+                flash_drive.verify_rsync(source, destination)
+        assert "reset-board" in str(exc_info.value)
+
+    def test_corruption_error_names_scanned_paths(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """The corruption error enumerates the torn entries the
+        post-failure stat sweep found and carries them on the
+        ``corrupted_paths`` attribute.
+        """
+        source = tmp_path / "source"
+        source.mkdir()
+        destination = tmp_path / "destination"
+        destination.mkdir()
+        monkeypatch.setattr(
+            "chumicro_deploy.flash_drive.scan_for_torn_directory_entries",
+            lambda _drive_path: ["lib/chumicro_config/section.py"],
+        )
+
+        with patch(
+            "chumicro_deploy.flash_drive.subprocess.run",
+            side_effect=subprocess.CalledProcessError(
+                23, "rsync", stderr="rsync: fstatat: Invalid argument",
+            ),
+        ):
+            with pytest.raises(FatVolumeCorruptionError) as exc_info:
+                flash_drive.rsync(source, destination)
+        assert "lib/chumicro_config/section.py" in str(exc_info.value)
+        assert exc_info.value.corrupted_paths == (
+            "lib/chumicro_config/section.py",
+        )
+
+    def test_non_einval_stderr_keeps_generic_error(
+        self, tmp_path: Path,
+    ) -> None:
+        """Other rsync failures still raise the plain FlashDriveError."""
+        source = tmp_path / "source"
+        source.mkdir()
+        destination = tmp_path / "destination"
+        destination.mkdir()
+
+        with patch(
+            "chumicro_deploy.flash_drive.subprocess.run",
+            side_effect=subprocess.CalledProcessError(
+                23, "rsync", stderr="No space left on device",
+            ),
+        ):
+            with pytest.raises(FlashDriveError) as exc_info:
+                flash_drive.rsync(source, destination)
+        assert not isinstance(exc_info.value, FatVolumeCorruptionError)
+        assert "rsync failed" in str(exc_info.value)
+
+
+class _FakeTornDirEntry:
+    """``os.DirEntry`` stand-in modeling msdosfs torn-entry behavior.
+
+    A torn FAT directory entry is listed by ``readdir`` (so the entry
+    object exists) but every ``stat`` on it fails with the configured
+    error, exactly how macOS surfaces the corruption
+    (``fstatat: Invalid argument``).  A healthy entry stats cleanly.
+    """
+
+    def __init__(
+        self,
+        path: Path,
+        *,
+        is_directory: bool = False,
+        stat_error: OSError | None = None,
+    ) -> None:
+        self.path = str(path)
+        self.name = path.name
+        self._is_directory = is_directory
+        self._stat_error = stat_error
+
+    def stat(self, *, follow_symlinks: bool = True) -> object:
+        if self._stat_error is not None:
+            raise self._stat_error
+        return object()
+
+    def is_dir(self, *, follow_symlinks: bool = True) -> bool:
+        if self._stat_error is not None:
+            raise self._stat_error
+        return self._is_directory
+
+
+def _fake_scandir_for(tree: dict[str, list | OSError]):
+    """Build a scandir fake over *tree* (str(dir) -> entries | OSError)."""
+
+    def fake_scandir(directory: Path) -> list:
+        listing = tree[str(directory)]
+        if isinstance(listing, OSError):
+            raise listing
+        return listing
+
+    return fake_scandir
+
+
+class TestScanForTornDirectoryEntries:
+    """Tests for flash_drive.scan_for_torn_directory_entries."""
+
+    def test_healthy_tree_returns_empty(self, tmp_path: Path) -> None:
+        """A stat-able tree (real os.scandir) reports no torn entries."""
+        (tmp_path / "code.py").write_bytes(b"pass")
+        nested = tmp_path / "lib" / "pkg"
+        nested.mkdir(parents=True)
+        (nested / "module.py").write_bytes(b"X = 1")
+
+        assert flash_drive.scan_for_torn_directory_entries(tmp_path) == []
+
+    def test_torn_file_entry_is_reported(self, tmp_path: Path) -> None:
+        """An entry whose stat raises EINVAL lands in the report."""
+        einval = OSError(errno.EINVAL, "Invalid argument")
+        tree = {
+            str(tmp_path): [
+                _FakeTornDirEntry(tmp_path / "code.py"),
+                _FakeTornDirEntry(tmp_path / "broken.py", stat_error=einval),
+            ],
+        }
+
+        torn = flash_drive.scan_for_torn_directory_entries(
+            tmp_path, scandir=_fake_scandir_for(tree),
+        )
+        assert torn == ["broken.py"]
+
+    def test_nested_torn_entry_reports_relative_path(
+        self, tmp_path: Path,
+    ) -> None:
+        """The walk descends into healthy directories and reports the
+        torn entry's volume-relative path.
+        """
+        einval = OSError(errno.EINVAL, "Invalid argument")
+        lib_directory = tmp_path / "lib"
+        package_directory = lib_directory / "chumicro_config"
+        tree = {
+            str(tmp_path): [
+                _FakeTornDirEntry(lib_directory, is_directory=True),
+            ],
+            str(lib_directory): [
+                _FakeTornDirEntry(package_directory, is_directory=True),
+            ],
+            str(package_directory): [
+                _FakeTornDirEntry(
+                    package_directory / "section.py", stat_error=einval,
+                ),
+            ],
+        }
+
+        torn = flash_drive.scan_for_torn_directory_entries(
+            tmp_path, scandir=_fake_scandir_for(tree),
+        )
+        assert torn == ["lib/chumicro_config/section.py"]
+
+    def test_non_einval_errors_are_skipped(self, tmp_path: Path) -> None:
+        """A file deleted mid-walk (ENOENT) is not a torn entry."""
+        enoent = OSError(errno.ENOENT, "No such file or directory")
+        tree = {
+            str(tmp_path): [
+                _FakeTornDirEntry(tmp_path / "raced.py", stat_error=enoent),
+            ],
+        }
+
+        torn = flash_drive.scan_for_torn_directory_entries(
+            tmp_path, scandir=_fake_scandir_for(tree),
+        )
+        assert torn == []
+
+    def test_directory_whose_listing_einvals_is_reported(
+        self, tmp_path: Path,
+    ) -> None:
+        """A directory that stats cleanly but cannot be listed (EINVAL)
+        is itself reported as torn.
+        """
+        einval = OSError(errno.EINVAL, "Invalid argument")
+        broken_directory = tmp_path / "lib"
+        tree = {
+            str(tmp_path): [
+                _FakeTornDirEntry(broken_directory, is_directory=True),
+            ],
+            str(broken_directory): einval,
+        }
+
+        torn = flash_drive.scan_for_torn_directory_entries(
+            tmp_path, scandir=_fake_scandir_for(tree),
+        )
+        assert torn == ["lib"]
+
+
+class TestFormatFatCorruptionError:
+    """Tests for flash_drive.format_fat_corruption_error."""
+
+    def test_names_paths_recovery_command_and_classifier_phrase(
+        self, tmp_path: Path,
+    ) -> None:
+        """The message carries the torn paths, the reset-board command,
+        and the ``FAT directory entries`` phrase the recovery
+        classifier matches on.
+        """
+        message = flash_drive.format_fat_corruption_error(
+            tmp_path,
+            ["lib/chumicro_config/section.py", "lib/chumicro_mqtt/_wire.py"],
+            detail="rsync: fstatat: Invalid argument",
+        )
+        assert "FAT directory entries" in message
+        assert "lib/chumicro_config/section.py" in message
+        assert "lib/chumicro_mqtt/_wire.py" in message
+        assert "rsync: fstatat: Invalid argument" in message
+        assert "chumicro-workspace reset-board --device <id> --yes" in message
+
+    def test_empty_path_list_still_actionable(self, tmp_path: Path) -> None:
+        """No enumerable paths (stderr-only detection) still yields the
+        recovery command and the classifier phrase.
+        """
+        message = flash_drive.format_fat_corruption_error(tmp_path, [])
+        assert "FAT directory entries" in message
+        assert "reset-board" in message
+
+
 class TestVerifyRsync:
     """Tests for flash_drive.verify_rsync."""
 
@@ -729,6 +1000,94 @@ class TestFlushVolume:
             )
 
         assert sleep_durations == [0.123]
+
+    def test_full_fsync_barrier_on_darwin(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """On macOS, flush_volume issues F_FULLFSYNC on the mount point.
+
+        ``sync`` alone only schedules the flush (``sync(2)`` may return
+        before the buffers are written); the F_FULLFSYNC barrier is
+        what guarantees no dirty FAT metadata is outstanding when a
+        board reset lands.
+        """
+        import fcntl
+
+        monkeypatch.setattr(
+            "chumicro_deploy.flash_drive._sys_module.platform",
+            "darwin",
+        )
+        fcntl_calls: list[int] = []
+
+        def recording_fcntl(descriptor: int, command: int, *args: object) -> int:
+            fcntl_calls.append(command)
+            return 0
+
+        monkeypatch.setattr("fcntl.fcntl", recording_fcntl)
+        with patch(
+            "chumicro_deploy.flash_drive.subprocess.run",
+            side_effect=lambda command, **kwargs: subprocess.CompletedProcess(
+                args=command, returncode=0,
+            ),
+        ):
+            flash_drive.flush_volume(tmp_path, sleep=lambda _seconds: None)
+
+        assert fcntl_calls == [fcntl.F_FULLFSYNC]
+
+    def test_full_fsync_falls_back_to_fsync(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A filesystem without F_FULLFSYNC support falls back to os.fsync."""
+        monkeypatch.setattr(
+            "chumicro_deploy.flash_drive._sys_module.platform",
+            "darwin",
+        )
+
+        def unsupported_fcntl(
+            descriptor: int, command: int, *args: object,
+        ) -> int:
+            raise OSError(errno.EINVAL, "F_FULLFSYNC unsupported")
+
+        monkeypatch.setattr("fcntl.fcntl", unsupported_fcntl)
+        fsync_descriptors: list[int] = []
+        monkeypatch.setattr(
+            "chumicro_deploy.flash_drive.os.fsync",
+            fsync_descriptors.append,
+        )
+        with patch(
+            "chumicro_deploy.flash_drive.subprocess.run",
+            side_effect=lambda command, **kwargs: subprocess.CompletedProcess(
+                args=command, returncode=0,
+            ),
+        ):
+            flash_drive.flush_volume(tmp_path, sleep=lambda _seconds: None)
+
+        assert len(fsync_descriptors) == 1
+
+    def test_unopenable_drive_path_warns_and_continues(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """A mount that vanished before the barrier degrades to
+        sync + settle with a warning instead of failing the deploy.
+        """
+        monkeypatch.setattr(
+            "chumicro_deploy.flash_drive._sys_module.platform",
+            "darwin",
+        )
+        sleep_durations: list[float] = []
+        with patch(
+            "chumicro_deploy.flash_drive.subprocess.run",
+            side_effect=lambda command, **kwargs: subprocess.CompletedProcess(
+                args=command, returncode=0,
+            ),
+        ):
+            flash_drive.flush_volume(
+                tmp_path / "GONE", sleep=sleep_durations.append,
+            )
+
+        assert sleep_durations == [flash_drive.FLUSH_SETTLE_DELAY]
+        assert "full flush" in capsys.readouterr().out
 
 
 class TestMetadataHelpersHaveTimeouts:

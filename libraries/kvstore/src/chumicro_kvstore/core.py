@@ -25,7 +25,7 @@ class Backend:
     name: str = "base"
     capacity: int = 0
 
-    def load(self) -> bytes:
+    def load(self) -> bytes | bytearray:
         raise NotImplementedError
 
     def save(self, payload: bytes) -> None:

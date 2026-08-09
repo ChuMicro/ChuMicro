@@ -9,8 +9,8 @@ Three entry points cover the shapes a device needs: `connector` dials out, `list
 ```python
 from chumicro_sockets import connector
 
-# CircuitPython needs the board radio: import the built-in wifi module and
-# pass radio=wifi.radio.  MicroPython and CPython ignore the argument.
+# CircuitPython needs the board radio: with chumicro-wifi, pass
+# radio=wifi.adapter.radio.  MicroPython and CPython ignore the argument.
 dial = connector("broker.example.com", 1883, radio=None)
 while dial.state not in ("ready", "failed"):  # or register with a runner
     dial.tick(0)

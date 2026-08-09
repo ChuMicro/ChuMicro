@@ -39,13 +39,11 @@ import shutil
 import socket
 import subprocess
 import sys
-import tempfile
 import time
 from pathlib import Path
 
 from chumicro_mqtt import MQTTClient, ProtocolState
-from chumicro_pytest_device.fixtures.lan import detect_lan_ip
-from chumicro_pytest_device.fixtures.mosquitto import start_mosquitto_broker
+from chumicro_pytest_device.fixtures.mosquitto import provision_lan_broker
 from chumicro_timing import ticks_ms
 from chumicro_workspace.deploy_api import (
     DeployApiError,
@@ -75,33 +73,6 @@ _CELSIUS_MIN = -40.0
 _CELSIUS_MAX = 125.0
 
 
-def _resolve_broker() -> tuple[subprocess.Popen[bytes], Path, str, int]:
-    """Spin up Mosquitto bound to the host's LAN IP, return the handle."""
-    if shutil.which("mosquitto") is None:
-        raise SystemExit(
-            "driver: `mosquitto` is not on PATH.  Install it "
-            "(`brew install mosquitto` / `apt install mosquitto`) so the "
-            "demo can run a broker locally for the board to reach over wifi.",
-        )
-    lan_ip = detect_lan_ip()
-    if lan_ip is None:
-        raise SystemExit(
-            "driver: couldn't detect a LAN IP: the board needs an "
-            "address it can reach over wifi.  Check that the host is "
-            "connected to the same network the board will join.",
-        )
-    workdir = Path(tempfile.mkdtemp(prefix="chumicro_sensor_motor_broker_"))
-    broker = start_mosquitto_broker(lan_ip, workdir)
-    if broker is None:
-        shutil.rmtree(workdir, ignore_errors=True)
-        raise SystemExit(
-            f"driver: failed to start mosquitto on {lan_ip}.  Check "
-            f"{workdir}/broker.log for the broker's own output.",
-        )
-    process, port = broker
-    return process, workdir, lan_ip, port
-
-
 def _new_host_client(broker_host: str, broker_port: int) -> MQTTClient:
     # Host-side CPython driver: stdlib connect is the one-shot form here.
     sock = socket.create_connection((broker_host, broker_port))
@@ -126,28 +97,13 @@ def _drive_host(client: MQTTClient, predicate, *, timeout_s: float) -> bool:
     return True
 
 
-def _await_marker_while_driving_host(
-    session, host_client: MQTTClient, marker_name: str, *, timeout_s: float,
-):
-    """Wait for *marker_name* while keeping the host MQTT client ticking.
-
-    ``MarkerQueue.poll`` checks without blocking, so the loop ticks the
-    host client between polls.  If it stalled, the board's inbound
-    stream (its QoS-1 telemetry) would back up and get missed.
-    """
-    deadline = time.monotonic() + timeout_s
-    while True:
-        marker = session.runner.marker_queue.poll(marker_name)
-        if marker is not None:
-            return marker
-        if time.monotonic() >= deadline:
-            raise MarkerTimeoutError(
-                f"driver: timed out after {timeout_s:.1f}s waiting for "
-                f"marker {marker_name!r}",
-            )
-        if host_client.check(ticks_ms()):
-            host_client.handle(ticks_ms())
-        time.sleep(0.02)
+def _reactor_pump(client: MQTTClient):
+    """One-tick pump for ``session.wait_for(pump=...)``: keeps the host
+    MQTT client's inbound stream draining while a marker wait blocks."""
+    def pump() -> None:
+        if client.check(ticks_ms()):
+            client.handle(ticks_ms())
+    return pump
 
 
 def _validate_telemetry(samples: list[str]) -> str | None:
@@ -214,7 +170,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    broker_process, broker_workdir, broker_host, broker_port = _resolve_broker()
+    try:
+        broker_process, broker_workdir, broker_host, broker_port = (
+            provision_lan_broker(workdir_prefix="chumicro_sensor_motor_broker_")
+        )
+    except RuntimeError as broker_error:
+        raise SystemExit(f"driver: {broker_error}") from broker_error
     print(f"driver: started mosquitto on {broker_host}:{broker_port}")
 
     command_topic = f"demo/{_BOARD_CLIENT_ID}/motor/set"
@@ -314,9 +275,9 @@ def main(argv: list[str] | None = None) -> int:
             f"driver: waiting for board MQTT_CONNECTED "
             f"(up to {args.connect_timeout_s}s)...",
         )
-        connected_marker = _await_marker_while_driving_host(
-            session, host_client, "MQTT_CONNECTED",
-            timeout_s=args.connect_timeout_s,
+        pump = _reactor_pump(host_client)
+        connected_marker = session.wait_for(
+            "MQTT_CONNECTED", timeout_s=args.connect_timeout_s, pump=pump,
         )
         print(
             f"driver: board MQTT_CONNECTED "
@@ -372,9 +333,7 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 7
         print(f"driver: host published motor/set 75 to {command_topic}")
-        applied = _await_marker_while_driving_host(
-            session, host_client, "MOTOR_APPLIED", timeout_s=15.0,
-        )
+        applied = session.wait_for("MOTOR_APPLIED", timeout_s=15.0, pump=pump)
         if applied.values.get("speed") != "75":
             print(
                 f"driver: MOTOR_APPLIED speed={applied.values.get('speed')}, "
@@ -429,9 +388,7 @@ def main(argv: list[str] | None = None) -> int:
                 file=sys.stderr,
             )
             return 8
-        _await_marker_while_driving_host(
-            session, host_client, "DEMO_COMPLETE", timeout_s=15.0,
-        )
+        session.wait_for("DEMO_COMPLETE", timeout_s=15.0, pump=pump)
 
         print("driver: demo completed cleanly.")
         return 0

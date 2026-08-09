@@ -101,20 +101,21 @@ class DeviceBootstrapRunner:
         )
         self._thread.start()
 
-    def wait_for(self, name: str, *, timeout_s: float) -> Marker:
+    def wait_for(self, name: str, *, timeout_s: float, pump=None) -> Marker:
         """Block until a marker named *name* arrives on the device's stdout.
 
         Forwards to :meth:`MarkerQueue.wait_for`.  Non-matching markers
         that arrive while waiting are retained for later waits; on
         timeout, raises :class:`MarkerTimeoutError` whose message names
         what did arrive (including marker-shaped lines that failed to
-        parse).
+        parse).  *pump*, when given, is invoked between queue polls so
+        a host-side counterparty keeps ticking through the wait.
 
         It is fine to call this before :meth:`start` (the queue is
         already constructed; the bg thread will start pushing as soon
         as the bootstrap begins printing).
         """
-        return self._marker_queue.wait_for(name, timeout_s=timeout_s)
+        return self._marker_queue.wait_for(name, timeout_s=timeout_s, pump=pump)
 
     def wait_for_completion(self, *, timeout_s: float) -> str:
         """Join the background thread and return captured stdout.

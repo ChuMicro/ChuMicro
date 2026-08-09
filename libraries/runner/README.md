@@ -101,7 +101,7 @@ while True:
     runner.wait(now_ms)
 ```
 
-Both loops isolate a handler that raises: the fault is counted in `handler_errors` and the other services keep ticking, but neither says a word when it happens.  A real app should pass `on_handler_error(handle, exception)` to `Runner(...)` (see the API table below) so a fire-and-forget service that dies surfaces a line instead of stalling in silence.
+Both loops isolate a handler that raises: the fault is counted in `handler_errors`, the exception itself lands in `last_handler_error`, and the other services keep ticking, but neither says a word when it happens.  A real app should pass `on_handler_error(handle, exception)` to `Runner(...)` (see the API table below) so a fire-and-forget service that dies surfaces a line instead of stalling in silence.
 
 ## What's included
 
@@ -109,7 +109,7 @@ Both loops isolate a handler that raises: the fault is counted in `handler_error
 
 | Symbol | Description |
 |---|---|
-| `Runner(ticks=None, poller=None, on_handler_error=None)` | Tick-based service loop with shared timestamps.  A handler that raises is isolated and counted in `handler_errors` so one faulting service can't stop the others; pass `on_handler_error(handle, exception)` to log, remove the task, or re-raise to fail fast.  `poller` is an injectable `select.poll`-shaped object consulted by `wait()`; the default is built lazily on the first wait that has a socket to register |
+| `Runner(ticks=None, poller=None, on_handler_error=None)` | Tick-based service loop with shared timestamps.  A handler that raises is isolated, counted in `handler_errors`, and kept in `last_handler_error` so one faulting service can't stop the others; pass `on_handler_error(handle, exception)` to log, remove the task, or re-raise to fail fast.  `poller` is an injectable `select.poll`-shaped object consulted by `wait()`; the default is built lazily on the first wait that has a socket to register |
 | `Runner.add(task, handler=None, period_ms=None, start_after_ms=None, run_count=None, preserve_phase=False)` | Register a task; returns a `TaskHandle` |
 | `Runner.add_periodic(handler, period_ms, start_after_ms=None, run_count=None, preserve_phase=False)` | Register a periodic handler; returns a `TaskHandle` |
 | `Runner.add_generator(generator)` | Register a generator function (for sequential I/O written top-to-bottom); returns a `GeneratorHandle`.  See [Generator-driven sequential I/O](https://chumicro.github.io/ChuMicro/runner/stable/guide/#generator-driven) in the guide |

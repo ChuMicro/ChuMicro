@@ -102,6 +102,26 @@ If you ejected CIRCUITPY from Finder (or the FSKit wedge partially cleared leavi
 - If unplug/replug doesn't work, you probably hit the FSKit wedge.  Run the recovery command above.
 - Do **not** `rm -rf /Volumes/CIRCUITPY` or `diskutil unmount`.  Those can leave FSKit in a worse state than they started.
 
+## Deploys fail with `Invalid argument` on specific files
+
+**Symptoms**
+
+- rsync fails with `fstatat: Invalid argument` (or `link_stat ... failed: Invalid argument (22)`) naming specific files, e.g. `lib/chumicro_config/section.py`.
+- `ls` lists the file, but `stat` and `rm` on it fail with `Invalid argument`.  `rm -rf` of the parent directory fails with `Directory not empty`.
+- In a test sweep, every file in the session fails with the same repeated rsync stderr until the sweep is aborted.
+- `chumicro-deploy` raises `FAT directory entries on /Volumes/CIRCUITPY are torn`, naming the corrupted paths, and `RecoveringDeployer` classifies the failure as `fat_volume_corrupt`.
+
+**What's happening**
+
+The volume's FAT holds torn directory entries.  `readdir` still lists them, but the OS rejects any `stat` or `unlink` on them with EINVAL, so nothing on the host can read or delete them.  An entry gets torn when a board reset (soft reboot via Ctrl-D, `storage.erase_filesystem()`, or a bootloader reset) lands while macOS still holds dirty FAT metadata in its write cache.  The user-space FSKit `msdos` extension (the same driver behind the wedge above) writes that metadata asynchronously, and a reset that remounts the board's view of the volume mid-write leaves the entry half-committed.
+
+`chumicro-deploy` defends on two sides.  Before every reset it triggers, it flushes the volume with `F_FULLFSYNC`, which waits for the writes to reach the medium (plain `sync` only schedules them).  After every staged push, it stat-scans the volume, so fresh corruption fails the session once, loudly, with the torn paths named, instead of every subsequent test failing with rsync noise.
+
+**Recovery**
+
+- `chumicro-workspace reset-board --yes --device <id>`: reformats the board's filesystem.  Torn entries cannot be repaired in place; `rm`, `rsync --delete`, and Finder all fail on them the same way.  Destructive: every user file on the board is wiped.
+- After the board re-enumerates, re-run the deploy.
+
 ## Drives mount but `chumicro-deploy` picks the wrong one
 
 **Symptom**

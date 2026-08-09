@@ -25,7 +25,8 @@ def test_add_no_args_raises() -> None:
 
 
 def test_faulting_handler_is_isolated_and_siblings_still_fire() -> None:
-    """A faulting handler is counted and a sibling gated the same tick still fires."""
+    """A faulting handler is counted, its exception lands in last_handler_error,
+    and a sibling gated the same tick still fires."""
     runner = Runner(ticks=FakeTicks())
     fired = []
 
@@ -38,10 +39,33 @@ def test_faulting_handler_is_isolated_and_siblings_still_fire() -> None:
     runner.add(handler=boom)
     runner.add(handler=good)
 
+    assert runner.last_handler_error is None
     now_ms = runner.tick()
 
     assert fired == [now_ms]
     assert runner.handler_errors == 1
+    assert isinstance(runner.last_handler_error, ValueError)
+
+
+def test_last_handler_error_tracks_the_most_recent_fault() -> None:
+    """Two handlers faulting in registration order leave the later exception
+    in last_handler_error, and the counter reflects both."""
+    runner = Runner(ticks=FakeTicks())
+    first_error = ValueError("first")
+    second_error = KeyError("second")
+
+    def boom_first(now_ms: int) -> None:
+        raise first_error
+
+    def boom_second(now_ms: int) -> None:
+        raise second_error
+
+    runner.add(handler=boom_first)
+    runner.add(handler=boom_second)
+    runner.tick()
+
+    assert runner.handler_errors == 2
+    assert runner.last_handler_error is second_error
 
 
 def test_pending_cleared_so_isolated_fault_does_not_re_fire() -> None:
@@ -92,7 +116,8 @@ def test_on_handler_error_hook_receives_the_handle_and_exception() -> None:
 
 
 def test_on_handler_error_hook_that_raises_is_itself_isolated() -> None:
-    """A callback that raises is swallowed and counted, not re-breaking the loop."""
+    """A callback that raises is swallowed and counted, not re-breaking the
+    loop, and its exception replaces the handler's in last_handler_error."""
     def on_error(handle: object, error: BaseException) -> None:
         raise RuntimeError("buggy hook")
 
@@ -105,6 +130,7 @@ def test_on_handler_error_hook_that_raises_is_itself_isolated() -> None:
     runner.tick()
 
     assert runner.handler_errors == 2
+    assert isinstance(runner.last_handler_error, RuntimeError)
 
 
 def test_run_count_task_that_faults_still_auto_removes() -> None:

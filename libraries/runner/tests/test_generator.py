@@ -8,12 +8,12 @@ generator's ``finally`` block, ``yield from`` delegation, and the
 bare-yield / ready-wait protocol.  The wrapper's I/O surface (poll
 interest + ``io_error`` dispatch) lives in the sibling
 ``test_generator_io.py``; both share ``_Sock`` / ``_Wait`` via
-``_generator_helpers`` (split to keep each file's whole-file compile
+``_runner_generator_helpers`` (split to keep each file's whole-file compile
 under the CircuitPython unix-lane heap budget).
 """
 
 import chumicro_runner
-from _generator_helpers import _Sock, _Wait
+from _runner_generator_helpers import _Sock, _Wait
 from chumicro_runner import GeneratorHandle, Runner
 from chumicro_test_harness import raises
 from chumicro_timing.testing import FakeTicks

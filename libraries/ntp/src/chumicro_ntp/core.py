@@ -112,6 +112,7 @@ class NTPClient:
         socket: object | None = None,
         transport_factory: object | None = None,
         ticks: object | None = None,
+        **constructor_kwargs: object,
     ) -> "NTPClient":
         """Build an :class:`NTPClient` from runtime config.
 
@@ -122,6 +123,9 @@ class NTPClient:
             socket: Pre-built non-blocking UDP socket; skips the factory.
             transport_factory: Callable returning the UDP socket on first use.
             ticks: Optional tick source, forwarded to the constructor.
+            **constructor_kwargs: Any other constructor knob, passed
+                through verbatim; an explicit keyword wins over its
+                config-derived value.
 
         Raises:
             RuntimeError: No socket or factory was given and
@@ -136,27 +140,22 @@ class NTPClient:
                 raise RuntimeError(
                     "chumicro_sockets.sockets_factory not available "
                     "(excluded via __chumicro_skip_factories__ or "
-                    "not on the board), pass socket= or "
-                    "transport_factory= explicitly.",
+                    "not on the board); pass transport_factory= or "
+                    "socket= explicitly.",
                 ) from exception
 
-            base_factory = udp_socket_factory(radio=radio)
+            transport_factory = udp_socket_factory(radio=radio)
 
-            def non_blocking_udp_factory():
-                udp_socket = base_factory()
-                udp_socket.setblocking(False)
-                return udp_socket
-
-            transport_factory = non_blocking_udp_factory
-
-        return cls(
-            socket=socket,
-            transport_factory=transport_factory,
-            server=config.get("ntp.server", "pool.ntp.org"),
-            port=config.get("ntp.port", 123),
-            timeout_ms=config.get("ntp.timeout_ms", 5_000),
-            ticks=ticks,
-        )
+        kwargs = {
+            "socket": socket,
+            "transport_factory": transport_factory,
+            "server": config.get("ntp.server", "pool.ntp.org"),
+            "port": config.get("ntp.port", 123),
+            "timeout_ms": config.get("ntp.timeout_ms", 5_000),
+            "ticks": ticks,
+        }
+        kwargs.update(constructor_kwargs)
+        return cls(**kwargs)
 
     def __init__(
         self,

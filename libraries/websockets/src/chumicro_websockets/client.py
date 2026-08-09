@@ -60,8 +60,14 @@ class WebSocketClient(_BaseSession):
         ssl_context: object | None = None,
         transport_factory: object | None = None,
         ticks: object | None = None,
+        **constructor_kwargs: object,
     ) -> "WebSocketClient":
-        """Build a :class:`WebSocketClient` from runtime config."""
+        """Build a :class:`WebSocketClient` from runtime config.
+
+        Config keys carry the deployment-varying values; any other
+        constructor knob passes through verbatim as a keyword, and an
+        explicit keyword wins over its config-derived value.
+        """
         if transport_factory is None:
             try:
                 from chumicro_sockets.sockets_factory import (  # noqa: PLC0415
@@ -77,14 +83,15 @@ class WebSocketClient(_BaseSession):
             transport_factory = connector_factory(
                 radio=radio, ssl_context=ssl_context,
             )
-        return cls(
-            transport_factory=transport_factory,
-            max_message_bytes=config.get(
+        kwargs = {
+            "max_message_bytes": config.get(
                 "websockets.client.max_message_bytes",
                 DEFAULT_MAX_MESSAGE_BYTES,
             ),
-            ticks=ticks,
-        )
+            "ticks": ticks,
+        }
+        kwargs.update(constructor_kwargs)
+        return cls(transport_factory, **kwargs)
 
     def __init__(
         self,
@@ -245,7 +252,8 @@ class WebSocketClient(_BaseSession):
     @property
     def io_socket(self):
         """The connector's pollable while ``AWAITING_TRANSPORT``, else the live socket."""
-        # Inlined instead of super(): CircuitPython's property/super() descriptor lookup fails here.
+        # CircuitPython cannot resolve super() inside a property getter,
+        # so the base getter's body is inlined.
         if self._connecting_phase == ConnectingPhase.AWAITING_TRANSPORT:
             return self._connector.io_socket if self._connector is not None else None
         if self._socket is None:
@@ -261,7 +269,6 @@ class WebSocketClient(_BaseSession):
             and self.io_socket is None
         ):
             return now_ms
-        # Call the base by class, not super(): CircuitPython's super() is unreliable here.
         return _BaseSession.next_deadline(self, now_ms)
 
     def handle(self, now_ms: int) -> None:
@@ -319,12 +326,7 @@ class WebSocketClient(_BaseSession):
             if self.last_close_code is None:
                 self.last_close_code = code
                 self.last_close_reason = reason
-            try:
-                if self._socket is not None:
-                    self._socket.close()
-            except Exception:  # noqa: BLE001 - best-effort socket teardown
-                pass
-            self.state = WebSocketState.CLOSED
+            self._drop_transport()
             self._on_finalized()
             self.on_close(self.last_close_code, self.last_close_reason)
             return

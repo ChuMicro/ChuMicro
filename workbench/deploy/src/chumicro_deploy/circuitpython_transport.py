@@ -941,6 +941,23 @@ class CircuitpythonTransport:
                 "RESET and re-deploy."
             )
 
+        # Stat-sweep the whole volume for torn directory entries (stat
+        # returning EINVAL).  The verify pass above only walks the
+        # rsync scope, so a torn entry inside an excluded path (keep
+        # set, macOS noise dirs) would otherwise survive until it
+        # fails every subsequent operation with repeated rsync noise.
+        # Failing here, before any reset, is the one loud actionable
+        # error naming the corrupted paths.
+        corrupted_paths = flash_drive.scan_for_torn_directory_entries(
+            drive_path,
+        )
+        if corrupted_paths:
+            raise CircuitpythonTransportError(
+                flash_drive.format_fat_corruption_error(
+                    drive_path, corrupted_paths,
+                ),
+            )
+
         return drive_path
 
     def _stage_to_flash(
@@ -1141,6 +1158,9 @@ class CircuitpythonTransport:
         """
         if self._port is None:
             return False
+        # A bootloader reset detaches USB-MSC outright, so any FAT
+        # metadata still cached host-side would be dropped or torn.
+        self._flush_volumes_before_board_reset()
         try:
             self._send_repl_command(
                 "import microcontroller\n"
@@ -1220,12 +1240,59 @@ class CircuitpythonTransport:
         del timeout  # underlying helper has its own deadline policy
         return self._send_repl_command(script)
 
+    def _flush_volumes_before_board_reset(
+        self, drive_path: Path | None = None,
+    ) -> None:
+        """Flush host-cached FAT writes before the board resets.
+
+        A board reset (Ctrl-D soft reboot,
+        ``storage.erase_filesystem()``, a bootloader reset) remounts
+        the board's FatFs view of the volume while macOS may still
+        hold dirty FAT metadata in its cache.  Writes committing
+        across that boundary can tear directory entries into a state
+        where ``stat`` fails with ``EINVAL`` and the entry cannot be
+        unlinked, so every reset in flash mode is preceded by a full
+        volume flush, including the resets that follow read-only
+        host activity (post-rsync verification re-reads the volume
+        after the staging flush).  RAM mode never writes to the
+        drive and skips the flush.
+
+        The per-volume settle delay is deferred: each volume gets the
+        synchronous flush barrier with a zero settle, then one settle
+        covers them all, so a multi-board bench does not pay the
+        delay once per mounted volume.
+
+        Args:
+            drive_path: Flush only this mount when given.  ``None``
+                flushes every mounted ``CIRCUITPY*`` candidate, for
+                reset points where the connected board's mount is not
+                already resolved (resolving it would need a serial
+                probe mid-reset, and flushing a sibling volume is
+                harmless).
+        """
+        if self.mode != "flash":
+            return
+        candidates = (
+            [drive_path] if drive_path is not None else self._drive_scanner()
+        )
+        flushed_any = False
+        for candidate in candidates:
+            if candidate.is_dir():
+                flash_drive.flush_volume(
+                    candidate, sleep=self._time.sleep, settle_delay=0.0,
+                )
+                flushed_any = True
+        if flushed_any:
+            self._time.sleep(flash_drive.FLUSH_SETTLE_DELAY)
+
     def soft_reset(self) -> None:
         """Soft-reset the interpreter and re-enter raw REPL.
 
-        Exits raw REPL (Ctrl-B), sends Ctrl-D to trigger a soft reboot
-        (which clears ``sys.modules`` and all interpreter state), waits
-        for the reboot to complete, then re-enters raw REPL.
+        Flushes any host-cached FAT writes to the CIRCUITPY volume
+        (flash mode only), exits raw REPL (Ctrl-B), sends Ctrl-D to
+        trigger a soft reboot (which clears ``sys.modules`` and all
+        interpreter state), waits for the reboot to complete, then
+        re-enters raw REPL.
 
         Leaves the interpreter clean, with previous modules evicted
         from RAM.
@@ -1238,6 +1305,7 @@ class CircuitpythonTransport:
             raise CircuitpythonTransportError(
                 "Cannot soft_reset: port is not open"
             )
+        self._flush_volumes_before_board_reset()
         self._port.write(_CTRL_B)
         self._time.sleep(_ENTER_DELAY)
         self._port.write(_CTRL_D)
@@ -1342,7 +1410,7 @@ class CircuitpythonTransport:
                 expected_entrypoint_size = entrypoint_staged.stat().st_size
                 # clean=True: rsync --delete, only DEVICE_KEEP_SET survives.
                 # clean=False: additive, drive files outside this payload persist.
-                self._push_staging_to_drive(
+                drive_path = self._push_staging_to_drive(
                     staging_path,
                     rsync_delete=clean,
                     post_stage=PostStageStep.SOFT_REBOOT_AND_TAIL,
@@ -1365,6 +1433,11 @@ class CircuitpythonTransport:
             ) from error
 
         self._wait_for_board_to_see_entrypoint(entrypoint, expected_entrypoint_size)
+
+        # The post-rsync verification re-read the volume after the
+        # staging flush, so flush again to guarantee no host-side FAT
+        # metadata is dirty when the soft reboot lands.
+        self._flush_volumes_before_board_reset(drive_path)
 
         # CP caches the FAT32 filesystem view in-memory; with autoreload
         # disabled, exec(open()) would read stale content.  Soft-reboot
@@ -1544,6 +1617,11 @@ class CircuitpythonTransport:
             raise CircuitpythonTransportError(
                 "connect() must be called before wipe_filesystem()",
             )
+        # ``storage.erase_filesystem()`` reformats the volume and
+        # reboots the board.  A host-cache flush landing mid-reformat
+        # would corrupt the freshly-built FAT, so drain the cache
+        # before triggering the erase.
+        self._flush_volumes_before_board_reset()
         try:
             self._send_repl_command(
                 "import storage\nstorage.erase_filesystem()\n",

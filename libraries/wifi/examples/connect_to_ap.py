@@ -22,10 +22,10 @@ import time
 
 from chumicro_config import load_runtime_config
 from chumicro_timing import ticks_diff, ticks_ms
-from chumicro_wifi import WifiConfig, WifiService, WifiState
+from chumicro_wifi import WifiService, WifiState
 
 config = load_runtime_config()
-wifi = WifiService(WifiConfig.from_config(config))
+wifi = WifiService.from_config(config)
 wifi.on_state_change(lambda old, new: print(f"State: {old} -> {new}"))
 
 print(f"ADAPTER: {wifi.adapter.name}")

@@ -116,10 +116,28 @@ class TestListenerFactory:
 
 class TestUdpSocketFactory:
     def test_fresh_socket_per_call(self):
-        recorder = _Recorder()
-        with SwapAttribute(chumicro_sockets, "udp_socket", recorder):
+        from chumicro_sockets.testing import FakeUDPSocket
+
+        calls = []
+
+        def recording_udp_socket(**kwargs):
+            calls.append(kwargs)
+            return FakeUDPSocket()
+
+        with SwapAttribute(chumicro_sockets, "udp_socket", recording_udp_socket):
             factory = sockets_factory.udp_socket_factory(radio="R")
             factory()
             factory()
-        assert len(recorder.calls) == 2
-        assert recorder.calls[0][1] == {"radio": "R"}
+        assert len(calls) == 2
+        assert calls[0] == {"radio": "R"}
+
+    def test_built_socket_is_non_blocking(self):
+        """The factory applies setblocking(False), so a consumer's tick loop
+        never inherits a blocking recv from the raw builder."""
+        from chumicro_sockets.testing import FakeUDPSocket
+
+        with SwapAttribute(
+            chumicro_sockets, "udp_socket", lambda **kwargs: FakeUDPSocket(),
+        ):
+            built = sockets_factory.udp_socket_factory()()
+        assert built.blocking is False

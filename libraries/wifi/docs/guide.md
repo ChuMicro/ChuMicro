@@ -13,10 +13,10 @@ Typical wiring, with config loaded from the deployed runtime-config file, the se
 ```python
 from chumicro_config import load_runtime_config
 from chumicro_runner import Runner
-from chumicro_wifi import WifiConfig, WifiService
+from chumicro_wifi import WifiService
 
 config = load_runtime_config()
-wifi = WifiService(WifiConfig.from_config(config))
+wifi = WifiService.from_config(config)
 
 runner = Runner()
 runner.add(wifi)                 # check/handle integration
@@ -28,7 +28,7 @@ while True:
         pass
 ```
 
-`WifiService` calls into the right per-runtime adapter automatically.  No platform branches in your app.
+`WifiService.from_config(config)` reads the flat `wifi.*` keys (the table in [Configuration](#configuration)); any extra keyword (`adapter=`, `ticks=`) passes through to the constructor, and `radio=` hands the CircuitPython adapter a specific radio object.  `WifiService` calls into the right per-runtime adapter automatically.  No platform branches in your app.
 
 ## State machine
 
@@ -101,7 +101,7 @@ def main_run():
 
 ## Configuration
 
-`WifiConfig.from_config(config)` reads the flat `wifi.*` keys from a `RuntimeConfig` (or plain dict with the same shape).  `try_from_config(config)` is the soft variant that returns `None` when the section isn't deployed.  Accepted keys:
+`WifiConfig.from_config(config)` reads the flat `wifi.*` keys from a `RuntimeConfig` (or plain dict with the same shape); `WifiService.from_config(config)` wraps that loader and constructs the service in one call.  `try_from_config(config)` is the soft variant that returns `None` when the section isn't deployed.  Accepted keys:
 
 | Key | Required | Default | Notes |
 |---|---|---|---|
@@ -152,7 +152,7 @@ runner.tick()             # advances every registered service one step
 |---|---|---|
 | CircuitPython | `CpWifiAdapter` (uses `wifi.radio`) | `_adapters/cp.py` |
 | MicroPython | `MpWifiAdapter` (handles ESP32 + CYW43) | `_adapters/mp.py` |
-| CPython | `FakeWifiAdapter` | `testing.py` |
+| CPython | `CpythonWifiAdapter` (host stand-in, reports success immediately) | `_adapters/cpython.py` |
 
 The `MpWifiAdapter` auto-detects ESP-IDF vs CYW43 by matching `sys.implementation._machine` against a positive whitelist of known CYW43 boards (`CYW43_MACHINES` in `_adapters/mp.py`); anything outside the whitelist falls through to ESP-IDF.  It then applies the right `wlan.config(...)` knobs:
 

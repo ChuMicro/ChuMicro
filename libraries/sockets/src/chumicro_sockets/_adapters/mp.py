@@ -298,10 +298,18 @@ class _MpConnector(SocketConnector):  # pragma: no cover - device only
                         "TCP connect failed (POLLERR/POLLHUP)",
                     )
                 if self._tls:
-                    # wrap_socket blocks until the handshake completes; the next tick promotes to ready.
-                    # (A deferred handshake via do_handshake_on_connect=False
-                    # promoted to ready without surfacing certificate-verify
-                    # failures on a real Pi Pico W, so the blocking form stays.)
+                    # The handshake blocks by design: MicroPython exposes no
+                    # safe way to observe deferred-handshake completion.  Its
+                    # standalone mbedTLS config omits getpeercert entirely,
+                    # SSLSocket.cipher() dereferences a NULL ciphersuite and
+                    # crashes while the handshake is in flight, and a
+                    # zero-length write short-circuits in py/stream.c before
+                    # reaching mbedTLS.  A one-byte readinto does step the
+                    # handshake and does surface certificate-verify failures,
+                    # but nothing distinguishes "handshake done, no data" from
+                    # "still in flight", so a stepped bring-up cannot promote
+                    # provably.  The blocking wrap keeps verify failures at
+                    # bring-up, where the connector's fail path owns them.
                     self._context = _resolve_default_context(self._context)
                     # The handshake needs a blocking socket; flip to blocking for it and back after.
                     raw_socket = self.socket

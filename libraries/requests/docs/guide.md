@@ -13,7 +13,9 @@ from chumicro_requests.generators import get
 from chumicro_runner import Runner
 from chumicro_sockets.sockets_factory import connector_factory
 
-transport_factory = connector_factory(radio=wifi.radio)
+# wifi is your chumicro_wifi.WifiService; wifi.adapter.radio is the board
+# radio on CircuitPython and None on MP / CPython, where no radio is needed.
+transport_factory = connector_factory(radio=wifi.adapter.radio)
 
 
 def fetch_once():
@@ -39,7 +41,7 @@ from chumicro_requests import HttpClient
 from chumicro_sockets.sockets_factory import connector_factory
 from chumicro_timing import ticks_ms
 
-client = HttpClient(transport_factory=connector_factory(radio=wifi.radio))
+client = HttpClient(transport_factory=connector_factory(radio=wifi.adapter.radio))
 handle = client.get("http://api.example.com/now", timeout_ms=5000)
 
 while not handle.done:

@@ -99,8 +99,7 @@ def mp_adapter() -> Iterator[types.ModuleType]:
             self._timeout = seconds
 
         def write(self, data: bytes) -> int:
-            # Post-handshake stream write; the deferred handshake completes
-            # on the first call, so a zero-length probe returns 0.
+            # Post-handshake stream write.
             return len(data)
 
         def fileno(self) -> int:
@@ -205,12 +204,13 @@ def _connect(
     """Drive ``mp_adapter.connector`` to ``ready``; return the wrapped socket.
 
     The stubbed ``select.poll`` reports POLLOUT immediately, so the
-    drive completes in at most four ticks (DNS, dial, poll-ready
-    [+ TLS promote]).  Raises AssertionError if the connector fails —
-    the stub substrate never legitimately fails.
+    drive completes in a handful of ticks (DNS, dial, poll-ready, then
+    for TLS the stub's two handshake flights plus the promote tick).
+    Raises AssertionError if the connector fails — the stub substrate
+    never legitimately fails.
     """
     mp_connector = mp_adapter.connector(host, port, tls=tls, context=context)
-    for _ in range(6):
+    for _ in range(10):
         if mp_connector.state in ("ready", "failed"):
             break
         mp_connector.tick(0)

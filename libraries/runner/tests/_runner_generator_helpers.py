@@ -2,7 +2,7 @@
 
 Underscore-prefixed so the harness never collects it as a test module.
 The harness puts each test file's directory on ``sys.path``, so the split
-files import these with ``from _generator_helpers import ...`` on CPython,
+files import these with ``from _runner_generator_helpers import ...`` on CPython,
 MicroPython, and CircuitPython alike.
 
 The wait shape is **duck-typed**: ``_Wait`` exposes the protocol surface

@@ -16,12 +16,14 @@ class WifiState:
     FAILED = "failed"
 
 
-def _select_adapter():
+def _select_adapter(radio=None):
     # Import per runtime so a board only parses the adapter it uses.
+    # radio reaches only the CircuitPython adapter; the other runtimes
+    # acquire their own station handle and ignore it.
     runtime_name = sys.implementation.name
     if runtime_name == "circuitpython":  # pragma: no cover - CP runtime path
         from chumicro_wifi._adapters.cp import CpWifiAdapter
-        return CpWifiAdapter()
+        return CpWifiAdapter(radio=radio)
     if runtime_name == "micropython":  # pragma: no cover - MP runtime path
         from chumicro_wifi._adapters.mp import MpWifiAdapter
         return MpWifiAdapter()
@@ -37,6 +39,42 @@ class WifiService:
         adapter: Optional :class:`WifiAdapter`; ``None`` (default) selects the runtime-appropriate one.
         ticks: Optional ``chumicro_timing.ticks``-shaped source; defaults to the real clock.
     """
+
+    @classmethod
+    def from_config(
+        cls,
+        config: object,
+        *,
+        radio: object | None = None,
+        ticks: object | None = None,
+        **constructor_kwargs: object,
+    ) -> "WifiService":
+        """Build a :class:`WifiService` from runtime config.
+
+        The ``wifi.*`` config keys carry the deployment-varying values
+        (credentials, timeouts, backoff, power tuning) and load through
+        :meth:`WifiConfig.from_config`; any other constructor knob
+        passes through verbatim as a keyword, and an explicit keyword
+        wins over its config-derived value.
+
+        Args:
+            config: A :class:`chumicro_config.RuntimeConfig` or plain flat dict.
+            radio: CircuitPython radio handle for the runtime adapter;
+                ignored on MicroPython and CPython, and unused when an
+                explicit ``adapter=`` is passed.
+            ticks: Optional tick source, forwarded to the constructor.
+            **constructor_kwargs: Any other constructor knob (e.g.
+                ``adapter=``), passed through verbatim.
+
+        Raises:
+            chumicro_config.MissingConfigKey: ``wifi.ssid`` or ``wifi.password`` is absent.
+            chumicro_config.InvalidConfigType: *config* is ``None`` or not a mapping.
+        """
+        kwargs: dict = {"ticks": ticks}
+        if radio is not None and "adapter" not in constructor_kwargs:
+            kwargs["adapter"] = _select_adapter(radio=radio)
+        kwargs.update(constructor_kwargs)
+        return cls(WifiConfig.from_config(config), **kwargs)
 
     def __init__(
         self,

@@ -525,28 +525,13 @@ class ResponseParser:
         ))
 
     def _advance(self):
+        # BODY is handled in feed; DONE / ERROR are terminal, so any
+        # state outside the step table returns.  A step returning False
+        # means "need more bytes": stop until the next feed.
         while True:
-            if self.state == ParseState.STATUS:
-                if not self._try_parse_status_line():
-                    return
-                continue
-            if self.state == ParseState.HEADERS:
-                if not self._try_parse_headers():
-                    return
-                continue
-            if self.state == ParseState.CHUNK_SIZE:
-                if not self._try_parse_chunk_size():
-                    return
-                continue
-            if self.state == ParseState.CHUNK_DATA:
-                if not self._try_consume_chunk_data():
-                    return
-                continue
-            if self.state == ParseState.CHUNK_TRAILER:
-                if not self._try_parse_chunk_trailer():
-                    return
-                continue
-            return  # BODY handled in feed; DONE / ERROR terminal.
+            step = _ADVANCE_STEPS.get(self.state)
+            if step is None or not step(self):
+                return
 
     def _take_ascii_line(self, label):
         # One CRLF-terminated line off the live buffer, decoded as ASCII.
@@ -829,3 +814,15 @@ class ResponseParser:
     def _fail(self, error):
         self.error = error
         self.state = ParseState.ERROR
+
+
+# One parse step per non-terminal state; ``_advance`` walks this table.
+# Each step returns True when it consumed input and the loop should run
+# the next state's step, False when it needs more bytes.
+_ADVANCE_STEPS = {
+    ParseState.STATUS: ResponseParser._try_parse_status_line,
+    ParseState.HEADERS: ResponseParser._try_parse_headers,
+    ParseState.CHUNK_SIZE: ResponseParser._try_parse_chunk_size,
+    ParseState.CHUNK_DATA: ResponseParser._try_consume_chunk_data,
+    ParseState.CHUNK_TRAILER: ResponseParser._try_parse_chunk_trailer,
+}

@@ -162,7 +162,10 @@ class Runner:
         self._entries = []
         self._pending = []
         self._ticking = False
+        #: Count of handler faults isolated by tick(), including a raising on_handler_error callback.
         self.handler_errors = 0
+        #: Most recent isolated exception, or ``None`` while no handler has faulted.
+        self.last_handler_error = None
         self._on_handler_error = on_handler_error
         if ticks is not None:
             self._ticks = ticks
@@ -431,12 +434,14 @@ class Runner:
 
     def _record_handler_fault(self, entry: "TaskHandle", error: Exception) -> None:
         self.handler_errors += 1
+        self.last_handler_error = error
         on_error = self._on_handler_error
         if on_error is not None:
             try:
                 on_error(entry, error)
-            except Exception:  # noqa: BLE001
+            except Exception as callback_error:  # noqa: BLE001
                 self.handler_errors += 1
+                self.last_handler_error = callback_error
 
     def _dispatch_io_error(self, obj: object, eventmask: int, now_ms: int) -> None:
         # Snapshot with tuple(): an io_error throw can drop its entry from _entries mid-loop.

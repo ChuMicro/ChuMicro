@@ -49,8 +49,9 @@ from chumicro_mqtt import MQTTClient
 
 # The transport factory dials the broker for you (non-blocking, one
 # connect phase per tick) and rebuilds the socket after a wifi drop.
-# On CircuitPython pass `radio=wifi.radio` to `from_config`; on
-# MicroPython / CPython the kwarg is ignored.
+# On CircuitPython pass `radio=wifi.adapter.radio` (your WifiService's
+# board radio) to `from_config`; on MicroPython / CPython the kwarg is
+# ignored.
 client = MQTTClient.from_config(
     {"mqtt.broker.host": "broker.example.com", "mqtt.broker.port": 1883},
     radio=None,
@@ -194,7 +195,7 @@ def consume(client):
 runner.add_generator(consume(client))
 ```
 
-The first `next_message()` call switches inbound data delivery from the `on_message` callback to a bounded queue the generator drains (16 messages, drop-oldest; a slow consumer loses the oldest messages rather than growing the heap).  Lifecycle callbacks (`on_connect`, `on_disconnect`, `on_oversized`) keep firing either way; note `on_disconnect` fires only on an explicit `disconnect()` call, never on link loss - poll `state` / `last_error` to observe drops.  Pick one inbound surface per client: the stream for a linear single-topic consumer, `on_message` for multi-topic fan-out.  See `examples/receive_stream.py`.
+The first `next_message()` call switches inbound data delivery from the `on_message` callback to a bounded queue the generator drains (16 messages, drop-oldest; a slow consumer loses the oldest messages rather than growing the heap).  Lifecycle callbacks (`on_connect`, `on_disconnect`, `on_oversized`) keep firing either way; `on_disconnect` fires when an established session ends, on an explicit `disconnect()` call or on link loss (the client has already settled into `FAILED` with `last_error` set when it fires).  Failed connect attempts and self-heal retries stay silent, so an outage fires it once, not once per backoff.  Pick one inbound surface per client: the stream for a linear single-topic consumer, `on_message` for multi-topic fan-out.  See `examples/receive_stream.py`.
 
 ## Last-will
 
@@ -236,7 +237,7 @@ ssl_context = ssl_context_with_ca(ca_pem)         # CERT_REQUIRED by default
 client = MQTTClient.from_config(
     {"mqtt.broker.host": "broker.example.com", "mqtt.broker.port": 8883},
     ssl_context=ssl_context,
-    radio=wifi.radio,                              # CP only
+    radio=wifi.adapter.radio,                      # CP only
 )
 ```
 
@@ -255,7 +256,7 @@ Pass a `transport_factory` callable instead of a bare socket and the client will
 from chumicro_sockets import connector
 
 def make_connector():
-    return connector("broker.example.com", 1883, radio=wifi.radio)
+    return connector("broker.example.com", 1883, radio=wifi.adapter.radio)
 
 client = MQTTClient(transport_factory=make_connector, client_id="my-thing")
 client.connect()
@@ -466,7 +467,7 @@ So **plain sensor data, small-to-medium JSON readings (payload ≤ ~200 B on a �
 |---|---|---|---|
 | CPython | ✅ | ✅ | Reference runtime; works against any broker. |
 | MicroPython | ✅ | ✅ | mbedTLS PEM→DER conversion on rp2 (handled by `chumicro-sockets`). |
-| CircuitPython | ✅ (requires `radio=wifi.radio`) | ✅ | TLS handshake is synchronous, bench-tested under 15 ms on both Lolin S2 and Pi Pico W against `test.mosquitto.org:8883` over a good wifi link. |
+| CircuitPython | ✅ (requires `radio=wifi.adapter.radio`) | ✅ | TLS handshake is synchronous, bench-tested under 15 ms on both Lolin S2 and Pi Pico W against `test.mosquitto.org:8883` over a good wifi link. |
 
 `MQTTClient` enforces non-blocking mode on every socket it acquires.  MicroPython plain TCP defaults to blocking, and a blocking `recv` against a silent peer on a Pi Pico W stalls the tick loop indefinitely, so set `sock.setblocking(False)` explicitly to make the contract visible at the call site.
 

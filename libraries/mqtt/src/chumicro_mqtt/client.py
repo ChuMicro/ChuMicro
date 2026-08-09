@@ -184,8 +184,14 @@ class MQTTClient:
         socket: object | None = None,
         transport_factory: object | None = None,
         ticks: object | None = None,
+        **constructor_kwargs: object,
     ) -> "MQTTClient":
         """Build an :class:`MQTTClient` from runtime config.
+
+        Config keys carry the deployment-varying values (broker address,
+        credentials, client id, keepalive, offline policy).  Every other
+        constructor knob is reachable as a keyword and passes through
+        verbatim; an explicit keyword wins over its config-derived value.
 
         Raises:
             ValueError: *config* is not a mapping-like object.
@@ -222,16 +228,18 @@ class MQTTClient:
                 config["mqtt.broker.host"], config["mqtt.broker.port"],
                 radio=radio, ssl_context=ssl_context,
             )
-        return cls(
-            socket=socket,
-            transport_factory=transport_factory,
-            client_id=config.get("mqtt.client_id") or default_client_id(),
-            keep_alive_seconds=config.get("mqtt.keep_alive_seconds", 60),
-            username=config.get("mqtt.username"),
-            password=config.get("mqtt.password"),
-            when_disconnected=config.get("mqtt.when_disconnected", "queue"),
-            ticks=ticks,
-        )
+        kwargs = {
+            "socket": socket,
+            "transport_factory": transport_factory,
+            "client_id": config.get("mqtt.client_id") or default_client_id(),
+            "keep_alive_seconds": config.get("mqtt.keep_alive_seconds", 60),
+            "username": config.get("mqtt.username"),
+            "password": config.get("mqtt.password"),
+            "when_disconnected": config.get("mqtt.when_disconnected", "queue"),
+            "ticks": ticks,
+        }
+        kwargs.update(constructor_kwargs)
+        return cls(**kwargs)
 
     def __init__(
         self,
@@ -379,7 +387,7 @@ class MQTTClient:
             self._self_heal_retry_at_ticks = None
             if self._socket is None:
                 if not self._start_transport():
-                    self.state = ProtocolState.FAILED
+                    self._enter_failed()
                 return
             self._enqueue_connect_packet()
             self.state = ProtocolState.CONNECTING
@@ -716,7 +724,7 @@ class MQTTClient:
         self.last_error = MQTTError(
             f"socket error from runner.wait (poll eventmask 0x{eventmask:x})",
         )
-        self.state = ProtocolState.FAILED
+        self._enter_failed()
 
     def next_deadline(self, now_ms):
         """Earliest tick at which ``handle()`` must run even on a quiet socket."""
@@ -791,10 +799,22 @@ class MQTTClient:
             self._drain_tx_queue()
         except MQTTError as error:
             self.last_error = error
-            self.state = ProtocolState.FAILED
+            self._enter_failed()
         except OSError as error:
             self.last_error = MQTTError(f"socket error: {error}")
-            self.state = ProtocolState.FAILED
+            self._enter_failed()
+
+    def _enter_failed(self):
+        # State settles before the callback fires, so a reentrant
+        # connect() / hold() / disconnect() from inside on_disconnect
+        # sees FAILED rather than the dying state.  Connect attempts
+        # that never established (CONNECTING / AWAITING_TRANSPORT, the
+        # self-heal retry cycle) stay silent: on_disconnect reports the
+        # end of an established session, mirroring on_connect.
+        was_connected = self.state == ProtocolState.CONNECTED
+        self.state = ProtocolState.FAILED
+        if was_connected:
+            self.on_disconnect()
 
     def _self_heal_active(self):
         return (
@@ -860,7 +880,7 @@ class MQTTClient:
             f"transport connect attempt timed out after "
             f"{self._ack_timeout_ms} ms (connector phase: {phase})",
         )
-        self.state = ProtocolState.FAILED
+        self._enter_failed()
         return True
 
     def _advance_connector(self, now_ms):
@@ -880,7 +900,7 @@ class MQTTClient:
             )
             self._connector = None
             self._transport_deadline_ticks = None
-            self.state = ProtocolState.FAILED
+            self._enter_failed()
             return False
         return False
 
@@ -1159,7 +1179,7 @@ class MQTTClient:
             self.last_error = MQTTConnectError(message, return_code=packet.return_code)
             if packet.return_code in _PERMANENT_CONNACK_CODES:
                 self._permanent_failure = True
-            self.state = ProtocolState.FAILED
+            self._enter_failed()
             return
         self.state = ProtocolState.CONNECTED
         self._self_heal_attempts = 0
@@ -1222,7 +1242,7 @@ class MQTTClient:
                     f"PUBLISH packet_id {entry.packet_id} exceeded "
                     f"retry limit {self._publish_retry_max}",
                 )
-                self.state = ProtocolState.FAILED
+                self._enter_failed()
                 return
             # DUP flag is bit 3 of byte 0 (MQTT 3.1.1 §4.3.2); identical every
             # retry, so build it once and reuse.
@@ -1243,7 +1263,7 @@ class MQTTClient:
             self.last_error = MQTTError(
                 f"timed out awaiting {pending.awaiting}",
             )
-            self.state = ProtocolState.FAILED
+            self._enter_failed()
             return
 
         if self._send_deadline_ticks is not None:
@@ -1252,7 +1272,7 @@ class MQTTClient:
                     "send timeout: tx queue made no progress for "
                     f"{self._send_timeout_ms} ms",
                 )
-                self.state = ProtocolState.FAILED
+                self._enter_failed()
                 return
 
     def _check_keepalive(self, now_ms):

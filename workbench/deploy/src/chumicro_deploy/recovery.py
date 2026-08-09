@@ -84,6 +84,15 @@ _INSUFFICIENT_MEMORY_PATTERNS = (
     "memory allocation failed",
 )
 
+#: Torn FAT directory entries on the CIRCUITPY volume: entries the
+#: host can list but neither stat nor unlink.  The lead phrase is
+#: emitted verbatim by ``flash_drive.format_fat_corruption_error``
+#: for both the post-rsync stat sweep and the rsync-stderr
+#: ``Invalid argument`` classification, so both surfaces route here.
+_FAT_VOLUME_CORRUPT_PATTERNS = (
+    "fat directory entries",
+)
+
 #: Flash-mode copy to the CIRCUITPY drive failed.  rsync failures,
 #: disk-full, read-only filesystem, I/O errors.
 _FLASH_COPY_PATTERNS = (
@@ -166,7 +175,11 @@ _TRACEBACK_IN_MESSAGE_PATTERN = "traceback (most recent call last)"
 #: 2. ``TRACEBACK_RETURNED`` before bootstrap / flash buckets so a
 #:    board-side traceback lands the same way whether CP RAM raised
 #:    inline or CP flash / MP returned it on the DeployResult.
-#: 3. ``FLASH_COPY_FAILED`` (drive-state subset) wins over
+#: 3. ``FAT_VOLUME_CORRUPT`` before both flash buckets: the corruption
+#:    message embeds rsync stderr, so the broader ``rsync`` pattern in
+#:    the drive-state subset would otherwise swallow it and coach a
+#:    retry that cannot work (only a reformat clears torn entries).
+#:    ``FLASH_COPY_FAILED`` (drive-state subset) wins over
 #:    ``CIRCUITPY_DRIVE_MISSING``: a found-but-full / read-only /
 #:    I/O-erroring drive deserves "free up space / remount" coaching,
 #:    not the generic "tap RESET" CIRCUITPY_DRIVE_MISSING gives.
@@ -187,6 +200,7 @@ _CLASSIFICATION_TABLE: tuple[
     (_CONFIGURATION_PATTERNS, DeployFailureKind.CONFIGURATION_ERROR),
     (_UNRESOLVED_IMPORT_PATTERNS, DeployFailureKind.UNRESOLVED_IMPORT),
     ((_TRACEBACK_IN_MESSAGE_PATTERN,), DeployFailureKind.TRACEBACK_RETURNED),
+    (_FAT_VOLUME_CORRUPT_PATTERNS, DeployFailureKind.FAT_VOLUME_CORRUPT),
     (_FLASH_DRIVE_STATE_PATTERNS, DeployFailureKind.FLASH_COPY_FAILED),
     (_CIRCUITPY_DRIVE_PATTERNS, DeployFailureKind.CIRCUITPY_DRIVE_MISSING),
     (_NO_PYTHON_RUNTIME_PATTERNS, DeployFailureKind.NO_PYTHON_RUNTIME),

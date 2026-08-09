@@ -479,3 +479,101 @@ class TestEscapeSource:
         source = '"""docstring"""\nx = 1'
         result = _escape_source(source)
         assert eval(result) == source
+
+
+class TestLazyExportMaterialization:
+    """PEP-562 lazy exports must survive the class-as-module pattern."""
+
+    def _run_prelude(self, scripts: list[str]) -> dict:
+        """Execute every script but the final test-execution one in a
+        shared namespace, the way the raw REPL runs chunks sequentially,
+        then resolve the deferred queue the way the final script would."""
+        shared: dict = {}
+        for script in scripts[:-1]:
+            exec(script, shared)
+        shared["_retry_deferred"]()
+        return shared
+
+    def test_from_import_shape_materializes(self, tmp_path: Path) -> None:
+        """A package lazy-exporting via ``from pkg._impl import Name``
+        defers while ``_impl`` is a bare stub and resolves on retry, so
+        ``from pkg import Name`` works against the populated module."""
+        import sys
+
+        init_source = (
+            "__all__ = ['Widget']\n"
+            "def __getattr__(name):\n"
+            "    if name == 'Widget':\n"
+            "        from bootpkglazy._impl import Widget\n"
+            "        return Widget\n"
+            "    raise AttributeError(name)\n"
+        )
+        impl_source = "class Widget:\n    pass\n"
+        test_file = tmp_path / "test_x.py"
+        test_file.write_text("def test_ok(): pass")
+        scripts = build_circuitpython_bootstrap_scripts(
+            [("bootpkglazy", init_source), ("bootpkglazy._impl", impl_source)],
+            test_file,
+        )
+        try:
+            self._run_prelude(scripts)
+            module = sys.modules["bootpkglazy"]
+            assert isinstance(module.Widget, type)
+            assert module.Widget.__name__ == "Widget"
+        finally:
+            sys.modules.pop("bootpkglazy", None)
+            sys.modules.pop("bootpkglazy._impl", None)
+
+    def test_getattr_shape_materializes(self, tmp_path: Path) -> None:
+        """A package lazy-exporting via ``import pkg.sub`` + ``getattr``
+        (the mqtt / requests / http_server shape) materializes the same
+        way: the AttributeError against the bare stub converts to a
+        deferral, and the retry resolves it."""
+        import sys
+
+        init_source = (
+            "__all__ = ['Client']\n"
+            "def __getattr__(name):\n"
+            "    if name == 'Client':\n"
+            "        import bootpkggetattr.client as _client\n"
+            "        return _client.Client\n"
+            "    raise AttributeError(name)\n"
+        )
+        client_source = "class Client:\n    pass\n"
+        test_file = tmp_path / "test_x.py"
+        test_file.write_text("def test_ok(): pass")
+        scripts = build_circuitpython_bootstrap_scripts(
+            [
+                ("bootpkggetattr", init_source),
+                ("bootpkggetattr.client", client_source),
+            ],
+            test_file,
+        )
+        try:
+            self._run_prelude(scripts)
+            module = sys.modules["bootpkggetattr"]
+            assert module.Client.__name__ == "Client"
+        finally:
+            sys.modules.pop("bootpkggetattr", None)
+            sys.modules.pop("bootpkggetattr.client", None)
+
+    def test_unresolvable_lazy_export_fails_loudly(self, tmp_path: Path) -> None:
+        """An ``__all__`` name the package can never resolve (a drift
+        bug) must fail the session naming the module, not pass silently."""
+        init_source = (
+            "__all__ = ['Ghost']\n"
+            "def __getattr__(name):\n"
+            "    raise AttributeError(name)\n"
+        )
+        test_file = tmp_path / "test_x.py"
+        test_file.write_text("def test_ok(): pass")
+        scripts = build_circuitpython_bootstrap_scripts(
+            [("bootpkgghost", init_source)], test_file,
+        )
+        import sys
+
+        try:
+            with pytest.raises(ImportError, match="bootpkgghost"):
+                self._run_prelude(scripts)
+        finally:
+            sys.modules.pop("bootpkgghost", None)

@@ -437,8 +437,13 @@ class HttpServer:
         radio: object | None = None,
         ssl_context: object | None = None,
         transport_factory: object | None = None,
+        **constructor_kwargs: object,
     ) -> "HttpServer":
         """Build an :class:`HttpServer` from runtime config.
+
+        Config keys carry the deployment-varying values; any other
+        constructor knob passes through verbatim as a keyword, and an
+        explicit keyword wins over its config-derived value.
 
         Raises:
             MissingConfigKey: Exactly one of the TLS ``cert_path`` / ``key_path`` pair is set.
@@ -477,33 +482,35 @@ class HttpServer:
                 radio=radio, ssl_context=ssl_context,
                 cert_path=cert_path, key_path=key_path,
             )
-        return cls(
-            transport_factory=transport_factory,
-            handler=handler,
-            max_connections=config.get(
+        kwargs = {
+            "transport_factory": transport_factory,
+            "handler": handler,
+            "max_connections": config.get(
                 "http_server.max_connections", DEFAULT_MAX_CONNECTIONS,
             ),
-            request_timeout_ms=config.get(
+            "request_timeout_ms": config.get(
                 "http_server.request_timeout_ms",
                 DEFAULT_REQUEST_TIMEOUT_MS,
             ),
-            max_request_body_bytes=config.get(
+            "max_request_body_bytes": config.get(
                 "http_server.max_request_body_bytes",
                 DEFAULT_MAX_REQUEST_BODY_BYTES,
             ),
-            max_request_line_bytes=config.get(
+            "max_request_line_bytes": config.get(
                 "http_server.max_request_line_bytes",
                 DEFAULT_MAX_REQUEST_LINE_BYTES,
             ),
-            max_headers_bytes=config.get(
+            "max_headers_bytes": config.get(
                 "http_server.max_headers_bytes",
                 DEFAULT_MAX_HEADERS_BYTES,
             ),
-            stream_buffer_size=config.get(
+            "stream_buffer_size": config.get(
                 "http_server.stream_buffer_size",
                 DEFAULT_STREAM_BUFFER_SIZE,
             ),
-        )
+        }
+        kwargs.update(constructor_kwargs)
+        return cls(**kwargs)
 
     def __init__(
         self,

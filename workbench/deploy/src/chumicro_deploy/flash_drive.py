@@ -8,12 +8,14 @@ an injected sleep callable so tests can skip the real settle delay.
 
 from __future__ import annotations
 
+import errno
 import os
 import shutil
 import subprocess
 import sys as _sys_module
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from pathlib import Path
+from typing import NoReturn
 
 from .host_platform import install_hint_for_rsync
 from .runtime_marker import file_targets_runtime, is_test_support_module
@@ -21,6 +23,32 @@ from .runtime_marker import file_targets_runtime, is_test_support_module
 
 class FlashDriveError(Exception):
     """Raised when a flash-drive staging operation fails."""
+
+
+class FatVolumeCorruptionError(FlashDriveError):
+    """Raised when a FAT volume carries torn directory entries.
+
+    A torn entry is one the host can list via ``readdir`` but whose
+    ``stat`` fails with ``EINVAL`` and which cannot be unlinked, the
+    state a FAT directory is left in when cached host-side metadata
+    writes land across a board reset.  The volume cannot be repaired
+    in place; recovery is a full board-filesystem reformat.
+
+    Attributes:
+        corrupted_paths: Volume-relative paths of the torn entries,
+            as enumerated by :func:`scan_for_torn_directory_entries`.
+            May be empty when only rsync's stderr identified the
+            corruption.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        corrupted_paths: tuple[str, ...] = (),
+    ) -> None:
+        super().__init__(message)
+        self.corrupted_paths = corrupted_paths
 
 
 #: Seconds to wait after ``sync``/``os.sync()`` so the USB controller
@@ -337,9 +365,11 @@ def rsync(
             f"{install_hint_for_rsync()}"
         ) from not_found_error
     except subprocess.CalledProcessError as rsync_error:
-        raise FlashDriveError(
-            f"rsync failed: {rsync_error.stderr}"
-        ) from rsync_error
+        _raise_corruption_or_generic_rsync_error(
+            rsync_error,
+            destination,
+            f"rsync failed: {rsync_error.stderr}",
+        )
 
 
 #: Device-generated / device-required files that survive a clean
@@ -436,9 +466,11 @@ def verify_rsync(
             f"{install_hint_for_rsync()}"
         ) from not_found_error
     except subprocess.CalledProcessError as rsync_error:
-        raise FlashDriveError(
-            f"rsync verification failed: {rsync_error.stderr}"
-        ) from rsync_error
+        _raise_corruption_or_generic_rsync_error(
+            rsync_error,
+            destination,
+            f"rsync verification failed: {rsync_error.stderr}",
+        )
     except subprocess.TimeoutExpired as timeout_error:
         raise FlashDriveError(
             f"rsync verification hung past {timeout:.0f}s.  The FAT "
@@ -455,6 +487,132 @@ def verify_rsync(
             if len(parts) == 2:
                 needs_update.append(parts[1])
     return sorted(needs_update)
+
+
+def format_fat_corruption_error(
+    drive_path: Path,
+    corrupted_paths: Iterable[str],
+    *,
+    detail: str = "",
+) -> str:
+    """Build the single actionable message for a torn-FAT volume.
+
+    Names every corrupted path plus the one recovery command that
+    works, so a sweep fails once with instructions instead of every
+    test failing with repeated rsync stderr noise.  The lead phrase
+    ``FAT directory entries`` is load-bearing: the recovery
+    classifier's ``FAT_VOLUME_CORRUPT`` pattern matches on it, so
+    reword only together with the matching pattern in ``recovery.py``.
+
+    Args:
+        drive_path: Mount point of the corrupted volume.
+        corrupted_paths: Volume-relative paths of the torn entries.
+            May be empty when only rsync stderr identified the state.
+        detail: Optional raw diagnostic (typically rsync stderr) to
+            embed for the report.
+    """
+    listing = "\n".join(f"    {path}" for path in corrupted_paths)
+    if not listing:
+        listing = "    (not enumerable from the host; see detail below)"
+    detail_block = f"  rsync reported:\n    {detail}\n" if detail else ""
+    return (
+        f"FAT directory entries on {drive_path} are torn: the host "
+        f"can list them, but stat fails with EINVAL and they cannot "
+        f"be unlinked:\n{listing}\n{detail_block}"
+        f"  The volume cannot be repaired in place.  Run "
+        f"`chumicro-workspace reset-board --device <id> --yes` to "
+        f"reformat the board's filesystem, then re-run the deploy."
+    )
+
+
+def scan_for_torn_directory_entries(
+    drive_path: Path,
+    *,
+    scandir: Callable[[Path], Iterable] = os.scandir,
+) -> list[str]:
+    """Stat every entry under *drive_path* and collect EINVAL casualties.
+
+    Walks the volume with ``scandir`` and calls ``stat`` on each entry.
+    A healthy entry stats cleanly; a torn FAT directory entry is
+    listed by ``readdir`` but fails ``stat`` with ``EINVAL``, so any
+    ``EINVAL`` here is the corruption signature.  Directories whose
+    own listing fails with ``EINVAL`` are recorded the same way.
+    Other per-entry ``OSError`` values (a file deleted mid-walk, a
+    kernel-locked macOS noise directory) are skipped: they are not
+    the torn-entry state this scan exists to find.
+
+    Args:
+        drive_path: Mount point to walk.
+        scandir: Directory-listing callable, ``os.scandir`` by
+            default.  Injectable so tests can model the torn-entry
+            behavior (``readdir`` succeeds, ``stat`` raises
+            ``EINVAL``) without a real corrupted FAT volume.
+
+    Returns:
+        Sorted volume-relative paths of every torn entry.  Empty on a
+        healthy volume.
+    """
+    torn: list[str] = []
+
+    def _relative(path_text: str) -> str:
+        try:
+            return str(Path(path_text).relative_to(drive_path))
+        except ValueError:
+            return path_text
+
+    def _walk(directory: Path) -> None:
+        try:
+            entries = list(scandir(directory))
+        except OSError as list_error:
+            if list_error.errno == errno.EINVAL:
+                torn.append(_relative(str(directory)))
+            return
+        for entry in entries:
+            try:
+                entry.stat(follow_symlinks=False)
+                entry_is_directory = entry.is_dir(follow_symlinks=False)
+            except OSError as stat_error:
+                if stat_error.errno == errno.EINVAL:
+                    torn.append(_relative(entry.path))
+                continue
+            if entry_is_directory:
+                _walk(Path(entry.path))
+
+    _walk(drive_path)
+    return sorted(torn)
+
+
+def _raise_corruption_or_generic_rsync_error(
+    rsync_error: subprocess.CalledProcessError,
+    destination: Path,
+    generic_message: str,
+) -> NoReturn:
+    """Re-raise a failed rsync as corruption when stderr shows EINVAL.
+
+    The rsync command lines built in this module are fixed, so an
+    ``Invalid argument`` in stderr is not a flag problem: it is the
+    OS refusing ``stat`` / ``unlink`` on a torn FAT directory entry
+    (macOS renders ``EINVAL`` as ``fstatat: Invalid argument`` in
+    rsync's output).  On that signature, enumerate the torn entries
+    with :func:`scan_for_torn_directory_entries` and raise the single
+    actionable :class:`FatVolumeCorruptionError`.  Anything else
+    re-raises as a plain :class:`FlashDriveError` with
+    *generic_message*.
+    """
+    stderr_text = rsync_error.stderr or ""
+    if "invalid argument" in stderr_text.lower():
+        corrupted_paths = tuple(
+            scan_for_torn_directory_entries(destination),
+        )
+        raise FatVolumeCorruptionError(
+            format_fat_corruption_error(
+                destination,
+                corrupted_paths,
+                detail=stderr_text.strip(),
+            ),
+            corrupted_paths=corrupted_paths,
+        ) from rsync_error
+    raise FlashDriveError(generic_message) from rsync_error
 
 
 def strip_extended_attributes(path: Path) -> None:
@@ -598,6 +756,47 @@ def cleanup_macos_noise_dirs_post_rsync(drive_path: Path) -> None:
         shutil.rmtree(drive_path / noise_relative, ignore_errors=True)
 
 
+def _force_full_flush_to_media(drive_path: Path) -> None:
+    """Push *drive_path*'s volume writes all the way to the medium.
+
+    ``sync`` alone is not a write barrier on macOS: ``sync(2)``
+    schedules the flush and may return before the buffers are
+    written, and the user-space FSKit ``msdos`` extension caches FAT
+    metadata above the block layer.  ``fcntl``'s ``F_FULLFSYNC`` on a
+    descriptor opened at the mount point asks the filesystem and the
+    drive to complete every outstanding write for that volume, the
+    strongest barrier available from user space.  Falls back to
+    ``os.fsync`` where ``F_FULLFSYNC`` is unsupported.  Failures
+    print a warning and return: the ``sync`` + settle delay the
+    caller already runs stay in effect, and a weaker flush must not
+    become a hard deploy failure.
+    """
+    try:
+        descriptor = os.open(drive_path, os.O_RDONLY)
+    except OSError as open_error:
+        print(
+            f"WARNING: cannot open {drive_path} for a full flush "
+            f"({open_error}); relying on sync + settle delay only"
+        )
+        return
+    try:
+        if _sys_module.platform == "darwin":
+            import fcntl
+            try:
+                fcntl.fcntl(descriptor, fcntl.F_FULLFSYNC)
+                return
+            except OSError:
+                pass
+        os.fsync(descriptor)
+    except OSError as fsync_error:  # pragma: no cover -defensive
+        print(
+            f"WARNING: full flush of {drive_path} failed "
+            f"({fsync_error}); relying on sync + settle delay only"
+        )
+    finally:
+        os.close(descriptor)
+
+
 def flush_volume(
     drive_path: Path,
     *,
@@ -606,9 +805,16 @@ def flush_volume(
 ) -> None:
     """Flush pending writes to the volume containing *drive_path*.
 
-    On macOS, calls the ``sync`` command; on other platforms, uses
-    ``os.sync()``.  Always waits briefly afterward to let the USB
-    controller finish writing to FAT32 media.
+    Three layers, weakest to strongest: the ``sync`` command (or
+    ``os.sync()`` off macOS) schedules every volume's dirty buffers;
+    ``F_FULLFSYNC`` on the mount point (via
+    :func:`_force_full_flush_to_media`) waits until this volume's
+    writes have actually reached the medium; the settle delay gives
+    the board's USB-MSC controller time to finish its own FAT
+    bookkeeping.  All three must have completed before anything
+    resets the board, because a reset that lands while host-side FAT
+    metadata is still cached can tear directory entries into an
+    unreadable, undeletable state.
 
     The settle delay goes through the injected *sleep* callable so
     tests can use a fake time source to skip it without sleeping
@@ -639,4 +845,5 @@ def flush_volume(
     else:
         os.sync()  # pragma: no cover -tests run on macOS
 
+    _force_full_flush_to_media(drive_path)
     sleep(settle_delay)

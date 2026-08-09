@@ -12,8 +12,8 @@ from chumicro_mqtt import MQTTClient
 
 # from_config builds the transport factory: the client dials the broker
 # without blocking (one connect phase per tick) and self-heals after a
-# drop.  On CircuitPython add radio=wifi.radio from the built-in wifi
-# module; MicroPython and CPython need no radio.
+# drop.  On CircuitPython add radio=wifi.adapter.radio from your
+# chumicro-wifi WifiService; MicroPython and CPython need no radio.
 client = MQTTClient.from_config(
     {"mqtt.broker.host": "broker.example.com", "mqtt.broker.port": 1883},
 )

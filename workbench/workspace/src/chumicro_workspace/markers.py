@@ -43,6 +43,11 @@ from dataclasses import dataclass, field
 _DEFERRED_MARKER_CAP = 256
 _MALFORMED_LINE_CAP = 8
 
+#: Queue-poll slice while a ``pump=`` callable is set on ``wait_for``:
+#: short enough that the pumped counterparty ticks at reactor cadence,
+#: long enough that a quiet wait still sleeps instead of spinning.
+_PUMP_POLL_INTERVAL_S = 0.02
+
 _MARKER_NAME_PATTERN = re.compile(r"^([A-Z][A-Z0-9_]*)(?:\s+(.*))?$")
 _KEY_VALUE_PATTERN = re.compile(r"^([a-z_][a-z0-9_]*)=([^=\s]+)$")
 _RESERVED_MARKER_NAMES = frozenset(
@@ -186,12 +191,17 @@ class MarkerQueue:
                 return marker
             self._defer(marker)
 
-    def wait_for(self, name: str, *, timeout_s: float) -> Marker:
+    def wait_for(self, name: str, *, timeout_s: float, pump=None) -> Marker:
         """Block until a marker named *name* arrives, or raise on timeout.
 
         Args:
             name: The marker name to wait for (uppercase identifier).
             timeout_s: Seconds to wait before giving up.
+            pump: Optional zero-arg callable invoked between queue
+                polls, for a caller running a live counterparty (a
+                host-side client whose reactor must keep ticking while
+                the board works).  With *pump* set the wait polls in
+                short slices instead of blocking for the full timeout.
 
         Returns:
             The matching :class:`Marker`, either retained from an
@@ -214,9 +224,19 @@ class MarkerQueue:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 raise MarkerTimeoutError(self._timeout_message(name, timeout_s))
+            if pump is None:
+                slice_s = remaining
+            else:
+                pump()
+                slice_s = (
+                    _PUMP_POLL_INTERVAL_S
+                    if remaining > _PUMP_POLL_INTERVAL_S else remaining
+                )
             try:
-                marker = self._queue.get(timeout=remaining)
+                marker = self._queue.get(timeout=slice_s)
             except queue.Empty as empty:
+                if pump is not None:
+                    continue
                 raise MarkerTimeoutError(
                     self._timeout_message(name, timeout_s),
                 ) from empty

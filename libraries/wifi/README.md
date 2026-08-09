@@ -33,11 +33,11 @@ User-app pattern (the 4-line bring-up):
 ```python
 from chumicro_config import load_runtime_config
 from chumicro_runner import Runner
-from chumicro_wifi import WifiConfig, WifiService
+from chumicro_wifi import WifiService
 
 config = load_runtime_config()
 runner = Runner()
-wifi = WifiService(WifiConfig.from_config(config))
+wifi = WifiService.from_config(config)
 runner.add(wifi)
 ```
 
@@ -56,7 +56,7 @@ wifi.on_state_change(lambda old, new: print(f"{old} -> {new}"))
 | Symbol | What it does |
 |---|---|
 | `WifiConfig` | Typed connection settings (`ssid`, `password`, hostname, timeouts, reconnect tuning).  `from_config(config)` reads the flat `wifi.*` keys; `try_from_config(config)` returns `None` when the section isn't deployed. |
-| `WifiService` | State machine + reconnect supervisor; implements `Runner.add()`-compatible `check`/`handle`. Auto-detects the runtime adapter at construction time (`FakeWifiAdapter` on CPython, `CpWifiAdapter` on CircuitPython, substrate-aware `MpWifiAdapter` on MicroPython, handling ESP-IDF + CYW43 transparently). |
+| `WifiService` | State machine + reconnect supervisor; implements `Runner.add()`-compatible `check`/`handle`.  `from_config(config, radio=None, ...)` builds it straight from the flat `wifi.*` keys; extra keywords pass through to the constructor. Auto-detects the runtime adapter at construction time (the `CpythonWifiAdapter` host stand-in on CPython, `CpWifiAdapter` on CircuitPython, substrate-aware `MpWifiAdapter` on MicroPython, handling ESP-IDF + CYW43 transparently). |
 | `WifiState` | String-sentinel state names: `DISCONNECTED`, `CONNECTING`, `CONNECTED`, `RECONNECTING`, `FAILED`. |
 | `chumicro_wifi.testing.FakeWifi` | Drop-in `WifiService` wrapping a `FakeWifiAdapter` with `set_connect_outcome`, `drop_link`, `calls` hooks for downstream library tests. |
 
@@ -66,7 +66,7 @@ Depends on [`chumicro-config`](https://github.com/ChuMicro/ChuMicro/tree/main/li
 
 ## Platform support
 
-Works on CPython, MicroPython, and CircuitPython.  Ships three adapters: CircuitPython `wifi.radio` (`_adapters/cp.py`), MicroPython `network.WLAN` covering both ESP-IDF (ESP32 family) and CYW43 (Pi Pico W) stacks (`_adapters/mp.py`), and a `FakeWifiAdapter` for host-side tests.  The right adapter is selected at runtime via `sys.implementation.name`; the MP adapter then auto-detects ESP-IDF vs CYW43 by matching `sys.implementation._machine` against a positive whitelist of known CYW43 boards.
+Works on CPython, MicroPython, and CircuitPython.  Ships three runtime adapters: CircuitPython `wifi.radio` (`_adapters/cp.py`), MicroPython `network.WLAN` covering both ESP-IDF (ESP32 family) and CYW43 (Pi Pico W) stacks (`_adapters/mp.py`), and a CPython host stand-in that reports success immediately (`_adapters/cpython.py`); `chumicro_wifi.testing.FakeWifiAdapter` covers host-side tests.  The right adapter is selected at runtime via `sys.implementation.name`; the MP adapter then auto-detects ESP-IDF vs CYW43 by matching `sys.implementation._machine` against a positive whitelist of known CYW43 boards.
 
 ### CircuitPython connect is blocking (read this if you're shipping to CP)
 
@@ -82,7 +82,7 @@ MicroPython's `wlan.connect()` is genuinely non-blocking on both ESP32 and Pi Pi
 
 ## Wiring wifi credentials
 
-The library never reads TOML itself: it takes a `WifiConfig` and connects.  `WifiConfig.from_config(config)` is the construction path the standard pipeline uses, reading credentials from your project's runtime config under the `wifi.*` keys (`wifi.ssid`, `wifi.password`).  To get those credentials onto the device, deploy them as part of a workspace-based deploy or a raw single-file deploy.  The bundled `connect_to_ap.py` example and the on-device acceptance test both read the credentials this way and skip silently when none are configured.
+The library never reads TOML itself: it takes a `WifiConfig` and connects.  `WifiService.from_config(config)` is the construction path the standard pipeline uses, reading credentials from your project's runtime config under the `wifi.*` keys (`wifi.ssid`, `wifi.password`) through the same `WifiConfig.from_config(config)` loader that also works standalone.  To get those credentials onto the device, deploy them as part of a workspace-based deploy or a raw single-file deploy.  The bundled `connect_to_ap.py` example and the on-device acceptance test both read the credentials this way and skip silently when none are configured.
 
 ## Contributing
 

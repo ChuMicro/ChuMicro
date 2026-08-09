@@ -32,13 +32,15 @@ class CpNvmBackend(Backend):
             ) from error
         return microcontroller.nvm  # pragma: no cover - CP runtime path
 
-    def load(self) -> bytes:
+    def load(self) -> bytes | bytearray:
         # All-0xFF (flash-erased) or all-0x00 (how some chips power up) is a blank slab, not corruption.
-        magic = bytes(self._nvm[0 : len(self.HEADER_MAGIC)])
+        # Subscript reads copy out of the NVM slab already, so the
+        # bytearray results are used as-is: one copy per byte, not two.
+        magic = self._nvm[0 : len(self.HEADER_MAGIC)]
         if magic in (b"\xff\xff\xff\xff", b"\x00\x00\x00\x00"):
             return b""
         if magic != self.HEADER_MAGIC:
-            raise KVStoreCorrupt(f"NVM magic mismatch: got {magic!r}")
+            raise KVStoreCorrupt(f"NVM magic mismatch: got {bytes(magic)!r}")
 
         length = int.from_bytes(self._nvm[4:6], "little")
         if length > self.capacity:
@@ -47,7 +49,7 @@ class CpNvmBackend(Backend):
             )
 
         stored_crc = int.from_bytes(self._nvm[6:10], "little")
-        payload = bytes(self._nvm[self.HEADER_SIZE : self.HEADER_SIZE + length])
+        payload = self._nvm[self.HEADER_SIZE : self.HEADER_SIZE + length]
         actual_crc = binascii.crc32(payload) & 0xFFFFFFFF
         if actual_crc != stored_crc:
             raise KVStoreCorrupt(

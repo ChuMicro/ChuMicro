@@ -134,21 +134,18 @@ def ssl_context_with_ca(ca_pem):
     """
     # Validate before importing ssl, which is absent on the CP unix-port.
     if isinstance(ca_pem, (bytes, bytearray)):
-        if b"-----BEGIN CERTIFICATE-----" not in bytes(ca_pem):
-            raise ValueError(
-                "CircuitPython ssl_context_with_ca requires PEM input "
-                "(-----BEGIN CERTIFICATE-----); CP's load_verify_locations "
-                "binding cannot accept DER.  Convert to PEM, or pass DER "
-                "only on MicroPython / CPython.",
-            )
-        ca_pem = bytes(ca_pem).decode("ascii")
-    elif "-----BEGIN CERTIFICATE-----" not in ca_pem:
+        pem_marker_found = b"-----BEGIN CERTIFICATE-----" in bytes(ca_pem)
+    else:
+        pem_marker_found = "-----BEGIN CERTIFICATE-----" in ca_pem
+    if not pem_marker_found:
         raise ValueError(
             "CircuitPython ssl_context_with_ca requires PEM input "
             "(-----BEGIN CERTIFICATE-----); CP's load_verify_locations "
             "binding cannot accept DER.  Convert to PEM, or pass DER "
             "only on MicroPython / CPython.",
         )
+    if isinstance(ca_pem, (bytes, bytearray)):
+        ca_pem = bytes(ca_pem).decode("ascii")
     import ssl  # noqa: PLC0415
 
     context = ssl.create_default_context()

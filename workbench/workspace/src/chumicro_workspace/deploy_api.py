@@ -102,7 +102,7 @@ class DeployedProject:
 
     _shutdown_called: bool = field(default=False, init=False, repr=False)
 
-    def wait_for(self, marker_name: str, *, timeout_s: float) -> Marker:
+    def wait_for(self, marker_name: str, *, timeout_s: float, pump=None) -> Marker:
         """Block until *marker_name* arrives on the board's stdout.
 
         Forwards to :meth:`DeviceBootstrapRunner.wait_for`.  Non-matching
@@ -115,8 +115,13 @@ class DeployedProject:
             marker_name: The marker name to wait for (uppercase identifier).
             timeout_s: Seconds to wait before raising
                 :class:`chumicro_workspace.markers.MarkerTimeoutError`.
+            pump: Optional zero-arg callable invoked between marker
+                polls, so a driver running a live counterparty (a
+                host-side MQTT client, an HTTP poller) keeps it ticking
+                through the wait instead of re-implementing the
+                poll-and-pump loop.
         """
-        return self.runner.wait_for(marker_name, timeout_s=timeout_s)
+        return self.runner.wait_for(marker_name, timeout_s=timeout_s, pump=pump)
 
     def wait_for_completion(self, *, timeout_s: float) -> str:
         """Join the bootstrap thread; return the captured stdout.

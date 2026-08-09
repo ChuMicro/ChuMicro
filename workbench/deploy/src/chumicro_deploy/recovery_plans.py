@@ -126,6 +126,22 @@ PLANS: dict[DeployFailureKind, RecoveryPlan] = {
         ),
         retryable=True,
     ),
+    DeployFailureKind.FAT_VOLUME_CORRUPT: RecoveryPlan(
+        headline=(
+            "The CIRCUITPY drive's FAT is corrupt: it carries torn "
+            "directory entries the host can neither read nor delete."
+        ),
+        fix_steps=(
+            "Reformat the board's filesystem: run "
+            "`chumicro-workspace reset-board --yes --device <id>`.  "
+            "Destructive: every user file on the board is wiped.",
+            "Skip in-place repair attempts.  `rm`, `rm -rf`, and rsync "
+            "all fail on torn entries with `Invalid argument`, and a "
+            "retry without the reformat fails the same way.",
+            "After the board re-enumerates, re-run the deploy.",
+        ),
+        retryable=False,
+    ),
     DeployFailureKind.FLASH_COPY_FAILED: RecoveryPlan(
         headline="Copying files to the CIRCUITPY drive failed.",
         fix_steps=(

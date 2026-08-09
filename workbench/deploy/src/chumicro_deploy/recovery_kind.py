@@ -27,6 +27,7 @@ class DeployFailureKind(Enum):
     NO_PYTHON_RUNTIME = "no_python_runtime"
     CIRCUITPY_DRIVE_MISSING = "circuitpy_drive_missing"
     MACOS_FSKIT_WEDGED = "macos_fskit_wedged"
+    FAT_VOLUME_CORRUPT = "fat_volume_corrupt"
     FLASH_COPY_FAILED = "flash_copy_failed"
     BOOTSTRAP_EXEC_FAILED = "bootstrap_exec_failed"
     INSUFFICIENT_MEMORY = "insufficient_memory"

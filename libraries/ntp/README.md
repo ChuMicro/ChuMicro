@@ -33,7 +33,8 @@ from chumicro_ntp import NTPClient
 from chumicro_sockets import udp_socket
 from chumicro_timing import ticks_ms
 
-# On CircuitPython pass radio=wifi.radio; the kwarg is ignored on MP / CPython.
+# On CircuitPython pass radio=wifi.adapter.radio (your chumicro-wifi
+# WifiService's board radio); the kwarg is ignored on MP / CPython.
 sock = udp_socket(radio=None)
 sock.setblocking(False)                     # required: a blocking recv wedges on packet loss
 client = NTPClient(socket=sock, server="pool.ntp.org")

@@ -345,6 +345,41 @@ def test_classify_configuration_wins_over_drive_missing() -> None:
     )
 
 
+def test_classify_fat_corruption_message() -> None:
+    # The message flash_drive.format_fat_corruption_error emits routes
+    # to FAT_VOLUME_CORRUPT (reformat coaching), not a generic bucket.
+    error = CircuitpythonTransportError(
+        "FAT directory entries on /Volumes/CIRCUITPY are torn: the "
+        "host can list them, but stat fails with EINVAL and they "
+        "cannot be unlinked:\n    lib/chumicro_config/section.py\n"
+        "  The volume cannot be repaired in place.  Run "
+        "`chumicro-workspace reset-board --device <id> --yes` to "
+        "reformat the board's filesystem, then re-run the deploy."
+    )
+    assert (
+        classify_deploy_failure(error)
+        is DeployFailureKind.FAT_VOLUME_CORRUPT
+    )
+
+
+def test_classify_fat_corruption_wins_over_rsync_flash_state() -> None:
+    # The corruption message embeds rsync stderr, and "rsync" is a
+    # _FLASH_DRIVE_STATE_PATTERNS trigger.  Corruption must win: its
+    # coaching is "reformat", where FLASH_COPY_FAILED coaches a retry
+    # that cannot succeed against torn entries.
+    error = CircuitpythonTransportError(
+        "FAT directory entries on /Volumes/CIRCUITPY are torn: the "
+        "host can list them, but stat fails with EINVAL and they "
+        "cannot be unlinked:\n    lib/chumicro_mqtt/_wire.py\n"
+        "  rsync reported:\n    rsync: fstatat: Invalid argument\n"
+        "  The volume cannot be repaired in place."
+    )
+    assert (
+        classify_deploy_failure(error)
+        is DeployFailureKind.FAT_VOLUME_CORRUPT
+    )
+
+
 # ---------------------------------------------------------------------------
 # recovery_plan_for: every kind has a plan with non-empty fix_steps
 # ---------------------------------------------------------------------------
@@ -390,6 +425,21 @@ def test_no_python_runtime_is_not_retryable() -> None:
     consent, never an auto-loop retry."""
     plan = recovery_plan_for(DeployFailureKind.NO_PYTHON_RUNTIME)
     assert plan.retryable is False
+
+
+def test_fat_volume_corrupt_is_not_retryable() -> None:
+    # Torn FAT entries survive RESET and retry; only a reformat clears
+    # them, so the recovery loop must bail immediately.
+    plan = recovery_plan_for(DeployFailureKind.FAT_VOLUME_CORRUPT)
+    assert plan.retryable is False
+
+
+def test_fat_volume_corrupt_plan_names_reset_board() -> None:
+    """The coaching must name the one command that actually recovers
+    a torn FAT (chumicro-workspace reset-board)."""
+    plan = recovery_plan_for(DeployFailureKind.FAT_VOLUME_CORRUPT)
+    flat = " ".join(plan.fix_steps).lower()
+    assert "reset-board" in flat
 
 
 def test_no_python_runtime_plan_points_at_install_firmware() -> None:

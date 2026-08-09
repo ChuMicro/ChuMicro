@@ -96,3 +96,31 @@ class TestDefaultClientId:
 
     def test_custom_prefix(self) -> None:
         assert default_client_id(prefix="dev").startswith("dev-")
+
+
+class TestConstructorPassthrough:
+    """Constructor knobs with no manifest key ride ``from_config`` as
+    keywords, and an explicit keyword wins over its config-derived
+    value."""
+
+    @staticmethod
+    def _factory(sock: FakeSocket):
+        return lambda: FakeSocketConnector(
+            actions=["dns_ok", "tcp_ok"], socket=sock,
+        )
+
+    def test_tuning_kwarg_reaches_constructor(self) -> None:
+        client = MQTTClient.from_config(
+            {"mqtt.broker.host": "h", "mqtt.broker.port": 1},
+            transport_factory=self._factory(FakeSocket()),
+            rx_buffer_size=1024,
+        )
+        assert client._rx_buffer_size == 1024  # noqa: SLF001
+
+    def test_explicit_kwarg_wins_over_config(self) -> None:
+        client = MQTTClient.from_config(
+            {"mqtt.keep_alive_seconds": 120},
+            transport_factory=self._factory(FakeSocket()),
+            keep_alive_seconds=5,
+        )
+        assert client._keep_alive_seconds == 5  # noqa: SLF001

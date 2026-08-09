@@ -830,6 +830,174 @@ class TestSoftReset:
             transport.soft_reset()
 
 
+class TestFlushBeforeBoardReset:
+    """Tests for the flash-mode volume flush that precedes board resets.
+
+    A reset landing while macOS still holds dirty FAT metadata can
+    tear directory entries into an EINVAL state, so every reset path
+    (soft reset, filesystem wipe, bootloader reset) must drain the
+    host cache first.
+    """
+
+    @staticmethod
+    def _record_flush_calls(
+        monkeypatch: pytest.MonkeyPatch, events: list[tuple[str, object]],
+    ) -> None:
+        """Replace ``flash_drive.flush_volume`` with an event recorder."""
+
+        def recording_flush(
+            drive_path: Path,
+            *,
+            sleep: object,
+            settle_delay: float = 0.0,
+        ) -> None:
+            events.append(("flush", drive_path))
+
+        monkeypatch.setattr(
+            "chumicro_deploy.flash_drive.flush_volume", recording_flush,
+        )
+
+    @staticmethod
+    def _record_port_writes(
+        port: FakeSerialPort, events: list[tuple[str, object]],
+    ) -> None:
+        """Wrap *port*'s write so every wire write lands in *events*."""
+        original_write = port.write
+
+        def recording_write(data: bytes) -> int | None:
+            events.append(("write", data))
+            return original_write(data)
+
+        port.write = recording_write  # type: ignore[method-assign]
+
+    def test_soft_reset_flushes_flash_volume_before_ctrl_d(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Flash-mode soft_reset flushes the CIRCUITPY volume, then
+        sends the Ctrl-D that reboots the board.
+        """
+        drive = tmp_path / "CIRCUITPY"
+        drive.mkdir()
+        events: list[tuple[str, object]] = []
+        self._record_flush_calls(monkeypatch, events)
+
+        port = FakeSerialPort(
+            read_responses=[
+                _RAW_REPL_PROMPT,   # connect
+                _RAW_REPL_PROMPT,   # re-enter after soft reset
+            ],
+        )
+        transport = CircuitpythonTransport(
+            "/dev/ttyUSB0",
+            mode="flash",
+            serial_port_factory=port,
+            time=FakeTime(),
+            drive_scanner=lambda: [drive],
+        )
+        transport.connect()
+        self._record_port_writes(port, events)
+
+        transport.soft_reset()
+
+        assert ("flush", drive) in events
+        flush_index = events.index(("flush", drive))
+        ctrl_d_index = events.index(("write", _CTRL_D))
+        assert flush_index < ctrl_d_index
+
+    def test_soft_reset_ram_mode_does_not_flush(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """RAM mode never writes to the drive, so its soft reset must
+        not scan or flush volumes.
+        """
+        events: list[tuple[str, object]] = []
+        self._record_flush_calls(monkeypatch, events)
+
+        port = FakeSerialPort(
+            read_responses=[_RAW_REPL_PROMPT, _RAW_REPL_PROMPT],
+        )
+        transport = CircuitpythonTransport(
+            "/dev/ttyUSB0",
+            serial_port_factory=port,
+            time=FakeTime(),
+            drive_scanner=lambda: [tmp_path],
+        )
+        transport.connect()
+
+        transport.soft_reset()
+
+        assert events == []
+
+    def test_wipe_filesystem_flushes_before_erase_command(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """The flush runs before ``storage.erase_filesystem()`` goes on
+        the wire, so no host cache write can land mid-reformat.
+        """
+        drive = tmp_path / "CIRCUITPY"
+        drive.mkdir()
+        events: list[tuple[str, object]] = []
+        self._record_flush_calls(monkeypatch, events)
+
+        first_port = FakeSerialPort(read_responses=[_RAW_REPL_PROMPT])
+        second_port = FakeSerialPort(read_responses=[_RAW_REPL_PROMPT])
+        ports = [first_port, second_port]
+        transport = CircuitpythonTransport(
+            "/dev/ttyUSB0",
+            mode="flash",
+            timeout=0.05,
+            serial_port_factory=lambda **_kwargs: ports.pop(0),
+            time=FakeTime(),
+            drive_scanner=lambda: [drive],
+        )
+        transport.connect()
+        self._record_port_writes(first_port, events)
+
+        transport.wipe_filesystem()
+
+        flush_index = events.index(("flush", drive))
+        erase_index = next(
+            index
+            for index, (label, payload) in enumerate(events)
+            if label == "write"
+            and b"storage.erase_filesystem" in payload  # type: ignore[operator]
+        )
+        assert flush_index < erase_index
+
+    def test_reset_into_bootloader_flushes_flash_volume(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A bootloader reset detaches USB-MSC outright, so the flush
+        must precede the reset command.
+        """
+        drive = tmp_path / "CIRCUITPY"
+        drive.mkdir()
+        events: list[tuple[str, object]] = []
+        self._record_flush_calls(monkeypatch, events)
+
+        port = FakeSerialPort(read_responses=[_RAW_REPL_PROMPT, _OK_RESPONSE])
+        transport = CircuitpythonTransport(
+            "/dev/ttyUSB0",
+            mode="flash",
+            serial_port_factory=port,
+            time=FakeTime(),
+            drive_scanner=lambda: [drive],
+        )
+        transport.connect()
+        self._record_port_writes(port, events)
+
+        assert transport.reset_into_bootloader() is True
+
+        flush_index = events.index(("flush", drive))
+        reset_index = next(
+            index
+            for index, (label, payload) in enumerate(events)
+            if label == "write"
+            and b"microcontroller.reset" in payload  # type: ignore[operator]
+        )
+        assert flush_index < reset_index
+
+
 class TestDisconnect:
     """Tests for CircuitpythonTransport.disconnect."""
 
@@ -1278,6 +1446,48 @@ class TestFlashMode:
 
         # The one sanctioned per-context divergence, named.
         assert transport._post_stage_step is PostStageStep.HARNESS_EXEC_OVER_REPL
+
+        transport.disconnect()
+
+    def test_flash_stage_fails_loud_on_torn_directory_entries(
+        self, tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A torn FAT entry found by the post-sync stat sweep fails the
+        stage with one actionable error naming the path and the
+        reset-board recovery command, before any reset can land.
+        """
+        drive_path = tmp_path / "CIRCUITPY"
+        drive_path.mkdir()
+        source_dir = tmp_path / "src"
+        source_dir.mkdir()
+        harness_dir = tmp_path / "harness"
+        harness_dir.mkdir()
+        monkeypatch.setattr(
+            "chumicro_deploy.flash_drive.scan_for_torn_directory_entries",
+            lambda _drive_path: ["lib/chumicro_config/section.py"],
+        )
+
+        # Sequence: connect (prompt), stage's _enter_raw_repl (prompt),
+        # autoreload-off (OK).  The corruption error fires before the
+        # FAT cache refresh, so no further REPL traffic follows.
+        port = FakeSerialPort(
+            read_responses=[
+                _RAW_REPL_PROMPT,
+                _RAW_REPL_PROMPT, _OK_RESPONSE,
+            ],
+        )
+        transport = self._make_flash_transport(port, str(drive_path), monkeypatch)
+        transport.connect()
+
+        with pytest.raises(
+            CircuitpythonTransportError,
+            match="FAT directory entries",
+        ) as exc_info:
+            transport.stage([source_dir], [], harness_dir)
+        message = str(exc_info.value)
+        assert "lib/chumicro_config/section.py" in message
+        assert "reset-board" in message
 
         transport.disconnect()
 
@@ -2056,6 +2266,62 @@ class TestDeployFiles:
         transport.deploy_files({"/code.py": b"pass"}, "/code.py")
         combined_writes = b"".join(port.writes).decode("utf-8", errors="replace")
         assert "supervisor.runtime.autoreload = False" in combined_writes
+
+    def test_flushes_volume_again_directly_before_soft_reboot(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """The last three steps before the reboot are flush, Ctrl-B,
+        Ctrl-D, in that order.
+
+        The staging push flushes once, but the post-rsync verification
+        re-reads the volume afterwards, so a second flush must be the
+        final host-side drive operation before the Ctrl-D lands.
+        """
+        drive = tmp_path / "CIRCUITPY"
+        drive.mkdir()
+        events: list[tuple[str, object]] = []
+
+        def recording_flush(
+            drive_path: Path,
+            *,
+            sleep: object,
+            settle_delay: float = 0.0,
+        ) -> None:
+            events.append(("flush", drive_path))
+
+        monkeypatch.setattr(
+            "chumicro_deploy.flash_drive.flush_volume", recording_flush,
+        )
+
+        extra = [
+            _RAW_REPL_PROMPT,
+            _OK_RESPONSE,
+            self._stat_response(len(b"pass")),
+            self._boot_output(b""),
+            _RAW_REPL_PROMPT,
+        ]
+        transport, port = self._connect(
+            drive_path=str(drive), extra_responses=extra,
+            monkeypatch=monkeypatch,
+        )
+        original_write = port.write
+
+        def recording_write(data: bytes) -> int | None:
+            events.append(("write", data))
+            return original_write(data)
+
+        port.write = recording_write  # type: ignore[method-assign]
+
+        transport.deploy_files({"/code.py": b"pass"}, "/code.py")
+
+        from chumicro_deploy.circuitpython_transport import _CTRL_B
+        flush_events = [event for event in events if event[0] == "flush"]
+        assert len(flush_events) == 2  # staging push + pre-reboot barrier
+        assert events[-3:] == [
+            ("flush", drive),
+            ("write", _CTRL_B),
+            ("write", _CTRL_D),
+        ]
 
     def test_on_file_staged_invoked_per_file_sorted(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,

@@ -253,3 +253,44 @@ class TestMarkerQueueOfferLine:
         with pytest.raises(MarkerTimeoutError) as exc_info:
             queue.wait_for("SERVER_READY", timeout_s=0.05)
         assert "failed to parse" not in str(exc_info.value)
+
+
+class TestWaitForPump:
+    """``wait_for(pump=...)`` keeps a host-side counterparty ticking."""
+
+    def test_pump_runs_between_polls_until_marker_arrives(self) -> None:
+        """The pump callable fires repeatedly during the wait, and a
+        marker it pushes itself is still delivered."""
+        queue = MarkerQueue()
+        pump_calls = []
+
+        def pump() -> None:
+            pump_calls.append(1)
+            if len(pump_calls) == 3:
+                queue.push(Marker(name="PUMPED_IN", values={}))
+
+        marker = queue.wait_for("PUMPED_IN", timeout_s=2.0, pump=pump)
+        assert marker.name == "PUMPED_IN"
+        assert len(pump_calls) >= 3
+
+    def test_pump_timeout_still_raises_with_context(self) -> None:
+        """A pumped wait that never sees its marker times out with the
+        same MarkerTimeoutError, after multiple pump iterations."""
+        queue = MarkerQueue()
+        pump_calls = []
+        with pytest.raises(MarkerTimeoutError, match="NEVER_COMES"):
+            queue.wait_for(
+                "NEVER_COMES", timeout_s=0.15,
+                pump=lambda: pump_calls.append(1),
+            )
+        assert len(pump_calls) >= 2
+
+    def test_pump_wait_retains_non_matching_markers(self) -> None:
+        """Non-matching markers arriving during a pumped wait stay
+        retained for later waits, matching the blocking contract."""
+        queue = MarkerQueue()
+        queue.push(Marker(name="EARLY", values={}))
+        queue.push(Marker(name="TARGET", values={}))
+        marker = queue.wait_for("TARGET", timeout_s=1.0, pump=lambda: None)
+        assert marker.name == "TARGET"
+        assert queue.wait_for("EARLY", timeout_s=0.1).name == "EARLY"

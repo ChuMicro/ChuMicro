@@ -1,6 +1,12 @@
 import errno
 from collections import deque
 
+try:
+    from micropython import const
+except ImportError:
+    def const(value):
+        return value
+
 from chumicro_websockets._wire import (
     CLOSE_BAD_DATA,
     CLOSE_INTERNAL_ERROR,
@@ -29,14 +35,17 @@ from chumicro_websockets._wire import (
 )
 
 # Cap on zero-length continuation frames: an unbounded run is a liveness stall.
-_MAX_EMPTY_FRAGMENT_RUN = 64
+_MAX_EMPTY_FRAGMENT_RUN = const(64)
 
-# Mirror chumicro_runner.IO_READ / IO_WRITE by value; literals avoid a runner dependency.
+# Mirror chumicro_runner.IO_READ / IO_WRITE by value; literals avoid a
+# runner dependency.  Not const(): client.py and server.py import these,
+# and MicroPython's compiler keeps an underscore-named const() out of
+# module globals, breaking the cross-module import.
 _IO_READ = 1
 _IO_WRITE = 2
 
 # Slots of protocol-internal headroom above the user TX-queue bound.
-_TX_QUEUE_HEADROOM = 8
+_TX_QUEUE_HEADROOM = const(8)
 
 
 class WhenOversized:
@@ -249,6 +258,9 @@ class _BaseSession:
             raise WebSocketStateError(
                 f"send_binary() requires OPEN state, was {self.state}",
             )
+        # The one send path whose payload is not naturally coerced
+        # (text goes through str.encode, ping through bytes()), so a
+        # wrong type here would reach the frame encoder raw.
         if not isinstance(data, (bytes, bytearray, memoryview)):
             raise TypeError(
                 f"send_binary() requires bytes, bytearray, or memoryview; "
@@ -628,17 +640,24 @@ class _BaseSession:
             self._close_timeout_ms,
         )
 
+    def _drop_transport(self) -> None:
+        # Best-effort close (the peer may already have dropped TCP),
+        # then settle CLOSED and disarm every session timer.
+        try:
+            if self._socket is not None:
+                self._socket.close()
+        except Exception:  # noqa: BLE001 - best-effort socket teardown
+            pass
+        self.state = WebSocketState.CLOSED
+        self._handshake_deadline_ticks = None
+        self._close_deadline_ticks = None
+        self._pending_ping_deadline_ticks = None
+
     def _finalize_closed(self) -> None:
         # Flush the CLOSE frame so the peer sees our reply before we drop TCP.
         if self._tx_queue or self._tx_partial_buffer is not None:
             self._drain_outbound()
-        try:
-            self._socket.close()
-        except Exception:  # noqa: BLE001 - best-effort socket teardown
-            pass
-        self.state = WebSocketState.CLOSED
-        self._close_deadline_ticks = None
-        self._pending_ping_deadline_ticks = None
+        self._drop_transport()
         self._on_finalized()
         code = self.last_close_code if self.last_close_code is not None else CLOSE_NORMAL
         self.on_close(code, self.last_close_reason)
@@ -649,14 +668,7 @@ class _BaseSession:
         if self.last_close_code is None:
             self.last_close_code = CLOSE_INTERNAL_ERROR
             self.last_close_reason = str(error)
-        try:
-            if self._socket is not None:
-                self._socket.close()
-        except Exception:  # noqa: BLE001 - best-effort
-            pass
-        self.state = WebSocketState.CLOSED
-        self._close_deadline_ticks = None
-        self._pending_ping_deadline_ticks = None
+        self._drop_transport()
         self._on_finalized()
         self.on_close(self.last_close_code, self.last_close_reason)
 

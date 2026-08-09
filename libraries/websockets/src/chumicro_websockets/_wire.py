@@ -410,10 +410,14 @@ class _HandshakeLineParser:
         return position - self._read_offset
 
     def _live_slice(self, start, length=None):
+        # A memoryview, not a bytearray slice: every caller immediately
+        # wraps the return in bytes(), so each line is copied once, and
+        # the short-lived view is dead before the buffer next resizes.
         absolute_start = self._read_offset + start
+        view = memoryview(self._buffer)
         if length is None:
-            return self._buffer[absolute_start:]
-        return self._buffer[absolute_start:absolute_start + length]
+            return view[absolute_start:]
+        return view[absolute_start:absolute_start + length]
 
     def _consume(self, count):
         self._read_offset += count
@@ -594,6 +598,16 @@ class FrameParseState:
     ERROR = "error"
 
 
+# Fixed byte width of each header field the parser accumulates before
+# dispatching it (RFC 6455 §5.2 frame layout).
+_HEADER_FIELD_SIZES = {
+    FrameParseState.READING_HEADER: 2,
+    FrameParseState.READING_LEN16: 2,
+    FrameParseState.READING_LEN64: 8,
+    FrameParseState.READING_MASK: 4,
+}
+
+
 class FrameParser:
     """Streaming RFC 6455 §5 binary-frame parser, one frame at a time.
 
@@ -707,14 +721,7 @@ class FrameParser:
                     self.state = FrameParseState.FRAME_READY
                 continue
 
-            if state == FrameParseState.READING_HEADER:
-                field_size = 2
-            elif state == FrameParseState.READING_LEN16:
-                field_size = 2
-            elif state == FrameParseState.READING_LEN64:
-                field_size = 8
-            else:  # READING_MASK
-                field_size = 4
+            field_size = _HEADER_FIELD_SIZES[state]
             header_len = self._header_len
             need = field_size - header_len
             take = need if need <= remaining else remaining

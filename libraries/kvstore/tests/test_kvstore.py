@@ -202,15 +202,35 @@ def test_commit_if_changed_does_not_encode_when_clean() -> None:
 
 
 def test_commit_rejects_undecodable_deep_nesting() -> None:
-    """commit() refuses a value too deeply nested for the decoder, so the
-    store never persists bytes it can't read back on the next load."""
+    """commit() refuses exactly what the runtime's own codec refuses.
+
+    The pure msgpack path caps nesting at 8 and raises ValueError past
+    it; CircuitPython firmware's native codec implements the full spec
+    with no cap, so the same value round-trips there instead.  Probing
+    packb directly keeps the assertion honest on both codecs without
+    re-deriving the selection logic.
+    """
+    from chumicro_msgpack import packb
+
     store = KVStore(backend="memory")
     deep = 0
-    for _ in range(9):  # past msgpack _MAX_DEPTH (8)
+    for _ in range(9):  # past the pure path's depth cap (8)
         deep = [deep]
     store["deep"] = deep
-    with raises(ValueError):
+
+    codec_rejects = False
+    try:
+        packb({"deep": deep})
+    except ValueError:
+        codec_rejects = True
+
+    if codec_rejects:
+        with raises(ValueError):
+            store.commit()
+    else:
         store.commit()
+        store.reload()
+        assert store["deep"] == deep
 
 
 def test_commit_allowed_when_backend_capacity_is_zero_sentinel() -> None:

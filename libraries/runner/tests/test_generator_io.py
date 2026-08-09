@@ -4,7 +4,7 @@ Cross-runtime: runs on CPython (via pytest), MicroPython and CircuitPython
 (via chumicro_test_harness).  Split from ``test_generator.py`` (the
 lifecycle suite) so each file's whole-file compile transient stays under
 the CircuitPython unix-lane heap budget; ``_Sock`` / ``_Wait`` are shared
-via ``_generator_helpers``.
+via ``_runner_generator_helpers``.
 
 Asserts the wrapper's duck-typed ``io_socket`` / ``io_interest(now_ms)``
 reads off the yielded wait, and that ``io_error`` throws ``OSError`` into
@@ -12,7 +12,7 @@ the generator (recover or propagate) on the same isolated dispatch lane
 ``tick()`` uses.
 """
 
-from _generator_helpers import _Sock, _Wait
+from _runner_generator_helpers import _Sock, _Wait
 from chumicro_runner import IO_READ, IO_WRITE, Runner
 from chumicro_test_harness import raises
 from chumicro_timing.testing import FakeTicks

@@ -259,3 +259,24 @@ class TestFromConfig:
                 sys.modules.pop("chumicro_sockets.sockets_factory", None)
             else:
                 sys.modules["chumicro_sockets.sockets_factory"] = original
+
+
+class TestConstructorPassthrough:
+    """Constructor knobs with no manifest key ride ``from_config`` as
+    keywords, and an explicit keyword wins over its config-derived
+    value."""
+
+    def test_tuning_kwarg_reaches_constructor(self) -> None:
+        server = HttpServer.from_config(
+            {}, transport_factory=lambda: FakeListener([]),
+            recv_budget_per_tick=64,
+        )
+        assert server._recv_budget_per_tick == 64  # noqa: SLF001
+
+    def test_explicit_kwarg_wins_over_config(self) -> None:
+        server = HttpServer.from_config(
+            {"http_server.request_timeout_ms": 30_000},
+            transport_factory=lambda: FakeListener([]),
+            request_timeout_ms=1_234,
+        )
+        assert server._request_timeout_ms == 1_234  # noqa: SLF001

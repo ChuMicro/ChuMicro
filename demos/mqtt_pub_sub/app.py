@@ -14,6 +14,13 @@ to commands) happens in ``on_connect``, fire-and-forget, with no
 callback chain and no waiting on QoS 1 acks (the client tracks PUBACK /
 SUBACK internally; the app never needs to).
 
+Subscribing in ``on_connect`` is one of the client's two subscribe
+idioms, shown here deliberately because it is the mainstream-quickstart
+shape.  The other is declarative: call ``subscribe()`` once before
+``connect()`` and the client records the topic in its desired set, puts
+it on the wire at the first CONNACK, and replays it on every self-heal
+reconnect.  The mqtt_sensor_motor demo shows that shape.
+
 Presence pair: a retained ``"offline"`` Last Will the broker publishes
 if this board drops uncleanly, plus the retained ``"online"`` published
 on connect.  Then the demo publishes three QoS 1 telemetry samples on a

@@ -13,7 +13,8 @@
 ```python
 from chumicro_sockets import connector
 
-# CircuitPython requires `radio=wifi.radio`; MP / CPython ignore it.
+# CircuitPython requires the board radio (with chumicro-wifi,
+# `radio=wifi.adapter.radio`); MP / CPython ignore it.
 dial = connector("broker.example.com", 1883, radio=None)
 while dial.state not in ("ready", "failed"):   # one-shot form; a runner
     dial.tick(0)                               # drives this for you
@@ -93,7 +94,7 @@ def read(sock):
 | MicroPython | ✅ stdlib `socket` | ✅ MP `ssl.SSLContext` (mbedTLS) | ✅ via `ssl_context_with_ca` |
 | CircuitPython | ✅ `socketpool` + `radio` | ✅ on-board `ssl.SSLContext` | ✅ via `ssl_context_with_ca` |
 
-CircuitPython requires a `radio=` kwarg pointing at the board's wifi radio (typically `wifi.radio`).  MicroPython and CPython ignore the kwarg.
+CircuitPython requires a `radio=` kwarg pointing at the board's wifi radio (`wifi.adapter.radio` from a `chumicro-wifi` `WifiService`).  MicroPython and CPython ignore the kwarg.
 
 The TLS surface is uniform across runtimes because every supported board (256 KB MCU RAM / 2 MB physical / ~800 KB usable flash, current-LTS firmware: Pi Pico W, ESP32-S2, ESP32-S3, ESP32-S3 Feather native wifi) ships the on-board `ssl` module.  Legacy radios without `ssl` (AirLift, WIZNET5K-pre-mbedTLS) aren't supported by this library.
 

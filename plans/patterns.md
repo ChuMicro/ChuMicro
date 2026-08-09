@@ -662,6 +662,23 @@ code that passed CPython tests, the usual suspects:
   trip MP; basic `f"{name}"` is fine.
 - **Newer syntax** — `match`/`case` and walrus `:=` need recent MP/CP; grep
   `.tools/micropython/` and `.tools/circuitpython/` to verify before using.
+- **Underscore `const()` names are module-private on MP** — the compiler
+  folds `_X = const(1)` into its use sites and never binds `_X` in module
+  globals, so `from mod import _X` in a sibling module raises
+  `ImportError: can't import name _X` on MP/CP while CPython passes.
+  Wrap a constant in `const()` only when no other module imports it;
+  a cross-module constant stays a plain assignment (or loses the
+  leading underscore, the way `_wire.py`'s `DEFAULT_*` names do).
+- **MP's mbedTLS surface hides handshake state, sharply** —
+  `SSLSocket.cipher()` segfaults (unix port) or hard-faults if called
+  before the handshake completes (NULL ciphersuite into `strlen`),
+  `getpeercert` is absent because MP's standalone mbedTLS config never
+  defines `MBEDTLS_SSL_KEEP_PEER_CERTIFICATE`, and a zero-length
+  `send()` returns before reaching mbedTLS (`py/stream.c` loops
+  `while (size > 0)`), so it steps nothing and probes nothing.  There
+  is no safe Python-visible "handshake over" signal on MP 1.27; a
+  deferred `do_handshake_on_connect=False` bring-up cannot promote
+  provably and the sockets MP adapter blocks in `wrap_socket` instead.
 
 Related: Decision 0003, Decision 0016, Decision 0049.
 
@@ -972,27 +989,31 @@ Related: Decision 0010 (constructor injection — same "defer the cost" philosop
 
 ## Lazy module-level imports via PEP 562 `__getattr__` (workbench)
 
-**Workbench-only in practice.**  PEP 562's `module __getattr__` is
-implemented at the firmware level on both MP and CP (verified in
-the pinned source — `MICROPY_MODULE_GETATTR` default-on at the
-`CORE_FEATURES` ROM level), but the **deploy harness's
-CircuitPython RAM-mode path wraps the package in a class-as-module
-stub that silently bypasses PEP 562**.  Lookups hit the stub's
-`__dict__` directly without calling `__getattr__`, so the lazy attr
-table just doesn't fire.  MP + the unix-ports both honor PEP 562
-correctly; only CP RAM-mode is affected — but that's the
-primary deploy path for chumicro libraries.
+PEP 562's `module __getattr__` is implemented at the firmware level
+on both MP and CP (verified in the pinned source —
+`MICROPY_MODULE_GETATTR` default-on at the `CORE_FEATURES` ROM
+level).  The one holdout was the **deploy harness's CircuitPython
+RAM-mode path**, which wraps each package in a class-as-module stub:
+lookups hit the stub's `__dict__` directly and a module-level
+`__getattr__` never fires.  The stub cannot be taught the protocol
+(MP/CP have no metaclasses), so `_populate_module` in the CP
+bootstrap template now **materializes lazy exports at population
+time**: when the exec'd namespace defines `__getattr__`, every
+`__all__` name missing from the namespace is resolved through it and
+bound onto the stub, with a miss converted to ImportError so a
+not-yet-populated submodule defers the package into the existing
+retry loop.  A PEP-562 lazy `__init__` in a device library therefore
+works under CP RAM staging too; the cost is that a RAM-mode session
+loads the lazy submodules up front, which its test files import
+anyway.  Two constraints keep materialization sound: every lazy name
+belongs to `__all__`, and every lazy import resolves inside the
+package's own tree (a foreign-package lazy resolve would deadlock an
+own-src-scoped session).
 
-The pattern is **safe for workbench packages** (`chumicro-deploy`,
-`chumicro-repl`) because they're CPython-only.  For device
-libraries (anything under `libraries/*/src/`), use per-function
-lazy imports instead — see "Per-function lazy adapter selection"
-below, which works everywhere.
-
-History: surfaced 2026-04-25 during chumicro-wifi Slice 0
-hardware bring-up; the lazy-loading research doc carries the
-detail.  The earlier "cross-runtime by design" framing was
-correct at the firmware level but missed the harness wrapper.
+History: the bypass surfaced 2026-04-25 during chumicro-wifi Slice 0
+hardware bring-up; the materialization landed 2026-08-09 after the
+harness's own lazy `raises` export took down 128 of 165 RAM-mode
+runner tests on a real ESP32-S2.
 
 When a package has multiple submodules where users typically reach
 for a subset, defer submodule imports until first attribute access:
@@ -1293,3 +1314,5 @@ Two coupled gotchas from the 2026-07-28 secondary-docs pass:
    the docs phase goes red for a "pre-existing" reason.  When adding a
    `:::` section, annotate the module's public signatures in the same
    change (`object` for duck-typed params is the house convention).
+
+**macOS `sync` is not a write barrier.**  `sync(2)` schedules the flush and returns; before any operation that resets or remounts a mounted FAT volume (CP soft reboot, `storage.erase_filesystem()`), force completion with `fcntl F_FULLFSYNC` on the mount point (`chumicro_deploy.flash_drive.flush_volume`), or cached FAT metadata can tear directory entries into an EINVAL state.

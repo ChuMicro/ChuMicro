@@ -117,7 +117,8 @@ class TestFromConfig:
         ``from_config`` builds its transport off
         ``chumicro_sockets.sockets_factory.udp_socket_factory(radio=...)``.
         The ``radio`` binds at construction, but the socket only opens on
-        the first query and comes out non-blocking."""
+        the first query.  (The factory's own non-blocking guarantee is
+        covered by the chumicro-sockets suite.)"""
         captured: dict = {}
         opened: dict = {}
         sock = FakeUDPSocket()
@@ -146,8 +147,6 @@ class TestFromConfig:
 
         assert opened == {"socket": sock}
         assert client.socket is sock
-        # Non-blocking was applied — FakeUDPSocket records setblocking calls.
-        assert sock.blocking is False
 
     def test_default_factory_does_not_raise_on_empty_config(self) -> None:
         """Empty config dict is valid input even without socket=/transport_factory=.
@@ -237,5 +236,14 @@ def test_socket_and_factory_are_mutually_exclusive():
         NTPClient()
 
 
-# udp_socket_factory socket-binding coverage lives in test_ntp_pytest.py
-# (CPython-only; see that file's docstring for why).
+class TestConstructorPassthrough:
+    """An explicit constructor keyword rides through ``from_config``
+    and wins over its config-derived value."""
+
+    def test_explicit_kwarg_wins_over_config(self) -> None:
+        client = NTPClient.from_config(
+            {"ntp.timeout_ms": 9_000},
+            socket=FakeUDPSocket(),
+            timeout_ms=1_234,
+        )
+        assert client.timeout_ms == 1_234

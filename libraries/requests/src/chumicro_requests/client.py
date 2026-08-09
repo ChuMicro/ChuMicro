@@ -256,8 +256,15 @@ class HttpClient:
         radio: object | None = None,
         ssl_context: object | None = None,
         transport_factory: object | None = None,
+        **constructor_kwargs: object,
     ) -> "HttpClient":
-        """Build an :class:`HttpClient` from runtime config."""
+        """Build an :class:`HttpClient` from runtime config.
+
+        Config keys carry the deployment-varying values; any other
+        constructor knob (buffer sizes, budgets, ``ticks``) passes
+        through verbatim as a keyword, and an explicit keyword wins
+        over its config-derived value.
+        """
         if transport_factory is None:
             try:
                 from chumicro_sockets.sockets_factory import (  # noqa: PLC0415 - lazy
@@ -267,26 +274,28 @@ class HttpClient:
                 raise RuntimeError(
                     "chumicro_sockets.sockets_factory not available "
                     "(excluded via __chumicro_skip_factories__ or "
-                    "not on the board): pass transport_factory= "
+                    "not on the board); pass transport_factory= "
                     "explicitly.",
                 ) from exception
 
             transport_factory = connector_factory(
                 radio=radio, ssl_context=ssl_context,
             )
-        return cls(
-            transport_factory=transport_factory,
-            default_timeout_ms=config.get(
+        kwargs = {
+            "transport_factory": transport_factory,
+            "default_timeout_ms": config.get(
                 "requests.default_timeout_ms", DEFAULT_TIMEOUT_MS,
             ),
-            default_max_redirects=config.get(
+            "default_max_redirects": config.get(
                 "requests.default_max_redirects", DEFAULT_MAX_REDIRECTS,
             ),
-            user_agent=config.get("requests.user_agent"),
-            max_body_bytes=config.get(
+            "user_agent": config.get("requests.user_agent"),
+            "max_body_bytes": config.get(
                 "requests.max_body_bytes", DEFAULT_MAX_BODY_BYTES,
             ),
-        )
+        }
+        kwargs.update(constructor_kwargs)
+        return cls(**kwargs)
 
     def __init__(
         self,

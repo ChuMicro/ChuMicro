@@ -31,13 +31,17 @@ For bundle setup, pre-compiled `.mpy` bundles, the experimental channel, and det
 ```python
 from chumicro_timing import ticks_ms
 from chumicro_mqtt import MQTTClient
+from chumicro_wifi import WifiConfig, WifiService
 
-# On CircuitPython pass radio=wifi.radio; the kwarg is ignored on MP / CPython.
-# from_config builds the transport factory: the client dials the broker
-# non-blocking (one connect phase per tick) and self-heals after drops.
+wifi = WifiService(WifiConfig(ssid="home-wifi", password="s3cret"))
+
+# On CircuitPython pass radio=wifi.adapter.radio (the WifiService's board
+# radio); the kwarg is ignored on MP / CPython.  from_config builds the
+# transport factory: the client dials the broker non-blocking (one connect
+# phase per tick) and self-heals after drops.
 client = MQTTClient.from_config(
     {"mqtt.broker.host": "broker.example.com", "mqtt.broker.port": 1883},
-    radio=wifi.radio,
+    radio=wifi.adapter.radio,
 )
 
 client.on_message = lambda topic, payload: print(topic, payload)

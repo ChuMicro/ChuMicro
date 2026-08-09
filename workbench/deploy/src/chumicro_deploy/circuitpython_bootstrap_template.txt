@@ -17,6 +17,18 @@ def _populate_module(module_name, source_code):
     for key, value in namespace.items():
         if not key.startswith('__'):
             setattr(module_obj,key,value)
+    lazy=namespace.get('__getattr__')
+    if lazy is not None:
+        # Class-as-module attribute misses never reach a module-level
+        # __getattr__, so PEP-562 lazy exports are resolved here instead.
+        # A miss becomes ImportError so a not-yet-populated submodule
+        # defers this module into the retry loop.
+        for key in namespace.get('__all__',()):
+            if key not in namespace:
+                try:
+                    setattr(module_obj,key,lazy(key))
+                except AttributeError:
+                    raise ImportError('lazy export pending: '+module_name+'.'+key)
     if len(parts)>1 and parts[0] in sys.modules:
         setattr(sys.modules[parts[0]],parts[1],module_obj)
 
