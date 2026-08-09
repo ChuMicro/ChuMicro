@@ -798,6 +798,9 @@
 
 
         <p>Persisted key-value store with a mapping-style public API.</p>
+<p>Construction reads the backend once; a corrupt payload parks the store
+empty with <code>is_corrupt</code> set, but a backend that cannot reach its
+substrate at all (missing NVM, unreadable filesystem) raises.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
