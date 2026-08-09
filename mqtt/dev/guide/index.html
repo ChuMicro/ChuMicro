@@ -1035,7 +1035,7 @@
 </span></code></pre></div>
 <p>Build your client at startup. The first <code>MQTTClient</code> reference imports the client module, so let that one-time cost land on a fresh heap.</p>
 <p><code>connect()</code> queues the CONNECT packet; the first few <code>handle()</code> calls drive it through CONNECTING → CONNECTED.  <code>publish()</code> called before then buffers into a bounded pre-connect queue and flushes on CONNACK, the default <code>when_disconnected="queue"</code> policy (<code>"raise"</code> restores the raise-if-not-connected behavior).  <code>subscribe()</code> and <code>unsubscribe()</code> are declarations valid in any state: call them before <code>connect()</code> and the first CONNACK puts them on the wire (a self-heal reconnect replays them). Calling <code>subscribe()</code> while already CONNECTED still sends immediately, and placing it in <code>on_connect</code> is equally valid, just no longer required.</p>
-<p><code>MQTTClient</code> actually enforces non-blocking mode on every socket it acquires (force-<code>setblocking(False)</code>), so the explicit <code>sock.setblocking(False)</code> line above is belt-and-suspenders.  Don't omit it.  MP plain TCP defaults to blocking, and a blocking <code>recv</code> against a silent peer (broker that's hung mid-handshake, network blackholing returning packets) stalls the tick loop indefinitely on Pi Pico W RP2.  Bench-tested with a stalled TCP listener: recv was still blocked at the 3-minute mark, with no TCP keepalive timeout fired within that window.  Whole-app freeze, not a recoverable hiccup.</p>
+<p><code>MQTTClient</code> enforces non-blocking mode on every socket it acquires (force-<code>setblocking(False)</code>).  MP plain TCP defaults to blocking, and a blocking <code>recv</code> against a silent peer (broker that's hung mid-handshake, network blackholing returning packets) stalls the tick loop indefinitely on Pi Pico W RP2.  Bench-tested with a stalled TCP listener: recv was still blocked at the 3-minute mark, with no TCP keepalive timeout fired within that window.  Whole-app freeze, not a recoverable hiccup.</p>
 <h2 id="client-ids">Client ids<a class="headerlink" href="#client-ids" title="Permanent link">&para;</a></h2>
 <p>Every MQTT connection carries a client id, and brokers treat it as the
 identity of the session.  Pass your own when you have a meaningful name
@@ -1131,7 +1131,7 @@ pass an explicit <code>client_id</code> per device.</p>
 </span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>
 </span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="n">runner</span><span class="o">.</span><span class="n">add_generator</span><span class="p">(</span><span class="n">consume</span><span class="p">(</span><span class="n">client</span><span class="p">))</span>
 </span></code></pre></div>
-<p>The first <code>next_message()</code> call switches inbound data delivery from the <code>on_message</code> callback to a bounded queue the generator drains (16 messages, drop-oldest; a slow consumer loses the oldest messages rather than growing the heap).  Lifecycle callbacks (<code>on_connect</code>, <code>on_disconnect</code>, <code>on_oversized</code>) keep firing either way.  Pick one inbound surface per client: the stream for a linear single-topic consumer, <code>on_message</code> for multi-topic fan-out.  See <code>examples/receive_stream.py</code>.</p>
+<p>The first <code>next_message()</code> call switches inbound data delivery from the <code>on_message</code> callback to a bounded queue the generator drains (16 messages, drop-oldest; a slow consumer loses the oldest messages rather than growing the heap).  Lifecycle callbacks (<code>on_connect</code>, <code>on_disconnect</code>, <code>on_oversized</code>) keep firing either way; note <code>on_disconnect</code> fires only on an explicit <code>disconnect()</code> call, never on link loss - poll <code>state</code> / <code>last_error</code> to observe drops.  Pick one inbound surface per client: the stream for a linear single-topic consumer, <code>on_message</code> for multi-topic fan-out.  See <code>examples/receive_stream.py</code>.</p>
 <h2 id="last-will">Last-will<a class="headerlink" href="#last-will" title="Permanent link">&para;</a></h2>
 <p>Configured at construction time; the broker publishes the will when the connection is uncleanly dropped (network loss, device hard-reset, etc.):</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="n">client</span> <span class="o">=</span> <span class="n">MQTTClient</span><span class="p">(</span>
@@ -1199,12 +1199,15 @@ factory dials with <code>tls=True</code>:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_wifi</span><span class="w"> </span><span class="kn">import</span> <span class="n">WifiState</span>
 </span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>
 </span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="k">def</span><span class="w"> </span><span class="nf">on_wifi_state</span><span class="p">(</span><span class="n">old</span><span class="p">,</span> <span class="n">new</span><span class="p">):</span>
-</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>    <span class="k">if</span> <span class="n">new</span> <span class="o">==</span> <span class="n">WifiState</span><span class="o">.</span><span class="n">DISCONNECTED</span><span class="p">:</span>
-</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>        <span class="n">mqtt</span><span class="o">.</span><span class="n">hold</span><span class="p">()</span>       <span class="c1"># link is down: stop dialing a dead radio</span>
-</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>    <span class="k">elif</span> <span class="n">new</span> <span class="o">==</span> <span class="n">WifiState</span><span class="o">.</span><span class="n">CONNECTED</span><span class="p">:</span>
-</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a>        <span class="n">mqtt</span><span class="o">.</span><span class="n">connect</span><span class="p">()</span>    <span class="c1"># link is back: reconnect now (also clears the hold)</span>
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>    <span class="k">if</span> <span class="n">new</span> <span class="o">==</span> <span class="n">WifiState</span><span class="o">.</span><span class="n">CONNECTED</span><span class="p">:</span>
+</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>        <span class="n">mqtt</span><span class="o">.</span><span class="n">connect</span><span class="p">()</span>    <span class="c1"># link is back: reconnect now (also clears the hold)</span>
+</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>    <span class="k">else</span><span class="p">:</span>
+</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a>        <span class="n">mqtt</span><span class="o">.</span><span class="n">hold</span><span class="p">()</span>       <span class="c1"># link is down: stop dialing a dead radio</span>
 </span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a>
-</span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a><span class="n">wifi</span><span class="o">.</span><span class="n">on_state_change</span><span class="p">(</span><span class="n">on_wifi_state</span><span class="p">)</span>
+</span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a><span class="c1"># WifiService reports link loss as RECONNECTING (then FAILED once retries</span>
+</span><span id="__span-12-10"><a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a><span class="c1"># are exhausted), so &quot;any state but CONNECTED&quot; is the down signal.</span>
+</span><span id="__span-12-11"><a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a>
+</span><span id="__span-12-12"><a id="__codelineno-12-12" name="__codelineno-12-12" href="#__codelineno-12-12"></a><span class="n">wifi</span><span class="o">.</span><span class="n">on_state_change</span><span class="p">(</span><span class="n">on_wifi_state</span><span class="p">)</span>
 </span></code></pre></div>
 <p>You can still wire the callback to nothing and let self-heal reconnect on its own; <code>hold()</code> / <code>connect()</code> only <em>tighten</em> the timing when the app has better information than the timer does.</p>
 <p>What happens to publishes issued during the outage depends on the state the client is in when <code>publish()</code> runs, and this is worth understanding because it decides which publishes survive a wifi drop:</p>
@@ -1229,7 +1232,7 @@ factory dials with <code>tls=True</code>:</p>
 </tr>
 <tr>
 <td><code>send(payload) -&gt; int</code></td>
-<td>Sends <code>payload</code> (a <code>bytes</code>).  Raises <code>OSError(EAGAIN \| EWOULDBLOCK)</code> when the send buffer is full, otherwise returns bytes sent (may be partial).</td>
+<td>Sends <code>payload</code> (a <code>bytes</code> or, on a partial-send resume, a <code>memoryview</code> slice of one).  Raises <code>OSError(EAGAIN \| EWOULDBLOCK)</code> when the send buffer is full, otherwise returns bytes sent (may be partial).</td>
 </tr>
 <tr>
 <td><code>close() -&gt; None</code></td>
@@ -1272,7 +1275,7 @@ factory dials with <code>tls=True</code>:</p>
 <tr>
 <td><code>recv_budget_per_tick</code></td>
 <td><code>1024</code> (bytes)</td>
-<td>Cap on the single per-tick <code>recv_into</code> call, the inbound pacing lever.  It bounds tick latency on a multi-KB inbound PUBLISH (the payload arrives across several ticks instead of monopolizing one), how many packets one tick can dispatch, and the size of the per-tick PUBACK batch.  Raise for faster ingestion at the cost of per-tick latency.</td>
+<td>Cap on the single per-tick <code>recv_into</code> call.  It binds only when <code>rx_buffer_size</code> exceeds it: each recv is already limited to the RX buffer's free space, so at the default 256-byte <code>rx_buffer_size</code> the budget never engages.  With a large <code>rx_buffer_size</code>, it bounds tick latency on a multi-KB inbound PUBLISH (the payload arrives across several ticks instead of monopolizing one), how many packets one tick can dispatch, and the size of the per-tick PUBACK batch.</td>
 </tr>
 <tr>
 <td><code>max_tx_queue_size</code></td>
