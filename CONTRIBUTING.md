@@ -24,11 +24,13 @@ There are several ways to be part of this project, and writing code is only one 
 | Understand `devices.yml` / `workspace.yml` / `secrets.toml` | [Workspace, devices, and secrets](docs/contributing/config-files.md) |
 | Learn the code style | [Style Guide](docs/contributing/style-guide.md) |
 | Open a pull request | [Creating a Pull Request](docs/contributing/pull-requests.md) |
+| Understand how PRs merge and release | [How changes land](#how-changes-land) below |
 | Add a new library | [Adding a New Library](docs/contributing/new-library.md) |
 | Adopt one library into an existing codebase | [Standalone integration](docs/contributing/standalone-integration.md), then [Slimming your deploy](docs/contributing/slimming-your-deploy.md) |
 | Add a host-only tool | [Adding a Workbench Package](docs/contributing/workbench.md) |
 | Understand releases | [Releases and Promotion](docs/contributing/releases.md) |
 | Work with an AI coding agent | [Working with Agents](docs/contributing/working-with-agents.md), plus the [agent style guide](docs/contributing/agent-style-guide.md) for prose tone |
+| Maintain the repository itself | [Maintainer Runbook](docs/contributing/maintainers.md) |
 | Recover from a broken state | [Troubleshooting](docs/troubleshooting/) |
 
 Each page stands on its own.  Read the ones that match what you're doing and skip the rest.
@@ -182,7 +184,7 @@ git push -u origin fix/clarify-rate-docstring
 
 Click the "Compare & pull request" banner GitHub offers, check that the base is **ChuMicro/ChuMicro** `main` (not your own fork), and fill in the PR template.
 
-**Then it's CI and review.**  CI runs on the PR automatically.  If something fails, fix locally and push to the same branch; it re-runs.  A maintainer reviews, maybe asks for changes; push fixes to the same branch and the PR updates.  Review comments after a green preflight aren't a failure on your part.  Automation checks that the code is sound; review checks what automation can't, like naming, scope, and API shape.
+**Then it's CI and review.**  CI runs on the PR automatically (with one exception: GitHub holds a first-time contributor's runs until a maintainer approves them, so your first PR's checks may sit at "waiting" for a bit).  If something fails, fix locally and push to the same branch; it re-runs.  A maintainer reviews, maybe asks for changes; push fixes to the same branch and the PR updates.  Review comments after a green preflight aren't a failure on your part.  Automation checks that the code is sound; review checks what automation can't, like naming, scope, and API shape.
 
 After the merge, your change is on `main`.  If you bumped a `VERSION` file, an experimental release publishes automatically ([Releases and Promotion](docs/contributing/releases.md)); otherwise your change rides along with the library's next release.
 
@@ -195,6 +197,24 @@ git push origin main
 ```
 
 If `main` moves while your PR is open and you need its commits, rebase (`git rebase main`, then `git push --force-with-lease`).  This project keeps history linear, so rebases are preferred over merge commits.
+
+## How changes land
+
+Every change reaches `main` the same way, whether it comes from a first-time contributor or from the maintainer: a branch, a pull request, green checks, a squash merge.  Nobody pushes to `main` directly; the branch ruleset enforces that for everyone, maintainer included.
+
+A merge needs these checks green:
+
+- **preflight**, the same 13-phase gate `python scripts/run.py preflight` runs locally
+- **compatibility** on Python 3.11, 3.12, and 3.13
+- **Validate mpy bytecode**, which stages every library and proves MicroPython can install and import the compiled form
+
+PRs land as one squashed commit, so a PR reads best when it does one thing.  The maintainer ([@ChuxMaker](https://github.com/ChuxMaker)) reviews and merges.  ChuMicro is maintained by one person, so allow a few days for review; a polite follow-up after a week of silence is welcome.
+
+The maintainer can also ask an AI reviewer for a first pass by commenting `@claude /review` on the PR.  Its comments are advisory: the maintainer decides what matters, and you can push back on its findings the same way you would with a human reviewer.  Only maintainers can summon it, so don't be surprised if the command does nothing from your account.
+
+After the merge, a bumped `VERSION` publishes an experimental release automatically, and [promotion to stable](docs/contributing/releases.md#requesting-a-stable-promotion) is a separate, deliberate step.
+
+This project follows the [Contributor Covenant](CODE_OF_CONDUCT.md).  The short version is what you'd expect: be decent to each other.
 
 ## Testing
 

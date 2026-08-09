@@ -26,6 +26,7 @@ body:
         - sockets
         - websockets
         - wifi
+        - Workbench / host tooling (deploy, workspace, repl, pytest-device, checks)
         - Other / not sure
     validations:
       required: true

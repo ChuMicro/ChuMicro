@@ -3,3 +3,6 @@ contact_links:
   - name: Ask a question
     url: https://github.com/ChuMicro/ChuMicro/discussions/new?category=q-a
     about: Use Discussions for questions, help, and ideas; Issues are for bugs and feature requests.
+  - name: Report a security vulnerability
+    url: https://github.com/ChuMicro/ChuMicro/security/advisories/new
+    about: Report privately through GitHub security advisories, never in a public issue. SECURITY.md has the details.

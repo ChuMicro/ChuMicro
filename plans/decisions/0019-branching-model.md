@@ -57,7 +57,7 @@ On-device import paths are always the base name (`chumicro_timing`). Channel sep
 
 - Set `main` as the default branch in GitHub repo settings.
 - Delete the `develop` branch.
-- Branch protection on `main` stays off: maintainer and agent work commits directly to `main` (the flow AGENTS.md documents), and an approval requirement would block exactly that path.  Contributor pull requests get CI plus maintainer review instead.  (The originally drafted step here, "require status checks + 1 approval", was never applied; this line was corrected 2026-07-28 to record the practice actually decided.)
+- `main` is protected by a ruleset: pull requests only, squash merge, required checks green, for every actor including the maintainer and agent sessions — see [Decision 0120](0120-main-is-pr-only.md).  While the repo was private, this step instead kept protection off and direct commits were the documented flow; 0120 records the flip that came with going public.
 
 ## Consequences
 

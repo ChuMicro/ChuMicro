@@ -84,11 +84,11 @@
 # --- Semver labels ---
 - name: "semver:patch"
   color: "bfe5bf"
-  description: "Bug fix — no API change"
+  description: "Bug fix, no API change"
 
 - name: "semver:minor"
   color: "fef2c0"
-  description: "New feature — backward-compatible"
+  description: "New feature, backward-compatible"
 
 - name: "semver:major"
   color: "f9d0c4"
@@ -122,3 +122,24 @@
 - name: dependencies
   color: "0366d6"
   description: "Dependency or CI action version bump"
+
+# --- Community labels (GitHub surfaces the first two in contributor UI) ---
+- name: "good first issue"
+  color: "7057ff"
+  description: "Small, well-scoped, a fine first PR"
+
+- name: "help wanted"
+  color: "008672"
+  description: "Maintainer would welcome a PR for this"
+
+- name: question
+  color: "d876e3"
+  description: "Question rather than a defect or request"
+
+- name: "needs-triage"
+  color: "ededed"
+  description: "Not yet reviewed by a maintainer"
+
+- name: security
+  color: "b60205"
+  description: "Security-relevant; see SECURITY.md before discussing details"

@@ -158,7 +158,7 @@ mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_timing
 pip install chumicro-timing
 ```
 
-[`INSTALL.md`](INSTALL.md) covers pre-compiled `.mpy` packages for lower RAM use, the experimental release channel, and per-runtime notes.
+These commands install from the **stable** channel.  Every merge publishes to a separate **experimental** channel first and reaches stable when a maintainer promotes it, so a library merged since the last promotion may exist only on experimental for a while.  [`INSTALL.md`](INSTALL.md) covers installing from experimental, pre-compiled `.mpy` packages for lower RAM use, and per-runtime notes.
 
 ## The libraries
 
@@ -258,9 +258,8 @@ libraries/    the libraries that run on boards (and your laptop)
 workbench/    the host-side CLI tools
 demos/        end-to-end scenarios: board + laptop, one command
 support/      the cross-runtime test harness and shared doc assets
-.claude/surfaces/        localhost pages an agent shows a human (the decision picker, reports)
 docs/         contributor guides and troubleshooting
-plans/        design decisions and work queue
+plans/        design decision records and the maintainer's working notes
 scripts/      developer task runner (run.py, tasks in run_tasks/)
 ```
 

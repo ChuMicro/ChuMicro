@@ -51,9 +51,13 @@ concurrency:
   group: release
   cancel-in-progress: false
 
+# Read-only by default; only the release job escalates (it writes the
+# stable tag and GitHub Release and runs the PyPI OIDC exchange).  The
+# docs job pushes gh-pages over GH_PAGES_DEPLOY_KEY, and the bundle and
+# channel jobs use their own deploy keys or BUNDLE_TOKEN, so none of
+# them needs write on this workflow's token.
 permissions:
-  contents: write    # tags + GitHub Releases + push to gh-pages
-  id-token: write    # PyPI trusted publishing (OIDC)
+  contents: read
 
 defaults:
   run:
@@ -76,14 +80,14 @@ jobs:
       has_library_promotions: ${{ steps.validate.outputs.has_library_promotions }}
       has_docs_promotions: ${{ steps.validate.outputs.has_docs_promotions }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
         with:
           # Full history AND tags: promote_matrix resolves each tag to the
           # commit the preflight gate checks out, and reads local refs to
           # decide whether a stable tag already exists.
           fetch-depth: 0
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7
         with:
           python-version: "3.13"
 
@@ -126,12 +130,12 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJson(needs.validate.outputs.gate_commits) }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
         with:
           ref: ${{ matrix.commit }}
           fetch-depth: 0
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7
         with:
           python-version: "3.14"
           cache: "pip"
@@ -141,7 +145,7 @@ jobs:
       # restore with a circuitpython-less .tools whose cache "hit" also
       # skips the build-deps install needed to self-heal (see ci.yml
       # preflight for the full story).
-      - uses: actions/cache@v6
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6
         id: tools-cache
         with:
           path: .tools
@@ -189,10 +193,14 @@ jobs:
     # trusted-publisher (OIDC) credentials so the publish step can authenticate.
     environment: pypi
 
-    steps:
-      - uses: actions/checkout@v6
+    permissions:
+      contents: write   # the Create GitHub Release step writes the stable tag
+      id-token: write   # PyPI trusted publishing (OIDC)
 
-      - uses: actions/setup-python@v6
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7
         with:
           python-version: "3.13"
           cache: "pip"
@@ -232,7 +240,7 @@ jobs:
       # same tag list.
       - name: Create GitHub Release and tag
         if: ${{ !inputs.dry_run }}
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228  # v3
         with:
           tag_name: ${{ matrix.stable_tag }}
           # Pin the tag to the exact commit this promotion ran from.
@@ -271,9 +279,9 @@ jobs:
     env:
       MATRIX_JSON: ${{ needs.validate.outputs.library_matrix }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7
         with:
           python-version: "3.13"
           cache: "pip"
@@ -296,7 +304,7 @@ jobs:
       # restore to overwrite the first, leading to subtle corruption.
       # tools-mp-mpy-: this job produces mpy-cross + micropython only,
       # so it must not share a key with jobs producing other toolsets.
-      - uses: actions/cache@v6
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6
         id: tools-cache
         with:
           path: .tools
@@ -327,7 +335,7 @@ jobs:
         run: python scripts/run.py prepare-micropython
 
       - name: Configure SSH for bundle repository
-        uses: webfactory/ssh-agent@v0.10.0
+        uses: webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555  # v0.10.0
         with:
           ssh-private-key: ${{ secrets.BUNDLE_DEPLOY_KEY }}
 
@@ -417,15 +425,15 @@ jobs:
     env:
       MATRIX_JSON: ${{ needs.validate.outputs.library_matrix }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7
         with:
           python-version: "3.13"
 
       # tools-mp-: this job builds only the micropython unix-port (see
       # ci.yml preflight for why keys are split per produced toolset).
-      - uses: actions/cache@v6
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6
         id: tools-cache
         with:
           path: .tools
@@ -471,7 +479,7 @@ jobs:
     env:
       MATRIX_JSON: ${{ needs.validate.outputs.matrix }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
         with:
           # mike inspects existing version aliases on gh-pages.
           fetch-depth: 0
@@ -482,7 +490,7 @@ jobs:
           # key so the later push carries an identity the rule lets through.
           ssh-key: ${{ secrets.GH_PAGES_DEPLOY_KEY }}
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7
         with:
           python-version: "3.13"
           cache: "pip"
@@ -548,14 +556,14 @@ jobs:
     outputs:
       snapshot_tag: ${{ steps.stage.outputs.snapshot_tag }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7
         with:
           python-version: "3.13"
 
       - name: Configure SSH for libraries channel repository
-        uses: webfactory/ssh-agent@v0.10.0
+        uses: webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555  # v0.10.0
         with:
           ssh-private-key: ${{ secrets.LIBRARIES_DEPLOY_KEY }}
 
@@ -600,14 +608,14 @@ jobs:
     env:
       MATRIX_JSON: ${{ needs.validate.outputs.library_matrix }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7
         with:
           python-version: "3.13"
 
       - name: Configure SSH for bundle repository
-        uses: webfactory/ssh-agent@v0.10.0
+        uses: webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555  # v0.10.0
         with:
           ssh-private-key: ${{ secrets.BUNDLE_DEPLOY_KEY }}
 

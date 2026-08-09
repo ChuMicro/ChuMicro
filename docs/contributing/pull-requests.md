@@ -146,7 +146,7 @@ Say so in the PR. A maintainer can help test on available hardware. This won't b
 
 ## CI checks
 
-After you open the PR, GitHub Actions runs the full CI suite. If something fails:
+After you open the PR, GitHub Actions runs the full CI suite. If this is your first contribution here, GitHub waits for a maintainer to approve the run before anything starts, so "waiting for approval" on a fresh PR is normal and not a problem with your change. If something fails:
 
 1. Click the failed check to see the log
 2. Fix the issue locally
@@ -163,6 +163,9 @@ A maintainer will review your PR. They may:
 - Approve and merge
 - Request changes (you'll get a notification)
 - Leave comments for discussion
+- Comment `@claude /review`, which has Claude post a first review pass
+
+AI review comments are advisory. The maintainer decides what matters, and pushing back on a finding you disagree with is fine, exactly as with a human reviewer. The command only works for maintainers, so a PR is never reviewed by AI unless a human asked for it.
 
 After merge, your change is on `main`. If you bumped a VERSION file, an experimental release publishes automatically. See [Releases and Promotion](releases.md) for how that works.
 

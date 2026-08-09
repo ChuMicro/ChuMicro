@@ -23,8 +23,10 @@ concurrency:
   group: documentation-deploy
   cancel-in-progress: false
 
+# Read-only token: the gh-pages push goes over GH_PAGES_DEPLOY_KEY (the
+# checkout below configures origin for it), not this workflow's token.
 permissions:
-  contents: write
+  contents: read
 
 defaults:
   run:
@@ -35,7 +37,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
         with:
           # Full history so mike can inspect existing version aliases on
           # the gh-pages branch.
@@ -44,12 +46,12 @@ jobs:
           # gh-pages when branch protection or deploy-key rules are active.
           ssh-key: ${{ secrets.GH_PAGES_DEPLOY_KEY }}
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7
         with:
           python-version: "3.13"
 
       - name: Cache pip packages
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6
         with:
           path: ~/.cache/pip
           key: docs-pip-${{ hashFiles('requirements-docs.txt') }}
