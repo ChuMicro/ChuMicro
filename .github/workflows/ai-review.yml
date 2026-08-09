@@ -94,5 +94,10 @@ jobs:
             say the PR is approved or should be merged; a human maintainer
             decides that.
           claude_args: |
+            --model claude-sonnet-5
             --add-dir pr-head
             --allowedTools "Read,Grep,Glob,Bash(gh pr diff:*),Bash(gh pr view:*),mcp__github_inline_comment__create_inline_comment"
+        # Model pinned by maintainer call (2026-08-09): Sonnet tier for
+        # reviews, claude-opus-5 the sanctioned step-up if reviews need
+        # more depth.  Do not move this to a Fable/Mythos-class model
+        # without the maintainer's explicit go.
