@@ -15,6 +15,10 @@ class TestClassify:
             "CONTRIBUTING.md",  # noqa: CHU006  template-payload filename data
             "pyproject.toml",
             "requirements.txt",
+            # Pins for the requirements.txt floors; `update` must
+            # re-flow them so a template release can roll every
+            # workspace's pinned tooling forward or back.
+            "constraints.txt",
             "projects/_template/project_config.toml",
             "projects/_template/app.py",
             ".github/skills/deploy-and-debug/SKILL.md",

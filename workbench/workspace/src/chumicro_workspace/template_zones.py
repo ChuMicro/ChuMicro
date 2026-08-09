@@ -5,7 +5,8 @@ is no scaffolding CLI command).  These zones govern only what
 `update` re-syncs into an existing workspace:
 
 * **Tool-owned**: `run.py`, `AGENTS.md`, `CONTRIBUTING.md`,  <!-- noqa: CHU006 -->
-  `pyproject.toml`, `projects/_template/`, `examples/`
+  `pyproject.toml`, `requirements.txt`, `constraints.txt`,
+  `projects/_template/`, `examples/`
   (reading-material demos shipped from the template), the
   agent-skill documents under `.github/skills/`, and the CI
   workflows under `.github/workflows/` (their headers declare
@@ -46,6 +47,11 @@ TOOL_OWNED_PATHS: frozenset[str] = frozenset({
     # The chumicro tooling manifest `run.py setup` installs in regular mode.
     # Tool-owned so `update` keeps it in step with the CLI it pins.
     "requirements.txt",
+    # Exact-version pins for the requirements.txt floors, applied as a
+    # pip constraints file by `run.py setup` and template CI.  Tool-owned
+    # so `update` rolls every workspace's pins forward (or back) with
+    # the template release that ships them.
+    "constraints.txt",
 })
 
 #: Tool-owned directory prefixes.

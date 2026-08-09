@@ -195,24 +195,38 @@ class TestSetup:
 
 
 class TestUpdateCommand:
+    @staticmethod
+    def _record_update(
+        monkeypatch: pytest.MonkeyPatch,
+        recorded: dict[str, object],
+        report: Any = None,
+    ) -> None:
+        """Replace ``template_apply.update`` with a recording fake.
+
+        The fake captures every keyword ``_cmd_update`` forwards and
+        returns *report* (an empty ``ApplyReport`` by default).
+        """
+        from chumicro_workspace import template_apply
+
+        def fake_update(
+            target: Path, *, template_url: str, git_reference: str | None,
+            force: bool,
+        ) -> Any:
+            recorded["target"] = target
+            recorded["url"] = template_url
+            recorded["git_reference"] = git_reference
+            recorded["force"] = force
+            return report if report is not None else template_apply.ApplyReport()
+
+        monkeypatch.setattr(template_apply, "update", fake_update)
+
     def test_dispatches_to_template_apply_update(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        from chumicro_workspace import template_apply
-
         recorded: dict[str, object] = {}
-
-        def fake_update(
-            target: Path, *, template_url: str, git_reference: str | None,
-        ) -> Any:
-            recorded["target"] = target
-            recorded["url"] = template_url
-            recorded["git_reference"] = git_reference
-            return template_apply.ApplyReport()
-
-        monkeypatch.setattr(template_apply, "update", fake_update)
+        self._record_update(monkeypatch, recorded)
         root = seed_workspace(tmp_path)
         exit_code = cli.main([
             "update", "--workspace-dir", str(root),
@@ -223,6 +237,43 @@ class TestUpdateCommand:
         assert recorded["target"] == root
         assert recorded["url"] == "https://example.com/fork"
         assert recorded["git_reference"] == "v1.2.3"
+        assert recorded["force"] is False
+
+    def test_force_flag_reaches_template_apply(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        recorded: dict[str, object] = {}
+        self._record_update(monkeypatch, recorded)
+        root = seed_workspace(tmp_path)
+        exit_code = cli.main([
+            "update", "--workspace-dir", str(root), "--force",
+        ])
+        assert exit_code == 0
+        assert recorded["force"] is True
+
+    def test_refused_files_exit_code_3_with_force_hint(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """A report carrying a REFUSED file exits 3 and the stderr hint
+        names --force, so a scripted update can distinguish refused
+        local edits from a clean pass."""
+        from chumicro_workspace import template_apply
+
+        report = template_apply.ApplyReport()
+        report.add("run.py", template_apply.ApplyAction.REFUSED)
+        recorded: dict[str, object] = {}
+        self._record_update(monkeypatch, recorded, report)
+        root = seed_workspace(tmp_path)
+        exit_code = cli.main(["update", "--workspace-dir", str(root)])
+        assert exit_code == 3
+        captured = capsys.readouterr()
+        assert "refused" in captured.out
+        assert "--force" in captured.err
 
 
 class TestNew:
