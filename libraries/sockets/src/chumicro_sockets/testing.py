@@ -6,14 +6,16 @@ __chumicro_test_support__ = True
 import errno
 from collections import deque
 
+from chumicro_sockets._connector import (
+    _IO_READ,
+    _IO_WRITE,
+    STATE_FAILED,
+    STATE_READY,
+)
+
 # MicroPython's ``deque`` requires a positive ``maxlen`` (no unbounded form);
 # 1024 is a large stand-in for infinity.
 _FAKE_SOCKET_QUEUE_MAXLEN = 1024
-
-# Mirror ``chumicro_runner.IO_READ`` / ``IO_WRITE`` by value; kept as literals so
-# the test support takes no runner dependency edge.
-_IO_READ = 1
-_IO_WRITE = 2
 
 
 class FakeSocket:
@@ -224,7 +226,7 @@ class FakeSocketConnector:
         return 0
 
     def check(self, now_ms: int) -> bool:  # noqa: ARG002 (runner contract)
-        return self.state not in ("ready", "failed")
+        return self.state not in (STATE_READY, STATE_FAILED)
 
     def handle(self, now_ms: int) -> None:
         self.tick(now_ms)
@@ -233,14 +235,14 @@ class FakeSocketConnector:
         return None
 
     def tick(self, now_ms: int) -> None:  # noqa: ARG002
-        if self.state in ("ready", "failed"):
+        if self.state in (STATE_READY, STATE_FAILED):
             return
         if not self._actions:
             return
         action = self._actions.pop(0)
         if action.startswith("fail:"):
             self.last_error = OSError(action[5:])
-            self.state = "failed"
+            self.state = STATE_FAILED
             self.socket = None
             return
         if action == "dns_ok" and self.state == "awaiting_dns":
@@ -253,13 +255,13 @@ class FakeSocketConnector:
             if self._tls:
                 self.state = "awaiting_tls"
             else:
-                self.state = "ready"
+                self.state = STATE_READY
             return
         if action == "tls_pending" and self.state == "awaiting_tls":
             self._tls_interest = _IO_READ
             return
         if action == "tls_ok" and self.state == "awaiting_tls":
-            self.state = "ready"
+            self.state = STATE_READY
             return
         raise AssertionError(
             f"FakeSocketConnector: action {action!r} not valid in "
@@ -267,9 +269,9 @@ class FakeSocketConnector:
         )
 
     def cancel(self) -> None:
-        if self.state in ("ready", "failed"):
+        if self.state in (STATE_READY, STATE_FAILED):
             return
         if self.last_error is None:
             self.last_error = OSError("connector cancelled")
         self.socket = None
-        self.state = "failed"
+        self.state = STATE_FAILED

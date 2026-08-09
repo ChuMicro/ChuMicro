@@ -156,11 +156,15 @@ def ssl_context_with_cert_and_key(cert_pem, key_pem):  # pragma: no cover - devi
 
 class _MpTLSListenerWrapper:  # pragma: no cover - device only
     def __init__(self, raw_listener, context):
-        self.sock = raw_listener
+        # .sock holds the raw pollable socket: the runner unwraps exactly one
+        # level (getattr(io_socket, "sock", io_socket)) to reach a
+        # poll-registrable object.
+        self.sock = raw_listener.sock
+        self._plain_listener = raw_listener
         self._context = context
 
     def accept(self):
-        new_wrapper, address = self.sock.accept()
+        new_wrapper, address = self._plain_listener.accept()
         # The handshake needs the raw MP socket, not the _MpSocketWrapper polyfill.
         underlying = new_wrapper.sock
         underlying.setblocking(True)
@@ -295,6 +299,9 @@ class _MpConnector(SocketConnector):  # pragma: no cover - device only
                     )
                 if self._tls:
                     # wrap_socket blocks until the handshake completes; the next tick promotes to ready.
+                    # (A deferred handshake via do_handshake_on_connect=False
+                    # promoted to ready without surfacing certificate-verify
+                    # failures on a real Pi Pico W, so the blocking form stays.)
                     self._context = _resolve_default_context(self._context)
                     # The handshake needs a blocking socket; flip to blocking for it and back after.
                     raw_socket = self.socket

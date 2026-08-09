@@ -41,7 +41,7 @@ body:
     attributes:
       label: What you tried
       description: Which examples or code did you run?
-      placeholder: "e.g., Ran heartbeat_blink.py from the timing examples"
+      placeholder: "e.g., Ran rate_blink.py from the timing examples"
     validations:
       required: true
 

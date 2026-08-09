@@ -167,6 +167,7 @@ class TestRealMonoRepoManifests:
             "wifi.reconnect_backoff_max_ms",
             "wifi.reconnect_max",
             "wifi.power_save",
+            "wifi.tx_power_dbm",
         })
 
 

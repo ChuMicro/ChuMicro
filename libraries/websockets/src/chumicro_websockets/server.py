@@ -6,6 +6,7 @@ The public entry points are :class:`WebSocketServer` and :class:`Connection`.
 import errno
 
 from chumicro_websockets._session import (
+    _IO_READ,
     WhenOversized,
     _BaseSession,
     _force_non_blocking,
@@ -22,13 +23,17 @@ from chumicro_websockets._wire import (
     DEFAULT_SEND_BUDGET_PER_TICK,
     HandshakeParseState,
     HandshakeRequestParser,
+    WebSocketError,
     WebSocketHandshakeError,
-    WebSocketProtocolError,
     WebSocketState,
     WebSocketStateError,
     encode_server_handshake_response,
     encode_server_rejection,
 )
+
+# Caps Runner.wait while a connection is in flight, so an unpolled
+# connection socket keeps advancing.
+_CONNECTION_PROGRESS_INTERVAL_MS = 20
 
 
 class ServerHandshakePhase:
@@ -110,7 +115,7 @@ class Connection(_BaseSession):
 
         if self.state == WebSocketState.CONNECTING:
             if self._handshake_phase == ServerHandshakePhase.READING_REQUEST:
-                self._receive_handshake_chunk(now_ms)
+                self._receive_handshake_chunk()
             elif self._handshake_phase == ServerHandshakePhase.SENDING_RESPONSE:
                 self._send_handshake_chunk(now_ms)
             return
@@ -126,7 +131,7 @@ class Connection(_BaseSession):
     def _on_finalized(self) -> None:
         self._handshake_deadline_ticks = None
 
-    def _receive_handshake_chunk(self, now_ms: int) -> None:  # noqa: ARG002 - now_ms reserved for handshake-deadline parity
+    def _receive_handshake_chunk(self) -> None:
         chunk = self._recv_chunk(self._recv_budget_per_tick)
         if chunk is None:
             return
@@ -140,7 +145,7 @@ class Connection(_BaseSession):
         try:
             self._handshake_request_parser.feed(chunk)
         except WebSocketHandshakeError as handshake_error:
-            self._reject_with_400(str(handshake_error))
+            self._reject(400, "Bad Request", str(handshake_error))
             return
         if self._handshake_request_parser.state != HandshakeParseState.DONE:
             return
@@ -148,7 +153,9 @@ class Connection(_BaseSession):
             self._accept_path is not None
             and self._handshake_request_parser.path != self._accept_path
         ):
-            self._reject_with_404(
+            self._reject(
+                404,
+                "Not Found",
                 f"path {self._handshake_request_parser.path!r} not handled",
             )
             return
@@ -177,7 +184,7 @@ class Connection(_BaseSession):
             self._on_connection_callback(self)
         except Exception as callback_error:  # noqa: BLE001 - user code
             self._fail_with_error(
-                WebSocketProtocolError(
+                WebSocketError(
                     f"on_connection callback raised: {callback_error!r}",
                 ),
             )
@@ -187,14 +194,10 @@ class Connection(_BaseSession):
             self._feed_frame_bytes(self._post_handshake_carry, now_ms)
             self._post_handshake_carry = b""
 
-    def _reject_with_400(self, message: str) -> None:
-        body = message.encode("utf-8")
-        self._send_rejection_response(400, "Bad Request", body)
-        self.last_error = WebSocketHandshakeError(message)
-
-    def _reject_with_404(self, message: str) -> None:
-        body = message.encode("utf-8")
-        self._send_rejection_response(404, "Not Found", body)
+    def _reject(self, status_code: int, reason_phrase: str, message: str) -> None:
+        self._send_rejection_response(
+            status_code, reason_phrase, message.encode("utf-8"),
+        )
         self.last_error = WebSocketHandshakeError(message)
 
     def _send_rejection_response(
@@ -214,7 +217,9 @@ class Connection(_BaseSession):
             pass
         self.state = WebSocketState.CLOSED
         self._handshake_deadline_ticks = None
-        self.on_close(status_code, reason_phrase)
+        # No on_close here: the callback's contract is a WebSocket close code,
+        # and user code only wires it inside on_connection, which a rejected
+        # handshake never reaches.
 
 
 class WebSocketServer:
@@ -230,6 +235,7 @@ class WebSocketServer:
         listener: object | None = None,
         accept_path: str | None = None,
         max_connections: int = 2,
+        ticks: object | None = None,
     ) -> "WebSocketServer":
         """Build a :class:`WebSocketServer` from runtime config."""
         if listener is None:
@@ -258,6 +264,7 @@ class WebSocketServer:
                 "websockets.server.max_message_bytes",
                 DEFAULT_MAX_MESSAGE_BYTES,
             ),
+            ticks=ticks,
         )
 
     def __init__(
@@ -296,7 +303,7 @@ class WebSocketServer:
             max_inbound_queue_size: Bound on each connection's ``next_message`` queue.
             ticks: Tick source; defaults to the :mod:`chumicro_timing` ``ticks`` submodule.
         """
-        self._listener = listener
+        self.io_socket = listener
         self._on_connection = on_connection
         self._max_connections = max_connections
         self._accept_path = accept_path
@@ -329,16 +336,45 @@ class WebSocketServer:
         """How many connections are currently active (any non-CLOSED state)."""
         return len(self._connections)
 
+    def io_interest(self, now_ms: int) -> int:  # noqa: ARG002 - runner contract
+        """Poll-interest bit for ``Runner.wait``: read while a connection slot is free, else none."""
+        if self.closed or self.io_socket is None:
+            return 0
+        return _IO_READ if len(self._connections) < self._max_connections else 0
+
+    def next_deadline(self, now_ms: int) -> int | None:
+        """Earliest tick at which ``handle()`` must run.
+
+        The nearest connection deadline, capped at a short progress interval
+        while any connection is live; connection sockets are not registered
+        with the poller, so the cap keeps their I/O advancing.
+        """
+        if self.closed or not self._connections:
+            return None
+        ticks_diff = self._ticks.ticks_diff
+        nearest = self._ticks.ticks_add(now_ms, _CONNECTION_PROGRESS_INTERVAL_MS)
+        for connection in self._connections:
+            candidate = connection.next_deadline(now_ms)
+            if candidate is not None and ticks_diff(candidate, nearest) < 0:
+                nearest = candidate
+        return nearest
+
     def close(self) -> None:
         """Stop accepting new connections and close every active session."""
         if self.closed:
             return
         try:
-            self._listener.close()
+            self.io_socket.close()
         except Exception:  # noqa: BLE001 - best-effort
             pass
+        self.io_socket = None
         for connection in list(self._connections):
-            if connection.state not in (WebSocketState.CLOSED,):
+            if connection.state == WebSocketState.CONNECTING:
+                # No 101 has gone out yet, so a CLOSE frame would precede the
+                # handshake on the wire; just drop the socket.
+                connection._finalize_closed()
+                continue
+            if connection.state != WebSocketState.CLOSED:
                 try:
                     connection.close(CLOSE_NORMAL, "server shutting down")
                 except WebSocketStateError:
@@ -357,28 +393,27 @@ class WebSocketServer:
         if self.closed:
             return
         self._accept_pending(now_ms)
-        # Snapshot the list: a connection finalizing inside handle() may mutate it.
-        for connection in list(self._connections):
+        # Reverse index walk: closed connections pop in place with no per-tick
+        # list copy and no membership re-scans.
+        connections = self._connections
+        for connection_index in range(len(connections) - 1, -1, -1):
+            connection = connections[connection_index]
             if connection.state == WebSocketState.CLOSED:
-                if connection in self._connections:
-                    self._connections.remove(connection)
+                connections.pop(connection_index)
                 continue
             connection.handle(now_ms)
             # A callback may call server.close(), clearing every connection; stop if so.
             if self.closed:
                 return
-            if (
-                connection.state == WebSocketState.CLOSED
-                and connection in self._connections
-            ):
-                self._connections.remove(connection)
+            if connection.state == WebSocketState.CLOSED:
+                connections.pop(connection_index)
 
     def _accept_pending(self, now_ms: int) -> None:
         while True:
             if len(self._connections) >= self._max_connections:
                 return
             try:
-                accepted = self._listener.accept()
+                accepted = self.io_socket.accept()
             except OSError as accept_error:
                 if accept_error.errno == errno.EAGAIN:
                     return

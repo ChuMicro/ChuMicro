@@ -2,7 +2,7 @@
 
 **Cross-runtime millisecond tick helpers and periodic timing for CircuitPython, MicroPython, and CPython.**
 
-Capture `ticks_ms()` once per pass through your loop and hand it to a `Rate` (a drift-free periodic cadence) or a `Deadline` (a single armed timeout).  Both are built on wrap-safe tick arithmetic, so the counter rollover on a board that has been up for weeks changes nothing.  All timing is non-blocking: nothing in this library calls `time.sleep()`.
+Capture `ticks_ms()` once per pass through your loop and hand it to a `Rate` (a drift-free periodic cadence) or a `Deadline` (a single armed timeout).  Both are built on wrap-safe tick arithmetic, so the counter rollover on a board that has been up for weeks changes nothing.  All timing is non-blocking: nothing on the device path calls `time.sleep()` (the host-test `sleep_ms` shim in `chumicro_timing.testing` is the one exception, and it never deploys).
 
 ## Quick example
 

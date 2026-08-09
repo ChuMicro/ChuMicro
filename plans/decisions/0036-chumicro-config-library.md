@@ -57,10 +57,6 @@ Surface:
 - `chumicro_config.try_load_section(target_class, config, *, prefix, required, optional)`
   — soft-load sibling that returns `None` whenever `load_section`
   would raise (see §4 for the consumer pattern).
-- `chumicro_config.is_config_like(value) -> bool` — input-shape
-  predicate (True for `RuntimeConfig` or any dict-like mapping).
-  The shared input guard for libraries that use Pattern B in §3
-  (direct `config.get` reads without going through `load_section`).
 - `chumicro_config.load_runtime_config(path=...)` — explicit reader;
   raises `OSError` on missing file, `InvalidConfigType` on malformed
   payload.  Returns a `RuntimeConfig` directly so callers don't
@@ -74,7 +70,7 @@ Surface:
   `ConfigError` — exception hierarchy.
 
 Public surface re-exported from the package root so consumers write
-`from chumicro_config import RuntimeConfig, config, is_config_like, load_section, load_runtime_config, try_load_section`.
+`from chumicro_config import RuntimeConfig, config, load_section, load_runtime_config, try_load_section`.
 
 Depends on `chumicro-msgpack` for the decode in `load_runtime_config`.
 
@@ -181,11 +177,6 @@ class NTPClient:
         cls, config, *,
         socket=None, ticks=None, ...
     ) -> "NTPClient":
-        if not is_config_like(config):
-            raise InvalidConfigType(
-                f"NTPClient.from_config requires a RuntimeConfig or dict, "
-                f"got {type(config).__name__}"
-            )
         server = config.get("ntp.server", DEFAULT_SERVER)
         port = config.get("ntp.port", DEFAULT_PORT)
         timeout_ms = config.get("ntp.timeout_ms", DEFAULT_TIMEOUT_MS)
@@ -200,11 +191,14 @@ non-config injectables, (ii) it has no hook for per-class guards
 TLS), and (iii) call-site logic per construction is clearer
 inlined than carried via opaque `optional={}` defaults.
 
-**Both patterns share the same input guard.**  `is_config_like(config)`
-(public predicate exported from `chumicro_config`) — Pattern A
-gets it via `load_section`'s built-in check; Pattern B prepends
-the two-line guard explicitly.  Both raise the same
-`InvalidConfigType` on `None` / `str` / `int` / other-non-mapping.
+**Input guarding differs by pattern.**  Pattern A gets an
+`isinstance(config, (RuntimeConfig, dict))` check built into
+`load_section`, raising `InvalidConfigType` on `None` / `str` /
+`int` / other-non-mapping.  Pattern B libraries either prepend a
+one-line `hasattr(config, "get")` guard raising their own error
+(`MQTTClient.from_config` raises `ValueError`) or let the first
+`.get(...)` fail with `AttributeError`; no shared public predicate
+exists.
 
 **Rejected:** a `ConfigBase` mixin that introspects `_REQUIRED` / `_OPTIONAL` class attributes and auto-generates the methods.  The inheritance + class-attribute indirection saves three lines per library and adds magic the next reader has to chase.
 
@@ -257,12 +251,6 @@ MicroPython, and CircuitPython flash mode.  CircuitPython RAM mode
 wraps source modules in a class-stub that bypasses PEP 562 — but
 runtime configs aren't shipped in RAM mode anyway (the
 `extra_files` staging path requires flash).
-
-### 5. Templating convention: each library ships `_templates/config.toml`
-
-Every library that consumes runtime config ships a starter TOML snippet at `src/chumicro_<name>/_templates/config.toml` containing a `[<section>]` block with required keys spelled out and optional keys commented inline.  The template ships inside `src/` so it lands in the wheel and is discoverable via `importlib.resources` after `pip install`.  ~200 bytes per library; the file rides along to device and is never read there.
-
-`chumicro_config.templates.get_section_template(library_name) -> str` reads the snippet (CPython-only — `importlib.resources` doesn't exist on the embedded runtimes, and template collection is a host-side workspace-tooling concern).  `chumicro-workspace` consumes this from its `add-library` flow to assemble starter `projects/<name>/config.toml` files.
 
 ### 6. `chumicro-deploy`'s `devices.yml` is out of scope
 

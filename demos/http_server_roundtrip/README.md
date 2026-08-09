@@ -8,10 +8,8 @@ another window, no IP discovery.
 ## What it shows
 
 - `chumicro_wifi.WifiService` + `chumicro_http_server.HttpServer`
-  sharing one `while True:` loop on the board, the same shape as the
-  root README's
-  ["Give WiFi a deadline and keep blinking"](../../README.md#give-wifi-a-deadline-and-keep-blinking)
-  walkthrough.
+  registered with one `chumicro_runner.Runner` on the board, driven by a
+  single `runner.run_until(...)` call with a deadline.
 - Three registered routes (`GET /hello`, `GET /uptime`,
   `POST /echo`) with a `@server.route(...)` decorator.
 - The host driver reads the `SERVER_READY` marker the board prints
@@ -43,15 +41,15 @@ Override:
 ```
 driver: targeting pi-pico-w-circuitpython-board (circuitpython @ /dev/cu.usbmodem...)
 driver: waiting for SERVER_READY (up to 60.0s)...
-driver: GET /hello → 200 OK
+driver: GET /hello -> 200 OK
 {
   "message": "hello from chumicro_http_server"
 }
-driver: GET /uptime → 200 OK
+driver: GET /uptime -> 200 OK
 {
   "uptime_ms": 2341
 }
-driver: POST /echo → 200 OK
+driver: POST /echo -> 200 OK
 {
   "echoed": {"from": "demo driver"}
 }
@@ -73,7 +71,8 @@ The host driver:
 1. Picks the device from `devices.yml`.
 2. Builds a transport via `build_transport_for_entry`.
 3. Stages `app.py` plus every `chumicro_*` library it imports
-   (`http_server`, `sockets`, `timing`, `test_harness`) +
+   (`config`, `http_server`, `runner`, `sockets`, `test_harness`,
+   `timing`, `wifi`) +
    `runtime_config.msgpack` (with the wifi credentials from
    `secrets.toml`).
 4. Spawns a `DeviceBootstrapRunner` daemon thread that runs the

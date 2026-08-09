@@ -48,6 +48,8 @@ def echo_run(wifi, link_up, host, port):
         sock.close()
 
 
+_DEMO_DEADLINE_MS = 120_000
+
 config = load_runtime_config()
 echo_host = config["sockets.echo.host"]
 echo_port = int(config["sockets.echo.port"])
@@ -67,4 +69,6 @@ def signal_link_up(_old, new):
 wifi.on_state_change(signal_link_up)
 
 echo_handle = runner.add_generator(echo_run(wifi, link_up, echo_host, echo_port))
-runner.run_until(echo_handle)
+if not runner.run_until(echo_handle, timeout_ms=_DEMO_DEADLINE_MS):
+    marker("DEMO_TIMEOUT", stage="echo")
+    raise SystemExit(1)

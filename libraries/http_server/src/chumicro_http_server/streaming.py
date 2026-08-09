@@ -6,7 +6,6 @@ The entry points are :class:`StreamingResponse` and :func:`build_streaming_respo
 import errno
 
 from chumicro_http_server._wire import (
-    CRLF,
     DEFAULT_STREAM_BUFFER_SIZE,
     SOURCE_EOF,
     CaseInsensitiveDict,
@@ -19,8 +18,8 @@ from chumicro_http_server.server import (
     _ENCODED_500_ERROR,
     _REASONS,
     _ConnState,
+    _encode_head,
     _merge_headers,
-    _reject_control_chars,
 )
 
 __all__ = [
@@ -41,14 +40,6 @@ _HEX_DIGITS = b"0123456789abcdef"
 
 class _StreamError(ServerError):
     """Streamed-send failure that breaks framing mid-body."""
-
-
-class _StreamSourceError(_StreamError):
-    """The byte source violated its contract mid-transfer."""
-
-
-class _StreamHandlerError(_StreamError):
-    """The byte source raised mid-transfer (original on ``__cause__``)."""
 
 
 def _hex_len(value):
@@ -99,7 +90,7 @@ class _StreamState:
             self._header_reserve = 0
             self._fill_capacity = total
             self._fill_view = self._view
-        self._body_sent = 0
+        self.body_bytes_sent = 0
         self._eof = False
         self.out_view = self._view
         self.out_pos = 0
@@ -113,9 +104,6 @@ class _StreamState:
     def finished(self):
         return self._eof and self.out_pos >= self.out_end
 
-    @property
-    def body_bytes_sent(self):
-        return self._body_sent
 
     def advance_sent(self, count):
         self.out_pos += count
@@ -133,7 +121,7 @@ class _StreamState:
         if count == 0:
             return False
         if count < 0 or count > self._fill_capacity:
-            raise _StreamSourceError(
+            raise _StreamError(
                 f"streaming source returned {count}; expected "
                 f"0..{self._fill_capacity} or SOURCE_EOF ({SOURCE_EOF})",
             )
@@ -151,16 +139,16 @@ class _StreamState:
             self.out_pos = reserve - header_len
             self.out_end = body_end + 2
         else:
-            remaining = self._content_length - self._body_sent
+            remaining = self._content_length - self.body_bytes_sent
             if count > remaining:
-                raise _StreamSourceError(
+                raise _StreamError(
                     "streaming source produced more than the declared "
                     f"Content-Length {self._content_length}",
                 )
             self.out_view = self._view
             self.out_pos = 0
             self.out_end = count
-        self._body_sent += count
+        self.body_bytes_sent += count
 
     def _on_eof(self):
         self._eof = True
@@ -168,9 +156,9 @@ class _StreamState:
             self.out_view = _CHUNK_TERMINATOR_VIEW
             self.out_pos = 0
             self.out_end = len(_CHUNK_TERMINATOR)
-        elif self._body_sent != self._content_length:
-            raise _StreamSourceError(
-                f"streaming source signalled EOF after {self._body_sent} "
+        elif self.body_bytes_sent != self._content_length:
+            raise _StreamError(
+                f"streaming source signalled EOF after {self.body_bytes_sent} "
                 f"bytes but declared Content-Length {self._content_length}",
             )
 
@@ -236,22 +224,12 @@ def encode_streaming_headers(response: StreamingResponse) -> bytes:
     Raises:
         ServerProtocolError: The reason phrase or a header carries a CR, LF, or NUL.
     """
-    _reject_control_chars("reason", str(response.reason))
     headers = CaseInsensitiveDict()
     if response.content_length is not None:
         headers["Content-Length"] = str(response.content_length)
     else:
         headers["Transfer-Encoding"] = "chunked"
-    headers["Connection"] = "close"
-    _merge_headers(headers, response.headers)
-    parts = [
-        f"HTTP/1.1 {response.status_code} {response.reason}\r\n".encode("ascii"),
-    ]
-    for name, value in headers.items():
-        _reject_control_chars("header name", str(name))
-        _reject_control_chars("header value", str(value))
-        parts.append(f"{name}: {value}\r\n".encode("ascii"))
-    parts.append(CRLF)
+    parts = _encode_head(response.status_code, response.reason, headers, response.headers)
     return b"".join(parts)
 
 
@@ -309,7 +287,7 @@ def drive_stream_body(conn):
             raise
         except Exception as source_error:  # noqa: BLE001 - handler source raised mid-body
             # Bytes already on the wire; route through the fail-and-close path.
-            raise _StreamHandlerError(
+            raise _StreamError(
                 f"streaming source raised mid-body: {source_error!r}",
             ) from source_error
         if not progressed:

@@ -8,15 +8,17 @@ few text messages then closes; the board receives them with a linear
 loop:
 
 ```python
-def receive_stream(ws):
+def receive_stream(wifi, link_up, session, url):
+    yield from wait_for(link_up)            # suspend until wifi is up
+    session.connect(url)
+    runner.add(session)                     # session drives frame I/O each tick
     while True:
-        message = yield from ws.next_message()
+        message = yield from session.next_message()
         if message is None:
             break
         handle(message)
 
-runner.add(ws)                              # drives frame I/O each tick
-runner.add_generator(receive_stream(ws))    # drains the messages
+runner.add_generator(receive_stream(wifi, link_up, session, url))
 ```
 
 ## What it shows
@@ -56,7 +58,6 @@ Override:
 driver: websocket stream server up at ws://10.0.0.5:54344/
 driver: targeting raspberry-pi-pico-w-cp (circuitpython @ /dev/cu.usbmodem...)
 driver: board WIFI_OK ip=10.0.0.42
-driver: board WS_OPEN
 driver: board STREAM_CLOSED count=3 code=1000
 driver: demo completed cleanly.
 ```

@@ -7,9 +7,9 @@ driven by ``Runner.add_generator``: wait for a message, act on it,
 wait for the next.
 
 Pair with ``telemetry.py``, which uses the ``on_message`` callback and
-pattern handlers for multi-topic fan-out; this one shows the linear
-receive loop for a single-subscription consumer.  The session and the
-consumer are both registered with the runner.  Pick one inbound
+its own tick loop; this one shows the linear receive loop for a
+single-subscription consumer, with the client and the consumer both
+registered with the runner.  Pick one inbound
 surface per client, not both: the first ``next_message()`` call
 switches data delivery from the callbacks to the stream.
 

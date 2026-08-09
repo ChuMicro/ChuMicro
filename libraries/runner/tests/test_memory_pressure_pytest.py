@@ -3,9 +3,10 @@
 These tests run on CPython using :mod:`tracemalloc` to confirm that
 steady-state ``tick + wait`` cycles do not accumulate heap.  They
 catch Python-level leaks in the runner-reactor sync path: the
-``_registered_interest`` dict, the ``wanted_now`` scratch list inside
-``_sync_poll_set``, the ``ticks_diff``-driven ``_compute_timeout``,
-and the ``FakePoller`` bookkeeping that a test like this drives.
+``_registered_interest`` dict, the ``wanted_count`` / ``stale``
+bookkeeping inside ``_sync_poll_set``, the ``ticks_diff``-driven
+``_compute_timeout``, and the ``FakePoller`` bookkeeping that a test
+like this drives.
 
 These don't replicate device-level fragmentation (CP / MP allocators
 are different), but they prove the pure-Python data structures the

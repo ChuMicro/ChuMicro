@@ -71,9 +71,9 @@ from chumicro_runner import Runner
 
 runner = Runner(ticks=fake_ticks)  # or Runner() for real clock
 runner.add(service)  # Runner calls service.check(), then service.handle()
-# ... or use callables:
-runner.add(service.check, handler=some_function)
-# ... or periodic without a check gate:
+# ... or a bare handler on a schedule (the separate check+handler
+# shape was removed and raises ValueError; gate inside the handler
+# or give the object both check() and handle()):
 runner.add_periodic(handler, period_ms=100)
 ```
 
@@ -141,7 +141,7 @@ Existing examples:
   `memoryview(self._buffer)[self._buffer_length:]`; the MQTT client's
   recv loop (`client._handle_recv`) uses it directly.  Reference
   implementation borrowed from the basefs MQTT client.
-* `chumicro_websockets._session.WebSocketSession` — `_recv_buffer` +
+* `chumicro_websockets._session._BaseSession` — `_recv_buffer` +
   cached `_recv_view` allocated once in `__init__`.
 * `chumicro_requests.client.HttpClient` and
   `chumicro_http_server.server._Connection` — same shape.
@@ -270,6 +270,28 @@ When *not* to apply: per-instance buffers where the instance itself is
 short-lived (HTTP `ResponseParser` is constructed per request and
 discarded — pre-allocating to exact `Content-Length` upfront is the
 right call there because there's no reuse cycle to amortize over).
+
+## Two hidden per-tick allocators on MP/CP: `list.clear()` and method `getattr`
+
+Two hot-path shapes that look allocation-free on CPython allocate on
+every tick on MicroPython and CircuitPython:
+
+* **`list.clear()` shrinks the backing array.**  Both runtimes
+  `m_renew` the item buffer down to 4 slots on `clear()`
+  (`py/objlist.c`, `LIST_MIN_ALLOC`), so a scratch list cleared per
+  tick re-grows — and re-allocates — every tick once it holds 5+
+  items.  Reuse the list as a high-water buffer instead: overwrite
+  slots up to a cursor, `append` past the end, and blank the used
+  slots to `None` rather than clearing.  `Runner.tick`'s `_pending`
+  is the worked example.
+* **`getattr(obj, "method")` mints a bound method per call**
+  (`py/objboundmeth.c` heap-allocates the binding).  A duck-typed
+  hook resolved with `getattr` inside a per-tick or per-wait loop is
+  a steady allocation.  Resolve once at registration time and cache
+  the bound method (`TaskHandle.io_interest` / `next_deadline`), or
+  once per state change (`_GeneratorWrapper`'s wait hooks).  Reading
+  a plain data attribute through `getattr` is fine — only method
+  lookup allocates.
 
 ## `struct.unpack` accepts memoryview directly
 

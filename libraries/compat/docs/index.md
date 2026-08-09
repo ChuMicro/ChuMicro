@@ -2,7 +2,7 @@
 
 **Cross-runtime compatibility polyfills for CircuitPython, MicroPython, and CPython.**
 
-Lightweight reimplementations of the standard-library pieces CircuitPython and MicroPython leave out. Import from `chumicro_compat` and the same code runs on all three runtimes: on CPython the real C implementation is re-exported, so the import costs nothing there.
+Lightweight reimplementations of the standard-library pieces CircuitPython and MicroPython leave out. Import the polyfill submodule (`from chumicro_compat.functools import partial`) and the same code runs on all three runtimes: on CPython the real C implementation is re-exported, so the import costs nothing there.
 
 ## Quick example
 

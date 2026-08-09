@@ -17,6 +17,9 @@ Example output::
     closed cleanly
 """
 
+#: Needs a real radio and AP; a wifi-less host has nothing to join.
+__chumicro_runtimes__ = ("circuitpython", "micropython")
+
 import time
 
 from chumicro_sockets import connector
@@ -28,9 +31,7 @@ WIFI_PASSWORD = "your-wifi-password"  # noqa: S105 - replace before deploying
 radio, ip = wifi_up(WIFI_SSID, WIFI_PASSWORD)
 print(f"WIFI_OK ip={ip}")
 
-# One state machine per runtime: tick it until terminal.  Runner-shaped
-# apps register the connector with the runner instead; a one-shot
-# script drives the same machine inline.
+# A one-shot script drives the connector inline until it lands ready.
 dial = connector("example.com", 80, radio=radio)
 while dial.state not in ("ready", "failed"):
     dial.tick(0)

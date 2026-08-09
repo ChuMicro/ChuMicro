@@ -66,6 +66,16 @@ METHOD_PRESERVING_REDIRECT_STATUS_CODES = frozenset({307, 308})
 #: HTTP/1.1 line terminator.
 CRLF = b"\r\n"
 
+# Sentinel _take_ascii_line returns after failing the parser on a non-ASCII line.
+_NON_ASCII_LINE = object()
+
+
+def header_pairs(headers):
+    """Normalize a headers argument (mapping or iterable of pairs) to an
+    iterable of ``(name, value)`` pairs."""
+    return headers.items() if hasattr(headers, "items") else headers
+
+
 #: Header / body separator.
 CRLF_CRLF = b"\r\n\r\n"
 
@@ -325,13 +335,7 @@ def encode_request(
         merged["Content-Length"] = str(len(body))
 
     if headers is not None:
-        if isinstance(headers, CaseInsensitiveDict):
-            iterable = headers.items()
-        elif isinstance(headers, dict):
-            iterable = headers.items()
-        else:
-            iterable = headers
-        for name, value in iterable:
+        for name, value in header_pairs(headers):
             merged[name] = value
 
     _reject_unsafe_chars("method", method)
@@ -376,7 +380,9 @@ class ResponseParser:
 
         Args:
             max_body_bytes: Cap on the buffered body size; ignored when *stream_body* is set.
-            max_header_bytes: Cap on status-line and header bytes staged before the body.
+            max_header_bytes: Cap on unparsed staged bytes outside the
+                plain-body state, so it bounds the status line, headers,
+                and chunked-framing lines.
             body_buffer: Optional caller-owned ``bytearray`` reused as the body buffer.
             body_buffer_view: Pre-cached ``memoryview(body_buffer)``; required with *body_buffer*.
             stream_body: When ``True``, stage the body in a fixed window instead of buffering whole.
@@ -484,8 +490,8 @@ class ResponseParser:
                 live = len(self._buffer) - self._read_offset
                 if live + len(chunk) > self._max_header_bytes:
                     self._fail(HttpProtocolError(
-                        "response header section exceeded "
-                        f"{self._max_header_bytes} bytes",
+                        "unparsed response bytes exceeded "
+                        f"{self._max_header_bytes} (state={self.state})",
                     ))
                     return
                 self._buffer.extend(chunk)
@@ -542,20 +548,30 @@ class ResponseParser:
                 continue
             return  # BODY handled in feed; DONE / ERROR terminal.
 
-    def _try_parse_status_line(self):
+    def _take_ascii_line(self, label):
+        # One CRLF-terminated line off the live buffer, decoded as ASCII.
+        # Returns the text, ``None`` when no full line has arrived yet, or
+        # ``_NON_ASCII_LINE`` after failing the parser on an undecodable line.
         crlf_index = self._live_find(CRLF)
         if crlf_index == -1:
-            return False
+            return None
         line = self._live_slice(0, crlf_index)
         self._consume(crlf_index + 2)
-        # Status-Line per RFC 7230 §3.1.2: HTTP-version SP status-code SP reason-phrase
         try:
-            text = str(line, "ascii")
-        except UnicodeError as decode_error:
+            return str(line, "ascii")
+        except UnicodeError:
             self._fail(HttpProtocolError(
-                f"non-ASCII status line: {bytes(line)!r}",
+                f"non-ASCII {label}: {bytes(line)!r}",
             ))
-            raise self.error from decode_error
+            return _NON_ASCII_LINE
+
+    def _try_parse_status_line(self):
+        # Status-Line per RFC 7230 §3.1.2: HTTP-version SP status-code SP reason-phrase
+        text = self._take_ascii_line("status line")
+        if text is None:
+            return False
+        if text is _NON_ASCII_LINE:
+            return True
         parts = text.split(" ", 2)
         if len(parts) < 2:
             self._fail(HttpProtocolError(f"malformed status line: {text!r}"))
@@ -579,23 +595,15 @@ class ResponseParser:
         return True
 
     def _try_parse_headers(self):  # noqa: CHU027 - same primitive in chumicro-http-server _wire.py; per-consumer duplication kept intentionally
-        crlf_index = self._live_find(CRLF)
-        if crlf_index == -1:
+        text = self._take_ascii_line("header line")
+        if text is None:
             return False
-        if crlf_index == 0:
+        if text is _NON_ASCII_LINE:
+            return True
+        if text == "":
             # Empty line: end of headers.
-            self._consume(2)
             self._enter_body_state()
             return True
-        line = self._live_slice(0, crlf_index)
-        self._consume(crlf_index + 2)
-        try:
-            text = str(line, "ascii")
-        except UnicodeError as decode_error:
-            self._fail(HttpProtocolError(
-                f"non-ASCII header line: {bytes(line)!r}",
-            ))
-            raise self.error from decode_error
         colon_index = text.find(":")
         if colon_index <= 0:
             self._fail(HttpProtocolError(
@@ -667,39 +675,34 @@ class ResponseParser:
                 self._body = bytearray(content_length)
                 self._body_view = memoryview(self._body)
                 self._body_capacity = content_length
-            # Bytes after the header CRLF are the start of the body.
-            if self._live_len() > 0:
-                tail_view = self._live_slice(0)
-                self._reset_buffer()
-                self._absorb_body_bytes(tail_view)
+            self._absorb_trailing_bytes()
             return
         self._body_remaining = -1
         self.state = ParseState.BODY
-        if self._live_len() > 0:
-            tail = bytes(self._live_slice(0))
-            self._reset_buffer()
-            self._absorb_body_bytes(tail)
+        self._absorb_trailing_bytes()
+
+    def _absorb_trailing_bytes(self):
+        # Bytes that arrived after the header CRLF are the start of the body.
+        # _live_slice returns a fresh unshared bytearray, so no copy is needed.
+        if self._live_len() == 0:
+            return
+        tail_bytes = self._live_slice(0)
+        self._reset_buffer()
+        self._absorb_body_bytes(tail_bytes)
 
     def _try_parse_chunk_size(self):
-        crlf_index = self._live_find(CRLF)
-        if crlf_index == -1:
+        text = self._take_ascii_line("chunk-size line")
+        if text is None:
             return False
-        line = self._live_slice(0, crlf_index)
-        self._consume(crlf_index + 2)
-        try:
-            text = str(line, "ascii")
-        except UnicodeError as decode_error:
-            self._fail(HttpProtocolError(
-                f"non-ASCII chunk-size line: {bytes(line)!r}",
-            ))
-            raise self.error from decode_error
+        if text is _NON_ASCII_LINE:
+            return True
         # Strip chunk-extensions (everything after the first ';').
         semicolon_index = text.find(";")
         size_text = text[:semicolon_index] if semicolon_index != -1 else text
         size_text = size_text.strip()
         if not size_text:
             self._fail(HttpProtocolError(
-                f"empty chunk-size line: {line!r}",
+                f"empty chunk-size line: {text!r}",
             ))
             return True
         try:

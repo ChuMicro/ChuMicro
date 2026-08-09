@@ -8,7 +8,7 @@ Counters, timestamps, tokens, and retry budgets that your program writes while i
 
 ```python
 from chumicro_kvstore import KVStore
-from chumicro_timing import ticks_ms
+from chumicro_timing import ticks_ms  # separate install: chumicro-timing
 
 store = KVStore(backend="auto")              # picks the right backend per runtime
 store["boot_count"] = store.get("boot_count", 0) + 1

@@ -101,6 +101,10 @@ def main() -> None:
             lit = not lit
             blink_count += 1
             print(f"  LED {'on ' if lit else 'off'}")
+        if request.done:
+            # Check before wait(): after the last tick nothing re-arms a
+            # deadline, so wait() would sleep on the listener forever.
+            break
         runner.wait(now)                                  # idle the CPU until the next event
 
     print(f"\nlaptop_roundtrip: request finished; the LED blinked {blink_count} times "

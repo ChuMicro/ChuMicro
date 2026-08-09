@@ -359,10 +359,10 @@ class TestCPythonTLSSocketWrapper:
 
         return _CPythonTLSSocketWrapper(inner)
 
-    def test_recv_translates_want_read_to_eagain(self) -> None:
+    def test_recv_into_translates_want_read_to_eagain(self) -> None:
         wrapper = self._wrapper(_FakeSSLSocket(raise_error=ssl.SSLWantReadError()))
         with pytest.raises(OSError) as captured:
-            wrapper.recv(16)
+            wrapper.recv_into(bytearray(16), 16)
         assert captured.value.args[0] == errno.EAGAIN
 
     def test_recv_into_translates_want_write_to_eagain(self) -> None:
@@ -380,7 +380,6 @@ class TestCPythonTLSSocketWrapper:
     def test_passthrough_and_lifecycle_forwarding(self) -> None:
         inner = _FakeSSLSocket()
         wrapper = self._wrapper(inner)
-        assert wrapper.recv(4) == b"xxxx"
         assert wrapper.send(b"hi") == 2
         # Default-nbytes path fills the whole buffer; explicit-nbytes clamps.
         buffer = bytearray(4)

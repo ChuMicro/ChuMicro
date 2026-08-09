@@ -2,7 +2,7 @@ __chumicro_runtimes__ = ("circuitpython",)
 
 import binascii
 
-from chumicro_kvstore.core import Backend, KVStoreCorrupt, KVStoreFull
+from chumicro_kvstore.core import Backend, KVStoreCorrupt
 
 
 class CpNvmBackend(Backend):
@@ -56,10 +56,7 @@ class CpNvmBackend(Backend):
         return payload
 
     def save(self, payload: bytes) -> None:
-        if len(payload) > self.capacity:
-            raise KVStoreFull(
-                f"payload size {len(payload)} exceeds NVM capacity {self.capacity}"
-            )
+        self._check_capacity(payload)
 
         crc = binascii.crc32(payload) & 0xFFFFFFFF
         header = (

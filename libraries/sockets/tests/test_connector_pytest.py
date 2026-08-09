@@ -16,7 +16,6 @@ import socket
 import ssl
 
 import pytest
-from chumicro_runner import IO_READ, IO_WRITE
 from chumicro_sockets import connector as make_connector
 from chumicro_sockets._connector import (
     STATE_AWAITING_DNS,
@@ -25,6 +24,11 @@ from chumicro_sockets._connector import (
     STATE_FAILED,
     STATE_READY,
 )
+
+# Pinned poll-interest contract values (chumicro_runner.IO_READ / IO_WRITE
+# mirror them); literals keep this cross-runtime file off the runner.
+IO_READ = 1
+IO_WRITE = 2
 
 
 def _drive(connector, *, max_ticks: int = 50, now_ms: int = 0) -> None:

@@ -83,6 +83,8 @@ optional_keys = [
     "http_server.max_connections",
     "http_server.request_timeout_ms",
     "http_server.max_request_body_bytes",
+    "http_server.max_request_line_bytes",
+    "http_server.max_headers_bytes",
     "http_server.stream_buffer_size",
     "http_server.tls.cert_path",
     "http_server.tls.key_path",

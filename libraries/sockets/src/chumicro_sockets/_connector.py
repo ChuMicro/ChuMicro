@@ -30,8 +30,6 @@ class SocketConnector:
     @property
     def io_socket(self):
         """The socket for ``Runner.wait`` once built, or ``None`` before and after."""
-        if self.socket is None:
-            return None
         return self.socket
 
     def io_interest(self, now_ms):  # noqa: ARG002 (runner contract)

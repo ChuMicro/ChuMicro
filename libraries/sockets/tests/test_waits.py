@@ -7,9 +7,13 @@ now_ms) and defaults to None, and that one instance is re-yieldable —
 repeated reads return stable values so a steady EAGAIN loop reuses it.
 """
 
-from chumicro_runner import IO_READ, IO_WRITE
 from chumicro_sockets.testing import FakeSocket
 from chumicro_sockets.waits import ReadWait, WriteWait
+
+# Pinned poll-interest contract values (chumicro_runner.IO_READ / IO_WRITE
+# mirror them); literals keep this cross-runtime file off the runner.
+IO_READ = 1
+IO_WRITE = 2
 
 
 def test_read_wait_reports_read_interest():

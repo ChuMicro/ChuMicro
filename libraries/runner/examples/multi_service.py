@@ -5,7 +5,7 @@ coexist in a single ``Runner``:
 
 - **Periodic** health check (every 2 s)
 - **Object-based** motion detector (gate-based, checked every tick)
-- **Callable** check + handler (light sensor)
+- **Handler-only** light sensor with the gate inside the handler
 - **Periodic** data logger (every 5 s)
 
 All simulation lives inside the task objects.  On a real board,
@@ -125,8 +125,9 @@ light = LightSensor()
 
 
 def lights_on_when_dark(now_ms):
-    if light.read_level() < 20:
-        print(f"  [{now_ms} ms] lights ON (level={light.read_level()})")
+    level = light.read_level()
+    if level < 20:
+        print(f"  [{now_ms} ms] lights ON (level={level})")
 
 
 runner.add(handler=lights_on_when_dark)

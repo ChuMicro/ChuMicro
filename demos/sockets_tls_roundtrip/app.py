@@ -30,6 +30,8 @@ from chumicro_wifi import WifiConfig, WifiService, WifiState
 
 _PROBE_PAYLOAD = b"hello chumicro tls\n"
 
+_DEMO_DEADLINE_MS = 60_000
+
 config = load_runtime_config()
 echo_host = config["sockets.echo.host"]
 echo_port = int(config["sockets.echo.port"])
@@ -50,7 +52,11 @@ wifi.on_state_change(on_wifi_state)
 runner = Runner(on_handler_error=lambda entry, error: print("SERVICE_FAULT", entry.service, repr(error)))
 runner.add(wifi)
 
-runner.run_until(lambda: wifi.state == WifiState.CONNECTED)
+if not runner.run_until(
+    lambda: wifi.state == WifiState.CONNECTED, timeout_ms=_DEMO_DEADLINE_MS,
+):
+    marker("DEMO_TIMEOUT", stage="wifi")
+    raise SystemExit(1)
 
 # Wifi is up.  Dial the TLS echo server with the custom-CA anchor.
 # The connector is a runner service: register it raw and run until it
@@ -62,7 +68,11 @@ dial = connector(
     tls=True, context=context, radio=wifi.adapter.radio,
 )
 runner.add(dial)
-runner.run_until(lambda: dial.state in ("ready", "failed"))
+if not runner.run_until(
+    lambda: dial.state in ("ready", "failed"), timeout_ms=_DEMO_DEADLINE_MS,
+):
+    marker("DEMO_TIMEOUT", stage="connect")
+    raise SystemExit(1)
 if dial.state == "failed":
     raise dial.last_error
 sock = dial.socket

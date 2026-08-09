@@ -26,12 +26,16 @@ def connector_factory(*, radio=None, ssl_context=None):
     return factory
 
 
-def fixed_connector_factory(host, port, *, radio=None, ssl_context=None):
-    """Build a ``() -> SocketConnector`` factory for one fixed endpoint."""
+def fixed_connector_factory(host, port, *, use_tls=False, radio=None, ssl_context=None):
+    """Build a ``() -> SocketConnector`` factory for one fixed endpoint.
+
+    ``use_tls=True`` with no *ssl_context* dials TLS against the runtime's
+    default trust store; passing a context implies TLS on its own.
+    """
     def factory():
         return chumicro_sockets.connector(
             host, port,
-            tls=ssl_context is not None,
+            tls=use_tls or ssl_context is not None,
             context=ssl_context,
             radio=radio,
         )

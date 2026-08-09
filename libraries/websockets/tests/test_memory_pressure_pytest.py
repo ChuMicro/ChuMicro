@@ -1,9 +1,9 @@
 """Host-side memory-pressure regression tests.
 
-These tests run on CPython using :mod:`tracemalloc` to profile
-per-operation allocations and :mod:`gc` to force a clean baseline
-before each measurement.  They catch Python-level leaks in the
-client / connection — leaks that survive cycles of
+These tests run on CPython using :mod:`tracemalloc` to measure
+retained growth after collection and :mod:`gc` to force a clean
+baseline before each measurement.  They catch Python-level leaks in
+the client / connection — leaks that survive cycles of
 send/recv/ping/close without the session tearing down.
 
 These don't replicate device-level fragmentation (CP / MP
@@ -15,15 +15,6 @@ allocation counts.
 Pair with the live-board functional tests in
 ``libraries/websockets/functional_tests/`` for end-to-end
 heap-fragmentation measurement against real hardware.
-
-Why the library itself never calls ``gc.collect()``: fragmentation
-is prevented by design (pre-allocated recv + frame-parser buffers,
-bounded TX queue, no per-message data-structure growth in steady
-state) and host-side leaks are caught here.  A library calling
-``gc.collect()`` invisibly inside ``handle()`` would impose its
-collect cadence on every other task in the system; the runner
-contract (``handle`` returns quickly) keeps that decision in the
-user's hands.
 """
 
 #: CPython-only lane (pytest fixtures / host stdlib).  Not cross-runtime.
@@ -145,7 +136,7 @@ class TestSendTextNoLeak:
 
         Detects: lingering references in ``_tx_queue`` (queue items
         not popped), accumulating partial-send tuples in
-        ``_tx_partial``, callback closures not garbage-collected.
+        ``_tx_partial_buffer``, callback closures not garbage-collected.
         """
         socket = FakeConnection()
         clock = FakeTicks()
@@ -435,7 +426,7 @@ class TestServerInboundNoLeak:
             clock,
             on_connection=lambda connection: observed.append(connection),
         )
-        connection = _drive_server_to_open(socket, server, server._listener, clock)
+        connection = _drive_server_to_open(socket, server, server.io_socket, clock)
         connection.on_text = lambda _text: None
 
         # Client-side outbound MUST be masked.
@@ -462,7 +453,7 @@ class TestServerInboundNoLeak:
             clock,
             on_connection=lambda connection: observed.append(connection),
         )
-        connection = _drive_server_to_open(socket, server, server._listener, clock)
+        connection = _drive_server_to_open(socket, server, server.io_socket, clock)
 
         def operation() -> None:
             socket.outbound = bytearray()

@@ -51,4 +51,6 @@ runner.add_periodic(toggle_led, period_ms=500)
 print("Running LED blink (toggle every 500 ms)...\n")
 
 while True:
-    runner.tick()
+    now_ms = runner.tick()
+    # Sleep until the next 500 ms toggle instead of spinning the CPU.
+    runner.wait(now_ms)

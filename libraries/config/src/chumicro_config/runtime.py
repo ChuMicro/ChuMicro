@@ -1,6 +1,7 @@
 """On-device reader for ``/runtime_config.msgpack`` (flat dotted-key shape)."""
 
 import errno
+import gc
 
 from chumicro_msgpack import unpackb
 
@@ -28,17 +29,23 @@ def load_runtime_config(path: str | None = None) -> RuntimeConfig:
     if path is None:
         path = DEFAULT_RUNTIME_CONFIG_PATH
     with open(path, "rb") as handle:
-        try:
-            decoded = unpackb(handle.read())
-        except ValueError as error:
-            raise InvalidConfigType(
-                f"runtime config is not valid msgpack: {error}"
-            ) from error
+        payload = handle.read()
+    try:
+        decoded = unpackb(payload)
+    except ValueError as error:
+        raise InvalidConfigType(
+            f"runtime config is not valid msgpack: {error}"
+        ) from error
     if not isinstance(decoded, dict):
         raise InvalidConfigType(
             f"runtime config must decode to a dict, got {type(decoded).__name__}"
         )
-    return RuntimeConfig(decoded)
+    result = RuntimeConfig(decoded)
+    # The raw file blob is boot-time dead weight; release it now rather
+    # than waiting on natural collection.
+    del payload, decoded
+    gc.collect()
+    return result
 
 
 _config_cache: RuntimeConfig | None = None
@@ -52,7 +59,7 @@ def _ensure_config_loaded() -> RuntimeConfig | None:
             _config_cache = load_runtime_config()
         except OSError as error:
             # A missing file (ENOENT) means "no config"; other OSErrors surface.
-            if error.args and error.args[0] != errno.ENOENT:
+            if not error.args or error.args[0] != errno.ENOENT:
                 raise
             _config_cache = None
         _config_loaded = True

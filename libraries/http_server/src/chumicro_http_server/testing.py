@@ -44,7 +44,7 @@ def request_bytes(
         body: Optional request body; a non-empty body auto-adds ``Content-Length``.
 
     Returns:
-        The request as a single ``bytes`` for ``FakeSocket.enqueue_recv``.
+        The request as a single ``bytes``, ready to queue on a client-socket fake.
     """
     lines = [f"{method} {path} HTTP/1.1\r\n".encode("ascii")]
     if body:

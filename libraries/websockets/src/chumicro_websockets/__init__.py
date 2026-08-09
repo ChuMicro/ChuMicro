@@ -39,7 +39,7 @@ gc.collect()
 
 
 def __getattr__(name):
-    # Lazy PEP 562 import keeps the unused client/server half (~20 KB) out of RAM.
+    # Lazy PEP 562 import: the client/server half a board never references stays out of RAM.
     if name == "WebSocketClient":
         from chumicro_websockets.client import WebSocketClient  # noqa: PLC0415
 

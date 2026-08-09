@@ -51,9 +51,8 @@ Substrate quirks observed on real boards:
   on a LAN); set ``server_hostname=`` to that DNS name.
 """
 
-#: CircuitPython-only because MicroPython rp2 needs NTP-sync first
-#: (see Substrate quirks in the docstring).  Marker keeps the sweep
-#: harness from running this on MP boards.
+#: CircuitPython-only: MicroPython rp2 needs an NTP-synced clock before a
+#: TLS handshake validates (see Substrate quirks in the docstring).
 __chumicro_runtimes__ = ("circuitpython",)
 
 import time
@@ -106,9 +105,8 @@ print(f"WIFI_OK ip={ip}")
 
 context = ssl_context_with_ca(CA_PEM)
 
-# One state machine per runtime: tick it until terminal.  Runner-shaped
-# apps register the connector with the runner instead; a one-shot
-# script drives the same machine inline.
+# A one-shot script drives the connector inline until it lands ready;
+# runner-shaped apps register the connector with the runner instead.
 dial = connector("letsencrypt.org", 443, tls=True, context=context, radio=radio)
 while dial.state not in ("ready", "failed"):
     dial.tick(0)

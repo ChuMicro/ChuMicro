@@ -6,8 +6,6 @@ Register work with a ``Runner``, then call ``tick()`` in a loop; ``wait()`` idle
 # Eager import: on MicroPython mount-mode a lazy import becomes an mpremote RPC that adds ~1 s per test.
 import time
 
-from chumicro_timing import ticks as _DEFAULT_TICKS
-
 # Resolve poll flags once at import; the fallback constants match POSIX for a runtime without select.
 try:
     import select as _select
@@ -99,7 +97,8 @@ class TaskHandle:
                  runner: "Runner",
                  service: object | None = None,
                  preserve_phase: bool = False,
-                 io_interest: object | None = None) -> None:
+                 io_interest: object | None = None,
+                 next_deadline: object | None = None) -> None:
         self.check_function = check_function
         self.handler_function = handler_function
         self.period_ms = period_ms
@@ -109,21 +108,26 @@ class TaskHandle:
         self.active = True
         self._runner = runner
         self.service = service
-        # Cache the bound io_interest method so the per-sweep poll sync never re-allocates it.
+        # Cache the bound io_interest / next_deadline methods so the per-sweep
+        # poll sync and the per-wait timeout scan never re-allocate them.
         self.io_interest = io_interest
+        self.next_deadline = next_deadline
 
-    def set_period(self, period_ms: int | None) -> None:
+    def set_period(self, period_ms: int | None, now_ms: int | None = None) -> None:
         """Add, change, or remove the period for this task.
 
         Args:
             period_ms: New interval in milliseconds, or ``None`` to clear the period.
+            now_ms: Anchor for the next fire, typically the timestamp the enclosing
+                ``tick()`` returned; default is a fresh clock read.
         """
         if period_ms is not None and period_ms <= 0:
             raise ValueError("period_ms must be greater than zero")
         self.period_ms = period_ms
         if period_ms is not None:
             ticks = self._runner._ticks
-            now_ms = ticks.ticks_ms()
+            if now_ms is None:
+                now_ms = ticks.ticks_ms()
             self.next_due_ms = ticks.ticks_add(now_ms, period_ms)
         else:
             self.next_due_ms = None
@@ -160,7 +164,13 @@ class Runner:
         self._ticking = False
         self.handler_errors = 0
         self._on_handler_error = on_handler_error
-        self._ticks = ticks if ticks is not None else _DEFAULT_TICKS
+        if ticks is not None:
+            self._ticks = ticks
+        else:
+            from chumicro_timing import (
+                ticks as real_ticks,  # noqa: PLC0415 - DI fallback keeps the substrate off BYO-ticks deploys
+            )
+            self._ticks = real_ticks
         # Cache the tick source's sleep_ms (else the module one) so the socket-less wait allocates nothing.
         self._sleep_ms = getattr(self._ticks, "sleep_ms", _sleep_ms)
         self._poller = poller
@@ -191,17 +201,20 @@ class Runner:
         """
         service: object | None = None
         io_interest: object | None = None
+        next_deadline: object | None = None
         if task is not None and handler is not None:
             raise ValueError(
                 "Pass a task object OR a handler callable, not both "
                 "(the separate check-plus-handler shape was removed; "
-                "give the object a handle() or gate inside the handler)"
+                "give the object both check() and handle(), or gate "
+                "inside the handler)"
             )
         if task is not None:
             check_function = task.check
             handler_function = task.handle
             service = task
             io_interest = getattr(task, "io_interest", None)
+            next_deadline = getattr(task, "next_deadline", None)
         elif handler is not None:
             check_function = None
             handler_function = handler
@@ -223,16 +236,16 @@ class Runner:
         handle = TaskHandle(
             check_function, handler_function, period_ms, next_due_ms,
             run_count, self, service=service, preserve_phase=preserve_phase,
-            io_interest=io_interest,
+            io_interest=io_interest, next_deadline=next_deadline,
         )
         self._entries.append(handle)
         return handle
 
-    def add_generator(self, gen: object) -> "GeneratorHandle":  # noqa: F821 - GeneratorHandle is lazy-imported in the body to keep _generator off the eager import path, so the return annotation is a forward-ref string
+    def add_generator(self, generator: object) -> "GeneratorHandle":  # noqa: F821 - GeneratorHandle is lazy-imported in the body to keep _generator off the eager import path, so the return annotation is a forward-ref string
         """Register a generator-driven service with the runner.
 
         Args:
-            gen: A fresh, not-yet-advanced generator; this method primes it to its first yield.
+            generator: A fresh, not-yet-advanced generator; this method primes it to its first yield.
 
         Returns:
             A ``GeneratorHandle`` carrying ``.done`` and ``.cancel()``.
@@ -244,7 +257,7 @@ class Runner:
         )
 
         handle = GeneratorHandle()
-        wrapper = _GeneratorWrapper(gen, handle)
+        wrapper = _GeneratorWrapper(generator, handle)
         task_handle = self.add(wrapper)
         wrapper._task_handle = task_handle
         handle._wrapper = wrapper
@@ -295,6 +308,7 @@ class Runner:
             ticks_diff = ticks.ticks_diff
             ticks_add = ticks.ticks_add
             pending = self._pending
+            pending_count = 0
 
             for entry in self._entries:
                 if entry.next_due_ms is not None:
@@ -314,13 +328,20 @@ class Runner:
                     else:
                         entry.next_due_ms = ticks_add(now_ms, entry.period_ms)
 
-                if entry.check_function is not None:
-                    if entry.check_function(now_ms):
-                        pending.append(entry)
+                if entry.check_function is not None and not entry.check_function(now_ms):
+                    continue
+                # Overwrite a slot when one exists; the list grows to a high-water
+                # capacity and stays there.  list.clear() would shrink the backing
+                # array on MicroPython and CircuitPython, forcing a re-grow
+                # allocation on every tick with several due handlers.
+                if pending_count < len(pending):
+                    pending[pending_count] = entry
                 else:
                     pending.append(entry)
+                pending_count += 1
 
-            for entry in pending:
+            for pending_index in range(pending_count):
+                entry = pending[pending_index]
                 try:
                     entry.handler_function(now_ms)
                 except ReentrantTickError:
@@ -336,8 +357,10 @@ class Runner:
 
             return now_ms
         finally:
-            # Clear in finally so a raised handler leaves no fired entries to re-fire next tick.
-            self._pending.clear()
+            # Blank the slots in finally so a raised handler leaves no fired
+            # entries pinned; the next tick rebuilds from index zero either way.
+            for pending_index in range(len(self._pending)):
+                self._pending[pending_index] = None
             self._ticking = False
 
     def wait(self, now_ms: int) -> None:
@@ -541,10 +564,7 @@ class Runner:
                 delta = ticks_diff(entry.next_due_ms, now_ms)
                 if nearest is None or delta < nearest:
                     nearest = delta
-            service = entry.service
-            if service is None:
-                continue
-            deadline_fn = getattr(service, "next_deadline", None)
+            deadline_fn = entry.next_deadline
             if deadline_fn is None:
                 continue
             deadline = deadline_fn(now_ms)

@@ -1,11 +1,21 @@
 """Device-facing tests for tick arithmetic on real hardware.
 
-Validates ticks_add, ticks_diff, and wraparound behavior using
-the actual runtime's monotonic clock source.
+Validates ticks_add, ticks_diff, forward progression, and wraparound
+behavior using the actual runtime's monotonic clock source.
 """
 
 from chumicro_test_harness.assertions import raises
+from chumicro_timing.testing import sleep_ms
 from chumicro_timing.ticks import ticks_add, ticks_diff, ticks_ms
+
+
+def test_ticks_progress_on_runtime() -> None:
+    """The active runtime should expose forward-moving monotonic ticks."""
+    start_ms = ticks_ms()
+    sleep_ms(20)
+    end_ms = ticks_ms()
+
+    assert ticks_diff(end_ms, start_ms) >= 1
 
 
 def test_ticks_ms_returns_non_negative() -> None:

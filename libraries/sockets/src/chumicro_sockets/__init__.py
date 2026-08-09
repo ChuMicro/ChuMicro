@@ -203,6 +203,9 @@ def ssl_context_no_verify() -> object:
 def set_default_ca_bundle(pem_bytes: bytes | str | None) -> None:
     """Replace or revert the CA bundle used by ``connector(tls=True, context=None)``.
 
+    MicroPython only: a no-op on CircuitPython (firmware trust store) and
+    CPython (operating-system trust store).
+
     Args:
         pem_bytes: PEM-encoded CA bundle as bytes or str, or ``None`` to revert to the shipped bundle.
     """

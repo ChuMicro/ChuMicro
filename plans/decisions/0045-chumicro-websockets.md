@@ -36,22 +36,22 @@ Both classes satisfy `check(now_ms) -> bool` + `handle(now_ms)`.  No `async`/`aw
 
 ```python
 from chumicro_websockets import WebSocketClient
-from chumicro_websockets.sockets_factory import chumicro_sockets_factory
+from chumicro_sockets.sockets_factory import connector_factory
 
-client = WebSocketClient(connection_factory=chumicro_sockets_factory(radio=wifi.radio))
+client = WebSocketClient(transport_factory=connector_factory(radio=wifi.radio))
 client.on_text = lambda text: print(text)
 client.connect("ws://api.example.com/stream", timeout_ms=5000)
 # pump check/handle until client.state == CLOSED; client.send_text("...") while OPEN
 ```
 
 ```python
+from chumicro_sockets import listener
 from chumicro_websockets import WebSocketServer
-from chumicro_sockets import tcp_listening_socket
 
 def on_connection(connection):
     connection.on_text = lambda text: connection.send_text(f"echo: {text}")
 
-server = WebSocketServer(listener=tcp_listening_socket("0.0.0.0", 8080),
+server = WebSocketServer(listener=listener("0.0.0.0", 8080),
                         on_connection=on_connection, max_connections=2, accept_path="/ws")
 # pump server.check / server.handle in the main loop
 ```
@@ -104,8 +104,8 @@ The "share a port with chumicro-http-server" question is sidestepped: `WebSocket
 ### 10. Dependencies (per Decision 0042 Class 1)
 
 * Hard deps in `pyproject.toml`: `chumicro-sockets`, `chumicro-timing`.
-* `chumicro_websockets.sockets_factory.chumicro_sockets_factory(radio=...)` lives in **its own submodule** per the [Decision 0042 sub-rule](0042-library-dependency-policy.md) — `__init__.py` does not import it, so users injecting custom transports don't pay the deploy cost.  This is the first new library to ship under the sub-rule from day 1 (the `chumicro-requests` follow-up audit retrofits the same shape there).
-* Constructor takes `connection_factory` (client) or `listener` (server) explicitly — no auto-defaulting inside the constructor.
+* The transport-factory glue lives in `chumicro_sockets.sockets_factory.connector_factory(radio=...)` (Decision 0115), an opt-in submodule the `from_config` factories lazy-import — users injecting custom transports don't pay the deploy cost.
+* Constructor takes `transport_factory` (client) or `listener` (server) explicitly — no auto-defaulting inside the constructor.
 
 ### 11. Testing strategy
 

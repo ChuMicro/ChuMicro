@@ -7,7 +7,7 @@ schedule it across ticks.  Start from this demo for any TCP
 protocol `HttpClient` / `MQTTClient` / `WebSocketClient` don't
 already cover.
 
-`echo_run` here is the template, a 14-line function that calls
+`echo_run` here is the template, a short function that calls
 `connect` / `send_all` / `recv_until` in straight-line order.  The
 runner ticks the underlying socket events; the generator body reads
 top-to-bottom.  For the same wire behaviour expressed as an
@@ -23,8 +23,8 @@ fan-out, complex error recovery, long-lived multi-phase sessions).
   generator waits for the wifi link with `yield from wait_for(link_up)`
   (a `Signal` the wifi state-change callback sets), then connects,
   sends, and receives top-to-bottom, returning when the round trip
-  completes.  No user-defined class, no `io_*` plumbing, no
-  callback-set module global.
+  completes.  No user-defined class, no `io_*` plumbing, no polled
+  boolean flag: the `Signal` resumes the generator without polling.
 - **`connect` drives the connector across ticks.**  Wraps the
   existing `SocketConnector` lifecycle (DNS -> TCP -> ready) and
   yields `WriteReady` / `ReadReady` so the runner sleeps on the
@@ -38,9 +38,9 @@ fan-out, complex error recovery, long-lived multi-phase sessions).
   runs whether the generator returns normally, raises, or gets
   cancelled mid-flight via `handle.cancel()`.  No separate teardown
   path.
-- **Single `while not handle.done` loop at the end.**  The runner
-  flips `handle.done` to True the moment `echo_run` returns; the
-  outer loop exits cleanly.
+- **One `runner.run_until(echo_handle)` call at the end.**  The runner
+  flips `handle.done` to True the moment `echo_run` returns and
+  `run_until` exits cleanly.
 
 ## Run it
 
@@ -121,9 +121,9 @@ reconnect-capable services, register a new generator from the wifi
   `io_socket` / `io_interest` bookkeeping, and the partial-send
   handling that `connect` / `send_all` / `recv_until` keep out of
   your code.
-- [`sockets_tcp_roundtrip`](../sockets_tcp_roundtrip/): synchronous
-  TCP, no runner-driven connect.  Simpler app code; blocks for the
-  full TCP handshake.
+- [`sockets_tcp_roundtrip`](../sockets_tcp_roundtrip/): runner-driven
+  connect, then synchronous send/recv on the ready socket.  Simpler
+  app code once connected.
 - [`sockets_tls_roundtrip`](../sockets_tls_roundtrip/): TLS variant
   of the synchronous demo with a custom-CA trust anchor.
 - [`mqtt_pub_sub`](../mqtt_pub_sub/): the same `runner.add(service)`

@@ -27,6 +27,9 @@ class TestFromConfig:
             "http_server.max_connections": 8,
             "http_server.request_timeout_ms": 30_000,
             "http_server.max_request_body_bytes": 64_000,
+            "http_server.max_request_line_bytes": 3_000,
+            "http_server.max_headers_bytes": 9_000,
+            "http_server.stream_buffer_size": 2_048,
         }
         # transport_factory= bypasses the host/port-driven auto-build,
         # so we can assert the constructor knobs without touching
@@ -37,6 +40,9 @@ class TestFromConfig:
         assert server._max_connections == 8  # noqa: SLF001
         assert server._request_timeout_ms == 30_000  # noqa: SLF001
         assert server._max_request_body_bytes == 64_000  # noqa: SLF001
+        assert server._max_request_line_bytes == 3_000  # noqa: SLF001
+        assert server._max_headers_bytes == 9_000  # noqa: SLF001
+        assert server._stream_buffer_size == 2_048  # noqa: SLF001
 
     def test_defaults_apply_when_keys_absent(self) -> None:
         """Empty config dict makes every manifest key fall back to its default.

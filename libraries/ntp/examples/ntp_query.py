@@ -67,4 +67,4 @@ if request.error is not None:
 
 print(f"NTP_OK unix_seconds={request.unix_seconds}")
 
-client.socket.close()
+client.close()

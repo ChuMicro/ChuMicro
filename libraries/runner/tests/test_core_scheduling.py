@@ -412,3 +412,26 @@ def test_remove_period_at_runtime() -> None:
     handle.set_period(None)
     runner.tick()
     assert svc.check_count == 1
+
+
+def test_many_due_handlers_reuse_the_pending_buffer() -> None:
+    """Six due handlers all fire each tick, and the pending scratch list keeps
+    its high-water capacity with every slot blanked between ticks."""
+    fake = FakeTicks()
+    fired = []
+
+    runner = Runner(ticks=fake)
+    for handler_index in range(6):
+        runner.add(handler=lambda now, index=handler_index: fired.append(index))
+
+    runner.tick()
+    assert sorted(fired) == [0, 1, 2, 3, 4, 5]
+    capacity_after_first_tick = len(runner._pending)
+    assert capacity_after_first_tick >= 6
+
+    fired.clear()
+    runner.tick()
+    assert sorted(fired) == [0, 1, 2, 3, 4, 5]
+    assert len(runner._pending) == capacity_after_first_tick
+    for slot in runner._pending:
+        assert slot is None

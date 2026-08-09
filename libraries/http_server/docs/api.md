@@ -4,6 +4,14 @@
 
 ::: chumicro_http_server
 
+## `chumicro_http_server.server`
+
+The server module's entry points (`HttpServer`, `Request`, `Response`,
+`build_response`, `encode_response`) resolve lazily through the package,
+so their reference renders from the module itself.
+
+::: chumicro_http_server.server
+
 ## `chumicro_http_server.streaming`
 
 Opt-in submodule for streamed response bodies; import it explicitly.

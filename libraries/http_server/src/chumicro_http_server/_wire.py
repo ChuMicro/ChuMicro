@@ -40,13 +40,13 @@ class ServerError(Exception):
 
 
 class ServerProtocolError(ServerError):
-    """Inbound bytes don't conform to HTTP/1.1 (the connection returns 400)."""
+    """Inbound bytes don't conform to HTTP/1.1 (the connection is closed without a response)."""
 
 
 class ServerLimitError(ServerError):
     """A sender-controlled allocation hit a documented cap."""
 
-    #: HTTP status the connection layer emits; subclasses override.
+    #: HTTP status the connection layer emits; every subclass sets its own.
     status_code = 400
 
 
@@ -192,7 +192,8 @@ class RequestParser:
         body_buffer: bytearray | None = None,
         body_buffer_view: memoryview | None = None,
     ) -> None:
-        """Construct a one-shot parser.
+        """Construct a parser for one request; a caller-owned body buffer
+        lets successive parser instances reuse one allocation.
 
         Args:
             max_body_bytes: Body-size cap; a bigger body is rejected with 413.
@@ -235,11 +236,11 @@ class RequestParser:
             return -1
         return position - self._read_offset
 
-    def _live_slice(self, start, end=None):
+    def _live_slice(self, start, length=None):
         absolute_start = self._read_offset + start
-        if end is None:
+        if length is None:
             return self._buffer[absolute_start:]
-        return self._buffer[absolute_start:absolute_start + end]
+        return self._buffer[absolute_start:absolute_start + length]
 
     def _consume(self, count):
         self._read_offset += count

@@ -1,11 +1,4 @@
-"""mqtt client: ``_read_inbound`` honors ``recv_budget_per_tick``.
-
-Split from ``test_client_backpressure.py`` (suite-slimming convention).
-The 16K-buffer / 8K-payload multi-tick drain test — the mqtt
-heap-budget floor — lives alone in
-``test_client_bounded_recv_drain.py`` so it runs with as few
-co-resident test objects as possible.
-"""
+"""mqtt client: ``_read_inbound`` honors ``recv_budget_per_tick``."""
 
 from chumicro_mqtt import (
     ProtocolState,
@@ -60,10 +53,17 @@ class TestBoundedRecvPerTick:
         return client
 
     def test_budget_caps_bytes_consumed_per_tick(self) -> None:
-        """A single tick cannot consume more than ``recv_budget_per_tick``."""
+        """A single tick cannot consume more than ``recv_budget_per_tick``.
+
+        ``rx_buffer_size`` is raised past the budget so the budget is the
+        binding cap; at the 256-byte default RX buffer the free-space limit
+        binds first and the budget never engages.
+        """
         sock = _CountingSocket()
         ticks = FakeTicks()
-        client = self._connected_client(sock, ticks, recv_budget_per_tick=512)
+        client = self._connected_client(
+            sock, ticks, recv_budget_per_tick=512, rx_buffer_size=4096,
+        )
 
         # Queue a 4 KB payload in a single chunk.  FakeSocket honors
         # recv_into's *nbytes* cap so we'll consume in pieces.
@@ -71,19 +71,20 @@ class TestBoundedRecvPerTick:
         sock.enqueue_recv(big_publish)
 
         client.handle(ticks.ticks_ms())
-        assert sock.bytes_received_total <= 512
+        # Above the RX free-space floor proves the budget was the cap in force.
+        assert 256 < sock.bytes_received_total <= 512
 
     def test_default_budget_is_1024_bytes(self) -> None:
         """Default 1024-byte recv budget holds without explicit configuration."""
         sock = _CountingSocket()
         ticks = FakeTicks()
-        client = self._connected_client(sock, ticks)  # default budget
+        client = self._connected_client(sock, ticks, rx_buffer_size=8192)
 
         # Stuff a multi-KB blob.  Assert the default 1024-byte cap holds.
         big_publish = canned_publish_bytes("topic/a", b"x" * 8192, qos=0)
         sock.enqueue_recv(big_publish)
         client.handle(ticks.ticks_ms())
-        assert sock.bytes_received_total <= 1024
+        assert 256 < sock.bytes_received_total <= 1024
 
     def test_small_payload_drains_in_a_single_tick(self) -> None:
         """The budget never makes the *easy* case slower."""

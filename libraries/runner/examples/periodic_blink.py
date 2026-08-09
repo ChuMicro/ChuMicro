@@ -16,8 +16,6 @@ Example output::
 Runs on CPython, MicroPython, and CircuitPython.
 """
 
-import time
-
 from chumicro_runner import Runner
 
 led_state = False
@@ -46,9 +44,9 @@ print("Blinking...\n")
 while True:
     # tick() captures the current time, checks all registered
     # tasks, and fires any that are due.
-    runner.tick()
+    now_ms = runner.tick()
 
     # In a real project, the rest of your main loop goes here:
     # reading sensors, checking buttons, etc.
-    # The sleep just keeps this demo from flooding the console.
-    time.sleep(0.05)
+    # wait() sleeps until the next 500 ms toggle is due.
+    runner.wait(now_ms)

@@ -90,9 +90,13 @@ while True:
 The method returns `now_ms` so user code can use it alongside the service loop:
 
 ```python
+from chumicro_timing import Rate, ticks_ms
+
+rate = Rate(500, ticks_ms())
+
 while True:
     now = runner.tick()
-    if some_heartbeat.poll(now):
+    if rate.due(now):
         do_something()
     runner.wait(now)
 ```
@@ -180,13 +184,13 @@ A service is any object you hand to `runner.add(service)`.  The runner reads six
 | `next_deadline(now_ms) -> int \| None` | no | each `wait` | bounding the idle timeout so the service still runs on time with no I/O |
 | `io_error(now_ms, eventmask)` | no | on `wait`, when `io_socket` reports `POLLERR` / `POLLHUP` | transitioning cleanly to a failure state |
 
-The coherence rules, as the dispatch enforces them:
+The coherence rules.  Only the first raises on its own (`Runner.add` reads both attributes at registration); the dispatch silently depends on the other two, where a violation no-ops rather than raising, which is what `validate_service` below exists to catch:
 
 - **`check` and `handle` are both required.**  `Runner.add` reads both off the object at registration, so a service missing either cannot register.
 - **`io_socket` and `io_interest` come as a pair.**  The poll sync reaches the socket through `io_interest`; one member without the other never reaches the poller.
 - **`io_error` requires `io_socket`.**  It is dispatched only when that socket reports a poll error.
 
-`chumicro_runner.testing.validate_service(service)` checks exactly these rules and raises `ValueError` naming the offending member.  It validates shape, never behavior, so drop it into a consumer library's test suite to catch a malformed service before it reaches a live runner:
+`chumicro_runner.testing.validate_service(service)` checks exactly these rules and raises `ValueError` naming the offending member.  It validates shape, never behavior, so drop it into your project's test suite to catch a malformed service before it reaches a live runner:
 
 ```python
 from chumicro_runner.testing import validate_service
@@ -418,14 +422,15 @@ tick():
 
 ## Memory notes
 
-- Handlers are collected into a pre-allocated list and batch-fired, avoiding per-tick allocation.
+- Handlers are collected into a reused scratch list that keeps its high-water capacity across ticks, so batch-firing allocates nothing once the list has grown to the working set.
 - No `collections.deque` or ring buffers are required.
 
 ## Testing tasks
 
-The `chumicro_runner.testing` module provides two host-test helpers:
+The `chumicro_runner.testing` module provides three host-test helpers:
 
 - `CallRecorder`: a callable that records handler invocations for assertion in host-side tests.
+- `validate_service`: checks a service object against the coherence rules in [The service contract](#the-service-contract) and raises `ValueError` naming the offending member.
 - `FakePoller`: a stand-in for `select.poll().ipoll` so unit tests can drive `Runner.wait()` without real file descriptors (CPython's `select.poll` needs real fds that in-memory fake sockets do not have).  Records every `register` / `modify` / `unregister` / `ipoll` call so tests can assert on what the runner did with the poll set; `set_ready(obj, eventmask)` queues a ready pair for the next `ipoll` return.
 
 ### `CallRecorder`

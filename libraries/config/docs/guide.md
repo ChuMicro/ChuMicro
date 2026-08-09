@@ -85,7 +85,7 @@ class NTPClient:
         )
 ```
 
-No upfront `isinstance` / "config-like" guard.  A `None` / `str` / `int` passed for *config* fails on the first `.get(...)` with `AttributeError`, clear enough at the call site to diagnose, without flash cost in every Pattern B factory for a check the caller almost never trips.
+No upfront `isinstance` guard is required.  Some Pattern B factories add a one-line `hasattr(config, "get")` check that raises the library's own error (`MQTTClient.from_config` raises `ValueError`); the rest let a `None` / `str` / `int` fail on the first `.get(...)` with `AttributeError`, clear enough at the call site to diagnose.
 
 Pattern B's freedom to mix is exactly its point: `MQTTClient.from_config` reads `mqtt.broker.host` *and* takes an injectable `socket` factory *and* enforces a broker-required guard; trying to express any of that through `load_section`'s `required` / `optional` mapping bends it into a less-readable shape than the inline reads.
 

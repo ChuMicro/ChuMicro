@@ -3,9 +3,9 @@
 These tests exercise overflow paths in the encoder that require 65536+
 element structures.  They are excluded from cross-runtime tests
 (MicroPython / CircuitPython) because the allocations exceed the
-available heap on constrained runtimes.  The file is named
-``_pytest.py`` (CPython-only) rather than the bare ``test_`` form
-picked up by the cross-runtime harness.
+available heap on constrained runtimes.  The ``_pytest`` filename
+suffix is a human hint; the ``__chumicro_runtimes__ = ("cpython",)``
+marker below is what keeps the file off the cross-runtime lanes.
 
 This file also pins the wire-compatibility contract with PyPI
 ``msgpack`` (see ``test_byte_identity_*`` below).  That contract is

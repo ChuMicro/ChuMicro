@@ -108,7 +108,7 @@ def test_runtime_fs_is_used_when_no_injection() -> None:
     # Substrate is the runtime shim class; just confirm it has the
     # four methods the load / save paths need.
     for name in ("open", "rename", "remove", "sync"):
-        assert hasattr(backend._fs, name)
+        assert hasattr(backend._filesystem, name)
 
 
 # ---------------------------------------------------------------------------

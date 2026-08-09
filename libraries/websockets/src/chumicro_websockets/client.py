@@ -4,6 +4,8 @@ The public entry point is :class:`WebSocketClient`.
 """
 
 from chumicro_websockets._session import (
+    _IO_READ,
+    _IO_WRITE,
     WhenOversized,
     _BaseSession,
     _force_non_blocking,
@@ -34,10 +36,6 @@ from chumicro_websockets._wire import (
 
 __all__ = ["WebSocketClient"]
 
-# Mirror chumicro_runner.IO_READ / IO_WRITE by value; literals avoid a runner dependency.
-_IO_READ = 1
-_IO_WRITE = 2
-
 
 class ConnectingPhase:
     """Sub-states inside CONNECTING: send the upgrade request, then read the 101."""
@@ -61,6 +59,7 @@ class WebSocketClient(_BaseSession):
         radio: object | None = None,
         ssl_context: object | None = None,
         transport_factory: object | None = None,
+        ticks: object | None = None,
     ) -> "WebSocketClient":
         """Build a :class:`WebSocketClient` from runtime config."""
         if transport_factory is None:
@@ -84,6 +83,7 @@ class WebSocketClient(_BaseSession):
                 "websockets.client.max_message_bytes",
                 DEFAULT_MAX_MESSAGE_BYTES,
             ),
+            ticks=ticks,
         )
 
     def __init__(

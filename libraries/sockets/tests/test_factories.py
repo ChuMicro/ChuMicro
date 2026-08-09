@@ -1,16 +1,9 @@
 """Cross-runtime public-surface tests for the sockets factories.
 
-What's left here is runtime-independent: it touches no per-runtime
-adapter module, no real loopback sockets, no ``cryptography`` library,
-and no stdlib ``ssl`` / ``socket``.  It runs unmodified on CPython,
-MicroPython unix-port, CircuitPython unix-port, and real boards.
-
-Fake-runtime routing tests — which swap ``chumicro_sockets._adapter``
-to a named adapter and assert the dispatch target — moved to the
-host-only ``test_factories_routing.py``: a named adapter only stages
-on the matching runtime, so those can't run on real silicon.  The
-CPython-only tests (real TLS handshakes, ``cryptography``-minted certs,
-stdlib ``ssl`` / ``socket`` patching) live in ``test_factories_pytest.py``.
+``UnsupportedSSLConfigError`` must stage and import on every runtime — a
+CP-rp2 board raises it up-front from ``listener(tls=True)`` — so these
+checks pin the exception's reachability and its ``RuntimeError`` lineage
+without touching a per-runtime adapter, a real socket, or stdlib ``ssl``.
 """
 
 from chumicro_sockets import UnsupportedSSLConfigError

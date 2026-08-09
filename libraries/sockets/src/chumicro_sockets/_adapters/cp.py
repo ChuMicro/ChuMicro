@@ -70,7 +70,13 @@ class _CPUDPWrapper:
         # Bare-metal socketpool lacks getsockname (the unix build has it); forward only when present.
         if hasattr(sock, "getsockname"):
             self.getsockname = sock.getsockname
-        self.recvfrom_into = sock.recvfrom_into
+
+    def recvfrom_into(self, buffer, nbytes=0):
+        # CP's socketpool signature is (buffer) with no nbytes; slice a view
+        # so the documented (buffer, nbytes=0) surface holds on CP too.
+        if nbytes:
+            return self.sock.recvfrom_into(memoryview(buffer)[:nbytes])
+        return self.sock.recvfrom_into(buffer)
 
     def sendto(self, data, host, port):
         return self.sock.sendto(data, (host, port))

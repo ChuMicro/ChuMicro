@@ -81,7 +81,7 @@ Put examples in `libraries/<name>/examples/`. At least one per major feature.
 - Top-level code — no `if __name__ == "__main__":` guard.
 - Simulated examples must run on CPython without hardware.
 - Hardware examples: name `circuitpython_*.py` or `micropython_*.py`.
-- Descriptive filenames: `heartbeat_blink.py`, not `example1.py`.
+- Descriptive filenames: `rate_blink.py`, not `example1.py`.
 - Module docstring with `Example output::` block.
 - Self-contained: copy-paste and run.
 

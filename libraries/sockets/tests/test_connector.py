@@ -9,7 +9,6 @@ adapters must satisfy — the observable surface is identical regardless
 of substrate.
 """
 
-from chumicro_runner import IO_READ, IO_WRITE
 from chumicro_sockets._connector import (
     STATE_AWAITING_DNS,
     STATE_AWAITING_TCP,
@@ -19,6 +18,11 @@ from chumicro_sockets._connector import (
 )
 from chumicro_sockets.testing import FakeSocket, FakeSocketConnector
 from chumicro_test_harness.assertions import raises
+
+# Pinned poll-interest contract values (chumicro_runner.IO_READ / IO_WRITE
+# mirror them); literals keep this cross-runtime file off the runner.
+IO_READ = 1
+IO_WRITE = 2
 
 
 class TestFakeStateMachine:

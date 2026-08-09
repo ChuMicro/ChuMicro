@@ -46,6 +46,10 @@ changes for a real custom protocol.
 .venv/bin/python demos/sockets_runner_connector_explicit/driver.py
 ```
 
+The driver is deliberately identical to `sockets_runner_connector`'s:
+only the deployed `app.py` differs, so the two demos contrast the app
+shapes under the same host harness.
+
 Defaults: targets the first CircuitPython device in `devices.yml`.
 
 Override:
@@ -109,9 +113,9 @@ and call it from the wifi `DISCONNECTED` callback.
 
 ## Related
 
-- [`sockets_tcp_roundtrip`](../sockets_tcp_roundtrip/): synchronous
-  TCP, no runner-driven connect, no custom service.  Simpler app
-  code; blocks for the full TCP handshake.
+- [`sockets_tcp_roundtrip`](../sockets_tcp_roundtrip/): runner-driven
+  connect, then synchronous send/recv on the ready socket, with no
+  custom service.  Simpler app code once connected.
 - [`sockets_tls_roundtrip`](../sockets_tls_roundtrip/): TLS variant
   of the synchronous demo with a custom-CA trust anchor.
 - [`mqtt_pub_sub`](../mqtt_pub_sub/): the same `runner.add(service)`

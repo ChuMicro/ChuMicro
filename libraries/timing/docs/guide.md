@@ -173,8 +173,8 @@ The [examples](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/timing/e
 
 | Example | What it shows |
 |---|---|
-| `heartbeat_blink.py` | Basic periodic Rate in a main loop (the embedded hello world) |
-| `multiple_heartbeats.py` | Several Rate timers at different rates sharing one timestamp |
+| `rate_blink.py` | Basic periodic Rate in a main loop (the embedded hello world) |
+| `multiple_rates.py` | Several Rate timers at different rates sharing one timestamp |
 | `timeout_check.py` | Using `ticks_diff()` for deadline-based timeout detection |
 | `debounce.py` | Button debounce using `ticks_ms()` and `ticks_diff()` |
 | `periodic_tick.py` | Manual periodic action, the same logic `Rate` wraps |
@@ -188,7 +188,7 @@ Simulated examples run on CPython.  Hardware examples (`circuitpython_*` / `micr
 
 ### Sensor timeouts (`timeout_check.py`)
 
-Shows `ticks_add` for computing an absolute deadline and `ticks_diff` for checking it.  A `wait_for_sensor(timeout_ms)` helper polls a simulated sensor until it reads ready or the deadline expires, returning the elapsed time on success or `-1` on timeout.  The deadline is computed once with `ticks_add(start, timeout_ms)`; each iteration tests `ticks_diff(now, deadline) < 0` to decide whether to keep polling.
+Shows `ticks_add` for computing an absolute deadline and `ticks_diff` for checking it.  A `wait_for_sensor(timeout_ms)` helper polls a simulated sensor until it reads ready or the deadline expires, returning the elapsed time on success or `-1` on timeout.  The deadline is computed once with `ticks_add(start, timeout_ms)`; each iteration returns `-1` once `ticks_diff(now, deadline) >= 0`.
 
 The same pattern generalises to any "fail after N ms" check: handshake completion, status-register polling, button-hold detection.
 

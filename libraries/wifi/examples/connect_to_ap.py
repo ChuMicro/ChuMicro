@@ -15,6 +15,9 @@ Example output::
     WIFI_OK ip=10.0.0.42
 """
 
+#: Needs a real radio and AP; a wifi-less host has nothing to join.
+__chumicro_runtimes__ = ("circuitpython", "micropython")
+
 import time
 
 from chumicro_config import load_runtime_config

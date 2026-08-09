@@ -18,10 +18,7 @@ Example output::
     RECV bytes=17 src=('192.168.1.10', 51232)
 """
 
-#: Cross-runtime: wifi-up via :mod:`helpers` dispatches per
-#: ``sys.implementation.name`` (CP / MP) and the UDP socket helpers
-#: are runtime-neutral.  The marker tells :func:`scripts.verify_examples`
-#: + ``deploy-example`` to allow this file on either runtime.
+#: Runs on CircuitPython and MicroPython; needs a wifi radio and an AP.
 __chumicro_runtimes__ = ("circuitpython", "micropython")
 
 import time

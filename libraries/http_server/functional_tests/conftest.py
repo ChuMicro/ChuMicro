@@ -1,9 +1,8 @@
 """Host-side fixture: register the merged runtime-config dict for staging.
 
-See ``libraries/requests/functional_tests/conftest.py`` for the
-shared rationale.  Each library owns its own copy because the
-per-library ``functional_tests/config.toml`` overrides land relative
-to that library's directory.
+Each library owns its own copy of this fixture because the per-library
+``functional_tests/config.toml`` overrides land relative to that
+library's directory.
 """
 
 from __future__ import annotations

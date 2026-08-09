@@ -9,6 +9,7 @@ import json
 from chumicro_requests._wire import (
     DEFAULT_BODY_BUFFER_SIZE,
     DEFAULT_MAX_BODY_BYTES,
+    DEFAULT_MAX_HEADER_BYTES,
     DEFAULT_MAX_REDIRECTS,
     DEFAULT_RECV_BUDGET_PER_TICK,
     DEFAULT_STREAM_BUFFER_SIZE,
@@ -23,6 +24,7 @@ from chumicro_requests._wire import (
     ParseState,
     ResponseParser,
     encode_request,
+    header_pairs,
     parse_charset,
     parse_url,
     resolve_redirect_url,
@@ -54,7 +56,7 @@ class WhenOversized:
     #: Drop the body silently; the request finishes ``done`` with an empty body.
     DROP_SILENT = "drop_silent"
 
-    #: Default: drop the body and fire ``on_oversized`` if set, else like DROP_SILENT.
+    #: Default: drop the body and fire ``on_oversized(reported_length, url)``.
     DROP_WITH_EVENT = "drop_with_event"
 
     #: Fail the request with :class:`HttpOversizedError`.
@@ -80,13 +82,7 @@ def _merge_default_header(user_headers, name, value):
     merged[name] = value
     if user_headers is None:
         return merged
-    if isinstance(user_headers, CaseInsensitiveDict):
-        iterable = user_headers.items()
-    elif isinstance(user_headers, dict):
-        iterable = user_headers.items()
-    else:
-        iterable = user_headers
-    for header_name, header_value in iterable:
+    for header_name, header_value in header_pairs(user_headers):
         merged[header_name] = header_value
     return merged
 
@@ -298,6 +294,7 @@ class HttpClient:
         transport_factory: object,
         recv_budget_per_tick: int = DEFAULT_RECV_BUDGET_PER_TICK,
         max_body_bytes: int = DEFAULT_MAX_BODY_BYTES,
+        max_header_bytes: int = DEFAULT_MAX_HEADER_BYTES,
         when_oversized: str = WhenOversized.DROP_WITH_EVENT,
         default_timeout_ms: int = DEFAULT_TIMEOUT_MS,
         default_max_redirects: int = DEFAULT_MAX_REDIRECTS,
@@ -311,6 +308,7 @@ class HttpClient:
             transport_factory: Callable ``(host, port, use_tls)`` opening a socket per hop.
             recv_budget_per_tick: Soft cap on bytes drained per :meth:`handle` call.
             max_body_bytes: Cap on a buffered body; not applied to ``stream=True``.
+            max_header_bytes: Cap on the response's unparsed header section.
             when_oversized: Policy for over-cap responses (see :class:`WhenOversized`).
             default_timeout_ms: Default per-request timeout in ms.
             default_max_redirects: Default cap on 3xx hops; ``0`` returns the 3xx as-is.
@@ -326,6 +324,7 @@ class HttpClient:
         self._recv_buffer = bytearray(min(recv_budget_per_tick, 512))
         self._recv_view = memoryview(self._recv_buffer)
         self._max_body_bytes = max_body_bytes
+        self._max_header_bytes = max_header_bytes
         self._when_oversized = when_oversized
         self._default_timeout_ms = default_timeout_ms
         self._user_agent = user_agent or "chumicro-requests/0.1"
@@ -376,7 +375,10 @@ class HttpClient:
         return self._socket
 
     def io_interest(self, now_ms):
-        """Poll-interest bitmask OR-ing ``_IO_READ`` / ``_IO_WRITE``."""
+        """Runner poll-interest bit for the current phase.
+
+        Read while receiving, write while sending, ``0`` otherwise.
+        """
         if self._state == _RequestState.AWAITING_TRANSPORT:
             return self._connector.io_interest(now_ms) if self._connector is not None else 0
         if self._state == _RequestState.RECEIVING:
@@ -415,7 +417,14 @@ class HttpClient:
         on_done: object | None = None,
         stream: bool = False,
     ) -> "RequestHandle":
-        """Issue *method* against *url*; return a :class:`RequestHandle`."""
+        """Issue *method* against *url*; return a :class:`RequestHandle`.
+
+        Raises:
+            HttpBusyError: A request is already in flight.
+            HttpURLError: *url* is not an absolute http/https URL.
+            ValueError: ``json=`` combined with ``body=``.
+            TypeError: *body* is not bytes / bytearray / str.
+        """
         return self._start_request(
             method, url,
             body=body, json_body=json,
@@ -433,7 +442,10 @@ class HttpClient:
         on_done: object | None = None,
         stream: bool = False,
     ) -> "RequestHandle":
-        """Issue a GET request; return a :class:`RequestHandle`."""
+        """Issue a GET request; return a :class:`RequestHandle`.
+
+        Raises the same exceptions as :meth:`request`.
+        """
         return self._start_request(
             "GET", url, headers=headers, timeout_ms=timeout_ms,
             max_redirects=max_redirects, on_done=on_done, stream=stream,
@@ -451,7 +463,10 @@ class HttpClient:
         on_done: object | None = None,
         stream: bool = False,
     ) -> "RequestHandle":
-        """Issue a POST request; return a :class:`RequestHandle`."""
+        """Issue a POST request; return a :class:`RequestHandle`.
+
+        Raises the same exceptions as :meth:`request`.
+        """
         return self._start_request(
             "POST", url,
             body=body, json_body=json,
@@ -471,7 +486,9 @@ class HttpClient:
         on_done: object | None = None,
         stream: bool = False,
     ) -> "RequestHandle":
-        """Issue a PUT request; same body / json / stream semantics as :meth:`post`."""
+        """Issue a PUT request; same body / json / stream semantics as
+        :meth:`post`.  Raises the same exceptions as :meth:`request`.
+        """
         return self._start_request(
             "PUT", url,
             body=body, json_body=json,
@@ -491,7 +508,9 @@ class HttpClient:
         on_done: object | None = None,
         stream: bool = False,
     ) -> "RequestHandle":
-        """Issue a PATCH request; same body / json / stream semantics as :meth:`post`."""
+        """Issue a PATCH request; same body / json / stream semantics as
+        :meth:`post`.  Raises the same exceptions as :meth:`request`.
+        """
         return self._start_request(
             "PATCH", url,
             body=body, json_body=json,
@@ -509,14 +528,17 @@ class HttpClient:
         on_done: object | None = None,
         stream: bool = False,
     ) -> "RequestHandle":
-        """Issue a DELETE request; v1 sends no body."""
+        """Issue a DELETE request; v1 sends no body.
+
+        Raises the same exceptions as :meth:`request`.
+        """
         return self._start_request(
             "DELETE", url, headers=headers, timeout_ms=timeout_ms,
             max_redirects=max_redirects, on_done=on_done, stream=stream,
         )
 
     def check(self, now_ms):  # noqa: ARG002 - runner contract uses now_ms
-        """Return ``True`` if there's outbound bytes to send or readable bytes."""
+        """Return ``True`` while a request is in flight, so the runner ticks it."""
         return self._state != _RequestState.IDLE
 
     def handle(self, now_ms):
@@ -607,7 +629,21 @@ class HttpClient:
         timeout = timeout_ms if timeout_ms is not None else self._default_timeout_ms
         self._deadline_ticks = self._ticks.ticks_add(self._ticks.ticks_ms(), timeout)
         self._handle = RequestHandle(url=url, on_done=on_done, stream=stream)
-        self._start_hop(url, method, encoded_body, headers, json_body is not None)
+        try:
+            self._start_hop(url, method, encoded_body, headers, json_body is not None)
+        except Exception:
+            # A synchronous failure (bad URL, factory raise) leaves no request
+            # in flight; drop the armed deadline and redirect capture so no
+            # stale state outlives the raise.
+            self._handle = None
+            self._deadline_ticks = None
+            self._original_method = None
+            self._original_headers = None
+            self._original_body = None
+            self._original_json_body = None
+            self._redirects_remaining = 0
+            self._stream = False
+            raise
         return self._handle
 
     def _start_hop(
@@ -639,25 +675,30 @@ class HttpClient:
         if self._stream:
             self._parser = ResponseParser(
                 max_body_bytes=self._max_body_bytes,
+                max_header_bytes=self._max_header_bytes,
                 stream_body=True,
                 body_buffer=bytearray(self._stream_buffer_size),
             )
         else:
             self._parser = ResponseParser(
                 max_body_bytes=self._max_body_bytes,
+                max_header_bytes=self._max_header_bytes,
                 body_buffer=self._body_buffer,
                 body_buffer_view=self._body_buffer_view,
             )
         self._state = _RequestState.AWAITING_TRANSPORT
 
     def _drive_send(self):
-        # Bind the view once, not per iteration: a backpressured send loops
-        # here and rebuilding it each pass would allocate.
+        # The slice below allocates a small memoryview struct per pass; the
+        # zero-offset first pass sends the buffer itself to skip even that.
         tx_view = memoryview(self._tx_buffer)
         while self._tx_offset < len(self._tx_buffer):
-            view = tx_view[self._tx_offset:]
+            payload = (
+                self._tx_buffer if self._tx_offset == 0
+                else tx_view[self._tx_offset:]
+            )
             try:
-                sent = self._socket.send(view)
+                sent = self._socket.send(payload)
             except OSError as socket_error:
                 if _is_would_block(socket_error):
                     return

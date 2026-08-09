@@ -1,7 +1,6 @@
 """mqtt client: PUBACK-backlog hard-cap guard (fault instead of drop).
 
-Split from ``test_client_backpressure.py`` so each file fits the
-unix-lane heap budget (suite-slimming convention).
+Lives in its own small file so the unix-lane heap budget holds.
 """
 
 from chumicro_mqtt import (
@@ -20,10 +19,10 @@ from chumicro_timing.testing import FakeTicks
 class TestPubackHardCapGuard:
     """A PUBACK owed while the tx queue sits at its structural hard cap
     faults the client to FAILED instead of silently dropping (or
-    evicting) a protocol packet.  Interim guard until inbound dispatch
-    is rate-converged with the one-send-per-tick drain: self-heal
-    rebuilds cleanly, and the broker redelivers whatever was never
-    acked, so correctness survives the fault."""
+    evicting) a protocol packet.  The guard is the last-resort
+    correctness net: self-heal rebuilds cleanly, and the broker
+    redelivers whatever was never acked, so correctness survives the
+    fault."""
 
     def _client_at_hard_cap(self, sock, ticks, **overrides):
         """Connected client whose tx queue is filled to the hard cap."""

@@ -2,10 +2,16 @@ __chumicro_runtimes__ = ("micropython",)
 
 import errno
 
-from chumicro_kvstore.core import Backend, KVStoreCorrupt, KVStoreFull
+from chumicro_kvstore.core import Backend, KVStoreCorrupt
+
+try:
+    from micropython import const
+except ImportError:
+    def const(value):
+        return value
 
 # ESP-IDF ESP_ERR_NVS_NOT_FOUND: the "key absent" code esp32.NVS raises (host fakes use errno.ENOENT).
-_ESP_ERR_NVS_NOT_FOUND = 0x1102
+_ESP_ERR_NVS_NOT_FOUND = const(0x1102)
 
 
 class MpNvsBackend(Backend):
@@ -46,9 +52,6 @@ class MpNvsBackend(Backend):
         return bytes(memoryview(read_buffer)[:length])
 
     def save(self, payload: bytes) -> None:
-        if len(payload) > self.capacity:
-            raise KVStoreFull(
-                f"payload size {len(payload)} exceeds NVS capacity {self.capacity}"
-            )
+        self._check_capacity(payload)
         self._nvs.set_blob(self.PAYLOAD_KEY, payload)
         self._nvs.commit()

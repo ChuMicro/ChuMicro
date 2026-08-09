@@ -1,6 +1,7 @@
 """Core implementation for chumicro-ntp."""
 
 import errno
+import struct
 
 try:
     from micropython import const
@@ -18,6 +19,9 @@ PACKET_SIZE = const(48)
 CLIENT_FIRST_BYTE = const(0x23)
 
 SERVER_MODE = const(4)
+
+# Max stale datagrams discarded per query() call; a flooded socket must not spin.
+_DRAIN_LIMIT = const(8)
 
 _CLIENT_REQUEST = bytes([CLIENT_FIRST_BYTE]) + b"\x00" * (PACKET_SIZE - 1)
 
@@ -43,12 +47,7 @@ def _parse_response(packet: bytes | memoryview) -> int:
         # RFC 4330 §5: stratum 0 is a kiss-of-death, not a usable time.
         raise NTPError("SNTP kiss-of-death (stratum=0)")
     # Transmit timestamp: bytes 40-43 are seconds since 1900; 44-47 fraction, discarded.
-    seconds_1900 = (
-        (packet[40] << 24)
-        | (packet[41] << 16)
-        | (packet[42] << 8)
-        | packet[43]
-    )
+    seconds_1900 = struct.unpack_from(">I", packet, 40)[0]
     if seconds_1900 == 0:
         # RFC 4330 §5: reject a zero timestamp before the era lift makes it 2036.
         raise NTPError("SNTP zero transmit timestamp")
@@ -112,11 +111,25 @@ class NTPClient:
         radio: object | None = None,
         socket: object | None = None,
         transport_factory: object | None = None,
+        ticks: object | None = None,
     ) -> "NTPClient":
-        """Build an :class:`NTPClient` from runtime config."""
+        """Build an :class:`NTPClient` from runtime config.
+
+        Args:
+            config: Mapping-like runtime config; reads ``ntp.server``,
+                ``ntp.port``, and ``ntp.timeout_ms``, all optional.
+            radio: CircuitPython radio handle for the default UDP factory.
+            socket: Pre-built non-blocking UDP socket; skips the factory.
+            transport_factory: Callable returning the UDP socket on first use.
+            ticks: Optional tick source, forwarded to the constructor.
+
+        Raises:
+            RuntimeError: No socket or factory was given and
+                ``chumicro_sockets.sockets_factory`` is unavailable.
+        """
         if socket is None and transport_factory is None:
             try:
-                from chumicro_sockets.sockets_factory import (  # noqa: PLC0415
+                from chumicro_sockets.sockets_factory import (  # noqa: PLC0415 - lazy: keeps chumicro_sockets off BYO-transport deploys
                     udp_socket_factory,
                 )
             except ImportError as exception:
@@ -129,10 +142,12 @@ class NTPClient:
 
             base_factory = udp_socket_factory(radio=radio)
 
-            def transport_factory():
+            def non_blocking_udp_factory():
                 udp_socket = base_factory()
                 udp_socket.setblocking(False)
                 return udp_socket
+
+            transport_factory = non_blocking_udp_factory
 
         return cls(
             socket=socket,
@@ -140,6 +155,7 @@ class NTPClient:
             server=config.get("ntp.server", "pool.ntp.org"),
             port=config.get("ntp.port", 123),
             timeout_ms=config.get("ntp.timeout_ms", 5_000),
+            ticks=ticks,
         )
 
     def __init__(
@@ -169,6 +185,7 @@ class NTPClient:
         self._ticks = ticks
         self._result: NTPResult | None = None
         self._recv_buffer = bytearray(PACKET_SIZE)
+        self._recv_view = memoryview(self._recv_buffer)
 
     @property
     def busy(self) -> bool:
@@ -189,6 +206,10 @@ class NTPClient:
                 "NTP query already in flight; await result before re-querying",
             )
         if self.socket is None:
+            if self._transport_factory is None:
+                raise RuntimeError(
+                    "socket closed; pass transport_factory= to reopen on demand",
+                )
             self.socket = self._transport_factory()
         # Discard stale datagrams from a previous timed-out or cancelled query.
         self._drain_socket()
@@ -204,7 +225,7 @@ class NTPClient:
         return result
 
     def _drain_socket(self) -> None:
-        while True:
+        for _ in range(_DRAIN_LIMIT):
             try:
                 received_count, _sender = self.socket.recvfrom_into(
                     self._recv_buffer,
@@ -246,16 +267,16 @@ class NTPClient:
             return
         try:
             unix_seconds = _parse_response(
-                memoryview(self._recv_buffer)[:received_count],
+                self._recv_view[:received_count],
             )
         except NTPError as parse_error:
             result._fail(parse_error)
             return
-        result._unix_seconds = unix_seconds  # noqa: SLF001
+        result._unix_seconds = unix_seconds  # noqa: SLF001 - own result type
         result.done = True
 
     def _check_timeout(self, result: "NTPResult", now_ms: int) -> None:
-        elapsed_ms = self._ticks.ticks_diff(now_ms, result._ticks_started_ms)  # noqa: SLF001
+        elapsed_ms = self._ticks.ticks_diff(now_ms, result._ticks_started_ms)  # noqa: SLF001 - own result type
         if elapsed_ms >= self.timeout_ms:
             result._fail(
                 NTPError(f"SNTP query timed out after {elapsed_ms} ms"),
@@ -271,3 +292,18 @@ class NTPClient:
             return False
         self._result._fail(NTPError("canceled"))
         return True
+
+    def close(self) -> None:
+        """Close the UDP socket.
+
+        A factory-built client reopens on the next :meth:`query`; a client
+        constructed with ``socket=`` raises ``RuntimeError`` from ``query``
+        after close, since it has no way to rebuild the socket.
+        """
+        if self.socket is None:
+            return
+        try:
+            self.socket.close()
+        except OSError:
+            pass
+        self.socket = None

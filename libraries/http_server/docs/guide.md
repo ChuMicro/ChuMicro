@@ -54,7 +54,7 @@ while True:
     runner.tick()
 ```
 
-`check(now_ms) -> bool` reports whether the server has work pending; `handle(now_ms)` does at most one tick of progress, capped by the per-connection budgets below.
+`check(now_ms)` always returns `True` (the accept loop runs on every tick); `handle(now_ms)` does at most one tick of progress, capped by the per-connection budgets below.
 
 ## Routing
 
@@ -98,7 +98,7 @@ The handler signature is `(Request) -> Response`.
 |---|---|
 | `request.method` | `"GET"`, `"POST"`, … |
 | `request.path` | Path before `?`. |
-| `request.query` | `dict` from the query string. |
+| `request.query` | `CaseInsensitiveDict` from the query string.  Keys fold case, so `?Foo=1&foo=2` collapses into one entry with the values joined by `", "`. |
 | `request.path_params` | `dict` of `<param>` segments. |
 | `request.headers` | Case-insensitive dict. |
 | `request.body` | Raw `bytes` (or `b""` for body-less requests). |
@@ -287,7 +287,7 @@ The TLS handshake is synchronous inside `wrap_socket(..., server_side=True)`: th
 
 ## Memory notes
 
-Connection state is bounded by `max_connections`; each connection holds its receive buffer (a scratch chunk capped at 512 B, so a `recv_budget_per_tick` above 512 is satisfied by several `recv_into` calls per tick), the parsed `Request`, and the encoded `Response` until drained.  Nothing else allocates per-tick steady-state.  A streaming response adds one `stream_buffer_size` window (default 1 KB) per streaming connection, minted lazily and reused for the transfer: a body of any size costs that fixed window, never the whole body.  The shared `chumicro-requests` HTTP/1.1 wire primitives (case-insensitive header dict, charset parsing) are inlined into `chumicro_http_server._wire` so a server-only board doesn't ship the client library.  The streamed-body framing code lives in the opt-in `chumicro_http_server.streaming` submodule, loaded only when a handler actually streams, so a buffered-only server never pays its footprint.
+Connection state is bounded by `max_connections`; each connection holds its receive buffer (a scratch chunk capped at 512 B, so a `recv_budget_per_tick` above 512 is satisfied by several `recv_into` calls per tick), the parsed `Request`, and the encoded `Response` until drained (the request parser and its body copy are released the moment the `Request` is built, so the body is held once through the send phase).  Nothing else allocates per-tick steady-state.  A streaming response adds one `stream_buffer_size` window (default 1 KB) per streaming connection, minted lazily and reused for the transfer: a body of any size costs that fixed window, never the whole body.  The shared `chumicro-requests` HTTP/1.1 wire primitives (case-insensitive header dict, charset parsing) are inlined into `chumicro_http_server._wire` so a server-only board doesn't ship the client library.  The streamed-body framing code lives in the opt-in `chumicro_http_server.streaming` submodule, loaded only when a handler actually streams, so a buffered-only server never pays its footprint.
 
 ## Platform notes
 

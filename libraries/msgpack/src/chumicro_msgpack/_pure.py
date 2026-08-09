@@ -2,8 +2,19 @@
 
 import struct
 
+try:
+    from micropython import const
+except ImportError:
+    def const(value):
+        return value
+
 _ZERO2 = b"\x00\x00"
 _ZERO4 = b"\x00\x00\x00\x00"
+
+# MicroPython on a Pi Pico W exhausts pystack near 17 nested containers; 8
+# stays clear.  Governs both halves: the encoder refuses what the decoder
+# could not read back.
+_MAX_DEPTH = const(8)
 
 
 def _append_packed(buffer: bytearray, fmt: str, value: object, zero: bytes) -> None:
@@ -122,14 +133,14 @@ def _encode_map(value: dict, buffer: bytearray, depth: int) -> None:
         _encode(val, buffer, depth + 1)
 
 
-# MicroPython on a Pi Pico W exhausts pystack near 17 nested containers; 8 stays clear.
-_MAX_DEPTH = 8
+# One decoder contract across the native and pure paths: chumicro_msgpack's
+# package __init__ raises this same text verbatim on its native branch.
 _MALFORMED = "malformed msgpack: truncated or over-length framing"
 
 # CPython adds struct.error on short reads; MicroPython/CircuitPython lack it.
-_FRAMING_ERRORS = (IndexError,)
-if hasattr(struct, "error"):
-    _FRAMING_ERRORS = (IndexError, struct.error)
+_FRAMING_ERRORS = (
+    (IndexError, struct.error) if hasattr(struct, "error") else (IndexError,)
+)
 
 
 def _bounded_end(data: memoryview, start: int, length: int) -> int:
@@ -227,17 +238,19 @@ def _decode(data: memoryview, offset: int, depth: int) -> tuple:
     raise _unsupported_byte_error(byte)
 
 
+_OUT_OF_SUBSET = {
+    0xcb: ("float64", "encode with msgpack.packb(obj, use_single_float=True)"),
+    0xcf: ("uint64", "keep integers in [-2**31, 2**32-1]"),
+    0xd3: ("int64", "keep integers in [-2**31, 2**32-1]"),
+    0xc6: ("bin32", "bytes payloads must be under 65 536 bytes"),
+    0xdb: ("str32", "strings must be under 65 536 bytes"),
+    0xdd: ("array32", "arrays must be under 65 536 elements"),
+    0xdf: ("map32", "maps must be under 65 536 entries"),
+}
+
+
 def _unsupported_byte_error(byte: int) -> ValueError:
-    out_of_subset = {
-        0xcb: ("float64", "encode with msgpack.packb(obj, use_single_float=True)"),
-        0xcf: ("uint64", "keep integers in [-2**31, 2**32-1]"),
-        0xd3: ("int64", "keep integers in [-2**31, 2**32-1]"),
-        0xc6: ("bin32", "bytes payloads must be under 65 536 bytes"),
-        0xdb: ("str32", "strings must be under 65 536 bytes"),
-        0xdd: ("array32", "arrays must be under 65 536 elements"),
-        0xdf: ("map32", "maps must be under 65 536 entries"),
-    }
-    guidance = out_of_subset.get(byte)
+    guidance = _OUT_OF_SUBSET.get(byte)
     if guidance is not None:
         name, fix = guidance
         return ValueError(f"{name} (0x{byte:02x}) not in chumicro msgpack subset; {fix}")
@@ -256,8 +269,8 @@ def _decode_array(data: memoryview, offset: int, length: int, depth: int) -> tup
 
 
 def _decode_map(data: memoryview, offset: int, length: int, depth: int) -> tuple:
-    # Each pair is at least two bytes, so a count past the remaining bytes is malformed.
-    if length > len(data) - offset:
+    # Each pair is at least two bytes (a one-byte key and a one-byte value).
+    if length * 2 > len(data) - offset:
         raise ValueError(_MALFORMED)
     result = {}
     for _ in range(length):
@@ -278,6 +291,12 @@ def packb(obj: object) -> bytes:
 
     Returns:
         Msgpack-encoded data.
+
+    Raises:
+        ValueError: Nesting deeper than the depth cap.
+        OverflowError: An int, string, bytes, array, or map outside the
+            supported subset's ranges.
+        TypeError: An unsupported type.
     """
     buffer = bytearray()
     _encode(obj, buffer)

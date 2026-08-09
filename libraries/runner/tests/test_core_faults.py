@@ -45,7 +45,7 @@ def test_faulting_handler_is_isolated_and_siblings_still_fire() -> None:
 
 
 def test_pending_cleared_so_isolated_fault_does_not_re_fire() -> None:
-    """A handler faulting every tick leaves _pending empty, so a sibling fires once per tick."""
+    """A handler faulting every tick leaves _pending blanked, so a sibling fires once per tick."""
     runner = Runner(ticks=FakeTicks())
     good_calls = []
 
@@ -64,7 +64,10 @@ def test_pending_cleared_so_isolated_fault_does_not_re_fire() -> None:
 
     assert len(good_calls) == 3
     assert runner.handler_errors == 3
-    assert runner._pending == []
+    # _pending keeps its high-water capacity; every slot must be blanked so no
+    # fired entry stays pinned or can re-fire.
+    for slot in runner._pending:
+        assert slot is None
 
 
 def test_on_handler_error_hook_receives_the_handle_and_exception() -> None:

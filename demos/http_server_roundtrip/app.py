@@ -2,21 +2,20 @@
 
 Brings WiFi up with ``chumicro_wifi.WifiService`` and serves three
 routes with ``chumicro_http_server.HttpServer``.  Both services
-share one cooperative ``while True:`` loop (no async, no threads),
-which is the same shape the README's "Give WiFi a deadline and keep
-blinking" walkthrough uses.
+register with one ``chumicro_runner.Runner`` and the loop is a single
+``runner.run_until(...)`` call with a deadline.
 
 The host driver discovers the board's address by reading the
 ``SERVER_READY ip=<ip> port=<port>`` marker line, fires three HTTP
 requests, and the loop exits after the three matching ``ROUTE_HIT``
-prints land and ``DEMO_COMPLETE`` is printed.
+markers land and ``DEMO_COMPLETE`` is printed.
 """
-
-import time
 
 from chumicro_config import load_runtime_config
 from chumicro_http_server import HttpServer, build_response
-from chumicro_timing import Deadline, ticks_diff, ticks_ms
+from chumicro_runner import Runner
+from chumicro_test_harness.markers import marker
+from chumicro_timing import ticks_diff, ticks_ms
 from chumicro_wifi import WifiConfig, WifiService
 
 _DEMO_DEADLINE_MS = 60_000
@@ -34,7 +33,7 @@ start_ticks_ms = ticks_ms()
 @server.route("/hello")
 def _hello(_request):
     hit_routes.append("/hello")
-    print("ROUTE_HIT route=/hello")
+    marker("ROUTE_HIT", route="/hello")
     return build_response(
         200, json={"message": "hello from chumicro_http_server"},
     )
@@ -44,42 +43,50 @@ def _hello(_request):
 def _uptime(_request):
     hit_routes.append("/uptime")
     uptime_ms = ticks_diff(ticks_ms(), start_ticks_ms)
-    print(f"ROUTE_HIT route=/uptime uptime_ms={uptime_ms}")
+    marker("ROUTE_HIT", route="/uptime", uptime_ms=uptime_ms)
     return build_response(200, json={"uptime_ms": uptime_ms})
 
 
 @server.route("/echo", methods=["POST"])
 def _echo(request):
     hit_routes.append("/echo")
-    print("ROUTE_HIT route=/echo")
+    marker("ROUTE_HIT", route="/echo")
     return build_response(200, json={"echoed": request.json()})
 
 
-ready_printed = False
-deadline = Deadline(_DEMO_DEADLINE_MS, ticks_ms())
+runner = Runner()
+runner.add(wifi)
 
-while len(hit_routes) < len(_DEMO_ROUTES):
-    now_ms = ticks_ms()
-    if deadline.expired(now_ms):
-        print(
-            f"DEMO_TIMEOUT hit={len(hit_routes)} "
-            f"expected={len(_DEMO_ROUTES)}",
-        )
-        break
+demo_state = {"server_registered": False, "announced": False}
 
-    if wifi.check(now_ms):
-        wifi.handle(now_ms)
 
-    if wifi.connected:
-        # First server.handle() lazy-opens the listener, so SERVER_READY
-        # only prints once the port is actually accepting connections.
-        server.handle(now_ms)
-        if not ready_printed:
-            print(f"WIFI_OK ip={wifi.ip}")
-            print(f"SERVER_READY ip={wifi.ip} port={bind_port}")
-            ready_printed = True
+def bring_up_server(now_ms):
+    # Register the server only once the link is up (its listener binds on
+    # the radio), then announce once the first handle() has opened the port.
+    if not demo_state["server_registered"]:
+        if not wifi.connected:
+            return
+        runner.add(server)
+        demo_state["server_registered"] = True
+        return
+    if not demo_state["announced"] and server.io_socket is not None:
+        marker("WIFI_OK", ip=wifi.ip)
+        marker("SERVER_READY", ip=wifi.ip, port=bind_port)
+        demo_state["announced"] = True
 
-    time.sleep(0.02)
+
+runner.add(handler=bring_up_server)
+
+completed = runner.run_until(
+    lambda: len(hit_routes) >= len(_DEMO_ROUTES),
+    timeout_ms=_DEMO_DEADLINE_MS,
+)
+if not completed:
+    marker(
+        "DEMO_TIMEOUT",
+        hit=len(hit_routes),
+        expected=len(_DEMO_ROUTES),
+    )
 
 server.close()
-print("DEMO_COMPLETE")
+marker("DEMO_COMPLETE")

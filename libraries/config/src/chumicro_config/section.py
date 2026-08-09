@@ -25,25 +25,21 @@ class RuntimeConfig:
     def __init__(self, data: dict | None = None) -> None:
         self._data: dict = data if data is not None else {}
 
-    def get(self, key, default=None):
+    def get(self, key: str, default: object = None) -> object:
         return self._data.get(key, default)
 
-    def require(self, key):
+    def require(self, key: str) -> object:
         if key not in self._data:
             raise MissingConfigKey(
                 f"required config key {key!r} is missing",
             )
         return self._data[key]
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: str) -> object:
         return self.require(key)
 
-    def __contains__(self, key):
+    def __contains__(self, key: str) -> bool:
         return key in self._data
-
-
-def _is_config_like(value) -> bool:
-    return isinstance(value, (RuntimeConfig, dict))
 
 
 def load_section(
@@ -74,7 +70,7 @@ def load_section(
         raise InvalidConfigType(
             "load_section requires a runtime config; got None",
         )
-    if not _is_config_like(config):
+    if not isinstance(config, (RuntimeConfig, dict)):
         raise InvalidConfigType(
             f"load_section requires a RuntimeConfig or dict, "
             f"got {type(config).__name__}",

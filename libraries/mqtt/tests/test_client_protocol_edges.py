@@ -1,4 +1,4 @@
-"""Regression tests for the 2026-07 audit fixes on MQTTClient.
+"""MQTTClient edge behaviors.
 
 Covers: oversize-topic QoS-1 PUBACK not crashing, PUBACK receipt
 order, subscription replay past the user cap, tx-headroom overflow,

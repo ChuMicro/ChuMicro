@@ -79,6 +79,7 @@ Works on CPython, MicroPython, and CircuitPython.  Pure Python, no native extens
 | Example | What it shows |
 |---|---|
 | `periodic_get.py` | Periodic GET on a real CP/MP board.  Brings wifi up, hits a configured URL every N seconds, prints status + body length, drives an LED-blink counter to verify the request never blocks the loop.  Reads wifi + target URL from `runtime_config.msgpack` (chumicro-workspace) with a constants fallback.  Cross-runtime (CP + MP). |
+| `generator_fetch.py` | The generator surface: a straight-line `yield from get(...)` fetch driven by `runner.add_generator`, no callbacks or state polling. |
 
 ## Wiring wifi credentials for examples
 

@@ -1,5 +1,6 @@
-"""Core ``KVStore`` class, exception hierarchy, and ``Backend`` ABC."""
+"""Core ``KVStore`` class, exception hierarchy, and the ``Backend`` protocol base."""
 
+import gc
 import sys
 
 from chumicro_msgpack import packb, unpackb
@@ -29,6 +30,14 @@ class Backend:
 
     def save(self, payload: bytes) -> None:
         raise NotImplementedError
+
+    def _check_capacity(self, payload: bytes) -> None:
+        # One guard for every backend's save(); capacity 0 means unbounded.
+        if 0 < self.capacity < len(payload):
+            raise KVStoreFull(
+                f"payload size {len(payload)} exceeds "
+                f"{self.name} capacity {self.capacity}"
+            )
 
 
 def _select_backend() -> Backend:
@@ -71,6 +80,10 @@ def _resolve_backend(backend: Backend | str) -> Backend:
 class KVStore:
     """Persisted key-value store with a mapping-style public API.
 
+    Construction reads the backend once; a corrupt payload parks the store
+    empty with ``is_corrupt`` set, but a backend that cannot reach its
+    substrate at all (missing NVM, unreadable filesystem) raises.
+
     Args:
         backend: ``"auto"``, ``"memory"``, ``"nvm"``, ``"nvs"``, ``"littlefs"``, or a backend instance.
     """
@@ -83,32 +96,14 @@ class KVStore:
         self._last_payload: bytes = b""
         self.is_corrupt: bool = False
         self._dirty: bool = False
-        self._auto_load()
-
-    def _auto_load(self) -> None:
-        self._dirty = False
+        # Construction reads the backend once; corruption parks the store
+        # empty with is_corrupt latched instead of raising.
         try:
-            payload = self._backend.load()
+            self.reload()
         except KVStoreCorrupt:
             self._data = {}
             self._last_payload = b""
             self.is_corrupt = True
-            return
-        if not payload:
-            self._data = {}
-            self._last_payload = b""
-            return
-        try:
-            loaded = unpackb(payload)
-        except ValueError:
-            loaded = None
-        if not isinstance(loaded, dict):
-            self._data = {}
-            self._last_payload = b""
-            self.is_corrupt = True
-            return
-        self._data = dict(loaded)
-        self._last_payload = bytes(payload)
 
     def reload(self) -> None:
         """Discard in-memory state and reread from backend.
@@ -132,6 +127,10 @@ class KVStore:
         self._data = dict(loaded)
         self._last_payload = bytes(payload)
         self.is_corrupt = False
+        # The raw payload and decode scratch can be a 16 KB-class blob;
+        # release them now rather than waiting on natural collection.
+        del payload, loaded
+        gc.collect()
 
     def commit(self) -> None:
         """Encode the current dict and persist it through the backend.
@@ -201,10 +200,14 @@ class KVStore:
 
     def pop(self, key: str, *default: object) -> object:
         """Remove *key* and return its value, or *default* when supplied."""
-        self._dirty = True
         if default:
-            return self._data.pop(key, default[0])
-        return self._data.pop(key)
+            value = self._data.pop(key, default[0])
+        else:
+            # Mark dirty only after the pop: a KeyError changes nothing, so
+            # the next commit_if_changed() must not re-encode for it.
+            value = self._data.pop(key)
+        self._dirty = True
+        return value
 
     def clear(self) -> None:
         """Remove every key from the in-memory dict (commit not implied)."""

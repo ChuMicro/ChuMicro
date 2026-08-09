@@ -1,8 +1,9 @@
 """Button-controlled LED: CircuitPython gate pattern.
 
 Reads a button and toggles an LED using the runner's check/handle
-gate pattern.  The runner calls ``check()`` every tick.  When the
-button is pressed, ``handle()`` fires and toggles the LED.  Prints
+gate pattern.  The runner scans the button every 20 ms (the debounce
+window).  When the button is pressed, ``handle()`` fires and toggles
+the LED.  Prints
 a startup banner and a line on every accepted press so a serial
 console (or a sweep harness) can verify the loop without a probe.
 
@@ -117,9 +118,12 @@ class ButtonToggle:
 
 
 runner = Runner()
-runner.add(ButtonToggle())
+# A button is not pollable like a socket, so scan it on a 20 ms period —
+# the debounce window — and let wait() sleep between scans.
+runner.add(ButtonToggle(), period_ms=20)
 
 print("Button toggle: press button to flip the LED.\n")
 
 while True:
-    runner.tick()
+    now_ms = runner.tick()
+    runner.wait(now_ms)

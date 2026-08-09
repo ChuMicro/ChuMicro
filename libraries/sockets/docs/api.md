@@ -14,7 +14,7 @@ Builders that turn hosts, ports, and TLS material into the transport callable a 
 
 ## `chumicro_sockets.generators`
 
-Socket I/O as `yield from` steps for generators registered with `Runner.add_generator`: `connect` drives a connector until it hands back a connected socket, `send_all` writes a whole buffer, and `recv_until` and `recv_exact` read a delimited or a fixed-length chunk.  Each one suspends whenever the socket would block, so the rest of the device keeps running while it waits.
+Socket I/O as `yield from` steps for generators registered with `Runner.add_generator`: `connect` drives a connector until it hands back a connected socket, `send_all` writes a whole buffer, and `recv_until` reads a delimited chunk.  Each one suspends whenever the socket would block, so the rest of the device keeps running while it waits.
 
 ::: chumicro_sockets.generators
 

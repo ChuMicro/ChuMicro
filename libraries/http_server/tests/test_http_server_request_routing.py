@@ -23,19 +23,13 @@ def _make_server(*, sockets, handler=None, **kwargs):
     if handler is None:
         handler = lambda request: build_response(200, text="ok")  # noqa: E731
 
-    listener_called = {"count": 0}
-
-    def transport_factory():
-        listener_called["count"] += 1
-        return FakeListener(sockets)
-
     server = HttpServer(
-        transport_factory=transport_factory,
+        transport_factory=lambda: FakeListener(sockets),
         handler=handler,
         ticks=ticks,
         **kwargs,
     )
-    return server, ticks, listener_called
+    return server, ticks
 
 def _drive_until_idle(server, ticks, *, max_ticks=200):
     """Tick the server until no in-flight connections remain."""
@@ -78,7 +72,7 @@ class TestHttpServerInFlightObservation:
             raise OSError(errno.EAGAIN, "would block")
 
         sock_stalled = type("Stalled", (FakeSocket,), {"recv_into": _raise_eagain})()
-        server, ticks, _ = _make_server(sockets=[(sock_stalled, ("127.0.0.1", 1))])
+        server, ticks = _make_server(sockets=[(sock_stalled, ("127.0.0.1", 1))])
         assert server.in_flight == 0
         server.handle(ticks.ticks_ms())
         assert server.in_flight == 1
@@ -184,7 +178,7 @@ class TestRequestObject:
 
 
 class TestHttpServerRouting:
-    """``@server.route`` decorator + two-dict router (slice 7b)."""
+    """``@server.route`` decorator + two-dict router."""
 
     def _route_server(self, sockets, **kwargs):
         ticks = FakeTicks()

@@ -112,9 +112,9 @@ class TestClientEdges:
         client.connect("ws://example.com/")
         _drive_handshake(client, socket, clock)
         client.send_text("hello world")
-        # First tick partially sends.  client._tx_partial is now non-None.
+        # First tick partially sends.  client._tx_partial_buffer is now non-None.
         client.handle(clock.ticks_ms())
-        assert client._tx_partial is not None
+        assert client._tx_partial_buffer is not None
         assert client.check(clock.ticks_ms()) is True
 
     def test_drain_outbound_eagain_keeps_open(self):
@@ -126,7 +126,7 @@ class TestClientEdges:
         client.handle(clock.ticks_ms())
         assert client.state == WebSocketState.OPEN
         # Frame still queued.
-        assert client._tx_queue or client._tx_partial is not None
+        assert client._tx_queue or client._tx_partial_buffer is not None
 
     def test_drain_outbound_send_returns_zero(self):
         client, socket, clock, _ = _make_client()

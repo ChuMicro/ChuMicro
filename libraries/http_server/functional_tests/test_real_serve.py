@@ -29,7 +29,7 @@ import time
 from chumicro_http_server import HttpServer, build_response
 from chumicro_sockets import listener
 from chumicro_test_harness.network import runtime_config, wifi_up
-from chumicro_timing import ticks_diff, ticks_ms
+from chumicro_timing import ticks_add, ticks_diff, ticks_ms
 
 _LISTEN_PORT = 8765
 _REQUEST_DEADLINE_MS = 30_000
@@ -77,7 +77,7 @@ def test_real_serve_responds_to_host_driver() -> None:
     # land or the per-test deadline to expire.  Reraises as
     # AssertionError so the result-parser reports FAIL with the
     # deadline message.
-    deadline = ticks_ms() + _REQUEST_DEADLINE_MS
+    deadline = ticks_add(ticks_ms(), _REQUEST_DEADLINE_MS)
     while not observed_routes:
         now = ticks_ms()
         if ticks_diff(deadline, now) <= 0:

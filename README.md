@@ -191,7 +191,7 @@ git clone https://github.com/ChuMicro/ChuMicro
 cd ChuMicro
 python3 scripts/prepare_workspace.py                  # one-time: creates an isolated Python env, installs everything
 source .venv/bin/activate                             # puts the chumicro tools on your PATH
-chumicro-workspace deploy-example timing heartbeat_blink
+chumicro-workspace deploy-example timing rate_blink
 ```
 
 The first deploy walks you through picking the board's serial port and detecting its runtime, then remembers the board.  `chumicro-workspace deploy-example --list` prints every library-and-example pair you can deploy.  Networked examples read your WiFi name and password from a gitignored `secrets.toml` at the repo root; [wiring wifi credentials](docs/wiring-wifi-credentials.md) covers the details.

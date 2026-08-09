@@ -1,23 +1,9 @@
-"""Cross-runtime tests for the CircuitPython adapter.
+"""Host-only tests for the CircuitPython adapter.
 
 The CP adapter (``chumicro_sockets._adapters.cp``) imports
 ``socketpool`` at module load time (stubbed here via ``sys.modules``
 before the adapter import) and ``ssl`` lazily inside function bodies,
-so we can drive it from any runtime by stubbing both modules.
-
-Mirrors the shape of ``test_mp_adapter_pytest.py`` (per-test stubbed
-modules, protocol-shape verification) but uses the ``SwapAttribute``
-/ ``SwapItem`` / ``FakeModule`` cross-runtime helpers from
-``chumicro_test_harness.patching`` — so it runs on CPython,
-MicroPython unix-port, and CircuitPython unix-port.
-
-This is the host-side complement to:
-
-* the on-device functional tests under ``functional_tests/`` (real
-  ``socketpool`` against ``wifi.radio`` on actual CP boards), and
-* the dispatcher routing tests in ``test_factories_routing.py``
-  (verify the package entry reaches the cp adapter, not what the cp
-  adapter does).
+so host fakes can stand in for both modules on any interpreter.
 
 It catches regressions in the call shapes the CP adapter expects
 ``socketpool`` to expose, plus the protocol the wrapper classes

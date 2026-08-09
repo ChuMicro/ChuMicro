@@ -24,7 +24,11 @@ __chumicro_host_only__ = True
 
 from chumicro_test_harness import raises
 from chumicro_wifi import WifiConfig
-from chumicro_wifi._adapters.mp import CYW43_PM_DISABLE, MpWifiAdapter
+from chumicro_wifi._adapters.mp import (
+    CYW43_PM_DISABLE,
+    ESP32_PM_NONE,
+    MpWifiAdapter,
+)
 
 
 class _FakeWlan:
@@ -209,9 +213,8 @@ def test_configure_skips_dhcp_hostname_when_none_on_espidf() -> None:
     wlan = _FakeWlan()
     adapter = MpWifiAdapter(wlan=wlan, stack="espidf")
     adapter.configure(WifiConfig(ssid="x", password="y"))
-    # ESP-IDF stack with no hostname makes no config calls at all
-    # at configure time (PM knob is CYW43-only).
-    assert wlan.config_calls == []
+    # No hostname call; the only config call is the default power-save disable.
+    assert wlan.config_calls == [{"pm": ESP32_PM_NONE}]
 
 
 def test_configure_disables_power_save_by_default_on_cyw43() -> None:
@@ -231,11 +234,19 @@ def test_configure_leaves_power_save_alone_when_user_opts_in_on_cyw43() -> None:
     assert pm_calls == []
 
 
-def test_configure_does_not_touch_pm_knob_on_espidf() -> None:
-    """ESP-IDF stack never issues the CYW43-specific PM-disable knob."""
+def test_configure_disables_power_save_by_default_on_espidf() -> None:
+    """``power_save=False`` (default) applies ESP-IDF's WIFI_PS_NONE value."""
     wlan = _FakeWlan()
     adapter = MpWifiAdapter(wlan=wlan, stack="espidf")
     adapter.configure(WifiConfig(ssid="x", password="y"))
+    assert {"pm": ESP32_PM_NONE} in wlan.config_calls
+
+
+def test_configure_leaves_power_save_alone_when_user_opts_in_on_espidf() -> None:
+    """Explicit ``power_save=True`` leaves the firmware default in place."""
+    wlan = _FakeWlan()
+    adapter = MpWifiAdapter(wlan=wlan, stack="espidf")
+    adapter.configure(WifiConfig(ssid="x", password="y", power_save=True))
     pm_calls = [call for call in wlan.config_calls if "pm" in call]
     assert pm_calls == []
 

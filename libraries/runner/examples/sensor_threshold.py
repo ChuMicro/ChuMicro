@@ -11,16 +11,14 @@ Example output::
 
     Monitoring temperature...
 
-    [3005 ms] ALERT: 31.0°C exceeds 30.0°C
-    [4002 ms] ALERT: 35.0°C exceeds 30.0°C
-    [11003 ms] ALERT: 31.0°C exceeds 30.0°C
-    [12008 ms] ALERT: 35.0°C exceeds 30.0°C
+    [4002 ms] ALERT: 31.0°C exceeds 30.0°C
+    [5003 ms] ALERT: 35.0°C exceeds 30.0°C
+    [12008 ms] ALERT: 31.0°C exceeds 30.0°C
+    [13004 ms] ALERT: 35.0°C exceeds 30.0°C
     ...
 
 Runs on CPython, MicroPython, and CircuitPython.
 """
-
-import time
 
 from chumicro_runner import Runner
 
@@ -97,8 +95,8 @@ runner.add(sensor, period_ms=1000)
 print("Monitoring temperature...\n")
 
 while True:
-    runner.tick()
+    now_ms = runner.tick()
 
     # In a real project, the rest of your main loop goes here.
-    # The sleep just keeps this demo from flooding the console.
-    time.sleep(0.1)
+    # wait() sleeps until the next 1 s sensor read is due.
+    runner.wait(now_ms)

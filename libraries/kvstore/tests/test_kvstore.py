@@ -515,7 +515,7 @@ def test_memory_backend_reset_corrupt_clears_flag() -> None:
 
 
 def test_base_backend_load_save_raise_notimplementederror() -> None:
-    """The abstract ``Backend`` base raises on both methods.
+    """The ``Backend`` protocol base raises on both methods.
 
     Confirms subclasses can't accidentally inherit a no-op ``load`` or
     ``save`` and silently no-op writes.

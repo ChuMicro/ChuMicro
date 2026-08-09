@@ -63,7 +63,7 @@ driver: demo completed cleanly.
 
 - [`sockets_tls_roundtrip`](../sockets_tls_roundtrip/): same shape
   with TLS + a self-signed CA the driver embeds in runtime config.
-- [`sockets_runner_connector`](../sockets_runner_connector/): the
-  non-blocking connector form.  `runner.add(connector)` keeps a 500 ms
-  heartbeat firing through the connect for code that can't pause its
-  tick budget.
+- [`sockets_runner_connector`](../sockets_runner_connector/): the same
+  runner-driven connect expressed as a straight-line generator
+  (`yield from connect(...)`) instead of an explicitly registered
+  connector.

@@ -2,7 +2,7 @@
 
 Wires ``chumicro_wifi.WifiService`` + ``chumicro_mqtt.MQTTClient`` into
 one ``chumicro_runner.Runner`` and drives them with
-``while True: now = runner.tick(); runner.wait(now)``.
+``runner.run_until(..., timeout_ms=...)``.
 
 Reads like a mainstream MQTT quickstart (paho / Adafruit MiniMQTT): set
 a Last Will, set the callbacks once, connect, let the loop run.  The
@@ -96,7 +96,11 @@ def on_command_message(topic, payload):
 def on_wifi_state(_old, new):
     if new == WifiState.CONNECTED:
         marker("WIFI_OK", ip=wifi.ip)
-        mqtt.connect()
+        mqtt.connect()  # link is back: reconnect now (also clears the hold)
+    else:
+        # WifiService reports link loss as RECONNECTING / FAILED, so any
+        # state but CONNECTED means: stop dialing a dead radio.
+        mqtt.hold()
 
 
 def publish_telemetry(now_ms):

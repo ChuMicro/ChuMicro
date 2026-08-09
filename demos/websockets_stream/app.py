@@ -43,6 +43,8 @@ def receive_stream(wifi, link_up, session, url):
     marker("DEMO_COMPLETE")
 
 
+_DEMO_DEADLINE_MS = 120_000
+
 config = load_runtime_config()
 stream_url = config["websockets.stream.url"]
 
@@ -65,4 +67,6 @@ wifi.on_state_change(signal_link_up)
 receive_handle = runner.add_generator(
     receive_stream(wifi, link_up, ws, stream_url),
 )
-runner.run_until(receive_handle)
+if not runner.run_until(receive_handle, timeout_ms=_DEMO_DEADLINE_MS):
+    marker("DEMO_TIMEOUT", stage="stream")
+    raise SystemExit(1)

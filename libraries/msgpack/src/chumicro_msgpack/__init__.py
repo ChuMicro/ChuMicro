@@ -38,6 +38,8 @@ if sys.implementation.name == "circuitpython":
             """
             buffer = BytesIO(data)
             # The native decoder raises EOFError on truncation; our contract promises ValueError.
+            # Both message texts below are one contract with the pure path
+            # (chumicro_msgpack._pure raises them verbatim); change together.
             try:
                 result = unpack(buffer)
             except EOFError as truncation_error:

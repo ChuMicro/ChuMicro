@@ -142,9 +142,9 @@ class TestSendQueuesAndDrains:
         # Drain over multiple handles, each capped at 4 bytes.
         for _tick in range(20):
             client.handle(clock.ticks_ms())
-            if client._tx_partial is None and not client._tx_queue:
+            if client._tx_partial_buffer is None and not client._tx_queue:
                 break
-        assert client._tx_partial is None
+        assert client._tx_partial_buffer is None
         assert not client._tx_queue
         outbound = socket.read_outbound()
         parser = FrameParser()

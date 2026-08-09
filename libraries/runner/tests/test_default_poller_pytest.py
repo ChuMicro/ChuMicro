@@ -5,7 +5,7 @@ registered service exposes an ``io_socket`` whose readiness should
 wake the loop, ``wait`` builds a private ``_SelectPollAdapter`` around
 ``select.poll()`` on the first call that has a socket to register, and
 replays the bookkeeping the no-poller ``_sync_poll_set`` already
-captured.  Tests in :mod:`test_core` drive ``wait`` through an
+captured.  The ``test_core_wait*`` suites drive ``wait`` through an
 injected ``FakePoller`` and never exercise that path, so the adapter
 and its lazy build stay uncovered without a real-fd fixture here.
 

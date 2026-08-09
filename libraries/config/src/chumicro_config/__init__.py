@@ -39,10 +39,6 @@ def __getattr__(name: str):
         from chumicro_config.runtime import load_runtime_config  # noqa: PLC0415
 
         return load_runtime_config
-    if name == "runtime":
-        import chumicro_config.runtime as runtime_module  # noqa: PLC0415
-
-        return runtime_module
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 

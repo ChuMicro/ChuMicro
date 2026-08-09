@@ -1,10 +1,11 @@
 """Generator helpers for socket I/O driven by a tick-based scheduler.
 
-The public helpers are ``connect``, ``send_all``, ``recv_until``, and ``recv_exact``.
+The public helpers are ``connect``, ``send_all``, and ``recv_until``.
 """
 
 import errno
 
+from chumicro_sockets._connector import STATE_FAILED, STATE_READY
 from chumicro_sockets.waits import ReadWait, WriteWait
 
 
@@ -44,10 +45,10 @@ def connect(
         while True:
             connector.tick(now_ms)
             state = connector.state
-            if state == "ready":
+            if state == STATE_READY:
                 sock = connector.socket
                 return sock
-            if state == "failed":
+            if state == STATE_FAILED:
                 raise connector.last_error
             if (
                 deadline_ms is not None
@@ -137,50 +138,3 @@ def recv_until(sock: object, separator: object, *, max_bytes: int) -> bytes:
             return bytes(accumulator[: sep_index + sep_length])
         if len(accumulator) >= max_bytes:
             raise OSError("recv_until exceeded max_bytes")
-
-
-def recv_exact(sock: object, byte_count: int, *, max_bytes: int) -> bytes:
-    """Read exactly *byte_count* bytes and return them as ``bytes``.
-
-    Args:
-        sock: Non-blocking TCP socket.
-        byte_count: Number of bytes to read. Must be positive.
-        max_bytes: Hard cap on the buffer, so a peer-controlled length cannot force an unbounded allocation.
-
-    Yields:
-        A ``ReadWait`` on each ``EAGAIN``.
-
-    Returns:
-        ``bytes`` of length exactly *byte_count*.
-
-    Raises:
-        OSError: The peer closed before *byte_count* bytes arrived, or a non-EAGAIN error.
-        ValueError: *byte_count* or *max_bytes* is not positive, or *byte_count* exceeds *max_bytes*.
-    """
-    if byte_count <= 0:
-        raise ValueError("byte_count must be positive")
-    if max_bytes <= 0:
-        raise ValueError("max_bytes must be positive")
-    if byte_count > max_bytes:
-        raise ValueError("byte_count exceeds max_bytes")
-
-    buffer = bytearray(byte_count)
-    view = memoryview(buffer)
-    offset = 0
-    read_wait = ReadWait(sock)
-    chunk = view
-
-    while offset < byte_count:
-        try:
-            nbytes = sock.recv_into(chunk)
-        except OSError as error:
-            if error.args[0] == errno.EAGAIN:
-                yield read_wait
-                continue
-            raise
-        if nbytes == 0:
-            raise OSError("peer closed before byte_count bytes")
-        offset += nbytes
-        chunk = view[offset:]
-
-    return bytes(buffer)

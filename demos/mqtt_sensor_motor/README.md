@@ -64,9 +64,10 @@ The board code is short because it reimplements none of this:
   publishes if the board drops uncleanly, paired with a retained
   `online` on connect. A clean shutdown suppresses the will, so the
   shutdown path publishes `offline` explicitly.
-- **Wifi-drop self-heal.** No reconnect code at all: the
-  socket-factory transport rebuilds the connection after a wifi drop
-  on its own.
+- **Wifi-drop self-heal.** The wifi callback holds mqtt while the link
+  is down (`mqtt.hold()`) and reconnects the moment it returns
+  (`mqtt.connect()`); the socket-factory transport rebuilds the
+  connection.
 - **Runner composition.** `WifiService` and `MQTTClient` added with
   `runner.add(...)`, telemetry paced by `runner.add_periodic(...)`, all
   in one cooperative loop.

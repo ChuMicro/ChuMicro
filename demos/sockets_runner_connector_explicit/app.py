@@ -161,6 +161,8 @@ class EchoService:
         return 0
 
 
+_DEMO_DEADLINE_MS = 120_000
+
 config = load_runtime_config()
 echo_host = config["sockets.echo.host"]
 echo_port = int(config["sockets.echo.port"])
@@ -183,7 +185,6 @@ wifi.on_state_change(on_wifi_state)
 runner.add(wifi)
 runner.add(echo)
 
-while not echo.done:
-    # tick() runs every ready task; wait() sleeps until the next io event or deadline.
-    now_ms = runner.tick()
-    runner.wait(now_ms)
+if not runner.run_until(lambda: echo.done, timeout_ms=_DEMO_DEADLINE_MS):
+    marker("DEMO_TIMEOUT", stage="echo")
+    raise SystemExit(1)

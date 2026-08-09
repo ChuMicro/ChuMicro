@@ -3,10 +3,10 @@ __chumicro_runtimes__ = ("micropython",)
 import builtins
 import os
 
-from chumicro_kvstore.core import Backend, KVStoreFull
+from chumicro_kvstore.core import Backend
 
 
-class _RuntimeFs:
+class _RuntimeFilesystem:
     open = staticmethod(builtins.open)
     rename = staticmethod(os.rename)
     remove = staticmethod(os.remove)
@@ -24,16 +24,12 @@ class MpLittlefsBackend(Backend):
     def __init__(self, path=None, filesystem=None, capacity=None):
         self._path = path if path is not None else self.DEFAULT_PATH
         self._tmp_path = self._path + self.TMP_SUFFIX
-        self._fs = filesystem if filesystem is not None else self._acquire_runtime_fs()
+        self._filesystem = filesystem if filesystem is not None else _RuntimeFilesystem
         self.capacity = capacity if capacity is not None else self.DEFAULT_CAPACITY
-
-    @staticmethod
-    def _acquire_runtime_fs():
-        return _RuntimeFs
 
     def load(self) -> bytes:
         try:
-            handle = self._fs.open(self._path, "rb")
+            handle = self._filesystem.open(self._path, "rb")
         except OSError:
             return b""
         try:
@@ -42,12 +38,9 @@ class MpLittlefsBackend(Backend):
             handle.close()
 
     def save(self, payload: bytes) -> None:
-        if len(payload) > self.capacity:
-            raise KVStoreFull(
-                f"payload size {len(payload)} exceeds LittleFS capacity {self.capacity}"
-            )
+        self._check_capacity(payload)
 
-        handle = self._fs.open(self._tmp_path, "wb")
+        handle = self._filesystem.open(self._tmp_path, "wb")
         try:
             try:
                 handle.write(payload)
@@ -55,10 +48,10 @@ class MpLittlefsBackend(Backend):
                 handle.close()
         except OSError:
             try:
-                self._fs.remove(self._tmp_path)
+                self._filesystem.remove(self._tmp_path)
             except OSError:
                 pass
             raise
         # Sync before rename so payload bytes reach flash before the directory entry flips.
-        self._fs.sync()
-        self._fs.rename(self._tmp_path, self._path)
+        self._filesystem.sync()
+        self._filesystem.rename(self._tmp_path, self._path)

@@ -8,8 +8,8 @@ one command, with no broker setup beyond `brew install mosquitto`.
 
 The board wires `chumicro_wifi.WifiService` + `chumicro_mqtt.MQTTClient`
 into one `chumicro_runner.Runner` and drives them with
-`while True: now = runner.tick(); runner.wait(now)`, the same shape
-the root README's
+`runner.run_until(..., timeout_ms=...)` (the packaged form of the
+tick-and-wait loop), the same shape the root README's
 ["Give WiFi a deadline and keep blinking"](../../README.md#give-wifi-a-deadline-and-keep-blinking)
 walkthrough uses.  It reads like a mainstream MQTT quickstart: set a
 Last Will, set the callbacks once, connect, let the loop run.  All the
@@ -39,8 +39,6 @@ there is no callback cascade.
   samples with `on_publish` callbacks proving each PUBACK landed.
   Host publishes a command to `demo/<client_id>/cmd` with its own
   PUBACK proof.
-- **Pattern handler.** Board registers a handler for `demo/+/cmd`
-  alongside its `on_message`.  Both fire when the host's cmd arrives.
 
 ## Run it
 
@@ -66,11 +64,11 @@ Override:
 ```
 driver: started mosquitto on 10.0.0.5:54321
 driver: targeting pi-pico-w-circuitpython-board (circuitpython @ /dev/cu.usbmodem...)
+driver: host MQTT client connected (chumicro-mqtt-demo-driver)
 driver: waiting for board MQTT_CONNECTED (up to 60.0s)...
 driver: board MQTT_CONNECTED client_id=chumicro-mqtt-demo-board broker=10.0.0.5:54321
-driver: host MQTT client connected (chumicro-mqtt-demo-driver)
 driver: HOST_RX demo/chumicro-mqtt-demo-board/state payload=online (retained)
-driver: host published cmd to demo/chumicro-mqtt-demo-board/cmd (qos=1), PUBACK in
+driver: host published cmd to demo/chumicro-mqtt-demo-board/cmd (qos=1), PUBACK received
 driver: HOST_RX demo/chumicro-mqtt-demo-board/telemetry payload={"seq": 1, "value": 21, "uptime_ms": 412}
 driver: HOST_RX demo/chumicro-mqtt-demo-board/telemetry payload={"seq": 2, "value": 22, "uptime_ms": 1934}
 driver: HOST_RX demo/chumicro-mqtt-demo-board/telemetry payload={"seq": 3, "value": 23, "uptime_ms": 3447}

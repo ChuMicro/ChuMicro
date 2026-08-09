@@ -102,13 +102,6 @@ def decode_varlen(buffer, start_index, limit=None):
     raise MQTTProtocolError("varlen exceeds 4 bytes (malformed)")
 
 
-def encode_string(value):
-    """Encode *value* as ``2-byte big-endian length || UTF-8 bytes``."""
-    if isinstance(value, str):
-        value = value.encode("utf-8")
-    return struct.pack(">H", len(value)) + value
-
-
 _ZERO2 = b"\x00\x00"
 
 
@@ -148,8 +141,14 @@ def topic_matches(topic, pattern):
 _CONNECT_PROTOCOL_PREFIX = b"\x00\x04MQTT\x04"
 
 
-def _finalize_packet(packet_type, remaining):
-    return bytes(bytearray((packet_type,)) + encode_varlen(len(remaining))) + remaining
+def _finalize_packet(packet_type, body):
+    # Build header + body with in-place appends: one bytearray grows and one
+    # bytes() copy at the end, instead of a concatenation chain that copies
+    # the payload several times per outbound packet.
+    packet = bytearray((packet_type,))
+    packet += encode_varlen(len(body))
+    packet += body
+    return bytes(packet)
 
 
 def encode_connect(
@@ -210,7 +209,7 @@ def encode_connect(
     if password is not None:
         _append_string(body, password)
 
-    return _finalize_packet(PACKET_CONNECT, bytes(body))
+    return _finalize_packet(PACKET_CONNECT, body)
 
 
 def encode_publish(*, topic, payload, qos=0, retain=False, packet_id=None):
@@ -226,7 +225,7 @@ def encode_publish(*, topic, payload, qos=0, retain=False, packet_id=None):
         )
     if qos > 0 and packet_id is None:
         raise ValueError(
-            "QoS > 0 requires a packet_id (allocate via InFlightTable.allocate_id)",
+            "QoS > 0 requires a packet_id",
         )
 
     if isinstance(payload, str):
@@ -242,7 +241,7 @@ def encode_publish(*, topic, payload, qos=0, retain=False, packet_id=None):
         _append_packed_h(body, packet_id)
     body.extend(payload)
 
-    return _finalize_packet(fixed_byte_one, bytes(body))
+    return _finalize_packet(fixed_byte_one, body)
 
 
 def encode_subscribe(*, packet_id, subscriptions):
@@ -267,7 +266,7 @@ def encode_subscribe(*, packet_id, subscriptions):
         _append_string(body, topic)
         body.append(qos & 0x03)
 
-    return _finalize_packet(PACKET_SUBSCRIBE, bytes(body))
+    return _finalize_packet(PACKET_SUBSCRIBE, body)
 
 
 def encode_unsubscribe(*, packet_id, topics):
@@ -285,7 +284,7 @@ def encode_unsubscribe(*, packet_id, topics):
     for topic in pairs:
         _append_string(body, topic)
 
-    return _finalize_packet(PACKET_UNSUBSCRIBE, bytes(body))
+    return _finalize_packet(PACKET_UNSUBSCRIBE, body)
 
 
 _PUBACK_FIXED_HEADER = bytes((PACKET_PUBACK, 2))
@@ -305,11 +304,10 @@ DEFAULT_RX_BUFFER_SIZE = const(256)
 class ParsedPublish:
     """Inbound PUBLISH parsed off the wire."""
 
-    def __init__(self, *, topic, payload, qos, retain, packet_id):
+    def __init__(self, *, topic, payload, qos, packet_id):
         self.topic = topic
         self.payload = payload
         self.qos = qos
-        self.retain = retain
         self.packet_id = packet_id
 
 
@@ -467,9 +465,9 @@ class PacketDecoder:
         )
 
     def _parse_publish(self, fixed_byte, view, body_start, body_end):
-        # qos is bits 1-2 of the fixed-header byte, retain is bit 0.
+        # qos is bits 1-2 of the fixed-header byte; the retain bit (bit 0)
+        # is accepted off the wire but not surfaced — no consumer reads it.
         qos = (fixed_byte >> 1) & 0x03
-        retain = bool(fixed_byte & 0x01)
         if body_end - body_start < 2:
             raise MQTTProtocolError("PUBLISH missing 2-byte topic-length prefix")
         topic_length = struct.unpack(">H", view[body_start:body_start + 2])[0]
@@ -493,7 +491,6 @@ class PacketDecoder:
             topic=topic,
             payload=payload,
             qos=qos,
-            retain=retain,
             packet_id=packet_id,
         )
 

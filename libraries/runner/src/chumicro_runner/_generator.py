@@ -25,9 +25,15 @@ class GeneratorHandle:
 
 
 class _GeneratorWrapper:
-    def __init__(self, gen: object, handle: GeneratorHandle) -> None:
-        self._gen = gen
+    def __init__(self, generator: object, handle: GeneratorHandle) -> None:
+        self._generator = generator
         self._wait: object | None = None
+        # Bound hook methods of the current wait, resolved once per yield.  A
+        # per-tick getattr would allocate a fresh bound method on MicroPython
+        # and CircuitPython inside check() / io_interest() / next_deadline().
+        self._wait_ready: object | None = None
+        self._wait_io_interest: object | None = None
+        self._wait_next_deadline: object | None = None
         self._handle = handle
         self._task_handle: object | None = None
 
@@ -41,7 +47,7 @@ class _GeneratorWrapper:
         # A socket wait resumes every tick even when it carries a deadline, so ready bytes are not stuck.
         if getattr(wait, "io_socket", None) is not None:
             return True
-        ready = getattr(wait, "ready", None)
+        ready = self._wait_ready
         if ready is not None:
             if ready(now_ms):
                 return True
@@ -60,13 +66,12 @@ class _GeneratorWrapper:
         wait = self._wait
         if wait is None:
             return None
+        # Resolved per call, not cached at yield time: a connector wait grows
+        # its socket after the yield, so the attribute must be read live.
         return getattr(wait, "io_socket", None)
 
     def io_interest(self, now_ms: int) -> int:
-        wait = self._wait
-        if wait is None:
-            return 0
-        interest = getattr(wait, "io_interest", None)
+        interest = self._wait_io_interest
         if interest is None:
             return 0
         return interest(now_ms)
@@ -75,17 +80,25 @@ class _GeneratorWrapper:
         self._advance_throw(OSError("POLLERR / POLLHUP on awaited socket"))
 
     def next_deadline(self, now_ms: int) -> int | None:
-        wait = self._wait
-        if wait is None:
-            return None
-        deadline = getattr(wait, "next_deadline", None)
+        deadline = self._wait_next_deadline
         if deadline is None:
             return None
         return deadline(now_ms)
 
+    def _set_wait(self, wait: object | None) -> None:
+        # A bare yield gets the next-tick wait, so _wait is None only when the generator finishes.
+        if wait is None:
+            wait = _NEXT_TICK_WAIT
+        if wait is self._wait:
+            return
+        self._wait = wait
+        self._wait_ready = getattr(wait, "ready", None)
+        self._wait_io_interest = getattr(wait, "io_interest", None)
+        self._wait_next_deadline = getattr(wait, "next_deadline", None)
+
     def _advance(self, value: object) -> None:
         try:
-            wait = self._gen.send(value)
+            wait = self._generator.send(value)
         except StopIteration:
             self._mark_done()
         except BaseException as error:
@@ -93,12 +106,11 @@ class _GeneratorWrapper:
             self._mark_done()
             raise
         else:
-            # A bare yield gets the next-tick wait, so _wait is None only when the generator finishes.
-            self._wait = wait if wait is not None else _NEXT_TICK_WAIT
+            self._set_wait(wait)
 
     def _advance_throw(self, error: BaseException) -> None:
         try:
-            wait = self._gen.throw(error)
+            wait = self._generator.throw(error)
         except StopIteration:
             self._mark_done()
         except BaseException as died:
@@ -106,18 +118,21 @@ class _GeneratorWrapper:
             self._mark_done()
             raise
         else:
-            self._wait = wait if wait is not None else _NEXT_TICK_WAIT
+            self._set_wait(wait)
 
     def _close(self) -> None:
         if self._handle.done:
             return
         try:
-            self._gen.close()
+            self._generator.close()
         finally:
             self._mark_done()
 
     def _mark_done(self) -> None:
         self._wait = None
+        self._wait_ready = None
+        self._wait_io_interest = None
+        self._wait_next_deadline = None
         self._handle.done = True
         task_handle = self._task_handle
         if task_handle is not None:

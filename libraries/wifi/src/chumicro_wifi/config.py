@@ -1,7 +1,5 @@
 """``WifiConfig``: typed connection settings and a flat-key factory."""
 
-from chumicro_config import load_section, try_load_section
-
 
 class WifiConfig:
     """Connection configuration for ``WifiService``.
@@ -62,6 +60,10 @@ class WifiConfig:
             chumicro_config.MissingConfigKey: ``wifi.ssid`` or ``wifi.password`` is absent.
             chumicro_config.InvalidConfigType: *config* is ``None`` or not a mapping.
         """
+        from chumicro_config import (
+            load_section,  # noqa: PLC0415 - lazy: keeps chumicro_config off deploys that construct WifiConfig directly
+        )
+
         return load_section(
             cls,
             config,
@@ -80,6 +82,10 @@ class WifiConfig:
         Returns:
             A ``WifiConfig`` instance, or ``None`` when the section is not configured.
         """
+        from chumicro_config import (
+            try_load_section,  # noqa: PLC0415 - lazy: keeps chumicro_config off deploys that construct WifiConfig directly
+        )
+
         return try_load_section(
             cls,
             config,

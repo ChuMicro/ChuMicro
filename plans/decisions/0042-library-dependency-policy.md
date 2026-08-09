@@ -60,10 +60,12 @@ unless polyfills are needed.)
 Example (the `chumicro-requests` shape, now the standard):
 
 ```python
-from chumicro_requests import HttpClient, chumicro_sockets_factory
-from chumicro_wifi import wifi
+from chumicro_requests import HttpClient
+from chumicro_sockets.sockets_factory import connector_factory
+from chumicro_wifi import WifiConfig, WifiService
 
-client = HttpClient(connection_factory=chumicro_sockets_factory(radio=wifi.adapter.radio))
+wifi = WifiService(WifiConfig(ssid="...", password="..."))
+client = HttpClient(transport_factory=connector_factory(radio=wifi.adapter.radio))
 ```
 
 Existing libraries that already match this pattern (and need no change):
@@ -132,7 +134,7 @@ helper, the helper is named `chumicro_<B>_factory(...)` and lives in
 When `B` itself ships a "default everything" entry point (e.g. a
 no-arg constructor that works on the current runtime with whatever
 hardware is present), it is named `default_<thing>(...)` in `B`'s
-public exports — e.g. `chumicro_wifi.default_adapter()`. This is
+public exports — e.g. `chumicro_mqtt.default_client_id()`. This is
 the upstream-side counterpart to the downstream-side factory helper.
 
 ## Consequences

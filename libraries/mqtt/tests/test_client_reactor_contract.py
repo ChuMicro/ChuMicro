@@ -117,6 +117,22 @@ class TestRunnerReactorContract:
         # drive() advanced through 2 ticks; allow for that.
         assert ticks.ticks_diff(deadline, ticks.ticks_ms()) > 0
 
+    def test_next_deadline_ignores_ping_timer_with_keepalive_disabled(self) -> None:
+        """With keep_alive_seconds=0 an idle CONNECTED client reports no
+        deadline, so Runner.wait can idle instead of busy-spinning on a
+        ping due-tick that is never re-armed."""
+        sock = FakeSocket()
+        sock.enqueue_recv(canned_connack_bytes(return_code=0))
+        ticks = FakeTicks()
+        client = new_client(sock, ticks, keep_alive_seconds=0)
+        client.connect()
+        drive(client, ticks, count=2)
+        assert client.state == ProtocolState.CONNECTED
+
+        # Well past the internal 1000 ms floor the dead timer would sit at.
+        ticks.advance(5000)
+        assert client.next_deadline(ticks.ticks_ms()) is None
+
     def test_runner_wait_registers_socket_for_mqtt_lifecycle(self) -> None:
         """End-to-end: connect via Runner + FakePoller, observe POLLIN
         registration after the CONNECT drains, then unregister on

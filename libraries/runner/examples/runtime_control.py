@@ -78,7 +78,7 @@ while True:
     if not switched and mode_timer.due(now):
         print("\n  >> Switching to fast mode: "
               "logging every 250 ms, Wi-Fi removed\n")
-        log_handle.set_period(250)
+        log_handle.set_period(250, now)
         wifi_handle.remove()
         switched = True
 

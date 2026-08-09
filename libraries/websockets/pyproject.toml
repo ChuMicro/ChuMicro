@@ -69,12 +69,10 @@ requires_flash = true
 
 # ---------------------------------------------------------------------
 # Runtime-config manifest: declares the flat dotted keys this library
-# knows about.  All keys are optional today: WebSocketClient and
-# WebSocketServer take their tunables + connection target via
-# constructor args.  This block describes the forward-looking
-# config-aware surface that ``.from_config`` factories will consume;
-# client connect target + server bind target + per-side message-size
-# caps.
+# knows about.  The two ``from_config`` factories read the server bind
+# target and both per-side message-size caps; ``connect_url`` is read by
+# app code (the client dials per connect() call).  All keys are optional
+# and fall back to the constructor defaults.
 
 [tool.chumicro.config]
 required_keys = []

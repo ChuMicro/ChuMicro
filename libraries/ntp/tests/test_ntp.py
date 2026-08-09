@@ -415,3 +415,65 @@ def test_cancel_in_flight_marks_failed() -> None:
     assert request.done is True
     assert isinstance(request.error, NTPError)
     assert "canceled" in str(request.error)
+
+
+# ---------------------------------------------------------------------------
+# close
+# ---------------------------------------------------------------------------
+
+
+def test_close_closes_the_socket_and_clears_the_handle() -> None:
+    sock = FakeUDPSocket()
+    client = NTPClient(socket=sock)
+    client.close()
+    assert sock.closed is True
+    assert client.socket is None
+    # A second close is harmless.
+    client.close()
+
+
+def test_query_after_close_without_factory_raises() -> None:
+    """A socket-injected client cannot rebuild its transport after close."""
+    sock = FakeUDPSocket()
+    client = NTPClient(socket=sock)
+    client.close()
+    with raises(RuntimeError):
+        client.query()
+
+
+def test_factory_client_reopens_after_close() -> None:
+    """A factory-built client opens a fresh socket on the next query."""
+    built = []
+
+    def factory():
+        sock = FakeUDPSocket()
+        built.append(sock)
+        return sock
+
+    client = NTPClient(transport_factory=factory)
+    request = client.query()
+    client.cancel()
+    assert request.done is True
+    client.close()
+    assert built[0].closed is True
+
+    client.query()
+    assert len(built) == 2
+    assert client.socket is built[1]
+
+
+def test_query_drains_stale_datagrams_with_a_bounded_sweep() -> None:
+    """Stale replies queued before query() are discarded, and the drain
+    stops after its bounded sweep instead of spinning on a flooded socket."""
+    sock = FakeUDPSocket()
+    client = NTPClient(socket=sock)
+    # More stale datagrams than the drain bound (8): query still returns.
+    for _ in range(12):
+        sock.enqueue_recv(_server_response(1_600_000_000))
+    sock.enqueue_recv(_server_response(1_700_000_000))
+    request = client.query()
+    assert request.done is False
+    # The bounded drain left the last datagrams queued; handle() consumes
+    # the next one and completes the exchange.
+    client.handle(now_ms=0)
+    assert request.done is True

@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "chumicro-sockets"
 dynamic = ["version"]
-description = "Cross-runtime TCP + TLS sockets for CircuitPython, MicroPython, and CPython."
+description = "Cross-runtime TCP, TLS, and UDP sockets for CircuitPython, MicroPython, and CPython"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
@@ -33,9 +33,7 @@ test = [
     "chumicro-test-harness",
     "chumicro-pytest-device",
     "chumicro-workspace",
-    "chumicro-config",
     "chumicro-timing",
-    "chumicro-wifi",
 ]
 
 [project.urls]

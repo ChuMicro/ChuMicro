@@ -316,7 +316,7 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 6
         print(
-            f"driver: host published cmd to {command_topic} (qos=1), PUBACK in",
+            f"driver: host published cmd to {command_topic} (qos=1), PUBACK received",
         )
 
         # The board's on_message fires when the command lands.

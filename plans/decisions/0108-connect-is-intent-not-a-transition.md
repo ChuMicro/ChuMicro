@@ -33,11 +33,13 @@ The three self-heal gates (`handle()`, `next_deadline()`, `check()`) share one p
 
 ```python
 def on_wifi_state(old, new):
-    if new == WifiState.DISCONNECTED:
-        mqtt.hold()       # link down: stop dialing
-    elif new == WifiState.CONNECTED:
-        mqtt.connect()    # link back: reconnect now
+    if new == WifiState.CONNECTED:
+        mqtt.connect()    # link back: reconnect now (also clears the hold)
+    else:
+        mqtt.hold()       # link down or still dialing: stop dialing
 ```
+
+(`WifiService` reports link loss as `RECONNECTING`, then `FAILED` once retries are exhausted; it never re-enters `DISCONNECTED` after construction.  Keying the hold on "any state but CONNECTED" covers both and stays dormant during initial bring-up, when `connect()` has not yet been called.)
 
 `connect()` is the sole hold release — no separate `resume_reconnect()` (release-without-dial) primitive.  The canonical need is "wifi up → dial now"; a zero-consumer "release but keep waiting" verb is exactly the speculative surface the no-backwards-compat posture (0092) and the 0099 policy-cut precedent tell us to omit.
 

@@ -35,6 +35,8 @@ def fetch_run(wifi, link_up, url):
     marker("DEMO_COMPLETE")
 
 
+_DEMO_DEADLINE_MS = 120_000
+
 config = load_runtime_config()
 fetch_url = config["requests.fetch.url"]
 
@@ -53,4 +55,6 @@ def signal_link_up(_old, new):
 wifi.on_state_change(signal_link_up)
 
 fetch_handle = runner.add_generator(fetch_run(wifi, link_up, fetch_url))
-runner.run_until(fetch_handle)
+if not runner.run_until(fetch_handle, timeout_ms=_DEMO_DEADLINE_MS):
+    marker("DEMO_TIMEOUT", stage="fetch")
+    raise SystemExit(1)

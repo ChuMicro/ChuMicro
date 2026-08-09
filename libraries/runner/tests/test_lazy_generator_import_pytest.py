@@ -1,7 +1,7 @@
-"""Import-time isolation of the generator machinery (M50).
+"""Import-time isolation of the generator machinery.
 
 A plain periodic-blink app that only calls ``add`` / ``add_periodic``
-must not drag ``chumicro_runner._generator`` (~9 KB of source, two
+must not drag ``chumicro_runner._generator`` (~4 KB of source, two
 classes) into RAM.  This runs a fresh interpreter so ``sys.modules``
 starts clean, then confirms a bare ``import chumicro_runner`` leaves
 ``_generator`` unimported until the ``GeneratorHandle`` re-export or

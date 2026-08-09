@@ -2,8 +2,6 @@
 
 import sys
 
-from chumicro_timing import ticks as _DEFAULT_TICKS
-
 from chumicro_wifi.config import WifiConfig
 
 
@@ -27,8 +25,8 @@ def _select_adapter():
     if runtime_name == "micropython":  # pragma: no cover - MP runtime path
         from chumicro_wifi._adapters.mp import MpWifiAdapter
         return MpWifiAdapter()
-    from chumicro_wifi.testing import FakeWifiAdapter
-    return FakeWifiAdapter()
+    from chumicro_wifi._adapters.cpython import CpythonWifiAdapter
+    return CpythonWifiAdapter()
 
 
 class WifiService:
@@ -49,7 +47,13 @@ class WifiService:
     ) -> None:
         self._config = config
         self.adapter = adapter if adapter is not None else _select_adapter()
-        self._ticks = ticks if ticks is not None else _DEFAULT_TICKS
+        if ticks is not None:
+            self._ticks = ticks
+        else:
+            from chumicro_timing import (
+                ticks as real_ticks,  # noqa: PLC0415 - DI fallback keeps the substrate off BYO-ticks deploys
+            )
+            self._ticks = real_ticks
 
         self.state = WifiState.DISCONNECTED
         self.last_error = None
@@ -59,8 +63,9 @@ class WifiService:
         # Absolute-tick deadline of an in-flight join on a non-blocking adapter; None otherwise.
         self._attempt_deadline_ms = None
         self._state_callbacks = []
-
-        self.adapter.configure(self._config)
+        # Radio I/O stays out of the constructor: configure() runs on the
+        # first connect attempt, inside the tick loop.
+        self._configured = False
 
     @property
     def connected(self):
@@ -119,6 +124,9 @@ class WifiService:
     def _attempt_connect(self, now_ms):
         raised = False
         try:
+            if not self._configured:
+                self.adapter.configure(self._config)
+                self._configured = True
             ok = self.adapter.connect(self._config)
         except Exception as error:  # noqa: BLE001 - adapter errors flow through last_error
             self.last_error = error
@@ -187,7 +195,10 @@ class WifiService:
             try:
                 callback(old_state, new_state)
             except Exception as error:  # noqa: BLE001 - callbacks are user code
-                self.last_error = error
+                # Record only into an empty slot: the adapter failure that
+                # caused this transition must stay readable in last_error.
+                if self.last_error is None:
+                    self.last_error = error
 
     def _reset_backoff(self):
         self._current_backoff_ms = self._config.reconnect_backoff_start_ms

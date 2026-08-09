@@ -93,6 +93,7 @@ Works on CPython, MicroPython, and CircuitPython.
 |---|---|
 | [`client.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/websockets/examples/client.py) | WebSocket client on real CP/MP hardware: brings wifi up via the bundled `helpers`, connects to a configured echo server, prints every inbound message while a counter ticks alongside. |
 | [`server.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/websockets/examples/server.py) | WebSocket echo server on real CP/MP hardware: accepts inbound connections on the configured host/port and echoes every frame back. |
+| [`receive_stream.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/websockets/examples/receive_stream.py) | The `next_message` stream surface: a generator drains inbound messages linearly under `runner.add_generator`, with the session ticking alongside. |
 
 ## Contributing
 

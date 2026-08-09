@@ -92,7 +92,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--completion-timeout-s", type=float, default=30.0,
-        help="seconds to wait for DEMO_COMPLETE after WS_OPEN",
+        help="seconds to wait for STREAM_CLOSED after WS_CONNECTING",
     )
     args = parser.parse_args(argv)
 

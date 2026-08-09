@@ -69,10 +69,8 @@ requires_flash = true
 
 # ---------------------------------------------------------------------
 # Runtime-config manifest: declares the flat dotted keys this library
-# knows about.  All keys are optional today: HttpClient takes its
-# tunables via constructor args.  This block describes the
-# forward-looking config-aware surface that an ``HttpClient.from_config``
-# factory will consume.
+# knows about.  ``HttpClient.from_config`` reads these keys; all are
+# optional and fall back to the constructor defaults.
 
 [tool.chumicro.config]
 required_keys = []

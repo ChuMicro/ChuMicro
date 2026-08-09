@@ -29,8 +29,6 @@ from chumicro_http_server._wire import (
     split_target,
 )
 
-gc.collect()
-
 
 def __getattr__(name):
     # Lazy PEP 562 import: a wire-only board never loads the server module.

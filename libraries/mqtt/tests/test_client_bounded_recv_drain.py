@@ -2,8 +2,7 @@
 
 The 16K-buffer / 8K-payload drain test is the mqtt heap-budget floor
 on the unix device lanes; it lives alone in this file so it runs with
-as few co-resident test objects as possible (suite-slimming
-convention — split from ``test_client_bounded_recv.py``).
+as few co-resident test objects as possible.
 """
 
 from chumicro_mqtt import (

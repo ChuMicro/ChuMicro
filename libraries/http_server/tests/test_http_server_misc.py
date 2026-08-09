@@ -1,5 +1,5 @@
-"""http_server: respond method, accept variants, body state
-transition, charset parsing."""
+"""http_server: accept variants, unencodable-response fallback,
+partial-body state, charset parsing, and the runner reactor contract."""
 
 import select
 
@@ -22,19 +22,13 @@ def _make_server(*, sockets, handler=None, **kwargs):
     if handler is None:
         handler = lambda request: build_response(200, text="ok")  # noqa: E731
 
-    listener_called = {"count": 0}
-
-    def transport_factory():
-        listener_called["count"] += 1
-        return FakeListener(sockets)
-
     server = HttpServer(
-        transport_factory=transport_factory,
+        transport_factory=lambda: FakeListener(sockets),
         handler=handler,
         ticks=ticks,
         **kwargs,
     )
-    return server, ticks, listener_called
+    return server, ticks
 
 
 class TestHttpServerAcceptVariants:
@@ -76,7 +70,7 @@ class TestAuditFixes:
                 status_code=200, reason="OK", headers={}, body="not-bytes",
             )
 
-        server, ticks, _ = _make_server(
+        server, ticks = _make_server(
             sockets=[(sock, ("peer", 1))], handler=bad_handler,
         )
         for _ in range(12):
@@ -178,31 +172,31 @@ class TestRunnerReactorContract:
 
     def test_io_socket_none_before_first_tick(self):
         """Listener is lazy-opened in handle()."""
-        server, _ticks, _ = _make_server(sockets=[])
+        server, _ticks = _make_server(sockets=[])
         assert server.io_socket is None
 
     def test_io_socket_returns_listener_after_first_tick(self):
-        server, ticks, _ = _make_server(sockets=[])
+        server, ticks = _make_server(sockets=[])
+        assert server.io_socket is None
         server.handle(ticks.ticks_ms())
-        # FakeListener exposes no ``.sock``, so the property returns it
-        # directly; production listener wrappers expose ``.sock`` and the
-        # property unwraps to that pollable OS-level socket.
-        assert server.io_socket is server._listener
+        # io_socket is the listener itself; the runner unwraps a wrapper's
+        # ``.sock`` to reach the pollable OS-level socket when one exists.
+        assert server.io_socket is not None
 
     def test_io_interest_read_after_listener_open(self):
-        server, ticks, _ = _make_server(sockets=[])
+        server, ticks = _make_server(sockets=[])
         assert server.io_interest(ticks.ticks_ms()) == 0  # listener still None
         server.handle(ticks.ticks_ms())
         assert server.io_interest(ticks.ticks_ms()) == IO_READ
 
     def test_io_interest_never_wants_write(self):
         """The listener is not a write target."""
-        server, ticks, _ = _make_server(sockets=[])
+        server, ticks = _make_server(sockets=[])
         server.handle(ticks.ticks_ms())
         assert server.io_interest(ticks.ticks_ms()) & IO_WRITE == 0
 
     def test_next_deadline_none_with_no_in_flight_connections(self):
-        server, ticks, _ = _make_server(sockets=[])
+        server, ticks = _make_server(sockets=[])
         server.handle(ticks.ticks_ms())
         assert server.next_deadline(ticks.ticks_ms()) is None
 
@@ -219,7 +213,7 @@ class TestRunnerReactorContract:
         # being treated as a peer close.  Without this the empty queue
         # returns 0 bytes and the connection finalizes on first tick.
         peer.enqueue_eagain_for_recv(99)
-        server, ticks, _ = _make_server(
+        server, ticks = _make_server(
             sockets=[(peer, ("peer", 1234))],
             request_timeout_ms=1500,
         )
@@ -239,7 +233,7 @@ class TestRunnerReactorContract:
         ticks = FakeTicks()
         poller = FakePoller()
         runner = Runner(ticks=ticks, poller=poller)
-        server, _, _ = _make_server(sockets=[])
+        server, _ = _make_server(sockets=[])
         # Override the server's ticks with the runner's so they share clock.
         server._ticks = ticks
         runner.add(server)

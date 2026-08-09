@@ -4,7 +4,9 @@ End-to-end first-impression artifacts that show ChuMicro libraries
 working as a system, not just as code. Run a demo and the full round
 trip lands on your screen in one command: no curl in another terminal,
 no IP discovery, no setup beyond `secrets.toml` and a registered board
-(`chumicro-workspace add-device`). One demo,
+(`chumicro-workspace add-device`). Two exceptions: the mqtt demos need
+`mosquitto` on PATH (`brew install mosquitto`), and
+`sockets_tls_roundtrip` needs `pip install cryptography`. One demo,
 [`laptop_roundtrip`](laptop_roundtrip/), needs no board at all.
 
 ## What demos are (and aren't)

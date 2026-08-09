@@ -101,7 +101,7 @@ def build_bootstrap(
 
     Args:
         test_filename: Name of the test file (e.g.
-            ``test_heartbeat_ticks.py``).
+            ``test_ticks_arithmetic.py``).
         name_filter: Optional name filter to pass to ``run_module``.
         chunk_boundaries: Optional top-level statement start lines.  When
             set, the device exec's the file in chunks (RAM-constrained

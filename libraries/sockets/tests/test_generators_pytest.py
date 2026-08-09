@@ -1,7 +1,7 @@
 """Retained-allocation guard for the socket-generator helpers.
 
 CPython-only lane: uses :mod:`tracemalloc` + :mod:`gc` to confirm the
-EAGAIN-loop inside ``send_all`` / ``recv_until`` / ``recv_exact`` retains
+EAGAIN-loop inside ``send_all`` / ``recv_until`` retains
 no memory across iterations — the cached wait is reused, not re-allocated
 and stashed, and the accumulator does not grow without bound.  Measures
 net-retained bytes after ``gc.collect()``, so it catches a leak; it does
@@ -19,7 +19,7 @@ __chumicro_runtimes__ = ("cpython",)
 import gc
 import tracemalloc
 
-from chumicro_sockets.generators import recv_exact, recv_until, send_all
+from chumicro_sockets.generators import recv_until, send_all
 from chumicro_sockets.testing import FakeSocket
 
 
@@ -88,26 +88,4 @@ class TestRecvUntilEagainLoopStaysFlat:
         growth = _measure_growth(operation)
         assert growth < 2048, (
             f"recv_until EAGAIN loop leaked {growth} bytes over 500 iterations"
-        )
-
-
-class TestRecvExactEagainLoopStaysFlat:
-    """Same EAGAIN-loop contract for ``recv_exact``."""
-
-    def test_recv_exact_eagain_iteration_no_growth(self):
-        sock = FakeSocket()
-
-        def operation():
-            sock.enqueue_eagain_for_recv(count=1)
-            sock.enqueue_recv(b"abc")
-            gen = recv_exact(sock, 3, max_bytes=4096)
-            gen.send(None)
-            try:
-                gen.send(0)
-            except StopIteration:
-                pass
-
-        growth = _measure_growth(operation)
-        assert growth < 2048, (
-            f"recv_exact EAGAIN loop leaked {growth} bytes over 500 iterations"
         )

@@ -6,7 +6,9 @@ fit the periodic ``Rate`` pattern.
 
 A ``wait_for_sensor()`` helper polls until a sensor is ready or a
 deadline expires.  On a real board, ``poll_sensor()`` would be a fast
-non-blocking check (GPIO pin, status register, etc.).
+non-blocking check (GPIO pin, status register, etc.), and the deadline
+test would run inside your main loop, one pass per tick — the sleeps
+below only pace the simulated console output on a host.
 
 Example output::
 
@@ -93,8 +95,9 @@ def wait_for_sensor(timeout_ms: int) -> int:
         print(f"    [{elapsed} ms] not ready...")
         polls += 1
 
-        # Brief pause between polls.  On a real board you would
-        # yield to the main loop or scheduler here instead.
+        # Simulation pacing only — never sleep between polls on a board.
+        # There, this deadline check runs inside your non-blocking main
+        # loop and the loop itself provides the pacing.
         time.sleep(0.1)
 
 

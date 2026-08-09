@@ -151,13 +151,25 @@ while True:
     )
 
     led_counter = 0
+    # A permanent CONNACK rejection (bad credentials, rejected id) parks
+    # check() at False forever; bound the wait so the board reports the
+    # failure instead of hanging silently.
+    publish_deadline = ticks_add(ticks_ms(), 30 * 1000)
     while not publish_done[0]:
-        if mqtt.check(ticks_ms()):
-            mqtt.handle(ticks_ms())
+        now = ticks_ms()
+        if ticks_diff(publish_deadline, now) <= 0:
+            print(
+                f"[tx {attempt}] gave up after 30 s: "
+                f"state={mqtt.state} error={mqtt.last_error}"
+            )
+            break
+        if mqtt.check(now):
+            mqtt.handle(now)
         led_counter += 1
         time.sleep(0.02)
 
-    print(f"[tx {attempt}] {payload} led_ticks={led_counter}")
+    if publish_done[0]:
+        print(f"[tx {attempt}] {payload} led_ticks={led_counter}")
 
     next_due = ticks_add(ticks_ms(), PUBLISH_INTERVAL_S * 1000)
     while ticks_diff(next_due, ticks_ms()) > 0:

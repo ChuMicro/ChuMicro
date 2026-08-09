@@ -12,7 +12,7 @@ The "boot counter that survives reboot" pattern in five lines:
 
 ```python
 from chumicro_kvstore import KVStore
-from chumicro_timing import ticks_ms
+from chumicro_timing import ticks_ms  # separate install: chumicro-timing
 
 store = KVStore(backend="auto")
 store["boot_count"] = store.get("boot_count", 0) + 1
@@ -55,7 +55,7 @@ store = KVStore(backend="littlefs")
 store = KVStore(backend="memory")
 ```
 
-Or pass a backend instance directly (typically a `FakeKVStore` in tests; see [Testing Helpers](testing.md)).
+Or pass a `Backend` instance directly (a `MemoryBackend`, or your own `load`/`save` pair).  In tests, construct a `FakeKVStore()` in place of the whole store; it is a `KVStore`, not a backend (see [Testing Helpers](testing.md)).
 
 ## Commit semantics
 
@@ -92,7 +92,7 @@ A few keys with short string / int values (boot counters, timestamps, simple fla
 
 The CP NVM backend is the only one with explicit framing (magic `b"CKVS"` + length + CRC32 + payload).  A blank slab from `storage.erase_filesystem()` reads as empty.  A bad-magic or CRC-mismatch reads as corrupt.
 
-Construction never raises on corruption; the store resets to empty and reports the event via `is_corrupt`:
+Construction never raises *on corruption*: the store resets to empty and reports the event via `is_corrupt` (a backend that cannot reach its substrate at all, e.g. NVM missing, still raises):
 
 ```python
 store = KVStore(backend="auto")

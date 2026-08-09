@@ -481,8 +481,10 @@ class TestSslContextWithCa:
         fake_ssl = FakeModule()
         fake_ssl.create_default_context = lambda: _RecordingContext()
 
+        from chumicro_sockets._adapters import cpython as cpython_adapter
+
         with _set_runtime("cpython"), \
-                SwapItem(sys.modules, "ssl", fake_ssl):
+                SwapAttribute(cpython_adapter, "ssl", fake_ssl):
             ca_pem = b"-----BEGIN CERTIFICATE-----\nfake-bytes\n-----END CERTIFICATE-----\n"
             result = ssl_context_with_ca(ca_pem)
 
@@ -505,8 +507,10 @@ class TestSslContextWithCa:
         fake_ssl.create_default_context = lambda: _RecordingContext()
         der = b"\x30\x82\x01\x10" + b"\x00" * 40
 
+        from chumicro_sockets._adapters import cpython as cpython_adapter
+
         with _set_runtime("cpython"), \
-                SwapItem(sys.modules, "ssl", fake_ssl):
+                SwapAttribute(cpython_adapter, "ssl", fake_ssl):
             ssl_context_with_ca(der)
 
         assert captured["cadata"] == der
@@ -518,8 +522,10 @@ class TestSslContextWithCa:
         fake_ssl = FakeModule()
         fake_ssl.create_default_context = lambda: object()
 
+        from chumicro_sockets._adapters import cpython as cpython_adapter
+
         with _set_runtime("cpython"), \
-                SwapItem(sys.modules, "ssl", fake_ssl):
+                SwapAttribute(cpython_adapter, "ssl", fake_ssl):
             try:
                 ssl_context_with_ca(b"plainly not a certificate")
             except ValueError as error:
@@ -546,8 +552,10 @@ class TestSslContextNoVerifyRouting:
 
         fake_ssl.create_default_context = lambda: _CtxStub()
 
+        from chumicro_sockets._adapters import cpython as cpython_adapter
+
         with _set_runtime("cpython"), \
-                SwapItem(sys.modules, "ssl", fake_ssl):
+                SwapAttribute(cpython_adapter, "ssl", fake_ssl):
             result = ssl_context_no_verify()
 
         assert isinstance(result, _CtxStub)

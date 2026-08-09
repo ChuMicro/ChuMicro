@@ -1,23 +1,14 @@
 """Host-side memory-pressure regression tests for the response parser.
 
-These tests run on CPython using :mod:`tracemalloc` to profile per-
-operation allocations and :mod:`gc` to force a clean baseline before
-each measurement.  They catch Python-level leaks in
+These tests run on CPython using :mod:`tracemalloc` to measure
+retained growth after collection and :mod:`gc` to force a clean
+baseline before each measurement.  They catch Python-level leaks in
 :class:`ResponseParser` — accumulating list/dict references,
 buffer growth that doesn't release across cycles, retained closures.
 
 These don't replicate device-level heap fragmentation: CP / MP
 allocators differ from CPython.  Device-side soak measurement is a
 separate concern from this unit suite.
-
-Why the library itself never calls ``gc.collect()``: fragmentation is
-prevented by design (parser tears down per-request, no module-level
-or per-instance accumulation, bounded body cap) and host-side leaks
-are caught here.  A
-library calling ``gc.collect()`` invisibly inside ``handle()`` would
-impose its collect cadence on every other task in the system; the
-runner contract (``handle`` returns quickly) keeps that decision in
-the user's hands.
 """
 
 #: CPython-only lane (pytest fixtures / host stdlib); not cross-runtime.

@@ -41,6 +41,21 @@ class TestCPythonUDP:
         finally:
             sock.close()
 
+    def test_udp_socket_factory_defaults_bind_every_interface(self) -> None:
+        """``udp_socket_factory()()`` (the ``NTPClient.from_config`` wiring)
+        yields a wrapper bound to an ephemeral port on every interface with
+        the ``sendto`` / ``recvfrom_into`` surface present."""
+        from chumicro_sockets.sockets_factory import udp_socket_factory
+        sock = udp_socket_factory()()
+        try:
+            host, port = sock.getsockname()
+            assert host == "0.0.0.0"
+            assert port > 0
+            assert callable(sock.sendto)
+            assert callable(sock.recvfrom_into)
+        finally:
+            sock.close()
+
     def test_sendto_and_recvfrom_round_trip(self) -> None:
         sender = udp_socket("127.0.0.1", 0)
         receiver = udp_socket("127.0.0.1", 0)

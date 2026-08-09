@@ -102,6 +102,10 @@ def echo(request):
 
 bound_host = config.get("http_server.bind_host", "0.0.0.0")
 bound_port = config.get("http_server.bind_port", 8080)
+
+# The listener opens on the first handle(), so drive one tick before
+# announcing the port; a bind failure surfaces here, not mid-loop.
+server.handle(ticks_ms())
 print(f"Server listening on http://{ip}:{bound_port}/  (bound {bound_host}:{bound_port})")
 
 while True:

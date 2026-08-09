@@ -15,7 +15,9 @@ def validate_service(service: object) -> None:
     the service exposes and enforces the coherence rules the ``Runner``
     dispatch relies on. It never calls ``check`` / ``handle`` / any hook.
 
-    The rules, as ``chumicro_runner.core`` enforces them:
+    The rules the ``Runner`` dispatch relies on.  Only the first raises on
+    its own; the other two silently no-op when violated, which is why this
+    checker exists:
 
     * ``check`` and ``handle`` are both required. ``Runner.add`` reads
       ``task.check`` and ``task.handle`` unconditionally, so a service

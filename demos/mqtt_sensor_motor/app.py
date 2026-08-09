@@ -25,8 +25,9 @@ reimplementing it:
   broker publishes if the board drops uncleanly, paired with a retained
   ``"online"`` sent on connect.  A clean shutdown suppresses the will,
   so the shutdown path publishes ``"offline"`` explicitly.
-* **Self-heal.**  No reconnect code: the socket-factory transport
-  rebuilds the connection after a wifi drop on its own.
+* **Self-heal.**  The wifi callback composes the pair: ``mqtt.hold()``
+  while the link is down, ``mqtt.connect()`` the moment it returns, and
+  the socket-factory transport rebuilds the connection.
 
 Command path: an inbound speed (int 0-100) is clamped, applied to the
 motor PWM (and mirrored onto the onboard LED so the bench shows speed),
@@ -264,7 +265,11 @@ def publish_telemetry(now_ms):
 def on_wifi_state(_old_state, new_state):
     if new_state == WifiState.CONNECTED:
         marker("WIFI_OK", ip=wifi.ip)
-        mqtt.connect()
+        mqtt.connect()  # link is back: reconnect now (also clears the hold)
+    else:
+        # WifiService reports link loss as RECONNECTING / FAILED, so any
+        # state but CONNECTED means: stop dialing a dead radio.
+        mqtt.hold()
 
 
 mqtt.on_connect = on_connect

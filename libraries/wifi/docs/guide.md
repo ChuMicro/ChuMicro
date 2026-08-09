@@ -36,8 +36,8 @@ while True:
 
 ```
 DISCONNECTED -> CONNECTING -> CONNECTED
-                    |            |
-                    |            v
+                    |            |    ^
+                    |            v    | (link restored)
                     |       RECONNECTING (link dropped)
                     |            |
                     v            v
@@ -112,7 +112,7 @@ def main_run():
 | `reconnect_backoff_start_ms` | | `1_000` | Initial reconnect delay. |
 | `reconnect_backoff_max_ms` | | `60_000` | Exponential-backoff cap. |
 | `reconnect_max` | | `None` (unlimited) | Consecutive failed attempts (initial connect + reconnects) before the terminal `FAILED` state. Leave `None` for always-on devices (see below). |
-| `power_save` | | `False` | Leave radio power-save on.  `False` disables it on Pi Pico W (CYW43); ignored on adapters without the knob. |
+| `power_save` | | `False` | Leave radio power-save on.  `False` disables it on both MicroPython stacks (CYW43 on Pi Pico W, ESP-IDF on esp32); ignored on adapters without the knob (CircuitPython). |
 | `tx_power_dbm` | | `None` (radio default) | Radio transmit power in dBm.  `None` leaves the firmware default untouched; set a reduced value (e.g. `15`) on boards unstable at full power.  Applied via `wifi.radio.tx_power` (CP) / `sta.config(txpower=…)` (MP); ignored on ports without the knob. |
 
 ```toml

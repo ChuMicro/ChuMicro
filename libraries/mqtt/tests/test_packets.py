@@ -3,7 +3,6 @@
 from chumicro_mqtt import MQTTProtocolError
 from chumicro_mqtt._wire import (
     decode_varlen,
-    encode_string,
     encode_varlen,
     topic_matches,
 )
@@ -67,24 +66,6 @@ class TestDecodeVarlen:
         decoded, consumed = decode_varlen(memoryview(b"\x05"), 1)
         assert decoded == 0
         assert consumed == 0
-
-
-class TestEncodeString:
-    def test_str_input_is_utf8_encoded(self) -> None:
-        encoded = encode_string("hello")
-        assert encoded == b"\x00\x05hello"
-
-    def test_bytes_input_passthrough(self) -> None:
-        encoded = encode_string(b"hello")
-        assert encoded == b"\x00\x05hello"
-
-    def test_empty_string_carries_zero_length(self) -> None:
-        assert encode_string("") == b"\x00\x00"
-
-    def test_unicode_length_is_byte_length_not_char_count(self) -> None:
-        # Three-byte UTF-8 char ("£") + ASCII "x".
-        encoded = encode_string("£x")
-        assert encoded[:2] == b"\x00\x03"  # 3 bytes total
 
 
 class TestTopicMatches:

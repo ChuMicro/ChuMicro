@@ -34,10 +34,9 @@ Deploy with ``chumicro-workspace``::
 #: Tooling reads this marker to allow the example on either runtime.
 __chumicro_runtimes__ = ("circuitpython", "micropython")
 
-import time
-
+from chumicro_runner import Runner
 from chumicro_websockets import WebSocketServer
-from helpers import runtime_config, ticks_ms, wifi_up
+from helpers import runtime_config, wifi_up
 
 WIFI_SSID = "your-wifi-ssid"  # noqa: S105 - replace before deploying
 WIFI_PASSWORD = "your-wifi-password"  # noqa: S105 - replace before deploying
@@ -64,7 +63,11 @@ bound_host = config.get("websockets.server.host", "0.0.0.0")
 bound_port = config.get("websockets.server.port", 8765)
 print(f"[server] listening on {bound_host}:{bound_port}")
 
+runner = Runner()
+runner.add(server)
+
 while True:
-    if server.check(ticks_ms()):
-        server.handle(ticks_ms())
-    time.sleep(0.02)
+    now_ms = runner.tick()
+    # wait() sleeps on the listener socket and the connection deadlines
+    # instead of spinning the CPU.
+    runner.wait(now_ms)

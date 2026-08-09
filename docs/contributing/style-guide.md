@@ -294,7 +294,7 @@ status_pin = board.D5  # pragma: no cover
 if sys.implementation.name == "circuitpython":  # pragma: no cover
     import neopixel
 else:
-    from chumicro_compat.stubs import neopixel
+    neopixel = None
 
 # Entire function (put it on the def line)
 def _reset_hardware() -> None:  # pragma: no cover

@@ -29,9 +29,11 @@ class FakeKVStore(KVStore):
             initial=initial_payload,
             capacity=capacity,
         )
-        super().__init__(backend=self._memory_backend)
+        # Recording state first: KVStore's constructor calls reload(), which
+        # dispatches to the recording override below.
         self.calls: list[tuple[str, tuple[object, ...]]] = []
         self._record = record_calls
+        super().__init__(backend=self._memory_backend)
 
     def __setitem__(self, key: str, value: object) -> None:
         if self._record:

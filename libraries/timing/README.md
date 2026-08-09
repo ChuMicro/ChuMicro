@@ -63,7 +63,7 @@ Opt-in completion-wait vocabulary for generator flows.  Import it explicitly.
 
 | Symbol | Description |
 |---|---|
-| `Signal()` | A completion flag: `set(value)` / `clear()` / `ready(now)` |
+| `Signal()` | A completion flag: `set(value)` / `clear()` / `ready(now)`, with `is_set` and `value` readable directly |
 | `wait_for(signal, deadline_ms=None)` | Generator suspension helper: `yield from wait_for(signal)` |
 
 ### Testing
@@ -118,8 +118,8 @@ assert rate.due(fake.ticks_ms()) is True
 
 | Example | What it shows |
 |---|---|
-| `heartbeat_blink.py` | Basic periodic `Rate` loop |
-| `multiple_heartbeats.py` | Multiple `Rate` timers at different rates |
+| `rate_blink.py` | Basic periodic `Rate` loop |
+| `multiple_rates.py` | Multiple `Rate` timers at different rates |
 | `timeout_check.py` | One-shot deadline check using `ticks_diff` |
 | `debounce.py` | Simulated button debounce |
 | `periodic_tick.py` | Manual periodic loop (the same logic `Rate` wraps internally) |

@@ -226,7 +226,7 @@ pytest libraries/timing/functional_tests/
 
 You need a registered board (`python scripts/run.py add-device`); without one these tests skip cleanly, which is the expected no-hardware behavior, not an error.  Setup, multi-board runs, and the PR-summary output live in [Device Testing](docs/contributing/device-testing.md).  Most contributions never need a new functional test.  Write one only when the behavior can't be proven with injected fakes.
 
-**4. Examples on real hardware.**  Preflight verifies every example still imports; actually deploying one (`chumicro-workspace deploy-example timing heartbeat_blink`) is the manual smoke test for "the documented quickstart still works."  Reach for it on API changes; release prep covers it systematically.
+**4. Examples on real hardware.**  Preflight verifies every example still imports; actually deploying one (`chumicro-workspace deploy-example timing rate_blink`) is the manual smoke test for "the documented quickstart still works."  Reach for it on API changes; release prep covers it systematically.
 
 ## Commit messages
 

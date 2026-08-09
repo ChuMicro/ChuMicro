@@ -7,6 +7,7 @@ import errno
 import json
 
 from chumicro_http_server._wire import (
+    _PARSER_TERMINAL_STATES,
     CRLF,
     DEFAULT_MAX_CONNECTIONS,
     DEFAULT_MAX_HEADERS_BYTES,
@@ -59,9 +60,16 @@ _REASONS = {
     503: "Service Unavailable",
 }
 
+#: Reason phrase for a status code with no _REASONS entry.
+_UNKNOWN_REASON = "Unknown"
+
 
 def _force_non_blocking(socket):
-    socket.setblocking(False)
+    # Best-effort, matching the documented transport contract: a BYO
+    # transport without setblocking is tolerated.
+    setblocking = getattr(socket, "setblocking", None)
+    if setblocking is not None:
+        setblocking(False)
 
 
 def _split_pattern_path(path):
@@ -165,8 +173,6 @@ _RECV_STATES = (
     _ConnState.WANT_HEADERS,
     _ConnState.WANT_BODY,
 )
-
-_PARSER_TERMINAL_STATES = (RequestParseState.DONE, RequestParseState.ERROR)
 
 
 class _Connection:
@@ -283,6 +289,9 @@ class _Connection:
             body=self._parser.body,
             peer=self._peer,
         )
+        # The request now owns its copy of the body; drop the parser so the
+        # connection stops pinning a second full copy through the send phase.
+        self._parser = None
         try:
             response = self._handler(request)
         except Exception as handler_error:  # noqa: BLE001 - anything in the handler is a 500
@@ -359,25 +368,33 @@ def _reject_control_chars(label: str, value: str) -> None:
         raise ServerProtocolError(f"{label} contains a control character")
 
 
+def _encode_head(status_code, reason, framing_headers, extra_headers):
+    # Shared status-line + header-block builder for plain and streaming
+    # responses; the caller supplies the framing header (Content-Length or
+    # Transfer-Encoding) and appends any body.
+    _reject_control_chars("reason", str(reason))
+    framing_headers["Connection"] = "close"
+    _merge_headers(framing_headers, extra_headers)
+    parts = [
+        f"HTTP/1.1 {status_code} {reason}\r\n".encode("ascii"),
+    ]
+    for name, value in framing_headers.items():
+        _reject_control_chars("header name", str(name))
+        _reject_control_chars("header value", str(value))
+        parts.append(f"{name}: {value}\r\n".encode("ascii"))
+    parts.append(CRLF)
+    return parts
+
+
 def encode_response(response: Response) -> bytes:
     """Serialize a :class:`Response` into wire bytes.
 
     Raises:
         ServerProtocolError: The reason phrase or a header name or value carries a CR, LF, or NUL.
     """
-    _reject_control_chars("reason", str(response.reason))
     headers = CaseInsensitiveDict()
     headers["Content-Length"] = str(len(response.body))
-    headers["Connection"] = "close"
-    _merge_headers(headers, response.headers)
-    parts = [
-        f"HTTP/1.1 {response.status_code} {response.reason}\r\n".encode("ascii"),
-    ]
-    for name, value in headers.items():
-        _reject_control_chars("header name", str(name))
-        _reject_control_chars("header value", str(value))
-        parts.append(f"{name}: {value}\r\n".encode("ascii"))
-    parts.append(CRLF)
+    parts = _encode_head(response.status_code, response.reason, headers, response.headers)
     parts.append(response.body)
     return b"".join(parts)
 
@@ -388,7 +405,7 @@ def _build_error_response(status_code: int, message: str) -> Response:
     headers["Content-Type"] = "text/plain; charset=utf-8"
     return Response(
         status_code=status_code,
-        reason=_REASONS.get(status_code, "Error"),
+        reason=_REASONS.get(status_code, _UNKNOWN_REASON),
         headers=headers,
         body=body,
     )
@@ -533,11 +550,10 @@ class HttpServer:
             from chumicro_timing import ticks  # noqa: PLC0415 - DI fallback
         self._ticks = ticks
 
-        self._listener = None
+        self.io_socket = None
         self._connections = []
         #: Count of accept-time errors swallowed as connection-scoped (e.g. TLS handshake failures).
         self.accept_errors = 0
-        self.last_accept_error = None
 
         # _explicit_routes: (method, path) -> handler; _pattern_routes: (method, prefix, param_name, handler).
         self._explicit_routes = {}
@@ -565,15 +581,13 @@ class HttpServer:
         return decorator
 
     def _register(self, method: str, path: str, handler_func: object) -> None:
-        last_slash = path.rfind("/")
-        last_segment = path[last_slash + 1:] if last_slash != -1 else path
+        prefix, last_segment = _split_pattern_path(path)
         if (
             len(last_segment) >= 2
             and last_segment[0] == "<"
             and last_segment[-1] == ">"
         ):
             param_name = last_segment[1:-1]
-            prefix = path[:last_slash + 1] if last_slash != -1 else ""
             # Last-wins: replace any prior pattern entry with the same prefix and method.
             for existing_index, existing in enumerate(self._pattern_routes):
                 existing_method, existing_prefix, _, _ = existing
@@ -629,7 +643,7 @@ class HttpServer:
     @property
     def listening(self) -> bool:
         """``True`` once the listener has been opened."""
-        return self._listener is not None
+        return self.io_socket is not None
 
     @property
     def in_flight(self) -> int:
@@ -641,38 +655,37 @@ class HttpServer:
         for connection in self._connections:
             connection.close()
         self._connections = []
-        if self._listener is not None:
+        if self.io_socket is not None:
             try:
-                self._listener.close()
+                self.io_socket.close()
             except OSError:  # pragma: no cover - defensive
                 pass
-            self._listener = None
+            self.io_socket = None
 
     def check(self, now_ms):  # noqa: ARG002 - runner contract
         """Always ``True``: the accept loop must run on every tick."""
         return True
 
-    @property
-    def io_socket(self):
-        """The listener socket once opened, else ``None``."""
-        if self._listener is None:
-            return None
-        return self._listener
-
     def io_interest(self, now_ms):  # noqa: ARG002 (runner contract)
-        """Poll-interest bitmask for ``Runner.wait``: read when the listener is open, else none."""
-        return _IO_READ if self._listener is not None else 0
+        """Poll-interest bit for ``Runner.wait``.
+
+        Read while the listener is open and a connection slot is free,
+        else none.
+        """
+        if self.io_socket is None:
+            return 0
+        return _IO_READ if len(self._connections) < self._max_connections else 0
 
     def next_deadline(self, now_ms):
         """Earliest tick at which ``handle()`` must run."""
+        if not self._connections:
+            return None
         ticks_diff = self._ticks.ticks_diff
         nearest = None
         for connection in self._connections:
             candidate = connection._deadline_ticks
             if nearest is None or ticks_diff(candidate, nearest) < 0:
                 nearest = candidate
-        if not self._connections:
-            return nearest
         progress = self._ticks.ticks_add(now_ms, _CONNECTION_PROGRESS_INTERVAL_MS)
         if nearest is None or ticks_diff(progress, nearest) < 0:
             return progress
@@ -680,28 +693,30 @@ class HttpServer:
 
     def handle(self, now_ms):
         """One tick of progress: lazy-open listener, accept, advance conns."""
-        if self._listener is None:
-            self._listener = self._transport_factory()
-            _force_non_blocking(self._listener)
+        if self.io_socket is None:
+            self.io_socket = self._transport_factory()
+            _force_non_blocking(self.io_socket)
         if len(self._connections) < self._max_connections:
             self._try_accept(now_ms)
-        # Iterate a copy so a connection can be removed mid-loop.
-        if self._connections:
-            for connection in list(self._connections):
-                connection.tick(now_ms, ticks_diff_func=self._ticks.ticks_diff)
-                if connection.is_done:
-                    connection.close()
-                    self._connections.remove(connection)
+        # Reverse index walk: done connections pop in place, with no per-tick
+        # list copy and no equality re-scan.
+        connections = self._connections
+        ticks_diff_func = self._ticks.ticks_diff
+        for connection_index in range(len(connections) - 1, -1, -1):
+            connection = connections[connection_index]
+            connection.tick(now_ms, ticks_diff_func=ticks_diff_func)
+            if connection.is_done:
+                connection.close()
+                connections.pop(connection_index)
 
     def _try_accept(self, now_ms):
         try:
-            accept_result = self._listener.accept()
+            accept_result = self.io_socket.accept()
         except OSError as accept_error:
             if accept_error.errno == errno.EAGAIN:
                 return
             # A TLS listener handshakes inside accept(), so a bad client raises here; keep listening.
             self.accept_errors += 1
-            self.last_accept_error = accept_error
             return
         if accept_result is None:
             return
@@ -745,7 +760,7 @@ def build_response(
     if default_content_type is not None:
         merged_headers["Content-Type"] = default_content_type
     _merge_headers(merged_headers, headers)
-    reason = _REASONS.get(status, "Unknown")
+    reason = _REASONS.get(status, _UNKNOWN_REASON)
     return Response(
         status_code=status,
         reason=reason,

@@ -27,7 +27,7 @@ class TestServerFromConfig:
             listener=listener,
         )
         assert server._max_message_bytes == 4096  # noqa: SLF001
-        assert server._listener is listener  # noqa: SLF001
+        assert server.io_socket is listener  # noqa: SLF001
 
     def test_defaults_apply_when_keys_absent(self) -> None:
         """Empty config → max_message_bytes falls back to library default."""
@@ -50,7 +50,7 @@ class TestServerFromConfig:
             _noop_connection,
             listener=listener,
         )
-        assert server._listener is listener  # noqa: SLF001
+        assert server.io_socket is listener  # noqa: SLF001
 
     def test_runtime_config_wrapper_works_too(self) -> None:
         """Real ``RuntimeConfig`` instance — same flat-key reads as a dict."""
@@ -94,7 +94,7 @@ class TestServerFromConfig:
         assert captured == {
             "host": "10.0.0.7", "port": 8443, "radio": "fake-radio",
         }
-        assert server._listener is listener  # noqa: SLF001
+        assert server.io_socket is listener  # noqa: SLF001
 
     def test_auto_listener_falls_back_to_library_defaults(self) -> None:
         """Empty config → bind to 0.0.0.0:8765 (library-convention port)."""

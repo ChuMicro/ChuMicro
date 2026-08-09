@@ -136,6 +136,10 @@ def on_connection(connection):
 
 Same shape as the client's callbacks; semantically identical.
 
+For a broadcast, iterate `server.connections` (a tuple snapshot of the
+live `Connection` objects) and call `send_text` / `send_binary` on each;
+`server.connection_count` is the cheap size check.
+
 ## Bring your own transport
 
 `WebSocketClient` and `WebSocketServer` don't care which library produces their sockets.  The `transport_factory` you pass to the client (and the `listener` you hand to the server) return any object matching the `SocketConnector` contract on the client side or the listener contract on the server side.  The connector advances DNS / TCP / TLS across multiple ticks; once `connector.state == "ready"`, the underlying socket must expose the four-method TCP contract:
@@ -235,6 +239,7 @@ MCU RAM, 2 MB physical / ~800 KB usable flash):
 |---|---|
 | [`client.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/websockets/examples/client.py) | Wifi-capable board (CP or MP) connecting to a remote `ws://` echo server. |
 | [`server.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/websockets/examples/server.py) | Wifi-capable board (CP or MP) accepting inbound websocket connections. |
+| [`receive_stream.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/websockets/examples/receive_stream.py) | The `next_message` stream surface: a generator drains inbound messages linearly under `runner.add_generator`, with the session ticking alongside. |
 
 ---
 

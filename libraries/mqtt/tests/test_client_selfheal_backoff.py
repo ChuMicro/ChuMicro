@@ -1,7 +1,6 @@
 """mqtt client: self-heal backoff pacing + permanent-failure latch.
 
-Split from ``test_client_audit_fixes.py`` so each file fits the
-unix-lane heap budget (suite-slimming convention).
+Lives in its own small file so the unix-lane heap budget holds.
 """
 
 from chumicro_mqtt import (

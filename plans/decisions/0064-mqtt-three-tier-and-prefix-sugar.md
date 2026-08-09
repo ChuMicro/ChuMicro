@@ -2,7 +2,7 @@
 
 Status: `accepted`
 Date: `2026-05-12`
-Summary: MQTT inbound has two tiers (steady ≤ `rx_buffer_size`, oversized = policy; the intact middle tier was removed by 0099); `root_topic` + `prefixed=` sugar; SUBACK 0x80 faults loudly.
+Summary: MQTT inbound has two tiers (steady ≤ `rx_buffer_size`, oversized = policy; middle tier removed by 0099); `root_topic`/`prefixed=` sugar (cut 2026-07-04); SUBACK 0x80 faults loudly.
 Related: [Decision 0061](0061-whenoversized-cross-library-contract.md) (`WhenOversized` cross-library contract), [Decision 0010](0010-library-testability.md) (constructor injection), [Decision 0014](0014-runner-pattern.md) (tick-based runner).
 
 ## Context
@@ -53,6 +53,8 @@ This fixes a latent deadlock where the decoder kept returning `None` waiting for
 
 ### 4. Topic-prefix sugar: `root_topic` + per-call `prefixed=` opt-out
 
+> **Cut 2026-07-04** by the mqtt bloat review ([reviews/2026-07-04-mqtt-bloat-review.md](../reviews/2026-07-04-mqtt-bloat-review.md), commit `924b3ab6`): shipped, then removed as set-by-no-runnable-consumer.  `root_topic` / `prefixed=` / `will_prefixed` do not exist on `MQTTClient`; apps build topics by f-string.  This section stays as the design record.
+
 `MQTTClient` gains a `root_topic: str | None = None` constructor kwarg.  When set, every `publish` / `subscribe` / `unsubscribe` call automatically prefixes the topic:
 
 | `root_topic` | Outbound topic | Example |
@@ -78,7 +80,7 @@ Unexpected acks (no matching pending entry) are handled per packet type:
 
 | Packet | Policy | Reason |
 |--------|--------|--------|
-| **PUBACK** | Fault (`MQTTProtocolError`) | Packet ID was either never allocated or already consumed. Real state-machine bug. |
+| **PUBACK** | Tolerate (ignore) | A duplicate PUBACK arrives legitimately when a retransmitted QoS-1 publish gets acked twice, so the client ignores an unmatched one (`test_unmatched_puback_is_tolerated`). |
 | **SUBACK** | Fault | Same; SUBACK carries a packet ID we must have issued. |
 | **UNSUBACK** | Fault | Same. |
 | **PINGRESP** | Silently ignore | No packet ID; naturally racy in keepalive timeout / self-heal corners. |

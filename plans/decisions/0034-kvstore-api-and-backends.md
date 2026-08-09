@@ -96,7 +96,7 @@ The three lifecycle methods are explicit because flash writes are too expensive 
 
 ### 4. Properties expose the constraints honestly
 
-`store.capacity`, `store.bytes_used`, `store.is_corrupt`, `store.backend_name` — all read-only.  `capacity` is computed per-backend at construction (e.g. `len(microcontroller.nvm) - HEADER_SIZE` for CP NVM; partition free bytes for LittleFS; `sys.maxsize` for memory).  `is_corrupt` is sticky for one session and clears on the next successful `commit()` — so the app can log the event without losing the ability to keep running on a fresh empty state.
+`store.capacity`, `store.bytes_used`, `store.is_corrupt`, `store.backend_name` — all read-only.  `capacity` is set per-backend at construction (`len(microcontroller.nvm) - HEADER_SIZE` for CP NVM; a fixed 16 KB default for LittleFS, overridable via `capacity=`; unbounded for memory).  `is_corrupt` is sticky for one session and clears on the next successful `commit()` — so the app can log the event without losing the ability to keep running on a fresh empty state.
 
 ### 5. CP NVM payload framing: `MAGIC | LEN | CRC32 | MSGPACK`
 

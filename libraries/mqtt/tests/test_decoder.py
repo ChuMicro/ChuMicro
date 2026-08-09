@@ -89,7 +89,6 @@ class TestParsePublish:
         assert packet.topic == "temp"
         assert packet.payload == b"42"
         assert packet.qos == 0
-        assert packet.retain is False
         assert packet.packet_id is None
 
     def test_qos_one_includes_packet_id(self) -> None:
@@ -103,11 +102,14 @@ class TestParsePublish:
         assert packet.packet_id == 1234
         assert packet.payload == b"99"
 
-    def test_retain_flag(self) -> None:
+    def test_retain_bit_is_accepted_without_faulting(self) -> None:
+        """A retained delivery parses like any other PUBLISH; the retain
+        bit is tolerated off the wire, not surfaced."""
         decoder = PacketDecoder()
         _feed(decoder, canned_publish_bytes("status", b"on", qos=0, retain=True))
         packet = decoder.read_next()
-        assert packet.retain is True
+        assert packet.topic == "status"
+        assert packet.payload == b"on"
 
     def test_unicode_topic(self) -> None:
         decoder = PacketDecoder()

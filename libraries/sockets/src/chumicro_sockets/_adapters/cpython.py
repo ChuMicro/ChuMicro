@@ -34,12 +34,6 @@ class _CPythonTLSSocketWrapper:
         except (ssl.SSLWantReadError, ssl.SSLWantWriteError):
             raise OSError(errno.EAGAIN, "would block") from None
 
-    def recv(self, nbytes):
-        try:
-            return self.sock.recv(nbytes)
-        except (ssl.SSLWantReadError, ssl.SSLWantWriteError):
-            raise OSError(errno.EAGAIN, "would block") from None
-
     def send(self, data):
         try:
             return self.sock.send(data)
@@ -145,11 +139,21 @@ def listener(host, port, *, tls=False, context=None, backlog=4, **_kwargs):
     return sock
 
 
+def ssl_context_with_cert_and_key_paths(cert_path, key_path):
+    """Build a server-side SSLContext straight from cert and key files.
+
+    CPython's ``load_cert_chain`` takes paths natively, so the private key
+    never lands in a second on-disk location.
+    """
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.load_cert_chain(certfile=cert_path, keyfile=key_path)
+    return context
+
+
 def ssl_context_with_cert_and_key(cert_pem, key_pem):
     """Build a server-side SSLContext presenting *cert_pem* signed by *key_pem*."""
-    import os  # noqa: PLC0415 - runtime-gated
-    import ssl  # noqa: PLC0415 - runtime-gated
-    import tempfile  # noqa: PLC0415 - runtime-gated
+    import os  # noqa: PLC0415 - only the in-memory-PEM path needs temp files
+    import tempfile  # noqa: PLC0415 - only the in-memory-PEM path needs temp files
 
     if isinstance(cert_pem, (bytes, bytearray)):
         cert_pem_text = bytes(cert_pem).decode("ascii")
@@ -200,7 +204,9 @@ class _CPythonTLSListenerWrapper:
             client_raw.close()
             raise
         wrapped.setblocking(False)
-        return wrapped, address
+        # Wrap so the accepted socket reports EAGAIN, not ssl.SSLWant*,
+        # matching the client path and the MP adapter.
+        return _CPythonTLSSocketWrapper(wrapped), address
 
     def close(self):
         self.sock.close()
@@ -214,8 +220,6 @@ class _CPythonTLSListenerWrapper:
 
 def udp_socket(*, bind_host="0.0.0.0", bind_port=0, broadcast=False, **_kwargs):
     """Open a UDP socket on CPython, bound to (bind_host, bind_port)."""
-    import socket  # noqa: PLC0415 - runtime-gated
-
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     if broadcast:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
@@ -243,8 +247,6 @@ class _CPythonUDPWrapper:
 
 def ssl_context_with_ca(ca_pem):
     """Build a CPython SSLContext that trusts only the CA(s) in *ca_pem*."""
-    import ssl  # noqa: PLC0415 - runtime-gated
-
     context = ssl.create_default_context()
     if isinstance(ca_pem, str):
         context.load_verify_locations(cadata=ca_pem)
@@ -267,8 +269,6 @@ def ssl_context_with_ca(ca_pem):
 
 def ssl_context_no_verify():
     """Return a CPython ``ssl.SSLContext`` that skips verification."""
-    import ssl  # noqa: PLC0415 - runtime-gated
-
     context = ssl.create_default_context()
     # check_hostname must clear before CERT_NONE; stdlib refuses CERT_NONE while it is True.
     context.check_hostname = False

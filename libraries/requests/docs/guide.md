@@ -217,18 +217,15 @@ print(response.text)
 `Response.json()` decodes via `text` first, then runs `json.loads`,
 so charset overrides apply to JSON responses too.
 
-The `transport_factory` argument is a callable
-`(host, port, use_tls) -> SocketConnector`, a tick-driven connector,
-not a ready socket (see [Bring your own transport](#bring-your-own-transport)
-below for the connector contract). The bundled
+## Bring your own transport
+
+The bundled
 `chumicro_sockets.sockets_factory.connector_factory(radio=..., ssl_context=...)`
-returns one wired to `chumicro-sockets`. The helper lives in an opt-in
-submodule so users with a custom transport never trigger the
+returns a factory wired to `chumicro-sockets`. The helper lives in an
+opt-in submodule so users with a custom transport never trigger the
 `chumicro-sockets` deploy. Tests pass a factory returning a
 `chumicro_sockets.testing.FakeSocketConnector` (which wraps a
 `FakeSocket`).
-
-## Bring your own transport
 
 `HttpClient` does not care which library produces its sockets.  The `transport_factory` you pass is a callable of shape `(host: str, port: int, use_tls: bool) -> SocketConnector`.  The connector advances the TCP connect one tick at a time, but the DNS lookup and, on MicroPython / CircuitPython, the TLS handshake block the reactor for their duration.  On a slow or unreachable host that can be seconds, freezing every other runner service, so connect before starting time-critical work.  Once `connector.state == "ready"`, the underlying socket must expose the four-method contract:
 
@@ -264,9 +261,12 @@ from chumicro_requests import HttpClient
 from chumicro_sockets.sockets_factory import connector_factory
 
 http_client = HttpClient(transport_factory=connector_factory(radio=radio))
-runner = Runner([http_client, blink_task])
+runner = Runner()
+runner.add(http_client)
+runner.add(blink_task)
 while True:
-    runner.tick(ticks_ms())
+    now_ms = runner.tick()
+    runner.wait(now_ms)
 ```
 
 ## Memory notes
@@ -280,6 +280,9 @@ For bodies that shouldn't (or can't) sit in RAM at all, use
 `stream=True` (see [Streaming large bodies](#streaming-large-bodies)):
 the per-request cost drops to the `stream_buffer_size` staging window
 (default 1024 bytes) regardless of body size.
+The response's header section has its own 16 KB `max_header_bytes` cap;
+raise it on `HttpClient(...)` if a server's cookie or header chain
+overflows it.
 
 ## Platform notes
 
@@ -334,6 +337,7 @@ Use [`chumicro-ntp`](https://chumicro.github.io/ChuMicro/ntp/stable/) to set the
 | Example | What it shows |
 |---|---|
 | `periodic_get.py` | Periodic GET on a real CP/MP board: wifi up, hits a configured URL every N seconds, drives an LED-blink counter to verify the request never blocks the loop.  Cross-runtime (CP + MP). |
+| `generator_fetch.py` | The generator surface: a straight-line `yield from get(...)` fetch driven by `runner.add_generator`, no callbacks or state polling. |
 
 ---
 

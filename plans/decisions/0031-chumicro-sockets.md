@@ -51,7 +51,6 @@ connector(host, port, *, tls=False, context=None, radio=None) -> SocketConnector
 - `close() -> None`
 - `setblocking(flag: bool) -> None`
 - `settimeout(seconds: float | None) -> None`
-- `fileno() -> int` (for `select.poll()` registration)
 
 Connector behaviour: the entry returns immediately with a `SocketConnector` whose `tick(now_ms)` advances DNS → TCP → TLS one phase per tick.  See [Decision 0081](0081-non-blocking-connect-via-tick-driven-connector.md) for the connector contract, the per-runtime substrate caveats (CP blocks per phase; MP+CPython are truly non-blocking), and the sanctioned one-shot forms.
 

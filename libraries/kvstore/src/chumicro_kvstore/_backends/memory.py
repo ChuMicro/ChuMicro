@@ -1,6 +1,6 @@
 import sys
 
-from chumicro_kvstore.core import Backend, KVStoreCorrupt, KVStoreFull
+from chumicro_kvstore.core import Backend, KVStoreCorrupt
 
 
 class MemoryBackend(Backend):
@@ -22,10 +22,7 @@ class MemoryBackend(Backend):
         return self._payload
 
     def save(self, payload: bytes) -> None:
-        if len(payload) > self.capacity:
-            raise KVStoreFull(
-                f"payload size {len(payload)} exceeds capacity {self.capacity}"
-            )
+        self._check_capacity(payload)
         self._payload = bytes(payload)
         self._corrupt = False
 

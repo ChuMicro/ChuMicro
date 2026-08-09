@@ -32,8 +32,8 @@ def __getattr__(name):
 
 
 __all__ = [
-    # pyright: ignore[reportUnsupportedDunderAll]: InboundPublish,
-    # MQTTClient, ProtocolState, and WhenOversized are PEP-562 lazy via
+    # pyright: ignore[reportUnsupportedDunderAll]: InboundPublish, MQTTClient,
+    # ProtocolState, WhenOversized, and default_client_id are PEP-562 lazy via
     # __getattr__.
     "InboundPublish",
     "MQTTClient",

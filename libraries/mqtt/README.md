@@ -67,15 +67,15 @@ QoS 0 + QoS 1 are implemented; QoS 2 raises `UnsupportedQoSError`.  Last-will, r
 | `ProtocolState.{DISCONNECTED,AWAITING_TRANSPORT,CONNECTING,CONNECTED,FAILED}` | Lifecycle states.  `AWAITING_TRANSPORT` appears while a `transport_factory` drives the transport up. |
 | `MQTTBackpressureError` | Raised when an outbound publish overflows `max_tx_queue_size` (or the pre-connect queue under `"queue"`).  Drain via `handle()` and retry. |
 | `MQTTError` / `MQTTConnectError` / `MQTTProtocolError` / `UnsupportedQoSError` | Exceptions. |
-| `topic_matches(topic, pattern)` | Public wildcard matcher.  Encoder + decoder primitives (`encode_publish`, `encode_varlen`, `decode_varlen`, `encode_string`) stay internal to `chumicro_mqtt._wire`. |
+| `topic_matches(topic, pattern)` | Public wildcard matcher.  Encoder + decoder primitives (`encode_publish`, `encode_varlen`, `decode_varlen`) stay internal to `chumicro_mqtt._wire`. |
 
 ### Tuning for tick-latency vs throughput
 
-`handle()` does exactly one `recv_into` and one `send` per tick, so each call yields back to the runner after one socket syscall.  Three `MQTTClient(...)` constructor knobs let you trade tick fairness for throughput:
+`handle()` does one `recv_into` and one packet `send` per tick (plus, on ticks that dispatched inbound QoS-1 publishes, a single coalesced PUBACK batch), so each call yields back to the runner after a bounded slice of socket work.  Three `MQTTClient(...)` constructor knobs let you trade tick fairness for throughput:
 
 | Knob | Default | What it bounds |
 |---|---|---|
-| `recv_budget_per_tick` | `1024` (bytes) | Cap on the single per-tick `recv_into` call.  Without it, an oversized-tier rolling drain of a multi-KB inbound PUBLISH would draw the whole payload in one syscall; the cap means it arrives across several ticks instead, keeping each tick short.  Raise for fast big-blob ingestion at the cost of per-syscall latency. |
+| `recv_budget_per_tick` | `1024` (bytes) | Cap on the single per-tick `recv_into` call.  It binds only when `rx_buffer_size` exceeds it (each recv is already limited to the RX buffer's free space); with a large RX buffer it keeps a multi-KB inbound PUBLISH arriving across several ticks instead of one long syscall. |
 | `max_tx_queue_size` | `20` packets | Hard cap on pending outbound packets.  Sized for the runner-shaped sensor profile (publish every N seconds; queue stays near zero).  Appending past the cap raises `MQTTBackpressureError`; protocol-internal traffic (PUBACK responses, retransmits, PINGREQ) bypasses the cap so QoS-1 / keepalive contracts hold.  Failed QoS-1 publishes roll back the `packet_id` allocation cleanly so the id pool isn't leaked on backpressure.  Raise for bursty publishers; each slot pins ~8 bytes long-lived on MP / CP. |
 | `send_timeout_seconds` | inherits `ack_timeout_seconds` (5 s) | Maximum time the socket can stay non-writable with a packet queued before the client transitions to `FAILED`.  Re-arms on every successful send: a steady drip of small sends never trips it, only a stalled socket does.  Catches NAT-style silent-drops on the outbound path that would otherwise let the queue grow until `MQTTBackpressureError`. |
 

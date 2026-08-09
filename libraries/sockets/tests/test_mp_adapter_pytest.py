@@ -98,6 +98,11 @@ def mp_adapter() -> Iterator[types.ModuleType]:
         def settimeout(self, seconds: float | None) -> None:
             self._timeout = seconds
 
+        def write(self, data: bytes) -> int:
+            # Post-handshake stream write; the deferred handshake completes
+            # on the first call, so a zero-length probe returns 0.
+            return len(data)
+
         def fileno(self) -> int:
             return self._fileno
 
@@ -119,8 +124,13 @@ def mp_adapter() -> Iterator[types.ModuleType]:
             sock: object,
             *,
             server_hostname: str,
+            do_handshake_on_connect: bool = True,
         ) -> object:
+            # Mirrors MP 1.27's mbedTLS signature: the deferred-handshake
+            # kwarg is accepted and recorded.
             self.wrapped.append((sock, server_hostname))
+            self.deferred_handshakes = getattr(self, "deferred_handshakes", [])
+            self.deferred_handshakes.append(do_handshake_on_connect)
             return sock
 
         def load_verify_locations(self, *, cadata: bytes | str) -> None:

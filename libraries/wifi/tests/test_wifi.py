@@ -175,12 +175,12 @@ def _service(*, config_overrides=None):
 
 
 def test_starts_in_disconnected_state() -> None:
-    """Construction does not auto-connect."""
+    """Construction touches no radio: no adapter calls until the first tick."""
     service, _, adapter = _service()
     assert service.state == WifiState.DISCONNECTED
     assert service.connected is False
     assert service.ip is None
-    assert ("configure",) == adapter.calls[0][:1]
+    assert adapter.calls == []
 
 
 def test_connect_succeeds_on_first_attempt() -> None:
@@ -414,18 +414,20 @@ def test_adapter_name_field_reflects_injected_adapter() -> None:
     assert service.adapter.name == "fake"
 
 
-def test_default_adapter_on_cpython_is_fake() -> None:
-    """``_select_adapter`` returns ``FakeWifiAdapter`` on CPython.
+def test_default_adapter_on_cpython_is_the_host_stand_in() -> None:
+    """``_select_adapter`` returns ``CpythonWifiAdapter`` on CPython, and it
+    reports an immediate successful link.
 
     The CP and MP adapters are exercised by the functional suites.
-    This host-side test stays scoped to the CPython fake-adapter
-    path.
     """
     if not _IS_CPYTHON:
         skip("CP/MP adapter selection is covered by the functional suites")
     config = WifiConfig(ssid="x", password="y")
     service = WifiService(config)
-    assert service.adapter.name == "fake"
+    assert service.adapter.name == "cpython"
+    assert service.adapter.connect(config) is True
+    assert service.adapter.is_linked() is True
+    assert service.adapter.ip() == "127.0.0.1"
 
 
 # ---------------------------------------------------------------------------
@@ -554,20 +556,15 @@ def test_fake_adapter_records_every_call() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Adapter base class: abstract methods raise
+# Adapter base class: contract attribute defaults
 # ---------------------------------------------------------------------------
 
 
-def test_base_adapter_methods_raise_notimplementederror() -> None:
-    """Concrete adapters must override every method.  Defaults raise loudly."""
+def test_base_adapter_carries_the_contract_attribute_defaults() -> None:
+    """The base class carries the three contract attributes with their
+    documented defaults and no callable surface of its own."""
     from chumicro_wifi._adapters.base import WifiAdapter
     adapter = WifiAdapter()
-    config = WifiConfig(ssid="x", password="y")
-    with raises(NotImplementedError):
-        adapter.configure(config)
-    with raises(NotImplementedError):
-        adapter.connect(config)
-    with raises(NotImplementedError):
-        adapter.is_linked()
-    with raises(NotImplementedError):
-        adapter.ip()
+    assert adapter.name == "base"
+    assert adapter.connect_blocks is True
+    assert adapter.radio is None

@@ -221,7 +221,7 @@ def _reset_inbound():
     inbound_last_size = 0
 
 
-def scenario_tier1():
+def scenario_steady():
     banner("STEADY (small): inline parse (32-byte payload)")
     scenario = Scenario("steady_32b")
     _reset_inbound()
@@ -237,7 +237,7 @@ def scenario_tier1():
     results.append(scenario.finish() + (ok,))
 
 
-def scenario_tier3():
+def scenario_oversized():
     banner(f"OVERSIZED: rolling drain (4096 B above {RX_BUFFER_SIZE} B rx buffer)")
     scenario = Scenario("oversize_4kb")
     seen = len(oversize_events)
@@ -348,8 +348,8 @@ def scenario_stress():
 # Run.
 # ---------------------------------------------------------------------------
 
-scenario_tier1()
-scenario_tier3()
+scenario_steady()
+scenario_oversized()
 scenario_oversize_topic()
 scenario_qos1()
 scenario_stress()

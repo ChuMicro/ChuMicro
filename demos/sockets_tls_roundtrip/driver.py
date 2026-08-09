@@ -15,6 +15,7 @@ production-shaped path regardless of any per-device override in
 from __future__ import annotations
 
 import argparse
+import shutil
 import sys
 import tempfile
 from pathlib import Path
@@ -43,7 +44,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--runtime", default=None,
-        help="runtime to pick the default device for (circuitpython | micropython)",
+        choices=("circuitpython", "micropython"),
+        help="runtime to pick the default device for",
     )
     parser.add_argument(
         "--wifi-timeout-s", type=float, default=45.0,
@@ -148,6 +150,8 @@ def main(argv: list[str] | None = None) -> int:
         if session is not None:
             session.shutdown()
         echo_stop.set()
+        # The workdir holds a self-signed cert and its private key.
+        shutil.rmtree(cert_workdir, ignore_errors=True)
 
 
 if __name__ == "__main__":

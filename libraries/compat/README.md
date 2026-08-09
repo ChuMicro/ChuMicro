@@ -5,7 +5,7 @@ align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
 **Stdlib polyfills for the bits CircuitPython and MicroPython skipped.**
 
-Import from `chumicro_compat` instead of the stdlib and your code works everywhere. CPython gets the real C implementation (zero overhead); CircuitPython and MicroPython get a lightweight pure-Python version of the same public API.
+Import the polyfill submodule (`from chumicro_compat.functools import partial`) instead of the stdlib module and your code works everywhere. CPython gets the real C implementation (zero overhead); CircuitPython and MicroPython get a lightweight pure-Python version of the same public API.
 
 <br clear="left">
 

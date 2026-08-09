@@ -110,13 +110,16 @@ Both loops isolate a handler that raises: the fault is counted in `handler_error
 | Symbol | Description |
 |---|---|
 | `Runner(ticks=None, poller=None, on_handler_error=None)` | Tick-based service loop with shared timestamps.  A handler that raises is isolated and counted in `handler_errors` so one faulting service can't stop the others; pass `on_handler_error(handle, exception)` to log, remove the task, or re-raise to fail fast.  `poller` is an injectable `select.poll`-shaped object consulted by `wait()`; the default is built lazily on the first wait that has a socket to register |
-| `Runner.add(task, handler=None, period_ms=None, start_after_ms=None, run_count=None)` | Register a task; returns a `TaskHandle` |
-| `Runner.add_periodic(handler, period_ms, start_after_ms=None, run_count=None)` | Register a periodic handler; returns a `TaskHandle` |
-| `Runner.add_generator(gen)` | Register a generator function (for sequential I/O written top-to-bottom); returns a `GeneratorHandle`.  See [Generator-driven sequential I/O](https://chumicro.github.io/ChuMicro/runner/stable/guide/#generator-driven) in the guide |
-| `Runner.tick()` | Capture time, check services, batch-fire handlers; returns `now_ms` |
+| `Runner.add(task, handler=None, period_ms=None, start_after_ms=None, run_count=None, preserve_phase=False)` | Register a task; returns a `TaskHandle` |
+| `Runner.add_periodic(handler, period_ms, start_after_ms=None, run_count=None, preserve_phase=False)` | Register a periodic handler; returns a `TaskHandle` |
+| `Runner.add_generator(generator)` | Register a generator function (for sequential I/O written top-to-bottom); returns a `GeneratorHandle`.  See [Generator-driven sequential I/O](https://chumicro.github.io/ChuMicro/runner/stable/guide/#generator-driven) in the guide |
+| `Runner.tick()` | Capture time, check services, batch-fire handlers; returns `now_ms`.  Raises `ReentrantTickError` if a handler calls `tick()` while a tick is already running |
 | `Runner.wait(now_ms)` | Idle until the next deadline or a registered socket is ready.  Companion to `tick()`; see [Idling between ticks](https://chumicro.github.io/ChuMicro/runner/stable/guide/#idling-between-ticks) in the guide |
+| `Runner.run_until(predicate, timeout_ms=None)` | Drive `tick()` + `wait()` until a handle finishes or a zero-arg callable turns truthy; returns `False` on timeout |
+| `IO_READ` / `IO_WRITE` | Poll-interest bits a service returns from `io_interest(now_ms)`; pinned values `1` / `2` |
+| `ReentrantTickError` | Raised when `tick()` runs while another `tick()` is in progress |
 | `TaskHandle` | Opaque handle for runtime mutation of a registered service |
-| `TaskHandle.set_period(period_ms)` | Add, change, or remove the period (`None` to remove) |
+| `TaskHandle.set_period(period_ms, now_ms=None)` | Add, change, or remove the period (`None` to remove); pass the tick's `now_ms` to anchor the next fire to the shared timestamp |
 | `TaskHandle.remove()` | Remove this service from the runner |
 | `TaskHandle.period_ms` | Current period in milliseconds, or `None`.  Mutate via `set_period()`, not direct assignment (direct writes skip the timer reset) |
 | `TaskHandle.run_count` | Remaining run count, or `None` if unlimited.  Decremented by the runner after each fire |
@@ -137,7 +140,6 @@ Both loops isolate a handler that raises: the fault is counted in `handler_error
 | `connect(connector)` (`chumicro_sockets.generators`) | Drive any `SocketConnector`-shaped object to ready across runner ticks; return the connected socket via PEP 380 (`sock = yield from connect(connector)`) |
 | `send_all(sock, data)` (`chumicro_sockets.generators`) | Send every byte of *data* with an EAGAIN-yielding inner loop |
 | `recv_until(sock, separator, max_bytes=...)` (`chumicro_sockets.generators`) | Read until *separator* appears, capped at *max_bytes* (heap-DoS guard) |
-| `recv_exact(sock, byte_count, max_bytes=...)` (`chumicro_sockets.generators`) | Read exactly *byte_count* bytes, capped at *max_bytes* |
 
 A `Signal` bridges callback-land into a generator body: hand `signal.set` to a service as its callback, then `value = yield from wait_for(signal)`:
 
@@ -153,6 +155,7 @@ state = yield from wait_for(link_up)
 |---|---|
 | `CallRecorder()` | Callable that records handler invocations for test assertions |
 | `CallRecorder.calls` | Direct access to the list of recorded `now_ms` values |
+| `validate_service(service)` | Check a service object against the runner's coherence rules; raises `ValueError` naming the offending member |
 | `FakePoller()` | Host-test stand-in for `select.poll().ipoll`.  Pass as `Runner(poller=FakePoller())` so tests can drive `wait()` without real file descriptors; records `register` / `modify` / `unregister` / `ipoll` calls for assertion, and `set_ready(obj, eventmask)` queues a ready pair for the next `ipoll` return |
 
 ## Where this fits
