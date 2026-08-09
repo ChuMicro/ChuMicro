@@ -961,10 +961,6 @@ class TestFlushVolume:
         Constructor-injected sleep lets flash-mode tests skip the
         real 0.5 s settle delay.
         """
-        monkeypatch.setattr(
-            "chumicro_deploy.flash_drive._sys_module.platform",
-            "darwin",
-        )
         sleep_durations: list[float] = []
 
         with patch(
@@ -981,10 +977,6 @@ class TestFlushVolume:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Callers can override the settle delay per-invocation."""
-        monkeypatch.setattr(
-            "chumicro_deploy.flash_drive._sys_module.platform",
-            "darwin",
-        )
         sleep_durations: list[float] = []
 
         with patch(
@@ -1001,22 +993,20 @@ class TestFlushVolume:
 
         assert sleep_durations == [0.123]
 
-    def test_full_fsync_barrier_on_darwin(
+    def test_full_fsync_barrier_when_supported(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """On macOS, flush_volume issues F_FULLFSYNC on the mount point.
+        """With F_FULLFSYNC available, flush_volume issues it on the mount.
 
         ``sync`` alone only schedules the flush (``sync(2)`` may return
         before the buffers are written); the F_FULLFSYNC barrier is
         what guarantees no dirty FAT metadata is outstanding when a
-        board reset lands.
+        board reset lands.  The command value is pinned here so the
+        assertion holds on hosts whose fcntl lacks the real constant.
         """
         import fcntl
 
-        monkeypatch.setattr(
-            "chumicro_deploy.flash_drive._sys_module.platform",
-            "darwin",
-        )
+        monkeypatch.setattr(fcntl, "F_FULLFSYNC", 51, raising=False)
         fcntl_calls: list[int] = []
 
         def recording_fcntl(descriptor: int, command: int, *args: object) -> int:
@@ -1032,16 +1022,43 @@ class TestFlushVolume:
         ):
             flash_drive.flush_volume(tmp_path, sleep=lambda _seconds: None)
 
-        assert fcntl_calls == [fcntl.F_FULLFSYNC]
+        assert fcntl_calls == [51]
+
+    def test_fsync_fallback_when_constant_absent(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A host whose fcntl has no F_FULLFSYNC (any non-Darwin POSIX)
+        goes straight to os.fsync without touching fcntl.fcntl."""
+        import fcntl
+
+        monkeypatch.delattr(fcntl, "F_FULLFSYNC", raising=False)
+
+        def forbidden_fcntl(descriptor: int, command: int, *args: object) -> int:
+            raise AssertionError("fcntl.fcntl must not run without the constant")
+
+        monkeypatch.setattr("fcntl.fcntl", forbidden_fcntl)
+        fsync_descriptors: list[int] = []
+        monkeypatch.setattr(
+            "chumicro_deploy.flash_drive.os.fsync",
+            fsync_descriptors.append,
+        )
+        with patch(
+            "chumicro_deploy.flash_drive.subprocess.run",
+            side_effect=lambda command, **kwargs: subprocess.CompletedProcess(
+                args=command, returncode=0,
+            ),
+        ):
+            flash_drive.flush_volume(tmp_path, sleep=lambda _seconds: None)
+
+        assert len(fsync_descriptors) == 1
 
     def test_full_fsync_falls_back_to_fsync(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """A filesystem without F_FULLFSYNC support falls back to os.fsync."""
-        monkeypatch.setattr(
-            "chumicro_deploy.flash_drive._sys_module.platform",
-            "darwin",
-        )
+        import fcntl
+
+        monkeypatch.setattr(fcntl, "F_FULLFSYNC", 51, raising=False)
 
         def unsupported_fcntl(
             descriptor: int, command: int, *args: object,
@@ -1071,10 +1088,6 @@ class TestFlushVolume:
         """A mount that vanished before the barrier degrades to
         sync + settle with a warning instead of failing the deploy.
         """
-        monkeypatch.setattr(
-            "chumicro_deploy.flash_drive._sys_module.platform",
-            "darwin",
-        )
         sleep_durations: list[float] = []
         with patch(
             "chumicro_deploy.flash_drive.subprocess.run",
