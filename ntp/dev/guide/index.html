@@ -632,8 +632,11 @@ socket directly from <code>chumicro_sockets.udp_socket</code>.</p>
 </span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="n">sock</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
 </span></code></pre></div>
 <p><code>request.unix_seconds</code> is the server's transmit-timestamp converted
-to Unix-epoch seconds.  Feed it into <code>time.gmtime</code> (CPython) /
-<code>utime.localtime</code> (MP/CP) for date components.</p>
+to Unix-epoch seconds.  Feed it into <code>time.gmtime</code> (CPython) for date
+components.  On MicroPython and CircuitPython check the port's epoch
+first: rp2 and CircuitPython use 1970, but MicroPython's esp32 port
+counts from 2000, so <code>time.localtime(unix_seconds - 946_684_800)</code>
+is the correct call there (946,684,800 is the 1970-to-2000 offset).</p>
 <h2 id="bring-your-own-transport">Bring your own transport<a class="headerlink" href="#bring-your-own-transport" title="Permanent link">&para;</a></h2>
 <p><code>NTPClient</code> doesn't care which library produces its UDP socket.  The <code>socket=</code> (or <code>transport_factory=</code>) you pass returns any object exposing the four-method UDP contract:</p>
 <table>
@@ -695,7 +698,7 @@ recv side automatically:</p>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">runner</span> <span class="o">=</span> <span class="n">Runner</span><span class="p">()</span>
 </span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="n">runner</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">client</span><span class="p">)</span>        <span class="c1"># check/handle wired up by the runner</span>
 </span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="c1"># inside your tick loop:</span>
-</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="n">runner</span><span class="o">.</span><span class="n">tick</span><span class="p">(</span><span class="n">now_ms</span><span class="p">())</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="n">now_ms</span> <span class="o">=</span> <span class="n">runner</span><span class="o">.</span><span class="n">tick</span><span class="p">()</span>
 </span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="k">if</span> <span class="n">request</span><span class="o">.</span><span class="n">done</span><span class="p">:</span>
 </span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>    <span class="n">use</span><span class="p">(</span><span class="n">request</span><span class="o">.</span><span class="n">unix_seconds</span><span class="p">)</span>
 </span></code></pre></div>
@@ -737,11 +740,15 @@ buffer, so the success path doesn't copy bytes either.</p>
 </tr>
 <tr>
 <td>Wrong mode in the response</td>
-<td><code>NTPError("unexpected SNTP mode N")</code></td>
+<td><code>NTPError("unexpected SNTP mode N (want 4)")</code></td>
 </tr>
 <tr>
 <td>Stratum-0 kiss-of-death</td>
 <td><code>NTPError("SNTP kiss-of-death (stratum=0)")</code></td>
+</tr>
+<tr>
+<td>Zero transmit timestamp</td>
+<td><code>NTPError("SNTP zero transmit timestamp")</code></td>
 </tr>
 <tr>
 <td>Canceled via <code>client.cancel()</code></td>
@@ -755,6 +762,10 @@ buffer, so the success path doesn't copy bytes either.</p>
 </table>
 <p><code>NTPError</code> is an <code>OSError</code> subclass so handlers that do
 <code>except OSError</code> catch both wrapped and unwrapped failures.</p>
+<p>One thing the client does not check: the datagram's sender.  Any host
+that lands 48 well-formed bytes on the ephemeral port before the real
+server replies can set the result.  SNTP over UDP is spoofable by
+design; treat the result as advisory time, not authenticated time.</p>
 <h2 id="examples">Examples<a class="headerlink" href="#examples" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
