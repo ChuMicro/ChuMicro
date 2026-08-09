@@ -46,4 +46,9 @@ not as compatibility contracts (they never block a break).
   manifest-less fallback glob kept for hand-built test inputs.
 - Deprecation as a state ceases to exist here: a surface is either current or deleted.
 - This decision self-retires at first publication, at which point a real compatibility policy
-  (SemVer, deprecation windows) must replace it.
+  (SemVer, deprecation windows) must replace it.  Deferred past publication by user call
+  2026-08-09: the packages published 2026-07-19, but this project is still their only
+  consumer, so the retirement bar is "a real external consumer appears", not the publish
+  date.  Until then the rule above stands, `PUBLISHED` stays `False` in
+  `scripts/check_api.py`, and the griffe compat gate stays warn-only.  Do not flip either
+  on the publication trigger alone.
