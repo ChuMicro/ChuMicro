@@ -163,6 +163,7 @@ class TestRealMonoRepoManifests:
         assert manifest.optional_keys == frozenset({
             "wifi.hostname",
             "wifi.connect_timeout_ms",
+            "wifi.first_connect_timeout_ms",
             "wifi.reconnect_backoff_start_ms",
             "wifi.reconnect_backoff_max_ms",
             "wifi.reconnect_max",

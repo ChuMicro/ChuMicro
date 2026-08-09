@@ -27,7 +27,7 @@ class CpWifiAdapter(WifiAdapter):
         if config.hostname is not None:
             self.radio.hostname = config.hostname
 
-    def connect(self, config):
+    def connect(self, config, timeout_ms=None):
         # Already linked (an association can survive a soft-reload); poking the radio would destabilise it.
         if self.radio.connected:
             return True
@@ -39,7 +39,9 @@ class CpWifiAdapter(WifiAdapter):
         # Apply after stop_station (so the reset doesn't clear it) and before connect.
         if config.tx_power_dbm is not None:
             self._apply_tx_power(config.tx_power_dbm)
-        timeout_seconds = config.connect_timeout_ms / 1000
+        if timeout_ms is None:
+            timeout_ms = config.connect_timeout_ms
+        timeout_seconds = timeout_ms / 1000
         try:
             self.radio.connect(
                 config.ssid,

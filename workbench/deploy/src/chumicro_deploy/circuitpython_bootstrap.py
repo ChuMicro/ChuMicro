@@ -50,6 +50,7 @@ _TEST_EXECUTION_MARKER = "# Execute the test file."
 #: the way they would after an ordinary boot.
 _DEPLOY_EXECUTION_TEMPLATE = (
     "_retry_deferred()\n"
+    "_materialize_lazy_exports()\n"
     "exec($ENTRYPOINT_SOURCE, {'__name__': '__main__'})"
 )
 
@@ -295,6 +296,7 @@ def _build_test_execution_script(
     filter_repr = repr(name_filter) if name_filter else "None"
     return (
         "_retry_deferred()\n"
+        "_materialize_lazy_exports()\n"
         + test_execution_template
         .replace("$TEST_SOURCE", escaped_test)
         .replace("$FILTER_REPR", filter_repr)

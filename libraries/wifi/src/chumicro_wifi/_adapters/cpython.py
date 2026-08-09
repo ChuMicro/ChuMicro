@@ -19,7 +19,7 @@ class CpythonWifiAdapter(WifiAdapter):
     def configure(self, config):
         return None
 
-    def connect(self, config):
+    def connect(self, config, timeout_ms=None):
         self._linked = True
         return True
 

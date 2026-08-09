@@ -8,6 +8,7 @@ def _register_stub(module_name):
     sys.modules[module_name]=_Mod
     if len(parts)>1 and parts[0] in sys.modules:
         setattr(sys.modules[parts[0]],parts[1],_Mod)
+_lazy_pending=[]
 def _populate_module(module_name, source_code):
     parts=module_name.rsplit('.',1)
     package=parts[0] if len(parts)>1 else module_name
@@ -20,17 +21,25 @@ def _populate_module(module_name, source_code):
     lazy=namespace.get('__getattr__')
     if lazy is not None:
         # Class-as-module attribute misses never reach a module-level
-        # __getattr__, so PEP-562 lazy exports are resolved here instead.
-        # A miss becomes ImportError so a not-yet-populated submodule
-        # defers this module into the retry loop.
-        for key in namespace.get('__all__',()):
-            if key not in namespace:
-                try:
-                    setattr(module_obj,key,lazy(key))
-                except AttributeError:
-                    raise ImportError('lazy export pending: '+module_name+'.'+key)
+        # __getattr__, so PEP-562 lazy exports are resolved by
+        # _materialize_lazy_exports after every module is populated.
+        _lazy_pending.append((module_obj,lazy,namespace.get('__all__',()),tuple(namespace)))
     if len(parts)>1 and parts[0] in sys.modules:
         setattr(sys.modules[parts[0]],parts[1],module_obj)
+def _materialize_lazy_exports():
+    # Runs after population settles, so a resolution failure means the
+    # providing submodule is structurally absent from this deploy (the
+    # walker stages only what eager imports reach).  The name is left
+    # off, matching a flash deploy where the file is not on the board;
+    # a test importing it fails at its own import with the true message.
+    for module_obj, lazy, names, populated in _lazy_pending:
+        for key in names:
+            if key not in populated and not hasattr(module_obj,key):
+                try:
+                    setattr(module_obj,key,lazy(key))
+                except Exception:
+                    pass
+    _lazy_pending[:]=[]
 
 
 # Pass 1: register empty stubs so import statements resolve.

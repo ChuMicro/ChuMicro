@@ -121,6 +121,17 @@ def test_connect_calls_radio_with_credentials_and_timeout() -> None:
     assert radio.calls[-1] == ("connect", "HomeNet", "secret", 5.0)
 
 
+def test_connect_explicit_timeout_overrides_config_timeout() -> None:
+    """An explicit ``timeout_ms=`` bounds the blocking radio wait instead
+    of ``config.connect_timeout_ms``, so a per-attempt allowance from the
+    service (the first-association grace) reaches the substrate."""
+    radio = _FakeRadio()
+    adapter = CpWifiAdapter(radio=radio)
+    config = WifiConfig(ssid="HomeNet", password="secret", connect_timeout_ms=5_000)
+    assert adapter.connect(config, timeout_ms=45_000) is True
+    assert radio.calls[-1] == ("connect", "HomeNet", "secret", 45.0)
+
+
 def test_connect_clears_station_before_each_attempt() -> None:
     """Each fresh attempt calls ``stop_station()`` before ``connect()``.
 

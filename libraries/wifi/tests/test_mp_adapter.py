@@ -365,6 +365,16 @@ def test_connect_dispatches_credentials_to_wlan_on_cyw43() -> None:
     assert ("connect", "HomeNet", "secret") in wlan.calls
 
 
+def test_connect_accepts_attempt_timeout_and_dispatches_unchanged() -> None:
+    """``connect(config, timeout_ms=...)`` takes the per-attempt allowance
+    and dispatches the same non-blocking join: the caller bounds the
+    attempt by polling ``is_linked()``, not through the wlan call."""
+    wlan = _FakeWlan()
+    adapter = MpWifiAdapter(wlan=wlan, stack="espidf")
+    adapter.connect(WifiConfig(ssid="HomeNet", password="secret"), timeout_ms=45_000)
+    assert ("connect", "HomeNet", "secret") in wlan.calls
+
+
 def test_connect_returns_true_when_isconnected_after_dispatch() -> None:
     """MP's connect is non-blocking.  Success means isconnected flipped to True."""
     wlan = _FakeWlan()

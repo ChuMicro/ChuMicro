@@ -115,7 +115,9 @@ class MpWifiAdapter(WifiAdapter):
         except (OSError, ValueError):
             pass
 
-    def connect(self, config):
+    def connect(self, config, timeout_ms=None):
+        # timeout_ms is unused: wlan.connect() dispatches a non-blocking
+        # join, so the caller bounds the attempt by polling is_linked().
         # Already linked: re-issuing wlan.connect() aborts and restarts the association on ESP-IDF.
         if self._wlan.isconnected():
             self._disable_supervisor_once()

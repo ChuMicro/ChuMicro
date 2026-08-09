@@ -83,6 +83,7 @@ required_keys = ["wifi.ssid", "wifi.password"]
 optional_keys = [
     "wifi.hostname",
     "wifi.connect_timeout_ms",
+    "wifi.first_connect_timeout_ms",
     "wifi.reconnect_backoff_start_ms",
     "wifi.reconnect_backoff_max_ms",
     "wifi.reconnect_max",

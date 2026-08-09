@@ -32,8 +32,10 @@ class FakeWifiAdapter(WifiAdapter):
         self._configured_with = config
         self.calls.append(("configure", config))
 
-    def connect(self, config):
-        self.calls.append(("connect", config))
+    def connect(self, config, timeout_ms=None):
+        # Recording timeout_ms lets tests assert which per-attempt
+        # allowance the service handed the adapter (None on direct calls).
+        self.calls.append(("connect", config, timeout_ms))
         if self._link_after is not None:
             self._pending_polls = self._link_after
             return False
