@@ -864,7 +864,7 @@
 </span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
 </span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>    <span class="n">runner</span><span class="o">.</span><span class="n">tick</span><span class="p">()</span>
 </span></code></pre></div>
-<p><code>check(now_ms) -&gt; bool</code> reports whether the server has work pending; <code>handle(now_ms)</code> does at most one tick of progress, capped by the per-connection budgets below.</p>
+<p><code>check(now_ms)</code> always returns <code>True</code> (the accept loop runs on every tick); <code>handle(now_ms)</code> does at most one tick of progress, capped by the per-connection budgets below.</p>
 <h2 id="routing">Routing<a class="headerlink" href="#routing" title="Permanent link">&para;</a></h2>
 <p><code>@server.route(path, methods=...)</code> registers a handler:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nd">@server</span><span class="o">.</span><span class="n">route</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">)</span>                                <span class="c1"># GET /</span>
@@ -914,7 +914,7 @@
 </tr>
 <tr>
 <td><code>request.query</code></td>
-<td><code>dict</code> from the query string.</td>
+<td><code>CaseInsensitiveDict</code> from the query string.  Keys fold case, so <code>?Foo=1&amp;foo=2</code> collapses into one entry with the values joined by <code>", "</code>.</td>
 </tr>
 <tr>
 <td><code>request.path_params</code></td>
@@ -1171,7 +1171,7 @@
 </table>
 <p>The TLS handshake is synchronous inside <code>wrap_socket(..., server_side=True)</code>: the listener stalls until the handshake completes (single-digit to tens of milliseconds on the supported board class with a local TLS client; longer on a slow uplink as TLS rounds-trip).  After the handshake, the server's per-connection state machine resumes its runner-friendly progression.</p>
 <h2 id="memory-notes">Memory notes<a class="headerlink" href="#memory-notes" title="Permanent link">&para;</a></h2>
-<p>Connection state is bounded by <code>max_connections</code>; each connection holds its receive buffer (a scratch chunk capped at 512 B, so a <code>recv_budget_per_tick</code> above 512 is satisfied by several <code>recv_into</code> calls per tick), the parsed <code>Request</code>, and the encoded <code>Response</code> until drained.  Nothing else allocates per-tick steady-state.  A streaming response adds one <code>stream_buffer_size</code> window (default 1 KB) per streaming connection, minted lazily and reused for the transfer: a body of any size costs that fixed window, never the whole body.  The shared <code>chumicro-requests</code> HTTP/1.1 wire primitives (case-insensitive header dict, charset parsing) are inlined into <code>chumicro_http_server._wire</code> so a server-only board doesn't ship the client library.  The streamed-body framing code lives in the opt-in <code>chumicro_http_server.streaming</code> submodule, loaded only when a handler actually streams, so a buffered-only server never pays its footprint.</p>
+<p>Connection state is bounded by <code>max_connections</code>; each connection holds its receive buffer (a scratch chunk capped at 512 B, so a <code>recv_budget_per_tick</code> above 512 is satisfied by several <code>recv_into</code> calls per tick), the parsed <code>Request</code>, and the encoded <code>Response</code> until drained (the request parser and its body copy are released the moment the <code>Request</code> is built, so the body is held once through the send phase).  Nothing else allocates per-tick steady-state.  A streaming response adds one <code>stream_buffer_size</code> window (default 1 KB) per streaming connection, minted lazily and reused for the transfer: a body of any size costs that fixed window, never the whole body.  The shared <code>chumicro-requests</code> HTTP/1.1 wire primitives (case-insensitive header dict, charset parsing) are inlined into <code>chumicro_http_server._wire</code> so a server-only board doesn't ship the client library.  The streamed-body framing code lives in the opt-in <code>chumicro_http_server.streaming</code> submodule, loaded only when a handler actually streams, so a buffered-only server never pays its footprint.</p>
 <h2 id="platform-notes">Platform notes<a class="headerlink" href="#platform-notes" title="Permanent link">&para;</a></h2>
 <p>Works identically on CPython, MicroPython, and CircuitPython.  The <code>chumicro-sockets</code> listener provides the platform-specific socket plumbing; the server just consumes the resulting non-blocking socket.</p>
 <h2 id="examples">Examples<a class="headerlink" href="#examples" title="Permanent link">&para;</a></h2>
