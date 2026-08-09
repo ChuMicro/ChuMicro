@@ -890,6 +890,25 @@
           </tr>
           <tr class="doc-section-item">
             <td>
+                <code>first_connect_timeout_ms</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Longer allowance for the first connect attempt
+after construction, in ms, or <code>None</code> (default) to use
+<code>connect_timeout_ms</code>.  A cold radio's first association after
+power-up takes longer than steady-state reconnects.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
                 <code>reconnect_backoff_start_ms</code>
             </td>
             <td>
