@@ -2081,7 +2081,10 @@ default trust store; passing a context implies TLS on its own.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Build a <code>() -&gt; socket</code> factory returning a fresh bound UDP socket.</p>
+        <p>Build a <code>() -&gt; socket</code> factory returning a fresh bound non-blocking UDP socket.</p>
+<p><code>setblocking(False)</code> is applied here so every consumer of the
+factory gets a tick-loop-safe socket; <code>connector</code> and <code>listener</code>
+already guarantee non-blocking transports themselves.</p>
 
 
     </div>
