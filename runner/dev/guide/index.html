@@ -1189,11 +1189,15 @@
 <h2 id="shared-timestamps">Shared timestamps<a class="headerlink" href="#shared-timestamps" title="Permanent link">&para;</a></h2>
 <p><code>Runner.tick()</code> captures <code>ticks_ms()</code> once and passes the resulting timestamp to every service.  This ensures all services in the loop see the same moment in time, preventing drift between independent clock reads on slow microcontrollers.</p>
 <p>The method returns <code>now_ms</code> so user code can use it alongside the service loop:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="n">now</span> <span class="o">=</span> <span class="n">runner</span><span class="o">.</span><span class="n">tick</span><span class="p">()</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    <span class="k">if</span> <span class="n">some_heartbeat</span><span class="o">.</span><span class="n">poll</span><span class="p">(</span><span class="n">now</span><span class="p">):</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>        <span class="n">do_something</span><span class="p">()</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="n">runner</span><span class="o">.</span><span class="n">wait</span><span class="p">(</span><span class="n">now</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_timing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Rate</span><span class="p">,</span> <span class="n">ticks_ms</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">rate</span> <span class="o">=</span> <span class="n">Rate</span><span class="p">(</span><span class="mi">500</span><span class="p">,</span> <span class="n">ticks_ms</span><span class="p">())</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>    <span class="n">now</span> <span class="o">=</span> <span class="n">runner</span><span class="o">.</span><span class="n">tick</span><span class="p">()</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>    <span class="k">if</span> <span class="n">rate</span><span class="o">.</span><span class="n">due</span><span class="p">(</span><span class="n">now</span><span class="p">):</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>        <span class="n">do_something</span><span class="p">()</span>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>    <span class="n">runner</span><span class="o">.</span><span class="n">wait</span><span class="p">(</span><span class="n">now</span><span class="p">)</span>
 </span></code></pre></div>
 <h2 id="idling-between-ticks">Idling between ticks<a class="headerlink" href="#idling-between-ticks" title="Permanent link">&para;</a></h2>
 <p><code>Runner.wait(now_ms)</code> is the loop's idle path and the runner's one sanctioned blocking point.  Call it right after <code>tick()</code>:</p>
@@ -1323,13 +1327,13 @@
 </tr>
 </tbody>
 </table>
-<p>The coherence rules, as the dispatch enforces them:</p>
+<p>The coherence rules.  Only the first raises on its own (<code>Runner.add</code> reads both attributes at registration); the dispatch silently depends on the other two, where a violation no-ops rather than raising, which is what <code>validate_service</code> below exists to catch:</p>
 <ul>
 <li><strong><code>check</code> and <code>handle</code> are both required.</strong>  <code>Runner.add</code> reads both off the object at registration, so a service missing either cannot register.</li>
 <li><strong><code>io_socket</code> and <code>io_interest</code> come as a pair.</strong>  The poll sync reaches the socket through <code>io_interest</code>; one member without the other never reaches the poller.</li>
 <li><strong><code>io_error</code> requires <code>io_socket</code>.</strong>  It is dispatched only when that socket reports a poll error.</li>
 </ul>
-<p><code>chumicro_runner.testing.validate_service(service)</code> checks exactly these rules and raises <code>ValueError</code> naming the offending member.  It validates shape, never behavior, so drop it into a consumer library's test suite to catch a malformed service before it reaches a live runner:</p>
+<p><code>chumicro_runner.testing.validate_service(service)</code> checks exactly these rules and raises <code>ValueError</code> naming the offending member.  It validates shape, never behavior, so drop it into your project's test suite to catch a malformed service before it reaches a live runner:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_runner.testing</span><span class="w"> </span><span class="kn">import</span> <span class="n">validate_service</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
@@ -1519,13 +1523,14 @@
 </span></code></pre></div>
 <h2 id="memory-notes">Memory notes<a class="headerlink" href="#memory-notes" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Handlers are collected into a pre-allocated list and batch-fired, avoiding per-tick allocation.</li>
+<li>Handlers are collected into a reused scratch list that keeps its high-water capacity across ticks, so batch-firing allocates nothing once the list has grown to the working set.</li>
 <li>No <code>collections.deque</code> or ring buffers are required.</li>
 </ul>
 <h2 id="testing-tasks">Testing tasks<a class="headerlink" href="#testing-tasks" title="Permanent link">&para;</a></h2>
-<p>The <code>chumicro_runner.testing</code> module provides two host-test helpers:</p>
+<p>The <code>chumicro_runner.testing</code> module provides three host-test helpers:</p>
 <ul>
 <li><code>CallRecorder</code>: a callable that records handler invocations for assertion in host-side tests.</li>
+<li><code>validate_service</code>: checks a service object against the coherence rules in <a href="#the-service-contract">The service contract</a> and raises <code>ValueError</code> naming the offending member.</li>
 <li><code>FakePoller</code>: a stand-in for <code>select.poll().ipoll</code> so unit tests can drive <code>Runner.wait()</code> without real file descriptors (CPython's <code>select.poll</code> needs real fds that in-memory fake sockets do not have).  Records every <code>register</code> / <code>modify</code> / <code>unregister</code> / <code>ipoll</code> call so tests can assert on what the runner did with the poll set; <code>set_ready(obj, eventmask)</code> queues a ready pair for the next <code>ipoll</code> return.</li>
 </ul>
 <h3 id="callrecorder"><code>CallRecorder</code><a class="headerlink" href="#callrecorder" title="Permanent link">&para;</a></h3>

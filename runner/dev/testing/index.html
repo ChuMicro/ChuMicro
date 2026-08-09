@@ -1032,7 +1032,9 @@ shape), <code>CallRecorder</code> (records handler invocations), and
 <p>Checks shape only, never behavior: it reads which contract members
 the service exposes and enforces the coherence rules the <code>Runner</code>
 dispatch relies on. It never calls <code>check</code> / <code>handle</code> / any hook.</p>
-<p>The rules, as <code>chumicro_runner.core</code> enforces them:</p>
+<p>The rules the <code>Runner</code> dispatch relies on.  Only the first raises on
+its own; the other two silently no-op when violated, which is why this
+checker exists:</p>
 <ul>
 <li><code>check</code> and <code>handle</code> are both required. <code>Runner.add</code> reads
   <code>task.check</code> and <code>task.handle</code> unconditionally, so a service

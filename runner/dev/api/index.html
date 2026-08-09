@@ -1160,7 +1160,7 @@
 
 
 <h4 id="chumicro_runner.Runner.add_generator" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">add_generator</span><span class="p">(</span><span class="n">gen</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">add_generator</span><span class="p">(</span><span class="n">generator</span><span class="p">)</span></code>
 
 <a href="#chumicro_runner.Runner.add_generator" class="headerlink" title="Permanent link">&para;</a></h4>
 
@@ -1183,7 +1183,7 @@
       <tbody>
           <tr class="doc-section-item">
             <td>
-                <code>gen</code>
+                <code>generator</code>
             </td>
             <td>
                   <code><span title="object">object</span></code>
@@ -1638,7 +1638,7 @@
 
 
 <h4 id="chumicro_runner.TaskHandle.set_period" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">set_period</span><span class="p">(</span><span class="n">period_ms</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">set_period</span><span class="p">(</span><span class="n">period_ms</span><span class="p">,</span> <span class="n">now_ms</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
 <a href="#chumicro_runner.TaskHandle.set_period" class="headerlink" title="Permanent link">&para;</a></h4>
 
@@ -1673,6 +1673,23 @@
             </td>
             <td>
                 <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>now_ms</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Anchor for the next fire, typically the timestamp the enclosing
+<code>tick()</code> returned; default is a fresh clock read.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
             </td>
           </tr>
       </tbody>
