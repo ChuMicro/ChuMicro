@@ -83,6 +83,7 @@ Values outside these limits raise `OverflowError` on encode. Tags outside the su
 | chumicro device writes → chumicro device reads | ✓ always | The common case; full round-trip |
 | Host writes with PyPI `msgpack` → chumicro device reads | ✓ if host stays in subset | See recipe below |
 | Host writes default PyPI `msgpack` → chumicro device reads | ✗ | PyPI defaults to `float64`, decodes raise on device |
+| CircuitPython firmware codec writes deep nesting → pure-path reads | ✗ past 8 levels | CircuitPython boards resolve `packb` to the firmware's native `msgpack`, which has no nesting cap; the pure path (MicroPython, CPython) refuses depth past 8 on decode.  A payload nested deeper than 8 persisted on a CircuitPython board (NVM, littlefs) will not load after reflashing that board to MicroPython; keep persisted structures within 8 levels |
 
 **Host-side recipe**, when a host script needs to produce bytes a chumicro device will read:
 

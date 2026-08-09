@@ -30,5 +30,8 @@ So phase 1 is a serial-mode CP transport that reuses the MP transport's raw-REPL
 
 ## Bench notes riding this workstream
 
+- 2026-08-09: CP-serial raw-REPL framing desync on long native-USB sessions — the Pico W under `deploy_transport: serial` intermittently answered `'\x04\x04>OK'` (the OK trailing stale banner bytes) at the clear-stale-entrypoint step, failing whole files; short suites and the UART-bridge tinypico never hit it, and `--per-file` sidesteps it.  Transport-level only, zero behavioral failures.  Relevant only when a native-USB board runs the serial transport; the bench returned to drive mode the same day once the FSKit flush barriers landed.
+
+
 - 2026-07-05: bench grew tinypico-mp, tinypico-cp (parked), feathers3-mp (swept green), feathers3-cp (phase 2 defect).  MP boards flashed 1.28.0 (above the v1.27.0 baseline, permitted); CP boards 10.2.0.
 - s2-cp board swapped by user 2026-07-05 after five wedges (user suspected the board, not the cable).  **Verdict, same day: board condemned, cable exonerated** — the replacement (uid 84722E749003), after a `storage.erase_filesystem()` cleared its corrupted-as-shipped FAT, ran the full gauntlet on the SAME cable with zero wedges: rsync-heavy deploy, fresh-fs bake, A1 RST kill (same-second recovery), A3 retry-exhaustion cycle, contiguous sequences throughout.  Reflashed rc.0 → release 10.2.0 later the same day (boot_out confirms); confirmation sweep rides the next full bench pass.  The old board (uid 84722E7490C3) is off the bench.
