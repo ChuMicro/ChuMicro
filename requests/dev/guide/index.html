@@ -979,17 +979,14 @@ Override the encoding when a server's Content-Type lies:</p>
 </span></code></pre></div>
 <p><code>Response.json()</code> decodes via <code>text</code> first, then runs <code>json.loads</code>,
 so charset overrides apply to JSON responses too.</p>
-<p>The <code>transport_factory</code> argument is a callable
-<code>(host, port, use_tls) -&gt; SocketConnector</code>, a tick-driven connector,
-not a ready socket (see <a href="#bring-your-own-transport">Bring your own transport</a>
-below for the connector contract). The bundled
+<h2 id="bring-your-own-transport">Bring your own transport<a class="headerlink" href="#bring-your-own-transport" title="Permanent link">&para;</a></h2>
+<p>The bundled
 <code>chumicro_sockets.sockets_factory.connector_factory(radio=..., ssl_context=...)</code>
-returns one wired to <code>chumicro-sockets</code>. The helper lives in an opt-in
-submodule so users with a custom transport never trigger the
+returns a factory wired to <code>chumicro-sockets</code>. The helper lives in an
+opt-in submodule so users with a custom transport never trigger the
 <code>chumicro-sockets</code> deploy. Tests pass a factory returning a
 <code>chumicro_sockets.testing.FakeSocketConnector</code> (which wraps a
 <code>FakeSocket</code>).</p>
-<h2 id="bring-your-own-transport">Bring your own transport<a class="headerlink" href="#bring-your-own-transport" title="Permanent link">&para;</a></h2>
 <p><code>HttpClient</code> does not care which library produces its sockets.  The <code>transport_factory</code> you pass is a callable of shape <code>(host: str, port: int, use_tls: bool) -&gt; SocketConnector</code>.  The connector advances the TCP connect one tick at a time, but the DNS lookup and, on MicroPython / CircuitPython, the TLS handshake block the reactor for their duration.  On a slow or unreachable host that can be seconds, freezing every other runner service, so connect before starting time-critical work.  Once <code>connector.state == "ready"</code>, the underlying socket must expose the four-method contract:</p>
 <table>
 <thead>
@@ -1033,9 +1030,12 @@ LED-heartbeat task:</p>
 </span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_sockets.sockets_factory</span><span class="w"> </span><span class="kn">import</span> <span class="n">connector_factory</span>
 </span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>
 </span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="n">http_client</span> <span class="o">=</span> <span class="n">HttpClient</span><span class="p">(</span><span class="n">transport_factory</span><span class="o">=</span><span class="n">connector_factory</span><span class="p">(</span><span class="n">radio</span><span class="o">=</span><span class="n">radio</span><span class="p">))</span>
-</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="n">runner</span> <span class="o">=</span> <span class="n">Runner</span><span class="p">([</span><span class="n">http_client</span><span class="p">,</span> <span class="n">blink_task</span><span class="p">])</span>
-</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
-</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>    <span class="n">runner</span><span class="o">.</span><span class="n">tick</span><span class="p">(</span><span class="n">ticks_ms</span><span class="p">())</span>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="n">runner</span> <span class="o">=</span> <span class="n">Runner</span><span class="p">()</span>
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="n">runner</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">http_client</span><span class="p">)</span>
+</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="n">runner</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">blink_task</span><span class="p">)</span>
+</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a>    <span class="n">now_ms</span> <span class="o">=</span> <span class="n">runner</span><span class="o">.</span><span class="n">tick</span><span class="p">()</span>
+</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a>    <span class="n">runner</span><span class="o">.</span><span class="n">wait</span><span class="p">(</span><span class="n">now_ms</span><span class="p">)</span>
 </span></code></pre></div>
 <h2 id="memory-notes">Memory notes<a class="headerlink" href="#memory-notes" title="Permanent link">&para;</a></h2>
 <p>The default 64 KB <code>max_body_bytes</code> cap is sized for the minimum
@@ -1046,7 +1046,10 @@ runner tasks (LED blink, control loop) keep getting CPU time even mid-large-body
 For bodies that shouldn't (or can't) sit in RAM at all, use
 <code>stream=True</code> (see <a href="#streaming-large-bodies">Streaming large bodies</a>):
 the per-request cost drops to the <code>stream_buffer_size</code> staging window
-(default 1024 bytes) regardless of body size.</p>
+(default 1024 bytes) regardless of body size.
+The response's header section has its own 16 KB <code>max_header_bytes</code> cap;
+raise it on <code>HttpClient(...)</code> if a server's cookie or header chain
+overflows it.</p>
 <h2 id="platform-notes">Platform notes<a class="headerlink" href="#platform-notes" title="Permanent link">&para;</a></h2>
 <p>Pure Python, no third-party deps beyond <code>chumicro-sockets</code> and <code>chumicro-timing</code>.
 Works identically on CPython, MicroPython, and CircuitPython once the
@@ -1099,6 +1102,10 @@ Use <a href="https://chumicro.github.io/ChuMicro/ntp/stable/"><code>chumicro-ntp
 <tr>
 <td><code>periodic_get.py</code></td>
 <td>Periodic GET on a real CP/MP board: wifi up, hits a configured URL every N seconds, drives an LED-blink counter to verify the request never blocks the loop.  Cross-runtime (CP + MP).</td>
+</tr>
+<tr>
+<td><code>generator_fetch.py</code></td>
+<td>The generator surface: a straight-line <code>yield from get(...)</code> fetch driven by <code>runner.add_generator</code>, no callbacks or state polling.</td>
 </tr>
 </tbody>
 </table>

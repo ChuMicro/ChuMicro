@@ -2426,7 +2426,9 @@
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Cap on status-line and header bytes staged before the body.</p>
+                <p>Cap on unparsed staged bytes outside the
+plain-body state, so it bounds the status line, headers,
+and chunked-framing lines.</p>
               </div>
             </td>
             <td>
@@ -3630,7 +3632,7 @@
 
 
 <h4 id="chumicro_requests.client.HttpClient.__init__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="fm">__init__</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">transport_factory</span><span class="p">,</span> <span class="n">recv_budget_per_tick</span><span class="o">=</span><span class="n">DEFAULT_RECV_BUDGET_PER_TICK</span><span class="p">,</span> <span class="n">max_body_bytes</span><span class="o">=</span><span class="n">DEFAULT_MAX_BODY_BYTES</span><span class="p">,</span> <span class="n">when_oversized</span><span class="o">=</span><span class="n">WhenOversized</span><span class="o">.</span><span class="n">DROP_WITH_EVENT</span><span class="p">,</span> <span class="n">default_timeout_ms</span><span class="o">=</span><span class="n">DEFAULT_TIMEOUT_MS</span><span class="p">,</span> <span class="n">default_max_redirects</span><span class="o">=</span><span class="n">DEFAULT_MAX_REDIRECTS</span><span class="p">,</span> <span class="n">stream_buffer_size</span><span class="o">=</span><span class="n">DEFAULT_STREAM_BUFFER_SIZE</span><span class="p">,</span> <span class="n">user_agent</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">ticks</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="fm">__init__</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">transport_factory</span><span class="p">,</span> <span class="n">recv_budget_per_tick</span><span class="o">=</span><span class="n">DEFAULT_RECV_BUDGET_PER_TICK</span><span class="p">,</span> <span class="n">max_body_bytes</span><span class="o">=</span><span class="n">DEFAULT_MAX_BODY_BYTES</span><span class="p">,</span> <span class="n">max_header_bytes</span><span class="o">=</span><span class="n">DEFAULT_MAX_HEADER_BYTES</span><span class="p">,</span> <span class="n">when_oversized</span><span class="o">=</span><span class="n">WhenOversized</span><span class="o">.</span><span class="n">DROP_WITH_EVENT</span><span class="p">,</span> <span class="n">default_timeout_ms</span><span class="o">=</span><span class="n">DEFAULT_TIMEOUT_MS</span><span class="p">,</span> <span class="n">default_max_redirects</span><span class="o">=</span><span class="n">DEFAULT_MAX_REDIRECTS</span><span class="p">,</span> <span class="n">stream_buffer_size</span><span class="o">=</span><span class="n">DEFAULT_STREAM_BUFFER_SIZE</span><span class="p">,</span> <span class="n">user_agent</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">ticks</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
 <a href="#chumicro_requests.client.HttpClient.__init__" class="headerlink" title="Permanent link">&para;</a></h4>
 
@@ -3697,6 +3699,22 @@
             </td>
             <td>
                   <code><span title="chumicro_requests._wire.DEFAULT_MAX_BODY_BYTES">DEFAULT_MAX_BODY_BYTES</span></code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>max_header_bytes</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Cap on the response's unparsed header section.</p>
+              </div>
+            </td>
+            <td>
+                  <code><span title="chumicro_requests._wire.DEFAULT_MAX_HEADER_BYTES">DEFAULT_MAX_HEADER_BYTES</span></code>
             </td>
           </tr>
           <tr class="doc-section-item">
@@ -3814,7 +3832,8 @@
 
     <div class="doc doc-contents ">
 
-        <p>Poll-interest bitmask OR-ing <code>_IO_READ</code> / <code>_IO_WRITE</code>.</p>
+        <p>Runner poll-interest bit for the current phase.</p>
+<p>Read while receiving, write while sending, <code>0</code> otherwise.</p>
 
 
     </div>
@@ -3853,6 +3872,59 @@
         <p>Issue <em>method</em> against <em>url</em>; return a :class:<code>RequestHandle</code>.</p>
 
 
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" href="./#chumicro_requests.HttpBusyError">HttpBusyError</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>A request is already in flight.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" href="./#chumicro_requests.HttpURLError">HttpURLError</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p><em>url</em> is not an absolute http/https URL.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="ValueError">ValueError</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p><code>json=</code> combined with <code>body=</code>.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="TypeError">TypeError</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p><em>body</em> is not bytes / bytearray / str.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
     </div>
 
 </div>
@@ -3869,6 +3941,7 @@
     <div class="doc doc-contents ">
 
         <p>Issue a GET request; return a :class:<code>RequestHandle</code>.</p>
+<p>Raises the same exceptions as :meth:<code>request</code>.</p>
 
 
     </div>
@@ -3887,6 +3960,7 @@
     <div class="doc doc-contents ">
 
         <p>Issue a POST request; return a :class:<code>RequestHandle</code>.</p>
+<p>Raises the same exceptions as :meth:<code>request</code>.</p>
 
 
     </div>
@@ -3904,7 +3978,8 @@
 
     <div class="doc doc-contents ">
 
-        <p>Issue a PUT request; same body / json / stream semantics as :meth:<code>post</code>.</p>
+        <p>Issue a PUT request; same body / json / stream semantics as
+:meth:<code>post</code>.  Raises the same exceptions as :meth:<code>request</code>.</p>
 
 
     </div>
@@ -3922,7 +3997,8 @@
 
     <div class="doc doc-contents ">
 
-        <p>Issue a PATCH request; same body / json / stream semantics as :meth:<code>post</code>.</p>
+        <p>Issue a PATCH request; same body / json / stream semantics as
+:meth:<code>post</code>.  Raises the same exceptions as :meth:<code>request</code>.</p>
 
 
     </div>
@@ -3941,6 +4017,7 @@
     <div class="doc doc-contents ">
 
         <p>Issue a DELETE request; v1 sends no body.</p>
+<p>Raises the same exceptions as :meth:<code>request</code>.</p>
 
 
     </div>
@@ -3958,7 +4035,7 @@
 
     <div class="doc doc-contents ">
 
-        <p>Return <code>True</code> if there's outbound bytes to send or readable bytes.</p>
+        <p>Return <code>True</code> while a request is in flight, so the runner ticks it.</p>
 
 
     </div>
