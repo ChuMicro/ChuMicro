@@ -1005,10 +1005,13 @@ not-yet-populated submodule defers the package into the existing
 retry loop.  A PEP-562 lazy `__init__` in a device library therefore
 works under CP RAM staging too; the cost is that a RAM-mode session
 loads the lazy submodules up front, which its test files import
-anyway.  Two constraints keep materialization sound: every lazy name
-belongs to `__all__`, and every lazy import resolves inside the
-package's own tree (a foreign-package lazy resolve would deadlock an
-own-src-scoped session).
+anyway.  Materialization is best-effort by design: it runs once after
+population settles, and a name whose providing module is not in the
+staged set is left absent rather than deferred, matching a flash
+deploy where the un-imported file never reaches the board (own-src
+scoping deliberately omits lazily-imported submodules, e.g.
+chumicro_config's runtime.py in a wifi session).  A test importing an
+absent name fails at that import with the true message.
 
 History: the bypass surfaced 2026-04-25 during chumicro-wifi Slice 0
 hardware bring-up; the materialization landed 2026-08-09 after the

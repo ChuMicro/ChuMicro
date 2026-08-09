@@ -492,6 +492,7 @@ class TestLazyExportMaterialization:
         for script in scripts[:-1]:
             exec(script, shared)
         shared["_retry_deferred"]()
+        shared["_materialize_lazy_exports"]()
         return shared
 
     def test_from_import_shape_materializes(self, tmp_path: Path) -> None:
@@ -557,12 +558,22 @@ class TestLazyExportMaterialization:
             sys.modules.pop("bootpkggetattr", None)
             sys.modules.pop("bootpkggetattr.client", None)
 
-    def test_unresolvable_lazy_export_fails_loudly(self, tmp_path: Path) -> None:
-        """An ``__all__`` name the package can never resolve (a drift
-        bug) must fail the session naming the module, not pass silently."""
+    def test_unresolvable_lazy_export_is_left_absent(self, tmp_path: Path) -> None:
+        """An ``__all__`` name whose provider is not in the staged set
+        stays absent, the way a flash deploy leaves the file off the
+        board: the session survives, eager names work, and importing
+        the absent name fails at that import with the true message.
+        The wifi RAM session hit exactly this — chumicro_config's lazy
+        ``config`` resolves from runtime.py, which own-src scoping
+        never stages, and the old defer-on-miss shape hung the whole
+        session on it."""
         init_source = (
-            "__all__ = ['Ghost']\n"
+            "__all__ = ['Present', 'Ghost']\n"
+            "Present = 1\n"
             "def __getattr__(name):\n"
+            "    if name == 'Ghost':\n"
+            "        from bootpkgghost._absent import Ghost\n"
+            "        return Ghost\n"
             "    raise AttributeError(name)\n"
         )
         test_file = tmp_path / "test_x.py"
@@ -573,7 +584,9 @@ class TestLazyExportMaterialization:
         import sys
 
         try:
-            with pytest.raises(ImportError, match="bootpkgghost"):
-                self._run_prelude(scripts)
+            self._run_prelude(scripts)
+            module = sys.modules["bootpkgghost"]
+            assert module.Present == 1
+            assert not hasattr(module, "Ghost")
         finally:
             sys.modules.pop("bootpkgghost", None)

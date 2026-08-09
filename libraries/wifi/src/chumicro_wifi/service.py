@@ -100,6 +100,8 @@ class WifiService:
         self._reconnect_attempts = 0
         # Absolute-tick deadline of an in-flight join on a non-blocking adapter; None otherwise.
         self._attempt_deadline_ms = None
+        # True once the first adapter.connect() has been dispatched; gates the first-association grace.
+        self._first_connect_dispatched = False
         self._state_callbacks = []
         # Radio I/O stays out of the constructor: configure() runs on the
         # first connect attempt, inside the tick loop.
@@ -160,12 +162,14 @@ class WifiService:
         self._attempt_connect(now_ms)
 
     def _attempt_connect(self, now_ms):
+        timeout_ms = self._attempt_timeout_ms()
         raised = False
         try:
             if not self._configured:
                 self.adapter.configure(self._config)
                 self._configured = True
-            ok = self.adapter.connect(self._config)
+            self._first_connect_dispatched = True
+            ok = self.adapter.connect(self._config, timeout_ms=timeout_ms)
         except Exception as error:  # noqa: BLE001 - adapter errors flow through last_error
             self.last_error = error
             ok = False
@@ -183,12 +187,22 @@ class WifiService:
         if not self.adapter.connect_blocks:
             # Non-blocking substrate: join dispatched, poll is_linked() over the timeout window.
             self._attempt_deadline_ms = self._ticks.ticks_add(
-                now_ms, self._config.connect_timeout_ms,
+                now_ms, timeout_ms,
             )
             return
 
         # Blocking substrate: connect() already waited, so False is a settled failure.
         self._register_failed_attempt()
+
+    def _attempt_timeout_ms(self):
+        # first_connect_timeout_ms covers only the first dispatched join:
+        # a cold radio's first association after power-up takes longer
+        # than steady-state reconnects, and the first dial warms the
+        # radio whatever its outcome.
+        grace_ms = self._config.first_connect_timeout_ms
+        if grace_ms is not None and not self._first_connect_dispatched:
+            return grace_ms
+        return self._config.connect_timeout_ms
 
     def _poll_in_flight(self, now_ms):
         if self.adapter.is_linked():
