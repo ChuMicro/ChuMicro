@@ -3,16 +3,23 @@ name: Continuous Integration
 # Design (2026-07-05 CI stand-up): the preflight job is a thin shell around
 # `python scripts/run.py preflight` — the same 13-phase gate every local
 # checkpoint runs.  CI cannot drift from the local gate because it does not
-# re-enumerate the phases; preflight IS the definition of green.  The repo
-# works direct-to-main, so everything runs on push as well as pull_request
-# (the old workflow gated its deep checks to pull_request only, which meant
-# they never ran).
+# re-enumerate the phases; preflight IS the definition of green.  Changes
+# reach main only through pull requests (the main ruleset enforces it), so
+# pull_request runs gate the merge and the push run validates the squashed
+# commit main actually carries, which is also the tree release.yml keys off.
 
 on:
   push:
     branches:
       - main
   pull_request:
+
+# Cancel superseded runs per ref: repeated pushes to a PR branch would
+# otherwise stack 45-minute jobs with nothing gating the queue on a public
+# repo.  Pushes to main keep every run, so each merge's validation stands.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 # CI only reads the repo.  Nothing here publishes, tags, or comments, so the
 # token stays read-only even when a fork's pull request runs it.
@@ -28,12 +35,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
         with:
           # check-version / check-api diff against origin/main.
           fetch-depth: 0
+          # Nothing in CI pushes, so no job keeps the token in .git/config
+          # while repository code (a fork PR's code, here) is running.
+          persist-credentials: false
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7
         with:
           python-version: "3.14"
           cache: "pip"
@@ -46,7 +56,7 @@ jobs:
       # to self-heal.  Still exactly one cache action per path — separate
       # cache actions on the same path corrupt each other.  This job
       # produces all three toolsets → tools-full-.
-      - uses: actions/cache@v6
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6
         id: tools-cache
         with:
           path: .tools
@@ -90,7 +100,7 @@ jobs:
       - name: Upload build artifacts
         # Preflight's build phase produced these; publish them for
         # inspection and downstream jobs.
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
         with:
           name: distribution
           path: libraries/*/dist/
@@ -107,9 +117,11 @@ jobs:
       matrix:
         python-version: ["3.11", "3.12", "3.13"]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7
         with:
           python-version: ${{ matrix.python-version }}
           cache: "pip"
@@ -133,9 +145,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7
         with:
           python-version: "3.14"
           cache: "pip"
@@ -148,7 +162,7 @@ jobs:
 
       # tools-mp-mpy-: this job builds only mpy-cross + micropython — see
       # the preflight cache comment for why keys are split per toolset.
-      - uses: actions/cache@v6
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6
         id: tools-cache
         with:
           path: .tools

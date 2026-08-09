@@ -53,6 +53,9 @@ happens after you report:
 - A confirmed issue gets a fix, and a disputed one gets an explanation of why.
   Serious problems go to the front of the line.
 
-Fixes land in the next release of the affected package. Versions you have pinned
-are not back-patched one by one. If a report goes quiet for a while, a polite
-follow-up on the advisory thread is welcome.
+Fixes land in the next release of the affected package. Because merges to
+`main` publish to the experimental channel first, a security fix appears there
+automatically, and the maintainer promotes it to stable right away rather than
+waiting for the next routine promotion. Versions you have pinned are not
+back-patched one by one. If a report goes quiet for a while, a polite follow-up
+on the advisory thread is welcome.

@@ -10,8 +10,8 @@ body:
   - type: input
     id: library
     attributes:
-      label: Library name
-      description: "The library to promote (e.g., timing, runner, msgpack)"
+      label: Library name(s)
+      description: "The library or libraries to promote, comma-separated (e.g., timing, runner)"
       placeholder: timing
     validations:
       required: true
@@ -19,9 +19,9 @@ body:
   - type: input
     id: tag
     attributes:
-      label: Experimental tag
-      description: "The exact experimental tag to promote (e.g., chumicro-timing-v0.2.0-experimental)"
-      placeholder: chumicro-timing-v0.2.0-experimental
+      label: Experimental tag(s)
+      description: "The exact experimental tag(s) to promote, comma-separated. Several tags promote together as one wave, which is the normal shape when libraries were released together."
+      placeholder: chumicro-timing-v0.2.0-experimental,chumicro-runner-v0.20.0-experimental
     validations:
       required: true
 

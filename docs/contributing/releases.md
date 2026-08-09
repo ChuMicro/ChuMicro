@@ -102,4 +102,7 @@ No release happens until the PR merges. Fix CI and push again.
 The release will fire on merge. It's not harmful (the package just gets a new version), but it's unnecessary. Only bump VERSION when source code under `src/` changes.
 
 **Q: What about hotfixes to older stable versions?**
-A maintainer creates a short-lived release branch from the stable tag, applies the fix, and runs `release.yml` manually. This is rare: most fixes go directly to `main`.
+A maintainer creates a short-lived release branch from the stable tag, applies the fix, and runs `release.yml` manually. This is rare: most fixes go through a normal PR to `main`.
+
+**Q: How do security fixes reach users?**
+Like any fix, plus urgency: the patch merges to `main`, publishes to experimental automatically, and the maintainer promotes it to stable immediately instead of waiting for the next routine promotion. If you are reporting a vulnerability, go through [SECURITY.md](../../SECURITY.md) privately; do not open a public promotion request for it.

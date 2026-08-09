@@ -60,7 +60,12 @@ A future agent picking up cold reads `next-up.md` for what's queued and runs `gi
 
 ## 5. Commit and push if the work is meaningful
 
-If the changes form a coherent unit, commit and push them.  Use the `git-commit` skill, then `git push` (no flags — branch tracking handles it).
+If the changes form a coherent unit, commit them.  Use the `git-commit` skill.
+
+`main` is PR-only ([Decision 0120](../../../plans/decisions/0120-main-is-pr-only.md)), so the commit rides a topic branch, never `main` directly:
+
+- Already on a topic branch: `git push` (no flags — branch tracking handles it), then open a PR with `gh pr create --fill` if one doesn't exist yet; a later checkpoint on the same branch just pushes and the open PR updates.
+- Still on `main` with work committed locally: you took a wrong turn earlier — move the work to a branch (`git checkout -b <type>/<slug>`), push that, open the PR, and leave local `main` pointing back at `origin/main`.
 
 A coherent unit = one logical change that could be described in a single commit message subject line. The compression artifacts from step 3 and the `plans/next-up.md` refresh from step 4 ride along in the same commit — they are part of the unit of work, not a separate housekeeping commit.
 
@@ -77,7 +82,7 @@ If you couldn't complete something, or noticed something that needs follow-up, s
 - Preflight green (or pre-existing red surfaced to the user and work paused).
 - Step 3 either lifted one bullet or explicitly decided "routine session, no lift".
 - `plans/next-up.md` reflects what just shipped: the shipped bullet removed from whichever section held it; new follow-ups added under `## Next`.
-- Commit pushed — or the work explicitly declared partial.
+- Commit pushed on a topic branch with a PR open — or the work explicitly declared partial.
 
 ## Rules
 
