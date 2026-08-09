@@ -979,11 +979,11 @@
 </thead>
 <tbody>
 <tr>
-<td><code>heartbeat_blink.py</code></td>
+<td><code>rate_blink.py</code></td>
 <td>Basic periodic Rate in a main loop (the embedded hello world)</td>
 </tr>
 <tr>
-<td><code>multiple_heartbeats.py</code></td>
+<td><code>multiple_rates.py</code></td>
 <td>Several Rate timers at different rates sharing one timestamp</td>
 </tr>
 <tr>
@@ -1022,7 +1022,7 @@
 </table>
 <p>Simulated examples run on CPython.  Hardware examples (<code>circuitpython_*</code> / <code>micropython_*</code>) require a real board.  See the setup notes in each file.</p>
 <h3 id="sensor-timeouts-timeout_checkpy">Sensor timeouts (<code>timeout_check.py</code>)<a class="headerlink" href="#sensor-timeouts-timeout_checkpy" title="Permanent link">&para;</a></h3>
-<p>Shows <code>ticks_add</code> for computing an absolute deadline and <code>ticks_diff</code> for checking it.  A <code>wait_for_sensor(timeout_ms)</code> helper polls a simulated sensor until it reads ready or the deadline expires, returning the elapsed time on success or <code>-1</code> on timeout.  The deadline is computed once with <code>ticks_add(start, timeout_ms)</code>; each iteration tests <code>ticks_diff(now, deadline) &lt; 0</code> to decide whether to keep polling.</p>
+<p>Shows <code>ticks_add</code> for computing an absolute deadline and <code>ticks_diff</code> for checking it.  A <code>wait_for_sensor(timeout_ms)</code> helper polls a simulated sensor until it reads ready or the deadline expires, returning the elapsed time on success or <code>-1</code> on timeout.  The deadline is computed once with <code>ticks_add(start, timeout_ms)</code>; each iteration returns <code>-1</code> once <code>ticks_diff(now, deadline) &gt;= 0</code>.</p>
 <p>The same pattern generalises to any "fail after N ms" check: handshake completion, status-register polling, button-hold detection.</p>
 <h3 id="button-debounce-debouncepy">Button debounce (<code>debounce.py</code>)<a class="headerlink" href="#button-debounce-debouncepy" title="Permanent link">&para;</a></h3>
 <p>Shows <code>ticks_ms</code> and <code>ticks_diff</code> for the classic debounce pattern.  A raw button signal bounces for a few ms after each press; the debouncer records the timestamp of the last accepted transition and rejects further changes until a quiet period (<code>DEBOUNCE_MS</code>) has elapsed.</p>
