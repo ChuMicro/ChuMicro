@@ -101,15 +101,16 @@ The request advances between LED blinks and MQTT keepalives.  A slow server or a
 
 ### Why generators and not async/await?
 
-Because `async` support is uneven across the two device runtimes, and the difference bites.  MicroPython ships a capable asyncio in its firmware.  CircuitPython's asyncio is a separate add-on library whose socket and stream layer remains incomplete, and smaller boards don't include async support in the firmware at all.  Code built on asyncio quietly commits you to one runtime.
+Because `async` support is uneven across the two device runtimes, and the difference bites.  MicroPython ships a capable asyncio in its firmware.  CircuitPython's asyncio is a separate add-on library whose socket layer has been broken since 2021, and smaller boards don't include async support in the firmware at all.  Code built on asyncio quietly commits you to one runtime, and its event loop wants to own the `while True` your app already owns.
 
-Generators sidestep that.  They're core Python, identical on CircuitPython, MicroPython, and CPython, and they're the machinery `async` compiles down to anyway.  ChuMicro drives them directly and skips the keywords.  Three things get better:
+Generators sidestep all of it.  They're core Python, identical on CircuitPython, MicroPython, and CPython, and they're what `async` compiles down to anyway: MicroPython emits the same bytecode for `await` as for `yield from`.  ChuMicro drives them directly and skips the keywords:
 
-- Every pause is a visible `yield from` in your source.  You can set a breakpoint on it, and when a deployed board misbehaves, the serial traceback shows which line it was waiting on.
-- The device pays less.  On CircuitPython, each `await` compiles into a method call that allocates a fresh object on the heap every time the line resumes; in a receive loop, that's an allocation per pass, on a board where the heap is measured in kilobytes.  `yield from` is a single bytecode on both device runtimes, ChuMicro reuses the wait objects it yields, and the runner's own tests hold its wait path to zero steady-state allocation.  These are measurements against the two runtimes' compilers, not vibes; [Decision 0087](plans/decisions/0087-generators-for-sequential-io.md) has the numbers.
-- Nothing pulls you toward coroutines you don't need.  A WiFi supervisor, an MQTT keepalive, a button debounce: each one is "check whether there's work, do one piece of it."  ChuMicro services expose exactly that pair of methods and the runner calls them.  Generators are reserved for the flows that genuinely read as a sequence.
+- A pause can't be faked or forgotten.  `yield from` a plain function and Python raises `TypeError` on the spot, where `await` invites sprinkling, and every extra pause is another place the rest of the system can change state under you between two lines of your code.
+- Every pause is a visible `yield from` in your source.  You can set a breakpoint on it, when a deployed board misbehaves the serial traceback shows which line it was waiting on, and the runner resumes services in the order you registered them, not in whatever order a task heap decides.
+- The device pays less.  CircuitPython compiles each `await` into a method call that allocates a fresh object every time the line resumes; in a receive loop, that's an allocation per pass, on a board where the heap is measured in kilobytes.  `yield from` is a single bytecode on both device runtimes, ChuMicro reuses the wait objects it yields, and the runner's own tests hold its wait path to zero steady-state allocation.
+- Nothing pulls you toward coroutines you don't need.  A WiFi supervisor, an MQTT keepalive, a button debounce: each one is "check whether there's work, do one piece of it."  ChuMicro services expose exactly that pair of methods and the runner calls them.  Generators are reserved for the flows that genuinely read as a sequence: connect, send, receive, close.
 
-The full reasoning is in the project's [decision records](plans/decisions/).
+The full case, with the compiler and scheduler sources cited, is [Decision 0087](plans/decisions/0087-generators-for-sequential-io.md).
 
 ## The engineering underneath
 
