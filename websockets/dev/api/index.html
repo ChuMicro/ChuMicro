@@ -2110,7 +2110,7 @@
 
 
 <h4 id="chumicro_websockets.client.WebSocketClient.from_config" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">from_config</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">radio</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">ssl_context</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">transport_factory</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">ticks</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">from_config</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">radio</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">ssl_context</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">transport_factory</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">ticks</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">constructor_kwargs</span><span class="p">)</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-classmethod"><code>classmethod</code></small>
@@ -2122,6 +2122,9 @@
     <div class="doc doc-contents ">
 
         <p>Build a :class:<code>WebSocketClient</code> from runtime config.</p>
+<p>Config keys carry the deployment-varying values; any other
+constructor knob passes through verbatim as a keyword, and an
+explicit keyword wins over its config-derived value.</p>
 
 
     </div>
@@ -2797,7 +2800,7 @@
 
 
 <h4 id="chumicro_websockets.server.WebSocketServer.from_config" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">from_config</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="n">on_connection</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">radio</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">listener</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">accept_path</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">max_connections</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">ticks</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">from_config</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="n">on_connection</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">radio</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">listener</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">listener_factory</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">accept_path</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">max_connections</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">ticks</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">constructor_kwargs</span><span class="p">)</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-classmethod"><code>classmethod</code></small>
@@ -2809,6 +2812,12 @@
     <div class="doc doc-contents ">
 
         <p>Build a :class:<code>WebSocketServer</code> from runtime config.</p>
+<p>Config keys carry the deployment-varying values; any other
+constructor knob passes through verbatim as a keyword, and an
+explicit keyword wins over its config-derived value.</p>
+<p>Construction is side-effect-free: with neither <em>listener</em> nor
+<em>listener_factory</em> given, a factory is built from the config's
+host / port and the bind happens on the first <code>handle()</code> tick.</p>
 
 
     </div>
@@ -2819,7 +2828,7 @@
 
 
 <h4 id="chumicro_websockets.server.WebSocketServer.__init__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="fm">__init__</span><span class="p">(</span><span class="n">listener</span><span class="p">,</span> <span class="n">on_connection</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">max_connections</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">accept_path</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">max_message_bytes</span><span class="o">=</span><span class="n">DEFAULT_MAX_MESSAGE_BYTES</span><span class="p">,</span> <span class="n">recv_budget_per_tick</span><span class="o">=</span><span class="n">DEFAULT_RECV_BUDGET_PER_TICK</span><span class="p">,</span> <span class="n">send_budget_per_tick</span><span class="o">=</span><span class="n">DEFAULT_SEND_BUDGET_PER_TICK</span><span class="p">,</span> <span class="n">max_tx_queue_size</span><span class="o">=</span><span class="n">DEFAULT_MAX_TX_QUEUE_SIZE</span><span class="p">,</span> <span class="n">when_oversized</span><span class="o">=</span><span class="n">WhenOversized</span><span class="o">.</span><span class="n">DROP_WITH_EVENT</span><span class="p">,</span> <span class="n">pong_timeout_ms</span><span class="o">=</span><span class="n">DEFAULT_PONG_TIMEOUT_MS</span><span class="p">,</span> <span class="n">handshake_timeout_ms</span><span class="o">=</span><span class="n">DEFAULT_HANDSHAKE_TIMEOUT_MS</span><span class="p">,</span> <span class="n">close_timeout_ms</span><span class="o">=</span><span class="n">DEFAULT_CLOSE_TIMEOUT_MS</span><span class="p">,</span> <span class="n">max_inbound_queue_size</span><span class="o">=</span><span class="n">DEFAULT_MAX_INBOUND_QUEUE_SIZE</span><span class="p">,</span> <span class="n">ticks</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="fm">__init__</span><span class="p">(</span><span class="n">listener</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">on_connection</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">listener_factory</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">max_connections</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">accept_path</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">max_message_bytes</span><span class="o">=</span><span class="n">DEFAULT_MAX_MESSAGE_BYTES</span><span class="p">,</span> <span class="n">recv_budget_per_tick</span><span class="o">=</span><span class="n">DEFAULT_RECV_BUDGET_PER_TICK</span><span class="p">,</span> <span class="n">send_budget_per_tick</span><span class="o">=</span><span class="n">DEFAULT_SEND_BUDGET_PER_TICK</span><span class="p">,</span> <span class="n">max_tx_queue_size</span><span class="o">=</span><span class="n">DEFAULT_MAX_TX_QUEUE_SIZE</span><span class="p">,</span> <span class="n">when_oversized</span><span class="o">=</span><span class="n">WhenOversized</span><span class="o">.</span><span class="n">DROP_WITH_EVENT</span><span class="p">,</span> <span class="n">pong_timeout_ms</span><span class="o">=</span><span class="n">DEFAULT_PONG_TIMEOUT_MS</span><span class="p">,</span> <span class="n">handshake_timeout_ms</span><span class="o">=</span><span class="n">DEFAULT_HANDSHAKE_TIMEOUT_MS</span><span class="p">,</span> <span class="n">close_timeout_ms</span><span class="o">=</span><span class="n">DEFAULT_CLOSE_TIMEOUT_MS</span><span class="p">,</span> <span class="n">max_inbound_queue_size</span><span class="o">=</span><span class="n">DEFAULT_MAX_INBOUND_QUEUE_SIZE</span><span class="p">,</span> <span class="n">ticks</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
 <a href="#chumicro_websockets.server.WebSocketServer.__init__" class="headerlink" title="Permanent link">&para;</a></h4>
 
@@ -2845,15 +2854,16 @@
                 <code>listener</code>
             </td>
             <td>
-                  <code><span title="object">object</span></code>
+                  <code><span title="object">object</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Listening socket, typically from :func:<code>chumicro_sockets.listener</code>.</p>
+                <p>Already-open listening socket, typically from
+:func:<code>chumicro_sockets.listener</code>; mutually exclusive with <em>listener_factory</em>.</p>
               </div>
             </td>
             <td>
-                <em>required</em>
+                  <code>None</code>
             </td>
           </tr>
           <tr class="doc-section-item">
@@ -2861,7 +2871,7 @@
                 <code>on_connection</code>
             </td>
             <td>
-                  <code><span title="object">object</span></code>
+                  <code><span title="object">object</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -2869,7 +2879,24 @@
               </div>
             </td>
             <td>
-                <em>required</em>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>listener_factory</code>
+            </td>
+            <td>
+                  <code><span title="object">object</span> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Zero-arg callable returning the listening socket; the bind
+is deferred to the first <code>handle()</code> tick.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
             </td>
           </tr>
           <tr class="doc-section-item">
@@ -3068,6 +3095,30 @@
     </table>
 
 
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="ValueError">ValueError</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Neither or both of <em>listener</em> / <em>listener_factory</em> were
+given, or <em>on_connection</em> is <code>None</code>.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
     </div>
 
 </div>
@@ -3083,7 +3134,9 @@
 
     <div class="doc doc-contents ">
 
-        <p>Poll-interest bit for <code>Runner.wait</code>: read while a connection slot is free, else none.</p>
+        <p>Poll-interest bit for <code>Runner.wait</code>: read while the server
+is open with its listener bound and a connection slot free,
+else none.</p>
 
 
     </div>
@@ -3158,7 +3211,7 @@ with the poller, so the cap keeps their I/O advancing.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Accept new connections and advance every active connection one tick.</p>
+        <p>Lazy-open the listener, accept new connections, advance every active connection one tick.</p>
 
 
     </div>
