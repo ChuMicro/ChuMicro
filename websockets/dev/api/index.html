@@ -787,6 +787,28 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#chumicro_websockets.server.WebSocketServer.io_interest" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        io_interest
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_websockets.server.WebSocketServer.next_deadline" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        next_deadline
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#chumicro_websockets.server.WebSocketServer.close" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -1342,6 +1364,28 @@
     <span class="md-ellipsis">
       <span class="md-typeset">
         __init__
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_websockets.server.WebSocketServer.io_interest" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        io_interest
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_websockets.server.WebSocketServer.next_deadline" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        next_deadline
       </span>
     </span>
   </a>
@@ -2066,7 +2110,7 @@
 
 
 <h4 id="chumicro_websockets.client.WebSocketClient.from_config" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">from_config</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">radio</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">ssl_context</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">transport_factory</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">from_config</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">radio</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">ssl_context</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">transport_factory</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">ticks</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-classmethod"><code>classmethod</code></small>
@@ -2753,7 +2797,7 @@
 
 
 <h4 id="chumicro_websockets.server.WebSocketServer.from_config" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">from_config</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="n">on_connection</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">radio</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">listener</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">accept_path</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">max_connections</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">from_config</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="n">on_connection</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">radio</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">listener</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">accept_path</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">max_connections</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">ticks</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-classmethod"><code>classmethod</code></small>
@@ -3022,6 +3066,45 @@
           </tr>
       </tbody>
     </table>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="chumicro_websockets.server.WebSocketServer.io_interest" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">io_interest</span><span class="p">(</span><span class="n">now_ms</span><span class="p">)</span></code>
+
+<a href="#chumicro_websockets.server.WebSocketServer.io_interest" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Poll-interest bit for <code>Runner.wait</code>: read while a connection slot is free, else none.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="chumicro_websockets.server.WebSocketServer.next_deadline" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">next_deadline</span><span class="p">(</span><span class="n">now_ms</span><span class="p">)</span></code>
+
+<a href="#chumicro_websockets.server.WebSocketServer.next_deadline" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Earliest tick at which <code>handle()</code> must run.</p>
+<p>The nearest connection deadline, capped at a short progress interval
+while any connection is live; connection sockets are not registered
+with the poller, so the cap keeps their I/O advancing.</p>
 
 
     </div>

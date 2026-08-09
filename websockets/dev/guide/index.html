@@ -905,6 +905,9 @@ once per accepted connection at the moment its handshake completes:</p>
 </span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>    <span class="n">connection</span><span class="o">.</span><span class="n">on_oversized</span> <span class="o">=</span> <span class="o">...</span>
 </span></code></pre></div>
 <p>Same shape as the client's callbacks; semantically identical.</p>
+<p>For a broadcast, iterate <code>server.connections</code> (a tuple snapshot of the
+live <code>Connection</code> objects) and call <code>send_text</code> / <code>send_binary</code> on each;
+<code>server.connection_count</code> is the cheap size check.</p>
 <h2 id="bring-your-own-transport">Bring your own transport<a class="headerlink" href="#bring-your-own-transport" title="Permanent link">&para;</a></h2>
 <p><code>WebSocketClient</code> and <code>WebSocketServer</code> don't care which library produces their sockets.  The <code>transport_factory</code> you pass to the client (and the <code>listener</code> you hand to the server) return any object matching the <code>SocketConnector</code> contract on the client side or the listener contract on the server side.  The connector advances DNS / TCP / TLS across multiple ticks; once <code>connector.state == "ready"</code>, the underlying socket must expose the four-method TCP contract:</p>
 <table>
@@ -1094,6 +1097,10 @@ MCU RAM, 2 MB physical / ~800 KB usable flash):</p>
 <tr>
 <td><a href="https://github.com/ChuMicro/ChuMicro/blob/main/libraries/websockets/examples/server.py"><code>server.py</code></a></td>
 <td>Wifi-capable board (CP or MP) accepting inbound websocket connections.</td>
+</tr>
+<tr>
+<td><a href="https://github.com/ChuMicro/ChuMicro/blob/main/libraries/websockets/examples/receive_stream.py"><code>receive_stream.py</code></a></td>
+<td>The <code>next_message</code> stream surface: a generator drains inbound messages linearly under <code>runner.add_generator</code>, with the session ticking alongside.</td>
 </tr>
 </tbody>
 </table>
