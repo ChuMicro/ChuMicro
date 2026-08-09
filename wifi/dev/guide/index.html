@@ -737,8 +737,8 @@
 <h2 id="state-machine">State machine<a class="headerlink" href="#state-machine" title="Permanent link">&para;</a></h2>
 <p><code>WifiState</code> has five string-sentinel values:</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>DISCONNECTED -&gt; CONNECTING -&gt; CONNECTED
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>                    |            |
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>                    |            v
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>                    |            |    ^
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>                    |            v    | (link restored)
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>                    |       RECONNECTING (link dropped)
 </span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>                    |            |
 </span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>                    v            v
@@ -837,7 +837,7 @@
 <td><code>power_save</code></td>
 <td></td>
 <td><code>False</code></td>
-<td>Leave radio power-save on.  <code>False</code> disables it on Pi Pico W (CYW43); ignored on adapters without the knob.</td>
+<td>Leave radio power-save on.  <code>False</code> disables it on both MicroPython stacks (CYW43 on Pi Pico W, ESP-IDF on esp32); ignored on adapters without the knob (CircuitPython).</td>
 </tr>
 <tr>
 <td><code>tx_power_dbm</code></td>
