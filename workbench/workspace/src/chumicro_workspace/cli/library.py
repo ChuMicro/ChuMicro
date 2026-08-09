@@ -90,7 +90,8 @@ def _maintain_pyright_paths_added(
     if added:
         print(
             f"Updated {PYRIGHT_CONFIG_FILENAME} "
-            f"(added {', '.join(added)}).",
+            f"(added {', '.join(added)}); commit it alongside the "
+            "acquired libraries/ trees.",
         )
 
 

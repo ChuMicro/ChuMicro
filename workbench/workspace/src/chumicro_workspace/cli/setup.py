@@ -224,7 +224,13 @@ def _cmd_setup(args: argparse.Namespace) -> int:
 
 
 def _cmd_update(args: argparse.Namespace) -> int:
-    """Re-flow tool-owned template files from upstream."""
+    """Re-flow tool-owned template files from upstream.
+
+    Exit codes: ``0`` on success, ``2`` when the template clone
+    fails, ``3`` when any tool-owned file was refused because its
+    on-disk content differs from the last-applied template version
+    (re-run with ``--force`` to overwrite or delete those files).
+    """
     workspace = _resolve_workspace(args)
     template_url = args.template_url or DEFAULT_TEMPLATE_URL
     try:
@@ -232,6 +238,7 @@ def _cmd_update(args: argparse.Namespace) -> int:
             workspace.root,
             template_url=template_url,
             git_reference=args.git_reference,
+            force=args.force,
         )
     except RuntimeError as error:
         print(f"update: {error}", file=sys.stderr)
@@ -239,13 +246,26 @@ def _cmd_update(args: argparse.Namespace) -> int:
     refreshed = report.count(ApplyAction.REFRESHED)
     unchanged = report.count(ApplyAction.UNCHANGED)
     skipped = report.count(ApplyAction.SKIPPED)
+    removed = report.count(ApplyAction.REMOVED)
+    refused = report.count(ApplyAction.REFUSED)
     print(
-        f"update: refreshed={refreshed} unchanged={unchanged} skipped={skipped}",
+        f"update: refreshed={refreshed} unchanged={unchanged} "
+        f"skipped={skipped} removed={removed} refused={refused}",
     )
     for path, action in report:
         print(f"  {action:>11}  {path}")
     for path in report.dependency_preserved_paths:
         print(f"update: preserved your added dependencies in {path}")
+    if refused:
+        plural = "file" if refused == 1 else "files"
+        print(
+            f"update: refused {refused} tool-owned {plural} with local "
+            "edits (content differs from the last-applied template "
+            "version); review the list above, then re-run with --force "
+            "to overwrite or delete them.",
+            file=sys.stderr,
+        )
+        return 3
     return 0
 
 
@@ -477,7 +497,8 @@ def _add_setup_parsers(subparsers: argparse._SubParsersAction) -> None:
         "update",
         help=(
             "Re-flow tool-owned template files from upstream. "
-            "User-owned files are skipped."
+            "User-owned files are skipped; tool-owned files upstream "
+            "no longer ships are deleted."
         ),
     )
     _add_workspace_arg(update_parser)
@@ -492,6 +513,16 @@ def _add_setup_parsers(subparsers: argparse._SubParsersAction) -> None:
         dest="git_reference",
         default=None,
         help="Branch or tag to fetch (defaults to the remote's HEAD).",
+    )
+    update_parser.add_argument(
+        "--force",
+        action="store_true",
+        help=(
+            "Overwrite or delete tool-owned files even when their "
+            "content differs from the last-applied template version "
+            "(without this flag such files are refused and left "
+            "untouched)."
+        ),
     )
     update_parser.set_defaults(func=_cmd_update)
 

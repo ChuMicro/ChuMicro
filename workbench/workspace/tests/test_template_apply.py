@@ -8,6 +8,7 @@ Option A: ``git clone`` then decouple from upstream.
 
 from __future__ import annotations
 
+import json
 import shutil
 import subprocess
 import tomllib
@@ -17,6 +18,7 @@ from typing import TYPE_CHECKING
 import pytest
 from chumicro_workspace.template_apply import (
     DEFAULT_TEMPLATE_URL,
+    TEMPLATE_STATE_FILENAME,
     ApplyAction,
     materialize_workspace_templates,
     update,
@@ -59,9 +61,7 @@ def fake_template_repo(tmp_path: Path) -> Path:
         '[project]\nname = "_template"\n',
     )
     _git("init", "-b", "main", cwd=repo)
-    _git("add", "-A", cwd=repo)
-    _git("-c", "user.email=test@example.com", "-c", "user.name=Test",
-         "commit", "-m", "initial", cwd=repo)
+    _commit_all(repo, "initial")
     return repo
 
 
@@ -72,6 +72,21 @@ def _git(*args: str, cwd: Path) -> None:
         check=True,
         capture_output=True,
     )
+
+
+def _commit_all(repo: Path, message: str) -> None:
+    """Stage every change in *repo* (adds and deletions) and commit."""
+    _git("add", "-A", cwd=repo)
+    _git("-c", "user.email=test@example.com", "-c", "user.name=Test",
+         "commit", "-m", message, cwd=repo)
+
+
+def _read_state(target: Path) -> dict[str, str]:
+    """Return the ``applied`` fingerprint mapping from the state file."""
+    raw = json.loads(
+        (target / TEMPLATE_STATE_FILENAME).read_text(encoding="utf-8"),
+    )
+    return raw["applied"]
 
 
 def _clone_template(template_repo: Path, target: Path) -> None:
@@ -99,9 +114,7 @@ def _template_repo_with_pyproject(parent: Path, pyproject_text: str) -> Path:
     repo.mkdir()
     (repo / "pyproject.toml").write_text(pyproject_text)
     _git("init", "-b", "main", cwd=repo)
-    _git("add", "-A", cwd=repo)
-    _git("-c", "user.email=test@example.com", "-c", "user.name=Test",
-         "commit", "-m", "initial", cwd=repo)
+    _commit_all(repo, "initial")
     return repo
 
 
@@ -404,3 +417,354 @@ class TestUpdatePreservesPyprojectDependencies:
         assert "requests>=2.31" in written
         dependencies = tomllib.loads(written)["project"]["dependencies"]
         assert dependencies == ["tomlkit>=0.13", "requests>=2.31"]
+
+
+class TestUpdateDirtyGuard:
+    """`update` refuses to overwrite a tool-owned file whose on-disk
+    content differs from the fingerprint recorded when it was last
+    applied, unless ``force=True``."""
+
+    def test_update_records_fingerprint_state(
+        self, fake_template_repo: Path, tmp_path: Path,
+    ) -> None:
+        """An update writes the state file and its ``applied`` mapping
+        covers every tool-owned file, including files that reported
+        UNCHANGED, and no user-owned file."""
+        target = tmp_path / "my-house"
+        _clone_template(fake_template_repo, target)
+        update(target, template_url=str(fake_template_repo))
+        state = _read_state(target)
+        assert {"run.py", "AGENTS.md", "pyproject.toml"} <= set(state)  # noqa: CHU006  template-payload filename data
+        assert "README.md" not in state
+
+    def test_refuses_overwrite_of_locally_edited_file(
+        self, fake_template_repo: Path, tmp_path: Path,
+    ) -> None:
+        """A run.py edited after the baseline-recording update reports
+        REFUSED and keeps its local content when upstream evolves."""
+        target = tmp_path / "my-house"
+        _clone_template(fake_template_repo, target)
+        update(target, template_url=str(fake_template_repo))
+        (target / "run.py").write_text("# my local tweak\n")
+        (fake_template_repo / "run.py").write_text("# upstream v2\n")
+        _commit_all(fake_template_repo, "evolve run.py")
+
+        report = update(target, template_url=str(fake_template_repo))
+
+        actions = _files(report)
+        assert actions["run.py"] == ApplyAction.REFUSED
+        assert (target / "run.py").read_text() == "# my local tweak\n"
+
+    def test_refusal_persists_across_runs(
+        self, fake_template_repo: Path, tmp_path: Path,
+    ) -> None:
+        """A refused file keeps its recorded baseline, and the next
+        update refuses it again rather than treating the untouched
+        local content as the new last-applied version."""
+        target = tmp_path / "my-house"
+        _clone_template(fake_template_repo, target)
+        update(target, template_url=str(fake_template_repo))
+        (target / "run.py").write_text("# my local tweak\n")
+        (fake_template_repo / "run.py").write_text("# upstream v2\n")
+        _commit_all(fake_template_repo, "evolve run.py")
+        update(target, template_url=str(fake_template_repo))
+
+        report = update(target, template_url=str(fake_template_repo))
+
+        actions = _files(report)
+        assert actions["run.py"] == ApplyAction.REFUSED
+        assert (target / "run.py").read_text() == "# my local tweak\n"
+
+    def test_force_overwrites_locally_edited_file(
+        self, fake_template_repo: Path, tmp_path: Path,
+    ) -> None:
+        target = tmp_path / "my-house"
+        _clone_template(fake_template_repo, target)
+        update(target, template_url=str(fake_template_repo))
+        (target / "run.py").write_text("# my local tweak\n")
+        (fake_template_repo / "run.py").write_text("# upstream v2\n")
+        _commit_all(fake_template_repo, "evolve run.py")
+
+        report = update(
+            target, template_url=str(fake_template_repo), force=True,
+        )
+
+        actions = _files(report)
+        assert actions["run.py"] == ApplyAction.REFRESHED
+        assert (target / "run.py").read_text() == "# upstream v2\n"
+
+    def test_refused_file_does_not_block_other_refreshes(
+        self, fake_template_repo: Path, tmp_path: Path,
+    ) -> None:
+        """One dirty file refuses while a clean sibling still takes the
+        upstream refresh, so a single local edit never wedges the
+        whole update."""
+        target = tmp_path / "my-house"
+        _clone_template(fake_template_repo, target)
+        update(target, template_url=str(fake_template_repo))
+        (target / "run.py").write_text("# my local tweak\n")
+        (fake_template_repo / "run.py").write_text("# upstream v2\n")
+        (fake_template_repo / "AGENTS.md").write_text("# agents v2\n")  # noqa: CHU006  template-payload filename data
+        _commit_all(fake_template_repo, "evolve run.py and agents doc")
+
+        report = update(target, template_url=str(fake_template_repo))
+
+        actions = _files(report)
+        assert actions["run.py"] == ApplyAction.REFUSED
+        assert actions["AGENTS.md"] == ApplyAction.REFRESHED  # noqa: CHU006  template-payload filename data
+        assert (target / "AGENTS.md").read_text() == "# agents v2\n"  # noqa: CHU006  template-payload filename data
+
+    def test_first_update_without_state_is_unguarded(
+        self, fake_template_repo: Path, tmp_path: Path,
+    ) -> None:
+        """With no recorded state (a workspace that never ran a
+        state-recording update) a locally edited tool-owned file is
+        still overwritten: the guard needs a baseline, and the first
+        update is what records one."""
+        target = tmp_path / "my-house"
+        _clone_template(fake_template_repo, target)
+        (target / "run.py").write_text("# my local tweak\n")
+
+        report = update(target, template_url=str(fake_template_repo))
+
+        actions = _files(report)
+        assert actions["run.py"] == ApplyAction.REFRESHED
+        assert (target / "run.py").read_text() == "# tool-owned shim\n"
+
+
+class TestUpdateReconcilesDeletions:
+    """`update` deletes tool-owned files it applied earlier that
+    upstream no longer ships, under the same local-edit guard as
+    overwrites."""
+
+    def test_removes_file_dropped_upstream(
+        self, fake_template_repo: Path, tmp_path: Path,
+    ) -> None:
+        target = tmp_path / "my-house"
+        _clone_template(fake_template_repo, target)
+        update(target, template_url=str(fake_template_repo))
+        removed_relative = "projects/_template/project_config.toml"
+        (fake_template_repo / removed_relative).unlink()
+        _commit_all(fake_template_repo, "drop template project config")
+
+        report = update(target, template_url=str(fake_template_repo))
+
+        actions = _files(report)
+        assert actions[removed_relative] == ApplyAction.REMOVED
+        assert not (target / removed_relative).exists()
+        assert removed_relative not in _read_state(target)
+
+    def test_removal_prunes_empty_directories(
+        self, fake_template_repo: Path, tmp_path: Path,
+    ) -> None:
+        """Deleting the last file of a nested tool-owned tree removes
+        the emptied parent directories too, and stops at the first
+        directory that still has content."""
+        skill_relative = ".github/skills/example/SKILL.md"
+        skill_path = fake_template_repo / skill_relative
+        skill_path.parent.mkdir(parents=True)
+        skill_path.write_text("# a shipped skill\n")
+        _commit_all(fake_template_repo, "ship a skill")
+        target = tmp_path / "my-house"
+        _clone_template(fake_template_repo, target)
+        update(target, template_url=str(fake_template_repo))
+        assert (target / skill_relative).is_file()
+        shutil.rmtree(fake_template_repo / ".github")
+        _commit_all(fake_template_repo, "retire the skill")
+
+        report = update(target, template_url=str(fake_template_repo))
+
+        actions = _files(report)
+        assert actions[skill_relative] == ApplyAction.REMOVED
+        assert not (target / ".github").exists()
+        assert (target / "run.py").is_file()
+
+    def test_refuses_deletion_of_locally_modified_file_until_forced(
+        self, fake_template_repo: Path, tmp_path: Path,
+    ) -> None:
+        """A locally edited file slated for upstream deletion reports
+        REFUSED and stays on disk, and a follow-up ``force=True`` run
+        deletes it."""
+        target = tmp_path / "my-house"
+        _clone_template(fake_template_repo, target)
+        update(target, template_url=str(fake_template_repo))
+        (target / "AGENTS.md").write_text("# my local tweak\n")  # noqa: CHU006  template-payload filename data
+        (fake_template_repo / "AGENTS.md").unlink()  # noqa: CHU006  template-payload filename data
+        _commit_all(fake_template_repo, "drop agents doc")
+
+        refused_report = update(target, template_url=str(fake_template_repo))
+        refused_actions = _files(refused_report)
+        assert refused_actions["AGENTS.md"] == ApplyAction.REFUSED  # noqa: CHU006  template-payload filename data
+        assert (target / "AGENTS.md").read_text() == "# my local tweak\n"  # noqa: CHU006  template-payload filename data
+
+        forced_report = update(
+            target, template_url=str(fake_template_repo), force=True,
+        )
+        forced_actions = _files(forced_report)
+        assert forced_actions["AGENTS.md"] == ApplyAction.REMOVED  # noqa: CHU006  template-payload filename data
+        assert not (target / "AGENTS.md").exists()  # noqa: CHU006  template-payload filename data
+
+    def test_leaves_user_created_files_in_tool_owned_directories(
+        self, fake_template_repo: Path, tmp_path: Path,
+    ) -> None:
+        """A user-created file inside a tool-owned directory was never
+        applied by the tool, so deletion reconciliation neither
+        deletes nor reports it."""
+        target = tmp_path / "my-house"
+        _clone_template(fake_template_repo, target)
+        update(target, template_url=str(fake_template_repo))
+        user_file = target / "projects" / "_template" / "my_note.txt"
+        user_file.write_text("# mine, not the template's\n")
+
+        report = update(target, template_url=str(fake_template_repo))
+
+        actions = _files(report)
+        assert "projects/_template/my_note.txt" not in actions
+        assert user_file.read_text() == "# mine, not the template's\n"
+
+    def test_state_entry_dropped_when_file_already_gone_locally(
+        self, fake_template_repo: Path, tmp_path: Path,
+    ) -> None:
+        """A recorded file that upstream dropped and the user already
+        deleted locally produces no report entry, and its fingerprint
+        leaves the state record."""
+        target = tmp_path / "my-house"
+        _clone_template(fake_template_repo, target)
+        update(target, template_url=str(fake_template_repo))
+        (target / "AGENTS.md").unlink()  # noqa: CHU006  template-payload filename data
+        (fake_template_repo / "AGENTS.md").unlink()  # noqa: CHU006  template-payload filename data
+        _commit_all(fake_template_repo, "drop agents doc")
+
+        report = update(target, template_url=str(fake_template_repo))
+
+        actions = _files(report)
+        assert "AGENTS.md" not in actions  # noqa: CHU006  template-payload filename data
+        assert "AGENTS.md" not in _read_state(target)  # noqa: CHU006  template-payload filename data
+
+
+class TestUpdatePyprojectGuard:
+    """The dirty guard treats ``[project].dependencies`` as user
+    territory (matching the preservation carve-out) and every other
+    ``pyproject.toml`` knob as tool-owned."""
+
+    _UPSTREAM_V1 = (
+        '[project]\n'
+        'name = "my-workspace"\n'
+        'requires-python = ">=3.11"\n'
+        'dependencies = [\n'
+        ']\n'
+    )
+    _UPSTREAM_V2 = (
+        '[project]\n'
+        'name = "my-workspace"\n'
+        'requires-python = ">=3.11"\n'
+        'dependencies = [\n'
+        '  "tomlkit>=0.13",\n'
+        ']\n'
+    )
+
+    def _workspace_with_baseline(self, tmp_path: Path) -> tuple[Path, Path]:
+        """Stand up a repo + workspace pair with recorded state.
+
+        Returns ``(repo, target)`` after one update has recorded the
+        v1 pyproject fingerprint.
+        """
+        repo = _template_repo_with_pyproject(tmp_path, self._UPSTREAM_V1)
+        target = tmp_path / "my-house"
+        _clone_template(repo, target)
+        update(target, template_url=str(repo))
+        return repo, target
+
+    def test_dependency_only_edit_is_not_refused(
+        self, tmp_path: Path,
+    ) -> None:
+        """A user whose only edit is an added dependency sails through
+        the guard, and the carve-out carries the addition onto the
+        evolved upstream file."""
+        repo, target = self._workspace_with_baseline(tmp_path)
+        (target / "pyproject.toml").write_text(
+            '[project]\n'
+            'name = "my-workspace"\n'
+            'requires-python = ">=3.11"\n'
+            'dependencies = [\n'
+            '  "requests>=2.31",\n'
+            ']\n',
+        )
+        (repo / "pyproject.toml").write_text(self._UPSTREAM_V2)
+        _commit_all(repo, "upstream ships tomlkit")
+
+        report = update(target, template_url=str(repo))
+
+        actions = _files(report)
+        assert actions["pyproject.toml"] == ApplyAction.REFRESHED
+        dependencies = tomllib.loads(
+            (target / "pyproject.toml").read_text(),
+        )["project"]["dependencies"]
+        assert "requests>=2.31" in dependencies
+        assert "tomlkit>=0.13" in dependencies
+
+    def test_non_dependency_edit_is_refused(self, tmp_path: Path) -> None:
+        repo, target = self._workspace_with_baseline(tmp_path)
+        edited = (
+            '[project]\n'
+            'name = "my-workspace"\n'
+            'requires-python = ">=3.12"\n'
+            'dependencies = [\n'
+            ']\n'
+        )
+        (target / "pyproject.toml").write_text(edited)
+        (repo / "pyproject.toml").write_text(self._UPSTREAM_V2)
+        _commit_all(repo, "upstream ships tomlkit")
+
+        report = update(target, template_url=str(repo))
+
+        actions = _files(report)
+        assert actions["pyproject.toml"] == ApplyAction.REFUSED
+        assert (target / "pyproject.toml").read_text() == edited
+
+    def test_force_overwrites_knob_edit_but_keeps_added_dependency(
+        self, tmp_path: Path,
+    ) -> None:
+        """``force=True`` takes the upstream side of a knob edit while
+        the carve-out still carries the user's added dependency."""
+        repo, target = self._workspace_with_baseline(tmp_path)
+        (target / "pyproject.toml").write_text(
+            '[project]\n'
+            'name = "my-workspace"\n'
+            'requires-python = ">=3.12"\n'
+            'dependencies = [\n'
+            '  "requests>=2.31",\n'
+            ']\n',
+        )
+        (repo / "pyproject.toml").write_text(self._UPSTREAM_V2)
+        _commit_all(repo, "upstream ships tomlkit")
+
+        report = update(target, template_url=str(repo), force=True)
+
+        actions = _files(report)
+        assert actions["pyproject.toml"] == ApplyAction.REFRESHED
+        assert "pyproject.toml" in report.dependency_preserved_paths
+        document = tomllib.loads((target / "pyproject.toml").read_text())
+        assert document["project"]["requires-python"] == ">=3.11"
+        assert "requests>=2.31" in document["project"]["dependencies"]
+
+    def test_mangled_pyproject_is_refused_after_baseline(
+        self, tmp_path: Path,
+    ) -> None:
+        """An on-disk pyproject that no longer parses cannot match its
+        recorded structural fingerprint, so the update refuses loudly
+        instead of silently overwriting the mangled file."""
+        repo, target = self._workspace_with_baseline(tmp_path)
+        (target / "pyproject.toml").write_text(
+            "this is not = valid = toml [[[\n",
+        )
+        (repo / "pyproject.toml").write_text(self._UPSTREAM_V2)
+        _commit_all(repo, "upstream ships tomlkit")
+
+        report = update(target, template_url=str(repo))
+
+        actions = _files(report)
+        assert actions["pyproject.toml"] == ApplyAction.REFUSED
+        assert (target / "pyproject.toml").read_text() == (
+            "this is not = valid = toml [[[\n"
+        )

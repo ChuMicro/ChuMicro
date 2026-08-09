@@ -9,9 +9,18 @@ command calls :func:`add_library_extra_paths` to register the new
 source directories, and ``remove`` / ``forget`` call
 :func:`remove_library_extra_paths` to drop them again.
 
-The file is user-owned JSON: unrelated ``extraPaths`` entries (such as
-``"shared"``) and unrelated top-level keys are preserved, the order of
-untouched entries is kept, and new entries are appended in sorted
+``pyrightconfig.json`` is tracked workspace content, and the managed
+entries are meant to be committed: an acquired ``libraries/<name>/``
+tree is itself committable workspace content, each entry mirrors one
+acquired tree, and a teammate cloning the workspace gets resolving
+editor imports only when the two travel together.  The entries are
+machine-independent (workspace-root-relative POSIX paths), so nothing
+per-host leaks into git; dropping an acquired tree via ``remove`` /
+``forget`` clears its entry again.
+
+The file stays user-owned JSON: unrelated ``extraPaths`` entries (such
+as ``"shared"``) and unrelated top-level keys are preserved, the order
+of untouched entries is kept, and new entries are appended in sorted
 order.  A missing file is created with just ``{"extraPaths": [...]}``.
 Writes go through :func:`~chumicro_workspace.atomic_write.atomic_write_text`
 so a crash never leaves a half-written config.  A file that exists but
