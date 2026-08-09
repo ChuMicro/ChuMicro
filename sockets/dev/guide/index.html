@@ -764,7 +764,6 @@
 <th>TCP</th>
 <th>TLS context</th>
 <th>Custom CA</th>
-<th><code>fileno()</code></th>
 </tr>
 </thead>
 <tbody>
@@ -773,21 +772,18 @@
 <td>✅ stdlib <code>socket</code></td>
 <td>✅ <code>ssl.SSLContext</code></td>
 <td>✅ via <code>ssl_context_with_ca</code></td>
-<td>✅ real fd</td>
 </tr>
 <tr>
 <td>MicroPython</td>
 <td>✅ stdlib <code>socket</code></td>
 <td>✅ MP <code>ssl.SSLContext</code> (mbedTLS)</td>
 <td>✅ via <code>ssl_context_with_ca</code></td>
-<td>✅ real fd</td>
 </tr>
 <tr>
 <td>CircuitPython</td>
 <td>✅ <code>socketpool</code> + <code>radio</code></td>
 <td>✅ on-board <code>ssl.SSLContext</code></td>
 <td>✅ via <code>ssl_context_with_ca</code></td>
-<td>⚠️ may return <code>-1</code></td>
 </tr>
 </tbody>
 </table>
@@ -817,7 +813,7 @@
 <tr>
 <td>MicroPython SSLSocket on some ports</td>
 <td>Wrapped TLS socket lacks <code>settimeout</code> / <code>setblocking</code> / <code>fileno</code></td>
-<td>Wrapper forwards <code>settimeout</code> / <code>setblocking</code> to no-ops; non-blocking semantics still hold via the TLS layer.  Runner reads the connector's <code>io_socket</code> and unwraps it to the registrable underlying socket at the poller; user code never deals with <code>fileno()</code>.</td>
+<td>Wrapper forwards <code>setblocking</code> to the underlying socket and substitutes a no-op for <code>settimeout</code>, which MP's <code>SSLSocket</code> does not expose; non-blocking semantics still hold via the TLS layer.  Runner reads the connector's <code>io_socket</code> and unwraps it to the registrable underlying socket at the poller; user code never deals with <code>fileno()</code>.</td>
 </tr>
 <tr>
 <td>Stricter mbedTLS builds</td>

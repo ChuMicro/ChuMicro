@@ -597,17 +597,6 @@
   
 </li>
         
-          <li class="md-nav__item">
-  <a href="#chumicro_sockets.generators.recv_exact" class="md-nav__link">
-    <span class="md-ellipsis">
-      <span class="md-typeset">
-        recv_exact
-      </span>
-    </span>
-  </a>
-  
-</li>
-        
       </ul>
     </nav>
   
@@ -987,17 +976,6 @@
     <span class="md-ellipsis">
       <span class="md-typeset">
         recv_until
-      </span>
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#chumicro_sockets.generators.recv_exact" class="md-nav__link">
-    <span class="md-ellipsis">
-      <span class="md-typeset">
-        recv_exact
       </span>
     </span>
   </a>
@@ -1944,6 +1922,8 @@
     <div class="doc doc-contents ">
 
         <p>Replace or revert the CA bundle used by <code>connector(tls=True, context=None)</code>.</p>
+<p>MicroPython only: a no-op on CircuitPython (firmware trust store) and
+CPython (operating-system trust store).</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -2054,7 +2034,7 @@ would pull :mod:<code>chumicro_sockets</code> onto the board.</p>
 
 
 <h3 id="chumicro_sockets.sockets_factory.fixed_connector_factory" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">fixed_connector_factory</span><span class="p">(</span><span class="n">host</span><span class="p">,</span> <span class="n">port</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">radio</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">ssl_context</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">fixed_connector_factory</span><span class="p">(</span><span class="n">host</span><span class="p">,</span> <span class="n">port</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">use_tls</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">radio</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">ssl_context</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
 <a href="#chumicro_sockets.sockets_factory.fixed_connector_factory" class="headerlink" title="Permanent link">&para;</a></h3>
 
@@ -2062,6 +2042,8 @@ would pull :mod:<code>chumicro_sockets</code> onto the board.</p>
     <div class="doc doc-contents ">
 
         <p>Build a <code>() -&gt; SocketConnector</code> factory for one fixed endpoint.</p>
+<p><code>use_tls=True</code> with no <em>ssl_context</em> dials TLS against the runtime's
+default trust store; passing a context implies TLS on its own.</p>
 
 
     </div>
@@ -2113,7 +2095,7 @@ would pull :mod:<code>chumicro_sockets</code> onto the board.</p>
     </div>
 
 </div><h2 id="chumicro_socketsgenerators"><code>chumicro_sockets.generators</code><a class="headerlink" href="#chumicro_socketsgenerators" title="Permanent link">&para;</a></h2>
-<p>Socket I/O as <code>yield from</code> steps for generators registered with <code>Runner.add_generator</code>: <code>connect</code> drives a connector until it hands back a connected socket, <code>send_all</code> writes a whole buffer, and <code>recv_until</code> and <code>recv_exact</code> read a delimited or a fixed-length chunk.  Each one suspends whenever the socket would block, so the rest of the device keeps running while it waits.</p>
+<p>Socket I/O as <code>yield from</code> steps for generators registered with <code>Runner.add_generator</code>: <code>connect</code> drives a connector until it hands back a connected socket, <code>send_all</code> writes a whole buffer, and <code>recv_until</code> reads a delimited chunk.  Each one suspends whenever the socket would block, so the rest of the device keeps running while it waits.</p>
 
 
 <div class="doc doc-object doc-module">
@@ -2129,7 +2111,7 @@ would pull :mod:<code>chumicro_sockets</code> onto the board.</p>
     <div class="doc doc-contents first">
 
         <p>Generator helpers for socket I/O driven by a tick-based scheduler.</p>
-<p>The public helpers are <code>connect</code>, <code>send_all</code>, <code>recv_until</code>, and <code>recv_exact</code>.</p>
+<p>The public helpers are <code>connect</code>, <code>send_all</code>, and <code>recv_until</code>.</p>
 
 
 
@@ -2571,166 +2553,6 @@ would pull :mod:<code>chumicro_sockets</code> onto the board.</p>
             <td>
               <div class="doc-md-description">
                 <p><em>max_bytes</em> is not positive.</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h3 id="chumicro_sockets.generators.recv_exact" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">recv_exact</span><span class="p">(</span><span class="n">sock</span><span class="p">,</span> <span class="n">byte_count</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">max_bytes</span><span class="p">)</span></code>
-
-<a href="#chumicro_sockets.generators.recv_exact" class="headerlink" title="Permanent link">&para;</a></h3>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Read exactly <em>byte_count</em> bytes and return them as <code>bytes</code>.</p>
-
-
-<p><span class="doc-section-title">Parameters:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Default</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                <code>sock</code>
-            </td>
-            <td>
-                  <code><span title="object">object</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Non-blocking TCP socket.</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>byte_count</code>
-            </td>
-            <td>
-                  <code><span title="int">int</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Number of bytes to read. Must be positive.</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>max_bytes</code>
-            </td>
-            <td>
-                  <code><span title="int">int</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Hard cap on the buffer, so a peer-controlled length cannot force an unbounded allocation.</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-    <p><span class="doc-section-title">Yields:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                  <code><span title="bytes">bytes</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>A <code>ReadWait</code> on each <code>EAGAIN</code>.</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-    <p><span class="doc-section-title">Returns:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                  <code><span title="bytes">bytes</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p><code>bytes</code> of length exactly <em>byte_count</em>.</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-<p><span class="doc-section-title">Raises:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                  <code><span title="OSError">OSError</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>The peer closed before <em>byte_count</em> bytes arrived, or a non-EAGAIN error.</p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                  <code><span title="ValueError">ValueError</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p><em>byte_count</em> or <em>max_bytes</em> is not positive, or <em>byte_count</em> exceeds <em>max_bytes</em>.</p>
               </div>
             </td>
           </tr>
