@@ -13,14 +13,15 @@ The repository operates as a public project: `main` is PR-only for everyone (Dec
 - `ai-review.yml`: Claude review on a maintainer's `@claude /review` comment (user call 2026-08-09: comment command over label, and the gate exists because a drive-by PR must never be able to spend tokens on the maintainer's account).  PR-as-data design, advisory-only.  Abuse model written up in docs/contributing/maintainers.md.
 - Docs: CONTRIBUTING "How changes land", maintainer runbook, first-time-contributor CI-approval notes, security-fix release path in SECURITY.md and releases.md, README channel visibility and repo-map cleanup, promotion-request template takes a wave, labels grown (ai-review, good first issue, help wanted, question, needs-triage, security) and de-em-dashed.
 
-## Settings still to flip (maintainer, one-time; commands in the PR body)
+## Settings — ALL FLIPPED and verified 2026-08-09 (user go, run from the session)
 
-- Main ruleset bypass actors: `always` → `pull_request` mode (until then, direct pushes still physically work).
-- Actions default workflow permissions: `write` → `read` (every workflow declares its own; the default only backstops future files).
-- Fork-PR workflow approval: first-timers → all outside collaborators.
-- `pypi` environment: restrict deployments to `main`.
-- Add `ANTHROPIC_API_KEY` secret with a console spend cap, or ai-review runs fail at the action step.
-- After merge + dependabot rebases: consider the repo-level "require SHA pinning" Actions setting.
+- Main ruleset bypass actors: `pull_request` mode for OrganizationAdmin, RepositoryRole(admin), and the user.  Direct pushes to main are dead; emergency bypass works only through a PR merge.
+- Actions default workflow permissions: back to `read` (it had been widened to `write` during the release-403 hunt; every workflow declares its own, so the default only backstops future files).
+- Fork-PR workflow approval: all outside collaborators.
+- `pypi` environment: deployment branch policy restricts to `main` (verified: one policy row, `main`).
+- Private vulnerability reporting: **found DISABLED and enabled.**  Durable lesson: SECURITY.md's only reporting channel pointed at a switched-off feature, and nothing in the repo could have caught it — settings-side claims in docs need a settings-side verification step, which the maintainer runbook's verification commands now cover.
+- `ANTHROPIC_API_KEY`: user reports added 2026-08-09; not visible in repo Actions secrets from the session (may be org-level), so the first live `@claude /review` is the real verification.
+- Still open: the repo-level "require SHA pinning" Actions setting, now that every workflow is SHA-pinned.
 
 ## Punch list (deferred, roughly by value)
 
