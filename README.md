@@ -112,53 +112,36 @@ Generators sidestep all of it.  They're core Python, identical on CircuitPython,
 
 The full case, with the compiler and scheduler sources cited, is [Decision 0087](plans/decisions/0087-generators-for-sequential-io.md).
 
-## A real device on one page
+## A real project on one page
 
-Everything above adds up to real devices.  This one is a greenhouse fan controller: temperature readings out, speed commands in, and the LED from the first example blinking through all of it.
+Put the pieces together and you get a real project.  This one is a greenhouse fan controller: it reports the temperature every five seconds, listens for fan-speed commands, and keeps its status LED blinking through it all.
 
 ```python
-import json
-
 from chumicro_mqtt import MQTTClient
 from chumicro_runner import Runner
-from chumicro_wifi import WifiConfig, WifiService, WifiState
+from chumicro_wifi import WifiConfig, WifiService
 
 wifi = WifiService(WifiConfig(ssid="home-wifi", password="…"))
 mqtt = MQTTClient.from_config(
     {"mqtt.broker.host": "10.0.0.5", "mqtt.broker.port": 1883},
     radio=wifi.adapter.radio,
 )
-
-# If the board drops off the network, the broker says so.
-mqtt.set_will("greenhouse/status", b"offline", qos=1, retain=True)
-mqtt.on_connect = lambda: mqtt.publish("greenhouse/status", b"online", qos=1, retain=True)
-
-# Declared once: sent on the first connect, replayed on every reconnect.
-mqtt.subscribe("greenhouse/fan/set", qos=1)
-
-def on_wifi_state(old_state, new_state):
-    if new_state == WifiState.CONNECTED:
-        mqtt.connect()   # link is up: dial the broker
-    else:
-        mqtt.hold()      # link is down: stop dialing a dead radio
-
-wifi.on_state_change(on_wifi_state)
+mqtt.subscribe("greenhouse/fan/set")
+mqtt.connect()                       # keeps retrying until the broker answers
 
 def publish_temperature(now):
-    reading = json.dumps({"celsius": round(read_celsius(), 1)})
-    mqtt.publish("greenhouse/temperature", reading.encode(), qos=1)
+    mqtt.publish("greenhouse/temperature", f"{read_celsius():.1f}".encode())
 
 def follow_fan_commands():
     while True:
-        message = yield from mqtt.next_message()   # waits here; the rest keeps running
+        message = yield from mqtt.next_message()   # wait for a command; the LED keeps blinking
         if message is None:
-            return                                 # client stopped for good
+            return
         speed = max(0, min(100, int(message.payload.decode())))
         set_fan_duty(speed / 100)
-        mqtt.publish("greenhouse/fan/speed", str(speed).encode(), qos=1, retain=True)
 
 runner = Runner()
-runner.add(wifi)
+runner.add(wifi)                     # brings WiFi up, reconnects when it drops
 runner.add(mqtt)
 runner.add_periodic(publish_temperature, period_ms=5_000)
 runner.add_periodic(toggle_led, period_ms=500)     # the blink from the first example
@@ -169,9 +152,9 @@ while True:
     runner.wait(now)
 ```
 
-Staying online is the libraries' job: WiFi retries with backoff, the MQTT client connects a step at a time and re-dials when the network returns, and your subscription and any readings published during the outage arrive once it's back.  What you wrote is pure fan controller, and the command loop reads top to bottom with `yield from` marking the line where it waits.  The same shape holds across the library table below: every network library is a service on this loop, so serving a status page next to this client is one more `runner.add()`.
+Now do the worst thing you can do to a connected board: pull your router's plug.  The LED keeps blinking and the fan holds its speed while the board quietly retries.  Plug the router back in and the temperature starts flowing again on its own: the wifi service and the mqtt client handle the reconnecting, the re-subscribing, and the catching up for you.  Your part stays small and reads like a story: wait for a command, set the fan, wait for the next one, with `yield from` marking each place your code waits its turn.
 
-[`demos/mqtt_sensor_motor`](demos/mqtt_sensor_motor/) is this program running on a Pico W or ESP32, sensor and fan lines filled in per board, against a live broker your laptop hosts.  The reference project in the [workspace template](https://github.com/ChuMicro/ChuMicro-Workbench-Template) grows it into a project of your own.
+[`demos/mqtt_sensor_motor`](demos/mqtt_sensor_motor/) is the runnable version, sensor and fan wiring written out for Pico W and ESP32: one command puts it on your board while your laptop plays the broker.  And when you're ready to build your own, the [workspace template](https://github.com/ChuMicro/ChuMicro-Workbench-Template) starts you off with a project just like it.
 
 ## The engineering underneath
 
