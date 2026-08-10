@@ -744,6 +744,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#chumicro_workspace.workspace.runner_invocation" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        runner_invocation
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2517,6 +2528,17 @@
         
       </ul>
     </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_workspace.workspace.runner_invocation" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        runner_invocation
+      </span>
+    </span>
+  </a>
   
 </li>
         
@@ -5210,6 +5232,30 @@ in <em>start</em> or any of its parents.</p>
 
 </div>
 
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="chumicro_workspace.workspace.runner_invocation" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">runner_invocation</span><span class="p">(</span><span class="n">workspace_root</span><span class="p">)</span></code>
+
+<a href="#chumicro_workspace.workspace.runner_invocation" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Return the command prefix a hint should name for this workspace.</p>
+<p>A workspace driven by the template's <code>run.py</code> shim keeps its
+venv off PATH, so a hint naming <code>chumicro-workspace ...</code> fails
+with command-not-found when pasted; a standalone install has no
+<code>run.py</code> and drives the CLI directly.  Picks whichever
+invocation actually resolves: <code>python3 run.py</code> when the shim
+exists at <em>workspace_root</em>, <code>chumicro-workspace</code> otherwise.</p>
+
+
+    </div>
+
+</div>
 
 
 
