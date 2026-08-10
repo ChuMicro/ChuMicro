@@ -114,7 +114,7 @@ The full case, with the compiler and scheduler sources cited, is [Decision 0087]
 
 ## An MQTT device on one page
 
-Here is everything above assembled into one program: a greenhouse fan controller.  It publishes the temperature, takes speed commands back, and tells the broker whether it's alive.  Five libraries share the loop: `wifi`, `mqtt`, and the `runner` in plain sight, `sockets` and `timing` underneath.
+Here is everything above assembled into one program: a greenhouse fan controller.  Temperature out every five seconds, speed commands in, and the LED from the first example still blinking through all of it.
 
 ```python
 import json
@@ -171,7 +171,7 @@ while True:
 
 (`read_celsius`, `set_fan_duty`, and `toggle_led` are the board-specific lines; the demo fills them in for Pico W and ESP32.)
 
-Nothing here babysits the connection.  Messages published before the broker is up wait in a queue and go out on connect, and the subscription replays itself on every reconnect.  Kill the router and the broker announces `offline` for the board (that's the last will), the LED keeps blinking, and when the network comes back the session heals, subscription and all.  The command loop is seven lines you read top to bottom, and `yield from` marks the one place it waits.
+The program stays this short because the libraries carry the bookkeeping.  While `mqtt` dials a broker that isn't answering, the temperature keeps sampling and the LED keeps blinking.  When WiFi drops, the wifi service retries with backoff and the client stops dialing a dead radio; when the network returns, it reconnects, replays its subscription, and sends what queued up while it was gone.  And the one job that really is a sequence (wait for a command, apply it, confirm it) is a generator you read top to bottom, with `yield from` marking the only line that waits.
 
 [`demos/mqtt_sensor_motor`](demos/mqtt_sensor_motor/) is this same node driving real PWM and the CPU temperature sensor, one command after the setup below.  The reference project in the [workspace template](https://github.com/ChuMicro/ChuMicro-Workbench-Template) is where your own version starts.
 
