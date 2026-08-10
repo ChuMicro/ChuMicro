@@ -112,9 +112,9 @@ Generators sidestep all of it.  They're core Python, identical on CircuitPython,
 
 The full case, with the compiler and scheduler sources cited, is [Decision 0087](plans/decisions/0087-generators-for-sequential-io.md).
 
-## An MQTT device on one page
+## A real device on one page
 
-Here is everything above assembled into one program: a greenhouse fan controller.  Temperature out every five seconds, speed commands in, and the LED from the first example still blinking through all of it.  If you've built this device before, you know where it hurts: a connect call that freezes everything until the broker answers, and reconnect logic you end up writing yourself.
+Everything above adds up to real devices.  This one is a greenhouse fan controller: temperature readings out, speed commands in, and the LED from the first example blinking through all of it.
 
 ```python
 import json
@@ -169,11 +169,9 @@ while True:
     runner.wait(now)
 ```
 
-(`read_celsius`, `set_fan_duty`, and `toggle_led` are the board-specific lines; the demo fills them in for Pico W and ESP32.)
+Staying online is the libraries' job: WiFi retries with backoff, the MQTT client connects a step at a time and re-dials when the network returns, and your subscription and any readings published during the outage arrive once it's back.  What you wrote is pure fan controller, and the command loop reads top to bottom with `yield from` marking the line where it waits.  The same shape holds across the library table below: every network library is a service on this loop, so serving a status page next to this client is one more `runner.add()`.
 
-Neither hurt made it onto the page.  Connecting never freezes anything: the client works toward the broker a step at a time while the temperature keeps sampling and the LED keeps blinking.  And there is no reconnect logic to write: WiFi retries with backoff, the client re-dials when the network comes back, the subscription comes back with it, and readings published while the broker was away go out once it returns.  What's left is the part that's actually yours, and it's plain Python read top to bottom: `yield from` marks the one line that waits.
-
-[`demos/mqtt_sensor_motor`](demos/mqtt_sensor_motor/) is this same device driving real PWM and the CPU temperature sensor, one command after the setup below.  The reference project in the [workspace template](https://github.com/ChuMicro/ChuMicro-Workbench-Template) is where your own version starts.
+[`demos/mqtt_sensor_motor`](demos/mqtt_sensor_motor/) is this program running on a Pico W or ESP32, sensor and fan lines filled in per board, against a live broker your laptop hosts.  The reference project in the [workspace template](https://github.com/ChuMicro/ChuMicro-Workbench-Template) grows it into a project of your own.
 
 ## The engineering underneath
 
@@ -213,7 +211,7 @@ chumicro-workspace add-device               # one-time: register the plugged-in 
 python demos/mqtt_sensor_motor/driver.py    # deploys the board side, then drives the round trip
 ```
 
-The driver deploys `app.py` to your board, runs the laptop side against it, and prints the exchange as it happens; `--help` on any driver lists its options.  You never copy a file onto a USB drive or assemble the board's `lib/` folder by hand: the tooling deploys, drives, and reports, for every demo here and every example in every library.  Networked demos read WiFi credentials from a gitignored `secrets.toml` at the repo root ([wiring wifi credentials](docs/wiring-wifi-credentials.md)), and the MQTT demos expect the `mosquitto` broker on your PATH (`brew install mosquitto`, or your package manager's equivalent).  No board on your desk?  `cd demos/laptop_roundtrip && python app.py` runs with nothing plugged in.
+The driver deploys `app.py` to your board, runs the laptop side against it, and prints the exchange as it happens; `--help` on any driver lists its options.  The tooling does the bench work for you: it picks the port, ships the files with the libraries they need, bakes in your WiFi credentials, and tails the board's output, for every demo here and every example in every library.  Networked demos read WiFi credentials from a gitignored `secrets.toml` at the repo root ([wiring wifi credentials](docs/wiring-wifi-credentials.md)), and the MQTT demos expect the `mosquitto` broker on your PATH (`brew install mosquitto`, or your package manager's equivalent).  No board on your desk?  `cd demos/laptop_roundtrip && python app.py` runs with nothing plugged in.
 
 Each demo's README says what you'll see and what it proves.  For single-library learning material, every library also ships an `examples/` folder that deploys to a board with one command ([below](#try-an-example-on-a-board)).
 
