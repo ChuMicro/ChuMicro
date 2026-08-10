@@ -7,6 +7,7 @@ from chumicro_workspace.workspace import (
     ProjectClassification,
     WorkspaceLayout,
     WorkspaceNotFoundError,
+    runner_invocation,
 )
 
 
@@ -206,3 +207,14 @@ class TestFromDir:
         monkeypatch.chdir(root)
         layout = WorkspaceLayout.from_dir()
         assert layout.root == root.resolve()
+
+
+class TestRunnerInvocation:
+    def test_names_the_shim_when_run_py_exists(self, tmp_path: Path) -> None:
+        root = _seed_root(tmp_path)
+        (root / "run.py").write_text("# dispatcher shim\n")
+        assert runner_invocation(root) == "python3 run.py"
+
+    def test_names_the_cli_without_the_shim(self, tmp_path: Path) -> None:
+        root = _seed_root(tmp_path)
+        assert runner_invocation(root) == "chumicro-workspace"

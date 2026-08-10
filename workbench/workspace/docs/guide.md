@@ -129,7 +129,7 @@ chumicro-workspace new garage.sensors.door_open      # dotted form, same effect
 # Copy an existing tree instead of the blank template.  --from takes any
 # directory under the workspace root that contains an app.py, code.py,
 # or main.py entry point.
-chumicro-workspace new garage/heater --from examples/two_projects/server
+chumicro-workspace new garage/heater --from examples/two_board_handshake/server
 
 # Scaffold a chumicro-style library (full src/tests/docs/examples tree).
 # Lands at <workspace>/libraries/<name>/ by default; --into <dir>

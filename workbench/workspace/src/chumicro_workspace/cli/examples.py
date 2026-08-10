@@ -33,7 +33,7 @@ from chumicro_workspace.cli.deploy import (
     _make_deploy_runner,
     resolve_project_deploy_source,
 )
-from chumicro_workspace.workspace import WorkspaceLayout
+from chumicro_workspace.workspace import WorkspaceLayout, runner_invocation
 
 # ---------------------------------------------------------------------------
 # demo
@@ -175,7 +175,10 @@ def _resolve_deploy_example_modes(args: argparse.Namespace) -> tuple[bool, bool]
     return False, should_tail
 
 
-def _print_no_device_hint(runtime_required: str | None) -> None:
+def _print_no_device_hint(
+    workspace_root: Path,
+    runtime_required: str | None,
+) -> None:
     """Print the structured stderr hint for the no-device-registered case.
 
     Non-interactive shape: emit a deterministic stderr hint and let the
@@ -183,11 +186,12 @@ def _print_no_device_hint(runtime_required: str | None) -> None:
     register a device explicitly.
     """
     runtime = runtime_required or "circuitpython"
+    invocation = runner_invocation(workspace_root)
     print(
         f"deploy-example: no {runtime} device registered.\n"
-        f"  to register:    chumicro-workspace add-device "
+        f"  to register:    {invocation} add-device "
         f"<id> --address <port> --runtime {runtime}\n"
-        f"  to list ports:  chumicro-workspace discover\n"
+        f"  to list ports:  {invocation} discover\n"
         f"  rerun without --non-interactive for the registration wizard.",
         file=sys.stderr,
     )
@@ -340,7 +344,7 @@ def _resolve_deploy_example_device(
         pass
 
     if non_interactive or not args.auto_register:
-        _print_no_device_hint(runtime_required)
+        _print_no_device_hint(workspace.root, runtime_required)
         raise _DeployExampleError(
             DEPLOY_EXAMPLE_EXIT_NO_DEVICE_REGISTERED, "",
         )

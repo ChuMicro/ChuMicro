@@ -1939,6 +1939,27 @@ class TestDoctor:
         ):
             assert label in out
 
+    def test_glyph_column_is_aligned_across_rows(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """Every finding row places its glyph at the same column, and the
+        longest label still gets a gutter before its glyph."""
+        root = seed_workspace(tmp_path)
+        project_dir = seed_project(root, name="back-porch")
+        (project_dir / "app.py").write_text("def run(): pass\n")
+        exit_code = cli.main(["doctor", "--workspace-dir", str(root)])
+        assert exit_code == 0
+        out = capsys.readouterr().out
+        glyph_columns = set()
+        for line in out.splitlines():
+            positions = [
+                line.index(glyph) for glyph in ("✓", "⚠", "✗") if glyph in line
+            ]
+            if positions:
+                glyph_columns.add(min(positions))
+        assert len(glyph_columns) == 1
+        assert "PROJECT run() defs  " in out
+
     def test_missing_run_function_flips_exit_to_one(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
     ) -> None:
@@ -3539,9 +3560,29 @@ class TestTestCommand:
         )
         assert exit_code == 0
         assert runner.calls[0].args == [
-            sys.executable, "-m", "pytest", "--", "-k", "sanity",
+            sys.executable, "-m", "pytest", "-k", "sanity",
         ]
         assert runner.calls[0].cwd == root
+
+    def test_separator_is_not_forwarded_to_pytest(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        """The `--` the help asks for must not reach pytest.
+
+        argparse.REMAINDER keeps the separator, and pytest reads
+        everything after a literal `--` as file or directory paths, so
+        a forwarded separator turns every flag behind it into a "file
+        or directory not found" error.
+        """
+        root = seed_workspace(tmp_path)
+        runner = FakeSubprocessRunner()
+        exit_code = cli.main(
+            ["test", "--workspace-dir", str(root), "--", "-k", "sanity"],
+            env=cli.CliEnv(subprocess_runner=runner),
+        )
+        assert exit_code == 0
+        assert "--" not in runner.calls[0].args
 
     def test_fails_loudly_when_pytest_missing(
         self,

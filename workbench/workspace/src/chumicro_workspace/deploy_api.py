@@ -58,6 +58,7 @@ from .device_orchestration import (
 from .device_runner import DeviceBootstrapRunner
 from .markers import Marker
 from .pipeline import compose_runtime_config
+from .workspace import runner_invocation
 
 
 class DeployApiError(RuntimeError):
@@ -209,8 +210,8 @@ def _select_device(
         if entry.runtime == effective_runtime:
             return entry
     raise DeviceNotFoundError(
-        f"no {effective_runtime!r} device in devices.yml; "
-        f"register one with `chumicro-workspace add-device`.",
+        f"no {effective_runtime!r} device in devices.yml; register one "
+        f"with `{runner_invocation(workspace_root)} add-device`.",
     )
 
 

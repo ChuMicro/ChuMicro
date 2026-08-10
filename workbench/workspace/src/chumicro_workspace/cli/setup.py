@@ -551,7 +551,7 @@ def _add_setup_parsers(subparsers: argparse._SubParsersAction) -> None:
             "Copy from this directory (relative to the workspace root) "
             "instead of projects/_template/.  Source must contain an "
             "app.py / code.py / main.py entry-point.  Useful for "
-            "`new garage/heater --from examples/two_projects/server`."
+            "`new garage/heater --from examples/two_board_handshake/server`."
         ),
     )
     new_parser.add_argument(

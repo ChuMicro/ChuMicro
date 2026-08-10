@@ -117,6 +117,21 @@ def _walk_classified(
     return has_project_or_namespace
 
 
+def runner_invocation(workspace_root: Path) -> str:
+    """Return the command prefix a hint should name for this workspace.
+
+    A workspace driven by the template's ``run.py`` shim keeps its
+    venv off PATH, so a hint naming ``chumicro-workspace ...`` fails
+    with command-not-found when pasted; a standalone install has no
+    ``run.py`` and drives the CLI directly.  Picks whichever
+    invocation actually resolves: ``python3 run.py`` when the shim
+    exists at *workspace_root*, ``chumicro-workspace`` otherwise.
+    """
+    if (workspace_root / "run.py").is_file():
+        return "python3 run.py"
+    return "chumicro-workspace"
+
+
 @dataclass(frozen=True)
 class WorkspaceLayout:
     """Resolved paths for a single project workspace.
