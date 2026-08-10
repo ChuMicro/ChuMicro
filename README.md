@@ -114,7 +114,7 @@ The full case, with the compiler and scheduler sources cited, is [Decision 0087]
 
 ## An MQTT device on one page
 
-Here is everything above assembled into one program: a greenhouse fan controller.  Temperature out every five seconds, speed commands in, and the LED from the first example still blinking through all of it.
+Here is everything above assembled into one program: a greenhouse fan controller.  Temperature out every five seconds, speed commands in, and the LED from the first example still blinking through all of it.  If you've built this device before, you know where it hurts: a connect call that freezes everything until the broker answers, and reconnect logic you end up writing yourself.
 
 ```python
 import json
@@ -171,9 +171,9 @@ while True:
 
 (`read_celsius`, `set_fan_duty`, and `toggle_led` are the board-specific lines; the demo fills them in for Pico W and ESP32.)
 
-The program stays this short because the libraries carry the bookkeeping.  While `mqtt` dials a broker that isn't answering, the temperature keeps sampling and the LED keeps blinking.  When WiFi drops, the wifi service retries with backoff and the client stops dialing a dead radio; when the network returns, it reconnects, replays its subscription, and sends what queued up while it was gone.  And the one job that really is a sequence (wait for a command, apply it, confirm it) is a generator you read top to bottom, with `yield from` marking the only line that waits.
+Neither hurt made it onto the page.  Connecting never freezes anything: the client works toward the broker a step at a time while the temperature keeps sampling and the LED keeps blinking.  And there is no reconnect logic to write: WiFi retries with backoff, the client re-dials when the network comes back, the subscription comes back with it, and readings published while the broker was away go out once it returns.  What's left is the part that's actually yours, and it's plain Python read top to bottom: `yield from` marks the one line that waits.
 
-[`demos/mqtt_sensor_motor`](demos/mqtt_sensor_motor/) is this same node driving real PWM and the CPU temperature sensor, one command after the setup below.  The reference project in the [workspace template](https://github.com/ChuMicro/ChuMicro-Workbench-Template) is where your own version starts.
+[`demos/mqtt_sensor_motor`](demos/mqtt_sensor_motor/) is this same device driving real PWM and the CPU temperature sensor, one command after the setup below.  The reference project in the [workspace template](https://github.com/ChuMicro/ChuMicro-Workbench-Template) is where your own version starts.
 
 ## The engineering underneath
 
@@ -213,7 +213,7 @@ chumicro-workspace add-device               # one-time: register the plugged-in 
 python demos/mqtt_sensor_motor/driver.py    # deploys the board side, then drives the round trip
 ```
 
-The driver deploys `app.py` to your board, runs the laptop side against it, and prints the exchange as it happens; `--help` on any driver lists its options.  Networked demos read WiFi credentials from a gitignored `secrets.toml` at the repo root ([wiring wifi credentials](docs/wiring-wifi-credentials.md)), and the MQTT demos expect the `mosquitto` broker on your PATH (`brew install mosquitto`, or your package manager's equivalent).  No board on your desk?  `cd demos/laptop_roundtrip && python app.py` runs with nothing plugged in.
+The driver deploys `app.py` to your board, runs the laptop side against it, and prints the exchange as it happens; `--help` on any driver lists its options.  You never copy a file onto a USB drive or assemble the board's `lib/` folder by hand: the tooling deploys, drives, and reports, for every demo here and every example in every library.  Networked demos read WiFi credentials from a gitignored `secrets.toml` at the repo root ([wiring wifi credentials](docs/wiring-wifi-credentials.md)), and the MQTT demos expect the `mosquitto` broker on your PATH (`brew install mosquitto`, or your package manager's equivalent).  No board on your desk?  `cd demos/laptop_roundtrip && python app.py` runs with nothing plugged in.
 
 Each demo's README says what you'll see and what it proves.  For single-library learning material, every library also ships an `examples/` folder that deploys to a board with one command ([below](#try-an-example-on-a-board)).
 
