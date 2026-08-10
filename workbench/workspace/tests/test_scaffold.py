@@ -35,6 +35,31 @@ class TestNameHelpers:
         assert _display_name("my_project") == "My Project"
 
 
+class TestRegisterInvocationInReadme:
+    """The generated README's add-device instruction adapts to its home."""
+
+    def test_names_the_shim_inside_a_template_workspace(
+        self, tmp_path: Path,
+    ) -> None:
+        (tmp_path / "workspace.yml").write_text("# machinery only\n")
+        (tmp_path / "run.py").write_text("# dispatcher shim\n")
+        created = scaffold_library(tmp_path / "libraries", "gpio")
+        readme_text = (created / "README.md").read_text()
+        assert "python3 run.py add-device" in readme_text
+        assert "chumicro-workspace add-device" not in readme_text
+
+    def test_names_the_cli_in_a_bare_workspace(self, tmp_path: Path) -> None:
+        (tmp_path / "workspace.yml").write_text("# machinery only\n")
+        created = scaffold_library(tmp_path / "libraries", "gpio")
+        readme_text = (created / "README.md").read_text()
+        assert "chumicro-workspace add-device" in readme_text
+
+    def test_names_the_cli_outside_any_workspace(self, tmp_path: Path) -> None:
+        created = scaffold_library(tmp_path / "libraries", "gpio")
+        readme_text = (created / "README.md").read_text()
+        assert "chumicro-workspace add-device" in readme_text
+
+
 class TestScaffoldLibrary:
     def test_creates_canonical_layout(self, tmp_path: Path) -> None:
         created = scaffold_library(tmp_path / "libraries", "gpio")

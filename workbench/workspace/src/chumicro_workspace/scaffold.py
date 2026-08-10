@@ -39,6 +39,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from chumicro_workspace.workspace import (
+    WorkspaceLayout,
+    WorkspaceNotFoundError,
+    runner_invocation,
+)
+
 #: Default template root.  Holds pyproject, README, mkdocs, src/,
 #: tests/, examples/, and the library-flavored docs/ templates.
 #: Every scaffold reads from here unless explicitly overridden.
@@ -173,22 +179,28 @@ _FRAGMENT_KEYS: tuple[str, ...] = (
 )
 
 
-#: README "Contributing" body for a self-owned package.  The branded
-#: rendering points contributors at the upstream repo's guide; a
-#: self-owned package has no upstream, so the dev loop lives here.
-_NEUTRAL_CONTRIBUTING = (
-    "Set up a development install:\n"
-    "\n"
-    "```bash\n"
-    "pip install -e .[test]\n"
-    "pytest tests/                  # host-side tests\n"
-    "pytest functional_tests/       # on-device tests (needs a board "
-    "registered in devices.yml)\n"
-    "```\n"
-    "\n"
-    "Register a board before running functional tests: "
-    "`chumicro-workspace add-device <id> --address <port>`."
-)
+def _neutral_contributing(register_invocation: str) -> str:
+    """Build the README "Contributing" body for a self-owned package.
+
+    The branded rendering points contributors at the upstream repo's
+    guide; a self-owned package has no upstream, so the dev loop lives
+    here.  *register_invocation* is the command prefix the add-device
+    instruction names, so the generated README's instruction pastes
+    back into a working command in the workspace it was scaffolded in.
+    """
+    return (
+        "Set up a development install:\n"
+        "\n"
+        "```bash\n"
+        "pip install -e .[test]\n"
+        "pytest tests/                  # host-side tests\n"
+        "pytest functional_tests/       # on-device tests (needs a board "
+        "registered in devices.yml)\n"
+        "```\n"
+        "\n"
+        "Register a board before running functional tests: "
+        f"`{register_invocation} add-device <id> --address <port>`."
+    )
 
 
 def _platform_section(package_kind: str) -> str:
@@ -221,7 +233,11 @@ def _platform_section(package_kind: str) -> str:
     )
 
 
-def _neutral_fragments(distribution: str, package_kind: str) -> dict[str, str]:
+def _neutral_fragments(
+    distribution: str,
+    package_kind: str,
+    register_invocation: str,
+) -> dict[str, str]:
     """Build the self-owned fragment set: no upstream banner, URLs, or footers.
 
     The emitted package installs from PyPI under its own name, carries a
@@ -234,7 +250,7 @@ def _neutral_fragments(distribution: str, package_kind: str) -> dict[str, str]:
         "family_note": "",
         "install_block": f"```bash\npip install {distribution}\n```\n\n",
         "platform_section": _platform_section(package_kind),
-        "contributing_intro": _NEUTRAL_CONTRIBUTING,
+        "contributing_intro": _neutral_contributing(register_invocation),
         "docs_section": "",
         "find_section": "",
         "license_body": "MIT",
@@ -425,14 +441,17 @@ def _branding_fragments(
     distribution: str,
     import_name: str,
     package_kind: str,
+    register_invocation: str,
 ) -> dict[str, str]:
     """Return the fragment dict the README / pyproject / mkdocs / docs use.
 
     Dispatches to the self-owned or upstream-branded builder.  ``repo_url``
     is the tell: ``None`` (the neutral default) yields self-owned output.
+    ``register_invocation`` reaches only the self-owned rendering; the
+    branded contributing section points at the upstream guide instead.
     """
     if branding.repo_url is None:
-        return _neutral_fragments(distribution, package_kind)
+        return _neutral_fragments(distribution, package_kind, register_invocation)
     return _branded_fragments(
         branding, name, distribution, import_name, package_kind,
     )
@@ -498,8 +517,19 @@ def scaffold_library(
     class_name = _class_name(name)
     display_name = _display_name(name)
     test_name = name.replace("-", "_")
+    # The generated README's add-device instruction names whichever
+    # command resolves where the package lives: the enclosing
+    # workspace's shim when one is found above *target_dir*, the bare
+    # CLI when the scaffold lands outside any workspace.
+    try:
+        enclosing_workspace = WorkspaceLayout.from_dir(target_dir)
+    except WorkspaceNotFoundError:
+        register_invocation = "chumicro-workspace"
+    else:
+        register_invocation = runner_invocation(enclosing_workspace.root)
     branding_fragments = _branding_fragments(
         branding, name, distribution, import_name, package_kind,
+        register_invocation,
     )
 
     (library_dir / "src" / import_name).mkdir(parents=True)
