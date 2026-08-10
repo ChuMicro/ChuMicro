@@ -1,6 +1,6 @@
 """CHU008: no upstream-derivative framing in workspace-template trees.
 
-Targets the [ChuMicro-Workspace-Template](https://github.com/ChuMicro/ChuMicro-Workspace-Template)
+Targets the [ChuMicro-Workbench-Template](https://github.com/ChuMicro/ChuMicro-Workbench-Template)
 starter repo and downstream user workspaces cloned from it.  Flags
 prose / config / docstrings that frame the user's workspace as a
 derivative of an upstream chumicro mono-repo: leftover ``Decision NNNN``

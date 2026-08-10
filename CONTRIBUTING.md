@@ -325,7 +325,7 @@ Once the basic loop feels comfortable:
 - **[`plans/decisions/`](plans/decisions/)**: every structural decision has a record of what was decided and why.  Search here before proposing a structural change; your idea may have a history.
 - **Proposing a design change:** open a [Discussion](https://github.com/ChuMicro/ChuMicro/discussions) describing the problem and the tradeoff you see, and reference any decision records it touches.  If it holds up, a maintainer works with you to land it as a new numbered record in `plans/decisions/` alongside the code change.
 - **[`AGENTS.md`](AGENTS.md)**: the AI-agent operating manual, and a useful strict-rules reference for humans.
-- **[Workspace template](https://github.com/ChuMicro/ChuMicro-Workspace-Template)**: the starter repo for projects built *on* ChuMicro.  Reading it shows how a downstream user assembles the libraries into an application.
+- **[Workspace template](https://github.com/ChuMicro/ChuMicro-Workbench-Template)**: the starter repo for projects built *on* ChuMicro.  Reading it shows how a downstream user assembles the libraries into an application.
 
 ## License
 

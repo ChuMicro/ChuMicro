@@ -77,7 +77,7 @@ if TYPE_CHECKING:  # pragma: no cover - type-only
 
 #: Default upstream for ``update``.  Override when working with a fork.
 DEFAULT_TEMPLATE_URL = (
-    "https://github.com/ChuMicro/ChuMicro-Workspace-Template"
+    "https://github.com/ChuMicro/ChuMicro-Workbench-Template"
 )
 
 #: Workspace-root JSON file recording the fingerprint of every

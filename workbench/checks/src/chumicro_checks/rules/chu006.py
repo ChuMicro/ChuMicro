@@ -74,7 +74,7 @@ def _outside_chumicro_checks(filepath: Path) -> bool:
 
 
 #: Top-level directory names that signal a workspace cloned from the
-#: ChuMicro-Workspace-Template.  Files under a repo-root tree named one
+#: ChuMicro-Workbench-Template.  Files under a repo-root tree named one
 #: of these legitimately mention the workspace's own ``run.py`` shim.
 #: That IS the command runner in a user workspace, not the
 #: chumicro-style anti-pattern the bare-``run.py`` rule is meant to
