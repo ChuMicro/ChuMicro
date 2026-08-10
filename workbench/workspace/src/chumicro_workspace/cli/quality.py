@@ -53,8 +53,15 @@ def _cmd_test(args: argparse.Namespace) -> int:
     quality_flags: list[str] = []
     if quality.coverage_threshold is not None:
         quality_flags.append(f"--cov-fail-under={quality.coverage_threshold}")
+    # argparse.REMAINDER keeps the `--` separator the help tells users
+    # to type, and pytest reads everything after a literal `--` as
+    # file or directory paths, so a forwarded separator makes every
+    # flag behind it a "file or directory not found" error.  Strip it.
+    pytest_args = args.pytest_args
+    if pytest_args and pytest_args[0] == "--":
+        pytest_args = pytest_args[1:]
     completed = args._env.subprocess_runner(  # noqa: S603 - args fully controlled
-        [sys.executable, "-m", "pytest", *quality_flags, *args.pytest_args],
+        [sys.executable, "-m", "pytest", *quality_flags, *pytest_args],
         cwd=workspace.root,
         check=False,
     )

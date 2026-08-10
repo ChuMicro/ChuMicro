@@ -119,6 +119,18 @@ class TestCheckDevicesYaml:
         assert "not present" in finding.message
         assert "add-device" in finding.hint
 
+    def test_hint_names_the_shim_when_run_py_exists(self, tmp_path: Path) -> None:
+        workspace = _layout(tmp_path)
+        (workspace.root / "run.py").write_text("# dispatcher shim\n")
+        finding = check_devices_yaml(workspace)
+        assert "python3 run.py add-device" in finding.hint
+        assert "chumicro-workspace" not in finding.hint
+
+    def test_hint_names_the_cli_without_the_shim(self, tmp_path: Path) -> None:
+        workspace = _layout(tmp_path)
+        finding = check_devices_yaml(workspace)
+        assert "chumicro-workspace add-device" in finding.hint
+
     def test_warns_when_empty(self, tmp_path: Path) -> None:
         workspace = _layout(tmp_path)
         workspace.devices_yaml.write_text("devices: []\n")

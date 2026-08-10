@@ -89,12 +89,16 @@ jobs:
         # own invocations per AGENTS.md; CI is the same gate a contributor
         # runs locally, so "preflight passed" means CI passes.
         env:
-          # The commit main pointed at before this push, so check-version
-          # and check-api see every commit it carries.  Their origin/main
-          # default is the pushed commit itself here, which leaves them
-          # diffing HEAD^ and grading only the tip.  Empty on
-          # pull_request, where the origin/main default is already right.
-          CHUMICRO_DIFF_BASE: ${{ github.event.before }}
+          # On push: the commit main pointed at before the push, so
+          # check-version and check-api see every commit it carries
+          # (their origin/main default is the pushed commit itself
+          # there, which would grade only the tip).  Guarded to push
+          # events: a pull_request `synchronize` payload also carries
+          # `before` (the previous PR head), which would grade each
+          # follow-up push alone and demand a VERSION bump per push;
+          # the PR gate is change-set wide, so pull_request runs leave
+          # this empty and take the origin/main...HEAD default.
+          CHUMICRO_DIFF_BASE: ${{ github.event_name == 'push' && github.event.before || '' }}
         run: python scripts/run.py preflight
 
       - name: Upload build artifacts

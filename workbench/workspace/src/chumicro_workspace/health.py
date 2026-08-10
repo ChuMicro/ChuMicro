@@ -27,6 +27,7 @@ from chumicro_workspace.loaders import (
     WorkspaceConfigError,
     read_secrets_toml,
 )
+from chumicro_workspace.workspace import runner_invocation
 
 if TYPE_CHECKING:  # pragma: no cover - type-only
     from pathlib import Path
@@ -152,8 +153,8 @@ def check_devices_yaml(workspace: WorkspaceLayout) -> HealthFinding:
             level=HealthLevel.WARN,
             message="not present",
             hint=(
-                "run `chumicro-workspace add-device <id> "
-                "--address <port>` to register a board."
+                f"run `{runner_invocation(workspace.root)} add-device "
+                f"<id> --address <port>` to register a board."
             ),
         )
     try:
@@ -176,8 +177,8 @@ def check_devices_yaml(workspace: WorkspaceLayout) -> HealthFinding:
             level=HealthLevel.WARN,
             message="no devices registered",
             hint=(
-                "run `chumicro-workspace add-device <id> "
-                "--address <port>` to register a board."
+                f"run `{runner_invocation(workspace.root)} add-device "
+                f"<id> --address <port>` to register a board."
             ),
         )
     plural = "" if count == 1 else "s"

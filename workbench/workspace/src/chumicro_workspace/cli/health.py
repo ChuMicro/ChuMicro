@@ -42,16 +42,10 @@ _HEALTH_LEVEL_PREFIX: dict[HealthLevel, str] = {
     HealthLevel.ERROR: "✗",
 }
 
-#: Width of the label column in ``status`` output.  Picked so the
-#: longest current label (``WORKSPACE.YML``) plus a 2-space gutter
-#: lines up the prefix glyph at the same column for every row.
-_STATUS_LABEL_WIDTH: int = 16
-
-
-def _format_health_finding(finding: HealthFinding) -> str:
+def _format_health_finding(finding: HealthFinding, label_width: int) -> str:
     """Return the one-line representation of *finding* for ``status``."""
     prefix = _HEALTH_LEVEL_PREFIX[finding.level]
-    label = finding.label.ljust(_STATUS_LABEL_WIDTH)
+    label = finding.label.ljust(label_width)
     return f"{label}{prefix} {finding.message}"
 
 
@@ -67,12 +61,19 @@ def _print_health_findings(
     to 1 only on at least one ERROR.  Warnings stay at 0 so the
     output composes cleanly with shell-pipe checks.
     """
-    print(f"WORKSPACE       {workspace.root}")
+    # Label column sized from the longest label actually printed plus
+    # a 2-space gutter: status and doctor carry different label sets,
+    # and a fixed width drifts out of alignment the first time a new
+    # check ships a longer label.
+    label_width = 2 + max(
+        [len("WORKSPACE"), *(len(finding.label) for finding in findings)],
+    )
+    print(f"{'WORKSPACE'.ljust(label_width)}{workspace.root}")
     has_error = False
     for finding in findings:
-        print(_format_health_finding(finding))
+        print(_format_health_finding(finding, label_width))
         if finding.hint and finding.level is not HealthLevel.OK:
-            print(f"{' ' * _STATUS_LABEL_WIDTH}  hint: {finding.hint}")
+            print(f"{' ' * label_width}  hint: {finding.hint}")
         if finding.level is HealthLevel.ERROR:
             has_error = True
     return 1 if has_error else 0
