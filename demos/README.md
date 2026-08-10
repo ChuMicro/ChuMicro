@@ -14,7 +14,7 @@ no IP discovery, no setup beyond `secrets.toml` and a registered board
 A demo is a self-contained directory under `demos/<name>/` with:
 
 - `app.py`, the on-device code (deployed to a registered board,
-  named to match the `ChuMicro-Workspace-Template/projects/<name>/app.py`
+  named to match the `ChuMicro-Workbench-Template/projects/<name>/app.py`
   convention so demos read like real projects).
 - `driver.py`, the host-side script that deploys `app.py`, drives it,
   prints the round trip, and exits. Run with

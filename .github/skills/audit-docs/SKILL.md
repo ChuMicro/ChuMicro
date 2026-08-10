@@ -288,7 +288,7 @@ Pass 2 judgment — no sweep catches it.  Apply to both originals and rewrite dr
 
    * **`the` stays** if X is an established singular referent the reader already has (`the LED` after one is introduced, `the workbench` after the workbench section, `the same X` where `same` anchors it, parallel pairs like `on the laptop and on the board`).
    * **`a` / `an`, or a possessive (`your X`)** if X is a forward reference or a generic category (`the caller decides` becomes `you decide` or `callers decide`; `the board` for a board the reader has not met becomes `your board` or `a board`; `the long-term home` becomes `a long-term home`).
-   * **Bare X** if `the` decorates a brand name (`the ChuMicro-Workspace-Template` becomes `ChuMicro-Workspace-Template`; `the Pi Pico W` becomes `Pi Pico W`).
+   * **Bare X** if `the` decorates a brand name (`the ChuMicro-Workbench-Template` becomes `ChuMicro-Workbench-Template`; `the Pi Pico W` becomes `Pi Pico W`).
 
    Tag findings as `definite` (see taxonomy below).  A first audit typically surfaces 5–15 hits in a healthy doc and 30+ in a drifted one.
 3. **Implementation-detail and history strip** (dims 3 and 9).  Grep `previously`, `used to`, `as of `, `<!-- removed`, `## Update`, coverage percentages, `CHU0\d+`, `Decision \d+`, `plans/` paths.  Drop pure history; replace impl-leaks with capability-shaped wording or remove.
@@ -421,7 +421,7 @@ When the same patterns recur across audits, ask rather than acting.
 | Two unrelated concerns in one section | *"`## Status & contributing` has a status paragraph and a contributing paragraph — they target different audiences.  Split or drop the status part?"* |
 | Inline comments not pulling weight | *"The trailing `# comment`s here label operations rather than narrating.  Want me to rewrite them to describe what each tick does?"* |
 | Historical rationale | *"This paragraph explains what the API used to do — `git log` covers that.  Drop it?"* |
-| `the` before a brand name | *"`the ChuMicro-Workspace-Template` reads as `the` decorating a brand.  Drop the article, or keep for parallelism with a nearby clause?"* |
+| `the` before a brand name | *"`the ChuMicro-Workbench-Template` reads as `the` decorating a brand.  Drop the article, or keep for parallelism with a nearby clause?"* |
 | Generic `the X` in user-facing prose | *"`the board` / `the caller` / `the device` here aren't anchored to a specific referent the reader has yet.  Swap to `your X` (matches the doc's existing second-person voice), `a X`, or drop the article?"* |
 | Section much longer than what it covers | *"This 4-paragraph rationale wraps a 2-line example.  Cut the framing or expand the example?"* |
 

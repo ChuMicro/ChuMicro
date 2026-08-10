@@ -30,7 +30,7 @@ Argument: none, or `--repo mono` / `--repo template` / `--pattern <N>` to scope.
 | `libraries/<name>/docs/**` | published Zensical site | yes |
 | Templates / payloads emitted by workbench tools (`secrets_yml_starter.py`, `boot_shim.py` payloads, scaffolder writes) | written to user's filesystem at deploy time | yes |
 | Generators in `scripts/` whose **output** reaches a user (e.g. `bundle_manager.py` writes the bundle README; `generate_config_files.py` emits user-facing strings) | indirect — the generator itself is mono-repo-only, but its output ships | yes (audit the **emitted strings**, not the generator's own docstrings) |
-| `ChuMicro-Workspace-Template/**` | clone-and-customize starter | yes |
+| `ChuMicro-Workbench-Template/**` | clone-and-customize starter | yes |
 | `scripts/run.py`, `plans/`, mono-repo `AGENTS.md`, internal CI | mono-repo-only — never lands on consumer machine | **out of scope** (talking about run.py inside `scripts/run.py` is fine) |
 | Workbench `functional_tests/` and library `tests/` | mono-repo-only | **out of scope** unless they materialize content into a payload |
 
@@ -128,11 +128,11 @@ grep -rn -iE "scaled[- ]?down|downstream of|sibling of (internal )?libraries" .
 
 ### P6. Workbench packages naming the workspace-template repo
 
-A workbench package's source / docs / fixtures hard-code the specific GitHub URL `ChuMicro/ChuMicro-Workspace-Template` or assert directory-shape invariants of that one repo.  Default starter URL in `template_apply.py` is fine *as a default* (overridable, configurable), but README prose framing the package as "the package that ships the workspace template" is leak.
+A workbench package's source / docs / fixtures hard-code the specific GitHub URL `ChuMicro/ChuMicro-Workbench-Template` or assert directory-shape invariants of that one repo.  Default starter URL in `template_apply.py` is fine *as a default* (overridable, configurable), but README prose framing the package as "the package that ships the workspace template" is leak.
 
 **Search recipes:**
 ```
-grep -rn -E "ChuMicro-Workspace-Template|ChuMicro/ChuMicro\b" workbench/*/src/ workbench/*/README.md workbench/*/docs/
+grep -rn -E "ChuMicro-Workbench-Template|ChuMicro/ChuMicro\b" workbench/*/src/ workbench/*/README.md workbench/*/docs/
 grep -rn -E "workspace[- ]template repo" workbench/*/src/ workbench/*/README.md
 grep -rn "starter repo\|starter clone" workbench/*/src/   # often paired with implicit assumptions about layout
 ```

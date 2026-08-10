@@ -32,7 +32,7 @@ if TYPE_CHECKING:
 def fake_template_repo(tmp_path: Path) -> Path:
     """A local git repo populated like the workspace template.
 
-    Layout mirrors the ChuMicro-Workspace-Template repo: tool-owned
+    Layout mirrors the ChuMicro-Workbench-Template repo: tool-owned
     files at the root, a tracked but user-editable `README.md`.
     `workspace.yml` /
     `secrets.toml` / `devices.yml` are gitignored — setup
@@ -125,7 +125,7 @@ def _files(report_iter: Iterable[tuple[str, str]]) -> dict[str, str]:
 class TestDefaultTemplateUrl:
     def test_default_url_is_chumicro_template(self) -> None:
         # Smoke check on the constant — no network call.
-        assert DEFAULT_TEMPLATE_URL.endswith("ChuMicro-Workspace-Template")
+        assert DEFAULT_TEMPLATE_URL.endswith("ChuMicro-Workbench-Template")
         assert DEFAULT_TEMPLATE_URL.startswith("https://github.com/")
 
 

@@ -90,7 +90,7 @@ pip install chumicro-timing-experimental
 
 ## Project workspaces
 
-For a real project (multiple libraries, deploy automation, no live editing on a fragile CIRCUITPY drive), use the [ChuMicro-Workspace-Template](https://github.com/ChuMicro/ChuMicro-Workspace-Template).  From inside a clone of that template, `python3 run.py setup` bootstraps the virtual environment and installs the tooling; `python3 run.py new my_project` scaffolds a project; `python3 run.py deploy my_project` ships it to your board with verified flash deploys by default (rsync plus a post-write checksum, and no filesystem wear from save-on-every-keystroke editing).
+For a real project (multiple libraries, deploy automation, no live editing on a fragile CIRCUITPY drive), use the [ChuMicro-Workbench-Template](https://github.com/ChuMicro/ChuMicro-Workbench-Template).  From inside a clone of that template, `python3 run.py setup` bootstraps the virtual environment and installs the tooling; `python3 run.py new my_project` scaffolds a project; `python3 run.py deploy my_project` ships it to your board with verified flash deploys by default (rsync plus a post-write checksum, and no filesystem wear from save-on-every-keystroke editing).
 
 Those `python3 run.py <cmd>` forms only work inside a cloned workspace template, where `run.py` is a bootstrap wrapper that re-executes in the workspace's virtual environment and dispatches to `chumicro-workspace`.  Once that environment is active, `chumicro-workspace <cmd>` runs the same commands directly.  Libraries come in through `chumicro-workspace library add chumicro_timing`, which pulls from the stable channel unless you pass `--channel experimental`.
 

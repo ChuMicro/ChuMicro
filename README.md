@@ -201,10 +201,10 @@ If your board doesn't have CircuitPython or MicroPython on it yet, `chumicro-dep
 
 ## Start a real project
 
-When you move past trying examples, start from the **[workspace template](https://github.com/ChuMicro/ChuMicro-Workspace-Template)**.  It's a clone-and-go repository where your source lives on your laptop under version control and deploys to the board on demand, instead of being edited live on a USB drive that corrupts when the cable wiggles.  Deploys write to flash and verify every file by checksum; while you iterate, you can flip a board to RAM-mode deploys, which write nothing to flash at all.  Your WiFi password lives in a gitignored `secrets.toml` and gets baked onto the board at deploy time, so credentials never sit in your code or your git history.  And the same `pytest` that tests on your laptop tests on the board.
+When you move past trying examples, start from the **[workspace template](https://github.com/ChuMicro/ChuMicro-Workbench-Template)**.  It's a clone-and-go repository where your source lives on your laptop under version control and deploys to the board on demand, instead of being edited live on a USB drive that corrupts when the cable wiggles.  Deploys write to flash and verify every file by checksum; while you iterate, you can flip a board to RAM-mode deploys, which write nothing to flash at all.  Your WiFi password lives in a gitignored `secrets.toml` and gets baked onto the board at deploy time, so credentials never sit in your code or your git history.  And the same `pytest` that tests on your laptop tests on the board.
 
 ```bash
-git clone --depth 1 https://github.com/ChuMicro/ChuMicro-Workspace-Template my-workspace
+git clone --depth 1 https://github.com/ChuMicro/ChuMicro-Workbench-Template my-workspace
 cd my-workspace && rm -rf .git && git init      # make its history yours
 python3 run.py setup                            # creates a venv, installs everything
 python3 run.py bootstrap                        # register your board, ship the starter demo
@@ -240,7 +240,7 @@ Command-line tools that run on your laptop, not the board.  They're what make th
 
 This repository is built so an agent can actually drive it.  The CLIs answer the questions an agent needs answered (`chumicro-deploy probe` reports what runtime and version a board is running), and when something fails, the tools classify the failure into a message that names the fix (drive not mounted, board in bootloader mode, port held by another process) instead of leaving a bare stack trace to guess at.
 
-The practical effect: you can plug in a board you know nothing about and tell your agent "get this onto CircuitPython and blink an LED," and the agent has real commands for every step: probe the port, flash the right firmware, deploy an example, tail the serial output, and read back what happened.  [`AGENTS.md`](AGENTS.md) is the agent's operating manual for working in this repo; the [workspace template](https://github.com/ChuMicro/ChuMicro-Workspace-Template) carries its own, plus step-by-step skill files for board registration, firmware, and deploy-and-debug.
+The practical effect: you can plug in a board you know nothing about and tell your agent "get this onto CircuitPython and blink an LED," and the agent has real commands for every step: probe the port, flash the right firmware, deploy an example, tail the serial output, and read back what happened.  [`AGENTS.md`](AGENTS.md) is the agent's operating manual for working in this repo; the [workspace template](https://github.com/ChuMicro/ChuMicro-Workbench-Template) carries its own, plus step-by-step skill files for board registration, firmware, and deploy-and-debug.
 
 ## Documentation
 

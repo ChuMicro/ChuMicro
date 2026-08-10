@@ -34,7 +34,7 @@ Workspace-level cleanup operates on **library shapes**, not function shapes.  Th
 * **Are decisions consistent?**  When `chumicro-wifi` and `chumicro-mqtt` both face the same architectural question (e.g., how to handle reconnect backoff), they should answer it the same way — or the difference should be a documented Decision.
 * **Is the dependency graph clean?**  Libraries should depend downward (utility libs at the bottom, application-shaped libs at the top), not sideways or upward.
 * **Are there cross-cutting patterns nobody owns?**  When 3+ libraries each implement the same shape (e.g., a "service with check / handle methods" pattern), that pattern should live in a shared library or be documented as a contract.
-* **Is there speculative scope?**  Libraries / features built for "future users" who don't exist.  Per AGENTS.md → Workflow: until something ships to real users, "public API" means "us using it" — symbols with zero callers across this repo and the [workspace-template](https://github.com/ChuMicro/ChuMicro-Workspace-Template) repo are dead code.
+* **Is there speculative scope?**  Libraries / features built for "future users" who don't exist.  Per AGENTS.md → Workflow: until something ships to real users, "public API" means "us using it" — symbols with zero callers across this repo and the [workspace-template](https://github.com/ChuMicro/ChuMicro-Workbench-Template) repo are dead code.
 
 The output of this audit is often a set of **proposals** (merge candidates, infrastructure proposals, decision ADRs) more than direct edits.  Each proposal should be small enough that the user can sign off on it without a separate design pass.
 

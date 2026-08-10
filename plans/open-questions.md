@@ -52,6 +52,8 @@ the 2026-05-26 agent-collaboration reflections, since removed from the tree (`gi
 
 Not blocking anything today — but a "fix two-shape divergence" workstream proposal would block on this.
 
+**Field datapoint 2026-08-09:** a working central binder now exists app-side — the `Face` bring-up facade (`chux-workspace/shared/face.py` in the maintainer's personal workspace, also shipped as the template's default-face starter in its `shared/`) owns both mqtt single-slot callbacks and fans out (`on_connect` list, `on_topic` exact-match routing), consumes wifi's registration-shape `on_state_change` for the documented `hold()`/`connect()` wiring, and takes wifi/mqtt/runner/config as default-if-None constructor seams.  It bridges the two callback shapes at zero library cost, which is evidence for "the app layer pays the bridging cost" over shape convergence; a future `chumicro-presence` re-audit should start from that file, not the §167-168 sketch.
+
 ### Next CP hard fault on stale socketpool state — investigate
 
 **Surfaced 2026-05-09** during the 4-board example sweep on Lolin S2 CP.  After a

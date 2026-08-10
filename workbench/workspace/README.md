@@ -20,7 +20,7 @@ pip install chumicro-workspace
 
 `chumicro-deploy` comes along with its `pyserial` and `mpremote` dependencies, plus `msgpack`, `ruamel.yaml`, and `tomlkit`.  `chumicro-repl` is optional and loaded only when you use it: install it to get the interactive `repl` command and `deploy --tail`.
 
-The starter workspace lives at [`ChuMicro/ChuMicro-Workspace-Template`](https://github.com/ChuMicro/ChuMicro-Workspace-Template).  Typical day-zero is to `git clone` it (or click "Use this template" on GitHub) and run `python run.py setup`, which creates a venv and installs this package.
+The starter workspace lives at [`ChuMicro/ChuMicro-Workbench-Template`](https://github.com/ChuMicro/ChuMicro-Workbench-Template).  Typical day-zero is to `git clone` it (or click "Use this template" on GitHub) and run `python run.py setup`, which creates a venv and installs this package.
 
 <details>
 <summary>Experimental (pre-release) versions and channel switching</summary>
@@ -202,7 +202,7 @@ Issues, bug reports, and pull requests are welcome, and so is "I ran it on this 
 
 - **PyPI:** [chumicro-workspace](https://pypi.org/project/chumicro-workspace/)
 - **Source:** [workbench/workspace](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/workspace)
-- **Workspace template:** [`ChuMicro/ChuMicro-Workspace-Template`](https://github.com/ChuMicro/ChuMicro-Workspace-Template)
+- **Workspace template:** [`ChuMicro/ChuMicro-Workbench-Template`](https://github.com/ChuMicro/ChuMicro-Workbench-Template)
 
 ## License
 
