@@ -114,7 +114,7 @@ The full case, with the compiler and scheduler sources cited, is [Decision 0087]
 
 ## An MQTT device on one page
 
-Here is everything above assembled into a finished program: a greenhouse fan controller.  It publishes the temperature, takes speed commands back, tells the broker whether it's alive, and survives the router rebooting.  Five libraries are at work: `wifi`, `mqtt`, and the `runner` in plain sight, `sockets` and `timing` underneath them.
+Here is everything above assembled into one program: a greenhouse fan controller.  It publishes the temperature, takes speed commands back, and tells the broker whether it's alive.  Five libraries share the loop: `wifi`, `mqtt`, and the `runner` in plain sight, `sockets` and `timing` underneath.
 
 ```python
 import json
@@ -129,7 +129,7 @@ mqtt = MQTTClient.from_config(
     radio=wifi.adapter.radio,
 )
 
-# If the board drops off the network, the broker announces it.
+# If the board drops off the network, the broker says so.
 mqtt.set_will("greenhouse/status", b"offline", qos=1, retain=True)
 mqtt.on_connect = lambda: mqtt.publish("greenhouse/status", b"online", qos=1, retain=True)
 
@@ -169,13 +169,11 @@ while True:
     runner.wait(now)
 ```
 
-(`read_celsius`, `set_fan_duty`, and `toggle_led` are the board-specific lines this listing leaves out; the runnable demo below fills them in for Pico W and ESP32.)
+(`read_celsius`, `set_fan_duty`, and `toggle_led` are the board-specific lines; the demo fills them in for Pico W and ESP32.)
 
-Look at what the program leaves out.  `publish_temperature` doesn't check whether the broker is connected: a reading produced too early waits in a bounded queue and goes out on connect, so the sensor cadence and the connection state stay out of each other's way.  The subscription carries no reconnect bookkeeping: it's declared once before `connect()`, and the client replays it every time the connection heals.  And `follow_fan_commands` is the entire command path in seven lines you read top to bottom: `yield from` marks the one place it waits, and between commands the temperature keeps publishing and the LED keeps blinking.
+Nothing here babysits the connection.  Messages published before the broker is up wait in a queue and go out on connect, and the subscription replays itself on every reconnect.  Kill the router and the broker announces `offline` for the board (that's the last will), the LED keeps blinking, and when the network comes back the session heals, subscription and all.  The command loop is seven lines you read top to bottom, and `yield from` marks the one place it waits.
 
-When the router goes down mid-run, the broker publishes the retained `offline` for you (that's the last will).  The LED keeps blinking, WiFi retries with backoff, and when the network returns, the four lines of `on_wifi_state` (the only glue between the two libraries) bring the broker session back, subscription and all.  The retained speed on `greenhouse/fan/speed` means a dashboard that reconnects later still learns what the fan is doing right now.
-
-The runnable version of this device is [`demos/mqtt_sensor_motor`](demos/mqtt_sensor_motor/): the same node with the hardware lines filled in (a PWM fan output, the CPU temperature sensor) and a host driver that plays broker and controller, one command after the setup below.  The receive loop also stands alone as the mqtt library's [`receive_stream` example](libraries/mqtt/examples/receive_stream.py).  And when you're ready to build on it rather than read it, the reference project in the [workspace template](https://github.com/ChuMicro/ChuMicro-Workbench-Template) starts from the same WiFi-to-MQTT node.
+[`demos/mqtt_sensor_motor`](demos/mqtt_sensor_motor/) is this same node driving real PWM and the CPU temperature sensor, one command after the setup below.  The reference project in the [workspace template](https://github.com/ChuMicro/ChuMicro-Workbench-Template) is where your own version starts.
 
 ## The engineering underneath
 
@@ -215,9 +213,9 @@ chumicro-workspace add-device               # one-time: register the plugged-in 
 python demos/mqtt_sensor_motor/driver.py    # deploys the board side, then drives the round trip
 ```
 
-The driver deploys `app.py` to your board, runs the laptop side against it, and prints the exchange as it happens; `--help` on any driver lists its options.  Networked demos read WiFi credentials from a gitignored `secrets.toml` at the repo root ([wiring wifi credentials](docs/wiring-wifi-credentials.md)), and the MQTT demos expect the `mosquitto` broker on your PATH (`brew install mosquitto`, or your package manager's equivalent).  `laptop_roundtrip` needs no board at all: `cd demos/laptop_roundtrip && python app.py`.
+The driver deploys `app.py` to your board, runs the laptop side against it, and prints the exchange as it happens; `--help` on any driver lists its options.  Networked demos read WiFi credentials from a gitignored `secrets.toml` at the repo root ([wiring wifi credentials](docs/wiring-wifi-credentials.md)), and the MQTT demos expect the `mosquitto` broker on your PATH (`brew install mosquitto`, or your package manager's equivalent).  No board on your desk?  `cd demos/laptop_roundtrip && python app.py` runs with nothing plugged in.
 
-Each demo's README says what you'll see and what it proves.  For single-library learning material, every library also ships an `examples/` folder that deploys to a board with one command ([Try an example on a board](#try-an-example-on-a-board)).
+Each demo's README says what you'll see and what it proves.  For single-library learning material, every library also ships an `examples/` folder that deploys to a board with one command ([below](#try-an-example-on-a-board)).
 
 ## Install
 
@@ -273,7 +271,7 @@ source .venv/bin/activate                             # puts the chumicro tools 
 chumicro-workspace deploy-example timing rate_blink
 ```
 
-(If you already [ran a demo](#watch-it-work-on-real-hardware), only the last command is new.)
+(Already set up from [running a demo](#watch-it-work-on-real-hardware)?  Only the last command is new.)
 
 The first deploy walks you through picking the board's serial port and detecting its runtime, then remembers the board.  `chumicro-workspace deploy-example --list` prints every library-and-example pair you can deploy.  Networked examples read your WiFi name and password from a gitignored `secrets.toml` at the repo root; [wiring wifi credentials](docs/wiring-wifi-credentials.md) covers the details.
 
@@ -281,7 +279,7 @@ If your board doesn't have CircuitPython or MicroPython on it yet, `chumicro-dep
 
 ## Start a real project
 
-Demos and examples run this repository's code on your board.  Your own project shouldn't live in a clone of ours: when you're ready to write your own `app.py`, start from the **[workspace template](https://github.com/ChuMicro/ChuMicro-Workbench-Template)**.  It's a clone-and-go repository where your source lives on your laptop under version control and deploys to the board on demand, instead of being edited live on a USB drive that corrupts when the cable wiggles.  Deploys write to flash and verify every file by checksum; while you iterate, you can flip a board to RAM-mode deploys, which write nothing to flash at all.  Your WiFi password lives in a gitignored `secrets.toml` and gets baked onto the board at deploy time, so credentials never sit in your code or your git history.  And the same `pytest` that tests on your laptop tests on the board.
+When you move past trying examples, start from the **[workspace template](https://github.com/ChuMicro/ChuMicro-Workbench-Template)**.  It's a clone-and-go repository where your source lives on your laptop under version control and deploys to the board on demand, instead of being edited live on a USB drive that corrupts when the cable wiggles.  Deploys write to flash and verify every file by checksum; while you iterate, you can flip a board to RAM-mode deploys, which write nothing to flash at all.  Your WiFi password lives in a gitignored `secrets.toml` and gets baked onto the board at deploy time, so credentials never sit in your code or your git history.  And the same `pytest` that tests on your laptop tests on the board.
 
 ```bash
 git clone --depth 1 https://github.com/ChuMicro/ChuMicro-Workbench-Template my-workspace
@@ -290,7 +288,7 @@ python3 run.py setup                            # creates a venv, installs every
 python3 run.py bootstrap                        # register your board, ship the starter demo
 ```
 
-Its README walks through the reference project (the same WiFi-to-MQTT shape as [the device above](#an-mqtt-device-on-one-page), with a persistent boot counter added) and the multi-board flow.
+Its README walks through the reference project, a WiFi-to-MQTT sensor node with a persistent boot counter, and the multi-board flow.
 
 ## Testing
 
