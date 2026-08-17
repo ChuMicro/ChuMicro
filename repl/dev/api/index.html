@@ -2899,8 +2899,8 @@ callers that want the underlying errno or message.</p>
         <p>Raw-REPL session over pyserial.</p>
 <p>Use as a context manager::</p>
 <div class="language-text highlight"><pre><span></span><code>with ReplSession(device) as session:
-    output = session.exec(&quot;print(1 + 2)&quot;)
-    value = session.call(&quot;os.uname&quot;)
+    output = session.exec("print(1 + 2)")
+    value = session.call("os.uname")
 </code></pre></div>
 <p>The constructor opens the serial port, interrupts whatever was
 running, and enters raw REPL.  The <code>__exit__</code> path sends Ctrl-B
@@ -3873,7 +3873,7 @@ stalls waiting for input.</p>
 
 
 <h4 id="chumicro_repl.tui.run_loop" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">run_loop</span><span class="p">(</span><span class="n">port</span><span class="p">,</span> <span class="n">keyboard</span><span class="p">,</span> <span class="n">output</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">time</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">theme</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">exit_key</span><span class="o">=</span><span class="n">CTRL_X</span><span class="p">,</span> <span class="n">welcome_banner</span><span class="o">=</span><span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="n">initial_send</span><span class="o">=</span><span class="sa">b</span><span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="n">reopen</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">reconnect_seconds</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">reconnect_interval</span><span class="o">=</span><span class="mf">0.5</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">run_loop</span><span class="p">(</span><span class="n">port</span><span class="p">,</span> <span class="n">keyboard</span><span class="p">,</span> <span class="n">output</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">time</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">theme</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">exit_key</span><span class="o">=</span><span class="n">CTRL_X</span><span class="p">,</span> <span class="n">welcome_banner</span><span class="o">=</span><span class="s1">''</span><span class="p">,</span> <span class="n">initial_send</span><span class="o">=</span><span class="sa">b</span><span class="s1">''</span><span class="p">,</span> <span class="n">reopen</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">reconnect_seconds</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">reconnect_interval</span><span class="o">=</span><span class="mf">0.5</span><span class="p">)</span></code>
 
 <a href="#chumicro_repl.tui.run_loop" class="headerlink" title="Permanent link">&para;</a></h4>
 
@@ -4784,7 +4784,7 @@ never enter line mode do not pay its import cost.</p>
 
 
 <h4 id="chumicro_repl.line_mode.run_line_mode" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">run_line_mode</span><span class="p">(</span><span class="n">port</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">output</span><span class="p">,</span> <span class="n">address</span><span class="p">,</span> <span class="n">history_root</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">snippets_root</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">editor</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">commands</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">prompt</span><span class="o">=</span><span class="s1">&#39;&gt;&gt;&gt; &#39;</span><span class="p">,</span> <span class="n">welcome_banner</span><span class="o">=</span><span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="n">theme</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">time</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">prompt_session</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">drain_window_seconds</span><span class="o">=</span><span class="n">_DRAIN_WINDOW_SECONDS</span><span class="p">,</span> <span class="n">drain_settle_seconds</span><span class="o">=</span><span class="n">_DRAIN_SETTLE_SECONDS</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">run_line_mode</span><span class="p">(</span><span class="n">port</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">output</span><span class="p">,</span> <span class="n">address</span><span class="p">,</span> <span class="n">history_root</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">snippets_root</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">editor</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">commands</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">prompt</span><span class="o">=</span><span class="s1">'&gt;&gt;&gt; '</span><span class="p">,</span> <span class="n">welcome_banner</span><span class="o">=</span><span class="s1">''</span><span class="p">,</span> <span class="n">theme</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">time</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">prompt_session</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">drain_window_seconds</span><span class="o">=</span><span class="n">_DRAIN_WINDOW_SECONDS</span><span class="p">,</span> <span class="n">drain_settle_seconds</span><span class="o">=</span><span class="n">_DRAIN_SETTLE_SECONDS</span><span class="p">)</span></code>
 
 <a href="#chumicro_repl.line_mode.run_line_mode" class="headerlink" title="Permanent link">&para;</a></h4>
 
@@ -5975,7 +5975,7 @@ again, up to <em>max_attempts</em> times.</p>
 <div class="language-text highlight"><pre><span></span><code>from chumicro_repl import InteractiveReplSession
 
 with InteractiveReplSession(device) as session:
-    session.exec(&quot;print(&#39;hello&#39;)&quot;)
+    session.exec("print('hello')")
 </code></pre></div>
 <p>Mid-session disconnects (after the handshake completed) do NOT
 route through this wrapper; those are handled by the
@@ -7325,10 +7325,10 @@ methods decode with <code>errors="replace"</code>, so a caller never sees
 :class:<code>UnicodeDecodeError</code>.</p>
 <p>Example::</p>
 <div class="language-text highlight"><pre><span></span><code>decoder = Utf8StreamDecoder()
-first_half = bytes([0xF0, 0x9F])  # start of &quot;🙂&quot; (4 bytes)
+first_half = bytes([0xF0, 0x9F])  # start of "🙂" (4 bytes)
 second_half = bytes([0x99, 0x82])
-assert decoder.decode(first_half) == &quot;&quot;
-assert decoder.decode(second_half) == &quot;🙂&quot;
+assert decoder.decode(first_half) == ""
+assert decoder.decode(second_half) == "🙂"
 </code></pre></div>
 
 
