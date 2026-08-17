@@ -1319,3 +1319,25 @@ Two coupled gotchas from the 2026-07-28 secondary-docs pass:
    change (`object` for duck-typed params is the house convention).
 
 **macOS `sync` is not a write barrier.**  `sync(2)` schedules the flush and returns; before any operation that resets or remounts a mounted FAT volume (CP soft reboot, `storage.erase_filesystem()`), force completion with `fcntl F_FULLFSYNC` on the mount point (`chumicro_deploy.flash_drive.flush_volume`), or cached FAT metadata can tear directory entries into an EINVAL state.
+
+## Decompose a size-budget overage before touching the ceiling
+
+`check-size` reports one number per library, so a `FAIL: runner mpy 6874 B > ceiling 6831 B` says nothing about *which* addition cost what.  Blanket-raising to the new total makes the ceiling a rubber stamp.  Measure each construct instead, compiling variants of the changed module through the gate's own path so the numbers reconcile with it exactly:
+
+```python
+from check_size import prepared_mpy_cross               # scripts/
+from chumicro_deploy.source_minify import strip_source  # workbench/deploy/src/
+
+stripped = strip_source(source_variant)
+# The -s name must be the package-relative path: it is embedded in the .mpy,
+# so a temp-dir path would make the byte count depend on where you ran it.
+subprocess.run([mpy_cross, "-s", "chumicro_runner/generators.py",
+                "-o", str(temp_mpy), str(temp_py)], check=True)
+size = temp_mpy.stat().st_size
+```
+
+Build the variants cumulatively (baseline, then one construct added per step) and diff the `.mpy` sizes.  `check_size.measure_library(package_dir, src_root, mpy_cross)` gives the whole-package number when you need to reconcile a module delta against the library total.
+
+Two things this surfaces that a single number hides.  A module-level `import` is often the largest single item (`from chumicro_timing.ticks import ticks_diff` measured +48 B of a +98 B change, nearly half, in the qualified-name strings and import bytecode).  And the library's own headroom matters: a +98 B change tripped a ceiling by only 43 B because 55 B of slack was left from the last ratchet, so the overage and the growth are different numbers and the commit should name both.  Worked example with the per-construct table: the `[runner]` comment block in `size-budgets.toml`.
+
+Docstrings are free here.  The gate strips them with the real deploy `strip_source` (Decision 0090) before compiling, so explaining a workaround in a docstring costs no flash.

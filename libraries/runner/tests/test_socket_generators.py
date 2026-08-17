@@ -26,12 +26,30 @@ def test_sleep_until_yields_deadline_wait():
     # The yielded wait carries the absolute deadline the wrapper reads.
     assert first.next_deadline(0) == 1000
     assert getattr(first, "io_socket", None) is None
+    # ready() answers the same gate on its own, so a driver can consult it alone.
+    assert not first.ready(999)
+    assert first.ready(1000)
     try:
-        gen.send(0)
+        gen.send(1000)
     except StopIteration:
         pass
     else:
-        raise AssertionError("sleep_until did not return after its single yield")
+        raise AssertionError("sleep_until did not return once its deadline passed")
+
+
+def test_sleep_until_re_suspends_when_resumed_early():
+    # A driver that ignores the wait and resumes every pass must still sleep the
+    # full span: the deadline is enforced inside the helper, not by the caller.
+    gen = sleep_until(1000)
+    wait = gen.send(None)
+    for now_ms in (0, 250, 999):
+        assert gen.send(now_ms) is wait  # re-yields the same object: no allocation
+    try:
+        gen.send(1000)
+    except StopIteration:
+        pass
+    else:
+        raise AssertionError("sleep_until did not return once its deadline passed")
 
 
 def test_sleep_until_resumes_after_deadline_under_runner():
@@ -229,3 +247,58 @@ def test_signal_wait_contributes_no_wake_timeout():
 
     runner.add_generator(waiter())
     assert runner._compute_timeout(ticks.ticks_ms()) is None
+
+
+# -- Driving the same helpers with no runner at all ------------------
+
+
+def _drive_without_runner(generator, ticks):
+    """Run *generator* to completion on a bare loop, gating only on ``ready()``.
+
+    This is the loop an adopter writes when they lift the socket helpers into a
+    codebase that does not use ``chumicro_runner``.  It knows nothing about
+    ``io_socket`` or ``io_interest``: a wait with no ``ready()`` may be resumed on
+    any pass, and a wait that must gate resumption answers ``ready(now_ms)``.
+    """
+    wait = generator.send(None)
+    while True:
+        now_ms = ticks.ticks_ms()
+        ready = getattr(wait, "ready", None)
+        if ready is None or ready(now_ms):
+            try:
+                wait = generator.send(now_ms)
+            except StopIteration:
+                return
+        ticks.advance(1)
+
+
+def test_socket_helpers_run_to_completion_without_a_runner():
+    ticks = FakeTicks()
+    sock = FakeSocket()
+    sock.enqueue_recv(b"echo\n")
+    connector = FakeSocketConnector(actions=["dns_ok", "tcp_ok"], socket=sock)
+    replies = []
+
+    def echo():
+        connected = yield from connect(connector)
+        yield from send_all(connected, b"probe\n")
+        replies.append((yield from recv_until(connected, b"\n", max_bytes=64)))
+
+    _drive_without_runner(echo(), ticks)
+
+    assert replies == [b"echo\n"]
+    assert sock.sent == b"probe\n"
+
+
+def test_sleep_until_sleeps_its_full_span_without_a_runner():
+    # The deadline holds even though this driver never reads next_deadline().
+    ticks = FakeTicks()
+    finished_at = []
+
+    def sleeper():
+        yield from sleep_until(ticks.ticks_add(ticks.ticks_ms(), 500))
+        finished_at.append(ticks.ticks_ms())
+
+    _drive_without_runner(sleeper(), ticks)
+
+    assert finished_at == [500]

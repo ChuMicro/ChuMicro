@@ -50,6 +50,19 @@ def test_signal_clear_re_arms_for_reuse() -> None:
     assert signal.ready(0) is False
 
 
+def test_signal_ready_opens_once_a_bounded_waits_deadline_passes() -> None:
+    """ready() covers the timeout too, so a driver can gate on it alone.
+
+    wait_for has to be resumed past its deadline to raise ETIMEDOUT; a driver that
+    only consulted is_set would leave a timed-out wait parked forever.
+    """
+    signal = Signal()
+    generator = wait_for(signal, deadline_ms=500)
+    generator.send(None)  # prime it so the deadline lands on the signal
+    assert signal.ready(499) is False
+    assert signal.ready(500) is True
+
+
 # -- wait_for (the suspension helper) --------------------------------
 
 

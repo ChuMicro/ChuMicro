@@ -28,8 +28,22 @@ class Signal:
         self.value = None
 
     def ready(self, now_ms: int) -> bool:
-        """Return whether the waiting generator should resume: ``True`` once set."""
-        return self.is_set
+        """Return whether the waiting generator should resume.
+
+        ``True`` once the signal is set, and also once a bounded wait's deadline has
+        passed, so ``wait_for`` gets resumed and can raise ``ETIMEDOUT``.  Answering
+        both cases here lets any driver gate on ``ready()`` alone.
+
+        Args:
+            now_ms: Current ``ticks_ms`` value.
+
+        Returns:
+            Whether the generator waiting on this signal should be resumed.
+        """
+        if self.is_set:
+            return True
+        deadline_ms = self._deadline_ms
+        return deadline_ms is not None and ticks_diff(now_ms, deadline_ms) >= 0
 
 
 def wait_for(signal: Signal, *, deadline_ms: int | None = None) -> object:

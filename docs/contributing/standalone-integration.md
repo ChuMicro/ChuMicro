@@ -124,6 +124,26 @@ while True:
 
 `chumicro_websockets` and `chumicro_requests` follow the identical three-move shape; only the `transport_factory` arity differs (per-call `(host, port, use_tls)`, per the table in step 1).
 
+### The generator helpers, without the runner
+
+The sequential helpers (`chumicro_sockets.generators`, `MQTTClient.next_message`, `chumicro_requests.generators`) suspend by yielding a **wait**, and `runner.add_generator` is one driver for those rather than the only one.  A wait carries an optional `ready(now_ms)` gate; when it has none, the generator may be resumed on any pass.  `io_socket` / `io_interest` / `next_deadline` are hints a scheduler uses to sleep, and a driver is free to ignore all three:
+
+```python
+def drive(generator, ticks):
+    """Run a chumicro generator to completion on a loop you own."""
+    wait = generator.send(None)                 # prime it to the first suspension
+    while True:
+        now_ms = ticks.ticks_ms()
+        ready = getattr(wait, "ready", None)
+        if ready is None or ready(now_ms):
+            try:
+                wait = generator.send(now_ms)
+            except StopIteration:
+                return
+```
+
+The socket helpers retry on `EAGAIN` and re-suspend, so an early resume costs one wasted pass.  Deadline waits enforce their own span, so `sleep_until` sleeps the full time under this loop as it does under the runner.  What you give up is the sleep: `Runner.wait()` parks the CPU on `ipoll` until a socket is ready or a deadline lands, while this loop spins.  On mains power that difference is invisible; on a battery it is most of your runtime budget, which is the case for adopting `chumicro_runner` once the rest of the integration is working.
+
 ## Recipe: adopt sockets alone (the leaf)
 
 `chumicro_sockets` has no ChuMicro dependencies at all: its `pyproject.toml` declares none, and importing it pulls nothing.  Adopt it directly when you want one cross-runtime TCP / TLS / UDP primitive and nothing else.  The three entry points are `connector()`, `listener()`, and `udp_socket()`:

@@ -291,6 +291,34 @@ runner.run_until(handle)
 
 Each `yield from` is a scheduler checkpoint; between yields, other services registered on the same runner get their turn.  A bare `yield` suspends for exactly one tick.  `handle.done` flips True the moment the generator returns, dies, or is cancelled; `handle.error` holds the exception when the body raised (`None` otherwise), so a `while not handle.done` loop can report *why* a task ended: check it after the loop, or wire `Runner(on_handler_error=...)` for a loud callback at the moment of death.  `handle.cancel()` raises `GeneratorExit` inside the body so any `finally` block runs the cleanup.
 
+#### What a generator yields, and driving one without the runner
+
+A suspended generator yields a **wait**: a small object describing why it stopped.  Waits are duck-typed, and every hook on them is optional:
+
+| Hook | Meaning | Who reads it |
+|---|---|---|
+| `ready(now_ms) -> bool` | Whether to resume.  A wait with no `ready` may be resumed on any pass. | any driver |
+| `io_socket` + `io_interest(now_ms)` | Resume when this socket is readable or writable | `Runner.wait()`, to sleep on `ipoll` |
+| `next_deadline(now_ms)` | Resume no later than this tick | `Runner.wait()`, to bound the idle timeout |
+
+`ready` is the gate; the other two are hints that let a scheduler park the CPU instead of spinning.  A wait that must hold a generator back answers `ready`, so a driver gets the timing right by consulting `ready` alone.  Socket waits skip it: their helpers retry the syscall and re-suspend on `EAGAIN`, so resuming them early costs a wasted pass and nothing else.
+
+That makes the helpers drivable from any loop.  Lift `chumicro_sockets.generators` into a project that has no runner and this is the whole driver:
+
+```python
+wait = generator.send(None)                 # prime it to the first suspension
+while True:
+    now_ms = ticks.ticks_ms()
+    ready = getattr(wait, "ready", None)
+    if ready is None or ready(now_ms):
+        try:
+            wait = generator.send(now_ms)
+        except StopIteration:
+            break
+```
+
+This spins where `Runner.wait()` would sleep, which costs battery on a device, and it produces identical results.  `tests/test_socket_generators.py` runs a full connect, send, and receive through exactly this loop.
+
 #### Waiting on a callback-completed event
 
 `Signal` + `wait_for` (in `chumicro_timing.waits`) suspend a generator until a callback-style service reports a one-time completion, which removes the state-change-callback-plus-module-flag preamble from sequential flows.  Hand `signal.set` (or a small wrapper) to the service as its callback, then `yield from`:
