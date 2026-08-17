@@ -1513,6 +1513,10 @@
     <div class="doc doc-contents ">
 
         <p>Return whether the waiting generator should resume: <code>True</code> once set.</p>
+<p>A bounded wait also has to resume when its deadline lands so <code>wait_for</code>
+can raise <code>ETIMEDOUT</code>.  That compare belongs to the driver, which owns the
+clock, and it reads the deadline from <code>next_deadline</code>; answering it here
+would measure the timeout with this module's ticks rather than the driver's.</p>
 
 
     </div>
