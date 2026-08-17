@@ -21,35 +21,19 @@ from chumicro_timing.waits import Signal, wait_for
 
 
 def test_sleep_until_yields_deadline_wait():
+    # The helper does no time math: it publishes the deadline and returns after
+    # one suspension.  Gating it is the driver's job, with the driver's clock.
     gen = sleep_until(1000)
     first = gen.send(None)
-    # The yielded wait carries the absolute deadline the wrapper reads.
     assert first.next_deadline(0) == 1000
     assert getattr(first, "io_socket", None) is None
-    # ready() answers the same gate on its own, so a driver can consult it alone.
-    assert not first.ready(999)
-    assert first.ready(1000)
+    assert getattr(first, "ready", None) is None
     try:
-        gen.send(1000)
+        gen.send(0)
     except StopIteration:
         pass
     else:
-        raise AssertionError("sleep_until did not return once its deadline passed")
-
-
-def test_sleep_until_re_suspends_when_resumed_early():
-    # A driver that ignores the wait and resumes every pass must still sleep the
-    # full span: the deadline is enforced inside the helper, not by the caller.
-    gen = sleep_until(1000)
-    wait = gen.send(None)
-    for now_ms in (0, 250, 999):
-        assert gen.send(now_ms) is wait  # re-yields the same object: no allocation
-    try:
-        gen.send(1000)
-    except StopIteration:
-        pass
-    else:
-        raise AssertionError("sleep_until did not return once its deadline passed")
+        raise AssertionError("sleep_until did not return after its single yield")
 
 
 def test_sleep_until_resumes_after_deadline_under_runner():
@@ -252,19 +236,35 @@ def test_signal_wait_contributes_no_wake_timeout():
 # -- Driving the same helpers with no runner at all ------------------
 
 
-def _drive_without_runner(generator, ticks):
-    """Run *generator* to completion on a bare loop, gating only on ``ready()``.
+def _should_resume(wait, now_ms, ticks):
+    """The whole resumption gate, in the caller's own clock.
 
-    This is the loop an adopter writes when they lift the socket helpers into a
-    codebase that does not use ``chumicro_runner``.  It knows nothing about
-    ``io_socket`` or ``io_interest``: a wait with no ``ready()`` may be resumed on
-    any pass, and a wait that must gate resumption answers ``ready(now_ms)``.
+    Three cases, checked in order: a wait that answers ``ready`` decides for
+    itself; a wait that publishes ``next_deadline`` resumes once that tick lands;
+    anything else may be resumed on any pass.  Every compare goes through *ticks*,
+    so a clock with its own wrap behaviour measures its own deadlines.
+    """
+    ready = getattr(wait, "ready", None)
+    if ready is not None and ready(now_ms):
+        return True
+    next_deadline = getattr(wait, "next_deadline", None)
+    deadline_ms = None if next_deadline is None else next_deadline(now_ms)
+    if deadline_ms is not None:
+        return ticks.ticks_diff(now_ms, deadline_ms) >= 0
+    return ready is None
+
+
+def _drive_without_runner(generator, ticks):
+    """Run *generator* to completion on a bare loop an adopter could write.
+
+    This is what lifting the socket helpers into a codebase with no
+    ``chumicro_runner`` costs: the gate above, and nothing about ``io_socket`` or
+    ``io_interest``, which only exist so a scheduler can sleep instead of spin.
     """
     wait = generator.send(None)
     while True:
         now_ms = ticks.ticks_ms()
-        ready = getattr(wait, "ready", None)
-        if ready is None or ready(now_ms):
+        if _should_resume(wait, now_ms, ticks):
             try:
                 wait = generator.send(now_ms)
             except StopIteration:
@@ -290,8 +290,45 @@ def test_socket_helpers_run_to_completion_without_a_runner():
     assert sock.sent == b"probe\n"
 
 
+def test_runner_gates_deadlines_with_the_clock_it_was_given():
+    # Regression: the generator wrapper's own check() gate must use the clock
+    # passed to Runner(ticks=...).  A 4-day deadline on a non-wrapping clock
+    # aliases to "elapsed" under chumicro_timing's 2**29 compare, which would
+    # resume the task on its very first tick.
+    class UnwrappedTicks:
+        def __init__(self):
+            self.now = 600_000_000
+
+        def ticks_ms(self):
+            return self.now
+
+        def ticks_add(self, ticks_value, delta):
+            return ticks_value + delta
+
+        def ticks_diff(self, end, start):
+            return end - start
+
+        def sleep_ms(self, duration_ms):
+            pass
+
+    ticks = UnwrappedTicks()
+    resumed = []
+
+    def sleeper():
+        yield from sleep_until(ticks.ticks_add(ticks.ticks_ms(), 4 * 86_400_000))
+        resumed.append(True)
+
+    runner = Runner(ticks=ticks)
+    handle = runner.add_generator(sleeper())
+    runner.tick()
+
+    assert resumed == []
+    assert not handle.done
+
+
 def test_sleep_until_sleeps_its_full_span_without_a_runner():
-    # The deadline holds even though this driver never reads next_deadline().
+    # The bare-loop gate honours next_deadline with the caller's own ticks_diff,
+    # so a clock-free sleep_until still sleeps its whole span off the runner.
     ticks = FakeTicks()
     finished_at = []
 

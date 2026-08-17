@@ -68,19 +68,8 @@ stripped = 55942
 mpy = 20141
 
 [runner]
-# mpy raised 6831 -> 6874 (2026-08-17, chumicro_runner 0.22.0).  Measured, not
-# estimated: generators.py went 212 -> 310 mpy bytes making sequential I/O
-# drivable without the Runner (Decision 0087, amended).  Where the 98 B went:
-#   +48  from chumicro_timing.ticks import ticks_diff  (module-level import)
-#   +30  _DeadlineWait.ready(now_ms), the resumption gate a foreign driver reads
-#   +20  sleep_until's self-guarding loop, so an early resume re-suspends
-# Irreducible: the deadline compare must be wrap-safe on MicroPython's 30-bit
-# ticks, so ticks_diff cannot be inlined as `now_ms >= until_ms`, and a lazy
-# import inside ready() would move the cost onto every tick.  Package baseline
-# was 6776 B against a 6831 B ceiling, so 55 B of the growth fit the old
-# headroom and 43 B did not.  Stripped stays under its ceiling at 21548 B.
 stripped = 21669
-mpy = 6874
+mpy = 6831
 
 [sockets]
 stripped = 34164

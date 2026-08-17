@@ -260,7 +260,7 @@ class Runner:
         )
 
         handle = GeneratorHandle()
-        wrapper = _GeneratorWrapper(generator, handle)
+        wrapper = _GeneratorWrapper(generator, handle, self._ticks.ticks_diff)
         task_handle = self.add(wrapper)
         wrapper._task_handle = task_handle
         handle._wrapper = wrapper

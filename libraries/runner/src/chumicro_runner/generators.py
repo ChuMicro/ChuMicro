@@ -3,15 +3,10 @@
 ``sleep_until`` suspends a generator registered via ``Runner.add_generator`` until an absolute tick arrives.
 """
 
-from chumicro_timing.ticks import ticks_diff
-
 
 class _DeadlineWait:
     def __init__(self, until_ms: int) -> None:
         self._until_ms = until_ms
-
-    def ready(self, now_ms: int) -> bool:
-        return ticks_diff(now_ms, self._until_ms) >= 0
 
     def next_deadline(self, now_ms: int) -> int | None:
         return self._until_ms
@@ -20,17 +15,15 @@ class _DeadlineWait:
 def sleep_until(until_ms: int) -> object:
     """Suspend the generator until ``ticks_ms() >= until_ms``.
 
-    The deadline is enforced here rather than trusted to the driver, so a scheduler
-    that resumes the generator early re-suspends instead of returning short.  One
-    wait object is built and re-yielded, keeping a long sleep allocation-free.
+    Does no time math of its own: it publishes the deadline and the driver decides
+    when to resume, comparing with the clock it was built on.  That keeps a sleep
+    measured in the units of the clock passed to ``Runner(ticks=...)`` rather than
+    a second one this module reached for.
 
     Args:
-        until_ms: Absolute ``ticks_ms`` value at which to resume.
+        until_ms: Absolute tick value at which to resume, in the driver's units.
 
     Yields:
         A private deadline-wait carrying *until_ms*.
     """
-    wait = _DeadlineWait(until_ms)
-    now_ms = yield wait
-    while not wait.ready(now_ms):
-        now_ms = yield wait
+    yield _DeadlineWait(until_ms)

@@ -1338,6 +1338,29 @@ size = temp_mpy.stat().st_size
 
 Build the variants cumulatively (baseline, then one construct added per step) and diff the `.mpy` sizes.  `check_size.measure_library(package_dir, src_root, mpy_cross)` gives the whole-package number when you need to reconcile a module delta against the library total.
 
-Two things this surfaces that a single number hides.  A module-level `import` is often the largest single item (`from chumicro_timing.ticks import ticks_diff` measured +48 B of a +98 B change, nearly half, in the qualified-name strings and import bytecode).  And the library's own headroom matters: a +98 B change tripped a ceiling by only 43 B because 55 B of slack was left from the last ratchet, so the overage and the growth are different numbers and the commit should name both.  Worked example with the per-construct table: the `[runner]` comment block in `size-budgets.toml`.
+Two things this surfaces that a single number hides.  A module-level `import` is often the largest single item: `from chumicro_timing.ticks import ticks_diff` measured +48 B of a +98 B change, nearly half, in the qualified-name strings and import bytecode.  And the library's own headroom matters, because the overage and the growth are different numbers: that +98 B change tripped its ceiling by only 43 B, since 55 B of slack was left from the last ratchet.
+
+The per-construct view is also a design signal, not just an accounting one.  When the runner's deadline compare was measured this way, the biggest line item was an import the library should not have had at all (see *Injected clocks* below); removing it left the package 10 B smaller than before the feature, and the ceiling never moved.  Reach for this before writing the justification, because sometimes the measurement retires the raise.
 
 Docstrings are free here.  The gate strips them with the real deploy `strip_source` (Decision 0090) before compiling, so explaining a workaround in a docstring costs no flash.
+
+## Injected clocks: publish the deadline, never judge it
+
+A library that accepts `ticks=` has to route **every** comparison through it, including ones buried in helper modules.  `Runner` did this in `core.py` (`self._ticks.ticks_diff` at each site) while `_generator.py` compared deadlines with a module-level `from chumicro_timing.ticks import ticks_diff`, so a caller who injected a clock got it honoured everywhere except the generator gate.  The failure is invisible in tests that use `FakeTicks`, because a fake built on chumicro semantics agrees with the hardcoded import.
+
+It shows up with any clock whose units differ, and the guide's own example clock is one: unbounded CPython `monotonic_ns() // 1_000_000` with plain-subtraction `ticks_diff`.  A four-day deadline on that clock reads as `-345600000` (keep waiting) to its owner and `+191270912` (elapsed) to `chumicro_timing.ticks_diff`, whose 2^29 modular compare aliases any gap over `TICKS_HALFPERIOD` (~3.1 days) to the wrong sign.  The sleep is skipped entirely.
+
+The rule that falls out, and the one to apply to any new wait or helper:
+
+**A suspended object publishes its condition; whoever owns the clock does the comparing.**  `ready(now_ms)` answers only what needs no clock (`Signal.is_set`).  A deadline goes out through `next_deadline(now_ms)` for the driver to compare.  Giving a helper its own clock so it can self-guard looks like robustness and is the bug: it hardcodes a second time base into a library whose whole seam is that the caller supplies the first.
+
+Test it with a clock that disagrees, not a fake that agrees:
+
+```python
+class UnwrappedTicks:                      # no wrap, plain subtraction
+    def ticks_ms(self): return 600_000_000
+    def ticks_add(self, value, delta): return value + delta
+    def ticks_diff(self, end, start): return end - start
+```
+
+A 4-day deadline under this clock must stay pending on the first tick.  See `libraries/runner/tests/test_socket_generators.py::test_runner_gates_deadlines_with_the_clock_it_was_given`.

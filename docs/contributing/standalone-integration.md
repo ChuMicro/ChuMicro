@@ -126,23 +126,34 @@ while True:
 
 ### The generator helpers, without the runner
 
-The sequential helpers (`chumicro_sockets.generators`, `MQTTClient.next_message`, `chumicro_requests.generators`) suspend by yielding a **wait**, and `runner.add_generator` is one driver for those rather than the only one.  A wait carries an optional `ready(now_ms)` gate; when it has none, the generator may be resumed on any pass.  `io_socket` / `io_interest` / `next_deadline` are hints a scheduler uses to sleep, and a driver is free to ignore all three:
+The sequential helpers (`chumicro_sockets.generators`, `MQTTClient.next_message`, `chumicro_requests.generators`) suspend by yielding a **wait**, and `runner.add_generator` is one driver for those rather than the only one.  No wait compares times itself: it publishes `next_deadline` and *you* compare, which is what keeps a sleep measured in your clock's units rather than a clock the library reached for.  `io_socket` / `io_interest` exist only so a scheduler can sleep instead of spin, and this loop ignores both:
 
 ```python
+def should_resume(wait, now_ms, ticks):
+    """The whole resumption gate: three cases, all in your own clock."""
+    ready = getattr(wait, "ready", None)
+    if ready is not None and ready(now_ms):
+        return True
+    next_deadline = getattr(wait, "next_deadline", None)
+    deadline_ms = None if next_deadline is None else next_deadline(now_ms)
+    if deadline_ms is not None:
+        return ticks.ticks_diff(now_ms, deadline_ms) >= 0
+    return ready is None
+
+
 def drive(generator, ticks):
     """Run a chumicro generator to completion on a loop you own."""
     wait = generator.send(None)                 # prime it to the first suspension
     while True:
         now_ms = ticks.ticks_ms()
-        ready = getattr(wait, "ready", None)
-        if ready is None or ready(now_ms):
+        if should_resume(wait, now_ms, ticks):
             try:
                 wait = generator.send(now_ms)
             except StopIteration:
                 return
 ```
 
-The socket helpers retry on `EAGAIN` and re-suspend, so an early resume costs one wasted pass.  Deadline waits enforce their own span, so `sleep_until` sleeps the full time under this loop as it does under the runner.  What you give up is the sleep: `Runner.wait()` parks the CPU on `ipoll` until a socket is ready or a deadline lands, while this loop spins.  On mains power that difference is invisible; on a battery it is most of your runtime budget, which is the case for adopting `chumicro_runner` once the rest of the integration is working.
+The socket helpers retry on `EAGAIN` and re-suspend, so an early resume costs one wasted pass.  What you give up is the sleep: `Runner.wait()` parks the CPU on `ipoll` until a socket is ready or a deadline lands, while this loop spins.  On mains power that difference is invisible; on a battery it is most of your runtime budget, which is the case for adopting `chumicro_runner` once the rest of the integration is working.
 
 ## Recipe: adopt sockets alone (the leaf)
 
