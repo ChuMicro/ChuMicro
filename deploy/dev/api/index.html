@@ -7589,7 +7589,7 @@ specific failure; see :class:<code>UnresolvedFirmwareError</code>.</p>
 
 
 <h3 id="chumicro_deploy.firmware.flash_firmware" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">flash_firmware</span><span class="p">(</span><span class="n">url</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">reflash_method</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">bootloader_drive_path</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">interactive</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">erase_flash</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">flash_offset</span><span class="o">=</span><span class="s1">&#39;0x0&#39;</span><span class="p">,</span> <span class="n">on_progress</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">flash_firmware</span><span class="p">(</span><span class="n">url</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">reflash_method</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">bootloader_drive_path</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">interactive</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">erase_flash</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">flash_offset</span><span class="o">=</span><span class="s1">'0x0'</span><span class="p">,</span> <span class="n">on_progress</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
 <a href="#chumicro_deploy.firmware.flash_firmware" class="headerlink" title="Permanent link">&para;</a></h3>
 
@@ -8692,8 +8692,8 @@ different config format register a loader by declaring a Python
 entry point in the <code>chumicro_deploy.config_loaders</code> group.  A
 template repo's <code>pyproject.toml</code> looks like:</p>
 <p>.. code-block:: toml</p>
-<div class="language-text highlight"><pre><span></span><code>[project.entry-points.&quot;chumicro_deploy.config_loaders&quot;]
-myformat = &quot;my_pkg.loader:load&quot;
+<div class="language-text highlight"><pre><span></span><code>[project.entry-points."chumicro_deploy.config_loaders"]
+myformat = "my_pkg.loader:load"
 </code></pre></div>
 <p>Where <code>my_pkg.loader.load(path, *, device_id=None)</code> returns a
 :class:<code>Device</code>.</p>
@@ -11738,7 +11738,7 @@ so a flaky or unusual firmware never blocks the real test run.</p>
 
 
 <h4 id="chumicro_deploy.micropython_transport.MicropythonTransport.deploy_files" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">deploy_files</span><span class="p">(</span><span class="n">files</span><span class="p">,</span> <span class="n">entrypoint</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">on_file_staged</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">on_execute_line</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">follow</span><span class="o">=</span><span class="s1">&#39;exec&#39;</span><span class="p">,</span> <span class="n">clean</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">deploy_files</span><span class="p">(</span><span class="n">files</span><span class="p">,</span> <span class="n">entrypoint</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">on_file_staged</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">on_execute_line</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">follow</span><span class="o">=</span><span class="s1">'exec'</span><span class="p">,</span> <span class="n">clean</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></code>
 
 <a href="#chumicro_deploy.micropython_transport.MicropythonTransport.deploy_files" class="headerlink" title="Permanent link">&para;</a></h4>
 
@@ -14629,7 +14629,7 @@ shows up in stdout, not as a non-zero exit).</p>
 
 
 <h3 id="chumicro_deploy.flash_drive.format_fat_corruption_error" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">format_fat_corruption_error</span><span class="p">(</span><span class="n">drive_path</span><span class="p">,</span> <span class="n">corrupted_paths</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="s1">&#39;&#39;</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">format_fat_corruption_error</span><span class="p">(</span><span class="n">drive_path</span><span class="p">,</span> <span class="n">corrupted_paths</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="s1">''</span><span class="p">)</span></code>
 
 <a href="#chumicro_deploy.flash_drive.format_fat_corruption_error" class="headerlink" title="Permanent link">&para;</a></h3>
 
@@ -15166,7 +15166,7 @@ each one's docstring for shape and usage.  Typical injection::</p>
 <div class="language-text highlight"><pre><span></span><code>from chumicro_deploy.testing import FakeSerialPort, FakeTime
 
 transport = CircuitpythonTransport(
-    address=&quot;/dev/cu.fake&quot;,
+    address="/dev/cu.fake",
     port_factory=lambda *_args, **_kwargs: FakeSerialPort(...),
     time=FakeTime(),
 )
@@ -16053,7 +16053,7 @@ fallback.</p>
 
 
 <h4 id="chumicro_deploy.testing.FakeTransport.deploy_files" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">deploy_files</span><span class="p">(</span><span class="n">files</span><span class="p">,</span> <span class="n">entrypoint</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">on_file_staged</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">on_execute_line</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">follow</span><span class="o">=</span><span class="s1">&#39;exec&#39;</span><span class="p">,</span> <span class="n">clean</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">tail_seconds</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">deploy_files</span><span class="p">(</span><span class="n">files</span><span class="p">,</span> <span class="n">entrypoint</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">on_file_staged</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">on_execute_line</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">follow</span><span class="o">=</span><span class="s1">'exec'</span><span class="p">,</span> <span class="n">clean</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">tail_seconds</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
 <a href="#chumicro_deploy.testing.FakeTransport.deploy_files" class="headerlink" title="Permanent link">&para;</a></h4>
 
