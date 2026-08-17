@@ -21,11 +21,13 @@
 
 ChuMicro is a family of small Python libraries for microcontrollers: WiFi, MQTT, HTTP client and server, WebSockets, sockets, network time, timers, configuration, and storage that survives a reboot.  Each library installs by itself, so a project that only needs a timer gets a timer and nothing else.
 
-Two rules run through every library.
+Three rules run through every library.
 
 The first rule: never stop the program.  A microcontroller usually has several jobs running at once.  It keeps the WiFi alive, stays connected to an MQTT broker (the message hub most home-automation setups talk through), blinks a status LED, watches a button.  Most Python libraries for boards block: while a request waits on a slow server, or WiFi retries a dead router, the entire device freezes and every other job stops with it.  Code that stops the world to wait on a network is a bad foundation for a device, and if you've ever watched a board hang for thirty seconds because the router was unplugged, you already know it.  ChuMicro libraries do their work in small steps inside your loop.  Each pass, every library does a little and hands control back, so a dead network costs you nothing but the network: the LED keeps blinking, the button keeps answering, and you choose how long to wait and what happens when the waiting is over.
 
 The second rule: the same code runs everywhere.  A library written for CircuitPython won't run on MicroPython, and one written for MicroPython won't run on CircuitPython, so changing boards often means porting your project.  Every ChuMicro library runs unmodified on CircuitPython, MicroPython, and the standard Python on your computer.  You can develop and test a program at your desk, then deploy the same files to a Pico W running CircuitPython or an ESP32 running MicroPython.
+
+The third rule: your program stays yours.  Every library takes its socket and its clock as arguments you pass in, and every library moves forward when your own loop hands it a turn.  So you can run one of these inside a `while True` you already wrote and give it the socket you already have.  `import chumicro_mqtt` loads no other ChuMicro module, and supplying your own socket and clock keeps it that way.
 
 ## An LED blink without time.sleep()
 
@@ -79,7 +81,7 @@ Unplug the router and this program does not hang.  The LED blinks through the re
 
 ## Sequential work reads top to bottom
 
-Some work is a sequence: connect, send, wait for the reply, read it.  Spelled out as callbacks and status flags, a four-step sequence scatters across a file.  This repository keeps the receipt: its TCP echo demo exists in [both styles](demos/), and the spelled-out version is a state-machine class with its own states and handler methods where the generator version is one short function you read top to bottom.
+Some work is a sequence: connect, send, wait for the reply, read it.  Written out as callbacks and status flags, a four-step sequence scatters across a file.  This repository ships its TCP echo demo in [both styles](demos/) so you can put them side by side: the state-machine version is a class with ten methods, and the generator version is one function you read top to bottom.
 
 A generator is plain Python.  Each `yield from` marks the line where your code pauses; the rest of the device runs; your code resumes on that line when the socket is ready.
 
@@ -101,16 +103,19 @@ The request advances between LED blinks and MQTT keepalives.  A slow server or a
 
 ### Why generators and not async/await?
 
-Because `async` support is uneven across the two device runtimes, and the difference bites.  MicroPython ships a capable asyncio in its firmware.  CircuitPython's asyncio is a separate add-on library whose socket layer has been broken since 2021, and smaller boards don't include async support in the firmware at all.  Code built on asyncio quietly commits you to one runtime, and its event loop wants to own the `while True` your app already owns.
+Two questions hide in that one, and they have separate answers.
 
-Generators sidestep all of it.  They're core Python, identical on CircuitPython, MicroPython, and CPython, and they're what `async` compiles down to anyway: MicroPython emits the same bytecode for `await` as for `yield from`.  ChuMicro drives them directly and skips the keywords:
+**Who owns the loop?**  You do.  `runner.tick()` is a call you make from a `while True` you wrote, which is what lets a ChuMicro service sit beside code that knows nothing about ChuMicro and lets you decide what happens between turns.  An asyncio program is arranged the other way up: its event loop owns the `while True` and your code lives inside it.
 
-- A pause can't be faked or forgotten.  `yield from` a plain function and Python raises `TypeError` on the spot, where `await` invites sprinkling, and every extra pause is another place the rest of the system can change state under you between two lines of your code.
-- Every pause is a visible `yield from` in your source.  You can set a breakpoint on it, when a deployed board misbehaves the serial traceback shows which line it was waiting on, and the runner resumes services in the order you registered them, not in whatever order a task heap decides.
-- The device pays less.  CircuitPython compiles each `await` into a method call that allocates a fresh object every time the line resumes; in a receive loop, that's an allocation per pass, on a board where the heap is measured in kilobytes.  `yield from` is a single bytecode on both device runtimes, ChuMicro reuses the wait objects it yields, and the runner's own tests hold its wait path to zero steady-state allocation.
-- Nothing pulls you toward coroutines you don't need.  A WiFi supervisor, an MQTT keepalive, a button debounce: each one is "check whether there's work, do one piece of it."  ChuMicro services expose exactly that pair of methods and the runner calls them.  Generators are reserved for the flows that genuinely read as a sequence: connect, send, receive, close.
+**How is a pause spelled?**  As `yield from`, which is the same machinery `await` is built from.  MicroPython compiles `await x` into one `YIELD_FROM` bytecode, the same one `yield from x` produces.  Writing that directly buys three things:
 
-The full case, with the compiler and scheduler sources cited, is [Decision 0087](plans/decisions/0087-generators-for-sequential-io.md).
+- **You can see and stop at every pause.**  Set a breakpoint on the `yield from` line.  When a board misbehaves on your bench, the serial traceback names the line it was waiting on.  The runner gives services their turn in the order you registered them, so the sequence you read in your source is the sequence the device runs.
+- **A pause is always a real pause.**  `yield from` a plain function and Python raises `TypeError` right there, so every `yield from` you write marks a genuine handoff: a place where the LED gets to blink and the MQTT keepalive gets its turn.  Ordinary helpers stay ordinary functions.
+- **The device pays less.**  CircuitPython compiles each `await` into a method call that builds a fresh object every time the line resumes, which in a receive loop means one allocation per pass on a board whose heap is measured in kilobytes.  `yield from` is a single bytecode on both device runtimes, ChuMicro reuses the wait objects it yields, and the runner's tests hold its wait path to zero steady-state allocation.
+
+Most services never reach for a generator at all.  A WiFi supervisor, an MQTT keepalive, a button debounce: each one answers "is there work?" and then does one piece of it, which reads clearly as the pair of methods the runner calls.  Generators are for the flows that genuinely run in sequence.
+
+The full case, with both runtimes' compiler sources cited line by line, is [Decision 0087](plans/decisions/0087-generators-for-sequential-io.md).
 
 ## A real project on one page
 
@@ -166,13 +171,25 @@ Claims about embedded software are cheap, so this project keeps receipts:
 - Every non-obvious choice has a written [decision record](plans/decisions/): what was decided, what the alternatives were, and the evidence.  Over a hundred of them, and they get revisited when the facts change.
 - When something fails on your bench, the tools classify the failure and name the fix (drive not mounted, board in bootloader mode, port held by another process) instead of leaving you a stack trace.
 
-## Test on your laptop, not over a serial cable
+## Bring your own socket and clock
 
-Every library takes its I/O and its clock as constructor arguments: a socket, a millisecond tick source.  On a board you hand in the real thing.  On your laptop you hand in a fake, and your tests run in milliseconds with no hardware plugged in.  Libraries with hardware-shaped dependencies ship their fakes in a `testing` module (`from chumicro_timing.testing import FakeTicks`), so your tests use the same tools the project's own tests do.
+Every library takes its I/O and its clock as constructor arguments.  A socket needs four methods (`recv_into`, `send`, `close`, `setblocking`) and a clock needs three (`ticks_ms`, `ticks_add`, `ticks_diff`).  Anything with those methods is accepted: a stdlib socket, a wrapper from another library, or something you wrote this afternoon.  That one seam pays off twice.
 
-The same test suite also runs under desktop builds of MicroPython and CircuitPython, which catches "works on my laptop, breaks on the board" before any code touches hardware.  If you've ever debugged a library by adding prints and re-copying files to a USB drive, this is the part of ChuMicro you'll thank yourself for.
+**On your laptop, hand in a fake.**  Your tests run in milliseconds with nothing plugged in.  Every library with hardware-shaped dependencies ships its fakes in a `testing` module (`from chumicro_timing.testing import FakeTicks`), so your tests use the same tools the project's own tests do.  The same suite also runs under desktop builds of MicroPython and CircuitPython, which catches "works on my laptop, breaks on the board" before any code reaches hardware.  If you've ever debugged a library by adding prints and re-copying files to a USB drive, this is the part of ChuMicro you'll thank yourself for.
 
-Adopting one library into an existing project works too: bring your own socket and clock, take only the files you need.  See [standalone integration](docs/contributing/standalone-integration.md).
+**In someone else's project, hand in what it already has.**  `import chumicro_mqtt` loads zero other ChuMicro modules, and supplying your own transport and clock keeps that closure empty, so the MQTT client can go into a codebase built on something else entirely and run from the loop that codebase already has:
+
+```python
+mqtt.connect()                      # non-blocking; no I/O happens here
+
+while True:
+    now = ticks.ticks_ms()
+    if mqtt.check(now):             # does the client want a turn?
+        mqtt.handle(now)            # one chunk of connect, send, or recv
+    # your own work ticks here too
+```
+
+[Standalone integration](docs/contributing/standalone-integration.md) is the full recipe, with the measured import closure for every library and a copy-paste host test.  Keeping these seams costs a few kilobytes of flash and one extra frame per connect, under 1% of a 264 KB board.
 
 ## Watch it work on real hardware
 
@@ -290,7 +307,7 @@ Command-line tools that run on your laptop, not the board.  They're what make th
 
 | Tool | What it does |
 |---|---|
-| **[chumicro-workspace](workbench/workspace/)** | The front door: scaffold projects, install firmware, deploy code, open a REPL, register boards, run checks. |
+| **[chumicro-workspace](workbench/workspace/)** | The tool you reach for first: scaffold projects, install firmware, deploy code, open a REPL, register boards, run checks. |
 | **[chumicro-deploy](workbench/deploy/)** | Low-level board operations: probe what's running, push files, flash firmware, and fail with messages that say what to actually do. |
 | **[chumicro-repl](workbench/repl/)** | Serial REPL and output tailing with readable tracebacks.  Scriptable from Python when a tool or test needs to drive a board. |
 | **[chumicro-pytest-device](workbench/pytest-device/)** | The pytest plugin that stages tests onto a connected board and reports results back like any other test run. |

@@ -8,4 +8,6 @@
 
 ## Next
 
+- [ ] **No lint rule gates tick math, so `ticks_diff` is convention-only.**  AGENTS.md:66 requires all time math through `chumicro_timing`, but its named offenders are tick *sources* (`time.monotonic`, `supervisor.ticks_ms`), not the naive `now_ms >= deadline_ms` compare that `ticks_diff` exists to prevent; the style guide omits the rule entirely and no CHU rule covers it.  A violation passes every CPython test and every board run until `TICKS_PERIOD` (`1 << 29` ms, ~6.2 days) wraps and the compare inverts.  Library sources are clean today (grepped 2026-08-17); scope a CHU rule plus a style-guide entry, and watch false positives on size/index/count compares.
+
 - [ ] **Workspace → workbench rename: chumicro-side follow-through (template repo renamed 2026-08-10).**  [workstreams/workbench-rename.md](workstreams/workbench-rename.md) — near-term half LANDED 2026-08-10 (`DEFAULT_TEMPLATE_URL` + its pinned test, the doc links, the two checks-rule comments; workspace 0.54.1 → 0.54.2).  Remaining: the sized full-rename menu (PyPI package, module, `workspace.yml`, hosted docs path), each needing a per-surface user call, and the workbench-word collision spots to reword when touched.

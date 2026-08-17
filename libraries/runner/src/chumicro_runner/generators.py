@@ -15,8 +15,13 @@ class _DeadlineWait:
 def sleep_until(until_ms: int) -> object:
     """Suspend the generator until ``ticks_ms() >= until_ms``.
 
+    Does no time math of its own: it publishes the deadline and the driver decides
+    when to resume, comparing with the clock it was built on.  That keeps a sleep
+    measured in the units of the clock passed to ``Runner(ticks=...)`` rather than
+    a second one this module reached for.
+
     Args:
-        until_ms: Absolute ``ticks_ms`` value at which to resume.
+        until_ms: Absolute tick value at which to resume, in the driver's units.
 
     Yields:
         A private deadline-wait carrying *until_ms*.

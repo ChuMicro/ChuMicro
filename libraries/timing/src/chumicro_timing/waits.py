@@ -28,7 +28,13 @@ class Signal:
         self.value = None
 
     def ready(self, now_ms: int) -> bool:
-        """Return whether the waiting generator should resume: ``True`` once set."""
+        """Return whether the waiting generator should resume: ``True`` once set.
+
+        A bounded wait also has to resume when its deadline lands so ``wait_for``
+        can raise ``ETIMEDOUT``.  That compare belongs to the driver, which owns the
+        clock, and it reads the deadline from ``next_deadline``; answering it here
+        would measure the timeout with this module's ticks rather than the driver's.
+        """
         return self.is_set
 
 

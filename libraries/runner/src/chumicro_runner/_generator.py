@@ -1,6 +1,3 @@
-from chumicro_timing.ticks import ticks_diff
-
-
 class _NextTickWait:
     """Bare-yield wait with no hooks; the wrapper resumes it next tick."""
 
@@ -25,8 +22,12 @@ class GeneratorHandle:
 
 
 class _GeneratorWrapper:
-    def __init__(self, generator: object, handle: GeneratorHandle) -> None:
+    def __init__(self, generator: object, handle: GeneratorHandle,
+                 ticks_diff: object) -> None:
         self._generator = generator
+        # The runner's injected clock, not chumicro_timing's: a caller who passed
+        # ticks= to Runner must have every deadline compared in their own units.
+        self._ticks_diff = ticks_diff
         self._wait: object | None = None
         # Bound hook methods of the current wait, resolved once per yield.  A
         # per-tick getattr would allocate a fresh bound method on MicroPython
@@ -52,10 +53,10 @@ class _GeneratorWrapper:
             if ready(now_ms):
                 return True
             deadline = self.next_deadline(now_ms)
-            return deadline is not None and ticks_diff(now_ms, deadline) >= 0
+            return deadline is not None and self._ticks_diff(now_ms, deadline) >= 0
         deadline = self.next_deadline(now_ms)
         if deadline is not None:
-            return ticks_diff(now_ms, deadline) >= 0
+            return self._ticks_diff(now_ms, deadline) >= 0
         return True
 
     def handle(self, now_ms: int) -> None:

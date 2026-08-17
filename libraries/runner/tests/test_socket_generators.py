@@ -21,11 +21,13 @@ from chumicro_timing.waits import Signal, wait_for
 
 
 def test_sleep_until_yields_deadline_wait():
+    # The helper does no time math: it publishes the deadline and returns after
+    # one suspension.  Gating it is the driver's job, with the driver's clock.
     gen = sleep_until(1000)
     first = gen.send(None)
-    # The yielded wait carries the absolute deadline the wrapper reads.
     assert first.next_deadline(0) == 1000
     assert getattr(first, "io_socket", None) is None
+    assert getattr(first, "ready", None) is None
     try:
         gen.send(0)
     except StopIteration:
@@ -229,3 +231,111 @@ def test_signal_wait_contributes_no_wake_timeout():
 
     runner.add_generator(waiter())
     assert runner._compute_timeout(ticks.ticks_ms()) is None
+
+
+# -- Driving the same helpers with no runner at all ------------------
+
+
+def _should_resume(wait, now_ms, ticks):
+    """The whole resumption gate, in the caller's own clock.
+
+    Three cases, checked in order: a wait that answers ``ready`` decides for
+    itself; a wait that publishes ``next_deadline`` resumes once that tick lands;
+    anything else may be resumed on any pass.  Every compare goes through *ticks*,
+    so a clock with its own wrap behaviour measures its own deadlines.
+    """
+    ready = getattr(wait, "ready", None)
+    if ready is not None and ready(now_ms):
+        return True
+    next_deadline = getattr(wait, "next_deadline", None)
+    deadline_ms = None if next_deadline is None else next_deadline(now_ms)
+    if deadline_ms is not None:
+        return ticks.ticks_diff(now_ms, deadline_ms) >= 0
+    return ready is None
+
+
+def _drive_without_runner(generator, ticks):
+    """Run *generator* to completion on a bare loop an adopter could write.
+
+    This is what lifting the socket helpers into a codebase with no
+    ``chumicro_runner`` costs: the gate above, and nothing about ``io_socket`` or
+    ``io_interest``, which only exist so a scheduler can sleep instead of spin.
+    """
+    wait = generator.send(None)
+    while True:
+        now_ms = ticks.ticks_ms()
+        if _should_resume(wait, now_ms, ticks):
+            try:
+                wait = generator.send(now_ms)
+            except StopIteration:
+                return
+        ticks.advance(1)
+
+
+def test_socket_helpers_run_to_completion_without_a_runner():
+    ticks = FakeTicks()
+    sock = FakeSocket()
+    sock.enqueue_recv(b"echo\n")
+    connector = FakeSocketConnector(actions=["dns_ok", "tcp_ok"], socket=sock)
+    replies = []
+
+    def echo():
+        connected = yield from connect(connector)
+        yield from send_all(connected, b"probe\n")
+        replies.append((yield from recv_until(connected, b"\n", max_bytes=64)))
+
+    _drive_without_runner(echo(), ticks)
+
+    assert replies == [b"echo\n"]
+    assert sock.sent == b"probe\n"
+
+
+def test_runner_gates_deadlines_with_the_clock_it_was_given():
+    # Regression: the generator wrapper's own check() gate must use the clock
+    # passed to Runner(ticks=...).  A 4-day deadline on a non-wrapping clock
+    # aliases to "elapsed" under chumicro_timing's 2**29 compare, which would
+    # resume the task on its very first tick.
+    class UnwrappedTicks:
+        def __init__(self):
+            self.now = 600_000_000
+
+        def ticks_ms(self):
+            return self.now
+
+        def ticks_add(self, ticks_value, delta):
+            return ticks_value + delta
+
+        def ticks_diff(self, end, start):
+            return end - start
+
+        def sleep_ms(self, duration_ms):
+            pass
+
+    ticks = UnwrappedTicks()
+    resumed = []
+
+    def sleeper():
+        yield from sleep_until(ticks.ticks_add(ticks.ticks_ms(), 4 * 86_400_000))
+        resumed.append(True)
+
+    runner = Runner(ticks=ticks)
+    handle = runner.add_generator(sleeper())
+    runner.tick()
+
+    assert resumed == []
+    assert not handle.done
+
+
+def test_sleep_until_sleeps_its_full_span_without_a_runner():
+    # The bare-loop gate honours next_deadline with the caller's own ticks_diff,
+    # so a clock-free sleep_until still sleeps its whole span off the runner.
+    ticks = FakeTicks()
+    finished_at = []
+
+    def sleeper():
+        yield from sleep_until(ticks.ticks_add(ticks.ticks_ms(), 500))
+        finished_at.append(ticks.ticks_ms())
+
+    _drive_without_runner(sleeper(), ticks)
+
+    assert finished_at == [500]

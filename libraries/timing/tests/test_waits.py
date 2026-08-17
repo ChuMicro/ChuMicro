@@ -50,6 +50,20 @@ def test_signal_clear_re_arms_for_reuse() -> None:
     assert signal.ready(0) is False
 
 
+def test_signal_publishes_its_timeout_rather_than_judging_it() -> None:
+    """A bounded wait reports the deadline; the driver decides when it lands.
+
+    wait_for has to be resumed past its deadline to raise ETIMEDOUT, and ready()
+    deliberately does not answer that: the driver owns the clock, so comparing
+    here would measure the timeout in this module's ticks instead of the caller's.
+    """
+    signal = Signal()
+    generator = wait_for(signal, deadline_ms=500)
+    generator.send(None)  # prime it so the deadline lands on the signal
+    assert signal.ready(500) is False
+    assert signal.next_deadline(0) == 500
+
+
 # -- wait_for (the suspension helper) --------------------------------
 
 
