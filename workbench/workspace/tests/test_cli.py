@@ -6020,7 +6020,69 @@ class TestDeployExampleAdditionalBranches:
         assert exit_code == 0
         assert len(bootstrap_calls) == 1
         # Wizard called with no demo (we're about to deploy the example).
-        assert bootstrap_calls[0].with_demo is False
+        assert bootstrap_calls[0].demo is False
+
+    def test_bootstrap_fall_through_runs_the_real_wizard(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """The hand-off Namespace satisfies the real ``_cmd_bootstrap``.
+
+        Nothing stands in for the wizard here: one detected port and a
+        faked probe carry the real ``bootstrap`` -> ``add-device`` path,
+        so a Namespace missing an attribute that ``add-device`` reads
+        fails this test instead of reaching a user as an
+        ``AttributeError``."""
+        root = tmp_path
+        (root / "workspace.yml").write_text("")
+        (root / "secrets.toml").write_text("")
+        (root / "devices.yml").write_text("devices: []\n")
+        _seed_example_library(root, "timing")
+
+        monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+
+        from chumicro_workspace import onboarding
+        from serial.tools import list_ports
+
+        monkeypatch.setattr(
+            list_ports,
+            "comports",
+            lambda: [FakePort("/dev/cu.fake", "Pi Pico W")],
+        )
+
+        def fake_inference(address: str, **_kw):
+            """Probe every board as a supported CircuitPython one."""
+            return onboarding.RuntimeInferenceResult(
+                info=fake_probe_info(
+                    runtime="circuitpython",
+                    machine="Raspberry Pi Pico W with rp2040",
+                    version="10.2.0",
+                ),
+                runtime="circuitpython",
+            )
+
+        monkeypatch.setattr(
+            cli.devices, "probe_with_runtime_inference", fake_inference,
+        )
+        monkeypatch.setattr(
+            onboarding, "probe_with_runtime_inference", fake_inference,
+        )
+        transport = FakeTransport(execute_output="")
+        _install_fake_transport(monkeypatch, transport)
+        import chumicro_repl.cli as repl_cli_mod
+        monkeypatch.setattr(repl_cli_mod, "main", lambda _argv: 0)
+
+        exit_code = cli.main([
+            "deploy-example", "--workspace-dir", str(root),
+            "timing", "circuitpython_blink",
+        ])
+        assert exit_code == 0
+        # The wizard registered the probed board, and the example
+        # deployed onto it without a second device selector.
+        registered = (root / "devices.yml").read_text()
+        assert "runtime: circuitpython" in registered
+        assert "/dev/cu.fake" in registered
 
     def test_bootstrap_canceled_exits_five(
         self,

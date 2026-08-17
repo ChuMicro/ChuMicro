@@ -213,7 +213,12 @@ def _add_quality_parsers(subparsers: argparse._SubParsersAction) -> None:
 
     lint_parser = subparsers.add_parser(
         "lint",
-        help="Run `ruff check` across the workspace.  Extra args pass through.",
+        help=(
+            "Run `ruff check` and `chumicro-checks` across the "
+            "workspace.  Extra args pass through to ruff.  "
+            "workspace.yml's `quality.lint.tools` picks which of "
+            "the two run."
+        ),
     )
     _add_workspace_arg(lint_parser)
     lint_parser.add_argument(
