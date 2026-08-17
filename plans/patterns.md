@@ -1364,3 +1364,31 @@ class UnwrappedTicks:                      # no wrap, plain subtraction
 ```
 
 A 4-day deadline under this clock must stay pending on the first tick.  See `libraries/runner/tests/test_socket_generators.py::test_runner_gates_deadlines_with_the_clock_it_was_given`.
+
+## Subcommand hand-offs build the callee's Namespace, and a test drives the real callee
+
+`chumicro-workspace` subcommands chain by hand-building an `argparse.Namespace`
+for the next handler: `deploy-example` falls into `bootstrap`, `add-device
+--demo` chains into `demo`, `preflight` runs `lint` then `test`.  The callee
+reads whatever *its own parser* defines, so the constructed Namespace has to
+carry that full attribute set, not the caller's mental model of it.  Issue #22
+was the drift: `deploy-example`'s wizard fallback passed `port` / `device_id` /
+`with_demo`, while `_cmd_bootstrap` delegates to `_cmd_add_device`, which reads
+`address`, `runtime`, `id`, `force`, `description`, `non_interactive`, and
+`_env`.  Every interactive no-device `deploy-example` raised `AttributeError`
+instead of entering the wizard.
+
+The reason it lived a long time is the test shape, and that's the transferable
+part: the only test of that path monkeypatched `_cmd_bootstrap` with a fake,
+and the fake asserted on `with_demo`, an attribute that existed on nothing but
+the caller.  A stand-in for the callee can only confirm the caller talks to
+itself consistently.
+
+Rule: one test per hand-off drives the **real** callee, with the fakes pushed
+out to the edges it actually touches (`serial.tools.list_ports.comports` for
+the port pick, `probe_with_runtime_inference` for the probe, `create_transport`
+for the deploy).  See
+`workbench/workspace/tests/test_cli.py::TestDeployExampleAdditionalBranches::test_bootstrap_fall_through_runs_the_real_wizard`.
+Keep a `getattr(args, "demo", False)`-style read in the callee only for
+genuinely optional attributes; everything the callee reads unconditionally
+belongs in every Namespace built for it.

@@ -245,10 +245,10 @@ result = runner.deploy_diff(source, wipe=True)
 
 When the underlying `Deployer.deploy_diff()` raises a `CircuitpythonTransportError` or `MicropythonTransportError`, `RecoveringDeployer`:
 
-1. Classifies the error into a `DeployFailureKind`: one of `PORT_UNAVAILABLE`, `RAW_REPL_UNRESPONSIVE`, `CIRCUITPY_DRIVE_MISSING`, `MACOS_FSKIT_WEDGED`, `FLASH_COPY_FAILED`, `BOOTSTRAP_EXEC_FAILED`, `INSUFFICIENT_MEMORY`, `TRACEBACK_RETURNED`, `CONFIGURATION_ERROR`, or `UNKNOWN`.
+1. Classifies the error into a `DeployFailureKind`: one of `PORT_UNAVAILABLE`, `RAW_REPL_UNRESPONSIVE`, `COMMAND_TIMED_OUT`, `NO_PYTHON_RUNTIME`, `CIRCUITPY_DRIVE_MISSING`, `MACOS_FSKIT_WEDGED`, `FAT_VOLUME_CORRUPT`, `FLASH_COPY_FAILED`, `BOOTSTRAP_EXEC_FAILED`, `INSUFFICIENT_MEMORY`, `TRACEBACK_RETURNED`, `CONFIGURATION_ERROR`, `UNRESOLVED_IMPORT`, or `UNKNOWN`.
 2. Prints a headline, the underlying error, and the canned `RecoveryPlan` for that kind (the physical actions that typically fix it: close the app holding the port, tap RESET, replug USB, switch to flash mode).
 3. With `prompt=input`: asks the user to fix the condition and press Enter to retry, up to `max_attempts` times.  Typing `q` / `quit` / `abort` / `exit` at the prompt stops retrying and re-raises the last error.  With `prompt=None`: re-raises immediately after printing.
-4. For non-retryable kinds (`INSUFFICIENT_MEMORY`, `CONFIGURATION_ERROR`, `TRACEBACK_RETURNED`) it prints the coaching once and re-raises without prompting, regardless of mode.  A source-level bug can't be fixed by replugging, and a too-small board can't grow more RAM by retrying.
+4. For non-retryable kinds (`COMMAND_TIMED_OUT`, `NO_PYTHON_RUNTIME`, `FAT_VOLUME_CORRUPT`, `INSUFFICIENT_MEMORY`, `CONFIGURATION_ERROR`, `UNRESOLVED_IMPORT`, `TRACEBACK_RETURNED`) it prints the coaching once and re-raises without prompting, regardless of mode.  A source-level bug can't be fixed by replugging, a too-small board can't grow more RAM by retrying, and a wedged USB link, a missing Python runtime, or a corrupt CIRCUITPY filesystem each need the fix steps applied first (replug, `install-firmware`, `reset-board`) before a deploy can get anywhere.
 
 When `Deployer.deploy_diff()` returns a `DeployResult` with `success=False` and a `traceback`, `RecoveringDeployer` prints the traceback and a source-fix recovery plan, then returns the unchanged result.
 

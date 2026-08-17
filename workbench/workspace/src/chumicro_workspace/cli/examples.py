@@ -348,11 +348,20 @@ def _resolve_deploy_example_device(
         raise _DeployExampleError(
             DEPLOY_EXAMPLE_EXIT_NO_DEVICE_REGISTERED, "",
         )
+    # ``_cmd_bootstrap`` delegates to ``add-device``, so the Namespace
+    # has to carry that command's whole attribute set.  ``id`` /
+    # ``address`` / ``runtime`` stay None so the wizard picks the port
+    # and auto-detects the runtime, same as a bare ``bootstrap`` run.
     bootstrap_args = argparse.Namespace(
         workspace_dir=args.workspace_dir,
-        port=None,
-        device_id=None,
-        with_demo=False,  # don't double up; we deploy the example next
+        id=None,
+        address=None,
+        runtime=None,
+        description=None,
+        force=False,
+        demo=False,  # don't double up; we deploy the example next
+        non_interactive=False,  # only the interactive path lands here
+        _env=args._env,
     )
     if _cmd_bootstrap(bootstrap_args) != 0:
         raise _DeployExampleError(
