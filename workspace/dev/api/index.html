@@ -6034,7 +6034,7 @@ what on-device readers see directly.</p>
 
 
 <h3 id="chumicro_workspace.flatten.flatten_config" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">flatten_config</span><span class="p">(</span><span class="n">nested</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">_prefix</span><span class="o">=</span><span class="s1">&#39;&#39;</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">flatten_config</span><span class="p">(</span><span class="n">nested</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">_prefix</span><span class="o">=</span><span class="s1">''</span><span class="p">)</span></code>
 
 <a href="#chumicro_workspace.flatten.flatten_config" class="headerlink" title="Permanent link">&para;</a></h3>
 
@@ -6888,7 +6888,7 @@ recognized config file exists under <em>project_dir</em>.</p>
 
 
 <h3 id="chumicro_workspace.deploy_source.project_directory_source" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">project_directory_source</span><span class="p">(</span><span class="n">project_dir</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">secrets_toml</span><span class="p">,</span> <span class="n">entrypoint</span><span class="o">=</span><span class="s1">&#39;/code.py&#39;</span><span class="p">,</span> <span class="n">resource_prefix</span><span class="o">=</span><span class="s1">&#39;/&#39;</span><span class="p">,</span> <span class="n">extra_excluded</span><span class="o">=</span><span class="p">(),</span> <span class="n">target_runtime</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">project_directory_source</span><span class="p">(</span><span class="n">project_dir</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">secrets_toml</span><span class="p">,</span> <span class="n">entrypoint</span><span class="o">=</span><span class="s1">'/code.py'</span><span class="p">,</span> <span class="n">resource_prefix</span><span class="o">=</span><span class="s1">'/'</span><span class="p">,</span> <span class="n">extra_excluded</span><span class="o">=</span><span class="p">(),</span> <span class="n">target_runtime</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
 <a href="#chumicro_workspace.deploy_source.project_directory_source" class="headerlink" title="Permanent link">&para;</a></h3>
 
@@ -7242,7 +7242,7 @@ A file that can't be read or parsed returns <code>None</code>.</p>
 
 
 <h3 id="chumicro_workspace.boot_shim.boot_shim_files" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">boot_shim_files</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">entrypoint_filename</span><span class="o">=</span><span class="s1">&#39;code.py&#39;</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">boot_shim_files</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">entrypoint_filename</span><span class="o">=</span><span class="s1">'code.py'</span><span class="p">)</span></code>
 
 <a href="#chumicro_workspace.boot_shim.boot_shim_files" class="headerlink" title="Permanent link">&para;</a></h3>
 
@@ -7330,7 +7330,7 @@ Both are never shipped speculatively.</p>
 
 
 <h3 id="chumicro_workspace.boot_shim.project_boot_source" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">project_boot_source</span><span class="p">(</span><span class="n">project_dir</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">workspace</span><span class="p">,</span> <span class="n">entrypoint_filename</span><span class="o">=</span><span class="s1">&#39;code.py&#39;</span><span class="p">,</span> <span class="n">secrets_toml</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">extra_excluded</span><span class="o">=</span><span class="p">(),</span> <span class="n">target_runtime</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">project_boot_source</span><span class="p">(</span><span class="n">project_dir</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">workspace</span><span class="p">,</span> <span class="n">entrypoint_filename</span><span class="o">=</span><span class="s1">'code.py'</span><span class="p">,</span> <span class="n">secrets_toml</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">extra_excluded</span><span class="o">=</span><span class="p">(),</span> <span class="n">target_runtime</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
 <a href="#chumicro_workspace.boot_shim.project_boot_source" class="headerlink" title="Permanent link">&para;</a></h3>
 
@@ -7499,7 +7499,7 @@ recognized config file.</p>
 
 
 <h3 id="chumicro_workspace.boot_shim.project_boot_with_import_graph_source" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">project_boot_with_import_graph_source</span><span class="p">(</span><span class="n">project_dir</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">workspace</span><span class="p">,</span> <span class="n">entrypoint_filename</span><span class="o">=</span><span class="s1">&#39;code.py&#39;</span><span class="p">,</span> <span class="n">project_entrypoint</span><span class="o">=</span><span class="s1">&#39;app.py&#39;</span><span class="p">,</span> <span class="n">workspace_yaml</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">secrets_toml</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">extra_excluded</span><span class="o">=</span><span class="p">(),</span> <span class="n">target_runtime</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">extra_modules</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">extra_search_paths</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">project_boot_with_import_graph_source</span><span class="p">(</span><span class="n">project_dir</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">workspace</span><span class="p">,</span> <span class="n">entrypoint_filename</span><span class="o">=</span><span class="s1">'code.py'</span><span class="p">,</span> <span class="n">project_entrypoint</span><span class="o">=</span><span class="s1">'app.py'</span><span class="p">,</span> <span class="n">workspace_yaml</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">secrets_toml</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">extra_excluded</span><span class="o">=</span><span class="p">(),</span> <span class="n">target_runtime</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">extra_modules</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">extra_search_paths</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
 <a href="#chumicro_workspace.boot_shim.project_boot_with_import_graph_source" class="headerlink" title="Permanent link">&para;</a></h3>
 
@@ -8020,7 +8020,7 @@ coach).</p>
 
 
 <h3 id="chumicro_workspace.import_graph.project_import_graph_source" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">project_import_graph_source</span><span class="p">(</span><span class="n">project_dir</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">workspace</span><span class="p">,</span> <span class="n">workspace_yaml</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">secrets_toml</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">entrypoint_filename</span><span class="o">=</span><span class="s1">&#39;code.py&#39;</span><span class="p">,</span> <span class="n">device_entrypoint</span><span class="o">=</span><span class="s1">&#39;/code.py&#39;</span><span class="p">,</span> <span class="n">resource_prefix</span><span class="o">=</span><span class="s1">&#39;/lib&#39;</span><span class="p">,</span> <span class="n">extra_modules</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">extra_search_paths</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">target_runtime</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">project_import_graph_source</span><span class="p">(</span><span class="n">project_dir</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">workspace</span><span class="p">,</span> <span class="n">workspace_yaml</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">secrets_toml</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">entrypoint_filename</span><span class="o">=</span><span class="s1">'code.py'</span><span class="p">,</span> <span class="n">device_entrypoint</span><span class="o">=</span><span class="s1">'/code.py'</span><span class="p">,</span> <span class="n">resource_prefix</span><span class="o">=</span><span class="s1">'/lib'</span><span class="p">,</span> <span class="n">extra_modules</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">extra_search_paths</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">target_runtime</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
 <a href="#chumicro_workspace.import_graph.project_import_graph_source" class="headerlink" title="Permanent link">&para;</a></h3>
 
@@ -9333,7 +9333,7 @@ and :func:<code>explain</code> so the policy lives in one place.</p>
 
 
 <h4 id="chumicro_workspace.firmware_support.FirmwareSupportStatus.SUPPORTED" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">SUPPORTED</span> <span class="o">=</span> <span class="s1">&#39;supported&#39;</span></code>
+            <code class="highlight language-python"><span class="n">SUPPORTED</span> <span class="o">=</span> <span class="s1">'supported'</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
@@ -9356,7 +9356,7 @@ and :func:<code>explain</code> so the policy lives in one place.</p>
 
 
 <h4 id="chumicro_workspace.firmware_support.FirmwareSupportStatus.OLD" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">OLD</span> <span class="o">=</span> <span class="s1">&#39;old&#39;</span></code>
+            <code class="highlight language-python"><span class="n">OLD</span> <span class="o">=</span> <span class="s1">'old'</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
@@ -9379,7 +9379,7 @@ and :func:<code>explain</code> so the policy lives in one place.</p>
 
 
 <h4 id="chumicro_workspace.firmware_support.FirmwareSupportStatus.UNKNOWN" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">UNKNOWN</span> <span class="o">=</span> <span class="s1">&#39;unknown&#39;</span></code>
+            <code class="highlight language-python"><span class="n">UNKNOWN</span> <span class="o">=</span> <span class="s1">'unknown'</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
@@ -9402,7 +9402,7 @@ and :func:<code>explain</code> so the policy lives in one place.</p>
 
 
 <h4 id="chumicro_workspace.firmware_support.FirmwareSupportStatus.UNPARSEABLE" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">UNPARSEABLE</span> <span class="o">=</span> <span class="s1">&#39;unparseable&#39;</span></code>
+            <code class="highlight language-python"><span class="n">UNPARSEABLE</span> <span class="o">=</span> <span class="s1">'unparseable'</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
@@ -10414,8 +10414,8 @@ under it.</p>
 
   [lint]
   enabled = true
-  tools = [&quot;ruff&quot;, &quot;chumicro-checks&quot;]
-  select = [&quot;E&quot;, &quot;F&quot;, &quot;I&quot;]
+  tools = ["ruff", "chumicro-checks"]
+  select = ["E", "F", "I"]
 </code></pre></div>
 <ul>
 <li>the <code>quality:</code> block on <code>workspace.yml</code>: the per-machine
@@ -10426,8 +10426,8 @@ under it.</p>
 <div class="language-text highlight"><pre><span></span><code>  quality:
     lint:
       enabled: true
-      tools: [&quot;ruff&quot;, &quot;chumicro-checks&quot;]
-      select: [&quot;E&quot;, &quot;F&quot;, &quot;I&quot;]
+      tools: ["ruff", "chumicro-checks"]
+      select: ["E", "F", "I"]
     coverage_threshold: 85
 </code></pre></div>
 <p>Reads both, validates each file's shape separately (so an error
@@ -10869,7 +10869,7 @@ package is named by its owner, not stamped with someone else's brand.</p>
 
 
 <h3 id="chumicro_workspace.scaffold.scaffold_library" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">scaffold_library</span><span class="p">(</span><span class="n">target_dir</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">package_kind</span><span class="o">=</span><span class="s1">&#39;library&#39;</span><span class="p">,</span> <span class="n">branding</span><span class="o">=</span><span class="n">NEUTRAL_BRANDING</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">scaffold_library</span><span class="p">(</span><span class="n">target_dir</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">package_kind</span><span class="o">=</span><span class="s1">'library'</span><span class="p">,</span> <span class="n">branding</span><span class="o">=</span><span class="n">NEUTRAL_BRANDING</span><span class="p">)</span></code>
 
 <a href="#chumicro_workspace.scaffold.scaffold_library" class="headerlink" title="Permanent link">&para;</a></h3>
 
@@ -11518,9 +11518,9 @@ shaped by the constructor kwargs:</p>
 </ul>
 <p>Install via <code>monkeypatch.setattr</code>::</p>
 <div class="language-text highlight"><pre><span></span><code>runner = FakeSubprocessRunner()
-monkeypatch.setattr(cli.subprocess, &quot;run&quot;, runner)
+monkeypatch.setattr(cli.subprocess, "run", runner)
 ...
-assert runner.calls[0].args == [sys.executable, &quot;-m&quot;, &quot;pytest&quot;]
+assert runner.calls[0].args == [sys.executable, "-m", "pytest"]
 assert runner.calls[0].cwd == workspace_root
 </code></pre></div>
 
@@ -11608,7 +11608,7 @@ assert runner.calls[0].cwd == workspace_root
 
 
 <h3 id="chumicro_workspace.testing.seed_workspace" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">seed_workspace</span><span class="p">(</span><span class="n">tmp_path</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">runtime</span><span class="o">=</span><span class="s1">&#39;micropython&#39;</span><span class="p">,</span> <span class="n">device_id</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">seed_workspace</span><span class="p">(</span><span class="n">tmp_path</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">runtime</span><span class="o">=</span><span class="s1">'micropython'</span><span class="p">,</span> <span class="n">device_id</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
 <a href="#chumicro_workspace.testing.seed_workspace" class="headerlink" title="Permanent link">&para;</a></h3>
 
@@ -11696,7 +11696,7 @@ circuitpython.</p>
 
 
 <h3 id="chumicro_workspace.testing.seed_project" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">seed_project</span><span class="p">(</span><span class="n">workspace_root</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s1">&#39;back-porch&#39;</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">seed_project</span><span class="p">(</span><span class="n">workspace_root</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s1">'back-porch'</span><span class="p">)</span></code>
 
 <a href="#chumicro_workspace.testing.seed_project" class="headerlink" title="Permanent link">&para;</a></h3>
 
@@ -11720,7 +11720,7 @@ intermediate parent directories are created automatically.</p>
 
 
 <h3 id="chumicro_workspace.testing.fake_probe_info" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">fake_probe_info</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">runtime</span><span class="o">=</span><span class="s1">&#39;micropython&#39;</span><span class="p">,</span> <span class="n">machine</span><span class="o">=</span><span class="s1">&#39;Lolin S2&#39;</span><span class="p">,</span> <span class="n">uid</span><span class="o">=</span><span class="s1">&#39;ABCD1234&#39;</span><span class="p">,</span> <span class="n">board_id</span><span class="o">=</span><span class="s1">&#39;lolin_s2&#39;</span><span class="p">,</span> <span class="n">version</span><span class="o">=</span><span class="s1">&#39;1.27.0&#39;</span><span class="p">,</span> <span class="n">with_implementation</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">fake_probe_info</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">runtime</span><span class="o">=</span><span class="s1">'micropython'</span><span class="p">,</span> <span class="n">machine</span><span class="o">=</span><span class="s1">'Lolin S2'</span><span class="p">,</span> <span class="n">uid</span><span class="o">=</span><span class="s1">'ABCD1234'</span><span class="p">,</span> <span class="n">board_id</span><span class="o">=</span><span class="s1">'lolin_s2'</span><span class="p">,</span> <span class="n">version</span><span class="o">=</span><span class="s1">'1.27.0'</span><span class="p">,</span> <span class="n">with_implementation</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></code>
 
 <a href="#chumicro_workspace.testing.fake_probe_info" class="headerlink" title="Permanent link">&para;</a></h3>
 
