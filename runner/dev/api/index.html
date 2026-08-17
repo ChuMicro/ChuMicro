@@ -1784,6 +1784,10 @@
     <div class="doc doc-contents ">
 
         <p>Suspend the generator until <code>ticks_ms() &gt;= until_ms</code>.</p>
+<p>Does no time math of its own: it publishes the deadline and the driver decides
+when to resume, comparing with the clock it was built on.  That keeps a sleep
+measured in the units of the clock passed to <code>Runner(ticks=...)</code> rather than
+a second one this module reached for.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1806,7 +1810,7 @@
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Absolute <code>ticks_ms</code> value at which to resume.</p>
+                <p>Absolute tick value at which to resume, in the driver's units.</p>
               </div>
             </td>
             <td>
