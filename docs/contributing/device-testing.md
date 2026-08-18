@@ -22,7 +22,7 @@ Host-side `tests/` still run through normal CPython pytest. Real-board validatio
 - `workspace.yml`: host-side machinery (library_sources, deploy_targets, quality knobs); not a credentials file
 - `secrets.toml`: workspace-wide credentials + device-bound defaults (wifi SSID/password, broker host/port/auth) that flow into `runtime_config.msgpack` at deploy time.  Per-library `functional_tests/config.toml` overrides land on top via deep-merge.
 
-Full per-file detail (shape, purpose, who edits what) lives in [config-files.md](config-files.md).  The split lands per [Decision 0057](../../plans/decisions/0057-two-file-config.md).
+Full per-file detail (shape, purpose, who edits what) lives in [config-files.md](config-files.md).  The split lands per [Decision 0057](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0057-two-file-config.md).
 
 ## Generate the starter files
 
@@ -79,7 +79,7 @@ Fields:
 |---|---|
 | `micropython` | Default MicroPython device ID from the `devices:` list |
 | `circuitpython` | Default CircuitPython device ID from the `devices:` list |
-| `deploy_mode` | Workspace-wide default deploy mode: `flash` (the default, per [Decision 0047](../../plans/decisions/0047-deploy-mode-flash-default.md)) or `ram` |
+| `deploy_mode` | Workspace-wide default deploy mode: `flash` (the default, per [Decision 0047](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0047-deploy-mode-flash-default.md)) or `ram` |
 | `ide_runtime` | Which runtime(s) IDE play buttons target: `micropython`, `circuitpython`, or `both` |
 
 Notes:
@@ -136,7 +136,7 @@ Supported fields today:
 | `ram` | `mpremote mount`-based execution | raw-REPL inline execution |
 | `flash` | `mpremote fs cp -r` copy mode | copy to CIRCUITPY drive, then import from flash |
 
-`flash` is the default for project deploys, examples, and functional tests ([Decision 0047](../../plans/decisions/0047-deploy-mode-flash-default.md)), because it runs your code the way a shipped deploy does.  Opt into `ram` per device or per run when you are iterating on a single library that needs no persistence and no multi-library composition, and you want the edits to stay off the board's flash.
+`flash` is the default for project deploys, examples, and functional tests ([Decision 0047](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0047-deploy-mode-flash-default.md)), because it runs your code the way a shipped deploy does.  Opt into `ram` per device or per run when you are iterating on a single library that needs no persistence and no multi-library composition, and you want the edits to stay off the board's flash.
 
 #### When you must use `flash`
 
@@ -147,7 +147,7 @@ Supported fields today:
 - runtime-config-driven setup
 - `kvstore` persistence semantics across resets
 - full `deploy → wifi → mqtt` chains
-- `extra_files` staging on CircuitPython (CP RAM-mode deploy doesn't support `extra_files`, see [Decision 0056](../../plans/decisions/0056-transport-extra-files-staging.md))
+- `extra_files` staging on CircuitPython (CP RAM-mode deploy doesn't support `extra_files`, see [Decision 0056](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0056-transport-extra-files-staging.md))
 
 If a multi-stack test fails under `ram`, switch the device's `deploy_mode` to `flash` rather than chasing fallback paths like staging files via `/remote/`.  They don't exist on CP RAM mode for a reason.
 
@@ -175,7 +175,7 @@ It is **not** part of the default `preflight`. Opt in with `python scripts/run.p
 
 The on-device unit sweep runs each cross-runtime test *file* through one device interpreter. On the 264 KB Pi Pico W a very large class-organized module (the library it imports, plus that file's full set of test classes resident at once) can exhaust RAM with a `MemoryError` even on a freshly reset board running that file alone. PSRAM boards (Lolin S2) mask this; the Pico W under **both** CircuitPython and MicroPython is a distinct memory HAL, and it is the board class these libraries exist for.
 
-**Requirement, per [Decision 0072](../../plans/decisions/0072-large-test-modules-on-constrained-boards.md):** every cross-runtime test file must run green on a freshly-reset Pi Pico W on CP **and** MP. A file that OOMs there even with `--per-file` is a tracked defect, fixed by splitting, not left to run on PSRAM only.
+**Requirement, per [Decision 0072](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0072-large-test-modules-on-constrained-boards.md):** every cross-runtime test file must run green on a freshly-reset Pi Pico W on CP **and** MP. A file that OOMs there even with `--per-file` is a tracked defect, fixed by splitting, not left to run on PSRAM only.
 
 - `scripts/run.py test-unit-on-device --per-file` (or `pytest ... --per-file`) soft-resets the interpreter before *each* test file, not just each library, so a file never inherits a sibling's resident state. This is the mechanism the requirement runs on; it adds a reboot per file, so the default per-library reset stays the fast path for PSRAM boards and small libraries.
 - A file still `MemoryError`-ing alone on a fresh Pico W **must be split** until each sub-file fits, mirroring source modules where one exists, then mechanically (lossless: test bodies stay byte-identical). There is no fixed tests-per-file cap: the ceiling is library-weight-dependent and differs CP vs MP, so the target is found empirically per library on the bench: split until that library's files all run green on a freshly-reset Pico W on both runtimes.
@@ -419,10 +419,10 @@ flash so there's nothing persistent to wipe.
 
 ## Related guides
 
-- [Contributing guide](../../CONTRIBUTING.md)
+- [Contributing guide](https://github.com/ChuMicro/ChuMicro/blob/main/CONTRIBUTING.md)
 - [Development with PyCharm](development-pycharm.md)
 - [Development with VS Code](development-vscode.md)
 - [Development with Other Editors](development-other-editors.md)
 - [Pull requests](pull-requests.md)
-- [Decision 0027](../../plans/decisions/0027-device-testing-infrastructure.md)
-- [Decision 0028](../../plans/decisions/0028-deploy-modes.md)
+- [Decision 0027](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0027-device-testing-infrastructure.md)
+- [Decision 0028](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0028-deploy-modes.md)

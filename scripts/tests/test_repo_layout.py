@@ -1087,3 +1087,78 @@ class TestEffectiveDiffBase:
         monkeypatch.setenv(repo_layout.DIFF_BASE_ENVIRONMENT_VARIABLE, "")
 
         assert effective_diff_base("old-main") == "old-main"
+
+
+class TestUncommittedFiles:
+    """Parsing of `git status --porcelain`, the working-tree half."""
+
+    def _status(self, monkeypatch, output: str) -> None:
+        class Completed:
+            returncode = 0
+            stdout = output
+
+        monkeypatch.setattr(repo_layout, "run_git", lambda *args, **kwargs: Completed())
+
+    def test_staged_unstaged_and_untracked_all_count(self, monkeypatch):
+        self._status(monkeypatch, "M  libraries/timing/src/a.py\n"
+                                  " M libraries/timing/src/b.py\n"
+                                  "?? libraries/timing/src/c.py\n")
+        assert repo_layout.uncommitted_files() == [
+            "libraries/timing/src/a.py",
+            "libraries/timing/src/b.py",
+            "libraries/timing/src/c.py",
+        ]
+
+    def test_rename_counts_both_sides(self, monkeypatch):
+        """A rename changes the package at both ends of the arrow."""
+        self._status(monkeypatch, "R  libraries/timing/src/old.py -> libraries/timing/src/new.py\n")
+        assert repo_layout.uncommitted_files() == [
+            "libraries/timing/src/old.py",
+            "libraries/timing/src/new.py",
+        ]
+
+    def test_clean_tree_is_empty(self, monkeypatch):
+        """Every CI run looks like this."""
+        self._status(monkeypatch, "")
+        assert repo_layout.uncommitted_files() == []
+
+    def test_git_failure_is_not_fatal(self, monkeypatch):
+        class Failed:
+            returncode = 128
+            stdout = ""
+
+        monkeypatch.setattr(repo_layout, "run_git", lambda *args, **kwargs: Failed())
+        assert repo_layout.uncommitted_files() == []
+
+
+class TestChangedFilesMirrorsCI:
+    """A local gate answers the question CI will ask."""
+
+    def test_committed_and_uncommitted_are_both_reported(self, monkeypatch):
+        class Diff:
+            returncode = 0
+            stdout = "libraries/timing/src/committed.py\n"
+
+        monkeypatch.setattr(repo_layout, "run_git", lambda *args, **kwargs: Diff())
+        monkeypatch.setattr(
+            repo_layout, "uncommitted_files",
+            lambda: ["libraries/mqtt/src/working_tree.py"],
+        )
+        assert repo_layout.changed_files("origin/main") == [
+            "libraries/mqtt/src/working_tree.py",
+            "libraries/timing/src/committed.py",
+        ]
+
+    def test_a_path_in_both_halves_appears_once(self, monkeypatch):
+        class Diff:
+            returncode = 0
+            stdout = "libraries/timing/src/edited.py\n"
+
+        monkeypatch.setattr(repo_layout, "run_git", lambda *args, **kwargs: Diff())
+        monkeypatch.setattr(
+            repo_layout, "uncommitted_files",
+            lambda: ["libraries/timing/src/edited.py"],
+        )
+        assert repo_layout.changed_files("origin/main") == [
+            "libraries/timing/src/edited.py",
+        ]

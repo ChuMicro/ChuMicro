@@ -63,8 +63,7 @@ class TestScope:
         _write(tmp_path, "plans/decisions/0001-something.md", _DASHED)
         assert CHU037.check(tmp_path) == []
 
-    def test_superpowers_and_test_trees_out_of_scope(self, tmp_path: Path) -> None:
-        _write(tmp_path, "docs/superpowers/specs/spec.md", _DASHED)
+    def test_test_trees_out_of_scope(self, tmp_path: Path) -> None:
         _write(
             tmp_path,
             "workbench/deploy/tests/fixtures/third_party_template/README.md",

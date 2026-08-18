@@ -738,7 +738,17 @@ PUBLISHABLE_ROOTS = ("libraries", "workbench", "support")
 
 
 def changed_files(base_reference: str) -> list[str]:
-    """Return files changed between *base_reference* and HEAD."""
+    """Return files changed between *base_reference* and the working tree.
+
+    The committed diff plus whatever is still uncommitted, which is what
+    makes a local gate answer the same question CI will.  CI checks out
+    a clean tree, so the uncommitted half is empty there and the result
+    is the commit range alone.  Locally the two halves matter: running
+    ``preflight`` before committing used to report a clean bill on
+    changes that were still in the working tree, and the same gate then
+    failed on the pushed branch (2026-08-18, chumicro-checks VERSION).
+    A gate that mirrors CI has to see the edits either way.
+    """
     # Three-dot syntax finds changes since the merge-base, which is the
     # standard PR diff.  It fails in shallow clones (CI) where the
     # merge-base commit is not fetched.  The two-arg fallback gives a
@@ -749,7 +759,32 @@ def changed_files(base_reference: str) -> list[str]:
         result = run_git("diff", "--name-only", base_reference, "HEAD")
     if result.returncode != 0:
         raise RuntimeError(f"git diff failed: {result.stderr.strip()}")
-    return [line for line in result.stdout.strip().splitlines() if line]
+    committed = [line for line in result.stdout.strip().splitlines() if line]
+    return sorted(set(committed) | set(uncommitted_files()))
+
+
+def uncommitted_files() -> list[str]:
+    """Return paths edited but not committed: staged, unstaged, untracked.
+
+    Ignored files stay out, so build output and virtual environments do
+    not reach a gate.  An empty list on a clean tree, which is every CI
+    run.
+    """
+    result = run_git("status", "--porcelain", "--untracked-files=all")
+    if result.returncode != 0:
+        return []
+    paths: list[str] = []
+    for line in result.stdout.splitlines():
+        if not line.strip():
+            continue
+        # Porcelain v1: two status characters, a space, then the path.
+        # A rename reads "R  old -> new"; both sides count as changed.
+        entry = line[3:]
+        if " -> " in entry:
+            paths.extend(part.strip() for part in entry.split(" -> "))
+        else:
+            paths.append(entry.strip())
+    return [path.strip('"') for path in paths if path]
 
 
 #: Environment variable naming the commit a CI push started from.  The

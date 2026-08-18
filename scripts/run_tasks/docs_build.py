@@ -137,7 +137,28 @@ def docs(
         dispatcher=_pick_dispatcher(quiet=quiet),
         max_workers=package_workers,
     )
-    return exit_code
+    if exit_code != 0:
+        return exit_code
+
+    # The guides site publishes alongside the library docs and its URLs
+    # ride in the sitemap, so a build that breaks here has to fail a PR
+    # rather than surface as a 404 after deploy.
+    return build_guides_site()
+
+
+def build_guides_site() -> int:
+    """Build the guides site, or skip when there is none.
+
+    Returns 0 when the config is absent, which keeps a workspace
+    without a guides site from failing the docs phase.
+    """
+    from docs_deploy import GUIDES_CONFIG
+    from docs_deploy import build_guides_site as _build
+
+    if not GUIDES_CONFIG.is_file():
+        return 0
+    print(f"docs {GUIDES_CONFIG.relative_to(ROOT)}")
+    return _build()
 
 
 def _build_one_library_docs_factory(

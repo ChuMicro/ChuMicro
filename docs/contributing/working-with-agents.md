@@ -16,7 +16,7 @@ An AI coding agent reads code, proposes changes, runs tests, and iterates, like 
 - **Fixing lint errors** and formatting issues
 - **Exploring the codebase** to answer "how does X work?" questions
 
-Agents follow the same rules as human contributors: they run preflight, their code goes through review, and their PRs must pass CI. The difference is that agents have a stricter rule set ([`AGENTS.md`](../../AGENTS.md)) because they need explicit instructions for things humans intuit, like "don't reformat code you didn't change" or "check whether this was already decided."
+Agents follow the same rules as human contributors: they run preflight, their code goes through review, and their PRs must pass CI. The difference is that agents have a stricter rule set ([`AGENTS.md`](https://github.com/ChuMicro/ChuMicro/blob/main/AGENTS.md)) because they need explicit instructions for things humans intuit, like "don't reformat code you didn't change" or "check whether this was already decided."
 
 ## What agents don't replace
 
@@ -83,7 +83,7 @@ For longer sessions, periodically restating *"what we're solving here is X"* pul
 Agents working under this project's rule set behave somewhat differently than agents in a generic workspace. Worth knowing as a collaborator:
 
 - **Agents commit after each coherent unit of work** via the `task-checkpoint` skill: preflight, plans-doc refresh, commit, push. The tree stays clean across collaboration boundaries.
-- **Coverage gate runs at 94 % on agent invocations** (humans target the 85 % pyproject baseline). A coverage failure showing `94.0%` is from this gate, per [Decision 0025](../../plans/decisions/0025-dual-coverage-thresholds.md).
+- **Coverage gate runs at 94 % on agent invocations** (humans target the 85 % pyproject baseline). A coverage failure showing `94.0%` is from this gate, per [Decision 0025](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0025-dual-coverage-thresholds.md).
 - **Agents restate your message when a terse reply could mean multiple things.** If you say "yes" or "option 2" after a few exchanges, expect a "confirming you mean X" before action. That's the rule firing, not the agent being slow.  It prevents acting on the wrong referent.
 - **Agents surface tradeoffs before executing multi-option choices.** They name approaches and call out ambiguity. Rule firing, not indecision.
 - **Agents push back when something looks wrong.** A factual disagreement followed by reasoning is the rule working as intended.

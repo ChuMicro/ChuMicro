@@ -36,8 +36,8 @@ git push -u origin fix/my-change      # then open PR on GitHub
 ## The 10 rules
 
 1. **Preflight is the one required gate.** `python scripts/run.py preflight`. If it passes, CI will pass.
-2. **Use descriptive names.** The linter names the exact replacement, so each hit is mechanical; expect a few in your first PR. Single-letter for-loop targets (`for i in range(10)`) are fine. ([Decision 0022](../../plans/decisions/0022-naming-conventions.md))
-3. **No `async`/`await`.** CircuitPython's asyncio has a broken stream layer and every `await` allocates there; `yield from` is one bytecode on both device runtimes. Services are tick-driven (`check`/`handle`); sequential flows are generators via `runner.add_generator`. Lint-enforced. ([Decision 0087](../../plans/decisions/0087-generators-for-sequential-io.md))
+2. **Use descriptive names.** The linter names the exact replacement, so each hit is mechanical; expect a few in your first PR. Single-letter for-loop targets (`for i in range(10)`) are fine. ([Decision 0022](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0022-naming-conventions.md))
+3. **No `async`/`await`.** CircuitPython's asyncio has a broken stream layer and every `await` allocates there; `yield from` is one bytecode on both device runtimes. Services are tick-driven (`check`/`handle`); sequential flows are generators via `runner.add_generator`. Lint-enforced. ([Decision 0087](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0087-generators-for-sequential-io.md))
 4. **Accept dependencies as constructor parameters.** Don't import `board` or `busio` at the top level. This makes code testable without hardware.
 5. **Tests live next to the code.** `libraries/<name>/tests/`. Run them with `pytest libraries/<name>/tests/`.
 6. **Bump VERSION when you change source code.** Edit `libraries/<name>/VERSION`. CI catches it if you forget.
@@ -72,7 +72,7 @@ Grouped by what you're trying to do. Preflight is the one command you actually h
 | Test scripts infrastructure | `python scripts/run.py test-scripts` |
 | Verify examples | `python scripts/run.py verify-examples --libraries timing` |
 
-Bare `pytest` from the repo root is the everyday command for iteration: fast, IDE-play-button-friendly.  `python scripts/run.py test` wraps pytest in per-library subprocesses that enforce the coverage gates ([Decision 0009](../../plans/decisions/0009-per-library-test-runs.md)); preflight uses that wrapper, so you usually don't need to invoke it directly.
+Bare `pytest` from the repo root is the everyday command for iteration: fast, IDE-play-button-friendly.  `python scripts/run.py test` wraps pytest in per-library subprocesses that enforce the coverage gates ([Decision 0009](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0009-per-library-test-runs.md)); preflight uses that wrapper, so you usually don't need to invoke it directly.
 
 ### Cross-runtime testing
 
@@ -134,7 +134,7 @@ Both `pytest libraries/<name>/functional_tests/` and `python scripts/run.py test
 |---|---|
 | Lint error | Run `python scripts/run.py lint`, fix the flagged lines; the error message says what's wrong |
 | Test failure | Read the assertion error; the test name and line number point you right to it |
-| Coverage too low | The gate is configured in `pyproject.toml` ([Decision 0025](../../plans/decisions/0025-dual-coverage-thresholds.md)).  Check the `Missing` column for uncovered line numbers. If it's code you didn't write, note it in the PR. For hardware-only code that can't be tested on CPython, see [coverage exclusions](style-guide.md#coverage-exclusions) |
+| Coverage too low | The gate is configured in `pyproject.toml` ([Decision 0025](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0025-dual-coverage-thresholds.md)).  Check the `Missing` column for uncovered line numbers. If it's code you didn't write, note it in the PR. For hardware-only code that can't be tested on CPython, see [coverage exclusions](style-guide.md#coverage-exclusions) |
 | `check-version` | Edit `libraries/<name>/VERSION` (patch bump is usually right) |
 | `griffe warnings` | Add type annotations to function signatures |
 | `functional_tests/` say no device is configured | Register a board: `python scripts/run.py add-device <id> --address <port>` (probes the board, writes `devices.yml`). No board is also fine: these tests skip cleanly. See [device testing](device-testing.md) |
@@ -146,9 +146,9 @@ Both `pytest libraries/<name>/functional_tests/` and `python scripts/run.py test
 
 ## Links
 
-- [Full contributing guide](../../CONTRIBUTING.md)
+- [Full contributing guide](https://github.com/ChuMicro/ChuMicro/blob/main/CONTRIBUTING.md)
 - [Style guide](style-guide.md)
 - [PR guide](pull-requests.md)
 - [Device testing](device-testing.md)
-- [Troubleshooting](../troubleshooting/)
-- [Design decisions](../../plans/decisions/README.md)
+- [Troubleshooting](../troubleshooting/README.md)
+- [Design decisions](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/README.md)

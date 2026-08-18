@@ -12,8 +12,7 @@ Scope: markdown prose a user or contributor reads.
 * The root front doors (``README.md``, ``INSTALL.md``,
   ``CONTRIBUTING.md``, ``SECURITY.md``, ``CODE_OF_CONDUCT.md``,
   ``AGENTS.md``).
-* ``docs/`` except ``docs/superpowers/`` (session working notes, not
-  reader-facing pages).
+* ``docs/``, every page of which a reader can reach.
 * ``demos/``, ``libraries/``, ``workbench/``, and ``support/``
   markdown, excluding anything under a ``tests/``,
   ``functional_tests/``, or ``fixtures/`` directory (test fixtures are
@@ -74,12 +73,11 @@ _TEMPLATE_DIRECTORIES: tuple[str, ...] = (
 )
 
 #: Path components that take a file out of scope: test trees hold
-#: fixture data, and docs/superpowers holds session working notes.
+#: fixture data rather than prose.
 _EXCLUDED_PARTS: frozenset[str] = frozenset({
     "tests",
     "functional_tests",
     "fixtures",
-    "superpowers",
 })
 
 
