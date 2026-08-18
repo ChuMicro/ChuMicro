@@ -1,0 +1,40 @@
+# ChuMicro
+
+> Python libraries for microcontrollers: WiFi, MQTT, HTTP client and server, WebSockets, sockets, network time, timers, settings, and storage that survives a reboot.  One codebase runs on CircuitPython, MicroPython, and CPython.
+
+Every library keeps the main loop running: slow network work happens a step at a time between ticks, so an LED keeps blinking while WiFi reconnects.  Each library installs on its own.
+
+Install `chumicro-mqtt` (any library follows the same shape):
+
+```bash
+circup bundle-add ChuMicro/ChuMicro-Bundle && circup install chumicro_mqtt
+mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_mqtt
+pip install chumicro-mqtt
+```
+
+## Libraries
+
+- [chumicro-timing](https://chumicro.github.io/ChuMicro/timing/stable/): Wraparound-safe millisecond tick helpers plus wait value objects (deadlines, rates, signals) for CircuitPython, MicroPython, and CPython.
+- [chumicro-runner](https://chumicro.github.io/ChuMicro/runner/stable/): Tick-based task runner for CircuitPython, MicroPython, and CPython: non-blocking check/handle scheduling without async.
+- [chumicro-wifi](https://chumicro.github.io/ChuMicro/wifi/stable/): Unified wifi supervisor across CircuitPython, MicroPython, and CPython: sole-supervisor model with reconnect, state machine, and per-runtime adapters.
+- [chumicro-requests](https://chumicro.github.io/ChuMicro/requests/stable/): Non-blocking HTTP/1.1 client for CircuitPython, MicroPython, and CPython.
+- [chumicro-http_server](https://chumicro.github.io/ChuMicro/http_server/stable/): Non-blocking HTTP/1.1 server for CircuitPython, MicroPython, and CPython.
+- [chumicro-mqtt](https://chumicro.github.io/ChuMicro/mqtt/stable/): Non-blocking MQTT 3.1.1 client (QoS 0+1) for CircuitPython, MicroPython, and CPython.
+- [chumicro-websockets](https://chumicro.github.io/ChuMicro/websockets/stable/): Non-blocking WebSocket (RFC 6455) client and server for CircuitPython, MicroPython, and CPython.
+- [chumicro-sockets](https://chumicro.github.io/ChuMicro/sockets/stable/): Cross-runtime TCP, TLS, and UDP sockets for CircuitPython, MicroPython, and CPython
+- [chumicro-ntp](https://chumicro.github.io/ChuMicro/ntp/stable/): Runner-shaped SNTP client over an injected UDP socket: pure Python, cross-runtime.
+- [chumicro-config](https://chumicro.github.io/ChuMicro/config/stable/): Standardized runtime-config helpers for ChuMicro libraries: section loader plus on-device runtime-config reader.
+- [chumicro-kvstore](https://chumicro.github.io/ChuMicro/kvstore/stable/): Tiny mutable key-value store for persisted runtime state (counters, timestamps, tokens) across CircuitPython, MicroPython, and CPython.
+- [chumicro-msgpack](https://chumicro.github.io/ChuMicro/msgpack/stable/): Compact MessagePack serialization for CircuitPython, MicroPython, and CPython: delegates to the native C module when available.
+- [chumicro-compat](https://chumicro.github.io/ChuMicro/compat/stable/): Cross-runtime compatibility polyfills for CircuitPython, MicroPython, and CPython: functools.partial and more.
+
+## Host tools
+
+- [chumicro-workspace](https://chumicro.github.io/ChuMicro/workspace/stable/): Host-side runtime for ChuMicro project workspaces: config merge, secrets resolution, deploy orchestration, command dispatch.
+- [chumicro-deploy](https://chumicro.github.io/ChuMicro/deploy/stable/): Host-side device transports and deploy tooling for CircuitPython and MicroPython boards.
+- [chumicro-repl](https://chumicro.github.io/ChuMicro/repl/stable/): Host-side serial REPL for CircuitPython and MicroPython boards with traceback highlighting.
+
+## Optional
+
+- [Source and examples](https://github.com/ChuMicro/ChuMicro): the repository, with a runnable example per library.
+- [Bundle](https://github.com/ChuMicro/ChuMicro-Bundle): what circup and mip install from.
