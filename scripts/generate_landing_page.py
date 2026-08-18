@@ -319,6 +319,63 @@ VERIFICATION_TAGS = (
 )
 
 
+def _structured_data() -> str:
+    """Return the landing page's JSON-LD block.
+
+    Search engines and answer engines read this to learn what the site
+    is about without inferring it from prose.  Bing's URL inspection
+    reports "No Markup found" without it.
+    """
+    import json  # noqa: PLC0415 - only this builder needs a JSON encoder
+
+    graph = {
+        "@context": "https://schema.org",
+        "@graph": [
+            {
+                "@type": "Organization",
+                "@id": f"{SITE_ROOT}/#organization",
+                "name": "ChuMicro",
+                "url": SITE_ROOT + "/",
+                "logo": (
+                    "https://raw.githubusercontent.com/ChuMicro/ChuMicro/"
+                    "main/support/docs/chumicro.png"
+                ),
+                "sameAs": [
+                    "https://github.com/ChuMicro",
+                    "https://pypi.org/search/?q=chumicro",
+                ],
+            },
+            {
+                "@type": "WebSite",
+                "@id": f"{SITE_ROOT}/#website",
+                "name": "ChuMicro documentation",
+                "url": SITE_ROOT + "/",
+                "publisher": {"@id": f"{SITE_ROOT}/#organization"},
+                "inLanguage": "en",
+            },
+            {
+                "@type": "SoftwareSourceCode",
+                "name": "ChuMicro",
+                "description": (
+                    "Python libraries for microcontrollers: WiFi, MQTT, HTTP "
+                    "client and server, WebSockets, sockets, network time, "
+                    "timers, settings, and storage that survives a reboot.  "
+                    "One codebase runs on CircuitPython, MicroPython, and "
+                    "CPython."
+                ),
+                "url": SITE_ROOT + "/",
+                "codeRepository": "https://github.com/ChuMicro/ChuMicro",
+                "programmingLanguage": "Python",
+                "runtimePlatform": ["CircuitPython", "MicroPython", "CPython"],
+                "license": "https://github.com/ChuMicro/ChuMicro/blob/main/LICENSE",
+                "author": {"@id": f"{SITE_ROOT}/#organization"},
+            },
+        ],
+    }
+    payload = json.dumps(graph, indent=2)
+    return f'  <script type="application/ld+json">\n{payload}\n  </script>\n'
+
+
 def _verification_meta() -> str:
     """Return the site-verification meta tags, or an empty string.
 
@@ -464,7 +521,9 @@ def generate() -> str:
 
     template_text = (TEMPLATES_DIR / "landing_page.html.template").read_text()
     return Template(template_text).substitute(
-        content=content, verification=_verification_meta(),
+        content=content,
+        verification=_verification_meta(),
+        structured_data=_structured_data(),
     )
 
 
