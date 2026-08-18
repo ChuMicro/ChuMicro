@@ -233,7 +233,7 @@ mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_timing
 pip install chumicro-timing
 ```
 
-These commands install from the **stable** channel.  Every merge publishes to a separate **experimental** channel first and reaches stable when a maintainer promotes it, so a library merged since the last promotion may exist only on experimental for a while.  [`INSTALL.md`](INSTALL.md) covers installing from experimental, pre-compiled `.mpy` packages for lower RAM use, and per-runtime notes.
+These commands install from the **stable** channel.  Every merge publishes to a separate **experimental** channel first and reaches stable when a maintainer promotes it, so a library merged since the last promotion may exist only on experimental for a while.  [the install guide](docs/install.md) covers installing from experimental, pre-compiled `.mpy` packages for lower RAM use, and per-runtime notes.
 
 ## The libraries
 

@@ -8,6 +8,21 @@ title: "chumicro-timing: timers and deadlines without sleep, for CircuitPython a
 
 Capture `ticks_ms()` once per pass through your loop and hand it to a `Rate` (a drift-free periodic cadence) or a `Deadline` (a single armed timeout).  Both are built on wrap-safe tick arithmetic, so the counter rollover on a board that has been up for weeks changes nothing.  All timing is non-blocking: nothing on the device path calls `time.sleep()` (the host-test `sleep_ms` shim in `chumicro_timing.testing` is the one exception, and it never deploys).
 
+## Install
+
+```bash
+# CircuitPython (after `circup bundle-add ChuMicro/ChuMicro-Bundle`)
+circup install chumicro_timing
+
+# MicroPython
+mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_timing
+
+# CPython
+pip install chumicro-timing
+```
+
+No board running yet?  [Start here](https://chumicro.com/ChuMicro/guides/start-here/) goes from a new board to your own code running on it.  [Installing libraries](https://chumicro.com/ChuMicro/guides/install/) covers registering the bundle, the experimental channel, and the pre-compiled `.mpy` packages.
+
 ## Quick example
 
 ```python

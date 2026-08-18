@@ -8,6 +8,21 @@ title: "chumicro-http-server: HTTP server on CircuitPython and MicroPython board
 
 Each connection is a state machine the server advances one chunk per runner tick, so an LED keeps blinking while requests are being served.  Built on `chumicro-sockets` and `chumicro-timing` only.
 
+## Install
+
+```bash
+# CircuitPython (after `circup bundle-add ChuMicro/ChuMicro-Bundle`)
+circup install chumicro_http_server
+
+# MicroPython
+mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_http_server
+
+# CPython
+pip install chumicro-http-server
+```
+
+No board running yet?  [Start here](https://chumicro.com/ChuMicro/guides/start-here/) goes from a new board to your own code running on it.  [Installing libraries](https://chumicro.com/ChuMicro/guides/install/) covers registering the bundle, the experimental channel, and the pre-compiled `.mpy` packages.
+
 ## Quick example
 
 ```python

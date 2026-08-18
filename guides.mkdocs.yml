@@ -34,6 +34,8 @@ extra:
 
 nav:
   - Guides: index.md
+  - Start here: start-here.md
+  - Installing libraries: install.md
   - Questions: faq.md
   - Troubleshooting:
       - Start here: troubleshooting/README.md
@@ -58,7 +60,7 @@ nav:
       - Slimming your deploy: contributing/slimming-your-deploy.md
       - Config files: contributing/config-files.md
       - Device testing: contributing/device-testing.md
-      - Workbench tools: contributing/workbench.md
+      - Adding a workbench package: contributing/workbench.md
       - Releases and promotion: contributing/releases.md
       - Maintainers: contributing/maintainers.md
       - Working with agents: contributing/working-with-agents.md

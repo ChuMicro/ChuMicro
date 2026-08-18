@@ -8,6 +8,21 @@ title: "chumicro-requests: non-blocking HTTP client for CircuitPython and MicroP
 
 An LED keeps blinking on the same board while a request is in flight, in a TLS handshake, or mid-timeout against a stalled peer.  Built on `chumicro-sockets` and `chumicro-timing`.
 
+## Install
+
+```bash
+# CircuitPython (after `circup bundle-add ChuMicro/ChuMicro-Bundle`)
+circup install chumicro_requests
+
+# MicroPython
+mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_requests
+
+# CPython
+pip install chumicro-requests
+```
+
+No board running yet?  [Start here](https://chumicro.com/ChuMicro/guides/start-here/) goes from a new board to your own code running on it.  [Installing libraries](https://chumicro.com/ChuMicro/guides/install/) covers registering the bundle, the experimental channel, and the pre-compiled `.mpy` packages.
+
 ## Quick example
 
 ```python

@@ -8,6 +8,21 @@ title: "chumicro-kvstore: storage that survives a reboot on CircuitPython and Mi
 
 Counters, timestamps, tokens, and retry budgets that your program writes while it runs and still finds after a power cycle, on CircuitPython, MicroPython, and CPython.  You get a dict you assign to and `commit()` when the change matters; the backend is chosen for the runtime you are on (NVM with CRC framing on CircuitPython, NVS on ESP32 MicroPython, LittleFS elsewhere, in-memory on a host).
 
+## Install
+
+```bash
+# CircuitPython (after `circup bundle-add ChuMicro/ChuMicro-Bundle`)
+circup install chumicro_kvstore
+
+# MicroPython
+mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_kvstore
+
+# CPython
+pip install chumicro-kvstore
+```
+
+No board running yet?  [Start here](https://chumicro.com/ChuMicro/guides/start-here/) goes from a new board to your own code running on it.  [Installing libraries](https://chumicro.com/ChuMicro/guides/install/) covers registering the bundle, the experimental channel, and the pre-compiled `.mpy` packages.
+
 ## Quick example
 
 ```python

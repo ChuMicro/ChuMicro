@@ -1,13 +1,20 @@
 ---
-title: "ChuMicro guides: answers and fixes for CircuitPython and MicroPython"
+title: "ChuMicro guides: getting started, installing, and fixing CircuitPython and MicroPython boards"
 ---
 
 # Guides
 
-Two kinds of page live here.  The questions page answers what people
-ask before they start, and the troubleshooting pages start from a
-symptom you are looking at right now and walk to the fix.
+Start at the top if you have a board and nothing running on it yet.  The
+rest of the pages are here for when you have a specific question or a
+specific symptom.
 
+- **[Start here](start-here.md)** goes from a board still in its
+  packaging to your own code running on it, on your own wifi: putting a
+  runtime on the board, registering it, making a project, and deploying.
+- **[Installing libraries](install.md)** is the full matrix: circup and
+  the bundle on CircuitPython, mip on MicroPython, pip on CPython, the
+  pre-compiled `.mpy` packages, and switching between the stable and
+  experimental channels.
 - **[Questions people ask](faq.md)** covers why a board freezes on the
   network, whether any of this uses async, how the same code runs on
   CircuitPython and MicroPython, and what a library costs in flash.
@@ -18,6 +25,9 @@ symptom you are looking at right now and walk to the fix.
 - **[Wiring WiFi credentials](wiring-wifi-credentials.md)** shows how a
   network name and password reach a board without living in your code
   or your git history.
+
+The contributing pages further down the menu are for changing ChuMicro
+itself rather than using it.
 
 Library documentation lives on its own pages, one per library, from
 [the documentation home](https://chumicro.com/ChuMicro/).

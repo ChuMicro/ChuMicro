@@ -8,6 +8,21 @@ title: "chumicro-compat: standard-library polyfills for CircuitPython and MicroP
 
 Lightweight reimplementations of the standard-library pieces CircuitPython and MicroPython leave out. Import the polyfill submodule (`from chumicro_compat.functools import partial`) and the same code runs on all three runtimes: on CPython the real C implementation is re-exported, so the import costs nothing there.
 
+## Install
+
+```bash
+# CircuitPython (after `circup bundle-add ChuMicro/ChuMicro-Bundle`)
+circup install chumicro_compat
+
+# MicroPython
+mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_compat
+
+# CPython
+pip install chumicro-compat
+```
+
+No board running yet?  [Start here](https://chumicro.com/ChuMicro/guides/start-here/) goes from a new board to your own code running on it.  [Installing libraries](https://chumicro.com/ChuMicro/guides/install/) covers registering the bundle, the experimental channel, and the pre-compiled `.mpy` packages.
+
 ## Quick example
 
 ```python

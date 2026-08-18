@@ -24,7 +24,7 @@ mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_ntp
 pip install chumicro-ntp
 ```
 
-For bundle setup, pre-compiled `.mpy` bundles, the experimental channel, and details on PyPI naming, see the [chumicro INSTALL guide](https://github.com/ChuMicro/ChuMicro/blob/main/INSTALL.md).
+For bundle setup, pre-compiled `.mpy` bundles, the experimental channel, and details on PyPI naming, see the [ChuMicro install guide](https://chumicro.com/ChuMicro/guides/install/).
 
 ## Quick example
 

@@ -36,7 +36,7 @@ pip install chumicro-checks           # the CHU0NN lint rules on their own
 
 `chumicro-workspace` already depends on `chumicro-deploy`, so installing the workspace package brings the deploy primitive along.  The REPL features (the `repl` command, `deploy <project> --tail`, and the post-deploy tail in `deploy-example`) need `chumicro-repl` installed alongside; workspace imports it lazily and prints a one-line install hint if it's missing.
 
-For the experimental channel see [`INSTALL.md`](../INSTALL.md).
+For the experimental channel see [the install guide](https://chumicro.com/ChuMicro/guides/install/).
 
 ## Dependencies
 
