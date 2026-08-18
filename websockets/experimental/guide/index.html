@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://chumicro.github.io/ChuMicro/websockets/experimental/guide/">
+        <link rel="canonical" href="https://chumicro.com/ChuMicro/websockets/experimental/guide/">
       
       
         <link rel="prev" href="./..">
@@ -1083,7 +1083,7 @@ MCU RAM, 2 MB physical / ~800 KB usable flash):</p>
 <h3 id="tls-wss">TLS (<code>wss://</code>)<a class="headerlink" href="#tls-wss" title="Permanent link">&para;</a></h3>
 <p><code>wss://</code> client connections reuse <code>chumicro_sockets.connector(tls=True)</code> + <code>chumicro_sockets.ssl_context_with_ca</code>, with the same live-board constraints HTTPS clients have:</p>
 <ul>
-<li><strong>Device RTC must be set before <code>wss://</code>.</strong>  mbedTLS rejects every cert as "validity starts in the future" if the RTC is at boot default.  Use <a href="https://chumicro.github.io/ChuMicro/ntp/stable/"><code>chumicro-ntp</code></a> to set the clock first.</li>
+<li><strong>Device RTC must be set before <code>wss://</code>.</strong>  mbedTLS rejects every cert as "validity starts in the future" if the RTC is at boot default.  Use <a href="https://chumicro.com/ChuMicro/ntp/stable/"><code>chumicro-ntp</code></a> to set the clock first.</li>
 <li><strong>CA pinning is required.</strong>  Build the <code>ssl_context</code> with <code>chumicro_sockets.ssl_context_with_ca(pem)</code> and pass it through <code>connector_factory(radio=..., ssl_context=ctx)</code>.</li>
 <li><strong>Pi Pico W needs flash deploy mode for <code>wss://</code></strong>: RAM-mode leaves &lt;50 KB free for the mbedTLS handshake.</li>
 </ul>
