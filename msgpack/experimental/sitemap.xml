@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
       <url>
-        <loc>https://chumicro.github.io/ChuMicro/msgpack/experimental/</loc>
+        <loc>https://chumicro.com/ChuMicro/msgpack/experimental/</loc>
       </url>
       <url>
-        <loc>https://chumicro.github.io/ChuMicro/msgpack/experimental/guide/</loc>
+        <loc>https://chumicro.com/ChuMicro/msgpack/experimental/guide/</loc>
       </url>
       <url>
-        <loc>https://chumicro.github.io/ChuMicro/msgpack/experimental/api/</loc>
+        <loc>https://chumicro.com/ChuMicro/msgpack/experimental/api/</loc>
       </url>
 </urlset>
