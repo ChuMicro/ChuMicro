@@ -12,30 +12,5 @@
     "aliases": [
       "dev"
     ]
-  },
-  {
-    "version": "0.54.1",
-    "title": "0.54.1",
-    "aliases": []
-  },
-  {
-    "version": "0.52.1",
-    "title": "0.52.1",
-    "aliases": []
-  },
-  {
-    "version": "0.52.0",
-    "title": "0.52.0",
-    "aliases": []
-  },
-  {
-    "version": "0.51.0",
-    "title": "0.51.0",
-    "aliases": []
-  },
-  {
-    "version": "0.50.1",
-    "title": "0.50.1",
-    "aliases": []
   }
 ]
