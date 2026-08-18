@@ -58,6 +58,7 @@ chumicro-workspace = "chumicro_workspace.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/ChuMicro/ChuMicro"
+Documentation = "https://chumicro.com/ChuMicro/workspace/stable/"
 Source = "https://github.com/ChuMicro/ChuMicro/tree/main/workbench/workspace"
 Issues = "https://github.com/ChuMicro/ChuMicro/issues"
 
