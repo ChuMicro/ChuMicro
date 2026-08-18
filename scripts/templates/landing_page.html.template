@@ -11,9 +11,9 @@ $verification  <meta property="og:type" content="website">
   <meta property="og:title" content="ChuMicro: CircuitPython and MicroPython libraries">
   <meta property="og:description" content="Python libraries for CircuitPython, MicroPython, and CPython boards: WiFi, MQTT, HTTP, WebSockets, timers, settings, and storage that survives a reboot.">
   <meta property="og:url" content="https://chumicro.com/ChuMicro/">
-  <meta property="og:image" content="https://raw.githubusercontent.com/ChuMicro/ChuMicro/main/support/docs/chumicro.png">
-  <meta name="twitter:card" content="summary">
-$structured_data  <link rel="icon" href="./assets/images/favicon.png">
+  <meta property="og:image" content="$assets/chumicro.png">
+  <meta name="twitter:card" content="summary_large_image">
+$structured_data  <link rel="icon" href="$assets/favicon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
@@ -42,7 +42,9 @@ $structured_data  <link rel="icon" href="./assets/images/favicon.png">
     .container { max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem; }
 
     /* Header */
-    header { text-align: center; padding: 3rem 0 2rem; }
+    header { text-align: center; padding: 2.5rem 0 1.5rem; }
+    header img.hero { width: 170px; height: auto; margin: 0 auto .75rem; display: block; }
+    @media (max-width: 520px) { header img.hero { width: 130px; } }
     header h1 { font-size: 2em; font-weight: 700; margin-bottom: .5rem; }
     header p { font-size: 1.1rem; color: var(--muted); max-width: 600px; margin: 0 auto; }
     .badges { margin-top: 1rem; display: flex; gap: .5rem; justify-content: center; flex-wrap: wrap; }
@@ -109,8 +111,11 @@ $structured_data  <link rel="icon" href="./assets/images/favicon.png">
   </style>
 </head>
 <body>
+$topbar
+
   <div class="container">
     <header>
+      <img class="hero" src="$assets/chumicro.png" alt="ChuMicro">
       <h1>ChuMicro</h1>
       <p>Cross-runtime Python libraries for CircuitPython, MicroPython, and CPython, built for ESP32, RP2040, and other microcontrollers.</p>
       <div class="badges">

@@ -39,3 +39,32 @@ def test_urls_carry_no_trailing_slash():
 def test_site_root_sits_below_the_host():
     """The project site is a path on the host, never a host of its own."""
     assert site_host.site_root().startswith(f"{site_host.host_url()}/")
+
+
+def test_assets_url_follows_the_host(custom_domain):
+    """Images publish on whatever host the site is currently using."""
+    from site_chrome import assets_url
+
+    assert assets_url() == "https://example.test/assets"
+
+
+def test_topbar_links_to_the_source_and_the_docs(custom_domain):
+    """The bar is why GitHub is reachable without scrolling."""
+    from site_chrome import render_topbar
+
+    bar = render_topbar()
+    assert 'href="https://github.com/ChuMicro"' in bar
+    assert 'href="https://example.test/ChuMicro/"' in bar
+    assert 'href="https://example.test/ChuMicro/guides/"' in bar
+
+
+def test_both_pages_carry_the_same_bar(custom_domain, monkeypatch):
+    """One source for the bar is what keeps the two pages consistent."""
+    import generate_landing_page
+    import generate_site_root
+    from site_chrome import render_topbar
+
+    bar = render_topbar()
+    monkeypatch.setattr(generate_landing_page, "discover_doc_dirs", list)
+    assert bar in generate_site_root.root_index_html()
+    assert bar in generate_landing_page.generate()
