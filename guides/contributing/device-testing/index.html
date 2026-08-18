@@ -1,0 +1,2444 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Answers and fixes for CircuitPython and MicroPython projects: why a board freezes on the network, why WiFi will not connect, what to do when a deploy is refused, and how to keep data across a reboot.">
+      
+      
+      
+        <link rel="canonical" href="https://chumicro.github.io/ChuMicro/guides/contributing/device-testing/">
+      
+      
+        <link rel="prev" href="../config-files/">
+      
+      
+        <link rel="next" href="../workbench/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="zensical-0.0.39">
+    
+    
+      
+        <title>Device Testing - ChuMicro guides</title>
+      
+    
+    
+      
+        
+      
+      <link rel="stylesheet" href="../../assets/stylesheets/modern/main.1e981d71.min.css">
+      
+        
+          
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/modern/palette.dfe2e883.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter:300,300i,400,400i,500,500i,700,700i%7CJetBrains+Mono:400,400i,700,700i&amp;display=fallback">
+        <style>:root{--md-text-font:"Inter";--md-code-font:"JetBrains Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,t)=>(e<<5)-e+t.charCodeAt(0)),0),__md_get=(e,t=localStorage,a=__md_scope)=>JSON.parse(t.getItem(a.pathname+"."+e)),__md_set=(e,t,a=localStorage,_=__md_scope)=>{try{a.setItem(_.pathname+"."+e,JSON.stringify(t))}catch(e){}},document.documentElement.setAttribute("data-platform",navigator.platform)</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="deep-orange" data-md-color-accent="amber">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer" aria-label="Navigation"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#device-testing" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../../" title="ChuMicro guides" class="md-header__button md-logo" aria-label="ChuMicro guides" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-book-open" viewBox="0 0 24 24"><path d="M12 7v14M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer" aria-label="Navigation">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-menu" viewBox="0 0 24 24"><path d="M4 5h16M4 12h16M4 19h16"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            ChuMicro guides
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Device Testing
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="none" data-md-color-scheme="slate" data-md-color-primary="deep-orange" data-md-color-accent="amber"  aria-hidden="true"  type="radio" name="__palette" id="__palette_0">
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search" aria-label="Search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-search" viewBox="0 0 24 24"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog" aria-label="Search">
+  <button type="button" class="md-search__button">
+    Search
+  </button>
+</div>
+      
+    
+    <div class="md-header__source">
+      
+        <a href="https://github.com/ChuMicro/ChuMicro" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2026 Fonticons, Inc.--><path fill="currentColor" d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Source
+  </div>
+</a>
+      
+    </div>
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../../" title="ChuMicro guides" class="md-nav__button md-logo" aria-label="ChuMicro guides" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-book-open" viewBox="0 0 24 24"><path d="M12 7v14M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg>
+
+    </a>
+    ChuMicro guides
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/ChuMicro/ChuMicro" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2026 Fonticons, Inc.--><path fill="currentColor" d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Source
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../faq/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Questions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Troubleshooting
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Start here
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/board-not-found/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Board not found
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/wifi-wont-connect/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    WiFi will not connect
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/tls-https-failures/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TLS and HTTPS failures
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/out-of-memory/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Out of memory
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/deploy-refused-importerror/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deploy refused for an import
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/deploys-and-file-persistence/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deploys and file persistence
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/persisting-data/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Persisting data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/firmware-onto-a-new-board/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Firmware onto a new board
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/macos-circuitpy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CIRCUITPY on macOS
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/board-quirks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Board quirks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/circuitpython-ringio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CircuitPython ringio
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../wiring-wifi-credentials/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wiring WiFi credentials
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Contributing
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cheat-sheet/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cheat sheet
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../pull-requests/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pull requests
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../style-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Style guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../new-library/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Writing a new library
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../standalone-integration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Standalone integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../slimming-your-deploy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Slimming your deploy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../config-files/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Config files
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Device testing
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="././" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Device testing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+
+<nav class="md-nav md-nav--secondary" aria-label="On this page">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      On this page
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-gets-configured" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        What gets configured
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#generate-the-starter-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Generate the starter files
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#register-your-boards-via-add-device" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Register your boards via <code>add-device</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Register your boards via add-device">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#re-probing-replacing-and-deleting-entries" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Re-probing, replacing, and deleting entries
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tune-devicesyml-if-you-need-to" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Tune <code>devices.yml</code> if you need to
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Tune devices.yml if you need to">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#deploy-mode-behavior" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Deploy mode behavior
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Deploy mode behavior">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#when-you-must-use-flash" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        When you must use <code>flash</code>
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#on-device-unit-sweep-test-unit-on-device" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        On-device unit sweep (<code>test-unit-on-device</code>)
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="On-device unit sweep (test-unit-on-device)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#every-test-file-must-run-green-on-a-freshly-reset-pi-pico-w-cp-mp" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Every test file must run green on a freshly-reset Pi Pico W (CP + MP)
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configure-secretstoml" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Configure <code>secrets.toml</code>
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#run-device-tests-from-the-cli" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Run device tests from the CLI
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Run device tests from the CLI">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#default-target-set" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Default target set
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#common-filters" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Common filters
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#run-functional-tests-via-pytest-directly" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Run functional tests via pytest directly
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Run functional tests via pytest directly">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#plugin-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Plugin options
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#run-unix-port-unit-tests-from-an-ide" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Run unix-port unit tests from an IDE
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#run-workbench-functional-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Run workbench functional tests
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#run-functional_tests-from-an-ide" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Run <code>functional_tests/</code> from an IDE
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Run functional_tests&#x2f; from an IDE">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#pycharm" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        PyCharm
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#vs-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        VS Code
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-functional-tests-differ-from-host-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        How functional tests differ from host tests
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wiping-a-boards-filesystem" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Wiping a board's filesystem
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Troubleshooting
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related-guides" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Related guides
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../workbench/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Workbench tools
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../releases/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Releases and promotion
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../maintainers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Maintainers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../working-with-agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Working with agents
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agent-style-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent style guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../development-vscode/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    VS Code setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../development-pycharm/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PyCharm setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../development-other-editors/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Other editors
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  
+                    
+                    
+                    
+                      
+                    
+                    
+                      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+                      <div class="md-sidebar-button__wrapper">
+                        <label class="md-sidebar-button" for="__toc"></label>
+                      </div>
+                    
+                  
+                  <div class="md-sidebar__inner">
+                    
+
+
+<nav class="md-nav md-nav--secondary" aria-label="On this page">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      On this page
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-gets-configured" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        What gets configured
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#generate-the-starter-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Generate the starter files
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#register-your-boards-via-add-device" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Register your boards via <code>add-device</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Register your boards via add-device">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#re-probing-replacing-and-deleting-entries" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Re-probing, replacing, and deleting entries
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tune-devicesyml-if-you-need-to" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Tune <code>devices.yml</code> if you need to
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Tune devices.yml if you need to">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#deploy-mode-behavior" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Deploy mode behavior
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Deploy mode behavior">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#when-you-must-use-flash" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        When you must use <code>flash</code>
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#on-device-unit-sweep-test-unit-on-device" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        On-device unit sweep (<code>test-unit-on-device</code>)
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="On-device unit sweep (test-unit-on-device)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#every-test-file-must-run-green-on-a-freshly-reset-pi-pico-w-cp-mp" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Every test file must run green on a freshly-reset Pi Pico W (CP + MP)
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configure-secretstoml" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Configure <code>secrets.toml</code>
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#run-device-tests-from-the-cli" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Run device tests from the CLI
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Run device tests from the CLI">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#default-target-set" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Default target set
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#common-filters" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Common filters
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#run-functional-tests-via-pytest-directly" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Run functional tests via pytest directly
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Run functional tests via pytest directly">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#plugin-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Plugin options
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#run-unix-port-unit-tests-from-an-ide" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Run unix-port unit tests from an IDE
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#run-workbench-functional-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Run workbench functional tests
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#run-functional_tests-from-an-ide" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Run <code>functional_tests/</code> from an IDE
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Run functional_tests&#x2f; from an IDE">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#pycharm" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        PyCharm
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#vs-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        VS Code
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-functional-tests-differ-from-host-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        How functional tests differ from host tests
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wiping-a-boards-filesystem" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Wiping a board's filesystem
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Troubleshooting
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related-guides" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Related guides
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+  
+  
+
+
+<h1 id="device-testing">Device Testing<a class="headerlink" href="#device-testing" title="Permanent link">&para;</a></h1>
+<p><img src="../../../support/docs/chumicro_tip.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;"></p>
+<p>This guide covers the real-board testing workflow for ChuMicro libraries.</p>
+<p><br clear="left"></p>
+<p>Use it when you want to:</p>
+<ul>
+<li>run <code>functional_tests/</code> on a connected MicroPython or CircuitPython board</li>
+<li>understand how <code>devices.yml</code> and <code>workspace.yml</code> are structured</li>
+<li>use IDE play buttons for <code>functional_tests/</code></li>
+</ul>
+<p>Host-side <code>tests/</code> still run through normal CPython pytest. Real-board validation is an extra layer for behavior that mocks and unix-port checks cannot prove.</p>
+<h2 id="what-gets-configured">What gets configured<a class="headerlink" href="#what-gets-configured" title="Permanent link">&para;</a></h2>
+<p><code>python scripts/run.py setup</code> creates three gitignored files at the repo root when they do not already exist:</p>
+<ul>
+<li><code>devices.yml</code>: your local board registry and default target selection</li>
+<li><code>workspace.yml</code>: host-side machinery (library_sources, deploy_targets, quality knobs); not a credentials file</li>
+<li><code>secrets.toml</code>: workspace-wide credentials + device-bound defaults (wifi SSID/password, broker host/port/auth) that flow into <code>runtime_config.msgpack</code> at deploy time.  Per-library <code>functional_tests/config.toml</code> overrides land on top via deep-merge.</li>
+</ul>
+<p>Full per-file detail (shape, purpose, who edits what) lives in <a href="../config-files/">config-files.md</a>.  The split lands per <a href="https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0057-two-file-config.md">Decision 0057</a>.</p>
+<h2 id="generate-the-starter-files">Generate the starter files<a class="headerlink" href="#generate-the-starter-files" title="Permanent link">&para;</a></h2>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>python<span class="w"> </span>scripts/run.py<span class="w"> </span>setup
+</span></code></pre></div>
+<p>If the files already exist, setup leaves them alone.</p>
+<p>The first-materialized <code>devices.yml</code> ships with an empty <code>devices: []</code> registry.  Use the <code>add-device</code> flow (next section) to populate it; hand-editing the YAML is still supported but no longer the primary path.</p>
+<h2 id="register-your-boards-via-add-device">Register your boards via <code>add-device</code><a class="headerlink" href="#register-your-boards-via-add-device" title="Permanent link">&para;</a></h2>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>python<span class="w"> </span>scripts/run.py<span class="w"> </span>add-device<span class="w"> </span>pi-pico-w-mp<span class="w"> </span>--address<span class="w"> </span>/dev/cu.usbmodem1101
+</span></code></pre></div>
+<p>This is a thin shim around <code>chumicro-workspace add-device</code>.  It probes the connected board (UID, machine type, board_id), writes the entry to <code>devices.yml</code>, and fills in <code>defaults.{micropython,circuitpython}</code> on first registration of each runtime.</p>
+<p>Pass <code>--runtime</code> if you want to skip the auto-detect probe (faster), or <code>--description "Desk board"</code> to add a free-form note.  See <code>python scripts/run.py add-device --help</code> for the full flag set.</p>
+<h3 id="re-probing-replacing-and-deleting-entries">Re-probing, replacing, and deleting entries<a class="headerlink" href="#re-probing-replacing-and-deleting-entries" title="Permanent link">&para;</a></h3>
+<p>Three verbs cover an entry's later life, differing by how much they keep:</p>
+<ul>
+<li><code>chumicro-workspace add-device &lt;id&gt; --force</code>: <strong>update.</strong> Re-probes and refreshes the address + hardware-once fields, but keeps everything you typed (description, deploy_mode). The everyday "this board moved ports / I reflashed it" path.</li>
+<li><code>chumicro-workspace reset-device &lt;id&gt; --yes</code>: <strong>replace.</strong> Re-probes the connected board and rebuilds the entry from silicon, dropping accumulated hand edits (description, deploy_mode, serial_baudrate) and re-deriving the hardware identity. The id and its <code>defaults.&lt;runtime&gt;</code> binding survive. Use it when an entry has drifted and you want it rebuilt from truth. The board must be connected; a probe failure points you back here.</li>
+<li><code>chumicro-workspace remove-device &lt;id&gt; --yes</code>: <strong>delete.</strong> Drops the entry and nulls any <code>defaults:</code> pointer to it so the file stays loadable. No board needed.</li>
+</ul>
+<p><code>reset-device</code> and <code>remove-device</code> are <code>--yes</code>-gated because they discard user-owned metadata a probe cannot regenerate.</p>
+<h2 id="tune-devicesyml-if-you-need-to">Tune <code>devices.yml</code> if you need to<a class="headerlink" href="#tune-devicesyml-if-you-need-to" title="Permanent link">&para;</a></h2>
+<p><code>add-device</code> writes a complete, usable entry on every registration: id, runtime, address, probed hardware identity, and (on first registration of each runtime) the matching <code>defaults.&lt;runtime&gt;</code> pointer.  The day-to-day flow doesn't require hand-editing.</p>
+<p>Read on if you want to override per-device deploy mode, change the <code>defaults.ide_runtime</code>, or just understand the shape of what's on disk.</p>
+<details>
+<summary>defaults: block, fields and behavior (click to expand)</summary>
+
+`defaults:` controls what happens when you run `python scripts/run.py test-libraries-functional` with no board-selection flags, and what the IDE play button targets for `functional_tests/`.
+
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">defaults</span><span class="p">:</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="nt">micropython</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">office-esp32-mp</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span><span class="nt">circuitpython</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">office-esp32-cp</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span><span class="nt">deploy_mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">flash</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">  </span><span class="nt">ide_runtime</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">micropython</span>
+</span></code></pre></div>
+
+Fields:
+
+| Field | Meaning |
+|---|---|
+| `micropython` | Default MicroPython device ID from the `devices:` list |
+| `circuitpython` | Default CircuitPython device ID from the `devices:` list |
+| `deploy_mode` | Workspace-wide default deploy mode: `flash` (the default, per [Decision 0047](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0047-deploy-mode-flash-default.md)) or `ram` |
+| `ide_runtime` | Which runtime(s) IDE play buttons target: `micropython`, `circuitpython`, or `both` |
+
+Notes:
+
+- If `micropython` or `circuitpython` is omitted, ChuMicro falls back to the first configured board of that runtime.
+- `ide_runtime: both` collects each `functional_tests/test_*.py` function twice, once per runtime, so the IDE shows separate results.
+
+</details>
+
+<details>
+<summary>devices: entries, fields and per-device overrides (click to expand)</summary>
+
+Each device entry must define:
+
+- `id`
+- `runtime` (`micropython` or `circuitpython`)
+- `address`
+
+Typical serial examples:
+
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nt">devices</span><span class="p">:</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">office-esp32-cp</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">    </span><span class="nt">runtime</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">circuitpython</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">    </span><span class="nt">address</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/dev/cu.usbmodem101</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">    </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Desk board running CircuitPython</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">    </span><span class="nt">deploy_mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">flash</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">office-esp32-mp</span>
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="w">    </span><span class="nt">runtime</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">micropython</span>
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="w">    </span><span class="nt">address</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/dev/cu.usbserial-0001</span>
+</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="w">    </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Desk board running MicroPython</span>
+</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="w">    </span><span class="nt">deploy_mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ram</span><span class="w">      </span><span class="c1"># opt out of the flash default for this board</span>
+</span></code></pre></div>
+
+Supported fields today:
+
+| Field | Required | Meaning |
+|---|---|---|
+| `id` | yes | Stable name used by `defaults:` and CLI overrides |
+| `runtime` | yes | `micropython` or `circuitpython` |
+| `address` | yes | Serial port / device address used by the transport |
+| `description` | no | Free-form label for humans |
+| `connection_type` | no | Currently `serial` |
+| `deploy_mode` | no | Per-device *preference* override for `ram` or `flash` |
+| `supports_ram_mode` | no | Board *capability* (default `true`). Set `false` only for a board that cannot run RAM mode at all; a requested `ram` deploy then switches to `flash` with a message. Distinct from `deploy_mode`: preference is what you want, capability is what's possible. A board where RAM is merely tight (Pi Pico W's 256 KB) stays `true`: tightness is handled per-library via `requires_flash`, not by disabling the board |
+
+</details>
+
+<h3 id="deploy-mode-behavior">Deploy mode behavior<a class="headerlink" href="#deploy-mode-behavior" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Deploy mode</th>
+<th>MicroPython</th>
+<th>CircuitPython</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ram</code></td>
+<td><code>mpremote mount</code>-based execution</td>
+<td>raw-REPL inline execution</td>
+</tr>
+<tr>
+<td><code>flash</code></td>
+<td><code>mpremote fs cp -r</code> copy mode</td>
+<td>copy to CIRCUITPY drive, then import from flash</td>
+</tr>
+</tbody>
+</table>
+<p><code>flash</code> is the default for project deploys, examples, and functional tests (<a href="https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0047-deploy-mode-flash-default.md">Decision 0047</a>), because it runs your code the way a shipped deploy does.  Opt into <code>ram</code> per device or per run when you are iterating on a single library that needs no persistence and no multi-library composition, and you want the edits to stay off the board's flash.</p>
+<h4 id="when-you-must-use-flash">When you must use <code>flash</code><a class="headerlink" href="#when-you-must-use-flash" title="Permanent link">&para;</a></h4>
+<p><code>ram</code> is fine for single-library unit-style functional tests: no chumicro deps beyond the library under test, no runtime-config file.</p>
+<p><code>flash</code> is <strong>required</strong> when a test exercises:</p>
+<ul>
+<li>runtime-config-driven setup</li>
+<li><code>kvstore</code> persistence semantics across resets</li>
+<li>full <code>deploy → wifi → mqtt</code> chains</li>
+<li><code>extra_files</code> staging on CircuitPython (CP RAM-mode deploy doesn't support <code>extra_files</code>, see <a href="https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0056-transport-extra-files-staging.md">Decision 0056</a>)</li>
+</ul>
+<p>If a multi-stack test fails under <code>ram</code>, switch the device's <code>deploy_mode</code> to <code>flash</code> rather than chasing fallback paths like staging files via <code>/remote/</code>.  They don't exist on CP RAM mode for a reason.</p>
+<p>You usually don't have to switch by hand for the common cases: a requested <code>ram</code> deploy automatically falls back to <code>flash</code>, with a printed explanation, when the staged set contains a non-<code>.py</code> data file, when any library in the dependency closure declares <code>requires_flash</code>, or when the device sets <code>supports_ram_mode: false</code>. The run continues in <code>flash</code>.  It is never silently mis-deployed. Hand-setting <code>deploy_mode: flash</code> is still the right move when you simply know a board can't hold the RAM payload.</p>
+<h2 id="on-device-unit-sweep-test-unit-on-device">On-device unit sweep (<code>test-unit-on-device</code>)<a class="headerlink" href="#on-device-unit-sweep-test-unit-on-device" title="Permanent link">&para;</a></h2>
+<p>The <em>functional</em> tests above (<code>libraries/&lt;name&gt;/functional_tests/</code>) exercise real I/O on a board. The <strong>on-device unit sweep</strong> is different: it runs each library's <em>cross-runtime unit suite</em> (<code>libraries/&lt;name&gt;/tests/</code>), the same suite that runs on the unix ports, on real silicon, to catch behaviour that only differs on a real MCU's MicroPython / CircuitPython.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>python<span class="w"> </span>scripts/run.py<span class="w"> </span>test-unit-on-device<span class="w">                 </span><span class="c1"># both runtimes, all libraries</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>python<span class="w"> </span>scripts/run.py<span class="w"> </span>test-unit-on-device<span class="w"> </span>--library<span class="w"> </span>timing<span class="w"> </span><span class="c1"># one library</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>python<span class="w"> </span>scripts/run.py<span class="w"> </span>test-unit-on-device<span class="w"> </span>--runtime<span class="w"> </span>micropython
+</span></code></pre></div>
+<p>It is <strong>not</strong> part of the default <code>preflight</code>. Opt in with <code>python scripts/run.py preflight --with-device-unit</code> (parallel to <code>--with-functional</code>). When no board is configured for a runtime, that runtime is skipped cleanly rather than failing.</p>
+<p><strong>Per-library mode resolution, RAM-preferred.</strong> The sweep exists to validate RAM-capable libraries on silicon, so its last-resort preference is <code>ram</code> (not the <code>flash</code> default the functional path uses). Each library is resolved through the one shared deploy-mode policy with <strong>own-source</strong> scoping: a library that declares <code>requires_flash</code>, or ships a non-<code>.py</code> data file, switches to <code>flash</code>, but only <em>that</em> library, not the whole sweep. A library is not poisoned by a dependency's data file: <code>chumicro_ntp</code> depends on <code>chumicro_sockets</code> (which ships <code>_ca_bundle.der</code>) yet stays in the RAM group, because its own source has no data file and a pure unit test never reaches the dependency's bundle path.</p>
+<p><strong>Mode grouping.</strong> Libraries are grouped by resolved mode and each group runs as one single-mode session per runtime (the flash group first). A <code>ram</code>-preferred run on a RAM-capable board therefore becomes a fast RAM session over the light libraries plus a flash session over the <code>requires_flash</code> / data-file ones, with no per-library transport churn.</p>
+<p><strong>Behavioral pass/fail only.</strong> <code>coverage.py</code> cannot trace MicroPython / CircuitPython bytecode, so the sweep takes no <code>--coverage-threshold</code>; the per-library coverage gate stays a unix-port / CPython concern. A per-library failure <em>on silicon</em> is the sweep's <strong>output</strong>, not a <code>preflight</code>-gating quality check: the run completes and reports rather than turning <code>preflight</code> red. "Output, not a gate" governs how the sweep <em>runs</em>; it does not make the finding acceptable. A <code>MemoryError</code> from a large module on the Pi Pico W is a tracked defect to fix by splitting (see below), not an accepted end-state.</p>
+<h3 id="every-test-file-must-run-green-on-a-freshly-reset-pi-pico-w-cp-mp">Every test file must run green on a freshly-reset Pi Pico W (CP + MP)<a class="headerlink" href="#every-test-file-must-run-green-on-a-freshly-reset-pi-pico-w-cp-mp" title="Permanent link">&para;</a></h3>
+<p>The on-device unit sweep runs each cross-runtime test <em>file</em> through one device interpreter. On the 264 KB Pi Pico W a very large class-organized module (the library it imports, plus that file's full set of test classes resident at once) can exhaust RAM with a <code>MemoryError</code> even on a freshly reset board running that file alone. PSRAM boards (Lolin S2) mask this; the Pico W under <strong>both</strong> CircuitPython and MicroPython is a distinct memory HAL, and it is the board class these libraries exist for.</p>
+<p><strong>Requirement, per <a href="https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0072-large-test-modules-on-constrained-boards.md">Decision 0072</a>:</strong> every cross-runtime test file must run green on a freshly-reset Pi Pico W on CP <strong>and</strong> MP. A file that OOMs there even with <code>--per-file</code> is a tracked defect, fixed by splitting, not left to run on PSRAM only.</p>
+<ul>
+<li><code>scripts/run.py test-unit-on-device --per-file</code> (or <code>pytest ... --per-file</code>) soft-resets the interpreter before <em>each</em> test file, not just each library, so a file never inherits a sibling's resident state. This is the mechanism the requirement runs on; it adds a reboot per file, so the default per-library reset stays the fast path for PSRAM boards and small libraries.</li>
+<li>A file still <code>MemoryError</code>-ing alone on a fresh Pico W <strong>must be split</strong> until each sub-file fits, mirroring source modules where one exists, then mechanically (lossless: test bodies stay byte-identical). There is no fixed tests-per-file cap: the ceiling is library-weight-dependent and differs CP vs MP, so the target is found empirically per library on the bench: split until that library's files all run green on a freshly-reset Pico W on both runtimes.</li>
+</ul>
+<h2 id="configure-secretstoml">Configure <code>secrets.toml</code><a class="headerlink" href="#configure-secretstoml" title="Permanent link">&para;</a></h2>
+<p>Credentials and device-bound defaults that every functional test inherits at deploy time, in one gitignored file.  <code>setup</code> materializes it with placeholder values for <code>wifi.ssid</code> and <code>mqtt.broker.host</code>.</p>
+<p>Edit <code>secrets.toml</code> once per clone, filling in your wifi credentials and your broker host.  The mqtt library refuses to silently dial a third-party broker, so the broker host is required for mqtt-touching tests.  For the file's shape and the full field list, see <a href="../config-files/#secretstoml-runtime-credentials-for-on-device-code">secrets.toml</a> in the config-files guide.</p>
+<p>Per-library <code>functional_tests/config.toml</code> files override <code>secrets.toml</code> at deploy time: both layers share the same section-namespaced shape, and per-library configs win at any nesting depth.  The merged result is flattened to dotted keys (<code>wifi.ssid</code>, <code>mqtt.broker.host</code>) and msgpack-encoded into <code>/runtime_config.msgpack</code>; on-device tests read it via <code>chumicro_config.load_runtime_config()</code>, the same API user code uses.</p>
+<p>When <code>secrets.toml</code> is missing or still carries the placeholder SSID, tests skip cleanly rather than running with empty credentials, so fresh clones stay green by default.</p>
+<details>
+<summary>How the runtime-config staging works (click to expand)</summary>
+
+Each library's `functional_tests/conftest.py` calls `chumicro_workspace.compose_runtime_config(secrets_toml=…, project_config=…)` from its `pytest_configure` hook, then hands the merged dict to `chumicro_pytest_device.set_runtime_config(config, payload)`.  The pytest-device plugin msgpack-encodes the payload once per session and stages it via `transport.stage(extra_files={"/runtime_config.msgpack": …})`.  When `secrets.toml` is missing or carries the placeholder SSID, the conftest registers `None` and the on-device test hits its silent-skip path (no creds, no run).
+
+</details>
+
+<p>Typical uses:</p>
+<ul>
+<li>WiFi credentials for networking tests (<code>libraries/{wifi,requests,http_server,mqtt,sockets,websockets}</code>)</li>
+<li>broker addresses for MQTT tests</li>
+<li>NTP servers or other environment-specific values</li>
+</ul>
+<p>If a library does not need shared environment data, no override file is needed.</p>
+<h2 id="run-device-tests-from-the-cli">Run device tests from the CLI<a class="headerlink" href="#run-device-tests-from-the-cli" title="Permanent link">&para;</a></h2>
+<h3 id="default-target-set">Default target set<a class="headerlink" href="#default-target-set" title="Permanent link">&para;</a></h3>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>python<span class="w"> </span>scripts/run.py<span class="w"> </span>test-libraries-functional
+</span></code></pre></div>
+<p>This uses <code>devices.yml</code> defaults:</p>
+<ul>
+<li>active runtime set from <code>defaults.ide_runtime</code></li>
+<li>board selection from <code>defaults.micropython</code> / <code>defaults.circuitpython</code></li>
+<li>deploy mode from each device entry, falling back to <code>defaults.deploy_mode</code></li>
+</ul>
+<h3 id="common-filters">Common filters<a class="headerlink" href="#common-filters" title="Permanent link">&para;</a></h3>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># One runtime only</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>python<span class="w"> </span>scripts/run.py<span class="w"> </span>test-libraries-functional<span class="w"> </span>--runtime<span class="w"> </span>micropython
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="c1"># Both runtimes, using defaults-backed board selection</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>python<span class="w"> </span>scripts/run.py<span class="w"> </span>test-libraries-functional<span class="w"> </span>--runtime<span class="w"> </span>both
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="c1"># Override just one selected board</span>
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>python<span class="w"> </span>scripts/run.py<span class="w"> </span>test-libraries-functional<span class="w"> </span>--micropython-device<span class="w"> </span>office-esp32-mp
+</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>python<span class="w"> </span>scripts/run.py<span class="w"> </span>test-libraries-functional<span class="w"> </span>--circuitpython-device<span class="w"> </span>office-esp32-cp
+</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>
+</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="c1"># Scope to a library</span>
+</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a>python<span class="w"> </span>scripts/run.py<span class="w"> </span>test-libraries-functional<span class="w"> </span>--library<span class="w"> </span>timing
+</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a>
+</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="c1"># Scope to files whose name contains the substring</span>
+</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a>python<span class="w"> </span>scripts/run.py<span class="w"> </span>test-libraries-functional<span class="w"> </span>--library<span class="w"> </span>timing<span class="w"> </span>--file<span class="w"> </span>test_heartbeat
+</span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a>
+</span><span id="__span-6-17"><a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a><span class="c1"># Scope to functions whose name contains the substring</span>
+</span><span id="__span-6-18"><a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a>python<span class="w"> </span>scripts/run.py<span class="w"> </span>test-libraries-functional<span class="w"> </span>--library<span class="w"> </span>timing<span class="w"> </span>--function<span class="w"> </span>heartbeat_fires
+</span><span id="__span-6-19"><a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a>
+</span><span id="__span-6-20"><a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a><span class="c1"># Force flash mode</span>
+</span><span id="__span-6-21"><a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a>python<span class="w"> </span>scripts/run.py<span class="w"> </span>test-libraries-functional<span class="w"> </span>--library<span class="w"> </span>timing<span class="w"> </span>--deploy-mode<span class="w"> </span>flash
+</span></code></pre></div>
+<p><strong>Scoping flags:</strong></p>
+<ul>
+<li><code>--library &lt;name&gt;</code>: restrict to one library.</li>
+<li><code>--file &lt;substring&gt;</code>: match test file names (not function names).</li>
+<li><code>--function &lt;substring&gt;</code>: match test function names (not file names).</li>
+<li>Flags compose as AND: <code>--library timing --file test_heartbeat --function fires_on_interval</code> runs only <code>fires_on_interval</code> inside <code>test_heartbeat.py</code> in <code>timing/</code>.</li>
+<li>Any filter that matches nothing exits 2 so typos don't silently pass.</li>
+</ul>
+<p><code>devices.yml</code> is always resolved at <code>&lt;workspace_root&gt;/devices.yml</code>.  CI environments or unusual local layouts just need to drop a <code>devices.yml</code> at the workspace root before running tests.</p>
+<h2 id="run-functional-tests-via-pytest-directly">Run functional tests via pytest directly<a class="headerlink" href="#run-functional-tests-via-pytest-directly" title="Permanent link">&para;</a></h2>
+<p><code>scripts/run.py test-libraries-functional</code> is a thin wrapper over pytest.  It runs <code>pytest libraries/&lt;name&gt;/functional_tests/</code> with the <code>--chumicro-*</code> flags the device plugin exposes.  Invoking pytest directly is useful when you want pytest-native UX (a specific folder, file, or method) without going through <code>scripts/run.py</code>.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Whole directory</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>pytest<span class="w"> </span>libraries/timing/functional_tests/
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="c1"># One file</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>pytest<span class="w"> </span>libraries/timing/functional_tests/test_heartbeat.py
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="c1"># One function</span>
+</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>pytest<span class="w"> </span>libraries/timing/functional_tests/test_heartbeat.py::test_heartbeat_fires
+</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>
+</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="c1"># Keyword filter (pytest-native)</span>
+</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a>pytest<span class="w"> </span>libraries/timing/functional_tests/<span class="w"> </span>-k<span class="w"> </span>heartbeat
+</span></code></pre></div>
+<p>Target device selection still follows <code>devices.yml</code> defaults. Without a populated <code>devices.yml</code>, the tests skip with a clear message rather than failing.</p>
+<h3 id="plugin-options">Plugin options<a class="headerlink" href="#plugin-options" title="Permanent link">&para;</a></h3>
+<p>Driving pytest directly gives you access to the same overrides <code>test-libraries-functional</code> passes through the plugin:</p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--target {device,unix-port}</code></td>
+<td>Pick the execution backend.  Default <code>device</code> (real board via <code>chumicro-deploy</code>).  <code>unix-port</code> runs each test file in a MicroPython / CircuitPython unix-port subprocess instead.</td>
+</tr>
+<tr>
+<td><code>--runtime {micropython,circuitpython,both}</code></td>
+<td>Under <code>--target device</code>: override <code>defaults.ide_runtime</code> from <code>devices.yml</code>.  Under <code>--target unix-port</code>: pick which runtime(s) to spawn, defaults to <code>both</code>.</td>
+</tr>
+<tr>
+<td><code>--micropython-device &lt;id&gt;</code></td>
+<td>Override <code>defaults.micropython</code> for this run (device target only).</td>
+</tr>
+<tr>
+<td><code>--circuitpython-device &lt;id&gt;</code></td>
+<td>Override <code>defaults.circuitpython</code> for this run (device target only).</td>
+</tr>
+<tr>
+<td><code>--micropython-binary &lt;path&gt;</code></td>
+<td>Unix-port MicroPython binary override (unix-port target only).  Otherwise resolved via <code>.tools/micropython.path</code> then <code>PATH</code>.</td>
+</tr>
+<tr>
+<td><code>--circuitpython-binary &lt;path&gt;</code></td>
+<td>Unix-port CircuitPython binary override (unix-port target only).  Same resolution order.</td>
+</tr>
+<tr>
+<td><code>--deploy-mode {ram,flash}</code></td>
+<td>Override each device's <code>deploy_mode</code> (device target only).</td>
+</tr>
+<tr>
+<td><code>--pr-summary</code></td>
+<td>Print the Markdown PR block at session end (paste-ready).  Opt-in so IDE play-button runs stay quiet.</td>
+</tr>
+<tr>
+<td><code>--pr-summary-command &lt;str&gt;</code></td>
+<td>Literal command string rendered inside the PR block's <code>- Command:</code> line.  <code>test-libraries-functional</code> passes its reconstructed CLI invocation here; direct pytest runs can supply their own label or omit it and get a bare <code>pytest</code>.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="run-unix-port-unit-tests-from-an-ide">Run unix-port unit tests from an IDE<a class="headerlink" href="#run-unix-port-unit-tests-from-an-ide" title="Permanent link">&para;</a></h2>
+<p>Pytest is the single front door for every runtime: bare <code>pytest libraries/&lt;name&gt;/tests/</code> runs CPython, and <code>pytest libraries/&lt;name&gt;/tests/ --target unix-port --runtime &lt;X&gt;</code> runs the same files under a MicroPython or CircuitPython unix-port subprocess.  The plugin owns collection in both cases and stays out of the way of plain CPython collection when <code>--target</code> is left at its <code>device</code> default.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Whole library's tests under MicroPython unix-port.</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>pytest<span class="w"> </span>libraries/timing/tests<span class="w"> </span>--target<span class="w"> </span>unix-port<span class="w"> </span>--runtime<span class="w"> </span>micropython
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="c1"># One file under both unix-port runtimes (parametrized once per runtime).</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>pytest<span class="w"> </span>libraries/timing/tests/test_heartbeat.py<span class="w"> </span>--target<span class="w"> </span>unix-port<span class="w"> </span>--runtime<span class="w"> </span>both
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="c1"># One function under CircuitPython unix-port.</span>
+</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>pytest<span class="w"> </span>libraries/timing/tests/test_heartbeat.py::test_heartbeat_fires_on_real_clock<span class="w"> </span>--target<span class="w"> </span>unix-port<span class="w"> </span>--runtime<span class="w"> </span>circuitpython
+</span></code></pre></div>
+<p>IDE play buttons that target <code>libraries/&lt;name&gt;/tests/</code> files go through CPython pytest by default.  To click play and get the unix-port path instead, add a dedicated run configuration that passes <code>--target unix-port --runtime &lt;X&gt;</code> (and <code>--no-cov</code>, since coverage isn't collected through a subprocess).  The <code>--target</code> flag is opt-in by design.  The default <code>pytest libraries/timing/tests/</code> invocation is unchanged.</p>
+<h2 id="run-workbench-functional-tests">Run workbench functional tests<a class="headerlink" href="#run-workbench-functional-tests" title="Permanent link">&para;</a></h2>
+<p>Workbench packages (<code>workbench/&lt;name&gt;/</code>, Decision 0032) can ship their own <code>functional_tests/</code> directories.  Unlike library functional tests, these run host-side.  The workbench tool is the project <em>driving</em> a connected board through its public API rather than code that ships onto the device.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Run every workbench's functional_tests/ suite.</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>python<span class="w"> </span>scripts/run.py<span class="w"> </span>test-workbench-functional
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="c1"># One workbench package.</span>
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>python<span class="w"> </span>scripts/run.py<span class="w"> </span>test-workbench-functional<span class="w"> </span>--workbench<span class="w"> </span>deploy
+</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>
+</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="c1"># Scope by file / function like test-libraries-functional.</span>
+</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a>python<span class="w"> </span>scripts/run.py<span class="w"> </span>test-workbench-functional<span class="w"> </span>--file<span class="w"> </span>test_deploy_files_hardware<span class="w"> </span>--function<span class="w"> </span>circuitpython_ram<span class="w"> </span>-v
+</span></code></pre></div>
+<p>Device selection lives inside each suite's own <code>conftest.py</code> (typically by reading <code>devices.yml</code> defaults), so <code>test-workbench-functional</code> itself exposes no runtime / device flags.  Change the target board via <code>devices.yml</code> defaults or by editing the suite's fixtures.  Suites skip cleanly when <code>devices.yml</code> is missing or no matching board is configured.</p>
+<h2 id="run-functional_tests-from-an-ide">Run <code>functional_tests/</code> from an IDE<a class="headerlink" href="#run-functional_tests-from-an-ide" title="Permanent link">&para;</a></h2>
+<p>The repository registers a pytest plugin that intercepts explicit <code>functional_tests/</code> targets and routes them to hardware instead of importing them on the host.</p>
+<p>What that means in practice:</p>
+<ul>
+<li>host-side test runs still ignore <code>functional_tests/</code></li>
+<li>clicking play on a <code>functional_tests/test_*.py</code> file or test function targets the configured board(s)</li>
+<li>if <code>devices.yml</code> does not exist yet, the test is skipped with a message telling you to run setup</li>
+</ul>
+<h3 id="pycharm">PyCharm<a class="headerlink" href="#pycharm" title="Permanent link">&para;</a></h3>
+<p>PyCharm is the most-exercised IDE path. Once <code>devices.yml</code> is configured, play buttons on <code>functional_tests/</code> files, directories, and functions route to hardware.</p>
+<h3 id="vs-code">VS Code<a class="headerlink" href="#vs-code" title="Permanent link">&para;</a></h3>
+<p>VS Code uses the same pytest entrypoint and committed workspace settings/tasks as PyCharm. The structural support is present:</p>
+<ul>
+<li><code>.vscode/settings.json</code> enables pytest and points Pylance at all workspace source roots</li>
+<li><code>.vscode/tasks.json</code> includes a <code>Test Libraries Functional</code> task</li>
+<li>explicit <code>functional_tests/</code> targets go through the same pytest plugin</li>
+</ul>
+<p>A dedicated live end-to-end VS Code validation pass remains on <code>plans/next-up.md</code>, so if you hit a VS Code-only issue, treat that as a real bug rather than user error.</p>
+<h2 id="how-functional-tests-differ-from-host-tests">How functional tests differ from host tests<a class="headerlink" href="#how-functional-tests-differ-from-host-tests" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Test type</th>
+<th>Location</th>
+<th>How to run</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Host/unit tests</td>
+<td><code>libraries/&lt;name&gt;/tests/</code></td>
+<td><code>pytest libraries/&lt;name&gt;/tests/</code> (iteration) or <code>python scripts/run.py test --libraries &lt;name&gt;</code> (with coverage gate)</td>
+</tr>
+<tr>
+<td>Real-board functional tests</td>
+<td><code>libraries/&lt;name&gt;/functional_tests/</code></td>
+<td><code>python scripts/run.py test-libraries-functional --library &lt;name&gt;</code> or an IDE play button</td>
+</tr>
+<tr>
+<td>Workbench hardware-gated tests</td>
+<td><code>workbench/&lt;name&gt;/functional_tests/</code></td>
+<td><code>python scripts/run.py test-workbench-functional --workbench &lt;name&gt;</code></td>
+</tr>
+<tr>
+<td>Cross-runtime unix-port tests</td>
+<td>reuses <code>tests/</code></td>
+<td><code>pytest libraries/ --target unix-port --runtime both</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="wiping-a-boards-filesystem">Wiping a board's filesystem<a class="headerlink" href="#wiping-a-boards-filesystem" title="Permanent link">&para;</a></h2>
+<p>Functional-test runs accumulate stage residue on the device filesystem.
+<code>mpremote fs cp -r</code> (and <code>circup install</code>) are append-only, nothing
+pre-cleans.  Pi Pico W MP boards in particular fill up over time
+because the LittleFS partition is only ~850 KB; lolin-s2-mp is
+better-off at 2 MB but still eventually hits the wall.  When this
+happens, deploys fail with cryptic <code>mpremote: cp: ...: No space left
+on device</code> errors mid-test.</p>
+<p>Two ways to wipe a board:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Wipe + redeploy in one step.</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>chumicro-workspace<span class="w"> </span>deploy<span class="w"> </span>--wipe<span class="w"> </span>&lt;project&gt;<span class="w"> </span><span class="o">[</span>--device<span class="w"> </span>&lt;id&gt;<span class="o">]</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="c1"># Wipe only, leave the board idle, no follow-up deploy.</span>
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="c1"># --yes is required; no flag = exit 2 + safety message.</span>
+</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>chumicro-workspace<span class="w"> </span>reset-board<span class="w"> </span>--device<span class="w"> </span>&lt;id&gt;<span class="w"> </span>--yes
+</span></code></pre></div>
+<p>Both routes share one implementation.  Per-runtime recipe matrix:</p>
+<table>
+<thead>
+<tr>
+<th>Runtime / board family</th>
+<th>Recipe</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>CircuitPython</strong> (any board)</td>
+<td><code>import storage; storage.erase_filesystem()</code>: reformats FAT, hard-resets the board, host re-enumerates USB-CDC</td>
+</tr>
+<tr>
+<td><strong>MicroPython on rp2</strong> (Pi Pico W)</td>
+<td><code>os.umount('/'); os.VfsLfs2.mkfs(rp2.Flash()); machine.soft_reset()</code></td>
+</tr>
+<tr>
+<td><strong>MicroPython on esp32</strong> (Lolin S2 family)</td>
+<td><code>os.umount('/'); os.VfsLfs2.mkfs(esp32.Partition.find(TYPE_DATA, label='vfs')[0]); machine.soft_reset()</code></td>
+</tr>
+<tr>
+<td>Other MicroPython substrates</td>
+<td><code>RuntimeError</code> until a verified recipe lands</td>
+</tr>
+</tbody>
+</table>
+<p>The MicroPython path uses <code>mkfs</code> rather than a recursive <code>os.remove</code>
+walk: LittleFS metadata + wear-leveling artifacts survive a
+file-by-file delete, so a board with a small partition can still
+hit <code>ENOSPC</code> mid-deploy after a non-mkfs "wipe."  <code>mkfs</code> recovers
+the full block budget every time.  Verified on hardware
+(pi-pico-w-mp, lolin-s2-mp).</p>
+<p>Destructive on every runtime: wipes both managed scope (<code>/lib/*</code>,
+<code>/code.py</code> / <code>/main.py</code>, <code>runtime_config.msgpack</code>) <strong>and</strong> out-of-scope
+files (<code>settings.toml</code>, hand-edited <code>boot.py</code>, uploaded assets).
+Firmware partitions are untouched.</p>
+<p>RAM / mount mode is a no-op (printed).  Those modes never wrote to
+flash so there's nothing persistent to wipe.</p>
+<h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Symptom</th>
+<th>Likely cause</th>
+<th>What to do</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>No devices.yml found</code></td>
+<td>You have not generated local config yet</td>
+<td>Run <code>python scripts/run.py setup</code></td>
+</tr>
+<tr>
+<td><code>No devices configured in devices.yml</code></td>
+<td>The file exists but <code>devices:</code> is empty or defaults do not match real entries</td>
+<td>Add at least one board entry and update <code>defaults:</code></td>
+</tr>
+<tr>
+<td>CircuitPython RAM-mode run fails before tests start</td>
+<td>Inline payload is too large for available heap</td>
+<td>Re-run with <code>--deploy-mode flash</code> or set that board's <code>deploy_mode: flash</code></td>
+</tr>
+<tr>
+<td>Flash mode cannot find CIRCUITPY</td>
+<td>Host has no <code>CIRCUITPY*</code> mount visible</td>
+<td>Replug the board's USB cable and confirm Finder / <code>mount</code> shows the drive; see <a href="../../troubleshooting/macos-circuitpy/">docs/troubleshooting/macos-circuitpy.md</a></td>
+</tr>
+<tr>
+<td>A normal <code>python scripts/run.py test</code> run ignores <code>functional_tests/</code></td>
+<td>Expected behavior</td>
+<td>Use <code>test-libraries-functional</code> or explicitly target the <code>functional_tests/</code> path from your IDE</td>
+</tr>
+<tr>
+<td><code>mpremote: cp: ...: No space left on device</code> mid-deploy</td>
+<td>LittleFS partition full of stage residue from prior runs</td>
+<td><code>chumicro-workspace reset-board --device &lt;id&gt; --yes</code> (see "Wiping a board's filesystem" above)</td>
+</tr>
+<tr>
+<td>Lolin S2 CircuitPython deploys take 30–60 s per example</td>
+<td>The board's flash write speed is the floor, not a recovery or retry signal</td>
+<td>Expected; use Pi Pico W as the faster CP development target when iterating. Lolin S2 CP rsync slowness is a baseline characteristic, not a regression</td>
+</tr>
+<tr>
+<td>CIRCUITPY drive visible but every write fails with <code>Read-only file system</code></td>
+<td>Drive is mounted RO: either the device-side FS flipped read-only, or FSKit handed the mount up with the RO flag.  Distinct from the FSKit wedge, where the drive never appears at all</td>
+<td><code>chumicro-workspace reset-board --device &lt;id&gt; --yes</code> or unplug-and-replug; see <a href="../../troubleshooting/macos-circuitpy/">docs/troubleshooting/macos-circuitpy.md</a></td>
+</tr>
+</tbody>
+</table>
+<h2 id="related-guides">Related guides<a class="headerlink" href="#related-guides" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="https://github.com/ChuMicro/ChuMicro/blob/main/CONTRIBUTING.md">Contributing guide</a></li>
+<li><a href="../development-pycharm/">Development with PyCharm</a></li>
+<li><a href="../development-vscode/">Development with VS Code</a></li>
+<li><a href="../development-other-editors/">Development with Other Editors</a></li>
+<li><a href="../pull-requests/">Pull requests</a></li>
+<li><a href="https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0027-device-testing-infrastructure.md">Decision 0027</a></li>
+<li><a href="https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0028-deploy-modes.md">Decision 0028</a></li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://zensical.org/" target="_blank" rel="noopener">
+      Zensical
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate":null,"base":"../..","features":[],"search":"../../assets/javascripts/workers/search.e2d2d235.min.js","tags":null,"translations":{"clipboard.copied":"Copied to clipboard","clipboard.copy":"Copy to clipboard","search.result.more.one":"1 more on this page","search.result.more.other":"# more on this page","search.result.none":"No matching documents","search.result.one":"1 matching document","search.result.other":"# matching documents","search.result.placeholder":"Type to start searching","search.result.term.missing":"Missing","select.version":"Select version"},"version":null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.dbc0afdc.min.js"></script>
+      
+    
+  </body>
+</html>

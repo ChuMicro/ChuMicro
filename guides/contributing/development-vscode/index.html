@@ -1,0 +1,2080 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Answers and fixes for CircuitPython and MicroPython projects: why a board freezes on the network, why WiFi will not connect, what to do when a deploy is refused, and how to keep data across a reboot.">
+      
+      
+      
+        <link rel="canonical" href="https://chumicro.github.io/ChuMicro/guides/contributing/development-vscode/">
+      
+      
+        <link rel="prev" href="../agent-style-guide/">
+      
+      
+        <link rel="next" href="../development-pycharm/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="zensical-0.0.39">
+    
+    
+      
+        <title>Development with VS Code - ChuMicro guides</title>
+      
+    
+    
+      
+        
+      
+      <link rel="stylesheet" href="../../assets/stylesheets/modern/main.1e981d71.min.css">
+      
+        
+          
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/modern/palette.dfe2e883.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter:300,300i,400,400i,500,500i,700,700i%7CJetBrains+Mono:400,400i,700,700i&amp;display=fallback">
+        <style>:root{--md-text-font:"Inter";--md-code-font:"JetBrains Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,t)=>(e<<5)-e+t.charCodeAt(0)),0),__md_get=(e,t=localStorage,a=__md_scope)=>JSON.parse(t.getItem(a.pathname+"."+e)),__md_set=(e,t,a=localStorage,_=__md_scope)=>{try{a.setItem(_.pathname+"."+e,JSON.stringify(t))}catch(e){}},document.documentElement.setAttribute("data-platform",navigator.platform)</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="deep-orange" data-md-color-accent="amber">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer" aria-label="Navigation"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#development-with-vs-code" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../../" title="ChuMicro guides" class="md-header__button md-logo" aria-label="ChuMicro guides" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-book-open" viewBox="0 0 24 24"><path d="M12 7v14M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer" aria-label="Navigation">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-menu" viewBox="0 0 24 24"><path d="M4 5h16M4 12h16M4 19h16"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            ChuMicro guides
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Development with VS Code
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="none" data-md-color-scheme="slate" data-md-color-primary="deep-orange" data-md-color-accent="amber"  aria-hidden="true"  type="radio" name="__palette" id="__palette_0">
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search" aria-label="Search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-search" viewBox="0 0 24 24"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog" aria-label="Search">
+  <button type="button" class="md-search__button">
+    Search
+  </button>
+</div>
+      
+    
+    <div class="md-header__source">
+      
+        <a href="https://github.com/ChuMicro/ChuMicro" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2026 Fonticons, Inc.--><path fill="currentColor" d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Source
+  </div>
+</a>
+      
+    </div>
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../../" title="ChuMicro guides" class="md-nav__button md-logo" aria-label="ChuMicro guides" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-book-open" viewBox="0 0 24 24"><path d="M12 7v14M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg>
+
+    </a>
+    ChuMicro guides
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/ChuMicro/ChuMicro" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2026 Fonticons, Inc.--><path fill="currentColor" d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Source
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../faq/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Questions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Troubleshooting
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Start here
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/board-not-found/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Board not found
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/wifi-wont-connect/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    WiFi will not connect
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/tls-https-failures/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TLS and HTTPS failures
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/out-of-memory/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Out of memory
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/deploy-refused-importerror/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deploy refused for an import
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/deploys-and-file-persistence/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deploys and file persistence
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/persisting-data/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Persisting data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/firmware-onto-a-new-board/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Firmware onto a new board
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/macos-circuitpy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CIRCUITPY on macOS
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/board-quirks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Board quirks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/circuitpython-ringio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CircuitPython ringio
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../wiring-wifi-credentials/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wiring WiFi credentials
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Contributing
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cheat-sheet/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cheat sheet
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../pull-requests/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pull requests
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../style-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Style guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../new-library/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Writing a new library
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../standalone-integration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Standalone integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../slimming-your-deploy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Slimming your deploy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../config-files/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Config files
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../device-testing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Device testing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../workbench/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Workbench tools
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../releases/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Releases and promotion
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../maintainers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Maintainers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../working-with-agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Working with agents
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agent-style-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent style guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    VS Code setup
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="././" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    VS Code setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+
+<nav class="md-nav md-nav--secondary" aria-label="On this page">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      On this page
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Setup
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Setup">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-fork-clone-and-install" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        1. Fork, clone, and install
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-open-in-vs-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        2. Open in VS Code
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-install-recommended-extensions" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        3. Install recommended extensions
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-select-the-python-interpreter" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        4. Select the Python interpreter
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-run-workspace-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        5. Run workspace setup
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#import-resolution" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Import resolution
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#running-tasks" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Running tasks
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#running-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Running tests
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Running tests">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#from-the-task-runner-with-coverage" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        From the task runner (with coverage)
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#from-the-test-explorer-quick-check-no-coverage" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        From the test explorer (quick check, no coverage)
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#from-the-terminal" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        From the terminal
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#validating-your-work" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Validating your work
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Validating your work">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#quick-validation-during-development" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Quick validation (during development)
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#full-validation-before-opening-a-pr" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Full validation (before opening a PR)
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-by-step-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Step-by-step validation
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#device-functional-tests-from-the-terminal-or-task-runner" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Device functional tests from the terminal or task runner
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#useful-shortcuts" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Useful shortcuts
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#browsing-coverage" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Browsing coverage
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quirks-and-tips" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Quirks and tips
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../development-pycharm/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PyCharm setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../development-other-editors/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Other editors
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  
+                    
+                    
+                    
+                      
+                    
+                    
+                      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+                      <div class="md-sidebar-button__wrapper">
+                        <label class="md-sidebar-button" for="__toc"></label>
+                      </div>
+                    
+                  
+                  <div class="md-sidebar__inner">
+                    
+
+
+<nav class="md-nav md-nav--secondary" aria-label="On this page">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      On this page
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Setup
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Setup">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-fork-clone-and-install" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        1. Fork, clone, and install
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-open-in-vs-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        2. Open in VS Code
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-install-recommended-extensions" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        3. Install recommended extensions
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-select-the-python-interpreter" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        4. Select the Python interpreter
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-run-workspace-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        5. Run workspace setup
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#import-resolution" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Import resolution
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#running-tasks" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Running tasks
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#running-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Running tests
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Running tests">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#from-the-task-runner-with-coverage" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        From the task runner (with coverage)
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#from-the-test-explorer-quick-check-no-coverage" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        From the test explorer (quick check, no coverage)
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#from-the-terminal" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        From the terminal
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#validating-your-work" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Validating your work
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Validating your work">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#quick-validation-during-development" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Quick validation (during development)
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#full-validation-before-opening-a-pr" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Full validation (before opening a PR)
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-by-step-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Step-by-step validation
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#device-functional-tests-from-the-terminal-or-task-runner" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Device functional tests from the terminal or task runner
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#useful-shortcuts" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Useful shortcuts
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#browsing-coverage" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Browsing coverage
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quirks-and-tips" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Quirks and tips
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+  
+  
+
+
+<h1 id="development-with-vs-code">Development with VS Code<a class="headerlink" href="#development-with-vs-code" title="Permanent link">&para;</a></h1>
+<p><img src="../../../support/docs/chumicro_tip.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;"></p>
+<p>This guide covers the full development workflow in Visual Studio Code.  The project ships committed task definitions and settings under <code>.vscode/</code>.  Once you select a Python interpreter, every common task is available from the Command Palette with no extra configuration.</p>
+<p><br clear="left"></p>
+<h2 id="setup">Setup<a class="headerlink" href="#setup" title="Permanent link">&para;</a></h2>
+<h3 id="1-fork-clone-and-install">1. Fork, clone, and install<a class="headerlink" href="#1-fork-clone-and-install" title="Permanent link">&para;</a></h3>
+<p>Follow steps 1–4 of the <a href="https://github.com/ChuMicro/ChuMicro/blob/main/CONTRIBUTING.md#setting-up">setup walkthrough</a> in the contributing guide to fork the repository, clone it, and install dependencies. Then come back here for VS Code–specific setup.</p>
+<h3 id="2-open-in-vs-code">2. Open in VS Code<a class="headerlink" href="#2-open-in-vs-code" title="Permanent link">&para;</a></h3>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>code<span class="w"> </span>ChuMicro
+</span></code></pre></div>
+<p>Or <strong>File → Open Folder</strong> → select the <code>ChuMicro</code> directory.</p>
+<h3 id="3-install-recommended-extensions">3. Install recommended extensions<a class="headerlink" href="#3-install-recommended-extensions" title="Permanent link">&para;</a></h3>
+<p>VS Code may prompt you to install recommended extensions. Accept, or install manually:</p>
+<ul>
+<li><strong>Python</strong> (<code>ms-python.python</code>): required</li>
+<li><strong>Pylance</strong> (<code>ms-python.vscode-pylance</code>): recommended for type checking</li>
+</ul>
+<h3 id="4-select-the-python-interpreter">4. Select the Python interpreter<a class="headerlink" href="#4-select-the-python-interpreter" title="Permanent link">&para;</a></h3>
+<p>Open the Command Palette (<code>⌘⇧P</code> / <code>Ctrl+Shift+P</code>) → <strong>Python: Select Interpreter</strong>.</p>
+<p>If you already have a <code>.venv</code>:
+- Select it from the list</p>
+<p>If not, create one first:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>python<span class="w"> </span>scripts/prepare_workspace.py
+</span></code></pre></div>
+<p>Then select the <code>.venv</code> interpreter from the Command Palette.</p>
+<h3 id="5-run-workspace-setup">5. Run workspace setup<a class="headerlink" href="#5-run-workspace-setup" title="Permanent link">&para;</a></h3>
+<p>Open the integrated terminal (<code>⌃\`` / `` Ctrl+</code> ``) and run:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>python<span class="w"> </span>scripts/run.py<span class="w"> </span>setup
+</span></code></pre></div>
+<p>This installs dependencies, runs editable installs for every library and support package, and regenerates IDE configs.  It also materializes three gitignored starter files at the repo root if they're missing: <code>devices.yml</code>, <code>workspace.yml</code>, and <code>secrets.toml</code>.  If you plan to run functional tests on real hardware, see <a href="../device-testing/">Device Testing</a> for board registration and <code>secrets.toml</code> setup.</p>
+<p><code>setup</code> produces a lot of output.  Look for this at the end:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>============================================================
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>  Workspace is ready
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>============================================================
+</span></code></pre></div>
+<h2 id="import-resolution">Import resolution<a class="headerlink" href="#import-resolution" title="Permanent link">&para;</a></h2>
+<p>The mono-workspace layout means each library has its own <code>src/</code> directory. VS Code resolves imports through two generated config files:</p>
+<ul>
+<li><strong><code>pyrightconfig.json</code></strong>: sets <code>extraPaths</code> for each library's <code>src/</code> directory</li>
+<li><strong><code>.vscode/settings.json</code></strong>: sets <code>python.analysis.extraPaths</code> for Pylance</li>
+</ul>
+<p>Both are generated by <code>sync-ide</code> (called automatically during setup). Imports like <code>from chumicro_timing import ticks_ms</code> should resolve without errors.</p>
+<p>If imports show as unresolved:</p>
+<ol>
+<li>Run <code>python scripts/run.py sync-ide</code> in the terminal</li>
+<li>Reload the window: Command Palette → <strong>Developer: Reload Window</strong></li>
+</ol>
+<blockquote>
+<p><strong>Note:</strong> VS Code uses <code>extraPaths</code> for import resolution.  You don't need to run <code>pip install -e</code> manually. The workspace setup script handles editable installs automatically.</p>
+</blockquote>
+<h2 id="running-tasks">Running tasks<a class="headerlink" href="#running-tasks" title="Permanent link">&para;</a></h2>
+<p>The project provides pre-configured tasks in <code>.vscode/tasks.json</code>. Open the Command Palette (<code>⌘⇧P</code> / <code>Ctrl+Shift+P</code>) → <strong>Tasks: Run Task</strong>:</p>
+<table>
+<thead>
+<tr>
+<th>Task</th>
+<th>What it runs</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Preflight</strong></td>
+<td>Full CI gate: lint, test, build, docs, examples, compat</td>
+</tr>
+<tr>
+<td><strong>Lint</strong></td>
+<td>Ruff across the workspace</td>
+</tr>
+<tr>
+<td><strong>Test</strong></td>
+<td>CPython tests for all libraries</td>
+</tr>
+<tr>
+<td><strong>Test Scripts</strong></td>
+<td>Infrastructure tests for <code>scripts/</code></td>
+</tr>
+<tr>
+<td><strong>Build</strong></td>
+<td>Build all package distributions</td>
+</tr>
+<tr>
+<td><strong>Verify Examples</strong></td>
+<td>AST-based import check of all examples</td>
+</tr>
+<tr>
+<td><strong>Docs</strong></td>
+<td>Build documentation for all libraries</td>
+</tr>
+<tr>
+<td><strong>Docs Preview</strong></td>
+<td>Deploy and serve versioned docs locally</td>
+</tr>
+<tr>
+<td><strong>Check API</strong></td>
+<td>Detect API breakages</td>
+</tr>
+<tr>
+<td><strong>Check Version</strong></td>
+<td>Verify VERSION bumps</td>
+</tr>
+<tr>
+<td><strong>Test MicroPython</strong></td>
+<td>Library unit tests on the MicroPython unix port</td>
+</tr>
+<tr>
+<td><strong>Test CircuitPython</strong></td>
+<td>Library unit tests on the CircuitPython unix port</td>
+</tr>
+<tr>
+<td><strong>Test All Runtimes</strong></td>
+<td>Unit tests on CPython + MicroPython + CircuitPython (parallelized)</td>
+</tr>
+<tr>
+<td><strong>Setup</strong></td>
+<td><code>python scripts/run.py setup</code>: installs dev deps, runs editable installs, regenerates IDE configs, generates starter device configs</td>
+</tr>
+<tr>
+<td><strong>Prepare Workspace</strong></td>
+<td>Lower-level workspace prep: invokes <code>scripts/prepare_workspace.py</code> directly (advanced users; <code>Setup</code> is usually what you want)</td>
+</tr>
+<tr>
+<td><strong>Test Functional</strong></td>
+<td>Run all hardware-gated functional suites: <code>test-libraries-functional</code> then <code>test-workbench-functional</code> against <code>devices.yml</code> defaults</td>
+</tr>
+<tr>
+<td><strong>Test Libraries Functional</strong></td>
+<td>Run defaults-backed real-board functional tests for library code</td>
+</tr>
+<tr>
+<td><strong>Test Workbench Functional</strong></td>
+<td>Run hardware-gated functional tests for every <code>workbench/*/functional_tests/</code> suite</td>
+</tr>
+</tbody>
+</table>
+<p>Output appears in the Terminal panel at the bottom of the window.</p>
+<h2 id="running-tests">Running tests<a class="headerlink" href="#running-tests" title="Permanent link">&para;</a></h2>
+<h3 id="from-the-task-runner-with-coverage">From the task runner (with coverage)<a class="headerlink" href="#from-the-task-runner-with-coverage" title="Permanent link">&para;</a></h3>
+<p>Command Palette → <strong>Tasks: Run Task</strong> → <strong>Test</strong>. This runs all libraries with the coverage threshold and leaves a <code>.coverage</code> data file at the project root. To browse coverage visually, see <a href="#browsing-coverage">Browsing coverage</a> below.</p>
+<h3 id="from-the-test-explorer-quick-check-no-coverage">From the test explorer (quick check, no coverage)<a class="headerlink" href="#from-the-test-explorer-quick-check-no-coverage" title="Permanent link">&para;</a></h3>
+<p>VS Code's Testing panel (beaker icon in the sidebar, or <code>⌘⇧T</code> / <code>Ctrl+Shift+T</code>) discovers tests via the <code>python.testing.pytestArgs</code> setting in <code>.vscode/settings.json</code>.</p>
+<p>Click the ▶ button next to any test file or function to run it. This is fast for iterating but does not produce coverage data or enforce the coverage threshold.</p>
+<p>For real-board <code>functional_tests/</code>, the same Testing panel can target the explicit <code>functional_tests/</code> file, directory, or function.  The repository's pytest device plugin intercepts those targets and routes them to hardware.  The test tree shows extra <code>Setup: &lt;runtime&gt;</code> and <code>Run overhead: &lt;runtime&gt;</code> nodes alongside the individual tests.</p>
+<p>If no device is configured yet, pytest skips the run with a message telling you to generate or fill in <code>devices.yml</code>.  See <a href="../device-testing/">Device Testing</a> for setup, the schema, and CLI options.</p>
+<h3 id="from-the-terminal">From the terminal<a class="headerlink" href="#from-the-terminal" title="Permanent link">&para;</a></h3>
+<p>The integrated terminal (<code>⌃`</code> / <code>Ctrl+`</code>) works the same as any terminal:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>pytest<span class="w"> </span>libraries/timing/tests/
+</span></code></pre></div>
+<h2 id="validating-your-work">Validating your work<a class="headerlink" href="#validating-your-work" title="Permanent link">&para;</a></h2>
+<h3 id="quick-validation-during-development">Quick validation (during development)<a class="headerlink" href="#quick-validation-during-development" title="Permanent link">&para;</a></h3>
+<ol>
+<li>Click ▶ next to your test in the Testing panel</li>
+<li>Green ✓ = passing, red ✗ = failing</li>
+<li>Click a failed test to see the assertion error</li>
+</ol>
+<h3 id="full-validation-before-opening-a-pr">Full validation (before opening a PR)<a class="headerlink" href="#full-validation-before-opening-a-pr" title="Permanent link">&para;</a></h3>
+<p>Command Palette → <strong>Tasks: Run Task</strong> → <strong>Preflight</strong>.</p>
+<p><strong>When it passes,</strong> the terminal shows:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>Preflight passed.  Required CI checks should pass.
+</span></code></pre></div>
+<p><strong>When it fails,</strong> the terminal shows the failing step. <a href="https://github.com/ChuMicro/ChuMicro/blob/main/CONTRIBUTING.md#the-development-loop">The development loop</a> in the contributing guide covers how to read the common failures (coverage gaps, <code>ruff</code> style violations, <code>griffe</code> docstring warnings, a missed VERSION bump, cross-runtime breaks) and how to reproduce each. Terminal links are clickable: <code>Ctrl+click</code> / <code>⌘+click</code> a <code>file:line</code> reference to jump straight to it.</p>
+<h3 id="step-by-step-validation">Step-by-step validation<a class="headerlink" href="#step-by-step-validation" title="Permanent link">&para;</a></h3>
+<p>If preflight fails, run individual tasks to isolate the problem:</p>
+<ol>
+<li>Command Palette → <strong>Tasks: Run Task</strong> → <strong>Lint</strong></li>
+<li>Command Palette → <strong>Tasks: Run Task</strong> → <strong>Test</strong></li>
+<li>Command Palette → <strong>Tasks: Run Task</strong> → <strong>Verify Examples</strong></li>
+<li>Command Palette → <strong>Tasks: Run Task</strong> → <strong>Docs</strong></li>
+</ol>
+<p>Or use the terminal for more control:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Test one library with the coverage gate</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>python<span class="w"> </span>scripts/run.py<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--libraries<span class="w"> </span>timing
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="c1"># Day-to-day iteration (no coverage gate)</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>pytest<span class="w"> </span>libraries/timing/tests/<span class="w"> </span>-k<span class="w"> </span>heartbeat<span class="w"> </span>-x<span class="w"> </span>-v
+</span></code></pre></div>
+<h3 id="device-functional-tests-from-the-terminal-or-task-runner">Device functional tests from the terminal or task runner<a class="headerlink" href="#device-functional-tests-from-the-terminal-or-task-runner" title="Permanent link">&para;</a></h3>
+<p>The committed VS Code workspace also includes a <strong>Test Libraries Functional</strong> task, which runs:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>python<span class="w"> </span>scripts/run.py<span class="w"> </span>test-libraries-functional
+</span></code></pre></div>
+<p>That command uses the <code>defaults:</code> section in <code>devices.yml</code> to choose the target runtime(s), board(s), and default deploy mode.</p>
+<p>Common overrides:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>python<span class="w"> </span>scripts/run.py<span class="w"> </span>test-libraries-functional<span class="w"> </span>--library<span class="w"> </span>timing
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>python<span class="w"> </span>scripts/run.py<span class="w"> </span>test-libraries-functional<span class="w"> </span>--runtime<span class="w"> </span>both
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>python<span class="w"> </span>scripts/run.py<span class="w"> </span>test-libraries-functional<span class="w"> </span>--circuitpython-device<span class="w"> </span>desk-cp-board
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>python<span class="w"> </span>scripts/run.py<span class="w"> </span>test-libraries-functional<span class="w"> </span>--library<span class="w"> </span>timing<span class="w"> </span>--deploy-mode<span class="w"> </span>flash
+</span></code></pre></div>
+<h2 id="useful-shortcuts">Useful shortcuts<a class="headerlink" href="#useful-shortcuts" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Action</th>
+<th>macOS</th>
+<th>Windows/Linux</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Open Command Palette</td>
+<td><code>⌘⇧P</code></td>
+<td><code>Ctrl+Shift+P</code></td>
+</tr>
+<tr>
+<td>Open terminal</td>
+<td><code>⌃`</code></td>
+<td><code>Ctrl+`</code></td>
+</tr>
+<tr>
+<td>Run task</td>
+<td><code>⌘⇧P</code> → "Tasks: Run Task"</td>
+<td><code>Ctrl+Shift+P</code> → "Tasks: Run Task"</td>
+</tr>
+<tr>
+<td>Go to file</td>
+<td><code>⌘P</code></td>
+<td><code>Ctrl+P</code></td>
+</tr>
+<tr>
+<td>Go to symbol</td>
+<td><code>⌘⇧O</code></td>
+<td><code>Ctrl+Shift+O</code></td>
+</tr>
+<tr>
+<td>Find in files</td>
+<td><code>⌘⇧F</code></td>
+<td><code>Ctrl+Shift+F</code></td>
+</tr>
+<tr>
+<td>Toggle test explorer</td>
+<td><code>⌘⇧T</code></td>
+<td><code>Ctrl+Shift+T</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="browsing-coverage">Browsing coverage<a class="headerlink" href="#browsing-coverage" title="Permanent link">&para;</a></h2>
+<p>Running the <strong>Test</strong> task (or <code>python scripts/run.py test</code> from the terminal) produces a <code>.coverage</code> data file at the project root. To see it in the editor gutter, install the <a href="https://marketplace.visualstudio.com/items?itemName=ryanluker.vscode-coverage-gutters">Coverage Gutters</a> extension, generate an XML report with <code>python -m coverage xml</code>, and toggle the display with the <strong>Coverage Gutters: Display Coverage</strong> command. Coverage Gutters reads <code>coverage.xml</code> and highlights covered and uncovered lines directly in the editor. (<code>coverage.xml</code> is gitignored.)</p>
+<p>For the HTML report and the rest of the coverage workflow, see <a href="../style-guide/#browsing-coverage">Browsing coverage</a> in the Style Guide.</p>
+<h2 id="quirks-and-tips">Quirks and tips<a class="headerlink" href="#quirks-and-tips" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Pylance may show false-positive errors</strong> for <code>micropython</code> imports (e.g., <code>from micropython import const</code>). These modules only exist on-device. The code handles this with try/except at the module level.</li>
+<li><strong>Test discovery in the sidebar may be slow</strong> on first open. Wait for Pylance to finish indexing (check the status bar).</li>
+<li><strong>If a new library is added</strong>, run <code>python scripts/run.py sync-ide</code> to regenerate <code>pyrightconfig.json</code> and <code>.vscode/settings.json</code>. Reload the window afterward.</li>
+<li><strong><code>.vscode/tasks.json</code> and <code>.vscode/settings.json</code> are committed</strong> and shared. Workspace-specific settings (<code>.vscode/launch.json</code>, etc.) are gitignored if not present.</li>
+<li><strong>Terminal links are clickable.</strong> When a lint error or test failure shows <code>file.py:42</code>, <code>Ctrl+click</code> / <code>⌘+click</code> to jump directly to that line.</li>
+<li><strong>Device-testing support is wired through ordinary pytest.</strong> The committed VS Code settings and tasks are generated from <code>sync-ide</code>, and explicit <code>functional_tests/</code> targets go through the same plugin path PyCharm uses. A dedicated live VS Code validation pass remains on the project plan, so VS Code-specific bugs are worth reporting.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://zensical.org/" target="_blank" rel="noopener">
+      Zensical
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate":null,"base":"../..","features":[],"search":"../../assets/javascripts/workers/search.e2d2d235.min.js","tags":null,"translations":{"clipboard.copied":"Copied to clipboard","clipboard.copy":"Copy to clipboard","search.result.more.one":"1 more on this page","search.result.more.other":"# more on this page","search.result.none":"No matching documents","search.result.one":"1 matching document","search.result.other":"# matching documents","search.result.placeholder":"Type to start searching","search.result.term.missing":"Missing","select.version":"Select version"},"version":null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.dbc0afdc.min.js"></script>
+      
+    
+  </body>
+</html>

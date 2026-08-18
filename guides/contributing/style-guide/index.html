@@ -1,0 +1,2193 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Answers and fixes for CircuitPython and MicroPython projects: why a board freezes on the network, why WiFi will not connect, what to do when a deploy is refused, and how to keep data across a reboot.">
+      
+      
+      
+        <link rel="canonical" href="https://chumicro.github.io/ChuMicro/guides/contributing/style-guide/">
+      
+      
+        <link rel="prev" href="../pull-requests/">
+      
+      
+        <link rel="next" href="../new-library/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="zensical-0.0.39">
+    
+    
+      
+        <title>Style Guide - ChuMicro guides</title>
+      
+    
+    
+      
+        
+      
+      <link rel="stylesheet" href="../../assets/stylesheets/modern/main.1e981d71.min.css">
+      
+        
+          
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/modern/palette.dfe2e883.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter:300,300i,400,400i,500,500i,700,700i%7CJetBrains+Mono:400,400i,700,700i&amp;display=fallback">
+        <style>:root{--md-text-font:"Inter";--md-code-font:"JetBrains Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,t)=>(e<<5)-e+t.charCodeAt(0)),0),__md_get=(e,t=localStorage,a=__md_scope)=>JSON.parse(t.getItem(a.pathname+"."+e)),__md_set=(e,t,a=localStorage,_=__md_scope)=>{try{a.setItem(_.pathname+"."+e,JSON.stringify(t))}catch(e){}},document.documentElement.setAttribute("data-platform",navigator.platform)</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="deep-orange" data-md-color-accent="amber">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer" aria-label="Navigation"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#style-guide" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../../" title="ChuMicro guides" class="md-header__button md-logo" aria-label="ChuMicro guides" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-book-open" viewBox="0 0 24 24"><path d="M12 7v14M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer" aria-label="Navigation">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-menu" viewBox="0 0 24 24"><path d="M4 5h16M4 12h16M4 19h16"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            ChuMicro guides
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Style Guide
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="none" data-md-color-scheme="slate" data-md-color-primary="deep-orange" data-md-color-accent="amber"  aria-hidden="true"  type="radio" name="__palette" id="__palette_0">
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search" aria-label="Search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-search" viewBox="0 0 24 24"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog" aria-label="Search">
+  <button type="button" class="md-search__button">
+    Search
+  </button>
+</div>
+      
+    
+    <div class="md-header__source">
+      
+        <a href="https://github.com/ChuMicro/ChuMicro" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2026 Fonticons, Inc.--><path fill="currentColor" d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Source
+  </div>
+</a>
+      
+    </div>
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../../" title="ChuMicro guides" class="md-nav__button md-logo" aria-label="ChuMicro guides" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-book-open" viewBox="0 0 24 24"><path d="M12 7v14M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg>
+
+    </a>
+    ChuMicro guides
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/ChuMicro/ChuMicro" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2026 Fonticons, Inc.--><path fill="currentColor" d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Source
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../faq/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Questions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Troubleshooting
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Start here
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/board-not-found/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Board not found
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/wifi-wont-connect/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    WiFi will not connect
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/tls-https-failures/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TLS and HTTPS failures
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/out-of-memory/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Out of memory
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/deploy-refused-importerror/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deploy refused for an import
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/deploys-and-file-persistence/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deploys and file persistence
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/persisting-data/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Persisting data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/firmware-onto-a-new-board/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Firmware onto a new board
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/macos-circuitpy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CIRCUITPY on macOS
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/board-quirks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Board quirks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/circuitpython-ringio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CircuitPython ringio
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../wiring-wifi-credentials/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wiring WiFi credentials
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Contributing
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cheat-sheet/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cheat sheet
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../pull-requests/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pull requests
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Style guide
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="././" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Style guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+
+<nav class="md-nav md-nav--secondary" aria-label="On this page">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      On this page
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#baseline" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Baseline
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#naming" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Naming
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#type-annotations" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Type annotations
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#imports" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Imports
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#docstrings" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Docstrings
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#documentation-tone" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Documentation tone
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Documentation tone">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#voice" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Voice
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#string-formatting" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        String formatting
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#error-handling" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Error handling
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#subprocess-binary-resolution-host-tools" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Subprocess binary resolution (host tools)
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#memory-patterns-library-code-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Memory patterns (library code only)
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cooperative-concurrency" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Cooperative concurrency
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#coverage-exclusions" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Coverage exclusions
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Coverage exclusions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#pragma-no-cover-exclude-a-line-or-block" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <code># pragma: no cover</code> (exclude a line or block)
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#common-patterns-that-already-work" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Common patterns that already work
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#when-to-use-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        When to use it
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#when-not-to-use-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        When NOT to use it
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#browsing-coverage" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Browsing coverage
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lint" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Lint
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../new-library/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Writing a new library
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../standalone-integration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Standalone integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../slimming-your-deploy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Slimming your deploy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../config-files/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Config files
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../device-testing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Device testing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../workbench/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Workbench tools
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../releases/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Releases and promotion
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../maintainers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Maintainers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../working-with-agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Working with agents
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agent-style-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent style guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../development-vscode/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    VS Code setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../development-pycharm/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PyCharm setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../development-other-editors/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Other editors
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  
+                    
+                    
+                    
+                      
+                    
+                    
+                      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+                      <div class="md-sidebar-button__wrapper">
+                        <label class="md-sidebar-button" for="__toc"></label>
+                      </div>
+                    
+                  
+                  <div class="md-sidebar__inner">
+                    
+
+
+<nav class="md-nav md-nav--secondary" aria-label="On this page">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      On this page
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#baseline" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Baseline
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#naming" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Naming
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#type-annotations" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Type annotations
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#imports" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Imports
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#docstrings" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Docstrings
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#documentation-tone" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Documentation tone
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Documentation tone">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#voice" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Voice
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#string-formatting" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        String formatting
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#error-handling" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Error handling
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#subprocess-binary-resolution-host-tools" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Subprocess binary resolution (host tools)
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#memory-patterns-library-code-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Memory patterns (library code only)
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cooperative-concurrency" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Cooperative concurrency
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#coverage-exclusions" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Coverage exclusions
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Coverage exclusions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#pragma-no-cover-exclude-a-line-or-block" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <code># pragma: no cover</code> (exclude a line or block)
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#common-patterns-that-already-work" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Common patterns that already work
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#when-to-use-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        When to use it
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#when-not-to-use-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        When NOT to use it
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#browsing-coverage" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Browsing coverage
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lint" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Lint
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+  
+  
+
+
+<h1 id="style-guide">Style Guide<a class="headerlink" href="#style-guide" title="Permanent link">&para;</a></h1>
+<p><img src="../../../support/docs/chumicro_tip.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;"></p>
+<p>This is the definitive reference for code style in the ChuMicro workspace.  All code (library, infrastructure, and tests) follows these conventions unless explicitly noted.</p>
+<p><br clear="left"></p>
+<p>The linter (<code>python scripts/run.py lint</code>) enforces most of these automatically. If lint passes, you're almost certainly fine. This guide explains what the rules are, why they exist, and what to do when the linter flags something.</p>
+<h2 id="baseline">Baseline<a class="headerlink" href="#baseline" title="Permanent link">&para;</a></h2>
+<p><a href="https://peps.python.org/pep-0008/">PEP 8</a> with a <strong>100-character line limit</strong> (configured in <code>pyproject.toml</code>), enforced by <a href="https://docs.astral.sh/ruff/">Ruff</a>. Nothing exotic.</p>
+<h2 id="naming">Naming<a class="headerlink" href="#naming" title="Permanent link">&para;</a></h2>
+<p>We use descriptive names so everyone can read the code without extra context. The linter catches common abbreviations and suggests the descriptive name for you.</p>
+<table>
+<thead>
+<tr>
+<th>Rule</th>
+<th>Example</th>
+<th>Enforced by</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>No single-letter variables (except <code>_</code> and for-loop targets)</td>
+<td><code>index</code>, not <code>i</code> in assignments; <code>for i in range(10)</code> is fine</td>
+<td><code>CHU001</code> linter</td>
+</tr>
+<tr>
+<td>Abbreviations to expand</td>
+<td><code>env</code> → <code>environment</code>; <code>buf</code> → <code>buffer</code>; <code>src</code> → <code>source</code>; <code>cmd</code> → <code>command</code>; <code>msg</code> → <code>message</code>; <code>err</code> → <code>error</code>; <code>ref</code> → <code>reference</code>; <code>addr</code> → <code>address</code>; <code>exc</code> → <code>exception</code>; <code>exec</code> → <code>execute</code></td>
+<td><code>CHU001</code> linter</td>
+</tr>
+<tr>
+<td>Same expansions apply as suffixes</td>
+<td><code>base_ref</code> → <code>base_reference</code>; <code>build_env</code> → <code>build_environment</code></td>
+<td><code>CHU001</code> linter</td>
+</tr>
+<tr>
+<td>Short-but-complete words are fine</td>
+<td><code>dir</code>, <code>key</code>, <code>tag</code>, <code>raw</code>, <code>pin</code>, <code>led</code>, <code>ok</code>, <code>end</code>, <code>args</code>, <code>config</code></td>
+<td>none</td>
+</tr>
+<tr>
+<td>For-loop targets are exempt</td>
+<td><code>for i in range(10)</code>, <code>for k, v in items()</code></td>
+<td>none</td>
+</tr>
+<tr>
+<td>Suppress with <code># noqa: CHU001</code></td>
+<td>At upstream-API boundaries: <code>i2c_addr = kwargs["addr"]  # noqa: CHU001</code></td>
+<td>none</td>
+</tr>
+</tbody>
+</table>
+<p>Yes, this bans some domain idiom: datasheets label the pin <code>ADDR</code>, git has <code>refs</code>, and this table renames both. <a href="https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0022-naming-conventions.md">Decision 0022</a> weighed exactly that and chose one vocabulary anyway; the <code>noqa</code> row above is the boundary valve where an upstream API forces the abbreviation.</p>
+<p><strong>Why, honestly:</strong> two reasons. First, full words read without context: newcomers, non-native English speakers, and anyone outside Python's abbreviation culture get <code>exception</code> for free where <code>exc</code> costs them a lookup. Second, and just as load-bearing: a large share of the patches in this repo are agent-written, agents obey linters and ignore prose conventions, so anything the project cares about becomes a lint rule, and humans inherit the same gate so there's exactly one rule set. If you've written Python for years, this rule will fight your muscle memory, and we know it. Each hit is a mechanical fix (the message names the exact replacement), so expect several in your first PR and near zero after that.</p>
+<h2 id="type-annotations">Type annotations<a class="headerlink" href="#type-annotations" title="Permanent link">&para;</a></h2>
+<p>Python type annotations tell readers (and tools) what types a function accepts and returns. We use them on all function and method signatures. They cost zero runtime overhead on embedded boards: both CircuitPython and MicroPython parse annotations but strip them at compile time.</p>
+<p>Do not import <code>typing</code> in library code.  The module doesn't exist on CircuitPython or MicroPython. Use the modern built-in syntax instead:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># ✅ Works on all runtimes (PEP 604 / PEP 585 syntax)</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">read</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">timeout</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bytes</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span> <span class="o">...</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="k">def</span><span class="w"> </span><span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">items</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]:</span> <span class="o">...</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="c1"># ❌ Requires typing module (fails on embedded runtimes)</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">List</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="k">def</span><span class="w"> </span><span class="nf">read</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">timeout</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">bytes</span><span class="p">]:</span> <span class="o">...</span>
+</span></code></pre></div>
+<p>Infrastructure code (<code>scripts/</code>) may use <code>typing</code> imports since it runs only on CPython. Most of <code>support/</code> is also CPython-only, <strong>except <code>support/test_harness/</code></strong> which runs on all three runtimes: treat it like library code.</p>
+<p>(<a href="https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0021-docstring-type-policy.md">Decision 0021</a>)</p>
+<h2 id="imports">Imports<a class="headerlink" href="#imports" title="Permanent link">&para;</a></h2>
+<p>Code that runs on a device (<code>libraries/*/src/</code>, <code>support/test_harness/</code>) must use <strong>absolute imports only</strong>. Relative imports break CircuitPython RAM-mode deploys.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># ✅ Works on all runtimes</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_timing.ticks</span><span class="w"> </span><span class="kn">import</span> <span class="n">ticks_ms</span><span class="p">,</span> <span class="n">ticks_diff</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_timing.deadline</span><span class="w"> </span><span class="kn">import</span> <span class="n">Rate</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="c1"># ❌ Breaks CircuitPython RAM-mode</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="kn">from</span><span class="w"> </span><span class="nn">.ticks</span><span class="w"> </span><span class="kn">import</span> <span class="n">ticks_ms</span><span class="p">,</span> <span class="n">ticks_diff</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="kn">from</span><span class="w"> </span><span class="nn">.deadline</span><span class="w"> </span><span class="kn">import</span> <span class="n">Rate</span>
+</span></code></pre></div>
+<p><strong>Why:</strong> CircuitPython RAM mode assembles library modules as class-as-module stubs and <code>exec()</code>'s them inside the raw REPL. The namespace passed to <code>exec()</code> has no <code>__package__</code> attribute, so Python can't resolve a leading <code>.</code>: <code>from .foo import bar</code> raises <code>ImportError</code>. Flash mode works fine because files land on the device filesystem and get a real <code>__package__</code> when imported, but any module whose RAM-mode path is exercised (which includes every published library) has to work in both modes.</p>
+<p>Host-only code can use either style:</p>
+<ul>
+<li><strong><code>workbench/*/src/</code></strong>: relative imports are fine. These packages run on CPython only and are never <code>exec()</code>'d through the raw REPL. <code>chumicro-deploy</code> uses relative intra-package imports throughout.</li>
+<li><strong><code>scripts/</code></strong>: either style; not device-bound.</li>
+<li><strong>Tests</strong>: either style; <a href="https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0009-per-library-test-runs.md">Decision 0009</a> lifted the earlier absolute-only restriction.</li>
+</ul>
+<p>Cross-package imports between publishable libraries stay absolute regardless of where they live: <code>from chumicro_timing import ticks</code> inside <code>chumicro_runner</code> is correct and expected.</p>
+<p><strong>Enforcement.</strong> The rule is wired to ruff TID252 (<code>flake8-tidy-imports.ban-relative-imports</code>) in <code>pyproject.toml</code>. The <code>[tool.ruff.lint.per-file-ignores]</code> table relaxes it for <code>workbench/**</code>, <code>scripts/**</code>, <code>**/tests/**</code>, <code>**/functional_tests/**</code>, and <code>**/examples/**</code>.  Those trees run on CPython or stand alone outside any package, so relative imports either work fine or are syntactically impossible. A regression scenario in <code>scripts/audit_gates.py</code> confirms the gate fires for <code>libraries/*/src/</code> + <code>support/test_harness/src/</code> and stays silent in the relaxed trees.</p>
+<h2 id="docstrings">Docstrings<a class="headerlink" href="#docstrings" title="Permanent link">&para;</a></h2>
+<p>Every public function, method, and class needs a docstring. We use <a href="https://google.github.io/styleguide/pyguide.html#38-comments-and-docstrings">Google style</a>: types go on annotations, descriptions go in docstrings. This avoids writing the type twice.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">ticks_diff</span><span class="p">(</span><span class="n">end</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">start</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">    </span><span class="sd">"""Signed difference between two tick values.</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="sd">    Args:</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="sd">        end: Later tick value.</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="sd">        start: Earlier tick value.</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="sd">    Returns:</span>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="sd">        Signed difference in milliseconds.</span>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="sd">    """</span>
+</span></code></pre></div>
+<p>The sections you'll use most:</p>
+<ul>
+<li><strong><code>Args:</code></strong> is <code>name: description</code> (no type in parens, it's already on the signature)</li>
+<li><strong><code>Returns:</code></strong> is a description only (no <code>type:</code> prefix)</li>
+<li><strong><code>Raises:</code></strong> is <code>ExceptionType: description</code></li>
+</ul>
+<p>The published API reference is generated from these docstrings, which is why the gate exists: the docs build fails on <a href="https://mkdocstrings.github.io/griffe/">griffe</a> warnings about missing or malformed sections, so the hosted reference can't silently rot.</p>
+<p>(<a href="https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0021-docstring-type-policy.md">Decision 0021</a>)</p>
+<h2 id="documentation-tone">Documentation tone<a class="headerlink" href="#documentation-tone" title="Permanent link">&para;</a></h2>
+<p>Style for prose docs: the root README, every library's README and <code>docs/guide.md</code>, every workbench README, and contributing pages. (Docstrings are covered above.)</p>
+<p><strong>The audience is the Adafruit Learn crowd.</strong>  Beginners and hobbyists, sometimes kids, who have flashed a board, followed a guide or two, and want code that keeps working.  Write so that reader can follow every sentence; serve veterans with receipts (measured numbers, decision links) inside the same sentences, never with jargon.  The best claims are moments the reader can reproduce at a desk: <em>"pull your router's plug and watch the LED keep blinking."</em></p>
+<ul>
+<li><strong>Anchor on a concrete user-visible promise, not an abstract design principle.</strong> <em>"Keep a status LED blinking through a slow network call"</em> beats <em>"transparent state matters more than syntactic concurrency."</em> First-time readers don't share the vocabulary; they share the LED. Design philosophy belongs in ADRs, not in the project's top-level README.</li>
+<li><strong>Address the reader directly when it helps.</strong> <em>"You decide how long to wait"</em> beats a passive construction. Don't invent the reader's situation, though: a conditional (<em>"if you've ever watched a board hang"</em>) or a capability (<em>"keep a status LED blinking through a slow network call"</em>) is honest; <em>"you're building a weather station"</em> narrates at someone who isn't there.</li>
+<li><strong>Don't bury the substantive matrix behind a folder-README link.</strong> The library matrix and workbench matrix belong on the root README, not as a one-line <code>[Libraries](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/)</code> link. Most visitors only see one URL, the root. Folder-READMEs reinforce with deeper context (dependency graph, problem-driven selection); they're not the <em>only</em> home for the matrix.</li>
+<li><strong>Code, prose, and any visual must tell the same story.</strong> If the hero promises an LED, the code shows <code>led.value = not led.value</code>, not <code>print()</code>. If the hero promises composition, the code shows multiple services on one runner. If a visual is added, it depicts what the prose says. When in doubt, skip the visual.  Prose + code can carry the load alone.</li>
+<li><strong>Don't redirect to sibling packages from a published package's docs.</strong> A publishable package's public surface (README, guide, module docstrings) should describe what THIS package does, not what it doesn't do. Phrasings like <em>"This package doesn't do X, use <code>other-package</code> for X instead"</em> / <em>"For X, lives one level up in Y"</em> leak mono-repo awareness into a PyPI-facing artefact, and relative paths like <code>../workspace/</code> only resolve in the mono-repo docs site.  They break PyPI README rendering. Cross-tool positioning that describes in-scope relationships is fine; redirecting readers to a sibling to fill a gap isn't.</li>
+<li><strong>The root README speaks at repo altitude.</strong>  A section earns its place there by showing libraries, tooling, or workflow working together.  Single-library behaviors and protocol details (queue policies, replay semantics, last-will mechanics) belong in that library's README and guide.</li>
+<li><strong>Curate code listings for the page's reader.</strong>  A front-page listing carries only lines its reader can follow; expert options (last wills, retained state echoes, tuning knobs) stay in guides and demos even when a real deployment would use them.  If a listing needs three paragraphs of explanation, shrink the listing.</li>
+<li><strong>Feature bullets are consumer-first and concrete.</strong> Lead with what the user can DO (<em>"Bring your own socket, your own clock"</em>), not the implementation pattern (<em>"Constructor-injected duck-typed I/O dependencies"</em>). Name concrete things (actual library class names, stdlib alternatives, production scenarios), not abstractions like <em>"valid producer"</em> / <em>"any object that satisfies the contract"</em>. Acknowledge defaults first, then the swap-out path. No type-system jargon (<code>duck-typed</code>, <code>Protocol</code>, <code>structural typing</code>), no method-name lists in the pitch, no test-fake framing (production swap-ins belong; test fakes don't).</li>
+</ul>
+<h3 id="voice">Voice<a class="headerlink" href="#voice" title="Permanent link">&para;</a></h3>
+<p>How the prose in this project's docs should sound:</p>
+<ul>
+<li><strong>No em-dashes.</strong> Anywhere, including code comments, table cells, and quoted output that doesn't actually contain one. Use a period, a comma, a colon, or parentheses.</li>
+<li><strong>Plain words over clever ones.</strong> If a phrase needs decoding (<em>"the runtime split"</em>, <em>"transport wiring"</em>), spell out what it means instead. Clever wording that costs the reader a second read is a defect, not style.</li>
+<li><strong>Say what the project believes, straight.</strong> When the project holds a position (blocking code is a bad foundation for a device), state it. Don't pad it with <em>"that's fine for many projects"</em> diplomacy the project doesn't actually believe.</li>
+<li><strong>Concrete beats rhetorical.</strong> Measured numbers (80 lines vs 7), named hardware (Pico W, ESP32), real failure moments (a board hanging because the router was unplugged). Every claim traces to code, a measurement, or a decision record, or it doesn't ship.</li>
+<li><strong>Don't over-compress.</strong> Staccato fragment chains (<em>"Write it once. Test it. Ship it."</em>), <em>"the whole X"</em>, and symmetrical triads read as performance, not information. Normal sentences, varied length, one idea flowing into the next.</li>
+<li><strong>Behavior over mechanics.</strong> What the reader can do and what happens when they do it. How it's built inside belongs in ADRs and library guides.</li>
+<li><strong>At most one metaphor per page, and never the same one twice.</strong></li>
+<li><strong>Gloss jargon at first use in beginner-facing docs</strong> (TLS, MQTT, mpremote, venv), then use it freely. Terms sitting in reference tables the reader reaches later don't need glossing.</li>
+<li><strong>Positive claims carry the page.</strong>  Say what happens and who does it for you (<em>"the wifi service and the mqtt client handle the reconnecting"</em>).  Contrast frames (<em>"x, not y"</em>, <em>"you never have to..."</em>, <em>"there is no..."</em>) are seasoning at most once per page; a paragraph built from them is a rewrite signal.</li>
+<li><strong>Re-derive, don't re-word.</strong>  When review says a passage misses its audience, rewrite the section from what that reader needs, usually code and prose together.  Swapping synonyms and sentence order inside the wrong frame keeps the frame.</li>
+</ul>
+<h2 id="string-formatting">String formatting<a class="headerlink" href="#string-formatting" title="Permanent link">&para;</a></h2>
+<p>Use f-strings for building strings. Deferred-formatting APIs that take a template plus arguments (a logging seam, for example) are the exception, not a violation.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># ✅</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Found </span><span class="si">{</span><span class="n">count</span><span class="si">}</span><span class="s2"> items in </span><span class="si">{</span><span class="n">directory</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="c1"># ❌</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="nb">print</span><span class="p">(</span><span class="s2">"Found </span><span class="si">%d</span><span class="s2"> items in </span><span class="si">%s</span><span class="s2">"</span> <span class="o">%</span> <span class="p">(</span><span class="n">count</span><span class="p">,</span> <span class="n">directory</span><span class="p">))</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="nb">print</span><span class="p">(</span><span class="s2">"Found </span><span class="si">{}</span><span class="s2"> items in </span><span class="si">{}</span><span class="s2">"</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">count</span><span class="p">,</span> <span class="n">directory</span><span class="p">))</span>
+</span></code></pre></div>
+<h2 id="error-handling">Error handling<a class="headerlink" href="#error-handling" title="Permanent link">&para;</a></h2>
+<p>Do not silently swallow exceptions in host-side infrastructure (<code>scripts/</code>, <code>workbench/*/src/</code>, <code>support/</code> outside <code>test_harness</code>).  Every <code>except:</code> branch that chooses not to re-raise must log a visible message (a WARNING at minimum) so problems are noticed instead of hidden.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># ✅ visible</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="k">try</span><span class="p">:</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>    <span class="n">subprocess</span><span class="o">.</span><span class="n">run</span><span class="p">([</span><span class="s2">"xattr"</span><span class="p">,</span> <span class="s2">"-cr"</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">path</span><span class="p">)],</span> <span class="n">check</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="k">except</span> <span class="ne">FileNotFoundError</span><span class="p">:</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">"WARNING: xattr not found: skipping extended attribute removal"</span><span class="p">)</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="k">except</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">CalledProcessError</span> <span class="k">as</span> <span class="n">exception</span><span class="p">:</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"WARNING: xattr failed: </span><span class="si">{</span><span class="n">exception</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="c1"># ❌ silent</span>
+</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="k">try</span><span class="p">:</span>
+</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>    <span class="n">subprocess</span><span class="o">.</span><span class="n">run</span><span class="p">([</span><span class="s2">"xattr"</span><span class="p">,</span> <span class="s2">"-cr"</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">path</span><span class="p">)],</span> <span class="n">check</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a>    <span class="k">pass</span>
+</span></code></pre></div>
+<p>Library code (<code>libraries/*/src/</code>, <code>support/test_harness/</code>) is held to the same bar, with an added constraint: <code>print()</code> costs RAM and I/O time on devices, so prefer raising a specific exception type the caller can react to, or (where the library exposes a logging seam) emit through that.  Still never <code>except: pass</code>.</p>
+<p>Catching an exception and re-raising a different one is fine: the chained <code>__cause__</code> preserves the origin.  Catching to translate errno strings into classifier-friendly message shapes (e.g. the transport's <code>CIRCUITPY drive not found or not writable</code> re-raise) is the pattern, not the exception.</p>
+<h2 id="subprocess-binary-resolution-host-tools">Subprocess binary resolution (host tools)<a class="headerlink" href="#subprocess-binary-resolution-host-tools" title="Permanent link">&para;</a></h2>
+<p>When a host-side tool shells out to an installable CLI binary (<code>mpremote</code>, <code>esptool</code>, <code>rshell</code>), resolve the binary relative to the running interpreter first, not by a bare name on <code>PATH</code>:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">shutil</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">sys</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="k">def</span><span class="w"> </span><span class="nf">_resolve_binary</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>    <span class="n">candidate</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">executable</span><span class="p">)</span><span class="o">.</span><span class="n">parent</span> <span class="o">/</span> <span class="n">name</span>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>    <span class="k">if</span> <span class="n">candidate</span><span class="o">.</span><span class="n">is_file</span><span class="p">():</span>
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>        <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="n">candidate</span><span class="p">)</span>
+</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>    <span class="k">return</span> <span class="n">shutil</span><span class="o">.</span><span class="n">which</span><span class="p">(</span><span class="n">name</span><span class="p">)</span> <span class="ow">or</span> <span class="n">name</span>
+</span></code></pre></div>
+<p><strong>Why:</strong> PyCharm and VS Code launch test runs via the interpreter path without activating a shell, so <code>.venv/bin</code> is not on <code>PATH</code> even on a freshly-prepared workspace.  Resolving next to <code>sys.executable</code> makes <code>.venv/bin/&lt;name&gt;</code> the primary candidate; <code>shutil.which</code> handles system-wide installs and Windows <code>Scripts/&lt;name&gt;.exe</code>; the bare-name fallback preserves the subprocess-level error when nothing resolves.</p>
+<p>Only the first element of the argv list changes.  The rest of the command stays identical.  See <code>plans/patterns.md</code> "Subprocess binary resolution" for the worked example and rationale.</p>
+<h2 id="memory-patterns-library-code-only">Memory patterns (library code only)<a class="headerlink" href="#memory-patterns-library-code-only" title="Permanent link">&para;</a></h2>
+<p>Microcontrollers have limited RAM and no virtual memory. These patterns help library code run efficiently on constrained devices. <strong>You don't need to apply these patterns from day one</strong>.  They matter most in performance-sensitive code. If you're writing your first library, focus on correctness first and optimize later.</p>
+<p>They apply to <strong>publishable library code under <code>libraries/</code></strong> and <strong><code>support/test_harness/</code></strong>.  Other infrastructure code (<code>scripts/</code>, rest of <code>support/</code>) runs on CPython and should use standard Python conventions.</p>
+<table>
+<thead>
+<tr>
+<th>Pattern</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Pre-allocate <code>bytearray</code> in constructor, reuse with <code>readinto()</code></td>
+<td>Avoid repeated allocation</td>
+</tr>
+<tr>
+<td><code>memoryview</code> for slicing</td>
+<td>Avoid copies</td>
+</tr>
+<tr>
+<td><code>const()</code> for numeric constants (import from <code>micropython</code>)</td>
+<td>Compiler optimization</td>
+</tr>
+<tr>
+<td>Cache frequently used attributes in local variables</td>
+<td>Reduce attribute lookups in hot paths</td>
+</tr>
+<tr>
+<td>Avoid dynamic string building in loops</td>
+<td>GC pressure</td>
+</tr>
+</tbody>
+</table>
+<details>
+<summary>Examples (expand when you're ready to optimize)</summary>
+
+### `const()` (compile-time constants)
+
+On MicroPython and CircuitPython, `const()` inlines the value at compile time instead of creating a runtime object. On CPython it doesn't exist, so every library that uses it needs a fallback:
+
+<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="k">try</span><span class="p">:</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">micropython</span><span class="w"> </span><span class="kn">import</span> <span class="n">const</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">const</span><span class="p">(</span><span class="n">value</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">        </span><span class="sd">"""Identity fallback so const() works on CPython."""</span>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>        <span class="k">return</span> <span class="n">value</span>
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>
+</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="n">_PERIOD</span> <span class="o">=</span> <span class="n">const</span><span class="p">(</span><span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="mi">29</span><span class="p">)</span>       <span class="c1"># inlined at compile time, no heap allocation</span>
+</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="n">_MAX</span> <span class="o">=</span> <span class="n">const</span><span class="p">(</span><span class="n">_PERIOD</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+</span></code></pre></div>
+
+Prefix internal constants with `_` (module-private). See `libraries/timing/src/chumicro_timing/ticks.py` for a real example.
+
+### `memoryview` (zero-copy slicing)
+
+Normal `bytearray` slicing creates a copy every time. `memoryview` gives you a slice that points to the original data:
+
+<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># ❌ Each slice copies data</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">header</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="mi">4</span><span class="p">]</span>       <span class="c1"># new bytearray allocated</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="n">payload</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="mi">4</span><span class="p">:</span><span class="mi">20</span><span class="p">]</span>     <span class="c1"># another new bytearray allocated</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="c1"># ✅ Zero-copy: slices share the original buffer</span>
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="n">view</span> <span class="o">=</span> <span class="nb">memoryview</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="n">header</span> <span class="o">=</span> <span class="n">view</span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="mi">4</span><span class="p">]</span>       <span class="c1"># no copy</span>
+</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="n">payload</span> <span class="o">=</span> <span class="n">view</span><span class="p">[</span><span class="mi">4</span><span class="p">:</span><span class="mi">20</span><span class="p">]</span>     <span class="c1"># no copy</span>
+</span></code></pre></div>
+
+Combine with pre-allocated buffers for the full pattern:
+
+<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">PacketReader</span><span class="p">:</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">    </span><span class="sd">"""Incremental packet reader with zero-copy slicing."""</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">buffer_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">64</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_buffer</span> <span class="o">=</span> <span class="nb">bytearray</span><span class="p">(</span><span class="n">buffer_size</span><span class="p">)</span>  <span class="c1"># allocated once</span>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_view</span> <span class="o">=</span> <span class="nb">memoryview</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_buffer</span><span class="p">)</span>   <span class="c1"># reusable view</span>
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>
+</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">read_header</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">source</span><span class="p">:</span> <span class="nb">object</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">memoryview</span><span class="p">:</span>
+</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="w">        </span><span class="sd">"""Read from source into the buffer, return the header slice."""</span>
+</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a>        <span class="n">source</span><span class="o">.</span><span class="n">readinto</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_buffer</span><span class="p">)</span>
+</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_view</span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="mi">4</span><span class="p">]</span>  <span class="c1"># zero-copy slice</span>
+</span></code></pre></div>
+
+</details>
+
+<h2 id="cooperative-concurrency">Cooperative concurrency<a class="headerlink" href="#cooperative-concurrency" title="Permanent link">&para;</a></h2>
+<p><code>chumicro-runner</code> is the only sanctioned scheduler.  Services register via <code>runner.add(service)</code> (check / handle), <code>runner.add_periodic(handler, period_ms=...)</code> (periodic), or <code>runner.add_generator(gen)</code> (generator function for sequential I/O, see the <a href="https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner/docs/guide.md#generator-driven">runner guide</a>).</p>
+<p>Two facts drive the concurrency rule, both verified against the runtimes' compiler sources in <a href="https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0087-generators-for-sequential-io.md">Decision 0087</a>: CircuitPython compiles every <code>await</code> into an <code>__await__</code> method dispatch that allocates a fresh generator on each resume (MicroPython compiles the same <code>await</code> to a single <code>YIELD_FROM</code> bytecode), and Adafruit's CircuitPython asyncio port has had a broken socket/stream layer since 2021.  Building on <code>async</code> means paying per-await heap churn on one runtime and inheriting an unmaintained stream layer, or quietly targeting only the other runtime.  <code>yield from</code> is one bytecode on both, and the wait objects it drives are reusable.</p>
+<p>So: <strong><code>async</code> / <code>await</code> and the <code>asyncio</code> module are banned across <code>libraries/</code> / <code>support/</code> / <code>workbench/</code>.</strong>  Specifically:</p>
+<ul>
+<li><code>async def</code>, <code>await</code>, <code>async with</code>, <code>async for</code>.</li>
+<li><code>import asyncio</code> / <code>from asyncio import …</code>.</li>
+<li><code>import uasyncio</code> / <code>from uasyncio import …</code> (MicroPython alias).</li>
+<li>A module file or directory named <code>asyncio*</code>.</li>
+</ul>
+<p>The translation is mechanical:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">fetch</span><span class="p">():</span>                      <span class="c1"># what you'd write elsewhere</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>    <span class="n">response</span> <span class="o">=</span> <span class="k">await</span> <span class="n">get</span><span class="p">(</span><span class="n">url</span><span class="p">)</span>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="k">def</span><span class="w"> </span><span class="nf">fetch</span><span class="p">():</span>                            <span class="c1"># what you write here</span>
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>    <span class="n">response</span> <span class="o">=</span> <span class="k">yield from</span> <span class="n">get</span><span class="p">(</span><span class="n">transport_factory</span><span class="p">,</span> <span class="n">url</span><span class="p">)</span>
+</span></code></pre></div>
+<p>Enforced by lint rule <code>CHU033</code> (AST-based, so the keywords inside string literals don't trip it; <code>functional_tests/</code> are excluded because host-only test servers may reach asyncio through a host package).  The ban covers <code>workbench/</code> too, where the tools are CPython-only and none of the device-side reasons apply.  That's a deliberate tax: one concurrency model in the repo means host-tree patterns can't drift into device trees, and a contributor moving between them never switches paradigms.</p>
+<h2 id="coverage-exclusions">Coverage exclusions<a class="headerlink" href="#coverage-exclusions" title="Permanent link">&para;</a></h2>
+<p>Every library must meet the <strong>85 %</strong> coverage threshold configured in <code>pyproject.toml</code> (<code>fail_under = 85</code>). Sometimes code genuinely can't be exercised in CPython tests: runtime-specific branches, hardware fallbacks, or defensive guards that only fire on a real board. Mark those lines so they don't drag down your coverage.</p>
+<h3 id="pragma-no-cover-exclude-a-line-or-block"><code># pragma: no cover</code> (exclude a line or block)<a class="headerlink" href="#pragma-no-cover-exclude-a-line-or-block" title="Permanent link">&para;</a></h3>
+<p>Add the comment to any line, <code>if</code> branch, or function that can't be tested on CPython:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Single line</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">status_pin</span> <span class="o">=</span> <span class="n">board</span><span class="o">.</span><span class="n">D5</span>  <span class="c1"># pragma: no cover</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="c1"># Entire branch</span>
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="k">if</span> <span class="n">sys</span><span class="o">.</span><span class="n">implementation</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="s2">"circuitpython"</span><span class="p">:</span>  <span class="c1"># pragma: no cover</span>
+</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>    <span class="kn">import</span><span class="w"> </span><span class="nn">neopixel</span>
+</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="k">else</span><span class="p">:</span>
+</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a>    <span class="n">neopixel</span> <span class="o">=</span> <span class="kc">None</span>
+</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a>
+</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="c1"># Entire function (put it on the def line)</span>
+</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="k">def</span><span class="w"> </span><span class="nf">_reset_hardware</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>  <span class="c1"># pragma: no cover</span>
+</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="w">    </span><span class="sd">"""Hard-reset the I2C bus, only works on real hardware."""</span>
+</span><span id="__span-10-13"><a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a>    <span class="o">...</span>
+</span></code></pre></div>
+<h3 id="common-patterns-that-already-work">Common patterns that already work<a class="headerlink" href="#common-patterns-that-already-work" title="Permanent link">&para;</a></h3>
+<p>The <code>const()</code> fallback pattern used across libraries is already fully covered (both the <code>try</code> and <code>except</code> branches run on CPython). You usually don't need <code># pragma: no cover</code> for it.</p>
+<h3 id="when-to-use-it">When to use it<a class="headerlink" href="#when-to-use-it" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Runtime-only imports</strong> (<code>import board</code>, <code>import neopixel</code>, etc.)</li>
+<li><strong>Hardware-specific branches</strong> (<code>if sys.platform == "rp2":</code>)</li>
+<li><strong>Defensive guards</strong> that only fire under conditions impossible to reproduce in tests (e.g., memory allocation failure on a 256 KB MCU)</li>
+</ul>
+<h3 id="when-not-to-use-it">When NOT to use it<a class="headerlink" href="#when-not-to-use-it" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Don't use it to hide untested business logic.  Write a test instead.</li>
+<li>Don't use it on code that <em>could</em> be tested with a fake or stub. If you can inject the dependency and test it, do that.</li>
+<li>If you're unsure, leave it uncovered and note it in your PR. A reviewer can help decide.</li>
+</ul>
+<h3 id="browsing-coverage">Browsing coverage<a class="headerlink" href="#browsing-coverage" title="Permanent link">&para;</a></h3>
+<p>After running tests, you can see exactly which lines are covered:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>python<span class="w"> </span>-m<span class="w"> </span>coverage<span class="w"> </span>html
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>open<span class="w"> </span>htmlcov/index.html
+</span></code></pre></div>
+<p>Covered lines show in green, missed lines in red. Much easier than reading line numbers from the terminal output. (<code>htmlcov/</code> is gitignored.)</p>
+<h2 id="lint">Lint<a class="headerlink" href="#lint" title="Permanent link">&para;</a></h2>
+<p><code>python scripts/run.py lint</code> runs three tools back to back. If all three pass, your code is style-correct.</p>
+<p><strong>Ruff</strong> enforces:</p>
+<table>
+<thead>
+<tr>
+<th>Rule set</th>
+<th>What it catches</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>E</code>: pycodestyle errors</td>
+<td>Whitespace, indentation, line length, blank lines</td>
+</tr>
+<tr>
+<td><code>F</code>: pyflakes</td>
+<td>Unused imports, undefined names, redefined variables</td>
+</tr>
+<tr>
+<td><code>I</code>: isort</td>
+<td>Import ordering (stdlib → third-party → local, alphabetized)</td>
+</tr>
+<tr>
+<td><code>B</code>: bugbear</td>
+<td>Common pitfalls like mutable default arguments, bare <code>except:</code>, unused loop variables</td>
+</tr>
+<tr>
+<td><code>UP</code>: pyupgrade</td>
+<td>Modernization: replaces old syntax with newer Python equivalents</td>
+</tr>
+</tbody>
+</table>
+<p><strong><code>CHU001</code></strong> (in the <a href="https://chumicro.github.io/ChuMicro/checks/stable/"><code>chumicro-checks</code></a> package) catches:</p>
+<ul>
+<li>Single-letter variable names in assignments, parameters, and function names (<code>x</code> → use a descriptive name, <code>e</code> → <code>error</code>)</li>
+<li>For-loop targets are exempt: <code>for i in range(10)</code> is fine</li>
+<li>Abbreviated names we prefer spelled out (<code>env</code> → <code>environment</code>, <code>buf</code> → <code>buffer</code>)</li>
+<li>Those same abbreviations as suffixes (<code>base_ref</code> → <code>base_reference</code>, <code>build_env</code> → <code>build_environment</code>)</li>
+</ul>
+<p><strong><code>CHU002</code>–<code>CHU005</code></strong> (same package) are CI backstops for whitespace bugs that diff noisily.  Any editor's trim-on-save handles all four; nobody is expected to police them by hand:</p>
+<table>
+<thead>
+<tr>
+<th>Rule</th>
+<th>What it catches</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>CHU002</code></td>
+<td>File does not end with exactly one newline</td>
+</tr>
+<tr>
+<td><code>CHU003</code></td>
+<td>More than two consecutive blank lines inside a file</td>
+</tr>
+<tr>
+<td><code>CHU004</code></td>
+<td>Trailing whitespace on any line</td>
+</tr>
+<tr>
+<td><code>CHU005</code></td>
+<td>Blank line immediately after a block opener (<code>def</code>, <code>class</code>, <code>if:</code>, <code>for:</code>, etc.)</td>
+</tr>
+</tbody>
+</table>
+<p><strong><code>CHU006</code></strong> (same package) catches mono-repo references that have leaked into publishable <code>src/</code> trees (<code>libraries/*/src/</code>, <code>workbench/*/src/</code>, <code>support/*/src/</code>).  Those trees ship to PyPI / CircuitPython-bundle consumers who have no <code>plans/</code> directory and no <code>scripts/run.py</code>.  Flagged shapes:</p>
+<ul>
+<li><code>Decision NNNN</code> / <code>ADR NNNN</code>: ADR pointers; ADRs live in <code>plans/decisions/</code> and aren't shipped.</li>
+<li><code>plans/...md</code> paths: the mono-repo planning tree.</li>
+<li><code>scripts/run.py</code>: the mono-repo's developer command runner.</li>
+<li>Bare <code>run.py</code> (without the <code>scripts/</code> prefix): the workspace-template's command-runner shim.  Only <code>chumicro_workspace</code> legitimately knows about it (the package generates the shim); everywhere else, name the installable CLI (<code>chumicro-deploy</code>, <code>chumicro-workspace</code>, etc.) instead.</li>
+<li><code>chumicro mono-repo</code> / <code>chumicro monorepo</code> framing.</li>
+</ul>
+<p>Inline the prose instead of cross-linking.  Suppress with <code># noqa: CHU006</code> (or <code>&lt;!-- noqa: CHU006 --&gt;</code> in Markdown) only when the reference is genuinely load-bearing.</p>
+<p><strong><code>CHU007</code></strong> (same package) enforces Decision 0052: workbench packages do not import library packages.  Walks <code>workbench/*/src/</code> and flags any <code>import chumicro_&lt;libname&gt;</code> or <code>from chumicro_&lt;libname&gt;</code> where <code>&lt;libname&gt;</code> matches a <code>libraries/</code> package.  Workbench is host-only and ships to laptops; libraries target devices and their CPython compatibility exists for testing/dev, not as a production runtime.  Use third-party PyPI equivalents (<code>pyserial</code>, <code>msgpack</code>, <code>ruamel.yaml</code>, etc.).  Templates / on-device payloads embedded as bytes are not scanned: those run on the device and legitimately import library packages.  Suppress with <code># noqa: CHU007</code> only on legitimate payload-style imports (rare).</p>
+<p>When lint flags something, the error message tells you what to fix and why.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://zensical.org/" target="_blank" rel="noopener">
+      Zensical
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate":null,"base":"../..","features":[],"search":"../../assets/javascripts/workers/search.e2d2d235.min.js","tags":null,"translations":{"clipboard.copied":"Copied to clipboard","clipboard.copy":"Copy to clipboard","search.result.more.one":"1 more on this page","search.result.more.other":"# more on this page","search.result.none":"No matching documents","search.result.one":"1 matching document","search.result.other":"# matching documents","search.result.placeholder":"Type to start searching","search.result.term.missing":"Missing","select.version":"Select version"},"version":null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.dbc0afdc.min.js"></script>
+      
+    
+  </body>
+</html>
