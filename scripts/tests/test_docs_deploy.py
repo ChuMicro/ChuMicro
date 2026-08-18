@@ -115,8 +115,7 @@ class TestRetireConflictingNames:
         docs_deploy.docs_deploy("stable", branch="gh-pages")
 
         deletes = [c for c in recorded_commands if c[1] == "delete"]
-        assert len(deletes) == 1
-        assert deletes[0][-1] == "1.2.3"
+        assert "1.2.3" in deletes[0]
 
     def test_channel_name_held_as_an_alias_is_retired(
         self, synthetic_library, recorded_commands, monkeypatch,
@@ -151,4 +150,67 @@ class TestRetireConflictingNames:
         )
         docs_deploy.docs_deploy("stable", branch="gh-pages")
 
+        assert [c for c in recorded_commands if c[1] == "delete"] == []
+
+
+class TestFoldReleaseUrlsIntoRedirects:
+    """Release-numbered URLs point at the docs that ship today."""
+
+    def test_retired_release_url_comes_back_as_a_redirect(
+        self, synthetic_library, recorded_commands, monkeypatch,
+    ):
+        """The number the old layout used as a version does not 404:
+        it is re-added as an alias of the stable docs."""
+        _fake_mike_list(
+            monkeypatch, [{"version": "1.2.2", "aliases": ["stable"]}],
+        )
+        docs_deploy.docs_deploy("stable", branch="gh-pages")
+
+        aliases = [c for c in recorded_commands if c[1] == "alias"]
+        assert aliases, "expected a mike alias call"
+        assert aliases[0][-2:] == ["stable", "1.2.2"]
+        assert aliases[0][aliases[0].index("--alias-type") + 1] == "redirect"
+
+    def test_archived_release_directories_become_redirects(
+        self, synthetic_library, recorded_commands, monkeypatch,
+    ):
+        """Older release directories still holding a frozen copy are
+        deleted and handed back as redirects to the living docs."""
+        _fake_mike_list(monkeypatch, [
+            {"version": "stable", "aliases": ["1.2.3"]},
+            {"version": "1.1.0", "aliases": []},
+            {"version": "1.0.0", "aliases": []},
+        ])
+        docs_deploy.docs_deploy("stable", branch="gh-pages")
+
+        deletes = [c for c in recorded_commands if c[1] == "delete"]
+        assert "1.1.0" in deletes[-1] and "1.0.0" in deletes[-1]
+        aliases = [c for c in recorded_commands if c[1] == "alias"]
+        assert aliases[0][-2:] == ["1.0.0", "1.1.0"] or set(aliases[0][-2:]) == {
+            "1.0.0", "1.1.0",
+        }
+
+    def test_existing_alias_is_left_alone(
+        self, synthetic_library, recorded_commands, monkeypatch,
+    ):
+        """A release number already aliased needs no second pass."""
+        _fake_mike_list(monkeypatch, [
+            {"version": "stable", "aliases": ["1.2.3"]},
+        ])
+        docs_deploy.docs_deploy("stable", branch="gh-pages")
+
+        assert [c for c in recorded_commands if c[1] == "alias"] == []
+
+    def test_experimental_deploy_leaves_release_urls_alone(
+        self, synthetic_library, recorded_commands, monkeypatch,
+    ):
+        """Release numbers belong to stable; an experimental deploy is
+        not entitled to repoint them."""
+        _fake_mike_list(monkeypatch, [
+            {"version": "stable", "aliases": ["1.2.3"]},
+            {"version": "1.1.0", "aliases": []},
+        ])
+        docs_deploy.docs_deploy("experimental", branch="gh-pages")
+
+        assert [c for c in recorded_commands if c[1] == "alias"] == []
         assert [c for c in recorded_commands if c[1] == "delete"] == []
