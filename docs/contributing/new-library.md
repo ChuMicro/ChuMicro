@@ -56,7 +56,7 @@ The `tests/conftest.py` looks empty but is load-bearing: the workspace runs one 
 
 Put your code in `src/chumicro_my_sensor/`. Follow the [Style Guide](style-guide.md) for naming, annotations, docstrings, and formatting. Key rules for library code:
 
-- **No `async`/`await`.**  Use the tick-based runner pattern. If your library has active components, implement `check(now_ms) -> bool` so they work with [`Runner`](https://chumicro.github.io/ChuMicro/runner/stable/).
+- **No `async`/`await`.**  Use the tick-based runner pattern. If your library has active components, implement `check(now_ms) -> bool` so they work with [`Runner`](https://chumicro.com/ChuMicro/runner/stable/).
 - **No third-party dependencies** that aren't available on all three runtimes.
 - **No `typing` imports.**  Use PEP 604/585 syntax: `int | None`, `list[int]`.
 - **Memory patterns are optional on day one:** `const()`, `memoryview`, pre-allocated buffers. Focus on correctness first. The [Style Guide](style-guide.md#memory-patterns-library-code-only) has the full list when you're ready.

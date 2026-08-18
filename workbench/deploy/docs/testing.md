@@ -112,7 +112,7 @@ fake = FakeTime(start=1_000_000.0)
 
 ## Companion fakes in chumicro-repl
 
-If your tests cover the deploy → tail pipeline, [`chumicro-repl`](https://chumicro.github.io/ChuMicro/repl/stable/) ships parallel fakes (`FakeSerialPort`, `FakeKeyboard`, `FakeTime`) under `chumicro_repl.testing`.  The `FakeTime` shape is identical to the one here, so one fake clock can drive both halves of an integration test with no cross-package adapter code.
+If your tests cover the deploy → tail pipeline, [`chumicro-repl`](https://chumicro.com/ChuMicro/repl/stable/) ships parallel fakes (`FakeSerialPort`, `FakeKeyboard`, `FakeTime`) under `chumicro_repl.testing`.  The `FakeTime` shape is identical to the one here, so one fake clock can drive both halves of an integration test with no cross-package adapter code.
 
 `Deployer` has no clock of its own; it delegates timing to the transport.  Wire the clock into the transport, and pass the same instance to `tail`:
 

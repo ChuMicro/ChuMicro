@@ -1,4 +1,4 @@
-# The guides site: chumicro.github.io/ChuMicro/guides/
+# The guides site: chumicro.com/ChuMicro/guides/
 #
 # Its pages are the repository's docs/ tree, so they read the same on
 # GitHub and on the site.  The config sits at the repository root
@@ -10,7 +10,7 @@ site_description: >-
   Answers and fixes for CircuitPython and MicroPython projects: why a board
   freezes on the network, why WiFi will not connect, what to do when a deploy
   is refused, and how to keep data across a reboot.
-site_url: https://chumicro.github.io/ChuMicro/guides/
+site_url: https://chumicro.com/ChuMicro/guides/
 repo_url: https://github.com/ChuMicro/ChuMicro
 repo_name: Source
 docs_dir: docs

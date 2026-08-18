@@ -1,7 +1,7 @@
 site_name: chumicro-mqtt
 site_description: >-
   Non-blocking MQTT 3.1.1 client for CircuitPython, MicroPython, and CPython.  QoS 0 and 1, last will, retain, and TLS, while your main loop keeps running.
-site_url: https://chumicro.github.io/ChuMicro/mqtt/
+site_url: https://chumicro.com/ChuMicro/mqtt/
 repo_url: https://github.com/ChuMicro/ChuMicro/tree/main/libraries/mqtt
 repo_name: Source
 theme:

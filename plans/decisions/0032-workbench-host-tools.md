@@ -136,6 +136,6 @@ CPython packages.  The three folders now have clean, independent axes:
 
 - Discovery + editable-install + VERSION/API/coverage gates apply to workbench packages identically to libraries (`scripts/repo_layout.py`, `scripts/shared.py::install_editable()`, `check_version.py`, `check_api.py`).  Bundle staging and the cross-runtime test matrix stay scoped to `libraries/` only.
 - Release pipeline parity minus bundle mechanics: `release.yml` publishes `-experimental` wheels on every VERSION bump; `promote.yml` publishes stable names on tag.  Neither workflow touches `mpy-cross`, bundle repos, or device deploys for workbench packages.
-- Docs ship via the same Zensical + mkdocstrings + mike pipeline as libraries, on the same `https://chumicro.github.io/ChuMicro/<package>/` URL space.
+- Docs ship via the same Zensical + mkdocstrings + mike pipeline as libraries, on the same `https://chumicro.com/ChuMicro/<package>/` URL space.
 - Scaffolding: `python scripts/run.py new-library` stays device-library-shaped; a future `new-workbench` will mirror it.  Until then, `workbench/deploy/` is the reference layout.
 - `AGENTS.md`'s "File routing" table and workspace-structure section name the third folder and its rule.

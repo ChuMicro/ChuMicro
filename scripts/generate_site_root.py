@@ -1,4 +1,4 @@
-"""Generate the host-root site published at https://chumicro.github.io/.
+"""Generate the host-root site published at https://chumicro.com/.
 
 GitHub serves one root site per account, named after the account, and
 every repository under it publishes at a path below that root.  The

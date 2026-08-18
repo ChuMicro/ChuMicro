@@ -23,7 +23,7 @@ from __future__ import annotations
 PAGES_HOST = "chumicro.github.io"
 
 #: The custom domain, or an empty string while none is configured.
-CUSTOM_DOMAIN = ""
+CUSTOM_DOMAIN = "chumicro.com"
 
 #: The repository whose project site holds the library documentation.
 PROJECT_PATH = "ChuMicro"

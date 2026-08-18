@@ -3,11 +3,15 @@
 Search engines want proof you own a site before they report what
 people searched to reach it, and they want to be told when pages
 change.  Everything here is read at docs-deploy time and published to
-two places: the documentation site at
-`https://chumicro.github.io/ChuMicro/`, and the host root at
-`https://chumicro.github.io/`.  Both are rebuilt from this directory on
-every deploy, so a token survives the branch rewrite the deploy
-performs.
+two places: the documentation site at `https://chumicro.com/ChuMicro/`,
+and the host root at `https://chumicro.com/`.  Both are rebuilt from
+this directory on every deploy, so a token survives the branch rewrite
+the deploy performs.
+
+The site moved from `chumicro.github.io` to `chumicro.com` on
+2026-08-18.  GitHub redirects every old address to the matching new
+one, so nothing published before the move broke, but the properties
+below all describe the new host.
 
 ## Google Search Console
 
@@ -20,15 +24,18 @@ abc123DEFghi456JKLmno789
 
 Both landing-page generators write it into the head of their
 `index.html` as `<meta name="google-site-verification" content="...">`.
-Add `https://chumicro.github.io/` as a **URL prefix** property, paste
+Add `https://chumicro.com/` as a **URL prefix** property, paste
 the token here, deploy the docs, then press Verify.  The same token
-verifies `https://chumicro.github.io/ChuMicro/` as a second property,
+verifies `https://chumicro.com/ChuMicro/` as a second property,
 which is worth having: Search Console reports queries per property, and
 the project property is the one that shows how the library pages are
 found.
 
-A domain property is not available: `github.io` sits on the public
-suffix list and its DNS belongs to GitHub.
+Prefer a **domain property** for `chumicro.com` where you can.  It
+covers every subdomain and both schemes at once, and it verifies with
+a TXT record in the domain's DNS.  This became possible only with the
+move off `chumicro.github.io`, which sits on the public suffix list
+and whose DNS belongs to GitHub.
 
 ## Bing Webmaster Tools
 
@@ -37,7 +44,7 @@ suffix list and its DNS belongs to GitHub.
 its search share suggests, because Copilot and ChatGPT's search path
 read Bing's index.
 
-Verify `https://chumicro.github.io/` here as well as the project path.
+Verify `https://chumicro.com/` here as well as the project path.
 The root property is what makes IndexNow work, as the next section
 explains.
 
@@ -67,10 +74,11 @@ publishes the new file and pings with it.
 
 A key published only under `/ChuMicro/` drew
 `403 UserForbiddedToAccessSite` on 2026-08-17, and three separate keys
-behaved the same way.  The spec allows a key file outside the host root
+behaved the same way.  This was on the old `chumicro.github.io` host,
+which every GitHub Pages site in the organization shared.  The spec allows a key file outside the host root
 when the ping names it in `keyLocation`, which the ping does, so the
 key location was a red herring.  What the endpoint checks is whether
-the submitter owns the **host**, and `chumicro.github.io` carries every
+the submitter owns the **host**, and `chumicro.github.io` carried every
 GitHub Pages project site in the organization.
 
 Two results made this readable.  A brand new key returned `202` while
@@ -79,9 +87,14 @@ validated.  The same key five minutes later, with the file answering
 `200`, returned the `403`.  The key was never the variable.
 
 The fix is owning the root: the `ChuMicro/chumicro.github.io`
-repository publishes at `https://chumicro.github.io/`, the deploy
-writes `<key>.txt` there, and Bing's root property covers every path on
-the host.  See the next section.
+repository publishes at `https://chumicro.com/`, the deploy writes
+`<key>.txt` there, and Bing's root property covers every path on the
+host.  See the next section.
+
+Moving to `chumicro.com` settles the ownership question for good.  The
+host is a domain the project registered rather than a name shared with
+every other Pages site, so verifying it in Bing is verifying something
+that is genuinely yours.
 
 The ping names no `keyLocation` now that the key answers at the root,
 because an absent one is what tells the endpoint to look there.  Naming
@@ -91,7 +104,9 @@ ever weakened the claim.
 Confirmed working on 2026-08-18: with the key at the host root, no
 `keyLocation` in the payload, and the root property verified in Bing,
 the endpoint answers `200` rather than `202` or `403`.  A `200` is the
-one that means the submission was taken.
+one that means the submission was taken.  That was on the old host;
+`chumicro.com` needs its own Bing property before pings for it are
+accepted.
 
 A refused ping warns and leaves the deploy green.
 
@@ -102,7 +117,7 @@ live cannot keep authorizing pings.
 ## The host-root site
 
 `scripts/generate_site_root.py` builds the page at
-`https://chumicro.github.io/` and the files that describe the whole
+`https://chumicro.com/` and the files that describe the whole
 host, and the docs-deploy workflow pushes them to the
 `ChuMicro/chumicro.github.io` repository.  Three things live there
 because they only count at a host root:
@@ -111,7 +126,7 @@ because they only count at a host root:
   project path cannot advertise a sitemap this way.
 - `sitemap.xml`, which is a sitemap **index** rather than a list of
   URLs.  A sitemap at the host root is the only one whose scope is the
-  whole host, so submitting `https://chumicro.github.io/sitemap.xml`
+  whole host, so submitting `https://chumicro.com/sitemap.xml`
   once to a search engine covers every project below it.  Adding a
   project adds a line to the index rather than a submission someone has
   to remember to make.
@@ -127,5 +142,30 @@ the documentation deploy still succeeds.
 
 One rule for that repository: no folder in it may be named after a
 project repository.  GitHub serves `ChuMicro/AiFi` at
-`https://chumicro.github.io/AiFi/`, so a folder of that name would
-claim an address that already belongs to a site.
+`https://chumicro.com/AiFi/`, so a folder of that name would claim an
+address that already belongs to a site.
+
+## The custom domain
+
+`scripts/site_host.py` names the host once and every generated URL
+reads it, so moving hosts is an edit there plus a sweep of the static
+files that spell the address out in prose.
+
+`CUSTOM_DOMAIN` also makes the host-root site publish a `CNAME` file,
+which is the file GitHub reads to learn the domain.  Generating it
+matters because a publish rebuilds the whole tree: a `CNAME` added by
+hand, or written into the repository by GitHub when someone sets the
+domain in the web interface, would be deleted by the next deploy and
+take the domain down.
+
+Set `CUSTOM_DOMAIN` only after the domain's DNS already resolves to
+GitHub's servers.  GitHub begins redirecting the `github.io` address
+the moment it accepts the domain, so a `CNAME` that lands first sends
+every visitor to a name that does not answer yet.
+
+The DNS records the domain needs are four `A` records on the apex
+pointing at `185.199.108.153` through `185.199.111.153`, the four
+matching `AAAA` records on `2606:50c0:8000::153` through
+`2606:50c0:8003::153`, and a `CNAME` on `www` pointing at
+`chumicro.github.io`.  GitHub redirects `www` to the apex once the
+apex is the configured domain.

@@ -76,6 +76,6 @@ CircuitPython and MicroPython `.mpy` files are not interchangeable. Each runtime
 This repo is generated automatically by the [ChuMicro release workflow]({source_url}/blob/main/.github/workflows/release.yml). Don't edit it by hand; the next release overwrites any changes.
 
 - **Source code and examples:** [{github_org}/{source_repo}]({source_url})
-- **Documentation:** [chumicro.github.io/ChuMicro]({docs_url})
+- **Documentation:** [chumicro.com/ChuMicro]({docs_url})
 - **{alt_channel} bundle:** [{github_org}/{alt_repo}]({alt_repo_url})
 - **License:** [MIT](LICENSE)

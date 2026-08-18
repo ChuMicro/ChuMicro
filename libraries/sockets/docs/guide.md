@@ -66,11 +66,11 @@ dial = connector("api.example.com", 443, tls=True, context=context, radio=None)
 
 ## Runner pattern
 
-`chumicro-sockets` is a passive transport; it doesn't drive its own lifecycle.  Use it through [`chumicro-runner`](https://chumicro.github.io/ChuMicro/runner/stable/), which handles `select.poll` registration, readiness dispatch, and tick budgeting.  The downstream library that owns the connection (e.g. `chumicro-mqtt`, `chumicro-requests`) exposes the runner-service contract (`io_socket`, `io_interest(now_ms)`, `next_deadline(now_ms)`), and Runner reads those each tick to decide which sockets to register with `poll`.  User code calls `runner.add(client)` and never touches `poll` directly.
+`chumicro-sockets` is a passive transport; it doesn't drive its own lifecycle.  Use it through [`chumicro-runner`](https://chumicro.com/ChuMicro/runner/stable/), which handles `select.poll` registration, readiness dispatch, and tick budgeting.  The downstream library that owns the connection (e.g. `chumicro-mqtt`, `chumicro-requests`) exposes the runner-service contract (`io_socket`, `io_interest(now_ms)`, `next_deadline(now_ms)`), and Runner reads those each tick to decide which sockets to register with `poll`.  User code calls `runner.add(client)` and never touches `poll` directly.
 
 Without a Runner, drive the same machine yourself: call `connector.tick(now_ms)` from your own loop and read `connector.socket` once `connector.state == "ready"`, then call the connected socket's `recv_into` / `send` as usual.  `OSError(errno.EAGAIN)` is the cross-runtime "would block" signal: re-loop, don't re-raise.
 
-The socket read/write waits a generator yields (`ReadWait` / `WriteWait` from `chumicro_sockets.waits`) sit alongside the timer and completion waits in one place: the timing guide's [Choosing a wait](https://chumicro.github.io/ChuMicro/timing/stable/guide/#choosing-a-wait) table maps each question to its primitive.
+The socket read/write waits a generator yields (`ReadWait` / `WriteWait` from `chumicro_sockets.waits`) sit alongside the timer and completion waits in one place: the timing guide's [Choosing a wait](https://chumicro.com/ChuMicro/timing/stable/guide/#choosing-a-wait) table maps each question to its primitive.
 
 ## Memory notes
 

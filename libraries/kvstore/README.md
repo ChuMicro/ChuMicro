@@ -72,7 +72,7 @@ Issues, bug reports, and pull requests are welcome, and so is "I ran it on this 
 
 ## Docs
 
-📖 **[Stable docs](https://chumicro.github.io/ChuMicro/kvstore/stable/)** · **[Experimental docs](https://chumicro.github.io/ChuMicro/kvstore/experimental/)**
+📖 **[Stable docs](https://chumicro.com/ChuMicro/kvstore/stable/)** · **[Experimental docs](https://chumicro.com/ChuMicro/kvstore/experimental/)**
 
 ## Find this library
 

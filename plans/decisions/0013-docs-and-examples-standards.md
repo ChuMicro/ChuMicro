@@ -15,7 +15,7 @@ Every publishable library needs user-facing documentation and runnable examples.
 
 Each library under `libraries/<name>/` ships:
 
-1. **`README.md`** at the library root — landing page with one-line description, install instructions (pip / circup / mip), quick example, links to hosted docs (`https://chumicro.github.io/ChuMicro/<name>/{stable,experimental}/`), GitHub-browsable docs links, and platform compatibility notes.
+1. **`README.md`** at the library root — landing page with one-line description, install instructions (pip / circup / mip), quick example, links to hosted docs (`https://chumicro.com/ChuMicro/<name>/{stable,experimental}/`), GitHub-browsable docs links, and platform compatibility notes.
 2. **`docs/`** — `index.md` (landing), `guide.md` (user guide), `api.md` (auto-generated from docstrings via mkdocstrings `:::` directives), and topic pages as needed (`testing.md` etc.).
 3. **`examples/`** — runnable scripts: simulated examples that run on CPython without hardware, plus optional hardware examples named `circuitpython_*.py` / `micropython_*.py` with `# requires: hardware` first line.  Top-level code only, no `if __name__ == "__main__":` guards (CP/MP run `code.py` at top level).
 

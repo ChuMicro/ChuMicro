@@ -138,6 +138,6 @@ macOS assigns `/Volumes/CIRCUITPY` in mount order: the first CircuitPython drive
 
 ## See also
 
-- [`chumicro-deploy` guide](https://chumicro.github.io/ChuMicro/deploy/stable/guide/): full user guide for the deploy tool, including `RecoveringDeployer`.
+- [`chumicro-deploy` guide](https://chumicro.com/ChuMicro/deploy/stable/guide/): full user guide for the deploy tool, including `RecoveringDeployer`.
 - [Decision 0033](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0033-macos-circuitpy-deploy-hardening.md): *why* the deploy code handles each of these cases the way it does (FAT32 hygiene, `os.sync` + settle, board-side stat poll, FSKit detection).
 - [Device testing guide](https://github.com/ChuMicro/ChuMicro/blob/main/docs/contributing/device-testing.md): running `functional_tests/` against real boards via `devices.yml`.

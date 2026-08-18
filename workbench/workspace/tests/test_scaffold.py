@@ -274,6 +274,7 @@ class TestScaffoldBranding:
         assert "chumicro_tip.png" not in readme_text
         assert "Part of the [ChuMicro]" not in readme_text
         assert "ChuMicro-Bundle" not in readme_text
+        assert "chumicro.com" not in readme_text
         assert "chumicro.github.io" not in readme_text
         # No branding-derived URL survives.  The one ChuMicro URL left is
         # the worked example's link to chumicro-timing under "Where this
@@ -324,6 +325,7 @@ class TestScaffoldBranding:
         mkdocs_text = (created / "mkdocs.yml").read_text()
         assert "site_name: gpio" in mkdocs_text
         assert "repo_url:" not in mkdocs_text
+        assert "chumicro.com" not in mkdocs_text
         assert "chumicro.github.io" not in mkdocs_text
 
     def test_neutral_docs_drop_the_branded_footer(

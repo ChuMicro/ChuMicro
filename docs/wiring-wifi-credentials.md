@@ -1,8 +1,8 @@
 # Wiring wifi credentials for examples and functional tests
 
-The examples and `functional_tests/test_real_*.py` suites in the network-shaped libraries ([`chumicro-wifi`](https://chumicro.github.io/ChuMicro/wifi/stable/), [`chumicro-requests`](https://chumicro.github.io/ChuMicro/requests/stable/), [`chumicro-http-server`](https://chumicro.github.io/ChuMicro/http_server/stable/), [`chumicro-mqtt`](https://chumicro.github.io/ChuMicro/mqtt/stable/), [`chumicro-websockets`](https://chumicro.github.io/ChuMicro/websockets/stable/), [`chumicro-ntp`](https://chumicro.github.io/ChuMicro/ntp/stable/)) need wifi credentials before they can run on real hardware.
+The examples and `functional_tests/test_real_*.py` suites in the network-shaped libraries ([`chumicro-wifi`](https://chumicro.com/ChuMicro/wifi/stable/), [`chumicro-requests`](https://chumicro.com/ChuMicro/requests/stable/), [`chumicro-http-server`](https://chumicro.com/ChuMicro/http_server/stable/), [`chumicro-mqtt`](https://chumicro.com/ChuMicro/mqtt/stable/), [`chumicro-websockets`](https://chumicro.com/ChuMicro/websockets/stable/), [`chumicro-ntp`](https://chumicro.com/ChuMicro/ntp/stable/)) need wifi credentials before they can run on real hardware.
 
-How you get credentials onto the device depends on how you're running the code: out of a clone of this repository, out of a [`chumicro-workspace`](https://chumicro.github.io/ChuMicro/workspace/stable/) project, or by copying a single example file to the board by hand.
+How you get credentials onto the device depends on how you're running the code: out of a clone of this repository, out of a [`chumicro-workspace`](https://chumicro.com/ChuMicro/workspace/stable/) project, or by copying a single example file to the board by hand.
 
 ## Running an example from a clone of this repository
 
@@ -46,7 +46,7 @@ host = "broker.example.com"
 port = 1883
 ```
 
-Then deploy with `chumicro-workspace deploy <project>`.  The bake-and-deploy pipeline merges `secrets.toml` with the project's `project_config.toml`, flattens the result to dotted keys (`wifi.ssid`, `mqtt.broker.host`), and writes it to `/runtime_config.msgpack` on the device.  The example reads it back via `chumicro_config.load_runtime_config()`; see [`chumicro-config`](https://chumicro.github.io/ChuMicro/config/stable/) for the standard pattern.
+Then deploy with `chumicro-workspace deploy <project>`.  The bake-and-deploy pipeline merges `secrets.toml` with the project's `project_config.toml`, flattens the result to dotted keys (`wifi.ssid`, `mqtt.broker.host`), and writes it to `/runtime_config.msgpack` on the device.  The example reads it back via `chumicro_config.load_runtime_config()`; see [`chumicro-config`](https://chumicro.com/ChuMicro/config/stable/) for the standard pattern.
 
 The split is intentional.  `secrets.toml` holds credentials plus the workspace-wide defaults a project inherits, and never leaves your machine.  Non-secret per-project configuration goes in `projects/<name>/project_config.toml`, which is safe to commit and deep-merges over the `secrets.toml` defaults at any nesting depth.  (`workspace.yml` is a third file in a workspace, but it configures the tooling itself, library sources and deploy targets and quality knobs, and nothing in it reaches the board.)  See [config files](https://github.com/ChuMicro/ChuMicro/blob/main/docs/contributing/config-files.md) for the full field lists.
 
@@ -70,4 +70,4 @@ The constants act as the fallback when no `runtime_config.msgpack` is present on
 
 None of the network-shaped libraries reads `secrets.toml`, `project_config.toml`, or `runtime_config.msgpack` directly.  They all take a typed config object (`WifiConfig`, `HttpClient`, `MQTTClient(...)`) and a transport handle, and go.  The config wiring is application-layer: `chumicro-config` is what reads the msgpack, and your example or app code is what wires the typed config into the library.
 
-See [`chumicro-config`](https://chumicro.github.io/ChuMicro/config/stable/) and [`chumicro-workspace`](https://chumicro.github.io/ChuMicro/workspace/stable/) for the deploy-time mechanics.
+See [`chumicro-config`](https://chumicro.com/ChuMicro/config/stable/) and [`chumicro-workspace`](https://chumicro.com/ChuMicro/workspace/stable/) for the deploy-time mechanics.

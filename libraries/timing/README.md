@@ -135,7 +135,7 @@ Issues, bug reports, and pull requests are welcome, and so is "I ran it on this 
 
 ## Docs
 
-📖 **[Stable docs](https://chumicro.github.io/ChuMicro/timing/stable/)** · **[Experimental docs](https://chumicro.github.io/ChuMicro/timing/experimental/)**
+📖 **[Stable docs](https://chumicro.com/ChuMicro/timing/stable/)** · **[Experimental docs](https://chumicro.com/ChuMicro/timing/experimental/)**
 
 ## Find this library
 

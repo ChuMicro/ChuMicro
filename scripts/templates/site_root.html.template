@@ -5,12 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ChuMicro: open-source Python for CircuitPython and MicroPython boards</title>
   <meta name="description" content="ChuMicro builds Python libraries and host tools for microcontrollers. WiFi, MQTT, HTTP, WebSockets, timers, and storage for CircuitPython, MicroPython, and CPython, plus the workbench that deploys them.">
-  <link rel="canonical" href="https://chumicro.github.io/">
+  <link rel="canonical" href="https://chumicro.com/">
 $verification  <meta property="og:type" content="website">
   <meta property="og:site_name" content="ChuMicro">
   <meta property="og:title" content="ChuMicro: open-source Python for microcontrollers">
   <meta property="og:description" content="Python libraries and host tools for CircuitPython, MicroPython, and CPython boards.">
-  <meta property="og:url" content="https://chumicro.github.io/">
+  <meta property="og:url" content="https://chumicro.com/">
   <meta property="og:image" content="https://raw.githubusercontent.com/ChuMicro/ChuMicro/main/support/docs/chumicro.png">
   <meta name="twitter:card" content="summary">
 $structured_data  <link rel="icon" href="/ChuMicro/assets/images/favicon.png">
@@ -111,7 +111,7 @@ $packages
       &nbsp;&middot;&nbsp;
       <a href="https://pypi.org/search/?q=chumicro">PyPI</a>
       &nbsp;&middot;&nbsp;
-      <a href="https://chumicro.github.io/ChuMicro/guides/">Guides and troubleshooting</a>
+      <a href="https://chumicro.com/ChuMicro/guides/">Guides and troubleshooting</a>
       <br>
       MIT License
     </footer>

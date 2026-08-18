@@ -1,7 +1,7 @@
 site_name: chumicro-timing
 site_description: >-
   Wraparound-safe millisecond timers, deadlines, and rates for CircuitPython, MicroPython, and CPython.  Schedule repeating work without time.sleep().
-site_url: https://chumicro.github.io/ChuMicro/timing/
+site_url: https://chumicro.com/ChuMicro/timing/
 repo_url: https://github.com/ChuMicro/ChuMicro/tree/main/libraries/timing
 repo_name: Source
 theme:

@@ -1,7 +1,7 @@
 site_name: chumicro-kvstore
 site_description: >-
   Persistent key-value storage for CircuitPython, MicroPython, and CPython: boot counters, tokens, and timestamps that survive a reboot.
-site_url: https://chumicro.github.io/ChuMicro/kvstore/
+site_url: https://chumicro.com/ChuMicro/kvstore/
 repo_url: https://github.com/ChuMicro/ChuMicro/tree/main/libraries/kvstore
 repo_name: Source
 theme:

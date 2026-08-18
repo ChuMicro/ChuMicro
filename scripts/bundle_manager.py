@@ -814,7 +814,7 @@ def generate_bundle_readme(
     alt_channel = "Stable" if experimental else "Experimental"
     source_url = f"https://github.com/{GITHUB_ORG}/{_SOURCE_REPO}"
     alt_repo_url = f"https://github.com/{GITHUB_ORG}/{alt_repo}"
-    docs_url = "https://chumicro.github.io/ChuMicro/"
+    docs_url = "https://chumicro.com/ChuMicro/"
     pip_suffix = "-experimental" if experimental else ""
 
     banner = (

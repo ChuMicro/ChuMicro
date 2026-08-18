@@ -186,7 +186,7 @@ from chumicro_deploy.config.devices_yaml import (
 
 ## Examples
 
-This package is a CLI tool, so there is no "use it in your code" example that isn't just a CLI subcommand in Python clothing.  See the [user guide](https://chumicro.github.io/ChuMicro/workspace/stable/guide/) for end-to-end walkthroughs (the config pipeline, deploy layouts, library scaffolding, board onboarding) and `chumicro-workspace --help` for the full command surface.
+This package is a CLI tool, so there is no "use it in your code" example that isn't just a CLI subcommand in Python clothing.  See the [user guide](https://chumicro.com/ChuMicro/workspace/stable/guide/) for end-to-end walkthroughs (the config pipeline, deploy layouts, library scaffolding, board onboarding) and `chumicro-workspace --help` for the full command surface.
 
 The Python API exists so the [`chumicro-workspace` CLI](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/workspace/src/chumicro_workspace/cli/) and the workspace template's `run.py` shim can compose against it, not as a "build your own workspace tool" surface.  If you find yourself reaching for it, the CLI probably already does what you want; file an issue if it doesn't.
 
@@ -196,7 +196,7 @@ Issues, bug reports, and pull requests are welcome, and so is "I ran it on this 
 
 ## Docs
 
-📖 **[Stable docs](https://chumicro.github.io/ChuMicro/workspace/stable/)** · **[Experimental docs](https://chumicro.github.io/ChuMicro/workspace/experimental/)**
+📖 **[Stable docs](https://chumicro.com/ChuMicro/workspace/stable/)** · **[Experimental docs](https://chumicro.com/ChuMicro/workspace/experimental/)**
 
 ## Find this library
 

@@ -20,4 +20,4 @@ symptom you are looking at right now and walk to the fix.
   or your git history.
 
 Library documentation lives on its own pages, one per library, from
-[the documentation home](https://chumicro.github.io/ChuMicro/).
+[the documentation home](https://chumicro.com/ChuMicro/).

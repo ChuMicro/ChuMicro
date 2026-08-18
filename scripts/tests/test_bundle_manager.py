@@ -605,7 +605,7 @@ class TestPatchExperimental:
             '\n'
             '[project.urls]\n'
             'Bundle = "https://github.com/ChuMicro/ChuMicro-Bundle"\n'
-            'Documentation = "https://chumicro.github.io/ChuMicro/timing/stable/"\n'
+            'Documentation = "https://chumicro.com/ChuMicro/timing/stable/"\n'
         )
         library_dir = tmp_path / "timing"
         library_dir.mkdir()
@@ -846,7 +846,7 @@ class TestPatchExperimentalReadme:
         '\n'
         '[project.urls]\n'
         'Bundle = "https://github.com/ChuMicro/ChuMicro-Bundle"\n'
-        'Documentation = "https://chumicro.github.io/ChuMicro/timing/stable/"\n'
+        'Documentation = "https://chumicro.com/ChuMicro/timing/stable/"\n'
     )
 
     _README = (
@@ -859,7 +859,7 @@ class TestPatchExperimentalReadme:
         "pip install chumicro-timing\n"
         "```\n"
         "\n"
-        "[Stable docs](https://chumicro.github.io/ChuMicro/timing/stable/)\n"
+        "[Stable docs](https://chumicro.com/ChuMicro/timing/stable/)\n"
         "[Experimental bundle](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental"
         "/tree/main/chumicro_timing)\n"
         "Everything in chumicro-timing works on CPython too.\n"
@@ -906,16 +906,16 @@ class TestPatchExperimentalReadme:
         readme.write_text(
             readme.read_text()
             + "pip install chumicro-timing  "
-            + "# docs: https://chumicro.github.io/ChuMicro/timing/stable/\n"
+            + "# docs: https://chumicro.com/ChuMicro/timing/stable/\n"
         )
 
         patch_experimental(library_dir)
 
         patched = readme.read_text()
-        assert "[Stable docs](https://chumicro.github.io/ChuMicro/timing/stable/)" in patched
+        assert "[Stable docs](https://chumicro.com/ChuMicro/timing/stable/)" in patched
         assert (
             "pip install chumicro-timing-experimental  "
-            "# docs: https://chumicro.github.io/ChuMicro/timing/experimental/" in patched
+            "# docs: https://chumicro.com/ChuMicro/timing/experimental/" in patched
         )
 
     def test_second_run_leaves_readme_byte_identical(self, tmp_path: Path):

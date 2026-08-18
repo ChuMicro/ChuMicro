@@ -29,7 +29,7 @@ from repo_layout import ROOT
 FAQ_SOURCE = ROOT / "docs" / "faq.md"
 
 #: Where the page is published.
-FAQ_URL = "https://chumicro.github.io/ChuMicro/guides/faq/"
+FAQ_URL = "https://chumicro.com/ChuMicro/guides/faq/"
 
 #: The generated block sits between these markers, so a rewrite replaces
 #: only what it owns.

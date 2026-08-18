@@ -133,7 +133,7 @@ Issues, bug reports, and pull requests are welcome, and so is "I ran it on this 
 
 ## Docs
 
-📖 **[Stable docs](https://chumicro.github.io/ChuMicro/deploy/stable/)** · **[Experimental docs](https://chumicro.github.io/ChuMicro/deploy/experimental/)**
+📖 **[Stable docs](https://chumicro.com/ChuMicro/deploy/stable/)** · **[Experimental docs](https://chumicro.com/ChuMicro/deploy/experimental/)**
 
 ## Find this library
 

@@ -44,7 +44,7 @@ test = [
 
 [project.urls]
 Homepage = "https://github.com/ChuMicro/ChuMicro"
-Documentation = "https://chumicro.github.io/ChuMicro/ntp/stable/"
+Documentation = "https://chumicro.com/ChuMicro/ntp/stable/"
 Source = "https://github.com/ChuMicro/ChuMicro/tree/main/libraries/ntp"
 Issues = "https://github.com/ChuMicro/ChuMicro/issues"
 Bundle = "https://github.com/ChuMicro/ChuMicro-Bundle"

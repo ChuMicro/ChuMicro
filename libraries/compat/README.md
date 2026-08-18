@@ -80,7 +80,7 @@ Issues, bug reports, and pull requests are welcome, and so is "I ran it on this 
 
 ## Docs
 
-📖 **[Stable docs](https://chumicro.github.io/ChuMicro/compat/stable/)** · **[Experimental docs](https://chumicro.github.io/ChuMicro/compat/experimental/)**
+📖 **[Stable docs](https://chumicro.com/ChuMicro/compat/stable/)** · **[Experimental docs](https://chumicro.com/ChuMicro/compat/experimental/)**
 
 ## Find this library
 

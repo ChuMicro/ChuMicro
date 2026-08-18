@@ -39,7 +39,7 @@ print(result.execute_output)
 
 ## Companion: chumicro-repl
 
-After a deploy, follow the board with [`chumicro-repl`](https://chumicro.github.io/ChuMicro/repl/stable/), the sister workbench tool that opens interactive serial sessions, tails the friendly REPL, and exposes a programmatic `ReplSession` for headless test fixtures. Both tools read the same `devices.yml` workspace file:
+After a deploy, follow the board with [`chumicro-repl`](https://chumicro.com/ChuMicro/repl/stable/), the sister workbench tool that opens interactive serial sessions, tails the friendly REPL, and exposes a programmatic `ReplSession` for headless test fixtures. Both tools read the same `devices.yml` workspace file:
 
 ```python
 from chumicro_deploy import Deployer

@@ -112,9 +112,9 @@ Both loops isolate a handler that raises: the fault is counted in `handler_error
 | `Runner(ticks=None, poller=None, on_handler_error=None)` | Tick-based service loop with shared timestamps.  A handler that raises is isolated, counted in `handler_errors`, and kept in `last_handler_error` so one faulting service can't stop the others; pass `on_handler_error(handle, exception)` to log, remove the task, or re-raise to fail fast.  `poller` is an injectable `select.poll`-shaped object consulted by `wait()`; the default is built lazily on the first wait that has a socket to register |
 | `Runner.add(task, handler=None, period_ms=None, start_after_ms=None, run_count=None, preserve_phase=False)` | Register a task; returns a `TaskHandle` |
 | `Runner.add_periodic(handler, period_ms, start_after_ms=None, run_count=None, preserve_phase=False)` | Register a periodic handler; returns a `TaskHandle` |
-| `Runner.add_generator(generator)` | Register a generator function (for sequential I/O written top-to-bottom); returns a `GeneratorHandle`.  See [Generator-driven sequential I/O](https://chumicro.github.io/ChuMicro/runner/stable/guide/#generator-driven) in the guide |
+| `Runner.add_generator(generator)` | Register a generator function (for sequential I/O written top-to-bottom); returns a `GeneratorHandle`.  See [Generator-driven sequential I/O](https://chumicro.com/ChuMicro/runner/stable/guide/#generator-driven) in the guide |
 | `Runner.tick()` | Capture time, check services, batch-fire handlers; returns `now_ms`.  Raises `ReentrantTickError` if a handler calls `tick()` while a tick is already running |
-| `Runner.wait(now_ms)` | Idle until the next deadline or a registered socket is ready.  Companion to `tick()`; see [Idling between ticks](https://chumicro.github.io/ChuMicro/runner/stable/guide/#idling-between-ticks) in the guide |
+| `Runner.wait(now_ms)` | Idle until the next deadline or a registered socket is ready.  Companion to `tick()`; see [Idling between ticks](https://chumicro.com/ChuMicro/runner/stable/guide/#idling-between-ticks) in the guide |
 | `Runner.run_until(predicate, timeout_ms=None)` | Drive `tick()` + `wait()` until a handle finishes or a zero-arg callable turns truthy; returns `False` on timeout |
 | `IO_READ` / `IO_WRITE` | Poll-interest bits a service returns from `io_interest(now_ms)`; pinned values `1` / `2` |
 | `ReentrantTickError` | Raised when `tick()` runs while another `tick()` is in progress |
@@ -181,7 +181,7 @@ All classes use only basic Python features. Works identically on CPython, MicroP
 | `micropython_blink.py` | LED blink on MicroPython hardware |
 | `micropython_button_led.py` | Button-gated LED on MicroPython |
 
-The [full user guide](https://chumicro.github.io/ChuMicro/runner/stable/guide/) covers registration patterns, generator-driven sequential I/O, idling between ticks, runtime mutation, and testing your components in depth.
+The [full user guide](https://chumicro.com/ChuMicro/runner/stable/guide/) covers registration patterns, generator-driven sequential I/O, idling between ticks, runtime mutation, and testing your components in depth.
 
 ## Contributing
 
@@ -189,7 +189,7 @@ Issues, bug reports, and pull requests are welcome, and so is "I ran it on this 
 
 ## Docs
 
-📖 **[Stable docs](https://chumicro.github.io/ChuMicro/runner/stable/)** · **[Experimental docs](https://chumicro.github.io/ChuMicro/runner/experimental/)**
+📖 **[Stable docs](https://chumicro.com/ChuMicro/runner/stable/)** · **[Experimental docs](https://chumicro.com/ChuMicro/runner/experimental/)**
 
 ## Find this library
 

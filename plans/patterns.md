@@ -1429,3 +1429,34 @@ project site (`scripts/generate_site_root.py` reads the landing page's package
 list), publish it by rebuilding the site repository's whole tree so a retired
 key file stops answering, and gate the publish on a deploy key so a missing
 secret warns instead of failing a documentation deploy that already shipped.
+
+## Moving a Pages site to a custom domain
+
+An organization site with a custom domain redirects its whole `github.io` host to
+that domain, and project sites below it inherit the domain rather than needing
+one each.  `chumicro.github.io/ChuMicro/mqtt/stable/` became
+`chumicro.com/ChuMicro/mqtt/stable/` with no per-repository configuration, and
+GitHub issues the redirects itself, so no redirect table needs maintaining.
+
+Order matters and is not recoverable if you get it wrong.  DNS first: four `A`
+records and four `AAAA` records on the apex pointing at GitHub's Pages
+addresses, plus a `CNAME` on `www` pointing at the `github.io` name.  Only once
+those resolve does the custom domain get set, because GitHub starts redirecting
+the instant it accepts the domain, and a domain that does not answer yet takes
+the site down.  The certificate is requested after the domain is accepted and
+takes minutes; enforce HTTPS only once its state reads `approved`.
+
+The `CNAME` file is the trap.  Setting the domain through GitHub's web interface
+commits that file to the site repository, and a publish that rebuilds the
+repository's whole tree deletes it, which drops the domain on the next deploy.
+Generate it from the same constant that names the host.
+
+Registrar forwarding is not DNS.  A domain that "forwards to" a URL has records
+claiming the apex, and those have to be cleared before the Pages records take
+effect.  Spare domains stay as redirects to the canonical one: several hosts
+serving identical pages splits the site's authority and lets a search engine
+pick a winner arbitrarily.
+
+Changing the host rewrites `Documentation` in every `pyproject.toml`, which is
+release-relevant metadata, so the move costs a version bump per package and a
+release before PyPI shows the new links.

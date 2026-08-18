@@ -1,7 +1,7 @@
 site_name: chumicro-runner
 site_description: >-
   Tick-based task runner for CircuitPython, MicroPython, and CPython.  Run many services in one loop, no async required.
-site_url: https://chumicro.github.io/ChuMicro/runner/
+site_url: https://chumicro.com/ChuMicro/runner/
 repo_url: https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner
 repo_name: Source
 theme:
