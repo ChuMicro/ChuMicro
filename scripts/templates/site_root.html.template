@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ChuMicro: open-source Python for CircuitPython and MicroPython boards</title>
+  <meta name="description" content="ChuMicro builds Python libraries and host tools for microcontrollers. WiFi, MQTT, HTTP, WebSockets, timers, and storage for CircuitPython, MicroPython, and CPython, plus the workbench that deploys them.">
+  <link rel="canonical" href="https://chumicro.github.io/">
+$verification  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="ChuMicro">
+  <meta property="og:title" content="ChuMicro: open-source Python for microcontrollers">
+  <meta property="og:description" content="Python libraries and host tools for CircuitPython, MicroPython, and CPython boards.">
+  <meta property="og:url" content="https://chumicro.github.io/">
+  <meta property="og:image" content="https://raw.githubusercontent.com/ChuMicro/ChuMicro/main/support/docs/chumicro.png">
+  <meta name="twitter:card" content="summary">
+$structured_data  <link rel="icon" href="/ChuMicro/assets/images/favicon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0e0f10;
+      --card-bg: #1a1510;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --accent: #e87518;
+      --border: #2a1e10;
+      --tag-bg: #1e1208;
+      --tag-text: #e8d296;
+      --green-bg: #1e1208;
+      --green-text: #ed9838;
+      --orange-bg: #1e1208;
+      --orange-text: #f0a050;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+      background: var(--bg); color: var(--text);
+      font-size: 1rem; line-height: 1.75;
+    }
+    .container { max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem; }
+
+    header { text-align: center; padding: 3rem 0 2rem; }
+    header h1 { font-size: 2em; font-weight: 700; margin-bottom: .5rem; }
+    header p { font-size: 1.1rem; color: var(--muted); max-width: 620px; margin: 0 auto; }
+    .badges { margin-top: 1rem; display: flex; gap: .5rem; justify-content: center; flex-wrap: wrap; }
+    .badge {
+      display: inline-block; font-size: .8rem; font-weight: 600;
+      padding: .25rem .65rem; border-radius: 1rem;
+    }
+    .badge-cream { background: var(--tag-bg); color: var(--tag-text); }
+    .badge-amber { background: var(--green-bg); color: var(--green-text); }
+    .badge-orange { background: var(--orange-bg); color: var(--orange-text); }
+
+    .section { margin: 2.5rem 0; }
+    .section-heading { font-size: 1.4rem; margin-bottom: .35rem; }
+    .section-description { color: var(--muted); font-size: .95rem; margin-bottom: 1rem; }
+
+    .card {
+      background: var(--card-bg); border: 1px solid var(--border);
+      border-radius: .6rem; padding: 1.25rem 1.4rem; margin-bottom: 1rem;
+    }
+    .card h3 { font-size: 1.25rem; margin-bottom: .35rem; }
+    .card h3 a { color: var(--accent); text-decoration: none; }
+    .card h3 a:hover { text-decoration: underline; }
+    .card p { color: var(--muted); font-size: .95rem; }
+    .card .links { margin-top: .75rem; display: flex; gap: 1.25rem; flex-wrap: wrap; }
+    .card .links a { color: var(--accent); text-decoration: none; font-size: .9rem; font-weight: 600; }
+    .card .links a:hover { text-decoration: underline; }
+
+    .package-list { list-style: none; }
+    .package-list li {
+      padding: .5rem 0; border-bottom: 1px solid var(--border);
+      color: var(--muted); font-size: .95rem;
+    }
+    .package-list li:last-child { border-bottom: none; }
+    .package-list a {
+      color: var(--accent); text-decoration: none; font-weight: 600;
+      font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+      font-size: .88em; margin-right: .5rem;
+    }
+    .package-list a:hover { text-decoration: underline; }
+
+    footer { text-align: center; padding: 2rem 0 3rem; color: var(--muted); font-size: .9rem; }
+    footer a { color: var(--accent); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>ChuMicro</h1>
+      <p>Open-source Python for microcontrollers. Libraries that keep your main loop running while the network is slow, and host tools that get them onto a board.</p>
+      <div class="badges">
+        <span class="badge badge-cream">CircuitPython</span>
+        <span class="badge badge-amber">MicroPython</span>
+        <span class="badge badge-orange">CPython</span>
+      </div>
+    </header>
+
+    <section class="section">
+      <h2 class="section-heading">Projects</h2>
+      <p class="section-description">Everything published under this organization.</p>
+$projects
+    </section>
+
+$packages
+
+    <footer>
+      <a href="https://github.com/ChuMicro">GitHub</a>
+      &nbsp;&middot;&nbsp;
+      <a href="https://pypi.org/search/?q=chumicro">PyPI</a>
+      &nbsp;&middot;&nbsp;
+      <a href="https://chumicro.github.io/ChuMicro/guides/">Guides and troubleshooting</a>
+      <br>
+      MIT License
+    </footer>
+  </div>
+</body>
+</html>

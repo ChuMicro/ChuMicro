@@ -143,7 +143,27 @@ def docs(
     # The guides site publishes alongside the library docs and its URLs
     # ride in the sitemap, so a build that breaks here has to fail a PR
     # rather than surface as a 404 after deploy.
-    return build_guides_site()
+    exit_code = build_guides_site()
+    if exit_code != 0:
+        return exit_code
+
+    # The host-root site carries robots.txt and the verification files
+    # for the whole host, and it reads the same package list as the
+    # landing page, so a rename that breaks it should fail here too.
+    return build_site_root()
+
+
+def build_site_root() -> int:
+    """Build the host-root site into ``.site-root/``.
+
+    Returns:
+        Process exit status: 0 when the site builds.
+    """
+    from generate_site_root import SITE_DIR, build
+
+    print(f"docs {SITE_DIR.relative_to(ROOT)}")
+    build(SITE_DIR)
+    return 0
 
 
 def build_guides_site() -> int:

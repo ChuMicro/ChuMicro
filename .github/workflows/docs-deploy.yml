@@ -106,3 +106,60 @@ jobs:
         run: python scripts/index_now.py
         env:
           PYTHONPATH: scripts
+
+  # ---------------------------------------------------------------------------
+  # Host-root site.  GitHub serves one site per account, at the root of the
+  # host every project path hangs below.  robots.txt, the ownership tokens,
+  # and the IndexNow key only count when they answer there, so this job
+  # rebuilds https://chumicro.github.io/ from the same package list the
+  # landing page reads.  It follows the docs deploy because the hub links
+  # into pages that deploy publishes.
+  # ---------------------------------------------------------------------------
+  publish-site-root:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: deploy
+    env:
+      # Step-level `if` can read this; a job-level one cannot reach the
+      # secrets context.  Absent key means the publish skips rather than
+      # failing a deploy that already shipped the documentation.
+      SITE_ROOT_DEPLOY_KEY: ${{ secrets.SITE_ROOT_DEPLOY_KEY }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7
+        with:
+          python-version: "3.13"
+
+      - name: Report a missing deploy key
+        if: env.SITE_ROOT_DEPLOY_KEY == ''
+        run: |
+          echo "::warning::SITE_ROOT_DEPLOY_KEY is not set." \
+               "The host-root site at https://chumicro.github.io/ was not updated."
+
+      - name: Configure SSH for the site repository
+        if: env.SITE_ROOT_DEPLOY_KEY != ''
+        uses: webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555  # v0.10.0
+        with:
+          ssh-private-key: ${{ secrets.SITE_ROOT_DEPLOY_KEY }}
+
+      - name: Clone the site repository
+        if: env.SITE_ROOT_DEPLOY_KEY != ''
+        run: git clone git@github.com:ChuMicro/chumicro.github.io.git .site-repo
+
+      - name: Configure git
+        if: env.SITE_ROOT_DEPLOY_KEY != ''
+        run: |
+          git -C .site-repo config user.name "github-actions[bot]"
+          git -C .site-repo config user.email \
+            "github-actions[bot]@users.noreply.github.com"
+
+      - name: Publish the host-root site
+        if: env.SITE_ROOT_DEPLOY_KEY != ''
+        env:
+          PYTHONPATH: scripts
+        run: |
+          python scripts/publish_site_root.py \
+            --clone-dir .site-repo \
+            --message "Rebuild host-root site from ${GITHUB_SHA:0:7}" \
+            --push
