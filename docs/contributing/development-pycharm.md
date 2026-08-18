@@ -10,7 +10,7 @@ This guide covers the full development workflow in PyCharm.  The project ships c
 
 ### 1. Fork, clone, and install
 
-Follow steps 1–4 of the [setup walkthrough](../../CONTRIBUTING.md#setting-up) in the contributing guide to fork the repository, clone it, and install dependencies. Then come back here for PyCharm-specific setup.
+Follow steps 1–4 of the [setup walkthrough](https://github.com/ChuMicro/ChuMicro/blob/main/CONTRIBUTING.md#setting-up) in the contributing guide to fork the repository, clone it, and install dependencies. Then come back here for PyCharm-specific setup.
 
 ### 2. Open in PyCharm
 
@@ -146,7 +146,7 @@ Preflight passed.  Required CI checks should pass.
 Process finished with exit code 0
 ```
 
-**When it fails,** the Run panel shows the failing step. Look for lines starting with `FAIL` or `ERROR`. [The development loop](../../CONTRIBUTING.md#the-development-loop) in the contributing guide covers how to read the common failures (coverage gaps, `ruff` style violations, `griffe` docstring warnings, a missed VERSION bump, cross-runtime breaks) and how to reproduce each.
+**When it fails,** the Run panel shows the failing step. Look for lines starting with `FAIL` or `ERROR`. [The development loop](https://github.com/ChuMicro/ChuMicro/blob/main/CONTRIBUTING.md#the-development-loop) in the contributing guide covers how to read the common failures (coverage gaps, `ruff` style violations, `griffe` docstring warnings, a missed VERSION bump, cross-runtime breaks) and how to reproduce each.
 
 If the output isn't enough to pinpoint the problem, run the individual configurations (Lint, Test, Docs, etc.) from the dropdown to isolate the failing step.
 

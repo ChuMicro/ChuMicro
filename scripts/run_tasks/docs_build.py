@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import shutil
 import subprocess
-import tempfile
 from collections.abc import Callable
 from pathlib import Path
 
@@ -147,21 +146,19 @@ def docs(
     return build_guides_site()
 
 
-def build_guides_site(destination: Path | None = None) -> int:
-    """Build the guides site, or report why it cannot be built.
+def build_guides_site() -> int:
+    """Build the guides site, or skip when there is none.
 
-    Returns 0 when there is no guides site to build, which keeps a
-    workspace without one from failing the docs phase.
+    Returns 0 when the config is absent, which keeps a workspace
+    without a guides site from failing the docs phase.
     """
     from docs_deploy import GUIDES_CONFIG
     from docs_deploy import build_guides_site as _build
 
     if not GUIDES_CONFIG.is_file():
         return 0
-    with tempfile.TemporaryDirectory(suffix=".guides") as scratch:
-        target = destination or Path(scratch)
-        print(f"docs {GUIDES_CONFIG.relative_to(ROOT)}")
-        return _build(target)
+    print(f"docs {GUIDES_CONFIG.relative_to(ROOT)}")
+    return _build()
 
 
 def _build_one_library_docs_factory(

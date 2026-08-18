@@ -88,7 +88,7 @@ If a publish leg fails, the packages that succeeded keep their tags, and the bun
 
 ## Versioning
 
-See [VERSION bumps](../../CONTRIBUTING.md#version-bumps-and-publishing) in the contributing guide for when and how to bump. Libraries version independently: bumping one has no effect on others.
+See [VERSION bumps](https://github.com/ChuMicro/ChuMicro/blob/main/CONTRIBUTING.md#version-bumps-and-publishing) in the contributing guide for when and how to bump. Libraries version independently: bumping one has no effect on others.
 
 ## FAQ
 
@@ -105,4 +105,4 @@ The release will fire on merge. It's not harmful (the package just gets a new ve
 A maintainer creates a short-lived release branch from the stable tag, applies the fix, and runs `release.yml` manually. This is rare: most fixes go through a normal PR to `main`.
 
 **Q: How do security fixes reach users?**
-Like any fix, plus urgency: the patch merges to `main`, publishes to experimental automatically, and the maintainer promotes it to stable immediately instead of waiting for the next routine promotion. If you are reporting a vulnerability, go through [SECURITY.md](../../SECURITY.md) privately; do not open a public promotion request for it.
+Like any fix, plus urgency: the patch merges to `main`, publishes to experimental automatically, and the maintainer promotes it to stable immediately instead of waiting for the next routine promotion. If you are reporting a vulnerability, go through [SECURITY.md](https://github.com/ChuMicro/ChuMicro/blob/main/SECURITY.md) privately; do not open a public promotion request for it.

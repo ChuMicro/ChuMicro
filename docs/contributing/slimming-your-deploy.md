@@ -4,7 +4,7 @@ When you deploy a project, `chumicro-workspace` copies every chumicro library th
 
 Most of the time that's fine.  But if you're passing your own socket into a library (say `MQTTClient(transport_factory=my_factory, ...)`), the default-builder helper is dead code on your board, and so is `chumicro_sockets` underneath it.  The deployer can't tell at deploy time which path your code will take at runtime, so it ships both.
 
-[Decision 0062](../../plans/decisions/0062-entrypoint-factory-skip.md) lets you say "skip the default builder; I'm bringing my own."  Add one line to your `app.py` (or `code.py`, whichever your project's entrypoint is):
+[Decision 0062](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0062-entrypoint-factory-skip.md) lets you say "skip the default builder; I'm bringing my own."  Add one line to your `app.py` (or `code.py`, whichever your project's entrypoint is):
 
 ```python
 __chumicro_skip_factories__ = ("sockets_factory",)
@@ -73,7 +73,7 @@ The `sockets_factory` family entry now resolves to the single shared `chumicro_s
 
 ## When this matters (and when it doesn't)
 
-The skip mechanism only fires under the `chumicro-workspace` deploy path (`chumicro-workspace deploy <project>`).  `circup` and `mip` install the on-device libraries through their own dep-graph resolution: they read each package's pyproject.toml dependencies and install transitively with no `--no-deps` flag.  See [Decision 0042](../../plans/decisions/0042-library-dependency-policy.md) for the why; the bench evidence is recorded in the body of [Decision 0062](../../plans/decisions/0062-entrypoint-factory-skip.md).
+The skip mechanism only fires under the `chumicro-workspace` deploy path (`chumicro-workspace deploy <project>`).  `circup` and `mip` install the on-device libraries through their own dep-graph resolution: they read each package's pyproject.toml dependencies and install transitively with no `--no-deps` flag.  See [Decision 0042](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0042-library-dependency-policy.md) for the why; the bench evidence is recorded in the body of [Decision 0062](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0062-entrypoint-factory-skip.md).
 
 You'll feel the difference if and only if:
 

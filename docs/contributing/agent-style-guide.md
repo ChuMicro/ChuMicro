@@ -161,7 +161,7 @@ A passage rotted by repeated subtractive edits is not fixed by removing another 
 
 Several skills apply this rule in their scope:
 
-- [`audit-comments`](../../.github/skills/audit-comments/SKILL.md) for code comments.
-- [`audit-docs`](../../.github/skills/audit-docs/SKILL.md) for user-facing markdown.
-- [`audit-skill`](../../.github/skills/audit-skill/SKILL.md) for SKILL.md bodies.
-- The in-place-edit rule in [`plans/decisions/README.md`](../../plans/decisions/README.md) for ADR bodies.
+- [`audit-comments`](https://github.com/ChuMicro/ChuMicro/tree/main/.github/skills/audit-comments/SKILL.md) for code comments.
+- [`audit-docs`](https://github.com/ChuMicro/ChuMicro/tree/main/.github/skills/audit-docs/SKILL.md) for user-facing markdown.
+- [`audit-skill`](https://github.com/ChuMicro/ChuMicro/tree/main/.github/skills/audit-skill/SKILL.md) for SKILL.md bodies.
+- The in-place-edit rule in [`plans/decisions/README.md`](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/README.md) for ADR bodies.

@@ -8,7 +8,7 @@ This guide is for developers using editors other than PyCharm and VS Code: Neovi
 
 ## Setup
 
-Follow steps 1–4 of the [setup walkthrough](../../CONTRIBUTING.md#setting-up) in the contributing guide to fork the repository, clone it, and install dependencies:
+Follow steps 1–4 of the [setup walkthrough](https://github.com/ChuMicro/ChuMicro/blob/main/CONTRIBUTING.md#setting-up) in the contributing guide to fork the repository, clone it, and install dependencies:
 
 ```bash
 cd ChuMicro

@@ -6,7 +6,7 @@ Workbench packages are host-only CPython tools that ship to PyPI but never reach
 
 <br clear="left">
 
-For what workbench is and which tools currently ship, see [`workbench/`](../../workbench/).  For the design rationale behind splitting workbench from `libraries/`, see [Decision 0032](../../plans/decisions/0032-workbench-host-tools.md).
+For what workbench is and which tools currently ship, see [`workbench/`](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/).  For the design rationale behind splitting workbench from `libraries/`, see [Decision 0032](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0032-workbench-host-tools.md).
 
 ## Conventions shared with libraries
 
@@ -14,9 +14,9 @@ Workbench packages follow the same per-library conventions as code under `librar
 
 - `pyproject.toml` + `VERSION` (SemVer)
 - `src/<package_name>/` source layout
-- `tests/` meeting the coverage gate: the 85 % pyproject baseline, raised to 94 % on agent invocations ([Decision 0025](../../plans/decisions/0025-dual-coverage-thresholds.md))
-- f-strings, PEP 604/585 annotations ([Decision 0021](../../plans/decisions/0021-docstring-type-policy.md)), descriptive names ([Decision 0022](../../plans/decisions/0022-naming-conventions.md))
-- Constructor injection for injected dependencies ([Decision 0010](../../plans/decisions/0010-library-testability.md)) where relevant
+- `tests/` meeting the coverage gate: the 85 % pyproject baseline, raised to 94 % on agent invocations ([Decision 0025](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0025-dual-coverage-thresholds.md))
+- f-strings, PEP 604/585 annotations ([Decision 0021](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0021-docstring-type-policy.md)), descriptive names ([Decision 0022](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0022-naming-conventions.md))
+- Constructor injection for injected dependencies ([Decision 0010](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0010-library-testability.md)) where relevant
 - Tests via `pytest workbench/<name>/tests/` for iteration, `python scripts/run.py test --libraries <name>` for the gated run; lint via `python scripts/run.py lint`
 
 ## Scaffolding
@@ -39,7 +39,7 @@ Same `mkdocs.yml` + `docs/` layout as device libraries (Zensical + mkdocstrings 
 
 ## Differences from libraries
 
-- **Host-side `functional_tests/`, not on-device.**  Workbench tools drive devices from the host rather than running on the device.  A workbench package can still ship a `functional_tests/` directory for host-side tests that touch hardware (see [`workbench/deploy/functional_tests/`](../../workbench/deploy/functional_tests/) for the deploy happy paths against a real board through the public `chumicro_deploy` API).  The root `conftest.py` excludes these from default host collection the same way it does for library functional tests; run them with `python scripts/run.py test-workbench-functional` (the workbench counterpart to `test-libraries-functional`).  Each suite's own `conftest.py` owns device selection.
+- **Host-side `functional_tests/`, not on-device.**  Workbench tools drive devices from the host rather than running on the device.  A workbench package can still ship a `functional_tests/` directory for host-side tests that touch hardware (see [`workbench/deploy/functional_tests/`](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/deploy/functional_tests/) for the deploy happy paths against a real board through the public `chumicro_deploy` API).  The root `conftest.py` excludes these from default host collection the same way it does for library functional tests; run them with `python scripts/run.py test-workbench-functional` (the workbench counterpart to `test-libraries-functional`).  Each suite's own `conftest.py` owns device selection.
 - **No cross-runtime tests.**  Workbench packages target only CPython, so `test-micropython` and `test-circuitpython` don't apply.
 - **No `.mpy` compilation, no bundle staging.**  Workbench packages do not appear in `ChuMicro-Bundle` or `ChuMicro-Bundle-Experimental`.
 - **Third-party CPython dependencies are fine.**  `pyserial`, `ruamel.yaml`, `rich`, anything that ships on PyPI.  `libraries/` avoids them because a CPython-only dep can't be `import`ed on a device; workbench doesn't target devices, so the constraint never applied.
@@ -54,7 +54,7 @@ Only split into a separate `libraries/` entry if a real third-party demand appea
 
 ## See also
 
-- [`workbench/`](../../workbench/): what workbench is, current tool list, install commands
-- [Decision 0032](../../plans/decisions/0032-workbench-host-tools.md): full rationale and alternatives
+- [`workbench/`](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/): what workbench is, current tool list, install commands
+- [Decision 0032](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0032-workbench-host-tools.md): full rationale and alternatives
 - [Adding a New Library](new-library.md): the parallel guide for device libraries
-- [`AGENTS.md`](../../AGENTS.md): workspace structure rule, file routing table
+- [`AGENTS.md`](https://github.com/ChuMicro/ChuMicro/blob/main/AGENTS.md): workspace structure rule, file routing table

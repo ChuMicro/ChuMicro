@@ -37,7 +37,7 @@ The repository operates as a public project: `main` is PR-only for everyone (Dec
 - **`BUNDLE_TOKEN` scope.**  A PAT today.  Replace with a fine-grained PAT scoped to the two bundle repos (Contents + Releases) or a GitHub App token.
 - **SUPPORT.md** formalizing Discussions as the help channel (GitHub surfaces it in the issue flow).
 - **Dependabot for Python dev deps.**  Deliberately excluded today (`dependabot.yml` comment); `requirements-dev.txt` pins cryptography and a git-fork mike with no automated security updates.  Revisit the exclusion.
-- **Planning-tree public face.**  `plans/` and `docs/superpowers/` are tracked and public with no README telling a visitor what they are looking at; decision records are a public asset, the work queue and handoffs deserve a one-paragraph framing file.
+- **Planning-tree public face.**  `plans/` is tracked and public with no README telling a visitor what they are looking at; decision records are a public asset, the work queue and handoffs deserve a one-paragraph framing file.
 - **CodeQL + secret scanning.**  Settings-side (default setup covers Python for free on public repos); not a file in this repo.
 
 ## Hardware CI via chunraid (someday, explicitly not now)

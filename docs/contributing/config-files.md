@@ -62,10 +62,10 @@ Three different jobs with three different gitignore promises and three different
 - **`devices.yml`** changes whenever a board is plugged or unplugged.  Per-machine state, so drift between contributors would noise up shared history.
 - **`workspace.yml`** changes when the workspace layout shifts.  Stable across most days.
 
-The split lands per [Decision 0057](../../plans/decisions/0057-two-file-config.md).  Starter templates live under `workbench/workspace/src/chumicro_workspace/_payloads/` (tracked); the materialized files at the workspace root are gitignored.  `devices.yml` is the exception: its template lives with the code that reads it, at `workbench/deploy/src/chumicro_deploy/_payloads/devices.yml.template`, and materializes an empty `devices: []` registry for `add-device` to fill.
+The split lands per [Decision 0057](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0057-two-file-config.md).  Starter templates live under `workbench/workspace/src/chumicro_workspace/_payloads/` (tracked); the materialized files at the workspace root are gitignored.  `devices.yml` is the exception: its template lives with the code that reads it, at `workbench/deploy/src/chumicro_deploy/_payloads/devices.yml.template`, and materializes an empty `devices: []` registry for `add-device` to fill.
 
 ## Where to learn more
 
 - [Device testing](device-testing.md): the device-side flow that reads all three files.
-- [Decision 0057](../../plans/decisions/0057-two-file-config.md): the design rationale for the three-file split.
-- [`workbench/workspace/`](../../workbench/workspace/): the package that materializes and validates each file.
+- [Decision 0057](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0057-two-file-config.md): the design rationale for the three-file split.
+- [`workbench/workspace/`](https://chumicro.github.io/ChuMicro/workspace/stable/): the package that materializes and validates each file.

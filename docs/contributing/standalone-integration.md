@@ -32,7 +32,7 @@ The one sibling in the third column is deliberate: skip `ticks=` and you inherit
 
 Contrast the ergonomic entry point.  `MQTTClient.from_config(...)` wires the default `chumicro_sockets` transport *and* reads config, so its deploy closure is the full declared set: `{chumicro_config, chumicro_sockets, chumicro_timing}` for mqtt (the other four land `{chumicro_sockets, chumicro_timing}`, plus `chumicro_config` where the factory reads keys).  That is the default gravity well.  The recipe below is how you opt out of it, one constructor argument at a time.
 
-(The measured on-device cost of keeping these injection seams, across flash, heap, and hot-path frames, is in the [DI cost measurement](../../plans/reviews/2026-07-03-di-cost-measurement.md); it is sub-1% of a 264 KB / ~800 KB board.)
+(The measured on-device cost of keeping these injection seams, across flash, heap, and hot-path frames, is in the [DI cost measurement](https://github.com/ChuMicro/ChuMicro/blob/main/plans/reviews/2026-07-03-di-cost-measurement.md); it is sub-1% of a 264 KB / ~800 KB board.)
 
 ## Recipe: adopt mqtt, websockets, or requests standalone
 
@@ -45,7 +45,7 @@ Every networked client takes its transport through the constructor instead of im
 * **`socket=<a connected socket>`**: you already own a connected, non-blocking socket.  The library takes ownership and drives I/O on it.  Simplest for one-shot scripts and desktop code.
 * **`transport_factory=<callable>`**: you hand over a factory the library calls to build (and, after a drop, *re*build) its own non-blocking connect state machine.  This is the form that gets you self-heal reconnect.
 
-The factory's shape depends on the transport role (the two arities are fixed by [Decision 0115](../../plans/decisions/0115-shared-sockets-factories.md)):
+The factory's shape depends on the transport role (the two arities are fixed by [Decision 0115](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0115-shared-sockets-factories.md)):
 
 | Library | `transport_factory` signature | returns |
 |---|---|---|
@@ -217,10 +217,10 @@ def test_publishes_and_receives():
 
 **`async` / `await` is banned *inside* the libraries, but not in your app.**  ChuMicro libraries never `await`; they make progress through `check`/`handle` ticks so many of them can share one loop without a scheduler.  That is a rule about the library internals, not about you.  Your application can be an `asyncio` program, a thread, or a bare `while True:` loop.  You just have to tick the client from wherever your loop lives (`await`-ing between ticks is fine; call `client.handle(now)` on each pass).  The workspace deployer does enforce the rule at its own boundary: a project whose `app.py` defines `async def run()` is refused with a pointer to the tick pattern, because the on-device boot shim calls `run()` synchronously.
 
-**If the ~3 KB of dependency-injection ceremony ever costs you, there is a recorded escape.**  Keeping these constructor seams costs a few KB of flash and one extra frame per connect (details in the [DI cost measurement](../../plans/reviews/2026-07-03-di-cost-measurement.md)).  If a materially smaller target class ever makes that matter, deploy-time static resolution (rewriting the injection to direct calls in the deploy artifact while keeping every source seam) is recorded in §5 of that report as the pre-approved (currently unscheduled) fallback, and noted as such in the [design workstream](../../plans/workstreams/core-design-realignment.md).  You do not need it today; it exists so a future flash scare does not re-litigate the seams themselves.
+**If the ~3 KB of dependency-injection ceremony ever costs you, there is a recorded escape.**  Keeping these constructor seams costs a few KB of flash and one extra frame per connect (details in the [DI cost measurement](https://github.com/ChuMicro/ChuMicro/blob/main/plans/reviews/2026-07-03-di-cost-measurement.md)).  If a materially smaller target class ever makes that matter, deploy-time static resolution (rewriting the injection to direct calls in the deploy artifact while keeping every source seam) is recorded in §5 of that report as the pre-approved (currently unscheduled) fallback, and noted as such in the [design workstream](https://github.com/ChuMicro/ChuMicro/blob/main/plans/workstreams/core-design-realignment.md).  You do not need it today; it exists so a future flash scare does not re-litigate the seams themselves.
 
 ## See also
 
 * [Slimming your deploy](slimming-your-deploy.md): once your code brings its own transport, strip the default `chumicro_sockets` wiring off the device with `__chumicro_skip_factories__`.
-* Each networked library's guide has a **Bring your own transport** section with the exact socket-method contract for that library: [mqtt](../../libraries/mqtt/docs/guide.md), [websockets](../../libraries/websockets/docs/guide.md), [requests](../../libraries/requests/docs/guide.md), [ntp](../../libraries/ntp/docs/guide.md), [http_server](../../libraries/http_server/docs/guide.md).
-* [The dependency graph](../../libraries/README.md#dependencies): solid arrows are strict `pyproject.toml` deps; dashed arrows are the injection seams this recipe unplugs.
+* Each networked library's guide has a **Bring your own transport** section with the exact socket-method contract for that library: [mqtt](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/mqtt/docs/guide.md), [websockets](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/websockets/docs/guide.md), [requests](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/requests/docs/guide.md), [ntp](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/ntp/docs/guide.md), [http_server](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/http_server/docs/guide.md).
+* [The dependency graph](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/README.md#dependencies): solid arrows are strict `pyproject.toml` deps; dashed arrows are the injection seams this recipe unplugs.

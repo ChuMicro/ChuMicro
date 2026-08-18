@@ -314,14 +314,16 @@ class TestGuidesSite:
         empty.mkdir()
         assert docs_deploy._guides_blobs(empty) == []
 
-    def test_build_command_names_the_config(self, tmp_path, monkeypatch):
+    def test_build_runs_the_same_generator_as_the_library_sites(self, monkeypatch):
+        """One generator for every site on the domain."""
         commands: list[list[str]] = []
         monkeypatch.setattr(
             docs_deploy, "run_command", lambda command: commands.append(command) or 0,
         )
-        docs_deploy.build_guides_site(tmp_path / "out")
+        monkeypatch.setattr(docs_deploy.shutil, "rmtree", lambda path, **kwargs: None)
+        docs_deploy.build_guides_site()
 
-        assert commands[0][1:4] == ["-m", "mkdocs", "build"]
+        assert commands[0][1:4] == ["-m", "zensical", "build"]
         assert str(docs_deploy.GUIDES_CONFIG) in commands[0]
 
 

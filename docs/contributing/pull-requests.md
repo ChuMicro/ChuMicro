@@ -2,7 +2,7 @@
 
 <img src="../../support/docs/chumicro_tip.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
-This guide covers what happens once you have changes ready to submit. For environment setup and running tasks, see [CONTRIBUTING.md](../../CONTRIBUTING.md) and its [Setting up](../../CONTRIBUTING.md#setting-up) section.
+This guide covers what happens once you have changes ready to submit. For environment setup and running tasks, see [CONTRIBUTING.md](https://github.com/ChuMicro/ChuMicro/blob/main/CONTRIBUTING.md) and its [Setting up](https://github.com/ChuMicro/ChuMicro/blob/main/CONTRIBUTING.md#setting-up) section.
 
 <br clear="left">
 
@@ -11,8 +11,8 @@ This guide covers what happens once you have changes ready to submit. For enviro
 Make sure you've:
 
 1. Forked and cloned the repository
-2. Set up your development environment (see [Setting up](../../CONTRIBUTING.md#setting-up))
-3. Created a branch (see [Your first change](../../CONTRIBUTING.md#your-first-change-a-worked-example), which walks the branch-off-main steps)
+2. Set up your development environment (see [Setting up](https://github.com/ChuMicro/ChuMicro/blob/main/CONTRIBUTING.md#setting-up))
+3. Created a branch (see [Your first change](https://github.com/ChuMicro/ChuMicro/blob/main/CONTRIBUTING.md#your-first-change-a-worked-example), which walks the branch-off-main steps)
 4. Made your changes and validated them
 
 > **Trivial docs fix?** GitHub's web editor (the pencil icon on any file) + the PR template is a legitimate path for typos, broken links, and one-line clarifications. You skip the local setup entirely; CI still runs the checks. Save the full local workflow for changes that need preflight.
@@ -152,9 +152,9 @@ After you open the PR, GitHub Actions runs the full CI suite. If this is your fi
 2. Fix the issue locally
 3. Push again, and CI re-runs automatically
 
-Each failing check names its cause in the log.  [The development loop](../../CONTRIBUTING.md#the-development-loop) in the contributing guide covers how to read the common ones (coverage gaps, lint violations, docstring warnings, a missed VERSION bump, cross-runtime breaks) and how to reproduce each locally.  The CI-only checks are `check-api` (bump VERSION to the next minor or major when you remove or rename a public function) and `validate-mpy` (build the bundle with `python scripts/run.py build` and read the failing library out of the job log).
+Each failing check names its cause in the log.  [The development loop](https://github.com/ChuMicro/ChuMicro/blob/main/CONTRIBUTING.md#the-development-loop) in the contributing guide covers how to read the common ones (coverage gaps, lint violations, docstring warnings, a missed VERSION bump, cross-runtime breaks) and how to reproduce each locally.  The CI-only checks are `check-api` (bump VERSION to the next minor or major when you remove or rename a public function) and `validate-mpy` (build the bundle with `python scripts/run.py build` and read the failing library out of the job log).
 
-For detailed output examples (success and failure), see your [development environment guide](../../CONTRIBUTING.md#setting-up).
+For detailed output examples (success and failure), see your [development environment guide](https://github.com/ChuMicro/ChuMicro/blob/main/CONTRIBUTING.md#setting-up).
 
 ## Review and merge
 
@@ -171,7 +171,7 @@ After merge, your change is on `main`. If you bumped a VERSION file, an experime
 
 ## Keeping your fork up to date
 
-Your fork doesn't update automatically. Before starting new work, sync it with the original repository. The closing steps of [Your first change](../../CONTRIBUTING.md#your-first-change-a-worked-example) in the contributing guide cover keeping your fork in sync, including how to rebase your branch if `main` moves while you're working.
+Your fork doesn't update automatically. Before starting new work, sync it with the original repository. The closing steps of [Your first change](https://github.com/ChuMicro/ChuMicro/blob/main/CONTRIBUTING.md#your-first-change-a-worked-example) in the contributing guide cover keeping your fork in sync, including how to rebase your branch if `main` moves while you're working.
 
 The short version:
 

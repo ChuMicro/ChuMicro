@@ -264,7 +264,7 @@ SITE_ROOT = "https://chumicro.github.io/ChuMicro"
 #: published alongside the per-library documentation.  Its config names
 #: which pages publish, so the URL list below reads that nav rather than
 #: guessing from the docs tree.
-GUIDES_CONFIG = ROOT / "guides" / "mkdocs.yml"
+GUIDES_CONFIG = ROOT / "guides.mkdocs.yml"
 
 #: Where the guides site is published, relative to the site root.
 GUIDES_PREFIX = "guides"

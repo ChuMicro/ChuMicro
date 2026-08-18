@@ -123,18 +123,23 @@ def _hash_file(path: Path) -> str:
 
 #: The guides site's config.  Its pages are repository prose (questions,
 #: troubleshooting, wiring), published beside the per-library docs.
-GUIDES_CONFIG = ROOT / "guides" / "mkdocs.yml"
+GUIDES_CONFIG = ROOT / "guides.mkdocs.yml"
 
 #: Where the guides site lands on the docs branch.
 GUIDES_PREFIX = "guides"
 
 
-def build_guides_site(destination: Path) -> int:
-    """Build the guides site into *destination*."""
+#: Where the guides build lands.  The generator takes its output path
+#: from the config's ``site_dir`` rather than a flag, so this mirrors it.
+GUIDES_SITE_DIR = ROOT / ".guides-site"
+
+
+def build_guides_site() -> int:
+    """Build the guides site into :data:`GUIDES_SITE_DIR`."""
+    shutil.rmtree(GUIDES_SITE_DIR, ignore_errors=True)
     return run_command([
-        sys.executable, "-m", "mkdocs", "build",
+        sys.executable, "-m", "zensical", "build",
         "-f", str(GUIDES_CONFIG),
-        "-d", str(destination),
     ])
 
 
@@ -195,20 +200,16 @@ def inject_landing_page(branch: str) -> None:
     # The guides site is built fresh each deploy and replaces whatever
     # was published before, so a page dropped from its nav stops being
     # served instead of lingering as an orphan.
-    guides_directory = Path(tempfile.mkdtemp(suffix=".guides"))
     guides_blobs: list[tuple[str, str]] = []
     stale_guides: list[str] = []
-    try:
-        if GUIDES_CONFIG.is_file():
-            if build_guides_site(guides_directory) != 0:
-                # The sitemap advertises these pages, so publishing the
-                # rest without them would ship a sitemap full of 404s.
-                raise RuntimeError("guides site failed to build")
-            guides_blobs = _guides_blobs(guides_directory)
-            published = set(_published_guides_paths(branch))
-            stale_guides = sorted(published - {path for _, path in guides_blobs})
-    finally:
-        shutil.rmtree(guides_directory, ignore_errors=True)
+    if GUIDES_CONFIG.is_file():
+        if build_guides_site() != 0:
+            # The sitemap advertises these pages, so publishing the rest
+            # without them would ship a sitemap full of 404s.
+            raise RuntimeError("guides site failed to build")
+        guides_blobs = _guides_blobs(GUIDES_SITE_DIR)
+        published = set(_published_guides_paths(branch))
+        stale_guides = sorted(published - {path for _, path in guides_blobs})
 
     # Hash the favicon if it exists.
     favicon_source_file = ROOT / "support" / "docs" / "favicon.png"

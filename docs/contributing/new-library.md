@@ -2,13 +2,13 @@
 
 <img src="../../support/docs/chumicro_tip.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
-This guide walks you through the full lifecycle of adding a new library to ChuMicro, from idea to published package.  If you're working with an AI agent, point it at the [`new-library` skill](../../.github/skills/new-library/SKILL.md).
+This guide walks you through the full lifecycle of adding a new library to ChuMicro, from idea to published package.  If you're working with an AI agent, point it at the [`new-library` skill](https://github.com/ChuMicro/ChuMicro/tree/main/.github/skills/new-library/SKILL.md).
 
 <br clear="left">
 
 ## Before you start
 
-Check [open issues](https://github.com/ChuMicro/ChuMicro/issues) and [discussions](https://github.com/ChuMicro/ChuMicro/discussions), and skim [`plans/next-up.md`](../../plans/next-up.md) and [`plans/decisions/`](../../plans/decisions/) to see if your idea overlaps with planned work or settled design choices. If you're unsure whether the library fits the project, open a discussion first.  It's much faster to align on scope before building.
+Check [open issues](https://github.com/ChuMicro/ChuMicro/issues) and [discussions](https://github.com/ChuMicro/ChuMicro/discussions), and skim [`plans/next-up.md`](https://github.com/ChuMicro/ChuMicro/blob/main/plans/next-up.md) and [`plans/decisions/`](https://github.com/ChuMicro/ChuMicro/tree/main/plans/decisions/) to see if your idea overlaps with planned work or settled design choices. If you're unsure whether the library fits the project, open a discussion first.  It's much faster to align on scope before building.
 
 > **Is your package host-only?**  This guide is for *device libraries*: code that runs on CircuitPython, MicroPython, and CPython.  If you're adding a tool that runs only on the developer's laptop (a CLI that drives devices, a REPL client, a firmware helper), it belongs in `workbench/` instead.  See [`workbench.md`](workbench.md) for the layout and conventions.  The scaffolder supports workbench packages: from inside the mono-repo run `python scripts/run.py new-library --workbench <name>`; for a workspace project outside the mono-repo use `chumicro-workspace new --workbench <name>`.
 
@@ -56,7 +56,7 @@ The `tests/conftest.py` looks empty but is load-bearing: the workspace runs one 
 
 Put your code in `src/chumicro_my_sensor/`. Follow the [Style Guide](style-guide.md) for naming, annotations, docstrings, and formatting. Key rules for library code:
 
-- **No `async`/`await`.**  Use the tick-based runner pattern. If your library has active components, implement `check(now_ms) -> bool` so they work with [`Runner`](../../libraries/runner/).
+- **No `async`/`await`.**  Use the tick-based runner pattern. If your library has active components, implement `check(now_ms) -> bool` so they work with [`Runner`](https://chumicro.github.io/ChuMicro/runner/stable/).
 - **No third-party dependencies** that aren't available on all three runtimes.
 - **No `typing` imports.**  Use PEP 604/585 syntax: `int | None`, `list[int]`.
 - **Memory patterns are optional on day one:** `const()`, `memoryview`, pre-allocated buffers. Focus on correctness first. The [Style Guide](style-guide.md#memory-patterns-library-code-only) has the full list when you're ready.
@@ -85,7 +85,7 @@ class MySensor:
         self._i2c = busio.I2C(board.SCL, board.SDA)
 ```
 
-See [Decision 0010](../../plans/decisions/0010-library-testability.md) for the reasoning.
+See [Decision 0010](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0010-library-testability.md) for the reasoning.
 
 ### Public API
 

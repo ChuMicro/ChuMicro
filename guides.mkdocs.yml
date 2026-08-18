@@ -1,9 +1,10 @@
 # The guides site: chumicro.github.io/ChuMicro/guides/
 #
-# Its pages live in the repository's docs/ tree so they read the same
-# on GitHub and on the site, and this config only decides which of them
-# publish.  Nothing under docs/ reaches the site unless it is listed in
-# `nav` and left out of `exclude_docs`.
+# Its pages are the repository's docs/ tree, so they read the same on
+# GitHub and on the site.  The config sits at the repository root
+# because the site generator refuses a docs_dir outside the config's
+# own directory, and it builds with Zensical, the same generator the
+# per-library sites use.
 site_name: ChuMicro guides
 site_description: >-
   Answers and fixes for CircuitPython and MicroPython projects: why a board
@@ -12,7 +13,9 @@ site_description: >-
 site_url: https://chumicro.github.io/ChuMicro/guides/
 repo_url: https://github.com/ChuMicro/ChuMicro
 repo_name: Source
-docs_dir: ../docs
+docs_dir: docs
+# Built output, gitignored.  The docs deploy publishes it under guides/.
+site_dir: .guides-site
 
 theme:
   name: material
@@ -28,13 +31,6 @@ theme:
 
 extra:
   homepage: ../
-
-# Everything the site does not publish.  Design specs, contributor
-# process, and editor setup stay in the repository, where their readers
-# already are.
-exclude_docs: |
-  contributing/
-  superpowers/
 
 nav:
   - Guides: index.md
@@ -53,6 +49,20 @@ nav:
       - Board quirks: troubleshooting/board-quirks.md
       - CircuitPython ringio: troubleshooting/circuitpython-ringio.md
   - Wiring WiFi credentials: wiring-wifi-credentials.md
-
-plugins:
-  - search
+  - Contributing:
+      - Cheat sheet: contributing/cheat-sheet.md
+      - Pull requests: contributing/pull-requests.md
+      - Style guide: contributing/style-guide.md
+      - Writing a new library: contributing/new-library.md
+      - Standalone integration: contributing/standalone-integration.md
+      - Slimming your deploy: contributing/slimming-your-deploy.md
+      - Config files: contributing/config-files.md
+      - Device testing: contributing/device-testing.md
+      - Workbench tools: contributing/workbench.md
+      - Releases and promotion: contributing/releases.md
+      - Maintainers: contributing/maintainers.md
+      - Working with agents: contributing/working-with-agents.md
+      - Agent style guide: contributing/agent-style-guide.md
+      - VS Code setup: contributing/development-vscode.md
+      - PyCharm setup: contributing/development-pycharm.md
+      - Other editors: contributing/development-other-editors.md
