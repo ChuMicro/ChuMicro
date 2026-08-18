@@ -96,3 +96,13 @@ jobs:
 
       - name: Push to gh-pages
         run: git push origin gh-pages
+
+      # The pages are live now, so tell the engines that read IndexNow
+      # rather than waiting for their own crawl schedule.  A ping that
+      # fails prints a warning and leaves the deploy green: the docs
+      # shipped either way.  The promote workflow gets this through
+      # docs_deploy_retry.py, which pings after its own push.
+      - name: Ping IndexNow
+        run: python scripts/index_now.py
+        env:
+          PYTHONPATH: scripts

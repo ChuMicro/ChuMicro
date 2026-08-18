@@ -50,3 +50,11 @@ The key is not a secret.  It is public by design: crawlers fetch it
 from the site to confirm the ping came from someone who can publish
 there.  Replace it by writing a new hex string here; the next deploy
 publishes the new file and pings with it.
+
+Measured 2026-08-17: the endpoint answers `403
+UserForbiddedToAccessSite` while the key file sits under
+`/ChuMicro/` on the shared `chumicro.github.io` host.  Verify the site
+in Bing Webmaster Tools first and try again.  If it keeps refusing,
+the key needs to sit at the host root, which means claiming a
+`chumicro.github.io` pages repository.  A refused ping warns and
+leaves the deploy green, so this costs nothing but the ping.
