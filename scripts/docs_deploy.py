@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -165,6 +166,28 @@ def inject_landing_page(branch: str) -> None:
     )
 
 
+#: A version directory named after a release, e.g. ``0.30.1``.  These
+#: are the URLs that used to hold content and now redirect to the
+#: channel that ships them.
+RELEASE_VERSION_PATTERN = re.compile(r"^\d+\.\d+\.\d+$")
+
+
+def _list_deployed(library_name: str, library_dir: Path, branch: str) -> list[dict]:
+    """Return what mike has deployed under *library_name*, or ``[]``."""
+    listing = subprocess.run(
+        [MIKE, "list", "-j", "--deploy-prefix", library_name, "-b", branch,
+         "-F", str(library_dir / "mkdocs.yml")],
+        capture_output=True, cwd=ROOT, check=False,
+    )
+    if listing.returncode != 0:
+        # No deployed docs for this prefix yet.
+        return []
+    try:
+        return json.loads(listing.stdout or b"[]")
+    except json.JSONDecodeError:
+        return []
+
+
 def _retire_conflicting_names(
     library_name: str,
     library_dir: Path,
@@ -172,7 +195,7 @@ def _retire_conflicting_names(
     *,
     version: str,
     aliases: list[str],
-) -> int:
+) -> tuple[int, list[str]]:
     """Delete deployed names that block the channel-named layout.
 
     Docs deployed before the channel-name layout put the release
@@ -183,35 +206,77 @@ def _retire_conflicting_names(
     takes its aliases with it, so one delete usually clears both
     conflicts, and later runs find nothing to do.
 
-    Returns an exit code: 0 when the branch is ready to deploy onto.
+    Returns ``(exit_code, retired)``: 0 when the branch is ready to
+    deploy onto, and the version names that went away, so the caller
+    can hand their URLs back as redirects.
     """
-    listing = subprocess.run(
-        [MIKE, "list", "-j", "--deploy-prefix", library_name, "-b", branch,
-         "-F", str(library_dir / "mkdocs.yml")],
-        capture_output=True, cwd=ROOT, check=False,
-    )
-    if listing.returncode != 0:
-        # No deployed docs for this prefix yet: nothing to retire.
-        return 0
-    try:
-        deployed = json.loads(listing.stdout or b"[]")
-    except json.JSONDecodeError:
-        return 0
-
+    deployed = _list_deployed(library_name, library_dir, branch)
     stale = [
         entry["version"] for entry in deployed
         if entry.get("version") in aliases or version in entry.get("aliases", [])
     ]
     if not stale:
-        return 0
+        return 0, []
 
     print(f"== retire {library_name} {', '.join(stale)} (pre-channel layout) ==")
-    return run_command([
+    exit_code = run_command([
         MIKE, "delete",
         "--deploy-prefix", library_name,
         "-b", branch,
         "-F", str(library_dir / "mkdocs.yml"),
         *stale,
+    ])
+    return exit_code, stale
+
+
+def _fold_release_urls_into_redirects(
+    library_name: str,
+    library_dir: Path,
+    branch: str,
+    *,
+    version: str,
+    retired: list[str],
+) -> int:
+    """Point every release-numbered URL at *version*'s living docs.
+
+    A reader who bookmarked ``/mqtt/0.28.1/`` and a search engine that
+    indexed it both land on the current docs instead of a 404 or a
+    frozen copy of an old release.  Release-numbered directories that
+    still hold content are deleted and handed back as redirect
+    aliases; *retired* names, already deleted by
+    :func:`_retire_conflicting_names`, are re-added the same way.
+    """
+    deployed = _list_deployed(library_name, library_dir, branch)
+    existing_aliases = {
+        alias for entry in deployed for alias in entry.get("aliases", [])
+    }
+    holding_content = [
+        entry["version"] for entry in deployed
+        if RELEASE_VERSION_PATTERN.match(entry.get("version", ""))
+    ]
+    if holding_content:
+        print(f"== fold {library_name} {', '.join(holding_content)} into redirects ==")
+        exit_code = run_command([
+            MIKE, "delete",
+            "--deploy-prefix", library_name,
+            "-b", branch,
+            "-F", str(library_dir / "mkdocs.yml"),
+            *holding_content,
+        ])
+        if exit_code != 0:
+            return exit_code
+
+    wanted = sorted(set(holding_content + retired) - existing_aliases)
+    if not wanted:
+        return 0
+    return run_command([
+        MIKE, "alias",
+        "--deploy-prefix", library_name,
+        "-b", branch,
+        "-F", str(library_dir / "mkdocs.yml"),
+        "--alias-type", "redirect",
+        "--update-aliases",
+        version, *wanted,
     ])
 
 
@@ -270,7 +335,7 @@ def docs_deploy(
             version, aliases = "experimental", ["dev"]
             title = "experimental"
 
-        exit_code = _retire_conflicting_names(
+        exit_code, retired = _retire_conflicting_names(
             library_name, library_dir, branch, version=version, aliases=aliases,
         )
         if exit_code != 0:
@@ -290,6 +355,16 @@ def docs_deploy(
         if exit_code != 0:
             print(f"Docs deploy failed: {library_name}")
             return exit_code
+
+        # Release numbers belong to the stable channel, so only a stable
+        # deploy folds them.  An experimental deploy leaves them alone.
+        if version == "stable":
+            exit_code = _fold_release_urls_into_redirects(
+                library_name, library_dir, branch, version=version, retired=retired,
+            )
+            if exit_code != 0:
+                print(f"Redirect fold failed: {library_name}")
+                return exit_code
 
     # For stable deploys, set the "stable" alias as the default landing
     # page for each library so bare URLs (e.g. /timing/) redirect to the
