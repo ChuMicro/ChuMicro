@@ -1,14 +1,42 @@
-"""Board-side echo demo: sockets via runner.
+"""The same echo round trip as its sibling demo, written the long way.
 
-``EchoService`` runs one TCP round trip (connect, send a probe,
-read the echo, exit) under ``chumicro_runner``.  It stays dormant
-until the wifi link is up, then ``start()`` builds the
-``SocketConnector`` and the service drives it through DNS / TCP /
-TLS inside its own ``handle``.  Once the connector reaches
-``ready``, the service takes over the socket for send / recv.
+This is the file that runs on the board.  It does exactly what
+``sockets_runner_connector`` does: wait for wifi, connect to a small
+echo server on your laptop, send one line, read the line that comes
+back.  The difference is how it is written.
 
-Marker lines (``WIFI_OK``, ``CONNECTING``, ``CONNECTED``, ``SENT``,
-``ECHO_RECEIVED``, ``DEMO_COMPLETE``) drive the host driver.
+There, the whole conversation was one function with ``yield from`` at
+each pause.  Here it is ``EchoService``, an object with a ``state``
+string that walks ``idle`` to ``connecting`` to ``sending`` to
+``receiving`` to ``done``.  The runner asks it ``check(now_ms)`` ("do
+you want a turn?") and then ``handle(now_ms)`` ("here is your turn"),
+and the service picks up wherever it left off.
+
+Read the two side by side.  Nothing here is hidden from you in the
+other one; it is the same steps, and ``yield from`` is what collapses
+the bookkeeping.
+
+What you will see::
+
+    WIFI_OK ip=10.0.0.42
+    CONNECTING host=10.0.0.5 port=54321
+      ...still ticking
+    CONNECTED
+    SENT bytes=15
+    ECHO_RECEIVED bytes=14 payload_hex=68656c6c6f206368756d6963726f
+    DEMO_COMPLETE
+      ...still ticking
+      ...still ticking
+
+Nothing stops after that.  The loop goes on turning, the way a board
+program does, and the script on your laptop closes the connection once
+it has seen what it came for.
+
+The UPPERCASE lines are for the script running on your laptop, which
+reads them to follow how far the board got.  They are ordinary ``print``
+calls: the format is just ``NAME key=value``, and the values have to be
+free of spaces and ``=`` signs so the laptop side can split them apart.
+That is why the payload rides as hex rather than as text.
 """
 
 import errno
@@ -16,18 +44,19 @@ import errno
 from chumicro_config import load_runtime_config
 from chumicro_runner import IO_READ, IO_WRITE, Runner
 from chumicro_sockets import connector
-from chumicro_test_harness.markers import marker
 from chumicro_wifi import WifiConfig, WifiService, WifiState
 
 
 class EchoService:
-    """Connect to the echo server, send a probe, read the echo, exit.
+    """Connect to the echo server, send a line, read the reply, stop.
 
-    ``self.state`` walks ``idle`` → ``connecting`` → ``sending`` →
-    ``receiving`` → ``done``.  Pass the radio at construction; call
-    ``start()`` once the wifi link is up.  ``handle`` drives the
-    ``SocketConnector`` through ``connecting``; this service owns
-    ``self._socket`` for send and recv after ``ready``.
+    ``self.state`` is where this object keeps its place: it walks
+    ``idle`` → ``connecting`` → ``sending`` → ``receiving`` → ``done``.
+    Each turn from the runner advances it as far as it can go without
+    waiting, and then returns.  That is the rule the whole project runs
+    on: do a little, give the turn back.
+
+    Call ``start()`` once the wifi link is up.
     """
 
     PROBE_PAYLOAD = b"hello chumicro\n"
@@ -52,13 +81,13 @@ class EchoService:
         """Build the ``SocketConnector`` and move into ``connecting``."""
         if self.connector is not None or self.state == "done":
             return
-        marker("CONNECTING", host=self._host, port=self._port)
+        print(f"CONNECTING host={self._host} port={self._port}")
         try:
             self.connector = connector(
                 self._host, self._port, radio=self._radio,
             )
         except Exception as error:  # noqa: BLE001 - surface as marker, not traceback
-            marker("CONNECT_FAILED", error=type(error).__name__)
+            print(f"CONNECT_FAILED error={type(error).__name__}")
             print(f"  detail: {error!r}")
             self.state = "done"
             return
@@ -83,10 +112,10 @@ class EchoService:
             self._socket = self.connector.socket
             # Nonblocking so send() / recv() raise EAGAIN instead of stalling the runner.
             self._socket.setblocking(False)
-            marker("CONNECTED")
+            print("CONNECTED")
             self.state = "sending"
         elif self.connector.state == "failed":
-            marker("CONNECT_FAILED", error=type(self.connector.last_error).__name__)
+            print(f"CONNECT_FAILED error={type(self.connector.last_error).__name__}")
             print(f"  detail: {self.connector.last_error!r}")
             self.state = "done"
 
@@ -99,16 +128,16 @@ class EchoService:
             except OSError as error:
                 if error.args[0] == errno.EAGAIN:
                     return
-                marker("SEND_FAILED", error=type(error).__name__)
+                print(f"SEND_FAILED error={type(error).__name__}")
                 print(f"  detail: {error!r}")
                 self.state = "done"
                 return
             if sent == 0:
-                marker("SEND_FAILED", error="peer-closed")
+                print("SEND_FAILED error=peer-closed")
                 self.state = "done"
                 return
             self._send_offset += sent
-        marker("SENT", bytes=len(self.PROBE_PAYLOAD))
+        print(f"SENT bytes={len(self.PROBE_PAYLOAD)}")
         self.state = "receiving"
 
     def _handle_receiving(self):
@@ -119,7 +148,7 @@ class EchoService:
         except OSError as error:
             # EAGAIN means no bytes yet: wait for the next read-ready tick.
             if error.args[0] != errno.EAGAIN:
-                marker("RECV_FAILED", error=type(error).__name__)
+                print(f"RECV_FAILED error={type(error).__name__}")
                 print(f"  detail: {error!r}")
                 self.state = "done"
             return
@@ -131,10 +160,10 @@ class EchoService:
         # The echo server terminates its reply with a newline.
         if b"\n" in self._received:
             payload = bytes(self._received).rstrip(b"\n")
-            marker("ECHO_RECEIVED", bytes=len(payload), payload_hex=payload)
+            print(f"ECHO_RECEIVED bytes={len(payload)} payload_hex={payload.hex()}")
+            print("DEMO_COMPLETE")
             self._socket.close()
             self.state = "done"
-            marker("DEMO_COMPLETE")
 
     # Runner.wait() reads these to sleep on the right socket event:
     # delegate to the connector while connecting, then own the socket
@@ -161,7 +190,10 @@ class EchoService:
         return 0
 
 
-_DEMO_DEADLINE_MS = 120_000
+def heartbeat(now_ms):
+    """Runs once a second, whatever else is going on."""
+    print("  ...still ticking")
+
 
 config = load_runtime_config()
 echo_host = config["sockets.echo.host"]
@@ -170,12 +202,19 @@ echo_port = int(config["sockets.echo.port"])
 wifi = WifiService(WifiConfig.from_config(config))
 echo = EchoService(echo_host, echo_port, radio=wifi.adapter.radio)
 
-runner = Runner(on_handler_error=lambda entry, error: print("SERVICE_FAULT", entry.service, repr(error)))
+def report_fault(entry, error):
+    """Runs if a service raises.  The loop keeps going; this says so."""
+    print(f"SERVICE_FAULT service={type(entry.service).__name__} "
+          f"error={type(error).__name__}")
+    print(f"  detail: {error!r}")
+
+
+runner = Runner(on_handler_error=report_fault)
 
 
 def on_wifi_state(_old, new):
     if new == WifiState.CONNECTED:
-        marker("WIFI_OK", ip=wifi.ip)
+        print(f"WIFI_OK ip={wifi.ip}")
         # Link is up.  Kick off the round trip.
         echo.start()
 
@@ -184,7 +223,12 @@ wifi.on_state_change(on_wifi_state)
 
 runner.add(wifi)
 runner.add(echo)
+runner.add_periodic(heartbeat, period_ms=1000)
 
-if not runner.run_until(lambda: echo.done, timeout_ms=_DEMO_DEADLINE_MS):
-    marker("DEMO_TIMEOUT", stage="echo")
-    raise SystemExit(1)
+# The main loop.  tick() gives every registered service one small step,
+# and wait() then parks the CPU until the next event or timer deadline.
+# It never ends, which is what a board program does.  Your own project's
+# loop looks exactly like this one.
+while True:
+    now_ms = runner.tick()
+    runner.wait(now_ms)

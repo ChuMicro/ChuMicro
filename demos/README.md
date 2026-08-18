@@ -79,9 +79,56 @@ device from `devices.yml`.
 
 1. Create `demos/<name>/` with `README.md`, `app.py`,
    `driver.py`.
-2. The `app.py` follows the standard board-file shape: bring wifi
-   up, do the work, print marker lines for sync, exit on completion
-   or deadline.
+2. Write `app.py` for someone learning, because that is who reads
+   it. Four rules, all of them things a reader would otherwise trip
+   over:
+
+   **The docstring says what the board does and what you will see.**
+   Open with the behaviour, paste the actual output, and end with
+   something to try. Comparisons to sibling demos go in this
+   `README.md`, not in the file a beginner opens first.
+
+   **Only import what the demo is demonstrating.** No
+   `chumicro_test_harness`, no workbench internals. Marker lines are
+   plain `print` calls:
+
+   ```python
+   print(f"WIFI_OK ip={wifi.ip}")
+   print(f"ECHO_RECEIVED bytes={len(payload)} payload_hex={payload.hex()}")
+   ```
+
+   The host parser reads `NAME key=value` and drops the whole line if
+   any value contains a space or an `=`, so hex-encode bytes and keep
+   anything free-form (a URL with a query string, a message body) on
+   its own indented line. Indented and lowercase lines are ignored by
+   the parser, so they are free for the human.
+
+   **The demo does not exit.** It ends the way every board program
+   ends, which is that it doesn't:
+
+   ```python
+   while True:
+       now_ms = runner.tick()
+       runner.wait(now_ms)
+   ```
+
+   Print `DEMO_COMPLETE` at the point the work is actually finished,
+   then let the loop carry on. No board-side deadline and no
+   `SystemExit`: the driver already has timeouts on every `wait_for`,
+   and `session.shutdown()` is safe while the board is still running.
+   A demo that self-terminates teaches the one thing about boards that
+   is not true.
+
+   **No scaffolding beyond that.** No timeout constants, no completion
+   flags, no state dicts. If a demo needs something to prove the loop
+   is shared, a one-second heartbeat is enough:
+
+   ```python
+   def heartbeat(now_ms):
+       """Runs once a second, whatever else is going on."""
+       print("  ...still ticking")
+   ```
+
 3. The `driver.py` deploys and runs the on-device code via
    `chumicro_workspace.deploy_api.deploy_project`, which returns a
    session; wait on the board's marker lines with `session.wait_for(...)`

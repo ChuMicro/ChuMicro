@@ -35,8 +35,10 @@ wifi = WifiService.from_config(config)
 
 runner = Runner()
 runner.add(wifi)
+
 while True:
-    runner.tick()
+    now_ms = runner.tick()   # every registered service takes one small step
+    runner.wait(now_ms)      # then the CPU parks until the next event or deadline
 ```
 
 ## Documentation

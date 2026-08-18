@@ -1,35 +1,50 @@
-"""Board-side of the mqtt_pub_sub demo.
+"""Publish and receive MQTT messages from a board, both directions.
 
-Wires ``chumicro_wifi.WifiService`` + ``chumicro_mqtt.MQTTClient`` into
-one ``chumicro_runner.Runner`` and drives them with
-``runner.run_until(..., timeout_ms=...)``.
+This is the file that runs on the board.  It waits for wifi, connects to
+an MQTT broker on your laptop, announces that it is online, subscribes to
+a command topic, publishes three readings, and reacts to one command sent
+back to it.
 
-Reads like a mainstream MQTT quickstart (paho / Adafruit MiniMQTT): set
-a Last Will, set the callbacks once, connect, let the loop run.  The
-periodic publisher just calls ``publish``.  A publish issued before the
-broker session is up buffers in the client's pre-connect queue and
-flushes on CONNACK (``when_disconnected="queue"``, the default), so no
-state guard is needed.  Connect-time setup (publish presence, subscribe
-to commands) happens in ``on_connect``, fire-and-forget, with no
-callback chain and no waiting on QoS 1 acks (the client tracks PUBACK /
-SUBACK internally; the app never needs to).
+MQTT is a small publish/subscribe protocol: everyone connects to a
+broker, publishes to named topics, and subscribes to the topics they care
+about.  Nobody connects to anybody else directly.
 
-Subscribing in ``on_connect`` is one of the client's two subscribe
-idioms, shown here deliberately because it is the mainstream-quickstart
-shape.  The other is declarative: call ``subscribe()`` once before
-``connect()`` and the client records the topic in its desired set, puts
-it on the wire at the first CONNACK, and replays it on every self-heal
-reconnect.  The mqtt_sensor_motor demo shows that shape.
+Three habits worth stealing from this file:
 
-Presence pair: a retained ``"offline"`` Last Will the broker publishes
-if this board drops uncleanly, plus the retained ``"online"`` published
-on connect.  Then the demo publishes three QoS 1 telemetry samples on a
-1.5 s cadence, and prints ``DEMO_COMPLETE`` once all three are sent and
-the host's one command has arrived.
+* **Publish whenever you like.**  ``publish()`` before the broker session
+  is up does not fail; the client buffers it and sends it once connected.
+  There is no "am I connected yet" check anywhere below.
+* **Say goodbye in advance.**  ``set_will(...)`` hands the broker a
+  message to publish on this board's behalf if the board drops off
+  without a proper goodbye.  That plus the ``online`` publish on connect
+  is how anything watching knows whether the board is there.
+* **Do the connect-time setup in ``on_connect``.**  It fires once the
+  broker session is up, which is the first moment a subscription can go
+  on the wire.
 
-Marker lines (``WIFI_OK``, ``MQTT_CONNECTED``, ``RETAINED_STATE_SENT``,
-``SUBSCRIBED``, ``TELEMETRY_SENT``, ``CMD_RECEIVED``,
-``DEMO_COMPLETE``) drive the host driver via stdout markers.
+What you will see::
+
+    WIFI_OK ip=10.0.0.42
+    MQTT_CONNECTED broker=10.0.0.5:1883 client_id=chumicro-mqtt-demo-board
+    RETAINED_STATE_SENT topic=demo/chumicro-mqtt-demo-board/state
+    SUBSCRIBED topic=demo/chumicro-mqtt-demo-board/cmd
+    TELEMETRY_SENT seq=1
+    TELEMETRY_SENT seq=2
+    CMD_RECEIVED topic=demo/chumicro-mqtt-demo-board/cmd payload_hex=626c696e6b
+      text: blink
+    TELEMETRY_SENT seq=3
+    DEMO_COMPLETE
+
+Nothing stops after that.  The loop goes on turning, the way a board
+program does, and the script on your laptop closes the connection once
+it has seen what it came for.
+
+The UPPERCASE lines are for the script running on your laptop, which
+reads them to follow how far the board got.  They are ordinary ``print``
+calls: the format is just ``NAME key=value``, and the values have to be
+free of spaces and ``=`` signs so the laptop side can split them apart.
+That is why the command payload rides as hex, with the readable version
+on the indented line under it.
 """
 
 import json
@@ -37,16 +52,11 @@ import json
 from chumicro_config import load_runtime_config
 from chumicro_mqtt import MQTTClient
 from chumicro_runner import Runner
-from chumicro_test_harness.markers import marker
 from chumicro_timing import ticks_diff, ticks_ms
 from chumicro_wifi import WifiConfig, WifiService, WifiState
 
-_TELEMETRY_COUNT = 3
-_TELEMETRY_INTERVAL_MS = 1_500
-_DEMO_DEADLINE_MS = 120_000
-# Keep ticking this long after the last telemetry is queued so the runner
-# flushes it to the broker before the clean disconnect drops the queue.
-_FLUSH_DRAIN_MS = 750
+TELEMETRY_COUNT = 3
+TELEMETRY_INTERVAL_MS = 1_500
 
 config = load_runtime_config()
 client_id = config.get("mqtt.client_id", "chumicro-mqtt-demo-board")
@@ -72,9 +82,9 @@ start_ms = ticks_ms()
 
 def on_connect():
     """Connect-time setup, fired once: publish presence, subscribe to commands."""
-    marker("MQTT_CONNECTED", broker=broker, client_id=client_id)
+    print(f"MQTT_CONNECTED broker={broker} client_id={client_id}")
     mqtt.publish(state_topic, b"online", qos=1, retain=True)
-    marker("RETAINED_STATE_SENT", topic=state_topic)
+    print(f"RETAINED_STATE_SENT topic={state_topic}")
     mqtt.subscribe(command_topic, qos=1)
 
 
@@ -86,7 +96,7 @@ def on_subscribe(topic, granted_qos):
     printed at enqueue time races the broker (a command published
     before the broker processes the SUBSCRIBE is dropped unseen).
     """
-    marker("SUBSCRIBED", topic=topic)
+    print(f"SUBSCRIBED topic={topic}")
 
 
 def on_command_message(topic, payload):
@@ -96,13 +106,20 @@ def on_command_message(topic, payload):
         else payload
     )
     command_received = True
-    marker("CMD_RECEIVED", topic=topic, payload_hex=text.encode())
+    print(f"CMD_RECEIVED topic={topic} payload_hex={text.encode().hex()}")
     print(f"  text: {text}")
+    announce_if_done()
+
+
+def announce_if_done():
+    """Say so once both halves have happened.  Either one can be last."""
+    if telemetry_sent >= TELEMETRY_COUNT and command_received:
+        print("DEMO_COMPLETE")
 
 
 def on_wifi_state(_old, new):
     if new == WifiState.CONNECTED:
-        marker("WIFI_OK", ip=wifi.ip)
+        print(f"WIFI_OK ip={wifi.ip}")
         mqtt.connect()  # link is back: reconnect now (also clears the hold)
     else:
         # WifiService reports link loss as RECONNECTING / FAILED, so any
@@ -117,7 +134,7 @@ def publish_telemetry(now_ms):
     up buffers in the client's pre-connect queue and flushes on CONNACK.
     """
     global telemetry_sent
-    if telemetry_sent >= _TELEMETRY_COUNT:
+    if telemetry_sent >= TELEMETRY_COUNT:
         return
     telemetry_sent += 1
     payload = json.dumps({
@@ -126,7 +143,8 @@ def publish_telemetry(now_ms):
         "uptime_ms": ticks_diff(now_ms, start_ms),
     }).encode()
     mqtt.publish(telemetry_topic, payload, qos=1)
-    marker("TELEMETRY_SENT", seq=telemetry_sent)
+    print(f"TELEMETRY_SENT seq={telemetry_sent}")
+    announce_if_done()
 
 
 mqtt.on_connect = on_connect
@@ -134,24 +152,22 @@ mqtt.on_subscribe = on_subscribe
 mqtt.on_message = on_command_message
 wifi.on_state_change(on_wifi_state)
 
-runner = Runner(on_handler_error=lambda entry, error: print("SERVICE_FAULT", entry.service, repr(error)))
+def report_fault(entry, error):
+    """Runs if a service raises.  The loop keeps going; this says so."""
+    print(f"SERVICE_FAULT service={type(entry.service).__name__} "
+          f"error={type(error).__name__}")
+    print(f"  detail: {error!r}")
+
+
+runner = Runner(on_handler_error=report_fault)
 runner.add(wifi)
 runner.add(mqtt)
-runner.add_periodic(publish_telemetry, period_ms=_TELEMETRY_INTERVAL_MS)
+runner.add_periodic(publish_telemetry, period_ms=TELEMETRY_INTERVAL_MS)
 
-if not runner.run_until(
-    lambda: telemetry_sent >= _TELEMETRY_COUNT and command_received,
-    timeout_ms=_DEMO_DEADLINE_MS,
-):
-    print(
-        f"STATUS: FAIL_DEMO_DEADLINE "
-        f"telemetry_sent={telemetry_sent} "
-        f"command_received={command_received}",
-    )
-    raise SystemExit(1)
-
-# Drain window: keep ticking so the broker's QoS-1 acks land before
-# the disconnect tears the socket down.
-runner.run_until(timeout_ms=_FLUSH_DRAIN_MS)
-mqtt.disconnect()
-marker("DEMO_COMPLETE")
+# The main loop.  tick() gives every registered service one small step,
+# and wait() then parks the CPU until the next event or timer deadline.
+# It never ends, which is what a board program does.  Your own project's
+# loop looks exactly like this one.
+while True:
+    now_ms = runner.tick()
+    runner.wait(now_ms)

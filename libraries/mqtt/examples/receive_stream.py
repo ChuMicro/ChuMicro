@@ -4,7 +4,8 @@ Brings wifi up via the local ``helpers`` module, connects to a
 configured MQTT broker, subscribes to one command topic, then receives
 every inbound message with a ``yield from mqtt.next_message()`` loop
 driven by ``Runner.add_generator``: wait for a message, act on it,
-wait for the next.
+wait for the next.  The bottom of the file is the ``while True``
+main loop that turns the runner.
 
 Pair with ``telemetry.py``, which uses the ``on_message`` callback and
 its own tick loop; this one shows the linear receive loop for a
@@ -85,5 +86,12 @@ def consume_commands():
 
 runner = Runner()
 runner.add(mqtt)
-handle = runner.add_generator(consume_commands())
-runner.run_until(handle)
+runner.add_generator(consume_commands())
+
+# The main loop.  tick() gives the client and the consumer generator one
+# small step each; wait() idles the CPU until the next socket event or
+# timer deadline instead of spinning.  It never exits, which is what a
+# board program does: press Ctrl-C in the serial console to stop it.
+while True:
+    now_ms = runner.tick()
+    runner.wait(now_ms)

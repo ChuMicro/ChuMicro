@@ -77,5 +77,12 @@ def receive_stream():
 
 runner = Runner()
 runner.add(ws)
-handle = runner.add_generator(receive_stream())
-runner.run_until(handle)
+runner.add_generator(receive_stream())
+
+# The main loop.  tick() gives the client and the receive generator one
+# small step each; wait() idles the CPU until the next socket event or
+# timer deadline instead of spinning.  It never exits, which is what a
+# board program does: press Ctrl-C in the serial console to stop it.
+while True:
+    now_ms = runner.tick()
+    runner.wait(now_ms)

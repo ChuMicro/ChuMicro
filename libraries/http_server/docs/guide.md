@@ -51,8 +51,11 @@ runner.add(server)
 runner.add_periodic(led_blink, period_ms=500)
 
 while True:
-    runner.tick()
+    now_ms = runner.tick()   # every registered service takes one small step
+    runner.wait(now_ms)      # then the CPU parks until the next event or deadline
 ```
+
+`runner.wait(now_ms)` is what turns the loop above from a busy-spin into an idle one: it sleeps on the listening socket until a request arrives or the next blink is due.
 
 `check(now_ms)` always returns `True` (the accept loop runs on every tick); `handle(now_ms)` does at most one tick of progress, capped by the per-connection budgets below.
 

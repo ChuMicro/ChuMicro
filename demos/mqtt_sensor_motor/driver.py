@@ -375,16 +375,13 @@ def main(argv: list[str] | None = None) -> int:
             return 7
         print("driver: motor at 0 confirmed (state echo)")
 
-        # Graceful shutdown: the board announces "offline" before its
-        # clean disconnect (which would otherwise suppress the will).
-        if not _drive_host(
-            host_client,
-            lambda: availability_received and availability_received[-1] == "offline",
-            timeout_s=15.0,
-        ):
+        # The board keeps running, like any board program does, so the
+        # retained availability must still read "online" here.  The
+        # "offline" Last Will is the broker's job if the board ever drops.
+        if availability_received[-1] != "online":
             print(
-                "driver: expected retained 'offline' at shutdown but saw "
-                f"{availability_received!r}.",
+                "driver: expected retained availability to still be 'online' "
+                f"while the board runs, but saw {availability_received!r}.",
                 file=sys.stderr,
             )
             return 8

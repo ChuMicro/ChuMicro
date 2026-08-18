@@ -22,10 +22,13 @@ runner = Runner()
 runner.add(wifi)                 # check/handle integration
 
 while True:
-    runner.tick()
+    now_ms = runner.tick()       # every registered service takes one small step
+
     if wifi.connected:
         # do whatever needs the network
         pass
+
+    runner.wait(now_ms)          # then the CPU parks until the next event or deadline
 ```
 
 `WifiService.from_config(config)` reads the flat `wifi.*` keys (the table in [Configuration](#configuration)); any extra keyword (`adapter=`, `ticks=`) passes through to the constructor, and `radio=` hands the CircuitPython adapter a specific radio object.  `WifiService` calls into the right per-runtime adapter automatically.  No platform branches in your app.
@@ -142,7 +145,10 @@ Leaving `reconnect_max` at its `None` default is what lets an unattended device 
 ```python
 runner = Runner()
 runner.add(wifi)
-runner.tick()             # advances every registered service one step
+
+while True:
+    now_ms = runner.tick()   # advances every registered service one step
+    runner.wait(now_ms)      # then parks the CPU until the next event or deadline
 ```
 
 `check` is cheap (state inspection); `handle` performs at most one wifi-driver call per tick.  On MicroPython that call is non-blocking: association happens in the background and `handle()` returns immediately, so other services keep their tick budget.  On CircuitPython the substrate-level `wifi.radio.connect()` is itself blocking, so `handle()` stalls for up to `connect_timeout_ms` (default 15 000 ms; the first attempt uses `first_connect_timeout_ms` when set) while in `CONNECTING` / `RECONNECTING`.  Other services in the same `Runner` (LED heartbeat, an in-flight HTTP request, MQTT keep-alives) pause for that window.  Once `CONNECTED`, every tick is cheap on both runtimes, and connection failures land in `RECONNECTING`, with the next backoff window resuming naturally.

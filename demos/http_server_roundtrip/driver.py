@@ -129,27 +129,22 @@ def main(argv: list[str] | None = None) -> int:
         )
 
         print("driver: waiting for board to print DEMO_COMPLETE...")
+        # The board keeps serving after the third route, like any board
+        # program does, so wait on the marker rather than on the process
+        # finishing.  session.shutdown() in the finally tears it down.
         try:
-            captured = session.wait_for_completion(
-                timeout_s=args.completion_timeout_s,
+            session.wait_for(
+                "DEMO_COMPLETE", timeout_s=args.completion_timeout_s,
             )
-        except TimeoutError as completion_error:
+        except MarkerTimeoutError as completion_error:
             print(
                 f"driver: board didn't print DEMO_COMPLETE within "
                 f"{args.completion_timeout_s}s: {completion_error}",
                 file=sys.stderr,
             )
             return 3
-        if "DEMO_COMPLETE" in captured:
-            print("driver: demo completed cleanly.")
-            return 0
-        print(
-            "driver: bootstrap returned without DEMO_COMPLETE: "
-            "check the captured stdout below.",
-            file=sys.stderr,
-        )
-        print(captured, file=sys.stderr)
-        return 1
+        print("driver: demo completed cleanly.")
+        return 0
     finally:
         session.shutdown()
 

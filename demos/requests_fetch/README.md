@@ -14,7 +14,7 @@ def fetch_run(wifi, link_up, url):
     yield from wait_for(link_up)            # suspend until wifi is up
     factory = connector_factory(radio=wifi.adapter.radio)
     response = yield from get(factory, url)
-    marker("FETCHED", status=response.status_code, bytes=len(response.body))
+    print(f"FETCHED status={response.status_code} bytes={len(response.body)}")
 
 runner.add_generator(fetch_run(wifi, link_up, fetch_url))
 ```
