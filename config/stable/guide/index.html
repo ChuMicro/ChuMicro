@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://chumicro.github.io/ChuMicro/config/stable/guide/">
+        <link rel="canonical" href="https://chumicro.com/ChuMicro/config/stable/guide/">
       
       
         <link rel="prev" href="./..">
@@ -808,7 +808,7 @@
 </span></code></pre></div>
 <p>On device, <code>load_runtime_config()</code> reads this file back and returns a <code>RuntimeConfig</code> that behaves like a flat dict: <code>config["wifi.ssid"]</code>, <code>"mqtt.broker.host" in config</code>, etc.</p>
 <h3 id="how-the-workspace-tool-produces-it">How the workspace tool produces it<a class="headerlink" href="#how-the-workspace-tool-produces-it" title="Permanent link">&para;</a></h3>
-<p>You can ignore this section if you're building the msgpack file yourself.  If you're using <a href="https://chumicro.github.io/ChuMicro/workspace/stable/"><code>chumicro-workspace</code></a>, it composes the file from per-library TOML templates whose <strong>source shape is nested</strong> for human readability:</p>
+<p>You can ignore this section if you're building the msgpack file yourself.  If you're using <a href="https://chumicro.com/ChuMicro/workspace/stable/"><code>chumicro-workspace</code></a>, it composes the file from per-library TOML templates whose <strong>source shape is nested</strong> for human readability:</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># project_config.toml, what the user edits.</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="k">[wifi]</span>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">ssid</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"HomeNet"</span>
