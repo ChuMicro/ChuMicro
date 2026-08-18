@@ -58,7 +58,7 @@ class TestReadKey:
 class TestPing:
     """What the engines receive."""
 
-    def test_payload_carries_key_location_and_urls(
+    def test_payload_carries_the_key_and_urls(
         self, tmp_path, monkeypatch, recorded_request,
     ):
         key_file = tmp_path / "indexnow-key.txt"
@@ -72,9 +72,36 @@ class TestPing:
         assert index_now.ping() is True
         payload = json.loads(recorded_request[0].data)
         assert payload["key"] == "abc123"
-        assert payload["keyLocation"].endswith("/abc123.txt")
-        assert payload["urlList"] == ["https://chumicro.github.io/ChuMicro/"]
         assert payload["host"] == "chumicro.github.io"
+        assert payload["urlList"] == [
+            "https://chumicro.github.io/",
+            "https://chumicro.github.io/ChuMicro/",
+        ]
+
+    def test_payload_names_no_key_location(
+        self, tmp_path, monkeypatch, recorded_request,
+    ):
+        """An absent keyLocation is what points the endpoint at the host root.
+
+        Naming a subdirectory is legal in the spec and drew
+        ``403 UserForbiddedToAccessSite`` from the endpoint every time,
+        because it checks host ownership separately.
+        """
+        key_file = tmp_path / "indexnow-key.txt"
+        key_file.write_text("abc123\n")
+        monkeypatch.setattr(index_now, "KEY_FILE", key_file)
+        monkeypatch.setattr(index_now, "site_urls", list)
+
+        assert index_now.ping() is True
+        assert "keyLocation" not in json.loads(recorded_request[0].data)
+
+    def test_submitted_urls_lead_with_the_host_root(self, monkeypatch):
+        """The root page lists the packages, so a rename changes it too."""
+        monkeypatch.setattr(
+            index_now, "site_urls",
+            lambda: ["https://chumicro.github.io/ChuMicro/"],
+        )
+        assert index_now.submitted_urls()[0] == "https://chumicro.github.io/"
 
     def test_no_key_skips_the_ping(self, tmp_path, monkeypatch, recorded_request):
         monkeypatch.setattr(index_now, "KEY_FILE", tmp_path / "absent.txt")
