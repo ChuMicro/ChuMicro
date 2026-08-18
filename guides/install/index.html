@@ -10,13 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://chumicro.com/ChuMicro/guides/troubleshooting/">
+        <link rel="canonical" href="https://chumicro.com/ChuMicro/guides/install/">
       
       
-        <link rel="prev" href="../faq/">
+        <link rel="prev" href="../start-here/">
       
       
-        <link rel="next" href="./board-not-found/">
+        <link rel="next" href="../faq/">
       
       
         
@@ -27,7 +27,7 @@
     
     
       
-        <title>Troubleshooting - ChuMicro guides</title>
+        <title>Installing ChuMicro libraries on CircuitPython, MicroPython, and CPython - ChuMicro guides</title>
       
     
     
@@ -83,7 +83,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#troubleshooting" class="md-skip">
+        <a href="#installing-chumicro-libraries" class="md-skip">
           Skip to content
         </a>
       
@@ -119,7 +119,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Troubleshooting
+              Installing ChuMicro libraries on CircuitPython, MicroPython, and CPython
             
           </span>
         </div>
@@ -275,10 +275,37 @@
       
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../install/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installing libraries
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="././" class="md-nav__link md-nav__link--active">
         
   
   
@@ -294,6 +321,132 @@
   
 
       </a>
+      
+        
+
+
+<nav class="md-nav md-nav--secondary" aria-label="On this page">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      On this page
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#quick-install-stable-channel" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Quick install (stable channel)
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#circuitpython-circup-and-the-chumicro-bundle" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        CircuitPython: circup and the ChuMicro bundle
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#micropython-mip" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        MicroPython: mip
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="MicroPython: mip">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#pre-compiled-mpy-bytecode" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Pre-compiled <code>.mpy</code> bytecode
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cpython-pip" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        CPython: pip
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#experimental-pre-release-channel" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Experimental (pre-release) channel
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#project-workspaces" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Project workspaces
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#board-support" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Board support
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Troubleshooting
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -329,20 +482,18 @@
       
   
   
-    
   
   
-  
     
     
     
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
         
           
           <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
@@ -363,7 +514,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_5">
             <span class="md-nav__icon md-icon"></span>
             
@@ -378,37 +529,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Start here
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="././" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../troubleshooting/" class="md-nav__link">
         
   
   
@@ -424,93 +548,6 @@
   
 
       </a>
-      
-        
-
-
-<nav class="md-nav md-nav--secondary" aria-label="On this page">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      On this page
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#getting-a-board-working" class="md-nav__link">
-    <span class="md-ellipsis">
-      <span class="md-typeset">
-        Getting a board working
-      </span>
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#deploying" class="md-nav__link">
-    <span class="md-ellipsis">
-      <span class="md-typeset">
-        Deploying
-      </span>
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#network" class="md-nav__link">
-    <span class="md-ellipsis">
-      <span class="md-typeset">
-        Network
-      </span>
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#memory-and-data" class="md-nav__link">
-    <span class="md-ellipsis">
-      <span class="md-typeset">
-        Memory and data
-      </span>
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#contributor-side" class="md-nav__link">
-    <span class="md-ellipsis">
-      <span class="md-typeset">
-        Contributor-side
-      </span>
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#related" class="md-nav__link">
-    <span class="md-ellipsis">
-      <span class="md-typeset">
-        Related
-      </span>
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -523,7 +560,7 @@
   
   
     <li class="md-nav__item">
-      <a href="./board-not-found/" class="md-nav__link">
+      <a href="../troubleshooting/board-not-found/" class="md-nav__link">
         
   
   
@@ -551,7 +588,7 @@
   
   
     <li class="md-nav__item">
-      <a href="./wifi-wont-connect/" class="md-nav__link">
+      <a href="../troubleshooting/wifi-wont-connect/" class="md-nav__link">
         
   
   
@@ -579,7 +616,7 @@
   
   
     <li class="md-nav__item">
-      <a href="./tls-https-failures/" class="md-nav__link">
+      <a href="../troubleshooting/tls-https-failures/" class="md-nav__link">
         
   
   
@@ -607,7 +644,7 @@
   
   
     <li class="md-nav__item">
-      <a href="./out-of-memory/" class="md-nav__link">
+      <a href="../troubleshooting/out-of-memory/" class="md-nav__link">
         
   
   
@@ -635,7 +672,7 @@
   
   
     <li class="md-nav__item">
-      <a href="./deploy-refused-importerror/" class="md-nav__link">
+      <a href="../troubleshooting/deploy-refused-importerror/" class="md-nav__link">
         
   
   
@@ -663,7 +700,7 @@
   
   
     <li class="md-nav__item">
-      <a href="./deploys-and-file-persistence/" class="md-nav__link">
+      <a href="../troubleshooting/deploys-and-file-persistence/" class="md-nav__link">
         
   
   
@@ -691,7 +728,7 @@
   
   
     <li class="md-nav__item">
-      <a href="./persisting-data/" class="md-nav__link">
+      <a href="../troubleshooting/persisting-data/" class="md-nav__link">
         
   
   
@@ -719,7 +756,7 @@
   
   
     <li class="md-nav__item">
-      <a href="./firmware-onto-a-new-board/" class="md-nav__link">
+      <a href="../troubleshooting/firmware-onto-a-new-board/" class="md-nav__link">
         
   
   
@@ -747,7 +784,7 @@
   
   
     <li class="md-nav__item">
-      <a href="./macos-circuitpy/" class="md-nav__link">
+      <a href="../troubleshooting/macos-circuitpy/" class="md-nav__link">
         
   
   
@@ -775,7 +812,7 @@
   
   
     <li class="md-nav__item">
-      <a href="./board-quirks/" class="md-nav__link">
+      <a href="../troubleshooting/board-quirks/" class="md-nav__link">
         
   
   
@@ -803,7 +840,7 @@
   
   
     <li class="md-nav__item">
-      <a href="./circuitpython-ringio/" class="md-nav__link">
+      <a href="../troubleshooting/circuitpython-ringio/" class="md-nav__link">
         
   
   
@@ -1401,10 +1438,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#getting-a-board-working" class="md-nav__link">
+  <a href="#quick-install-stable-channel" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
-        Getting a board working
+        Quick install (stable channel)
       </span>
     </span>
   </a>
@@ -1412,10 +1449,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#deploying" class="md-nav__link">
+  <a href="#circuitpython-circup-and-the-chumicro-bundle" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
-        Deploying
+        CircuitPython: circup and the ChuMicro bundle
       </span>
     </span>
   </a>
@@ -1423,10 +1460,38 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#network" class="md-nav__link">
+  <a href="#micropython-mip" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
-        Network
+        MicroPython: mip
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="MicroPython: mip">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#pre-compiled-mpy-bytecode" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Pre-compiled <code>.mpy</code> bytecode
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cpython-pip" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        CPython: pip
       </span>
     </span>
   </a>
@@ -1434,10 +1499,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#memory-and-data" class="md-nav__link">
+  <a href="#experimental-pre-release-channel" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
-        Memory and data
+        Experimental (pre-release) channel
       </span>
     </span>
   </a>
@@ -1445,10 +1510,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#contributor-side" class="md-nav__link">
+  <a href="#project-workspaces" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
-        Contributor-side
+        Project workspaces
       </span>
     </span>
   </a>
@@ -1456,10 +1521,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#related" class="md-nav__link">
+  <a href="#board-support" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
-        Related
+        Board support
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Troubleshooting
       </span>
     </span>
   </a>
@@ -1484,86 +1560,104 @@
   
 
 
-<h1 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h1>
-<p>Start from what you're seeing.  Each page below opens with the symptom
-(the error text, the hang, the missing drive) and walks to the fix.</p>
-<p>Not everything lands here.  A lot of ChuMicro troubleshooting is inline
-where it's needed: the <code>chumicro-deploy</code> CLI coaches you through
-<code>PORT_UNAVAILABLE</code>, <code>RAW_REPL_UNRESPONSIVE</code>, <code>CIRCUITPY_DRIVE_MISSING</code>,
-and most other failure kinds with two or three fix steps at the point of
-failure, and lint, test, and coverage errors do the same in their own
-messages.  These pages cover what an inline message can't: multi-step
-recoveries, and symptoms whose proximate error doesn't name the root
-cause.</p>
-<p>The commands on these pages are the <code>chumicro-workspace</code> CLI, which is on
-your PATH once the workspace's Python environment is active.  Inside a
-cloned workspace template, <code>python3 run.py &lt;cmd&gt;</code> reaches the same
-commands through a bootstrap wrapper, so <code>python3 run.py deploy</code> and
-<code>chumicro-workspace deploy</code> do the same thing.</p>
-<p>The deploy and board tooling runs on macOS and Linux.  Windows hosts
-aren't supported for it, and WSL2 on its own isn't a way around that:
-WSL2 has no USB passthrough, so the board's serial port never appears
-inside it without <code>usbipd-win</code> (the USB/IP bridge you install on the
-Windows side) attaching the device first.  Editing, linting, and unit
-tests do run natively on Windows; <a href="https://github.com/ChuMicro/ChuMicro/blob/main/CONTRIBUTING.md#prerequisites">CONTRIBUTING</a>
-covers what each platform gets.</p>
-<h2 id="getting-a-board-working">Getting a board working<a class="headerlink" href="#getting-a-board-working" title="Permanent link">&para;</a></h2>
+<h1 id="installing-chumicro-libraries">Installing ChuMicro libraries<a class="headerlink" href="#installing-chumicro-libraries" title="Permanent link">&para;</a></h1>
+<p>Every ChuMicro library installs the same way.  Pick the method for your runtime and swap <code>chumicro-timing</code> for whichever library you need.</p>
+<p>These commands assume your board already runs CircuitPython or MicroPython.  A brand-new board may not: <a href="https://chumicro.com/ChuMicro/guides/start-here/">Start here</a> flashes a runtime before anything else.</p>
+<blockquote>
+<p><strong>A note on naming:</strong> pip uses hyphens (<code>chumicro-timing</code>); the import name and bundle path use underscores (<code>chumicro_timing</code>).  That's standard across the Python ecosystem.  PyPI names use hyphens by convention, and Python import names must be valid identifiers.  Copy commands from the blocks below as-is.</p>
+</blockquote>
+<h2 id="quick-install-stable-channel">Quick install (stable channel)<a class="headerlink" href="#quick-install-stable-channel" title="Permanent link">&para;</a></h2>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># CircuitPython (via circup)</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>circup<span class="w"> </span>bundle-add<span class="w"> </span>ChuMicro/ChuMicro-Bundle<span class="w">    </span><span class="c1"># one-time, registers the bundle</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>circup<span class="w"> </span>install<span class="w"> </span>chumicro_timing<span class="w">                </span><span class="c1"># then install any library by name</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="c1"># MicroPython (via mip)</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>mpremote<span class="w"> </span>mip<span class="w"> </span>install<span class="w"> </span>github:ChuMicro/ChuMicro-Bundle/chumicro_timing
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="c1"># CPython (via pip)</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>pip<span class="w"> </span>install<span class="w"> </span>chumicro-timing
+</span></code></pre></div>
+<p>Each library's README carries its own install line, so once the bundle is registered, any library is one command away.</p>
+<h2 id="circuitpython-circup-and-the-chumicro-bundle">CircuitPython: circup and the ChuMicro bundle<a class="headerlink" href="#circuitpython-circup-and-the-chumicro-bundle" title="Permanent link">&para;</a></h2>
+<p><a href="https://github.com/adafruit/circup">circup</a> is CircuitPython's package manager.  It finds third-party packages through <a href="https://learn.adafruit.com/keep-your-circuitpython-libraries-on-devices-up-to-date-with-circup/bundle-commands">bundles</a>.  Register the ChuMicro bundle once, then install any library by name:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>circup<span class="w"> </span>bundle-add<span class="w"> </span>ChuMicro/ChuMicro-Bundle
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>circup<span class="w"> </span>install<span class="w"> </span>chumicro_timing
+</span></code></pre></div>
+<p>Bundle registration is per-machine, not per-project.  Add it once on a laptop and every workspace on that laptop sees it.</p>
+<h2 id="micropython-mip">MicroPython: mip<a class="headerlink" href="#micropython-mip" title="Permanent link">&para;</a></h2>
+<p><a href="https://docs.micropython.org/en/latest/reference/mpremote.html">mpremote</a> is MicroPython's command-line tool (<code>pip install mpremote</code>); mip is its on-board package manager, which mpremote drives here:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>mpremote<span class="w"> </span>mip<span class="w"> </span>install<span class="w"> </span>github:ChuMicro/ChuMicro-Bundle/chumicro_timing
+</span></code></pre></div>
+<p>Or from the REPL on a network-capable board:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">mip</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">mip</span><span class="o">.</span><span class="n">install</span><span class="p">(</span><span class="s2">"github:ChuMicro/ChuMicro-Bundle/chumicro_timing"</span><span class="p">)</span>
+</span></code></pre></div>
+<h3 id="pre-compiled-mpy-bytecode">Pre-compiled <code>.mpy</code> bytecode<a class="headerlink" href="#pre-compiled-mpy-bytecode" title="Permanent link">&para;</a></h3>
+<p>Add <code>mpy6/</code> before the package name for faster startup and lower RAM use on boards with mpy format v6 (MicroPython 1.24+):</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>mpremote<span class="w"> </span>mip<span class="w"> </span>install<span class="w"> </span>github:ChuMicro/ChuMicro-Bundle/mpy6/chumicro_timing
+</span></code></pre></div>
+<h2 id="cpython-pip">CPython: pip<a class="headerlink" href="#cpython-pip" title="Permanent link">&para;</a></h2>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>pip<span class="w"> </span>install<span class="w"> </span>chumicro-timing
+</span></code></pre></div>
+<p>CPython is what your laptop runs.  No bundle, no <code>.mpy</code> step, just pip.  Useful for host-side testing of code that targets a board, and for the workbench tools (<code>chumicro-deploy</code>, <code>chumicro-repl</code>, <code>chumicro-workspace</code>, <code>chumicro-pytest-device</code>).</p>
+<h2 id="experimental-pre-release-channel">Experimental (pre-release) channel<a class="headerlink" href="#experimental-pre-release-channel" title="Permanent link">&para;</a></h2>
+<p>Pre-release builds publish automatically whenever a library's <code>VERSION</code> bumps on <code>main</code>.  New work lands there first, and things can break between releases.</p>
+<blockquote>
+<p><strong>Don't register both bundles at once.</strong>  circup may pick either version for a given package.  Pick one channel per laptop.</p>
+</blockquote>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># CircuitPython: switch to experimental</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>circup<span class="w"> </span>bundle-remove<span class="w"> </span>ChuMicro/ChuMicro-Bundle<span class="w">              </span><span class="c1"># skip if never added</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>circup<span class="w"> </span>bundle-add<span class="w"> </span>ChuMicro/ChuMicro-Bundle-Experimental
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>circup<span class="w"> </span>install<span class="w"> </span>chumicro_timing
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="c1"># MicroPython</span>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>mpremote<span class="w"> </span>mip<span class="w"> </span>install<span class="w"> </span>github:ChuMicro/ChuMicro-Bundle-Experimental/chumicro_timing
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>
+</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="c1"># CPython</span>
+</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>pip<span class="w"> </span>install<span class="w"> </span>chumicro-timing-experimental
+</span></code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Channel</th>
+<th>Bundle repo</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Stable</strong></td>
+<td><a href="https://github.com/ChuMicro/ChuMicro-Bundle">ChuMicro-Bundle</a></td>
+<td>tagged releases</td>
+</tr>
+<tr>
+<td><strong>Experimental</strong></td>
+<td><a href="https://github.com/ChuMicro/ChuMicro-Bundle-Experimental">ChuMicro-Bundle-Experimental</a></td>
+<td><code>main</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="project-workspaces">Project workspaces<a class="headerlink" href="#project-workspaces" title="Permanent link">&para;</a></h2>
+<p>For a real project (multiple libraries, deploy automation, no live editing on a fragile CIRCUITPY drive), use the <a href="https://github.com/ChuMicro/ChuMicro-Workbench-Template">workbench template</a>.  <a href="https://chumicro.com/ChuMicro/guides/start-here/">Start here</a> walks through creating one.  From inside a clone of that template, <code>python3 run.py setup</code> bootstraps the virtual environment and installs the tooling; <code>python3 run.py new my_project</code> scaffolds a project; <code>python3 run.py deploy my_project</code> ships it to your board with verified flash deploys by default (rsync plus a post-write checksum, and no filesystem wear from save-on-every-keystroke editing).</p>
+<p>Those <code>python3 run.py &lt;cmd&gt;</code> forms only work inside a cloned workspace template, where <code>run.py</code> is a bootstrap wrapper that re-executes in the workspace's virtual environment and dispatches to <code>chumicro-workspace</code>.  Once that environment is active, <code>chumicro-workspace &lt;cmd&gt;</code> runs the same commands directly.  Libraries come in through <code>chumicro-workspace library add chumicro_timing</code>, which pulls from the stable channel unless you pass <code>--channel experimental</code>.</p>
+<p>Recommended even for a single project on a single board.</p>
+<h2 id="board-support">Board support<a class="headerlink" href="#board-support" title="Permanent link">&para;</a></h2>
+<p>ChuMicro libraries run on:</p>
 <ul>
-<li><a href="board-not-found/"><strong>Board not found</strong></a>: nothing shows up in
-  <code>discover</code>, the serial port is busy or permission-denied (the Linux
-  <code>dialout</code> trap), the REPL won't respond, or the board keeps moving
-  between ports.</li>
-<li><a href="firmware-onto-a-new-board/"><strong>Getting firmware onto a new board</strong></a>:
-  the board isn't running CircuitPython or MicroPython yet, shipped
-  with ancient firmware, or won't enter its bootloader.</li>
-<li><a href="board-quirks/"><strong>Known board quirks</strong></a>: per-board table of the
-  hardware oddities the bench has hit, and what to do about each.</li>
+<li><strong>CircuitPython</strong>: ESP32 (S2, S3, C3, C6), RP2040/RP2350 (Raspberry Pi Pico, Pico W), and most boards with at least 256 KB RAM and 2 MB physical / ~800 KB usable flash.</li>
+<li><strong>MicroPython</strong>: the same hardware classes, plus broader STM32 / ESP-IDF coverage.</li>
+<li><strong>CPython</strong>: your laptop, for testing.</li>
 </ul>
-<h2 id="deploying">Deploying<a class="headerlink" href="#deploying" title="Permanent link">&para;</a></h2>
+<p>A few libraries have per-board restrictions.  Each library README's "Platform support" section flags them.</p>
+<h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <ul>
-<li><a href="deploys-and-file-persistence/"><strong>Deploys and file persistence</strong></a>:
-  a deploy wiped files you installed by hand, your boot counter never
-  increments, or RAM mode runs out of memory.</li>
-<li><a href="deploy-refused-importerror/"><strong>Deploy refused or ImportError on boot</strong></a>:
-  the import walker can't resolve a module, <code>shared/</code> imports fail, a
-  project name is rejected, or <code>from_config</code> raises about a missing
-  sockets factory.</li>
-<li><a href="macos-circuitpy/"><strong>macOS CIRCUITPY deploy troubleshooting</strong></a>: the
-  FSKit / DiskArbitration wedge, stale-mount <code>EACCES</code> after a Finder
-  eject, and multi-board drive disambiguation.</li>
+<li><strong>No CIRCUITPY drive appears, or circup finds no board.</strong>  The board may not be running CircuitPython yet.  Flash a runtime first: <a href="https://chumicro.com/ChuMicro/guides/start-here/">Start here</a> walks through it, and <code>chumicro-deploy flash-firmware --help</code> covers the flags.</li>
+<li><strong><code>circup install</code> says a library is <code>not a known CircuitPython library</code>.</strong>  Most often the name is hyphenated.  circup installs by the on-device package name, which uses underscores: run <code>circup install chumicro_timing</code>, not <code>chumicro-timing</code>.  If the name is already underscored, you may not have registered the bundle yet: run <code>circup bundle-add ChuMicro/ChuMicro-Bundle</code> once (registration is per-machine, so do it once).</li>
+<li><strong><code>mpremote mip install</code> hangs.</strong>  The board needs network connectivity; mip downloads from GitHub through the device's wifi.  Bring wifi up first, or download the package on your laptop and <code>mpremote cp</code> it over.</li>
+<li><strong><code>pip install</code> says "no matching distribution found".</strong>  Check the spelling against the library table in the <a href="https://github.com/ChuMicro/ChuMicro#libraries">README</a>.  Every library has a stable release, so a correctly spelled name resolves; the exception is a library merged since the last stable promotion, which is on the experimental channel only until it is promoted (<code>pip install chumicro-timing-experimental</code>).</li>
+<li><strong><code>ImportError</code> after install on a board.</strong>  Verify the files actually landed: <code>mpremote ls /lib/</code> on MicroPython, or look for <code>/lib/chumicro_timing/</code> on the CIRCUITPY drive.  circup and mip don't always report partial installs cleanly.</li>
 </ul>
-<h2 id="network">Network<a class="headerlink" href="#network" title="Permanent link">&para;</a></h2>
-<ul>
-<li><a href="wifi-wont-connect/"><strong>WiFi won't connect</strong></a>: credentials that never
-  left <code>secrets.toml</code>, silent drops with no error, CircuitPython's
-  blocking connect, weak-antenna boards, and the board-resident
-  <code>settings.toml</code> fighting your config.</li>
-<li><a href="tls-https-failures/"><strong>TLS and HTTPS failures</strong></a>: certificate
-  validity errors on a board whose clock is unset, handshake
-  out-of-memory, custom CA wiring, and the platform limits.</li>
-</ul>
-<h2 id="memory-and-data">Memory and data<a class="headerlink" href="#memory-and-data" title="Permanent link">&para;</a></h2>
-<ul>
-<li><a href="out-of-memory/"><strong>Running out of memory</strong></a>: <code>MemoryError</code> and
-  <code>OSError</code> 12 at import or connect time, and how deploy mode and
-  import order change the numbers.</li>
-<li><a href="persisting-data/"><strong>Persisting data</strong></a>: the KV store's capacity
-  and corruption behavior, and why writes need <code>commit()</code>.</li>
-</ul>
-<h2 id="contributor-side">Contributor-side<a class="headerlink" href="#contributor-side" title="Permanent link">&para;</a></h2>
-<ul>
-<li><a href="circuitpython-ringio/"><strong>CircuitPython unix-port RingIO build failure</strong></a>:
-  why a <code>VARIANT=standard</code> build fails, and why CircuitPython's own CI
-  never catches it.</li>
-</ul>
-<h2 id="related">Related<a class="headerlink" href="#related" title="Permanent link">&para;</a></h2>
-<ul>
-<li><a href="https://github.com/ChuMicro/ChuMicro/blob/main/docs/contributing/cheat-sheet.md"><code>docs/contributing/cheat-sheet.md</code></a>:
-  one-line fixes for common lint / test / coverage / device-setup
-  failures.</li>
-<li><a href="https://github.com/ChuMicro/ChuMicro/blob/main/docs/contributing/device-testing.md">Device testing guide</a>: configuring
-  <code>devices.yml</code> and running <code>functional_tests/</code>.</li>
-</ul>
+<p>For anything beyond install problems (board not found, firmware, WiFi, TLS, memory), <a href="https://chumicro.com/ChuMicro/guides/troubleshooting/">Troubleshooting</a> starts from the symptom and walks to the fix.</p>
 
 
 
@@ -1572,6 +1666,9 @@ covers what each platform gets.</p>
 
 
 
+
+  
+  
 
 
 
