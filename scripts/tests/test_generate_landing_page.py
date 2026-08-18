@@ -286,3 +286,40 @@ class TestGenerateSitemap:
             root.iter("{http://www.sitemaps.org/schemas/sitemap/0.9}loc")
         ]
         assert len(locations) == len(synthetic_doc_dirs) + 1
+
+
+class TestVerificationMeta:
+    """The Search Console token reaches the landing page's head."""
+
+    def test_token_file_becomes_a_meta_tag(
+        self, synthetic_doc_dirs, tmp_path, monkeypatch,
+    ):
+        search_console = tmp_path / "search-console"
+        search_console.mkdir()
+        (search_console / "meta-tag.txt").write_text("token-abc\n")
+        monkeypatch.setattr(
+            generate_landing_page, "SEARCH_CONSOLE_DIR", search_console,
+        )
+        assert (
+            '<meta name="google-site-verification" content="token-abc">'
+            in generate()
+        )
+
+    def test_no_token_leaves_the_head_alone(
+        self, synthetic_doc_dirs, tmp_path, monkeypatch,
+    ):
+        monkeypatch.setattr(
+            generate_landing_page, "SEARCH_CONSOLE_DIR", tmp_path / "absent",
+        )
+        assert "google-site-verification" not in generate()
+
+    def test_empty_token_file_leaves_the_head_alone(
+        self, synthetic_doc_dirs, tmp_path, monkeypatch,
+    ):
+        search_console = tmp_path / "search-console"
+        search_console.mkdir()
+        (search_console / "meta-tag.txt").write_text("\n")
+        monkeypatch.setattr(
+            generate_landing_page, "SEARCH_CONSOLE_DIR", search_console,
+        )
+        assert "google-site-verification" not in generate()

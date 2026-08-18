@@ -25,7 +25,7 @@ from __future__ import annotations
 from pathlib import Path
 from string import Template
 
-from repo_layout import discover_doc_dirs, is_parked, read_pyproject_description
+from repo_layout import ROOT, discover_doc_dirs, is_parked, read_pyproject_description
 from shared import TEMPLATES_DIR
 
 #: Landing-page card order: the root README's library-table order, so the
@@ -260,6 +260,27 @@ def _render_workbench_install(first_workbench: dict) -> str:
 #: the sitemap.  Every package's docs live one level below it.
 SITE_ROOT = "https://chumicro.github.io/ChuMicro"
 
+#: Where Search Console verification material lives.  See its README:
+#: ``meta-tag.txt`` holds the HTML-tag token, and any ``*.html`` file
+#: is published verbatim at the docs-site root.
+SEARCH_CONSOLE_DIR = ROOT / "support" / "docs" / "search-console"
+
+
+def _verification_meta() -> str:
+    """Return the Search Console meta tag, or an empty string.
+
+    Google rechecks the tag after verifying, so it stays in the page
+    for as long as the property is verified.  With no token on disk
+    the head is left alone.
+    """
+    token_file = SEARCH_CONSOLE_DIR / "meta-tag.txt"
+    if not token_file.is_file():
+        return ""
+    token = token_file.read_text().strip()
+    if not token:
+        return ""
+    return f'  <meta name="google-site-verification" content="{token}">\n'
+
 
 def generate_sitemap() -> str:
     """Return a sitemap.xml listing the site root and every package.
@@ -311,7 +332,9 @@ def generate() -> str:
     content = "\n\n".join(blocks)
 
     template_text = (TEMPLATES_DIR / "landing_page.html.template").read_text()
-    return Template(template_text).substitute(content=content)
+    return Template(template_text).substitute(
+        content=content, verification=_verification_meta(),
+    )
 
 
 if __name__ == "__main__":
