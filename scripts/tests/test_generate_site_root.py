@@ -184,3 +184,27 @@ def test_no_project_path_collides_with_a_generated_file():
     generated = {"index.html", "robots.txt", "sitemap.xml", PAGES_SITEMAP, "llms.txt"}
     for project in PROJECTS:
         assert project["path"] not in generated
+
+
+def test_build_writes_no_cname_without_a_custom_domain(
+    tmp_path, synthetic_packages, verification_dir, monkeypatch,
+):
+    """A CNAME naming nothing would take the site off its github.io address."""
+    monkeypatch.setattr(generate_site_root, "CUSTOM_DOMAIN", "")
+    assert "CNAME" not in build(tmp_path / "site")
+
+
+def test_build_writes_the_cname_for_a_custom_domain(
+    tmp_path, synthetic_packages, verification_dir, monkeypatch,
+):
+    """The publish rebuilds the tree, so the generator has to own this file.
+
+    A CNAME added to the site repository by hand, or written there by
+    GitHub when someone sets the domain in the web interface, would be
+    deleted by the next publish and take the domain down with it.
+    """
+    monkeypatch.setattr(generate_site_root, "CUSTOM_DOMAIN", "example.test")
+    destination = tmp_path / "site"
+
+    assert "CNAME" in build(destination)
+    assert (destination / "CNAME").read_text() == "example.test\n"

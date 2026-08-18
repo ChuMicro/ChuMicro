@@ -27,6 +27,7 @@ from string import Template
 
 from repo_layout import ROOT, discover_doc_dirs, is_parked, read_pyproject_description
 from shared import TEMPLATES_DIR
+from site_host import site_root
 
 #: Landing-page card order: the root README's library-table order, so the
 #: first card and the install snippet lead with the library the README
@@ -258,7 +259,7 @@ def _render_workbench_install(first_workbench: dict) -> str:
 
 #: Public root of the documentation site, used for canonical URLs and
 #: the sitemap.  Every package's docs live one level below it.
-SITE_ROOT = "https://chumicro.github.io/ChuMicro"
+SITE_ROOT = site_root()
 
 #: The guides site: repository prose (questions, troubleshooting, wiring)
 #: published alongside the per-library documentation.  Its config names

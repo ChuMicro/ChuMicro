@@ -33,9 +33,10 @@ from string import Template
 from generate_landing_page import _discover_packages
 from repo_layout import ROOT
 from shared import TEMPLATES_DIR
+from site_host import CUSTOM_DOMAIN, host_url
 
 #: The host this site occupies.  No trailing slash: callers add one.
-HOST = "https://chumicro.github.io"
+HOST = host_url()
 
 #: The hub's own pages, split out so ``sitemap.xml`` can be an index.
 PAGES_SITEMAP = "sitemap-pages.xml"
@@ -386,6 +387,13 @@ def build(destination: Path) -> list[str]:
     ):
         (destination / filename).write_text(content)
         written.append(filename)
+    if CUSTOM_DOMAIN:
+        # GitHub reads this file to learn the site's custom domain.  It
+        # is generated rather than left in the repository by hand
+        # because a publish rebuilds the whole tree: a hand-added CNAME
+        # would be deleted by the next deploy and take the domain down.
+        (destination / "CNAME").write_text(f"{CUSTOM_DOMAIN}\n")
+        written.append("CNAME")
     written.extend(_copy_verification_files(destination))
     return sorted(written)
 
