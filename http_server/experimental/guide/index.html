@@ -864,8 +864,10 @@
 </span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="n">runner</span><span class="o">.</span><span class="n">add_periodic</span><span class="p">(</span><span class="n">led_blink</span><span class="p">,</span> <span class="n">period_ms</span><span class="o">=</span><span class="mi">500</span><span class="p">)</span>
 </span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
 </span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
-</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>    <span class="n">runner</span><span class="o">.</span><span class="n">tick</span><span class="p">()</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>    <span class="n">now_ms</span> <span class="o">=</span> <span class="n">runner</span><span class="o">.</span><span class="n">tick</span><span class="p">()</span>   <span class="c1"># every registered service takes one small step</span>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>    <span class="n">runner</span><span class="o">.</span><span class="n">wait</span><span class="p">(</span><span class="n">now_ms</span><span class="p">)</span>      <span class="c1"># then the CPU parks until the next event or deadline</span>
 </span></code></pre></div>
+<p><code>runner.wait(now_ms)</code> is what turns the loop above from a busy-spin into an idle one: it sleeps on the listening socket until a request arrives or the next blink is due.</p>
 <p><code>check(now_ms)</code> always returns <code>True</code> (the accept loop runs on every tick); <code>handle(now_ms)</code> does at most one tick of progress, capped by the per-connection budgets below.</p>
 <h2 id="routing">Routing<a class="headerlink" href="#routing" title="Permanent link">&para;</a></h2>
 <p><code>@server.route(path, methods=...)</code> registers a handler:</p>
