@@ -46,6 +46,7 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://github.com/ChuMicro/ChuMicro"
+Documentation = "https://chumicro.com/ChuMicro/deploy/stable/"
 Source = "https://github.com/ChuMicro/ChuMicro/tree/main/workbench/deploy"
 Issues = "https://github.com/ChuMicro/ChuMicro/issues"
 
