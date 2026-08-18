@@ -1,0 +1,1522 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Command-line workspace for CircuitPython and MicroPython projects: register boards, deploy projects, install firmware, and run tests.">
+      
+      
+      
+        <link rel="canonical" href="https://chumicro.github.io/ChuMicro/workspace/stable/guide/">
+      
+      
+        <link rel="prev" href="./..">
+      
+      
+        <link rel="next" href="../api/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../img/favicon.png">
+      <meta name="generator" content="zensical-0.0.39">
+    
+    
+      
+        <title>Guide - chumicro-workspace</title>
+      
+    
+    
+      
+        
+      
+      <link rel="stylesheet" href="../assets/stylesheets/modern/main.1e981d71.min.css">
+      
+        
+          
+        
+        <link rel="stylesheet" href="../assets/stylesheets/modern/palette.dfe2e883.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter:300,300i,400,400i,500,500i,700,700i%7CJetBrains+Mono:400,400i,700,700i&amp;display=fallback">
+        <style>:root{--md-text-font:"Inter";--md-code-font:"JetBrains Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,t)=>(e<<5)-e+t.charCodeAt(0)),0),__md_get=(e,t=localStorage,a=__md_scope)=>JSON.parse(t.getItem(a.pathname+"."+e)),__md_set=(e,t,a=localStorage,_=__md_scope)=>{try{a.setItem(_.pathname+"."+e,JSON.stringify(t))}catch(e){}},document.documentElement.setAttribute("data-platform",navigator.platform)</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="deep-orange" data-md-color-accent="amber">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer" aria-label="Navigation"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#guide" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../../" title="chumicro-workspace" class="md-header__button md-logo" aria-label="chumicro-workspace" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-book-open" viewBox="0 0 24 24"><path d="M12 7v14M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer" aria-label="Navigation">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-menu" viewBox="0 0 24 24"><path d="M4 5h16M4 12h16M4 19h16"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            chumicro-workspace
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Guide
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="none" data-md-color-scheme="slate" data-md-color-primary="deep-orange" data-md-color-accent="amber"  aria-hidden="true"  type="radio" name="__palette" id="__palette_0">
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search" aria-label="Search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-search" viewBox="0 0 24 24"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog" aria-label="Search">
+  <button type="button" class="md-search__button">
+    Search
+  </button>
+</div>
+      
+    
+    <div class="md-header__source">
+      
+        <a href="https://github.com/ChuMicro/ChuMicro/tree/main/workbench/workspace" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2026 Fonticons, Inc.--><path fill="currentColor" d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Source
+  </div>
+</a>
+      
+    </div>
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../../" title="chumicro-workspace" class="md-nav__button md-logo" aria-label="chumicro-workspace" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-book-open" viewBox="0 0 24 24"><path d="M12 7v14M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg>
+
+    </a>
+    chumicro-workspace
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/ChuMicro/ChuMicro/tree/main/workbench/workspace" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2026 Fonticons, Inc.--><path fill="currentColor" d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Source
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="./.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guide
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="././" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+
+<nav class="md-nav md-nav--secondary" aria-label="On this page">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      On this page
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#workspace-layout" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Workspace layout
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Workspace layout">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#shared-vs-libraries-when-to-use-each" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <code>shared/</code> vs <code>libraries/</code>: when to use each
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#day-zero-bring-up-a-board" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Day-zero: bring up a board
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Day-zero: bring up a board">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-three-devicesyml-zones" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        The three <code>devices.yml</code> zones
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#workspace-health" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Workspace health
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#building-a-project" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Building a project
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Building a project">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-config-flows-from-your-edits-to-the-device" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        How config flows from your edits to the device
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#deploying" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Deploying
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Deploying">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#single-project-default-flat-layout" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Single project, default flat layout
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#single-project-ast-walked" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Single project, AST-walked
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#installing-libraries-without-the-workspace-tooling" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Installing libraries without the workspace tooling
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pointing-the-library-channel-at-a-mirror" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Pointing the library channel at a mirror
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#single-project-boot-shim-layout" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Single project, boot-shim layout
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#one-project-per-board" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        One project per board
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#inspect-what-would-land-with-dry-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Inspect what would land with <code>--dry-run</code>
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#multi-board-deploys-with-all-devices" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Multi-board deploys with <code>--all-devices</code>
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#per-project-default-device-with-deploy_targets" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Per-project default device with <code>deploy_targets:</code>
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#clean-slate-deploys-with-wipe" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Clean-slate deploys with <code>--wipe</code>
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#failure-hints" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Failure hints
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#programmatic-deploy" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Programmatic deploy
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#repl" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        REPL
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quality-knobs" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Quality knobs
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#config-merge" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Config merge
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#firmware" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Firmware
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#devicesyml-round-trip" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <code>devices.yml</code> round-trip
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#workbench-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Workbench-only
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  
+                    
+                    
+                    
+                      
+                    
+                    
+                      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+                      <div class="md-sidebar-button__wrapper">
+                        <label class="md-sidebar-button" for="__toc"></label>
+                      </div>
+                    
+                  
+                  <div class="md-sidebar__inner">
+                    
+
+
+<nav class="md-nav md-nav--secondary" aria-label="On this page">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      On this page
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#workspace-layout" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Workspace layout
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Workspace layout">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#shared-vs-libraries-when-to-use-each" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <code>shared/</code> vs <code>libraries/</code>: when to use each
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#day-zero-bring-up-a-board" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Day-zero: bring up a board
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Day-zero: bring up a board">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-three-devicesyml-zones" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        The three <code>devices.yml</code> zones
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#workspace-health" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Workspace health
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#building-a-project" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Building a project
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Building a project">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-config-flows-from-your-edits-to-the-device" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        How config flows from your edits to the device
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#deploying" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Deploying
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Deploying">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#single-project-default-flat-layout" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Single project, default flat layout
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#single-project-ast-walked" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Single project, AST-walked
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#installing-libraries-without-the-workspace-tooling" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Installing libraries without the workspace tooling
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pointing-the-library-channel-at-a-mirror" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Pointing the library channel at a mirror
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#single-project-boot-shim-layout" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Single project, boot-shim layout
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#one-project-per-board" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        One project per board
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#inspect-what-would-land-with-dry-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Inspect what would land with <code>--dry-run</code>
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#multi-board-deploys-with-all-devices" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Multi-board deploys with <code>--all-devices</code>
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#per-project-default-device-with-deploy_targets" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Per-project default device with <code>deploy_targets:</code>
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#clean-slate-deploys-with-wipe" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Clean-slate deploys with <code>--wipe</code>
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#failure-hints" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Failure hints
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#programmatic-deploy" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Programmatic deploy
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#repl" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        REPL
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quality-knobs" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Quality knobs
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#config-merge" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Config merge
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#firmware" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Firmware
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#devicesyml-round-trip" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <code>devices.yml</code> round-trip
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#workbench-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Workbench-only
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+  
+  
+
+
+<h1 id="guide">Guide<a class="headerlink" href="#guide" title="Permanent link">&para;</a></h1>
+<p><code>chumicro-workspace</code> is the host-side CLI for running ChuMicro projects on real boards from your laptop.  It builds on <a href="https://chumicro.github.io/ChuMicro/deploy/stable/"><code>chumicro-deploy</code></a> for the transports, firmware flashing, and the <code>devices.yml</code> schema, and picks up <a href="https://chumicro.github.io/ChuMicro/repl/stable/"><code>chumicro-repl</code></a> when you ask for an interactive session or a tail.  On top of those it adds the workspace-shaped pieces: a deploy-time config merge, a CLI that reads <code>workspace.yml</code>, board-state onboarding, firmware URL derivation, and the boot shim that lets a project ship an <code>app.py</code> with a <code>run()</code> instead of hand-writing a <code>code.py</code>.</p>
+<p>This guide walks through the typical workflows end to end.  See the <a href="../api/">API reference</a> for the module-level docs.</p>
+<h2 id="workspace-layout">Workspace layout<a class="headerlink" href="#workspace-layout" title="Permanent link">&para;</a></h2>
+<p>A workspace has this shape:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>my-workspace/
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>├── workspace.yml          # workspace machinery: library_sources, deploy_targets, quality
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>├── secrets.toml           # workspace-wide credentials and device defaults
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>├── devices.yml            # board registry
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>├── pyproject.toml
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>├── projects/
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>│   ├── _template/         # `chumicro-workspace new` copies from here
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>│   ├── back-porch/        # one project
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>│   │   ├── project_config.toml
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>│   │   └── app.py         # def run(): ...
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>│   └── kitchen/
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>│       └── ...
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>├── shared/                # flat shared modules, imported by bare name
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>├── libraries/             # full chumicro-style library packages (`new &lt;name&gt; --library`)
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>│   └── buttons/
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>│       ├── src/chumicro_buttons/
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>│       ├── tests/
+</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>│       ├── docs/
+</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>│       └── pyproject.toml
+</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>└── packages/              # third-party modules you vendor in yourself
+</span></code></pre></div>
+<p>The two requirements are <code>workspace.yml</code> (<code>WorkspaceLayout</code> walks up from cwd to find it, git-style) and <code>projects/</code>.</p>
+<p><code>secrets.toml</code> holds real wifi passwords and broker credentials, so never commit it.  <code>workspace.yml</code> and <code>devices.yml</code> carry machine-specific paths and board ids, so most workspaces keep those out of git as well.  Check what your <code>.gitignore</code> covers before the first commit.</p>
+<h3 id="shared-vs-libraries-when-to-use-each"><code>shared/</code> vs <code>libraries/</code>: when to use each<a class="headerlink" href="#shared-vs-libraries-when-to-use-each" title="Permanent link">&para;</a></h3>
+<p>Both hold code your projects can <code>import</code>.  Pick by weight:</p>
+<table>
+<thead>
+<tr>
+<th>Want to ship…</th>
+<th>Drop it under</th>
+<th>Imports look like</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A 50-line helper your projects share</td>
+<td><code>shared/foo.py</code></td>
+<td><code>from foo import bar</code></td>
+<td>No tests, no version, no scaffolding.  The search path roots at <code>shared/</code> itself, so there is no <code>shared.</code> prefix to qualify against.</td>
+</tr>
+<tr>
+<td>A full chumicro-style library you might publish someday</td>
+<td><code>libraries/&lt;name&gt;/</code> (via <code>new &lt;name&gt; --library</code>)</td>
+<td><code>import &lt;name&gt;</code></td>
+<td>Gets <code>src/</code>, <code>tests/</code>, <code>docs/</code>, <code>examples/</code>, <code>pyproject.toml</code>, and <code>VERSION</code>: the standard publishable-library layout.</td>
+</tr>
+<tr>
+<td>A published chumicro library</td>
+<td><code>libraries/&lt;name&gt;/</code> (via <code>library add &lt;name&gt;</code>)</td>
+<td><code>import chumicro_&lt;name&gt;</code></td>
+<td>Fetched from the release channel along with the chumicro libraries it imports.  A re-fetch backs up a tree you have edited instead of clobbering it.</td>
+</tr>
+<tr>
+<td>A third-party module you vendor yourself</td>
+<td><code>packages/</code></td>
+<td><code>import &lt;name&gt;</code></td>
+<td>Nothing populates this for you.  Drop files in and the search path finds them last.</td>
+</tr>
+</tbody>
+</table>
+<p>The import-graph search path resolves in this order: explicit <code>library_sources:</code> overrides, then <code>shared/</code>, then every <code>libraries/&lt;name&gt;/src/</code> (auto-discovered), then <code>packages/</code>.  So a library scaffolded with <code>new buttons --library</code> is importable as <code>import buttons</code> from any project without further wiring.</p>
+<p>Getting the <code>shared/</code> spelling wrong is the common first stumble.  A module at <code>shared/foo.py</code> is <code>from foo import bar</code>, never <code>from shared.foo import bar</code>, and a deploy that hits the wrong spelling says so before it ships anything.</p>
+<h2 id="day-zero-bring-up-a-board">Day-zero: bring up a board<a class="headerlink" href="#day-zero-bring-up-a-board" title="Permanent link">&para;</a></h2>
+<p>The fastest path is <code>bootstrap</code>: it picks a port, probes the runtime, registers the board in <code>devices.yml</code>, and prints what to run next.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>chumicro-workspace<span class="w"> </span>bootstrap
+</span></code></pre></div>
+<p>Run interactively it fills in the blanks for you, auto-picking the only serial port it sees or prompting with a numbered list when there are several.  Add <code>--demo</code> to chain into the built-in demo deploy so a freshly registered board ships something in the same command.  For CI or scripted setup, name the id and the port outright:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>chumicro-workspace<span class="w"> </span>bootstrap<span class="w"> </span>back-porch<span class="w"> </span>--address<span class="w"> </span>/dev/cu.usbmodem1101<span class="w"> </span>--non-interactive
+</span></code></pre></div>
+<p><code>bootstrap</code> installs no firmware and opens no REPL.  It is <code>add-device</code> plus a next-steps footer, so if a board needs firmware first, see <a href="#firmware">Firmware</a> below.</p>
+<p>The slower and more explicit path is what <code>bootstrap</code> composes:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Plug a board in, see what serial ports the host exposes.</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>chumicro-workspace<span class="w"> </span>discover
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="c1"># Probe the board over serial.  Fails with a structured diagnosis if</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="c1"># the board is in UF2 bootloader mode, the serial port is busy, or</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="c1"># the runtime doesn't respond.  Runtime is auto-detected when</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="c1"># --runtime is omitted (it tries both transports).</span>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>chumicro-workspace<span class="w"> </span>add-device<span class="w"> </span>back-porch<span class="w"> </span>--address<span class="w"> </span>/dev/cu.usbmodem1101<span class="w"> </span>--runtime<span class="w"> </span>micropython
+</span></code></pre></div>
+<h3 id="the-three-devicesyml-zones">The three <code>devices.yml</code> zones<a class="headerlink" href="#the-three-devicesyml-zones" title="Permanent link">&para;</a></h3>
+<p><code>add-device</code> writes an entry under <code>devices.yml</code>'s <code>devices:</code> block, and every later command rewrites the file in place with your comments and field order intact.  Which fields a rewrite may touch depends on the zone:</p>
+<table>
+<thead>
+<tr>
+<th>Zone</th>
+<th>Fields</th>
+<th>Rewrite rule</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>User-owned</td>
+<td><code>id</code>, <code>description</code>, <code>deploy_mode</code>, <code>serial_baudrate</code></td>
+<td>Yours.  Nothing overwrites them.</td>
+</tr>
+<tr>
+<td>Probed-always</td>
+<td><code>address</code>, <code>firmware_version</code></td>
+<td>Refreshed silently on every probe, because a board moves between ports.</td>
+</tr>
+<tr>
+<td>Hardware-once</td>
+<td><code>runtime</code>, and the <code>hardware:</code> block (<code>uid</code>, <code>machine</code>, <code>board_id</code>, <code>firmware_source</code>)</td>
+<td>Written once.  Changing one needs an explicit <code>--force</code>, because a changed uid usually means you swapped boards.</td>
+</tr>
+</tbody>
+</table>
+<p><a href="../api/"><code>detect_board_state</code></a> drives onboarding when the probe fails.  The four states are <code>REPL_REACHABLE</code> (fine), <code>UF2_BOOTLOADER</code> (a visible mount with <code>INFO_UF2.TXT</code>, which suggests <code>install-firmware --method uf2</code>), <code>NO_PROBE_RESPONSE</code> (board on serial but no Python prompt, which suggests an esptool reflash), and <code>SERIAL_UNREACHABLE</code> (the port doesn't open, so check the cable and the driver).</p>
+<h2 id="workspace-health">Workspace health<a class="headerlink" href="#workspace-health" title="Permanent link">&para;</a></h2>
+<p><code>status</code> is the one-screen "is anything obviously broken" check.  Every <code>deploy</code> runs the same fast checks as a pre-flight gate: ERROR-level findings (a malformed <code>workspace.yml</code> or <code>devices.yml</code>) abort before any bytes reach the device, while WARN-level findings (no devices registered yet, for instance) print and let the deploy proceed.  Pass <code>deploy --skip-health-check</code> to skip the gate in CI or power-user flows.</p>
+<p>Run it directly to see the snapshot:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>chumicro-workspace<span class="w"> </span>status
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="c1"># WORKSPACE              /Users/you/projects/my-house</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="c1"># WORKSPACE.YML          ✓ valid</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1"># DEVICES.YML            ✓ 2 devices registered</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="c1"># PROJECTS               ✓ 4 projects: garage/sensors/door_open, …</span>
+</span></code></pre></div>
+<p><code>doctor</code> is the strict sibling.  It runs every <code>status</code> check plus a Python-version probe and an AST scan for <code>def run</code> in each project's <code>app.py</code>:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>chumicro-workspace<span class="w"> </span>doctor
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="c1"># Adds rows for PYTHON and PROJECT run() defs.</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="c1"># Exit code is 1 only on ERROR-level findings; warnings stay 0 so</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="c1"># the command composes cleanly with shell-pipe checks.</span>
+</span></code></pre></div>
+<h2 id="building-a-project">Building a project<a class="headerlink" href="#building-a-project" title="Permanent link">&para;</a></h2>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Copy projects/_template/ into projects/back-porch/.</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>chumicro-workspace<span class="w"> </span>new<span class="w"> </span>back-porch
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="c1"># Nested layouts work too.  Intermediate namespace directories are</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="c1"># created for you with empty __init__.py markers, so host-side imports</span>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="c1"># (`from projects.garage.sensors.door_open.app import run`) resolve.</span>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>chumicro-workspace<span class="w"> </span>new<span class="w"> </span>garage/sensors/door_open
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>chumicro-workspace<span class="w"> </span>new<span class="w"> </span>garage.sensors.door_open<span class="w">      </span><span class="c1"># dotted form, same effect</span>
+</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>
+</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="c1"># Copy an existing tree instead of the blank template.  --from takes any</span>
+</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="c1"># directory under the workspace root that contains an app.py, code.py,</span>
+</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="c1"># or main.py entry point.</span>
+</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a>chumicro-workspace<span class="w"> </span>new<span class="w"> </span>garage/heater<span class="w"> </span>--from<span class="w"> </span>examples/two_board_handshake/server
+</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a>
+</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="c1"># Scaffold a chumicro-style library (full src/tests/docs/examples tree).</span>
+</span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="c1"># Lands at &lt;workspace&gt;/libraries/&lt;name&gt;/ by default; --into &lt;dir&gt;</span>
+</span><span id="__span-6-17"><a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a><span class="c1"># overrides.  --workbench scaffolds a host-only tool the same way.</span>
+</span><span id="__span-6-18"><a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a>chumicro-workspace<span class="w"> </span>new<span class="w"> </span>gpio<span class="w"> </span>--library
+</span></code></pre></div>
+<h3 id="how-config-flows-from-your-edits-to-the-device">How config flows from your edits to the device<a class="headerlink" href="#how-config-flows-from-your-edits-to-the-device" title="Permanent link">&para;</a></h3>
+<p>The runtime config a project receives at boot is the deep-merge of two host-side files, both using the same <code>[section]</code>-keyed TOML shape:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>secrets.toml                       projects/&lt;name&gt;/project_config.toml
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>  workspace-wide credentials         per-project knobs: sample period,
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>  and device defaults, in one        mqtt topic, sensor pins.  Wins on
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>  place.  Keep it out of git.        any key both files set.
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>              │                                   │
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>              └────────────────┬──────────────────┘
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>                               ▼
+</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>                        merge_configs           ← chumicro_workspace.merge
+</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>                               │                  (deep per-key merge: dicts
+</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>                               ▼                   recurse, lists replace)
+</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a>                       flatten_config           ← chumicro_workspace.flatten
+</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a>                               │                  ([wifi] ssid becomes the
+</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a>                               ▼                   flat key "wifi.ssid")
+</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a>                    write_runtime_config        ← chumicro_workspace.writer
+</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a>                               │                  (use_single_float=True so
+</span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a>                               ▼                   CircuitPython's built-in
+</span><span id="__span-7-17"><a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a>          /runtime_config.msgpack on device        msgpack module accepts it)
+</span><span id="__span-7-18"><a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a>                               │
+</span><span id="__span-7-19"><a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a>                               ▼
+</span><span id="__span-7-20"><a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a>                   chumicro_config.runtime      ← reads it on the device
+</span></code></pre></div>
+<p><code>workspace.yml</code> is separate.  It carries workspace <strong>machinery</strong> (<code>library_sources</code>, <code>deploy_targets</code>, <code>quality</code>, the curated <code>libraries</code> table), not runtime config, and nothing from it lands on the device.</p>
+<p>Use <code>chumicro-workspace dump-config &lt;project&gt;</code> to print the merged dict your project would receive without deploying anything.  It is the fastest way to find out which file a key came from.</p>
+<p><code>secrets.toml</code> carries credentials and workspace-wide device defaults; <code>project_config.toml</code> carries the per-project knobs:</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># secrets.toml: values flow into every project that doesn't override them</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="k">[wifi]</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="n">ssid</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"HomeNet"</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="n">password</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"my-real-wifi-password"</span>
+</span></code></pre></div>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># projects/back-porch/project_config.toml</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="k">[mqtt]</span>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="n">host</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"192.168.1.10"</span>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="n">topic</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"projects/back-porch/state"</span>
+</span></code></pre></div>
+<p><code>app.py</code> exports a <code>run()</code> function, which the synthesised entrypoint shim imports and calls:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># projects/back-porch/app.py</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="k">def</span><span class="w"> </span><span class="nf">run</span><span class="p">():</span>
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">"back-porch coming up"</span><span class="p">)</span>
+</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>    <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a>        <span class="c1"># ... your project's main loop ...</span>
+</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a>        <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+</span></code></pre></div>
+<h2 id="deploying">Deploying<a class="headerlink" href="#deploying" title="Permanent link">&para;</a></h2>
+<p>Two things vary independently.  The <em>layout</em> decides what file map gets built (flat, boot-shim, import-graph, or boot-shim plus import-graph) and deploy picks it from the shape of your project.  The <em>deploy mode</em> decides where the files land: <code>flash</code> writes them to the board's filesystem so they survive a reset, <code>ram</code> pushes them into memory for a fast throwaway run.  A device's mode lives in its <code>devices.yml</code> entry, and <code>--deploy-mode {ram,flash}</code> overrides it for one run.</p>
+<h3 id="single-project-default-flat-layout">Single project, default flat layout<a class="headerlink" href="#single-project-default-flat-layout" title="Permanent link">&para;</a></h3>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>chumicro-workspace<span class="w"> </span>deploy<span class="w"> </span>back-porch
+</span></code></pre></div>
+<p>Ships the project's directory contents to the device root via <a href="../api/"><code>project_directory_source</code></a>: <code>app.py</code> lands at <code>/app.py</code>, <code>project_config.toml</code> is host-only and skipped, <code>_generated/</code> is skipped.  The merged runtime config msgpack rides along at <code>/runtime_config.msgpack</code> (the path the on-device <code>chumicro_config.load_runtime_config()</code> reads).  The device entrypoint is <code>/code.py</code> for CircuitPython and <code>/main.py</code> for MicroPython by default; override with <code>--entrypoint</code>.</p>
+<h3 id="single-project-ast-walked">Single project, AST-walked<a class="headerlink" href="#single-project-ast-walked" title="Permanent link">&para;</a></h3>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>chumicro-workspace<span class="w"> </span>deploy<span class="w"> </span>back-porch<span class="w"> </span>--import-graph
+</span></code></pre></div>
+<p>Routes through <a href="../api/"><code>project_import_graph_source</code></a>: it AST-parses the entrypoint, walks the <code>import</code> and <code>from ... import</code> targets, resolves them against the workspace's <code>shared/</code>, <code>libraries/&lt;name&gt;/src/</code>, and <code>packages/</code> directories plus any <code>library_sources:</code> overrides in <code>workspace.yml</code>, and ships only the modules it reached.  Use it when a project imports shared code you don't want to copy by hand.</p>
+<h3 id="installing-libraries-without-the-workspace-tooling">Installing libraries without the workspace tooling<a class="headerlink" href="#installing-libraries-without-the-workspace-tooling" title="Permanent link">&para;</a></h3>
+<p>The default path pulls chumicro libraries into the workspace with <code>chumicro-workspace library add &lt;name&gt;</code>, then <code>deploy --import-graph</code> ships the ones a project imports to the board's <code>/lib/</code>.  Both steps fetch from the host's network.</p>
+<p>When the host can't reach the snapshot channel (air-gapped, behind a custom registry, or simply offline), install onto the board directly with the runtime's own package manager.  Both pull from <code>ChuMicro-Bundle</code>, take the libraries your project imports, and resolve transitive chumicro dependencies for you:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># CircuitPython: register the bundle once per machine, then install by name</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>circup<span class="w"> </span>bundle-add<span class="w"> </span>ChuMicro/ChuMicro-Bundle
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>circup<span class="w"> </span>install<span class="w"> </span>chumicro_wifi<span class="w"> </span>chumicro_mqtt<span class="w"> </span>chumicro_runner
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>
+</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="c1"># MicroPython: one mip install per library, and the board needs wifi to fetch</span>
+</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a>mpremote<span class="w"> </span>connect<span class="w"> </span>/dev/cu.usbmodem1101<span class="w"> </span>mip<span class="w"> </span>install<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="w">    </span>github:ChuMicro/ChuMicro-Bundle/chumicro_wifi
+</span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a>mpremote<span class="w"> </span>connect<span class="w"> </span>/dev/cu.usbmodem1101<span class="w"> </span>mip<span class="w"> </span>install<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a><span class="w">    </span>github:ChuMicro/ChuMicro-Bundle/chumicro_mqtt
+</span></code></pre></div>
+<p><code>circup</code> uses hyphens (<code>chumicro-wifi</code>); <code>mip</code> uses the underscore import name (<code>chumicro_wifi</code>).  Swap <code>ChuMicro-Bundle</code> for <code>ChuMicro-Bundle-Experimental</code> to track the pre-release channel.  Files land at <code>/lib/chumicro_&lt;name&gt;/</code> either way, the same place <code>deploy --import-graph</code> writes them, so a project deployed afterward finds its imports.  Full install matrix, pre-compiled <code>.mpy</code> bytecode, and pip-on-CPython: <a href="https://github.com/ChuMicro/ChuMicro/blob/main/INSTALL.md">INSTALL.md</a>.</p>
+<h3 id="pointing-the-library-channel-at-a-mirror">Pointing the library channel at a mirror<a class="headerlink" href="#pointing-the-library-channel-at-a-mirror" title="Permanent link">&para;</a></h3>
+<p><code>library add</code>, <code>browse</code>, and <code>update</code> fetch from GitHub by default.  Two environment variables move the channel to any server that carries the same tree layout, over <code>https</code>, <code>http</code>, or <code>file</code>:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">CHUMICRO_CHANNEL_FILES_BASE</span><span class="o">=</span><span class="s2">"https://mirror.example"</span><span class="w">     </span><span class="c1"># replaces raw.githubusercontent.com</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="nb">export</span><span class="w"> </span><span class="nv">CHUMICRO_CHANNEL_TARBALLS_BASE</span><span class="o">=</span><span class="s2">"https://mirror.example"</span><span class="w">  </span><span class="c1"># replaces codeload.github.com</span>
+</span></code></pre></div>
+<p>The URL paths keep the GitHub shapes (<code>&lt;owner&gt;/&lt;repo&gt;/&lt;ref&gt;/&lt;path&gt;</code> for raw files, <code>&lt;owner&gt;/&lt;repo&gt;/tar.gz/refs/tags/&lt;tag&gt;</code> for snapshot tarballs), so a mirror is a plain directory tree.  <code>python -m http.server</code> and a <code>file://</code> base both work.  The same seam exercises the acquisition path against a locally staged channel before any live repo exists.</p>
+<h3 id="single-project-boot-shim-layout">Single project, boot-shim layout<a class="headerlink" href="#single-project-boot-shim-layout" title="Permanent link">&para;</a></h3>
+<p>A project that ships <code>app.py</code> with a top-level <code>run()</code> and no <code>code.py</code> / <code>main.py</code> of its own gets this layout automatically, so you rarely pass the flag by hand:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>chumicro-workspace<span class="w"> </span>deploy<span class="w"> </span>back-porch<span class="w"> </span>--boot-shim
+</span></code></pre></div>
+<p>Your project's files land at the device root, and deploy synthesises the entrypoint next to them:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>/code.py                  # synthesised, three lines (or /main.py on MicroPython)
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>/app.py                   # your code: def run(): ...
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>/helpers.py               # anything else in the project directory
+</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>/runtime_config.msgpack   # merged config
+</span></code></pre></div>
+<p>The synthesised file is exactly this, and deploy overwrites it every time, so don't edit it on the board:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># Shipped by chumicro-workspace; do not edit.</span>
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">app</span><span class="w"> </span><span class="kn">import</span> <span class="n">run</span> <span class="k">as</span> <span class="n">_run</span>
+</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="n">_run</span><span class="p">()</span>
+</span></code></pre></div>
+<p>Only the runtime-matching filename is written, never both.  Deploy owns that one file; you own everything else at the device root.</p>
+<p>Combine it with <code>--import-graph</code> to also ship the libraries <code>app.py</code> imports to <code>/lib/</code>, which is what the auto-detected path does when a project reaches for chumicro libraries.</p>
+<h3 id="one-project-per-board">One project per board<a class="headerlink" href="#one-project-per-board" title="Permanent link">&para;</a></h3>
+<p>A board runs one project at a time.  To change which one, deploy the other.</p>
+<p>Staging several projects on one board (the old <code>deploy &lt;a&gt; &lt;b&gt; &lt;c&gt;</code> form and the <code>switch</code> command that went with it) was removed: the staged copies overran the flash budget on the smallest supported board class, 256 KB of MCU RAM with 2 MB physical flash and roughly 800 KB usable.  Pass one project name per <code>deploy</code> call.  Ordinary deploys already remove stale files, and <code>deploy --wipe</code> gives you a known-empty board when you want one.</p>
+<h3 id="inspect-what-would-land-with-dry-run">Inspect what would land with <code>--dry-run</code><a class="headerlink" href="#inspect-what-would-land-with-dry-run" title="Permanent link">&para;</a></h3>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>chumicro-workspace<span class="w"> </span>deploy<span class="w"> </span>garage/sensors/door_open<span class="w"> </span>--dry-run
+</span></code></pre></div>
+<p>Builds the file map like a real deploy, then prints it (path, size, one-word category) instead of calling the transport.  Useful when:</p>
+<ul>
+<li>You want to confirm the runtime config actually made it in.  The msgpack shows up in the listing with its real size.</li>
+<li>A library you expected isn't reaching the board.  Anything under <code>/lib/</code> is categorised <code>library</code>, so a short list means the import walk didn't find it.</li>
+<li>You want to read what deploy actually does.  The output's shape is stable enough to serve as documentation.</li>
+</ul>
+<p>The categories are <code>shim</code> (<code>/code.py</code> or <code>/main.py</code>, which is the firmware entrypoint no matter who wrote it), <code>config</code> (<code>/runtime_config.msgpack</code>), <code>library</code> (anything under <code>/lib/</code>), and <code>file</code> (everything else at the device root).</p>
+<h3 id="multi-board-deploys-with-all-devices">Multi-board deploys with <code>--all-devices</code><a class="headerlink" href="#multi-board-deploys-with-all-devices" title="Permanent link">&para;</a></h3>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>chumicro-workspace<span class="w"> </span>deploy<span class="w"> </span>garage/door_open<span class="w"> </span>--all-devices
+</span></code></pre></div>
+<p>Loops over every entry in <code>devices.yml</code> and ships the project to each in declaration order.  Per-device failures don't abort the loop; the exit code is 1 if any device's deploy failed, 0 otherwise.  Mutually exclusive with <code>--device</code> / <code>--runtime</code> (caught at runtime with a precise message).</p>
+<h3 id="per-project-default-device-with-deploy_targets">Per-project default device with <code>deploy_targets:</code><a class="headerlink" href="#per-project-default-device-with-deploy_targets" title="Permanent link">&para;</a></h3>
+<p>When a workspace has several boards, typing <code>--device &lt;id&gt;</code> for every deploy gets tedious.  <code>workspace.yml</code>'s <code>deploy_targets:</code> block maps each project to its default device or devices, so a bare <code>deploy &lt;project&gt;</code> with no <code>--device</code> or <code>--runtime</code> picks the mapped target.  Projects that aren't in the mapping fall back to <code>devices.yml</code>'s <code>defaults:</code> block.</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="nt">deploy_targets</span><span class="p">:</span>
+</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="w">  </span><span class="nt">garage/door</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">pi-pico-w-circuitpython-board</span><span class="w">   </span><span class="c1"># a bare string is fine</span>
+</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="w">  </span><span class="nt">garage/window</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">lolin-s2-circuitpython-board</span><span class="p p-Indicator">]</span>
+</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="w">  </span><span class="nt">garage/server</span><span class="p">:</span><span class="w">                               </span><span class="c1"># several devices, so a list</span>
+</span><span id="__span-20-5"><a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">pi-pico-w-micropython-board</span>
+</span><span id="__span-20-6"><a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">lolin-s2-micropython-board</span>
+</span></code></pre></div>
+<p><code>deploy --all-projects</code> walks the whole mapping at once, every project to every device it lists, in declaration order.  It is mutually exclusive with positional names, <code>--device</code>, <code>--runtime</code>, and <code>--all-devices</code>.  A failure on one (project, device) pair doesn't abort the loop, and the exit code reflects whether any failed.  An empty or missing <code>deploy_targets:</code> block exits 2 with a hint.</p>
+<h3 id="clean-slate-deploys-with-wipe">Clean-slate deploys with <code>--wipe</code><a class="headerlink" href="#clean-slate-deploys-with-wipe" title="Permanent link">&para;</a></h3>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>chumicro-workspace<span class="w"> </span>deploy<span class="w"> </span>garage/door_open<span class="w"> </span>--wipe
+</span></code></pre></div>
+<p>A plain <code>deploy</code> is already clean-slate: it removes anything on the board that isn't part of the new payload, apart from a small keep set the device itself needs (<code>boot.py</code>, <code>boot_out.txt</code>, <code>_chu_kv.msgpack</code>).  A board-resident <code>settings.toml</code> is evicted, because it competes with config-driven wifi.</p>
+<p>Three levels, from gentlest to harshest:</p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>What survives</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--no-wipe</code></td>
+<td>Everything you put on the board by hand.  Only the entrypoint, the state files, and <code>/lib</code> get reconciled.</td>
+</tr>
+<tr>
+<td>(default)</td>
+<td>The keep set.  Everything else that isn't the new payload goes.</td>
+</tr>
+<tr>
+<td><code>--wipe</code></td>
+<td>Nothing.  The whole filesystem is erased before the payload is staged, keep set included.</td>
+</tr>
+</tbody>
+</table>
+<p>Reach for <code>--wipe</code> when the board is corrupted or you want a provably empty starting point.  CircuitPython runs <code>import storage; storage.erase_filesystem()</code>, which reformats the FAT volume and reboots the board; MicroPython walks the user filesystem and removes every file and directory.  Firmware partitions are untouched on both runtimes, and the flag is a no-op in RAM-mode deploys since nothing was written to flash.</p>
+<h3 id="failure-hints">Failure hints<a class="headerlink" href="#failure-hints" title="Permanent link">&para;</a></h3>
+<p>When the deploy traceback matches a known workspace-shaped pattern, an indented <code>--- hints ---</code> block prints below it pointing at the fix:</p>
+<ul>
+<li><code>NameError: name '&lt;sym&gt;' is not defined</code> points at the missing <code>from ... import ...</code> in <code>app.py</code>.</li>
+<li><code>OSError ... runtime_config.msgpack</code> explains that RAM-mode deploys don't persist the config msgpack, and to switch the device to flash mode.</li>
+<li><code>ImportError</code> or <code>ModuleNotFoundError</code> naming a <code>chumicro_*</code> module says the library isn't installed in this venv and suggests re-running <code>setup</code>.</li>
+<li><code>KeyError: '&lt;key&gt;'</code> names the missing config key and points at <code>projects/&lt;project&gt;/project_config.toml</code> and <code>secrets.toml</code>.</li>
+</ul>
+<p>Driven by <a href="../api/"><code>detect_hints</code></a> over the captured traceback and execute output.  When nothing matches, no header prints, so unmatched failures don't carry an empty heading.</p>
+<h3 id="programmatic-deploy">Programmatic deploy<a class="headerlink" href="#programmatic-deploy" title="Permanent link">&para;</a></h3>
+<p>The CLI is a thin wrapper over the Python API.  Build a source explicitly when you need finer control:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_deploy</span><span class="w"> </span><span class="kn">import</span> <span class="n">Device</span><span class="p">,</span> <span class="n">Deployer</span>
+</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_workspace.boot_shim</span><span class="w"> </span><span class="kn">import</span> <span class="n">project_boot_source</span>
+</span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_workspace.workspace</span><span class="w"> </span><span class="kn">import</span> <span class="n">WorkspaceLayout</span>
+</span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a>
+</span><span id="__span-22-5"><a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a><span class="n">workspace</span> <span class="o">=</span> <span class="n">WorkspaceLayout</span><span class="o">.</span><span class="n">from_dir</span><span class="p">()</span>
+</span><span id="__span-22-6"><a id="__codelineno-22-6" name="__codelineno-22-6" href="#__codelineno-22-6"></a><span class="n">device</span> <span class="o">=</span> <span class="n">Device</span><span class="p">(</span><span class="n">transport</span><span class="o">=</span><span class="s2">"micropython"</span><span class="p">,</span> <span class="n">address</span><span class="o">=</span><span class="s2">"/dev/cu.usbmodem1101"</span><span class="p">)</span>
+</span><span id="__span-22-7"><a id="__codelineno-22-7" name="__codelineno-22-7" href="#__codelineno-22-7"></a>
+</span><span id="__span-22-8"><a id="__codelineno-22-8" name="__codelineno-22-8" href="#__codelineno-22-8"></a><span class="n">source</span> <span class="o">=</span> <span class="n">project_boot_source</span><span class="p">(</span>
+</span><span id="__span-22-9"><a id="__codelineno-22-9" name="__codelineno-22-9" href="#__codelineno-22-9"></a>    <span class="n">workspace</span><span class="o">.</span><span class="n">project_dir</span><span class="p">(</span><span class="s2">"garage/sensors/door_open"</span><span class="p">),</span>
+</span><span id="__span-22-10"><a id="__codelineno-22-10" name="__codelineno-22-10" href="#__codelineno-22-10"></a>    <span class="n">workspace</span><span class="o">=</span><span class="n">workspace</span><span class="p">,</span>
+</span><span id="__span-22-11"><a id="__codelineno-22-11" name="__codelineno-22-11" href="#__codelineno-22-11"></a>    <span class="n">entrypoint_filename</span><span class="o">=</span><span class="s2">"main.py"</span><span class="p">,</span>
+</span><span id="__span-22-12"><a id="__codelineno-22-12" name="__codelineno-22-12" href="#__codelineno-22-12"></a><span class="p">)</span>
+</span><span id="__span-22-13"><a id="__codelineno-22-13" name="__codelineno-22-13" href="#__codelineno-22-13"></a><span class="n">result</span> <span class="o">=</span> <span class="n">Deployer</span><span class="p">(</span><span class="n">device</span><span class="p">)</span><span class="o">.</span><span class="n">deploy_diff</span><span class="p">(</span><span class="n">source</span><span class="p">)</span>
+</span><span id="__span-22-14"><a id="__codelineno-22-14" name="__codelineno-22-14" href="#__codelineno-22-14"></a><span class="k">assert</span> <span class="n">result</span><span class="o">.</span><span class="n">success</span>
+</span></code></pre></div>
+<p><code>deploy_diff</code> is the one deploy entry point: it asks the transport what is currently on the board, deletes what the new payload doesn't include, then writes and runs.</p>
+<h2 id="repl">REPL<a class="headerlink" href="#repl" title="Permanent link">&para;</a></h2>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="c1"># Interactive REPL on the default device.</span>
+</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>chumicro-workspace<span class="w"> </span>repl
+</span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a>
+</span><span id="__span-23-4"><a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a><span class="c1"># Tail only: stream output for a window, then exit.  Useful for CI and</span>
+</span><span id="__span-23-5"><a id="__codelineno-23-5" name="__codelineno-23-5" href="#__codelineno-23-5"></a><span class="c1"># scripted "watch the next 30 seconds" checks.</span>
+</span><span id="__span-23-6"><a id="__codelineno-23-6" name="__codelineno-23-6" href="#__codelineno-23-6"></a>chumicro-workspace<span class="w"> </span>repl<span class="w"> </span>--tail<span class="w"> </span><span class="m">30</span>
+</span></code></pre></div>
+<p><code>repl</code> takes no project name.  To deploy and then watch in one command, put the tail on the deploy:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>chumicro-workspace<span class="w"> </span>deploy<span class="w"> </span>garage/sensors/door_open<span class="w"> </span>--tail
+</span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>chumicro-workspace<span class="w"> </span>deploy<span class="w"> </span>garage/sensors/door_open<span class="w"> </span>--tail<span class="w"> </span><span class="m">60</span>
+</span></code></pre></div>
+<p><code>--tail</code> defaults to 30 seconds when you give it no number, and needs exactly one project and one device.  It exits non-zero if a traceback shows up in the tailed output; pass <code>--no-fail-on-traceback</code> when that isn't what you want.</p>
+<h2 id="quality-knobs">Quality knobs<a class="headerlink" href="#quality-knobs" title="Permanent link">&para;</a></h2>
+<p><code>lint</code>, <code>test</code>, and <code>preflight</code> read their gates from two files.  <code>quality.toml</code> at the workspace root is the committed policy that travels with the repo, and <code>workspace.yml</code>'s <code>quality:</code> block is the per-machine override that wins on any key it sets.</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="c1"># quality.toml: shared policy, committed</span>
+</span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a><span class="n">coverage_threshold</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">85</span><span class="w">    </span><span class="c1"># top-level keys go before any [table]</span>
+</span><span id="__span-25-3"><a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a>
+</span><span id="__span-25-4"><a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a><span class="k">[lint]</span>
+</span><span id="__span-25-5"><a id="__codelineno-25-5" name="__codelineno-25-5" href="#__codelineno-25-5"></a><span class="n">enabled</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+</span><span id="__span-25-6"><a id="__codelineno-25-6" name="__codelineno-25-6" href="#__codelineno-25-6"></a><span class="n">tools</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">"ruff"</span><span class="p">,</span><span class="w"> </span><span class="s2">"chumicro-checks"</span><span class="p">]</span>
+</span><span id="__span-25-7"><a id="__codelineno-25-7" name="__codelineno-25-7" href="#__codelineno-25-7"></a><span class="n">select</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">"E"</span><span class="p">,</span><span class="w"> </span><span class="s2">"F"</span><span class="p">,</span><span class="w"> </span><span class="s2">"I"</span><span class="p">]</span>
+</span></code></pre></div>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="c1"># workspace.yml: your machine's overrides</span>
+</span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a><span class="nt">quality</span><span class="p">:</span>
+</span><span id="__span-26-3"><a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a><span class="w">  </span><span class="nt">lint</span><span class="p">:</span>
+</span><span id="__span-26-4"><a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a><span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+</span></code></pre></div>
+<p>The knobs:</p>
+<ul>
+<li><code>lint.enabled = false</code> turns <code>lint</code> into a no-op that prints a hint, so the command stays discoverable but runs nothing.</li>
+<li><code>lint.tools</code> picks which tools run.  The default runs both <code>ruff</code> and <code>chumicro-checks</code>; drop one to disable it without disabling the whole phase.  An empty list behaves like <code>enabled = false</code>, and a name outside the known set is rejected at load time so a typo surfaces instead of silently skipping a tool.</li>
+<li><code>lint.select</code> is forwarded to ruff as <code>--select &lt;comma list&gt;</code> ahead of anything you pass after <code>--</code>, so your own arguments still win.</li>
+<li><code>coverage_threshold</code> is forwarded to pytest as <code>--cov-fail-under=&lt;n&gt;</code>, which lets you set the gate without editing <code>pyproject.toml</code>'s <code>[tool.coverage.report]</code>.</li>
+</ul>
+<p><a href="../api/"><code>load_quality_config</code></a> reads both files, validates each one separately so an error names the file that carries it, and merges them.  With neither file present you get permissive defaults: linting on, no coverage gate.  A malformed shape raises <code>WorkspaceConfigError</code> naming the offending field.</p>
+<h2 id="config-merge">Config merge<a class="headerlink" href="#config-merge" title="Permanent link">&para;</a></h2>
+<p><a href="../api/"><code>build_runtime_config</code></a> is the deploy-time pipeline:</p>
+<ol>
+<li>Read <code>secrets.toml</code>, the workspace-wide credentials and device defaults.</li>
+<li>Read <code>projects/&lt;name&gt;/project_config.toml</code>.</li>
+<li>Deep-merge in that order.  The later layer wins at any nesting depth, dicts recurse, and lists replace wholesale.</li>
+<li>Flatten nested tables to dotted keys, so <code>[wifi] ssid</code> becomes <code>"wifi.ssid"</code>.  The device-side reader works with the flat shape: one hash lookup per key, no recursion.</li>
+<li>Pack as msgpack via the standard <code>msgpack</code> library with <code>use_single_float=True</code> for CircuitPython, and write to <code>projects/&lt;name&gt;/_generated/runtime_config.msgpack</code>.</li>
+</ol>
+<p>The deploy then ships that msgpack to <code>/runtime_config.msgpack</code> on the device, where apps read it via <code>chumicro-config</code>'s <code>load_runtime_config()</code>.</p>
+<p><code>compose_runtime_config</code> runs the same steps and hands back the dict without writing anything, which is what you want in tests.  To regenerate the msgpack on disk without deploying:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+</span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_workspace.pipeline</span><span class="w"> </span><span class="kn">import</span> <span class="n">build_runtime_config</span>
+</span><span id="__span-27-3"><a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a>
+</span><span id="__span-27-4"><a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a><span class="n">build_runtime_config</span><span class="p">(</span>
+</span><span id="__span-27-5"><a id="__codelineno-27-5" name="__codelineno-27-5" href="#__codelineno-27-5"></a>    <span class="n">secrets_toml</span><span class="o">=</span><span class="n">Path</span><span class="p">(</span><span class="s2">"secrets.toml"</span><span class="p">),</span>
+</span><span id="__span-27-6"><a id="__codelineno-27-6" name="__codelineno-27-6" href="#__codelineno-27-6"></a>    <span class="n">project_config</span><span class="o">=</span><span class="n">Path</span><span class="p">(</span><span class="s2">"projects/back-porch/project_config.toml"</span><span class="p">),</span>
+</span><span id="__span-27-7"><a id="__codelineno-27-7" name="__codelineno-27-7" href="#__codelineno-27-7"></a>    <span class="n">output_path</span><span class="o">=</span><span class="n">Path</span><span class="p">(</span><span class="s2">"projects/back-porch/_generated/runtime_config.msgpack"</span><span class="p">),</span>
+</span><span id="__span-27-8"><a id="__codelineno-27-8" name="__codelineno-27-8" href="#__codelineno-27-8"></a><span class="p">)</span>
+</span></code></pre></div>
+<h2 id="firmware">Firmware<a class="headerlink" href="#firmware" title="Permanent link">&para;</a></h2>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="c1"># CircuitPython: latest stable from the Adafruit S3 bucket.</span>
+</span><span id="__span-28-2"><a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a>chumicro-workspace<span class="w"> </span>install-firmware<span class="w"> </span>--method<span class="w"> </span>uf2
+</span><span id="__span-28-3"><a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a>
+</span><span id="__span-28-4"><a id="__codelineno-28-4" name="__codelineno-28-4" href="#__codelineno-28-4"></a><span class="c1"># MicroPython: latest dated build from micropython.org/download/&lt;BOARD&gt;/.</span>
+</span><span id="__span-28-5"><a id="__codelineno-28-5" name="__codelineno-28-5" href="#__codelineno-28-5"></a>chumicro-workspace<span class="w"> </span>install-firmware<span class="w"> </span>--method<span class="w"> </span>esptool
+</span><span id="__span-28-6"><a id="__codelineno-28-6" name="__codelineno-28-6" href="#__codelineno-28-6"></a>
+</span><span id="__span-28-7"><a id="__codelineno-28-7" name="__codelineno-28-7" href="#__codelineno-28-7"></a><span class="c1"># Pre-release windows (CP only):</span>
+</span><span id="__span-28-8"><a id="__codelineno-28-8" name="__codelineno-28-8" href="#__codelineno-28-8"></a>chumicro-workspace<span class="w"> </span>install-firmware<span class="w"> </span>--method<span class="w"> </span>uf2<span class="w"> </span>--allow-prerelease
+</span><span id="__span-28-9"><a id="__codelineno-28-9" name="__codelineno-28-9" href="#__codelineno-28-9"></a>
+</span><span id="__span-28-10"><a id="__codelineno-28-10" name="__codelineno-28-10" href="#__codelineno-28-10"></a><span class="c1"># Vendor or custom URL pinned in devices.yml, where the device entry</span>
+</span><span id="__span-28-11"><a id="__codelineno-28-11" name="__codelineno-28-11" href="#__codelineno-28-11"></a><span class="c1"># sets hardware.firmware_source: "https://my-mirror/...uf2"</span>
+</span><span id="__span-28-12"><a id="__codelineno-28-12" name="__codelineno-28-12" href="#__codelineno-28-12"></a>chumicro-workspace<span class="w"> </span>install-firmware<span class="w"> </span>--method<span class="w"> </span>uf2<span class="w">     </span><span class="c1"># picks up firmware_source</span>
+</span><span id="__span-28-13"><a id="__codelineno-28-13" name="__codelineno-28-13" href="#__codelineno-28-13"></a>
+</span><span id="__span-28-14"><a id="__codelineno-28-14" name="__codelineno-28-14" href="#__codelineno-28-14"></a><span class="c1"># Or override at the call site:</span>
+</span><span id="__span-28-15"><a id="__codelineno-28-15" name="__codelineno-28-15" href="#__codelineno-28-15"></a>chumicro-workspace<span class="w"> </span>install-firmware<span class="w"> </span>--url<span class="w"> </span>https://example/custom.uf2<span class="w"> </span>--method<span class="w"> </span>uf2
+</span></code></pre></div>
+<p>With no <code>--url</code>, the URL is derived from the device entry in this order, by <code>derive_firmware_url</code> in <a href="https://chumicro.github.io/ChuMicro/deploy/stable/api/"><code>chumicro-deploy</code></a>:</p>
+<ol>
+<li><code>hardware.firmware_source</code> is set, so it is returned verbatim.</li>
+<li>The runtime is CircuitPython, so the Adafruit S3 bucket listing gives the latest stable build.</li>
+<li>The runtime is MicroPython, so a curated machine-to-BOARD map plus a micropython.org lookup gives the latest stable dated build.</li>
+</ol>
+<p>ESP32-family boards need <code>.bin</code> instead of <code>.uf2</code>.  Set <code>hardware.firmware_extension = "bin"</code> in the device entry to point the MicroPython lookup at the right file.</p>
+<p><code>chumicro-workspace</code> also checks whether a board's installed firmware is new enough for the libraries you are deploying; see <a href="../api/"><code>check_firmware_supported</code></a>.</p>
+<h2 id="devicesyml-round-trip"><code>devices.yml</code> round-trip<a class="headerlink" href="#devicesyml-round-trip" title="Permanent link">&para;</a></h2>
+<p><code>devices.yml</code> is yours to comment and order however you like, and every rewrite preserves both.  That comes from <code>ruamel.yaml</code>, which round-trips comments and key order where PyYAML discards comments and sorts keys alphabetically.</p>
+<p>The schema and its writers live in <code>chumicro-deploy</code>, which owns the file.  Every mutation is load, mutate, dump:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+</span><span id="__span-29-2"><a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_deploy.config.devices_yaml</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+</span><span id="__span-29-3"><a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a>    <span class="n">HardwareOverwriteError</span><span class="p">,</span>
+</span><span id="__span-29-4"><a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a>    <span class="n">dump_devices</span><span class="p">,</span>
+</span><span id="__span-29-5"><a id="__codelineno-29-5" name="__codelineno-29-5" href="#__codelineno-29-5"></a>    <span class="n">load_devices</span><span class="p">,</span>
+</span><span id="__span-29-6"><a id="__codelineno-29-6" name="__codelineno-29-6" href="#__codelineno-29-6"></a>    <span class="n">update_device_address</span><span class="p">,</span>
+</span><span id="__span-29-7"><a id="__codelineno-29-7" name="__codelineno-29-7" href="#__codelineno-29-7"></a><span class="p">)</span>
+</span><span id="__span-29-8"><a id="__codelineno-29-8" name="__codelineno-29-8" href="#__codelineno-29-8"></a>
+</span><span id="__span-29-9"><a id="__codelineno-29-9" name="__codelineno-29-9" href="#__codelineno-29-9"></a><span class="n">devices</span> <span class="o">=</span> <span class="n">load_devices</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="s2">"devices.yml"</span><span class="p">))</span>
+</span><span id="__span-29-10"><a id="__codelineno-29-10" name="__codelineno-29-10" href="#__codelineno-29-10"></a><span class="n">update_device_address</span><span class="p">(</span><span class="n">devices</span><span class="p">,</span> <span class="s2">"back-porch"</span><span class="p">,</span> <span class="s2">"/dev/cu.usbmodem1102"</span><span class="p">)</span>
+</span><span id="__span-29-11"><a id="__codelineno-29-11" name="__codelineno-29-11" href="#__codelineno-29-11"></a><span class="n">dump_devices</span><span class="p">(</span><span class="n">devices</span><span class="p">,</span> <span class="n">Path</span><span class="p">(</span><span class="s2">"devices.yml"</span><span class="p">))</span>
+</span></code></pre></div>
+<p><code>update_device_hardware</code> raises <code>HardwareOverwriteError</code> when a hardware-once field would change; pass <code>force=True</code> when you really did swap boards.  <code>rename_device</code> also rewrites any <code>defaults.&lt;runtime&gt;</code> reference pointing at the old id.  <code>remove_device</code> deletes an entry, nulls any <code>defaults.&lt;runtime&gt;</code> that pointed at it so the file stays loadable, and returns the removed entry for callers that want to re-register under the same id.</p>
+<h2 id="workbench-only">Workbench-only<a class="headerlink" href="#workbench-only" title="Permanent link">&para;</a></h2>
+<p>This package runs on CPython and never on a microcontroller.  The on-device side of the workspace contract is <a href="https://chumicro.github.io/ChuMicro/config/stable/"><code>chumicro-config</code></a>.</p>
+<hr />
+<div class="chumicro-footer">
+<p><a href="../">← Home</a></p>
+<p><a href="https://github.com/ChuMicro/ChuMicro/tree/main/workbench/workspace">Source</a> · \
+<a href="https://pypi.org/project/chumicro-workspace/">PyPI</a> · \
+<a href="https://github.com/ChuMicro/ChuMicro/issues">Issues</a></p>
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://zensical.org/" target="_blank" rel="noopener">
+      Zensical
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate":null,"base":"..","features":[],"search":"../assets/javascripts/workers/search.e2d2d235.min.js","tags":null,"translations":{"clipboard.copied":"Copied to clipboard","clipboard.copy":"Copy to clipboard","search.result.more.one":"1 more on this page","search.result.more.other":"# more on this page","search.result.none":"No matching documents","search.result.one":"1 matching document","search.result.other":"# matching documents","search.result.placeholder":"Type to start searching","search.result.term.missing":"Missing","select.version":"Select version"},"version":{"default":["stable","experimental"],"provider":"mike"}}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.dbc0afdc.min.js"></script>
+      
+    
+  </body>
+</html>
