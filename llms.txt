@@ -14,31 +14,31 @@ pip install chumicro-mqtt
 
 ## Libraries
 
-- [chumicro-timing](https://chumicro.github.io/ChuMicro/timing/stable/): Wraparound-safe millisecond tick helpers plus wait value objects (deadlines, rates, signals) for CircuitPython, MicroPython, and CPython.
-- [chumicro-runner](https://chumicro.github.io/ChuMicro/runner/stable/): Tick-based task runner for CircuitPython, MicroPython, and CPython: non-blocking check/handle scheduling without async.
-- [chumicro-wifi](https://chumicro.github.io/ChuMicro/wifi/stable/): Unified wifi supervisor across CircuitPython, MicroPython, and CPython: sole-supervisor model with reconnect, state machine, and per-runtime adapters.
-- [chumicro-requests](https://chumicro.github.io/ChuMicro/requests/stable/): Non-blocking HTTP/1.1 client for CircuitPython, MicroPython, and CPython.
-- [chumicro-http_server](https://chumicro.github.io/ChuMicro/http_server/stable/): Non-blocking HTTP/1.1 server for CircuitPython, MicroPython, and CPython.
-- [chumicro-mqtt](https://chumicro.github.io/ChuMicro/mqtt/stable/): Non-blocking MQTT 3.1.1 client (QoS 0+1) for CircuitPython, MicroPython, and CPython.
-- [chumicro-websockets](https://chumicro.github.io/ChuMicro/websockets/stable/): Non-blocking WebSocket (RFC 6455) client and server for CircuitPython, MicroPython, and CPython.
-- [chumicro-sockets](https://chumicro.github.io/ChuMicro/sockets/stable/): Cross-runtime TCP, TLS, and UDP sockets for CircuitPython, MicroPython, and CPython
-- [chumicro-ntp](https://chumicro.github.io/ChuMicro/ntp/stable/): Runner-shaped SNTP client over an injected UDP socket: pure Python, cross-runtime.
-- [chumicro-config](https://chumicro.github.io/ChuMicro/config/stable/): Standardized runtime-config helpers for ChuMicro libraries: section loader plus on-device runtime-config reader.
-- [chumicro-kvstore](https://chumicro.github.io/ChuMicro/kvstore/stable/): Tiny mutable key-value store for persisted runtime state (counters, timestamps, tokens) across CircuitPython, MicroPython, and CPython.
-- [chumicro-msgpack](https://chumicro.github.io/ChuMicro/msgpack/stable/): Compact MessagePack serialization for CircuitPython, MicroPython, and CPython: delegates to the native C module when available.
-- [chumicro-compat](https://chumicro.github.io/ChuMicro/compat/stable/): Cross-runtime compatibility polyfills for CircuitPython, MicroPython, and CPython: functools.partial and more.
+- [chumicro-timing](https://chumicro.com/ChuMicro/timing/stable/): Wraparound-safe millisecond tick helpers plus wait value objects (deadlines, rates, signals) for CircuitPython, MicroPython, and CPython.
+- [chumicro-runner](https://chumicro.com/ChuMicro/runner/stable/): Tick-based task runner for CircuitPython, MicroPython, and CPython: non-blocking check/handle scheduling without async.
+- [chumicro-wifi](https://chumicro.com/ChuMicro/wifi/stable/): Unified wifi supervisor across CircuitPython, MicroPython, and CPython: sole-supervisor model with reconnect, state machine, and per-runtime adapters.
+- [chumicro-requests](https://chumicro.com/ChuMicro/requests/stable/): Non-blocking HTTP/1.1 client for CircuitPython, MicroPython, and CPython.
+- [chumicro-http_server](https://chumicro.com/ChuMicro/http_server/stable/): Non-blocking HTTP/1.1 server for CircuitPython, MicroPython, and CPython.
+- [chumicro-mqtt](https://chumicro.com/ChuMicro/mqtt/stable/): Non-blocking MQTT 3.1.1 client (QoS 0+1) for CircuitPython, MicroPython, and CPython.
+- [chumicro-websockets](https://chumicro.com/ChuMicro/websockets/stable/): Non-blocking WebSocket (RFC 6455) client and server for CircuitPython, MicroPython, and CPython.
+- [chumicro-sockets](https://chumicro.com/ChuMicro/sockets/stable/): Cross-runtime TCP, TLS, and UDP sockets for CircuitPython, MicroPython, and CPython
+- [chumicro-ntp](https://chumicro.com/ChuMicro/ntp/stable/): Runner-shaped SNTP client over an injected UDP socket: pure Python, cross-runtime.
+- [chumicro-config](https://chumicro.com/ChuMicro/config/stable/): Standardized runtime-config helpers for ChuMicro libraries: section loader plus on-device runtime-config reader.
+- [chumicro-kvstore](https://chumicro.com/ChuMicro/kvstore/stable/): Tiny mutable key-value store for persisted runtime state (counters, timestamps, tokens) across CircuitPython, MicroPython, and CPython.
+- [chumicro-msgpack](https://chumicro.com/ChuMicro/msgpack/stable/): Compact MessagePack serialization for CircuitPython, MicroPython, and CPython: delegates to the native C module when available.
+- [chumicro-compat](https://chumicro.com/ChuMicro/compat/stable/): Cross-runtime compatibility polyfills for CircuitPython, MicroPython, and CPython: functools.partial and more.
 
 ## Host tools
 
-- [chumicro-workspace](https://chumicro.github.io/ChuMicro/workspace/stable/): Host-side runtime for ChuMicro project workspaces: config merge, secrets resolution, deploy orchestration, command dispatch.
-- [chumicro-deploy](https://chumicro.github.io/ChuMicro/deploy/stable/): Host-side device transports and deploy tooling for CircuitPython and MicroPython boards.
-- [chumicro-repl](https://chumicro.github.io/ChuMicro/repl/stable/): Host-side serial REPL for CircuitPython and MicroPython boards with traceback highlighting.
+- [chumicro-workspace](https://chumicro.com/ChuMicro/workspace/stable/): Host-side runtime for ChuMicro project workspaces: config merge, secrets resolution, deploy orchestration, command dispatch.
+- [chumicro-deploy](https://chumicro.com/ChuMicro/deploy/stable/): Host-side device transports and deploy tooling for CircuitPython and MicroPython boards.
+- [chumicro-repl](https://chumicro.com/ChuMicro/repl/stable/): Host-side serial REPL for CircuitPython and MicroPython boards with traceback highlighting.
 
 ## Guides
 
-- [Questions people ask](https://chumicro.github.io/ChuMicro/guides/faq/): why a board freezes on the network, whether the libraries use async, what they cost in flash, and how to test without hardware.
-- [Troubleshooting](https://chumicro.github.io/ChuMicro/guides/troubleshooting/): fixes keyed to a symptom, including a board that will not appear, WiFi that will not connect, TLS failures, refused deploys, and running out of memory.
-- [Wiring WiFi credentials](https://chumicro.github.io/ChuMicro/guides/wiring-wifi-credentials/): getting a network name and password onto a board without putting them in your code.
+- [Questions people ask](https://chumicro.com/ChuMicro/guides/faq/): why a board freezes on the network, whether the libraries use async, what they cost in flash, and how to test without hardware.
+- [Troubleshooting](https://chumicro.com/ChuMicro/guides/troubleshooting/): fixes keyed to a symptom, including a board that will not appear, WiFi that will not connect, TLS failures, refused deploys, and running out of memory.
+- [Wiring WiFi credentials](https://chumicro.com/ChuMicro/guides/wiring-wifi-credentials/): getting a network name and password onto a board without putting them in your code.
 
 ## Optional
 

@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://chumicro.github.io/ChuMicro/guides/contributing/workbench/">
+        <link rel="canonical" href="https://chumicro.com/ChuMicro/guides/contributing/workbench/">
       
       
         <link rel="prev" href="../device-testing/">
@@ -1479,7 +1479,7 @@
 <li>No <code>.mpy</code> compilation, no <code>ChuMicro-Bundle</code> publishing.  Those exist for CircuitPython / MicroPython consumers; workbench tools don't have those consumers.</li>
 </ul>
 <h2 id="docs">Docs<a class="headerlink" href="#docs" title="Permanent link">&para;</a></h2>
-<p>Same <code>mkdocs.yml</code> + <code>docs/</code> layout as device libraries (Zensical + mkdocstrings + mike-versioned pages at <code>https://chumicro.github.io/ChuMicro/&lt;package&gt;/</code>).  Build locally with <code>python scripts/run.py docs --libraries &lt;name&gt;</code>.  The <code>discover_doc_dirs</code> helper picks up workbench packages the same way it picks up libraries, and griffe and the coverage gate (85 % baseline, raised to 94 % on agent invocations) apply identically.</p>
+<p>Same <code>mkdocs.yml</code> + <code>docs/</code> layout as device libraries (Zensical + mkdocstrings + mike-versioned pages at <code>https://chumicro.com/ChuMicro/&lt;package&gt;/</code>).  Build locally with <code>python scripts/run.py docs --libraries &lt;name&gt;</code>.  The <code>discover_doc_dirs</code> helper picks up workbench packages the same way it picks up libraries, and griffe and the coverage gate (85 % baseline, raised to 94 % on agent invocations) apply identically.</p>
 <h2 id="differences-from-libraries">Differences from libraries<a class="headerlink" href="#differences-from-libraries" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>Host-side <code>functional_tests/</code>, not on-device.</strong>  Workbench tools drive devices from the host rather than running on the device.  A workbench package can still ship a <code>functional_tests/</code> directory for host-side tests that touch hardware (see <a href="https://github.com/ChuMicro/ChuMicro/tree/main/workbench/deploy/functional_tests/"><code>workbench/deploy/functional_tests/</code></a> for the deploy happy paths against a real board through the public <code>chumicro_deploy</code> API).  The root <code>conftest.py</code> excludes these from default host collection the same way it does for library functional tests; run them with <code>python scripts/run.py test-workbench-functional</code> (the workbench counterpart to <code>test-libraries-functional</code>).  Each suite's own <code>conftest.py</code> owns device selection.</li>

@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://chumicro.github.io/ChuMicro/guides/contributing/new-library/">
+        <link rel="canonical" href="https://chumicro.com/ChuMicro/guides/contributing/new-library/">
       
       
         <link rel="prev" href="../style-guide/">
@@ -1750,7 +1750,7 @@
 <h2 id="2-implement">2. Implement<a class="headerlink" href="#2-implement" title="Permanent link">&para;</a></h2>
 <p>Put your code in <code>src/chumicro_my_sensor/</code>. Follow the <a href="../style-guide/">Style Guide</a> for naming, annotations, docstrings, and formatting. Key rules for library code:</p>
 <ul>
-<li><strong>No <code>async</code>/<code>await</code>.</strong>  Use the tick-based runner pattern. If your library has active components, implement <code>check(now_ms) -&gt; bool</code> so they work with <a href="https://chumicro.github.io/ChuMicro/runner/stable/"><code>Runner</code></a>.</li>
+<li><strong>No <code>async</code>/<code>await</code>.</strong>  Use the tick-based runner pattern. If your library has active components, implement <code>check(now_ms) -&gt; bool</code> so they work with <a href="https://chumicro.com/ChuMicro/runner/stable/"><code>Runner</code></a>.</li>
 <li><strong>No third-party dependencies</strong> that aren't available on all three runtimes.</li>
 <li><strong>No <code>typing</code> imports.</strong>  Use PEP 604/585 syntax: <code>int | None</code>, <code>list[int]</code>.</li>
 <li><strong>Memory patterns are optional on day one:</strong> <code>const()</code>, <code>memoryview</code>, pre-allocated buffers. Focus on correctness first. The <a href="../style-guide/#memory-patterns-library-code-only">Style Guide</a> has the full list when you're ready.</li>

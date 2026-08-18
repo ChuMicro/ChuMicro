@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://chumicro.github.io/ChuMicro/guides/faq/">
+        <link rel="canonical" href="https://chumicro.com/ChuMicro/guides/faq/">
       
       
         <link rel="prev" href="./..">
@@ -1533,7 +1533,7 @@ and what happens when the waiting is over.</p>
 <h2 id="how-do-i-use-mqtt-on-circuitpython-without-freezing-everything-else">How do I use MQTT on CircuitPython without freezing everything else?<a class="headerlink" href="#how-do-i-use-mqtt-on-circuitpython-without-freezing-everything-else" title="Permanent link">&para;</a></h2>
 <p>Call <code>handle()</code> once per pass through your loop.  MQTT is the small
 publish-and-subscribe protocol most home-automation setups speak, and
-<a href="https://chumicro.github.io/ChuMicro/mqtt/stable/">chumicro-mqtt</a> runs
+<a href="https://chumicro.com/ChuMicro/mqtt/stable/">chumicro-mqtt</a> runs
 each step of it (connect, subscribe, publish, the acknowledgements
 that follow) as a piece of work that finishes in one tick.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_timing</span><span class="w"> </span><span class="kn">import</span> <span class="n">ticks_ms</span>
@@ -1564,7 +1564,7 @@ or quietly supporting only the other, so the libraries use generators,
 which are one bytecode on both.</p>
 <h2 id="how-do-i-keep-wifi-connected-on-a-pico-w-or-an-esp32">How do I keep WiFi connected on a Pico W or an ESP32?<a class="headerlink" href="#how-do-i-keep-wifi-connected-on-a-pico-w-or-an-esp32" title="Permanent link">&para;</a></h2>
 <p>Hand the radio to
-<a href="https://chumicro.github.io/ChuMicro/wifi/stable/">chumicro-wifi</a> and
+<a href="https://chumicro.com/ChuMicro/wifi/stable/">chumicro-wifi</a> and
 read its state.  It connects, retries with backoff, reconnects after a
 drop, and reports every transition (<code>disconnected</code>, <code>connecting</code>,
 <code>connected</code>, <code>reconnecting</code>, <code>failed</code>) so your app can react to a
@@ -1595,7 +1595,7 @@ makes this work.  A socket needs four methods (<code>recv_into</code>, <code>sen
 <code>ticks_add</code>, <code>ticks_diff</code>).  Anything with those methods is accepted,
 including a fake you write for a test.</p>
 <h2 id="how-do-i-store-a-value-that-survives-a-reboot">How do I store a value that survives a reboot?<a class="headerlink" href="#how-do-i-store-a-value-that-survives-a-reboot" title="Permanent link">&para;</a></h2>
-<p>Use <a href="https://chumicro.github.io/ChuMicro/kvstore/stable/">chumicro-kvstore</a>,
+<p>Use <a href="https://chumicro.com/ChuMicro/kvstore/stable/">chumicro-kvstore</a>,
 which reads and writes like a dictionary and picks the right storage
 for the board it finds itself on: NVM on CircuitPython, NVS on ESP32
 MicroPython, LittleFS elsewhere, and memory on your laptop.</p>
@@ -1630,7 +1630,7 @@ timeout finishes in milliseconds.</p>
 {
   "@context": "https://schema.org",
   "@type": "FAQPage",
-  "url": "https://chumicro.github.io/ChuMicro/guides/faq/",
+  "url": "https://chumicro.com/ChuMicro/guides/faq/",
   "mainEntity": [
     {
       "@type": "Question",
