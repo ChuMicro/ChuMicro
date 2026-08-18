@@ -13,8 +13,8 @@
   <meta property="og:title" content="ChuMicro: CircuitPython and MicroPython libraries">
   <meta property="og:description" content="Python libraries for CircuitPython, MicroPython, and CPython boards: WiFi, MQTT, HTTP, WebSockets, timers, settings, and storage that survives a reboot.">
   <meta property="og:url" content="https://chumicro.com/ChuMicro/">
-  <meta property="og:image" content="https://raw.githubusercontent.com/ChuMicro/ChuMicro/main/support/docs/chumicro.png">
-  <meta name="twitter:card" content="summary">
+  <meta property="og:image" content="https://chumicro.com/assets/chumicro.png">
+  <meta name="twitter:card" content="summary_large_image">
   <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -60,7 +60,7 @@
   ]
 }
   </script>
-  <link rel="icon" href="./assets/images/favicon.png">
+  <link rel="icon" href="https://chumicro.com/assets/favicon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
@@ -89,7 +89,9 @@
     .container { max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem; }
 
     /* Header */
-    header { text-align: center; padding: 3rem 0 2rem; }
+    header { text-align: center; padding: 2.5rem 0 1.5rem; }
+    header img.hero { width: 170px; height: auto; margin: 0 auto .75rem; display: block; }
+    @media (max-width: 520px) { header img.hero { width: 130px; } }
     header h1 { font-size: 2em; font-weight: 700; margin-bottom: .5rem; }
     header p { font-size: 1.1rem; color: var(--muted); max-width: 600px; margin: 0 auto; }
     .badges { margin-top: 1rem; display: flex; gap: .5rem; justify-content: center; flex-wrap: wrap; }
@@ -156,8 +158,45 @@
   </style>
 </head>
 <body>
+  <style>
+    .topbar {
+      border-bottom: 1px solid var(--border);
+      background: rgba(14, 15, 16, .92);
+      position: sticky; top: 0; z-index: 10;
+      backdrop-filter: saturate(140%) blur(6px);
+    }
+    .topbar-inner {
+      max-width: 860px; margin: 0 auto; padding: .6rem 1.5rem;
+      display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+    }
+    .topbar .wordmark {
+      display: flex; align-items: center; gap: .5rem;
+      font-weight: 700; color: var(--text); text-decoration: none;
+      margin-right: auto;
+    }
+    .topbar .wordmark img { width: 28px; height: 28px; border-radius: 50%; }
+    .topbar a.nav { color: var(--muted); text-decoration: none; font-size: .92rem; font-weight: 600; }
+    .topbar a.nav:hover { color: var(--accent); }
+    .topbar a.nav-strong { color: var(--accent); }
+    @media (max-width: 520px) { .topbar .wordmark span { display: none; } }
+  </style>
+  <nav class="topbar">
+    <div class="topbar-inner">
+      <a class="wordmark" href="https://chumicro.com/">
+        <img src="https://chumicro.com/assets/chumicro-head.png" alt="">
+        <span>ChuMicro</span>
+      </a>
+      <a class="nav" href="https://chumicro.com/ChuMicro/">Documentation</a>
+      <a class="nav" href="https://chumicro.com/ChuMicro/guides/">Guides</a>
+      <a class="nav" href="https://pypi.org/search/?q=chumicro">PyPI</a>
+      <a class="nav nav-strong" href="https://github.com/ChuMicro">GitHub</a>
+    </div>
+  </nav>
+
+
   <div class="container">
     <header>
+      <img class="hero" src="https://chumicro.com/assets/chumicro.png" alt="ChuMicro">
       <h1>ChuMicro</h1>
       <p>Cross-runtime Python libraries for CircuitPython, MicroPython, and CPython, built for ESP32, RP2040, and other microcontrollers.</p>
       <div class="badges">
