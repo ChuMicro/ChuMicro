@@ -256,3 +256,37 @@ class TestVerificationFiles:
         monkeypatch.setattr(docs_deploy.index_now, "read_key", lambda: "")
 
         assert docs_deploy._verification_file_blobs() == []
+
+
+class TestStaleKeyFiles:
+    """Only the live IndexNow key stays published."""
+
+    def _listing(self, monkeypatch, names):
+        class Completed:
+            stdout = ("\n".join(names) + "\n").encode()
+
+        monkeypatch.setattr(
+            docs_deploy.subprocess, "run", lambda *args, **kwargs: Completed(),
+        )
+
+    def test_rotated_key_file_is_named_for_removal(self, monkeypatch):
+        self._listing(monkeypatch, [
+            "index.html", "sitemap.xml",
+            "0123456789abcdef0123456789abcdef.txt",
+            "fedcba9876543210fedcba9876543210.txt",
+        ])
+        stale = docs_deploy._stale_key_files(
+            "gh-pages", "fedcba9876543210fedcba9876543210.txt",
+        )
+        assert stale == ["0123456789abcdef0123456789abcdef.txt"]
+
+    def test_current_key_is_kept(self, monkeypatch):
+        self._listing(monkeypatch, ["fedcba9876543210fedcba9876543210.txt"])
+        assert docs_deploy._stale_key_files(
+            "gh-pages", "fedcba9876543210fedcba9876543210.txt",
+        ) == []
+
+    def test_other_root_files_are_left_alone(self, monkeypatch):
+        """Only files shaped like a key are candidates."""
+        self._listing(monkeypatch, ["llms.txt", "robots.txt", "index.html"])
+        assert docs_deploy._stale_key_files("gh-pages", "abc.txt") == []

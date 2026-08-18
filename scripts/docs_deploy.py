@@ -73,6 +73,27 @@ def _hash_blob(content: bytes) -> str:
     ).stdout.strip().decode()
 
 
+#: A published IndexNow key file: 32 hex characters and ``.txt``.
+INDEXNOW_KEY_FILE_PATTERN = re.compile(r"^[0-9a-f]{32}\.txt$")
+
+
+def _stale_key_files(branch: str, current: str) -> list[str]:
+    """Return published key files that are no longer the current key.
+
+    Rotating the key leaves the old file at the docs root, where it
+    would go on authorizing pings from whoever still holds it.  The
+    deploy removes it instead.
+    """
+    listing = subprocess.run(
+        ["git", "ls-tree", "--name-only", branch],
+        capture_output=True, cwd=ROOT, check=True,
+    ).stdout.decode().split()
+    return [
+        name for name in listing
+        if INDEXNOW_KEY_FILE_PATTERN.match(name) and name != current
+    ]
+
+
 def _verification_file_blobs() -> list[tuple[str, str]]:
     """Return ``(blob, path)`` for each file published at the docs root.
 
@@ -179,6 +200,13 @@ def inject_landing_page(branch: str) -> None:
             subprocess.run(
                 ["git", "update-index", "--add", "--cacheinfo",
                  f"100644,{favicon_blob},assets/images/favicon.png"],
+                env=index_environment, cwd=ROOT, check=True,
+            )
+
+        # Drop a rotated key's file so only the live key authorizes pings.
+        for stale in _stale_key_files(branch, index_now.key_filename(index_now.read_key())):
+            subprocess.run(
+                ["git", "update-index", "--force-remove", stale],
                 env=index_environment, cwd=ROOT, check=True,
             )
 

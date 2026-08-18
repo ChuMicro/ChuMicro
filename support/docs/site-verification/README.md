@@ -51,10 +51,15 @@ from the site to confirm the ping came from someone who can publish
 there.  Replace it by writing a new hex string here; the next deploy
 publishes the new file and pings with it.
 
-Measured 2026-08-17: the endpoint answers `403
-UserForbiddedToAccessSite` while the key file sits under
-`/ChuMicro/` on the shared `chumicro.github.io` host.  Verify the site
-in Bing Webmaster Tools first and try again.  If it keeps refusing,
-the key needs to sit at the host root, which means claiming a
-`chumicro.github.io` pages repository.  A refused ping warns and
-leaves the deploy green, so this costs nothing but the ping.
+Use the key Bing Webmaster Tools generates for the site rather than a
+self-minted one.  A self-minted key hosted under `/ChuMicro/` drew
+`403 UserForbiddedToAccessSite` from the endpoint on 2026-08-17; the
+spec allows a key file outside the host root as long as the ping names
+it in `keyLocation`, which the ping does, so the account's own key is
+the part that was missing.  If it still refuses, the key needs to sit
+at the host root, which means claiming a `chumicro.github.io` pages
+repository.  A refused ping warns and leaves the deploy green.
+
+Rotating the key is one edit here.  The next deploy publishes the new
+file and removes the old one, so a key that is no longer live cannot
+keep authorizing pings.
