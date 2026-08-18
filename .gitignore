@@ -105,3 +105,6 @@ firmware-*.bin
 
 # Built guides site (guides.mkdocs.yml); the docs deploy publishes it.
 .guides-site/
+
+# Playwright MCP session output: console logs and page snapshots.
+.playwright-mcp/
