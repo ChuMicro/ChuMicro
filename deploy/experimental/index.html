@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://chumicro.github.io/ChuMicro/deploy/experimental/">
+        <link rel="canonical" href="https://chumicro.com/ChuMicro/deploy/experimental/">
       
       
       
@@ -575,7 +575,7 @@
 <li><strong>Drive the transport layer yourself when you need to.</strong> <code>chumicro_deploy.micropython_transport.MicropythonTransport</code> and <code>chumicro_deploy.circuitpython_transport.CircuitpythonTransport</code> expose the staging and execution steps directly. Two host prerequisites that cannot be installed for you raise named errors from <code>chumicro_deploy.host_platform</code>: <code>WindowsNotSupportedError</code> and <code>RsyncMissingError</code>.</li>
 </ul>
 <h2 id="companion-chumicro-repl">Companion: chumicro-repl<a class="headerlink" href="#companion-chumicro-repl" title="Permanent link">&para;</a></h2>
-<p>After a deploy, follow the board with <a href="https://chumicro.github.io/ChuMicro/repl/stable/"><code>chumicro-repl</code></a>, the sister workbench tool that opens interactive serial sessions, tails the friendly REPL, and exposes a programmatic <code>ReplSession</code> for headless test fixtures. Both tools read the same <code>devices.yml</code> workspace file:</p>
+<p>After a deploy, follow the board with <a href="https://chumicro.com/ChuMicro/repl/stable/"><code>chumicro-repl</code></a>, the sister workbench tool that opens interactive serial sessions, tails the friendly REPL, and exposes a programmatic <code>ReplSession</code> for headless test fixtures. Both tools read the same <code>devices.yml</code> workspace file:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_deploy</span><span class="w"> </span><span class="kn">import</span> <span class="n">Deployer</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_repl</span><span class="w"> </span><span class="kn">import</span> <span class="n">tail</span><span class="p">,</span> <span class="n">ExitCode</span>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>

@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://chumicro.github.io/ChuMicro/deploy/experimental/testing/">
+        <link rel="canonical" href="https://chumicro.com/ChuMicro/deploy/experimental/testing/">
       
       
         <link rel="prev" href="../api/">
@@ -656,7 +656,7 @@
 <h2 id="why-these-fakes-ship-with-the-package">Why these fakes ship with the package<a class="headerlink" href="#why-these-fakes-ship-with-the-package" title="Permanent link">&para;</a></h2>
 <p><code>chumicro-deploy</code> is a published workbench tool.  Third parties install it via <code>pip install chumicro-deploy</code> and write their own host-side tests against the public API.  Without published fakes, every consumer would either re-derive the transport contract from the source or pull in heavier dependencies like <code>freezegun</code>.  Shipping the fakes alongside the production code makes downstream testing the obvious path, and it keeps the fakes honest: they live in the same package as the protocols they satisfy, so a change to <code>TransportProtocol</code> or <code>TimeSource</code> breaks this package's own tests first.</p>
 <h2 id="companion-fakes-in-chumicro-repl">Companion fakes in chumicro-repl<a class="headerlink" href="#companion-fakes-in-chumicro-repl" title="Permanent link">&para;</a></h2>
-<p>If your tests cover the deploy → tail pipeline, <a href="https://chumicro.github.io/ChuMicro/repl/stable/"><code>chumicro-repl</code></a> ships parallel fakes (<code>FakeSerialPort</code>, <code>FakeKeyboard</code>, <code>FakeTime</code>) under <code>chumicro_repl.testing</code>.  The <code>FakeTime</code> shape is identical to the one here, so one fake clock can drive both halves of an integration test with no cross-package adapter code.</p>
+<p>If your tests cover the deploy → tail pipeline, <a href="https://chumicro.com/ChuMicro/repl/stable/"><code>chumicro-repl</code></a> ships parallel fakes (<code>FakeSerialPort</code>, <code>FakeKeyboard</code>, <code>FakeTime</code>) under <code>chumicro_repl.testing</code>.  The <code>FakeTime</code> shape is identical to the one here, so one fake clock can drive both halves of an integration test with no cross-package adapter code.</p>
 <p><code>Deployer</code> has no clock of its own; it delegates timing to the transport.  Wire the clock into the transport, and pass the same instance to <code>tail</code>:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_deploy</span><span class="w"> </span><span class="kn">import</span> <span class="n">Device</span><span class="p">,</span> <span class="n">Deployer</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_deploy.circuitpython_transport</span><span class="w"> </span><span class="kn">import</span> <span class="n">CircuitpythonTransport</span>
