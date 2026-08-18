@@ -1392,3 +1392,38 @@ for the deploy).  See
 Keep a `getattr(args, "demo", False)`-style read in the callee only for
 genuinely optional attributes; everything the callee reads unconditionally
 belongs in every Namespace built for it.
+
+## GitHub Pages: what only works at the host root
+
+An account gets one root site, from a repository named `<account>.github.io`.
+Every other repository publishes at `https://<account>.github.io/<repo>/`.  The
+two coexist: claiming the root does not disturb a project path, and a project
+site keeps serving its own address.  The one collision is a folder in the root
+repository named after a project repository, which claims an address the
+project site already owns.
+
+Three things only count at the root, and no amount of work under a project path
+substitutes for them:
+
+- `robots.txt`.  Crawlers fetch it from the host root and ignore it anywhere
+  else, so a project path cannot advertise its own sitemap through robots.
+- Host-level ownership.  Search engines verify per property; a root property
+  covers every path below it, and a project property covers only its own
+  subtree.
+- The IndexNow key.  The spec permits a key outside the root when the ping
+  names it in `keyLocation`, but the endpoint separately checks that the
+  submitter owns the host.  On a shared `github.io` account nobody owns the
+  host until they claim the root repository.
+
+IndexNow's status codes read backwards on a first attempt: a submission with a
+brand new key returns `202` while the key file is still a 404, then the same key
+returns `403 UserForbiddedToAccessSite` once the endpoint gets around to
+evaluating ownership.  `202` means accepted, not validated, so a green ping is
+not evidence the setup works.  Test with a key that has been live long enough to
+be judged.
+
+The shape that follows: generate the root site from the same source as the
+project site (`scripts/generate_site_root.py` reads the landing page's package
+list), publish it by rebuilding the site repository's whole tree so a retired
+key file stops answering, and gate the publish on a deploy key so a missing
+secret warns instead of failing a documentation deploy that already shipped.
