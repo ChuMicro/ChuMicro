@@ -3,6 +3,8 @@
     "version": "stable",
     "title": "stable (0.15.1)",
     "aliases": [
+      "0.13.1",
+      "0.13.0",
       "0.15.1"
     ]
   },
