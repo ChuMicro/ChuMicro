@@ -1,3 +1,7 @@
+---
+title: "chumicro-wifi: WiFi that reconnects itself on CircuitPython and MicroPython"
+---
+
 # chumicro-wifi
 
 **Wifi that auto-reconnects without freezing your loop.**

@@ -15,12 +15,14 @@ import generate_landing_page
 import pytest
 from generate_landing_page import (
     LIBRARY_ORDER,
+    SITE_ROOT,
     WORKBENCH_ORDER,
     _curated_sort,
     _discover_packages,
     _library_card,
     _render_section,
     generate,
+    generate_sitemap,
 )
 
 
@@ -247,3 +249,40 @@ class TestGenerate:
         libraries_position = html.index(">Libraries</h2>")
         workbench_position = html.index(">Workbench</h2>")
         assert libraries_position < workbench_position
+
+
+class TestGenerateSitemap:
+    """Tests for generate_sitemap."""
+
+    def test_lists_the_site_root_and_every_package(self, synthetic_doc_dirs):
+        sitemap = generate_sitemap()
+        assert f"<loc>{SITE_ROOT}/</loc>" in sitemap
+        for name in ("lib_a", "lib_b", "tool_x"):
+            assert f"<loc>{SITE_ROOT}/{name}/stable/</loc>" in sitemap
+
+    def test_points_at_the_channel_url_not_a_release_number(
+        self, synthetic_doc_dirs,
+    ):
+        """The sitemap advertises the address that survives releases."""
+        sitemap = generate_sitemap()
+        assert sitemap.count("/stable/") == len(synthetic_doc_dirs)
+
+    def test_parked_library_stays_out(self, synthetic_doc_dirs, monkeypatch):
+        monkeypatch.setattr(
+            generate_landing_page,
+            "is_parked",
+            lambda package_dir: package_dir.name == "lib_b",
+        )
+        sitemap = generate_sitemap()
+        assert "lib_a/stable/" in sitemap
+        assert "lib_b" not in sitemap
+
+    def test_is_wellformed_xml(self, synthetic_doc_dirs):
+        from xml.etree import ElementTree
+
+        root = ElementTree.fromstring(generate_sitemap())
+        locations = [
+            element.text for element in
+            root.iter("{http://www.sitemaps.org/schemas/sitemap/0.9}loc")
+        ]
+        assert len(locations) == len(synthetic_doc_dirs) + 1

@@ -1,3 +1,7 @@
+---
+title: "chumicro-mqtt: non-blocking MQTT client for CircuitPython and MicroPython"
+---
+
 # chumicro-mqtt
 
 **Non-blocking MQTT 3.1.1 client (QoS 0 + 1) for CircuitPython, MicroPython, and CPython.**

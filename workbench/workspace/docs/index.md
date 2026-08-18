@@ -1,3 +1,7 @@
+---
+title: "chumicro-workspace: the CLI for CircuitPython and MicroPython projects"
+---
+
 # chumicro-workspace
 
 **Host-side CLI for running ChuMicro projects on real boards.**

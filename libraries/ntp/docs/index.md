@@ -1,3 +1,7 @@
+---
+title: "chumicro-ntp: network time (SNTP) for CircuitPython and MicroPython"
+---
+
 # chumicro-ntp
 
 **Non-blocking SNTP client for CircuitPython, MicroPython, and CPython.**

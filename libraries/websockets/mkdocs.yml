@@ -1,4 +1,6 @@
 site_name: chumicro-websockets
+site_description: >-
+  Non-blocking WebSocket client and server (RFC 6455) for CircuitPython, MicroPython, and CPython, plain or over TLS.
 site_url: https://chumicro.github.io/ChuMicro/websockets/
 repo_url: https://github.com/ChuMicro/ChuMicro/tree/main/libraries/websockets
 repo_name: Source

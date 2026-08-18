@@ -1,4 +1,6 @@
 site_name: chumicro-config
+site_description: >-
+  Typed runtime settings for CircuitPython, MicroPython, and CPython, read through one dotted-key convention such as wifi.ssid and mqtt.broker.host.
 site_url: https://chumicro.github.io/ChuMicro/config/
 repo_url: https://github.com/ChuMicro/ChuMicro/tree/main/libraries/config
 repo_name: Source

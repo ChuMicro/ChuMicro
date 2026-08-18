@@ -1,3 +1,7 @@
+---
+title: "chumicro-http-server: HTTP server on CircuitPython and MicroPython boards"
+---
+
 # chumicro-http-server
 
 **Non-blocking HTTP/1.1 server for CircuitPython, MicroPython, and CPython.**

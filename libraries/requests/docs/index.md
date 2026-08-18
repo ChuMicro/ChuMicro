@@ -1,3 +1,7 @@
+---
+title: "chumicro-requests: non-blocking HTTP client for CircuitPython and MicroPython"
+---
+
 # chumicro-requests
 
 **Non-blocking HTTP/1.1 client for CircuitPython, MicroPython, and CPython.**

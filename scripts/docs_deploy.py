@@ -13,6 +13,7 @@ library's stable docs live at ``/timing/stable/`` on gh-pages.  The
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -68,7 +69,7 @@ def inject_landing_page(branch: str) -> None:
         branch: Git branch to commit the landing page to.
     """
     try:
-        from generate_landing_page import generate
+        from generate_landing_page import generate, generate_sitemap
     except Exception as error:
         print(f"  Landing page skipped: {error}")
         return
@@ -79,6 +80,14 @@ def inject_landing_page(branch: str) -> None:
     html_blob = subprocess.run(
         ["git", "hash-object", "-w", "--stdin"],
         input=html.encode(), capture_output=True, cwd=ROOT, check=True,
+    ).stdout.strip().decode()
+
+    # The sitemap rides along with the landing page: both describe the
+    # same set of packages, and a search engine reads the sitemap to
+    # find the per-package docs that the landing page links.
+    sitemap_blob = subprocess.run(
+        ["git", "hash-object", "-w", "--stdin"],
+        input=generate_sitemap().encode(), capture_output=True, cwd=ROOT, check=True,
     ).stdout.strip().decode()
 
     # Hash the favicon if it exists.
@@ -105,12 +114,13 @@ def inject_landing_page(branch: str) -> None:
             env=index_environment, cwd=ROOT, check=True,
         )
 
-        # Upsert index.html at the root.
-        subprocess.run(
-            ["git", "update-index", "--add", "--cacheinfo",
-             f"100644,{html_blob},index.html"],
-            env=index_environment, cwd=ROOT, check=True,
-        )
+        # Upsert index.html and sitemap.xml at the root.
+        for blob, path in ((html_blob, "index.html"), (sitemap_blob, "sitemap.xml")):
+            subprocess.run(
+                ["git", "update-index", "--add", "--cacheinfo",
+                 f"100644,{blob},{path}"],
+                env=index_environment, cwd=ROOT, check=True,
+            )
 
         # Upsert the favicon.
         if favicon_blob:
@@ -155,6 +165,56 @@ def inject_landing_page(branch: str) -> None:
     )
 
 
+def _retire_conflicting_names(
+    library_name: str,
+    library_dir: Path,
+    branch: str,
+    *,
+    version: str,
+    aliases: list[str],
+) -> int:
+    """Delete deployed names that block the channel-named layout.
+
+    Docs deployed before the channel-name layout put the release
+    number in the version slot (``0.30.0``) and the channel in the
+    alias slot (``stable``), which is exactly backwards from what
+    :func:`docs_deploy` writes now.  mike refuses to turn a version
+    into an alias, so retire the old entry first.  Deleting a version
+    takes its aliases with it, so one delete usually clears both
+    conflicts, and later runs find nothing to do.
+
+    Returns an exit code: 0 when the branch is ready to deploy onto.
+    """
+    listing = subprocess.run(
+        [MIKE, "list", "-j", "--deploy-prefix", library_name, "-b", branch,
+         "-F", str(library_dir / "mkdocs.yml")],
+        capture_output=True, cwd=ROOT, check=False,
+    )
+    if listing.returncode != 0:
+        # No deployed docs for this prefix yet: nothing to retire.
+        return 0
+    try:
+        deployed = json.loads(listing.stdout or b"[]")
+    except json.JSONDecodeError:
+        return 0
+
+    stale = [
+        entry["version"] for entry in deployed
+        if entry.get("version") in aliases or version in entry.get("aliases", [])
+    ]
+    if not stale:
+        return 0
+
+    print(f"== retire {library_name} {', '.join(stale)} (pre-channel layout) ==")
+    return run_command([
+        MIKE, "delete",
+        "--deploy-prefix", library_name,
+        "-b", branch,
+        "-F", str(library_dir / "mkdocs.yml"),
+        *stale,
+    ])
+
+
 def docs_deploy(
     channel: str,
     *,
@@ -196,21 +256,27 @@ def docs_deploy(
     for library_dir in doc_dirs:
         library_name = library_dir.name
 
-        # Determine the version label and URL alias for this library.
-        # Stable channel reads the actual version from the VERSION file;
-        # experimental always deploys as "dev" with an "experimental" alias.
-        if channel == "stable":
-            version = read_version(library_dir)
-            if version:
-                alias = "stable"
-            else:
-                version = "dev"
-                alias = "experimental"
+        # The channel name is the deployed version, so a library's docs
+        # keep one address across releases: /<library>/stable/ and
+        # /<library>/experimental/.  Search engines and anyone who
+        # bookmarks a page land on the same URL after the next release,
+        # and the release number rides along as a redirect alias so
+        # older /<library>/<version>/ links still resolve.
+        release = read_version(library_dir) if channel == "stable" else None
+        if release:
+            version, aliases = "stable", [release]
+            title = f"stable ({release})"
         else:
-            version = "dev"
-            alias = "experimental"
+            version, aliases = "experimental", ["dev"]
+            title = "experimental"
 
-        print(f"== deploy {library_name} {version} ({alias}) ==")
+        exit_code = _retire_conflicting_names(
+            library_name, library_dir, branch, version=version, aliases=aliases,
+        )
+        if exit_code != 0:
+            return exit_code
+
+        print(f"== deploy {library_name} {version} ({', '.join(aliases)}) ==")
         exit_code = run_command([
             MIKE, "deploy",
             "--deploy-prefix", library_name,
@@ -218,7 +284,8 @@ def docs_deploy(
             "-F", str(library_dir / "mkdocs.yml"),
             "--alias-type", "redirect",
             "--update-aliases",
-            version, alias,
+            "-t", title,
+            version, *aliases,
         ])
         if exit_code != 0:
             print(f"Docs deploy failed: {library_name}")
