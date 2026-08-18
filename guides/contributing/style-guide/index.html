@@ -1795,7 +1795,7 @@
 
 
 <h1 id="style-guide">Style Guide<a class="headerlink" href="#style-guide" title="Permanent link">&para;</a></h1>
-<p><img src="https://chumicro.com/assets/chumicro-head.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;"></p>
+<p><img src="https://chumicro.com/assets/chumicro-head.png" alt="" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;"></p>
 <p>This is the definitive reference for code style in the ChuMicro workspace.  All code (library, infrastructure, and tests) follows these conventions unless explicitly noted.</p>
 <p><br clear="left"></p>
 <p>The linter (<code>python scripts/run.py lint</code>) enforces most of these automatically. If lint passes, you're almost certainly fine. This guide explains what the rules are, why they exist, and what to do when the linter flags something.</p>
@@ -2141,7 +2141,7 @@ Combine with pre-allocated buffers for the full pattern:
 </tr>
 </tbody>
 </table>
-<p><strong><code>CHU001</code></strong> (in the <a href="https://chumicro.com/ChuMicro/checks/stable/"><code>chumicro-checks</code></a> package) catches:</p>
+<p><strong><code>CHU001</code></strong> (in the <a href="https://github.com/ChuMicro/ChuMicro/tree/main/workbench/checks"><code>chumicro-checks</code></a> package) catches:</p>
 <ul>
 <li>Single-letter variable names in assignments, parameters, and function names (<code>x</code> → use a descriptive name, <code>e</code> → <code>error</code>)</li>
 <li>For-loop targets are exempt: <code>for i in range(10)</code> is fine</li>
