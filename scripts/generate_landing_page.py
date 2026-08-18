@@ -27,7 +27,8 @@ from string import Template
 
 from repo_layout import ROOT, discover_doc_dirs, is_parked, read_pyproject_description
 from shared import TEMPLATES_DIR
-from site_host import site_root
+from site_chrome import assets_url, render_topbar
+from site_host import host_url, site_root
 
 #: Landing-page card order: the root README's library-table order, so the
 #: first card and the install snippet lead with the library the README
@@ -523,6 +524,9 @@ def generate() -> str:
     template_text = (TEMPLATES_DIR / "landing_page.html.template").read_text()
     return Template(template_text).substitute(
         content=content,
+        host=host_url(),
+        assets=assets_url(),
+        topbar=render_topbar(),
         verification=_verification_meta(),
         structured_data=_structured_data(),
     )

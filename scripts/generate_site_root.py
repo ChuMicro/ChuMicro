@@ -33,6 +33,7 @@ from string import Template
 from generate_landing_page import _discover_packages
 from repo_layout import ROOT
 from shared import TEMPLATES_DIR
+from site_chrome import ASSETS_PREFIX, assets_url, render_topbar
 from site_host import CUSTOM_DOMAIN, host_url
 
 #: The host this site occupies.  No trailing slash: callers add one.
@@ -40,6 +41,15 @@ HOST = host_url()
 
 #: The hub's own pages, split out so ``sitemap.xml`` can be an index.
 PAGES_SITEMAP = "sitemap-pages.xml"
+
+#: Images copied into the site, source path to published filename.
+#: The same artwork runs through the READMEs, so the hub reads as part
+#: of the project rather than a separate landing page.
+ASSETS = (
+    (ROOT / "support" / "docs" / "chumicro_hero.png", "chumicro.png"),
+    (ROOT / "support" / "docs" / "chumicro_tip.png", "chumicro-head.png"),
+    (ROOT / "support" / "docs" / "favicon.png", "favicon.png"),
+)
 
 #: Where the built site lands.  Gitignored: the site repository is the
 #: place it gets committed, the same way ``gh-pages`` holds the docs.
@@ -57,8 +67,9 @@ PROJECTS = (
         "name": "ChuMicro",
         "path": "ChuMicro",
         "tagline": (
-            "Python libraries for microcontrollers that never freeze your "
-            "program, plus the host tools that deploy them.  One codebase "
+            "Wifi, MQTT, HTTP client and server, WebSockets, network time, "
+            "timers, settings, and storage that survives a reboot, plus the "
+            "host tools that deploy them and watch a board.  One codebase "
             "runs on CircuitPython, MicroPython, and CPython."
         ),
         "repo": "https://github.com/ChuMicro/ChuMicro",
@@ -113,10 +124,7 @@ def _structured_data() -> str:
                 "microcontrollers running CircuitPython, MicroPython, and "
                 "CPython."
             ),
-            "logo": (
-                "https://raw.githubusercontent.com/ChuMicro/ChuMicro/main/"
-                "support/docs/chumicro.png"
-            ),
+            "logo": f"{HOST}/{ASSETS_PREFIX}/chumicro.png",
             "sameAs": [
                 "https://github.com/ChuMicro",
                 "https://pypi.org/search/?q=chumicro",
@@ -206,6 +214,9 @@ def root_index_html() -> str:
     """Return the hub page HTML."""
     template_text = (TEMPLATES_DIR / "site_root.html.template").read_text()
     return Template(template_text).substitute(
+        host=HOST,
+        assets=assets_url(),
+        topbar=render_topbar(),
         verification=_verification_meta(),
         structured_data=_structured_data(),
         projects=_render_projects(),
@@ -334,6 +345,26 @@ the project's site and the folder would claim the same address.
 """
 
 
+def _copy_assets(destination: Path) -> list[str]:
+    """Copy the site's images into ``assets/``.
+
+    Args:
+        destination: Directory the site is being built into.
+
+    Returns:
+        The paths written, relative to the site root.
+    """
+    assets_dir = destination / ASSETS_PREFIX
+    assets_dir.mkdir(parents=True, exist_ok=True)
+    written = []
+    for source, published_name in ASSETS:
+        if not source.is_file():
+            continue
+        shutil.copyfile(source, assets_dir / published_name)
+        written.append(f"{ASSETS_PREFIX}/{published_name}")
+    return written
+
+
 def _copy_verification_files(destination: Path) -> list[str]:
     """Copy the files each engine fetches verbatim, and the IndexNow key.
 
@@ -394,6 +425,7 @@ def build(destination: Path) -> list[str]:
         # would be deleted by the next deploy and take the domain down.
         (destination / "CNAME").write_text(f"{CUSTOM_DOMAIN}\n")
         written.append("CNAME")
+    written.extend(_copy_assets(destination))
     written.extend(_copy_verification_files(destination))
     return sorted(written)
 
