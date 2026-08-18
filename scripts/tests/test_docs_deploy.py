@@ -319,7 +319,30 @@ class TestGuidesSite:
         monkeypatch.setattr(
             docs_deploy, "run_command", lambda command: commands.append(command) or 0,
         )
-        docs_deploy._build_guides_site(tmp_path / "out")
+        docs_deploy.build_guides_site(tmp_path / "out")
 
         assert commands[0][1:4] == ["-m", "mkdocs", "build"]
         assert str(docs_deploy.GUIDES_CONFIG) in commands[0]
+
+
+class TestGuidesBuildFailure:
+    """A guides site that will not build stops the deploy.
+
+    The sitemap advertises those pages, so publishing the rest without
+    them would ship a sitemap full of 404s.
+    """
+
+    def test_deploy_reports_the_failure(
+        self, synthetic_library, recorded_commands, monkeypatch, capsys,
+    ):
+        _fake_mike_list(monkeypatch, [])
+
+        def raising_injection(_branch: str) -> None:
+            raise RuntimeError("guides site failed to build")
+
+        monkeypatch.setattr(docs_deploy, "inject_landing_page", raising_injection)
+
+        exit_code = docs_deploy.docs_deploy("stable", branch="gh-pages")
+
+        assert exit_code == 1
+        assert "guides site failed to build" in capsys.readouterr().out

@@ -129,7 +129,7 @@ GUIDES_CONFIG = ROOT / "guides" / "mkdocs.yml"
 GUIDES_PREFIX = "guides"
 
 
-def _build_guides_site(destination: Path) -> int:
+def build_guides_site(destination: Path) -> int:
     """Build the guides site into *destination*."""
     return run_command([
         sys.executable, "-m", "mkdocs", "build",
@@ -199,12 +199,14 @@ def inject_landing_page(branch: str) -> None:
     guides_blobs: list[tuple[str, str]] = []
     stale_guides: list[str] = []
     try:
-        if GUIDES_CONFIG.is_file() and _build_guides_site(guides_directory) == 0:
+        if GUIDES_CONFIG.is_file():
+            if build_guides_site(guides_directory) != 0:
+                # The sitemap advertises these pages, so publishing the
+                # rest without them would ship a sitemap full of 404s.
+                raise RuntimeError("guides site failed to build")
             guides_blobs = _guides_blobs(guides_directory)
             published = set(_published_guides_paths(branch))
             stale_guides = sorted(published - {path for _, path in guides_blobs})
-        elif GUIDES_CONFIG.is_file():
-            print("WARNING: guides site failed to build; leaving it as published.")
     finally:
         shutil.rmtree(guides_directory, ignore_errors=True)
 
@@ -522,6 +524,10 @@ def docs_deploy(
                 print(f"set-default failed: {library_name}")
                 return exit_code
 
-    inject_landing_page(branch)
+    try:
+        inject_landing_page(branch)
+    except RuntimeError as error:
+        print(f"Docs deploy failed: {error}")
+        return 1
 
     return 0
