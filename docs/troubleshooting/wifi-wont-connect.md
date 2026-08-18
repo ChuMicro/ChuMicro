@@ -18,7 +18,7 @@ ssid = "your-network"
 password = "your-password"
 ```
 
-`chumicro-workspace dump-config <project>` prints the merged config a deploy would send, so you can confirm `wifi.ssid` before touching the board, and `chumicro-workspace deploy <project> --tail` shows what the board says once it boots.  (details: [Device testing](../contributing/device-testing.md#configure-secretstoml))
+`chumicro-workspace dump-config <project>` prints the merged config a deploy would send, so you can confirm `wifi.ssid` before touching the board, and `chumicro-workspace deploy <project> --tail` shows what the board says once it boots.  (details: [Device testing](https://github.com/ChuMicro/ChuMicro/blob/main/docs/contributing/device-testing.md#configure-secretstoml))
 
 ## The board sits in `RECONNECTING`, nothing is raised, and `wifi.last_error` is `None`
 
@@ -48,4 +48,4 @@ CircuitPython maps this to `wifi.radio.tx_power` and MicroPython to `sta.config(
 
 `CIRCUITPY_WIFI_SSID` and the other `CIRCUITPY_WIFI_*` keys in `settings.toml` switch on CircuitPython's own auto-connect supervisor, which then fights `chumicro-wifi` for control of the radio.  `settings.toml` is CircuitPython-only (MicroPython never reads it) and is reserved for `CIRCUITPY_*` keys.
 
-**Fix.** Keep `CIRCUITPY_WIFI_*` out of `settings.toml`.  Put wifi and app config in `secrets.toml`, which the deploy converts to `runtime_config.msgpack` on the board, and ship a `settings.toml` with no wifi keys.  (background: [Decision 0057](../../plans/decisions/0057-two-file-config.md))
+**Fix.** Keep `CIRCUITPY_WIFI_*` out of `settings.toml`.  Put wifi and app config in `secrets.toml`, which the deploy converts to `runtime_config.msgpack` on the board, and ship a `settings.toml` with no wifi keys.  (background: [Decision 0057](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0057-two-file-config.md))

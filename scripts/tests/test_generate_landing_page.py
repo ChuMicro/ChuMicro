@@ -60,6 +60,11 @@ def synthetic_doc_dirs(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(
         generate_landing_page, "discover_doc_dirs", lambda: package_dirs,
     )
+    # The URL builders read the real guides nav unless pointed elsewhere.
+    # These tests describe packages, so point them at nothing.
+    monkeypatch.setattr(
+        generate_landing_page, "GUIDES_CONFIG", tmp_path / "no-guides.yml",
+    )
 
     return package_dirs
 
@@ -391,3 +396,51 @@ class TestSiteUrls:
         sitemap = generate_sitemap()
         for url in site_urls():
             assert f"<loc>{url}</loc>" in sitemap
+
+
+class TestGuidesUrls:
+    """The guides site's nav decides which of its pages are advertised."""
+
+    def _config(self, tmp_path, body: str) -> Path:
+        config = tmp_path / "mkdocs.yml"
+        config.write_text(body)
+        return config
+
+    def test_section_root_leads(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(generate_landing_page, "GUIDES_CONFIG", self._config(
+            tmp_path, "nav:\n  - Guides: index.md\n  - Questions: faq.md\n",
+        ))
+        assert generate_landing_page.guides_urls()[0] == f"{SITE_ROOT}/guides/"
+
+    def test_index_pages_publish_as_their_directory(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(generate_landing_page, "GUIDES_CONFIG", self._config(
+            tmp_path,
+            "nav:\n  - Guides: index.md\n"
+            "  - Troubleshooting:\n      - Start: troubleshooting/README.md\n",
+        ))
+        urls = generate_landing_page.guides_urls()
+        assert f"{SITE_ROOT}/guides/troubleshooting/" in urls
+        assert f"{SITE_ROOT}/guides/index/" not in urls
+
+    def test_nested_sections_are_flattened(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(generate_landing_page, "GUIDES_CONFIG", self._config(
+            tmp_path,
+            "nav:\n  - Troubleshooting:\n"
+            "      - Board: troubleshooting/board-not-found.md\n"
+            "      - WiFi: troubleshooting/wifi-wont-connect.md\n",
+        ))
+        urls = generate_landing_page.guides_urls()
+        assert f"{SITE_ROOT}/guides/troubleshooting/board-not-found/" in urls
+        assert f"{SITE_ROOT}/guides/troubleshooting/wifi-wont-connect/" in urls
+
+    def test_absent_site_advertises_nothing(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(
+            generate_landing_page, "GUIDES_CONFIG", tmp_path / "absent.yml",
+        )
+        assert generate_landing_page.guides_urls() == []
+
+    def test_sitemap_carries_the_guides(self, synthetic_doc_dirs, tmp_path, monkeypatch):
+        monkeypatch.setattr(generate_landing_page, "GUIDES_CONFIG", self._config(
+            tmp_path, "nav:\n  - Questions: faq.md\n",
+        ))
+        assert f"<loc>{SITE_ROOT}/guides/faq/</loc>" in generate_sitemap()

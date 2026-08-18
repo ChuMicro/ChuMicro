@@ -123,6 +123,8 @@ $verification  <meta property="og:type" content="website">
 $content
 
     <footer>
+      <a href="./guides/">Guides and troubleshooting</a>
+      &nbsp;&middot;&nbsp;
       <a href="https://github.com/ChuMicro/ChuMicro">Source on GitHub</a>
       &nbsp;&middot;&nbsp;
       <a href="https://pypi.org/search/?q=chumicro">PyPI</a>

@@ -23,7 +23,7 @@ aren't supported for it, and WSL2 on its own isn't a way around that:
 WSL2 has no USB passthrough, so the board's serial port never appears
 inside it without `usbipd-win` (the USB/IP bridge you install on the
 Windows side) attaching the device first.  Editing, linting, and unit
-tests do run natively on Windows; [CONTRIBUTING](../../CONTRIBUTING.md#prerequisites)
+tests do run natively on Windows; [CONTRIBUTING](https://github.com/ChuMicro/ChuMicro/blob/main/CONTRIBUTING.md#prerequisites)
 covers what each platform gets.
 
 ## Getting a board working
@@ -77,8 +77,8 @@ covers what each platform gets.
 
 ## Related
 
-- [`docs/contributing/cheat-sheet.md`](../contributing/cheat-sheet.md):
+- [`docs/contributing/cheat-sheet.md`](https://github.com/ChuMicro/ChuMicro/blob/main/docs/contributing/cheat-sheet.md):
   one-line fixes for common lint / test / coverage / device-setup
   failures.
-- [Device testing guide](../contributing/device-testing.md): configuring
+- [Device testing guide](https://github.com/ChuMicro/ChuMicro/blob/main/docs/contributing/device-testing.md): configuring
   `devices.yml` and running `functional_tests/`.

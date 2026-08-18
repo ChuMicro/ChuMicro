@@ -1,6 +1,6 @@
 # CircuitPython unix-port RingIO build failure
 
-Covers why building the CircuitPython unix port with `VARIANT=standard` fails out of the box, and why `scripts/prepare_circuitpython.py` passes a workaround flag.  The decision rationale (*why* we build `standard` with the flag rather than switching variants) lives in [Decision 0017](../../plans/decisions/0017-circuitpython-ringio-bug.md); this page is the forensic detail behind it.
+Covers why building the CircuitPython unix port with `VARIANT=standard` fails out of the box, and why `scripts/prepare_circuitpython.py` passes a workaround flag.  The decision rationale (*why* we build `standard` with the flag rather than switching variants) lives in [Decision 0017](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0017-circuitpython-ringio-bug.md); this page is the forensic detail behind it.
 
 This only matters if you build the CP unix port from source (the cross-runtime test path does).  Nothing here affects on-device CircuitPython.
 
