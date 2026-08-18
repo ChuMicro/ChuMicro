@@ -1,9 +1,10 @@
 [
   {
     "version": "stable",
-    "title": "stable (0.4.3)",
+    "title": "stable (0.4.4)",
     "aliases": [
       "0.4.2",
+      "0.4.4",
       "0.4.3"
     ]
   },
