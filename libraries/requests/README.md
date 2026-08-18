@@ -95,7 +95,7 @@ contributing guide covers setup and the test workflow.
 
 ## Docs
 
-📖 **[Stable docs](https://chumicro.github.io/ChuMicro/requests/stable/)** · **[Experimental docs](https://chumicro.github.io/ChuMicro/requests/experimental/)**
+📖 **[Stable docs](https://chumicro.com/ChuMicro/requests/stable/)** · **[Experimental docs](https://chumicro.com/ChuMicro/requests/experimental/)**
 
 ## Find this library
 

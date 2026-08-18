@@ -85,7 +85,7 @@ Issues, bug reports, and pull requests are welcome, and so is "I ran it on this 
 
 ## Docs
 
-📖 **[Stable docs](https://chumicro.github.io/ChuMicro/config/stable/)** · **[Experimental docs](https://chumicro.github.io/ChuMicro/config/experimental/)**
+📖 **[Stable docs](https://chumicro.com/ChuMicro/config/stable/)** · **[Experimental docs](https://chumicro.com/ChuMicro/config/experimental/)**
 
 ## Find this library
 

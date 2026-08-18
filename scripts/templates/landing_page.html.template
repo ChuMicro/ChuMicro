@@ -5,12 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ChuMicro: CircuitPython and MicroPython libraries for WiFi, MQTT, HTTP, and more</title>
   <meta name="description" content="Documentation for ChuMicro: Python libraries for CircuitPython, MicroPython, and CPython boards.  WiFi, MQTT, HTTP client and server, WebSockets, sockets, network time, timers, settings, and storage that survives a reboot.">
-  <link rel="canonical" href="https://chumicro.github.io/ChuMicro/">
+  <link rel="canonical" href="https://chumicro.com/ChuMicro/">
 $verification  <meta property="og:type" content="website">
   <meta property="og:site_name" content="ChuMicro">
   <meta property="og:title" content="ChuMicro: CircuitPython and MicroPython libraries">
   <meta property="og:description" content="Python libraries for CircuitPython, MicroPython, and CPython boards: WiFi, MQTT, HTTP, WebSockets, timers, settings, and storage that survives a reboot.">
-  <meta property="og:url" content="https://chumicro.github.io/ChuMicro/">
+  <meta property="og:url" content="https://chumicro.com/ChuMicro/">
   <meta property="og:image" content="https://raw.githubusercontent.com/ChuMicro/ChuMicro/main/support/docs/chumicro.png">
   <meta name="twitter:card" content="summary">
 $structured_data  <link rel="icon" href="./assets/images/favicon.png">

@@ -35,7 +35,7 @@ Same as libraries, minus the bundle steps:
 
 ## Docs
 
-Same `mkdocs.yml` + `docs/` layout as device libraries (Zensical + mkdocstrings + mike-versioned pages at `https://chumicro.github.io/ChuMicro/<package>/`).  Build locally with `python scripts/run.py docs --libraries <name>`.  The `discover_doc_dirs` helper picks up workbench packages the same way it picks up libraries, and griffe and the coverage gate (85 % baseline, raised to 94 % on agent invocations) apply identically.
+Same `mkdocs.yml` + `docs/` layout as device libraries (Zensical + mkdocstrings + mike-versioned pages at `https://chumicro.com/ChuMicro/<package>/`).  Build locally with `python scripts/run.py docs --libraries <name>`.  The `discover_doc_dirs` helper picks up workbench packages the same way it picks up libraries, and griffe and the coverage gate (85 % baseline, raised to 94 % on agent invocations) apply identically.
 
 ## Differences from libraries
 

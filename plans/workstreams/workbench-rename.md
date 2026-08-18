@@ -19,7 +19,7 @@ Everything in this section shipped in one PR (workspace 0.54.1 → 0.54.2): the 
 
 Measured 2026-08-10; decide per-surface, cheapest first:
 
-- **Hosted docs path** `chumicro.github.io/ChuMicro/workspace/stable/`: only 4 hardcoded lines (`workbench/workspace/mkdocs.yml:2` site_url + repo_url, `workbench/workspace/README.md:189,199`, `libraries/config/docs/guide.md:157`).  `scripts/docs_deploy.py` derives the publish prefix from the directory name, so renaming `workbench/workspace/` moves the published path automatically; the gh-pages branch keeps a stale `workspace/` tree needing a redirect or prune.
+- **Hosted docs path** `chumicro.com/ChuMicro/workspace/stable/`: only 4 hardcoded lines (`workbench/workspace/mkdocs.yml:2` site_url + repo_url, `workbench/workspace/README.md:189,199`, `libraries/config/docs/guide.md:157`).  `scripts/docs_deploy.py` derives the publish prefix from the directory name, so renaming `workbench/workspace/` moves the published path automatically; the gh-pages branch keeps a stale `workspace/` tree needing a redirect or prune.
 - **`workspace_runtime` boot module**: retired terminology — the live boot shim is `from app import run; run()` and the string survives only in tests/docs negatives (26 lines, 11 files).  Delete the term rather than rename it.
 - **CLI entry point** `chumicro-workspace` → `chumicro-workbench`: 1 pyproject line plus hint strings; `runner_invocation()` already routes most hints through `python3 run.py`, shrinking the blast radius.
 - **PyPI package** `chumicro-workspace` → `chumicro-workbench`: 509 occurrences / 172 files (plus `workbench/pytest-device/pyproject.toml:40` depends on it).  Needs a PyPI rename strategy (new name + old-name shim release, or a clean break while consumer count is one).

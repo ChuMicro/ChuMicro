@@ -152,7 +152,7 @@ def on_tick() -> None:
         do_periodic_work()
 ```
 
-For applications with many components, [`chumicro-runner`](https://chumicro.github.io/ChuMicro/runner/stable/) captures the timestamp once per tick and dispatches it to every registered service.
+For applications with many components, [`chumicro-runner`](https://chumicro.com/ChuMicro/runner/stable/) captures the timestamp once per tick and dispatches it to every registered service.
 
 ## Platform notes
 

@@ -6,7 +6,7 @@ title: "chumicro-workspace: the CLI for CircuitPython and MicroPython projects"
 
 **Host-side CLI for running ChuMicro projects on real boards.**
 
-Register a board you just plugged in, scaffold a project, ship it, and watch the board's output stream back to your terminal.  Builds on [`chumicro-deploy`](https://chumicro.github.io/ChuMicro/deploy/stable/) for the transports, firmware flashing, and the `devices.yml` schema, and picks up [`chumicro-repl`](https://chumicro.github.io/ChuMicro/repl/stable/) when you ask for an interactive session or a tail.
+Register a board you just plugged in, scaffold a project, ship it, and watch the board's output stream back to your terminal.  Builds on [`chumicro-deploy`](https://chumicro.com/ChuMicro/deploy/stable/) for the transports, firmware flashing, and the `devices.yml` schema, and picks up [`chumicro-repl`](https://chumicro.com/ChuMicro/repl/stable/) when you ask for an interactive session or a tail.
 
 ## Quick example
 

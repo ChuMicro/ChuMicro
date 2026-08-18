@@ -66,16 +66,16 @@ class TestPing:
         monkeypatch.setattr(index_now, "KEY_FILE", key_file)
         monkeypatch.setattr(
             index_now, "site_urls",
-            lambda: ["https://chumicro.github.io/ChuMicro/"],
+            lambda: ["https://chumicro.com/ChuMicro/"],
         )
 
         assert index_now.ping() is True
         payload = json.loads(recorded_request[0].data)
         assert payload["key"] == "abc123"
-        assert payload["host"] == "chumicro.github.io"
+        assert payload["host"] == "chumicro.com"
         assert payload["urlList"] == [
-            "https://chumicro.github.io/",
-            "https://chumicro.github.io/ChuMicro/",
+            "https://chumicro.com/",
+            "https://chumicro.com/ChuMicro/",
         ]
 
     def test_payload_names_no_key_location(
@@ -99,9 +99,9 @@ class TestPing:
         """The root page lists the packages, so a rename changes it too."""
         monkeypatch.setattr(
             index_now, "site_urls",
-            lambda: ["https://chumicro.github.io/ChuMicro/"],
+            lambda: ["https://chumicro.com/ChuMicro/"],
         )
-        assert index_now.submitted_urls()[0] == "https://chumicro.github.io/"
+        assert index_now.submitted_urls()[0] == "https://chumicro.com/"
 
     def test_no_key_skips_the_ping(self, tmp_path, monkeypatch, recorded_request):
         monkeypatch.setattr(index_now, "KEY_FILE", tmp_path / "absent.txt")

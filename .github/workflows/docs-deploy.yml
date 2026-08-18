@@ -111,7 +111,7 @@ jobs:
   # Host-root site.  GitHub serves one site per account, at the root of the
   # host every project path hangs below.  robots.txt, the ownership tokens,
   # and the IndexNow key only count when they answer there, so this job
-  # rebuilds https://chumicro.github.io/ from the same package list the
+  # rebuilds https://chumicro.com/ from the same package list the
   # landing page reads.  It follows the docs deploy because the hub links
   # into pages that deploy publishes.
   # ---------------------------------------------------------------------------
@@ -135,7 +135,7 @@ jobs:
         if: env.SITE_ROOT_DEPLOY_KEY == ''
         run: |
           echo "::warning::SITE_ROOT_DEPLOY_KEY is not set." \
-               "The host-root site at https://chumicro.github.io/ was not updated."
+               "The host-root site at https://chumicro.com/ was not updated."
 
       - name: Configure SSH for the site repository
         if: env.SITE_ROOT_DEPLOY_KEY != ''

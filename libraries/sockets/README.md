@@ -106,7 +106,7 @@ contributing guide covers setup and the test workflow.
 
 ## Docs
 
-📖 **[Stable docs](https://chumicro.github.io/ChuMicro/sockets/stable/)** · **[Experimental docs](https://chumicro.github.io/ChuMicro/sockets/experimental/)**
+📖 **[Stable docs](https://chumicro.com/ChuMicro/sockets/stable/)** · **[Experimental docs](https://chumicro.com/ChuMicro/sockets/experimental/)**
 
 ## Find this library
 

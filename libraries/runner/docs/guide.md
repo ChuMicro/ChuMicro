@@ -119,7 +119,7 @@ Each call to `wait`:
 
 Errors on a registered socket (`POLLERR` / `POLLHUP`) are routed to the owning service's optional `io_error(now_ms, eventmask)` hook so the service can transition cleanly to a failure state.  `POLLIN` / `POLLOUT` are wake signals only: `check` and `next_deadline` decide what runs on the next `tick`.
 
-Not sure which wait primitive a given job wants?  The timing guide's [Choosing a wait](https://chumicro.github.io/ChuMicro/timing/stable/guide/#choosing-a-wait) table maps each question to its primitive across `chumicro_timing`, `chumicro_sockets`, and this service contract.
+Not sure which wait primitive a given job wants?  The timing guide's [Choosing a wait](https://chumicro.com/ChuMicro/timing/stable/guide/#choosing-a-wait) table maps each question to its primitive across `chumicro_timing`, `chumicro_sockets`, and this service contract.
 
 ### Writing a service that participates in `wait`
 

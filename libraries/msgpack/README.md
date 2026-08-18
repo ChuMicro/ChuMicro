@@ -124,7 +124,7 @@ Issues, bug reports, and pull requests are welcome, and so is "I ran it on this 
 
 ## Docs
 
-📖 **[Stable docs](https://chumicro.github.io/ChuMicro/msgpack/stable/)** · **[Experimental docs](https://chumicro.github.io/ChuMicro/msgpack/experimental/)**
+📖 **[Stable docs](https://chumicro.com/ChuMicro/msgpack/stable/)** · **[Experimental docs](https://chumicro.com/ChuMicro/msgpack/experimental/)**
 
 ## Find this library
 

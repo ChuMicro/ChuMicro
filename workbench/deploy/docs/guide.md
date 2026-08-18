@@ -390,7 +390,7 @@ flash_firmware(
 
 ## Tail the board with chumicro-repl
 
-`Deployer.deploy_diff()` returns once the entrypoint executes; if the entrypoint then enters a long-running loop (a heartbeat, a sensor publisher, a server) the deploy is "done" but the interesting output is just starting.  [`chumicro-repl`](https://chumicro.github.io/ChuMicro/repl/stable/) is the sister workbench tool for this.  It streams the friendly REPL with traceback highlighting and exposes a `tail()` follow-mode that fails fast on a crash:
+`Deployer.deploy_diff()` returns once the entrypoint executes; if the entrypoint then enters a long-running loop (a heartbeat, a sensor publisher, a server) the deploy is "done" but the interesting output is just starting.  [`chumicro-repl`](https://chumicro.com/ChuMicro/repl/stable/) is the sister workbench tool for this.  It streams the friendly REPL with traceback highlighting and exposes a `tail()` follow-mode that fails fast on a crash:
 
 ```python
 from chumicro_deploy import Deployer

@@ -1,7 +1,7 @@
 site_name: chumicro-ntp
 site_description: >-
   SNTP network-time client for CircuitPython, MicroPython, and CPython.  Sets the board clock close enough to UTC for TLS certificate checks and honest log timestamps.
-site_url: https://chumicro.github.io/ChuMicro/ntp/
+site_url: https://chumicro.com/ChuMicro/ntp/
 repo_url: https://github.com/ChuMicro/ChuMicro/tree/main/libraries/ntp
 repo_name: Source
 theme:

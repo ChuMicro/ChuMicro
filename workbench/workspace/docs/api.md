@@ -7,7 +7,7 @@ by source file.
 
 `devices.yml` reading and writing is not here.  That schema belongs
 to `chumicro-deploy`, whose
-[API reference](https://chumicro.github.io/ChuMicro/deploy/stable/api/)
+[API reference](https://chumicro.com/ChuMicro/deploy/stable/api/)
 documents `chumicro_deploy.config.devices_yaml` along with
 `derive_firmware_url` and the transports.
 

@@ -1,7 +1,7 @@
 site_name: chumicro-deploy
 site_description: >-
   Deploy Python projects to CircuitPython and MicroPython boards from your computer, with recovery guidance when a board stops responding.
-site_url: https://chumicro.github.io/ChuMicro/deploy/
+site_url: https://chumicro.com/ChuMicro/deploy/
 repo_url: https://github.com/ChuMicro/ChuMicro/tree/main/workbench/deploy
 repo_name: Source
 theme:

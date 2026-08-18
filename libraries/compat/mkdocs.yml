@@ -1,7 +1,7 @@
 site_name: chumicro-compat
 site_description: >-
   Standard-library pieces CircuitPython and MicroPython leave out, so one file of Python runs on both device runtimes and on CPython.
-site_url: https://chumicro.github.io/ChuMicro/compat/
+site_url: https://chumicro.com/ChuMicro/compat/
 repo_url: https://github.com/ChuMicro/ChuMicro/tree/main/libraries/compat
 repo_name: Source
 theme:

@@ -332,7 +332,7 @@ mbedTLS `CERT_REQUIRED` checks the cert validity window against the device
 clock. A board with no RTC battery and no NTP boots at 2021-01-01 (or epoch),
 which is "before" every modern cert's `not_valid_before` field, so the handshake
 fails with `ValueError("certificate validity starts in the future")`.
-Use [`chumicro-ntp`](https://chumicro.github.io/ChuMicro/ntp/stable/) to set the device clock from a public NTP server before the TLS handshake.  Cross-runtime, non-blocking, takes a UDP socket you provide.
+Use [`chumicro-ntp`](https://chumicro.com/ChuMicro/ntp/stable/) to set the device clock from a public NTP server before the TLS handshake.  Cross-runtime, non-blocking, takes a UDP socket you provide.
 
 ## Examples
 

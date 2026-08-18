@@ -25,7 +25,7 @@ and what happens when the waiting is over.
 
 Call `handle()` once per pass through your loop.  MQTT is the small
 publish-and-subscribe protocol most home-automation setups speak, and
-[chumicro-mqtt](https://chumicro.github.io/ChuMicro/mqtt/stable/) runs
+[chumicro-mqtt](https://chumicro.com/ChuMicro/mqtt/stable/) runs
 each step of it (connect, subscribe, publish, the acknowledgements
 that follow) as a piece of work that finishes in one tick.
 
@@ -65,7 +65,7 @@ which are one bytecode on both.
 ## How do I keep WiFi connected on a Pico W or an ESP32?
 
 Hand the radio to
-[chumicro-wifi](https://chumicro.github.io/ChuMicro/wifi/stable/) and
+[chumicro-wifi](https://chumicro.com/ChuMicro/wifi/stable/) and
 read its state.  It connects, retries with backoff, reconnects after a
 drop, and reports every transition (`disconnected`, `connecting`,
 `connected`, `reconnecting`, `failed`) so your app can react to a
@@ -106,7 +106,7 @@ including a fake you write for a test.
 
 ## How do I store a value that survives a reboot?
 
-Use [chumicro-kvstore](https://chumicro.github.io/ChuMicro/kvstore/stable/),
+Use [chumicro-kvstore](https://chumicro.com/ChuMicro/kvstore/stable/),
 which reads and writes like a dictionary and picks the right storage
 for the board it finds itself on: NVM on CircuitPython, NVS on ESP32
 MicroPython, LittleFS elsewhere, and memory on your laptop.
@@ -154,7 +154,7 @@ When you do have a board, the same `pytest` runs on the silicon.
 {
   "@context": "https://schema.org",
   "@type": "FAQPage",
-  "url": "https://chumicro.github.io/ChuMicro/guides/faq/",
+  "url": "https://chumicro.com/ChuMicro/guides/faq/",
   "mainEntity": [
     {
       "@type": "Question",

@@ -68,4 +68,4 @@ The split lands per [Decision 0057](https://github.com/ChuMicro/ChuMicro/blob/ma
 
 - [Device testing](device-testing.md): the device-side flow that reads all three files.
 - [Decision 0057](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0057-two-file-config.md): the design rationale for the three-file split.
-- [`workbench/workspace/`](https://chumicro.github.io/ChuMicro/workspace/stable/): the package that materializes and validates each file.
+- [`workbench/workspace/`](https://chumicro.com/ChuMicro/workspace/stable/): the package that materializes and validates each file.

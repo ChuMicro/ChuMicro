@@ -83,7 +83,7 @@ def log_dump(request):
     return build_streaming_response(200, source=source)
 ```
 
-See the [user guide](https://chumicro.github.io/ChuMicro/http_server/stable/guide/#streaming-large-response-bodies) for the source contract, framing rules, fairness, and staging-window sizing.
+See the [user guide](https://chumicro.com/ChuMicro/http_server/stable/guide/#streaming-large-response-bodies) for the source contract, framing rules, fairness, and staging-window sizing.
 
 ## Where this fits
 
@@ -133,7 +133,7 @@ Issues, bug reports, and pull requests are welcome, and so is "I ran it on this 
 
 ## Docs
 
-📖 **[Stable docs](https://chumicro.github.io/ChuMicro/http_server/stable/)** · **[Experimental docs](https://chumicro.github.io/ChuMicro/http_server/experimental/)**
+📖 **[Stable docs](https://chumicro.com/ChuMicro/http_server/stable/)** · **[Experimental docs](https://chumicro.com/ChuMicro/http_server/experimental/)**
 
 ## Find this library
 

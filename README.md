@@ -8,7 +8,7 @@
 </p>
 
 <p align="center"><big>
-  <a href="https://chumicro.github.io/ChuMicro/">Docs</a> •
+  <a href="https://chumicro.com/ChuMicro/">Docs</a> •
   <a href="#install">Install</a> •
   <a href="#the-libraries">Libraries</a> •
   <a href="#watch-it-work-on-real-hardware">Demos</a> •
@@ -320,7 +320,7 @@ The practical effect: you can plug in a board you know nothing about and tell yo
 
 ## Documentation
 
-📖 **[chumicro.github.io/ChuMicro](https://chumicro.github.io/ChuMicro/)**: hosted guides and API reference for every library, with a version selector for stable and experimental.
+📖 **[chumicro.github.io/ChuMicro](https://chumicro.com/ChuMicro/)**: hosted guides and API reference for every library, with a version selector for stable and experimental.
 
 When something fails on your bench, [`docs/troubleshooting/`](docs/troubleshooting/) starts from the symptom (board not found, deploy wiped my files, WiFi won't connect, TLS errors, out of memory) and walks to the fix.
 

@@ -79,7 +79,7 @@ Issues, bug reports, and pull requests are welcome, and so is "I ran it on this 
 
 ## Docs
 
-📖 **[Stable docs](https://chumicro.github.io/ChuMicro/ntp/stable/)** · **[Experimental docs](https://chumicro.github.io/ChuMicro/ntp/experimental/)**
+📖 **[Stable docs](https://chumicro.com/ChuMicro/ntp/stable/)** · **[Experimental docs](https://chumicro.com/ChuMicro/ntp/experimental/)**
 
 ## Find this library
 

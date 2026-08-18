@@ -42,7 +42,7 @@ test = [
 
 [project.urls]
 Homepage = "https://github.com/ChuMicro/ChuMicro"
-Documentation = "https://chumicro.github.io/ChuMicro/runner/stable/"
+Documentation = "https://chumicro.com/ChuMicro/runner/stable/"
 Source = "https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner"
 Issues = "https://github.com/ChuMicro/ChuMicro/issues"
 Bundle = "https://github.com/ChuMicro/ChuMicro-Bundle"

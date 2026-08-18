@@ -1,6 +1,6 @@
 # Guide
 
-`chumicro-workspace` is the host-side CLI for running ChuMicro projects on real boards from your laptop.  It builds on [`chumicro-deploy`](https://chumicro.github.io/ChuMicro/deploy/stable/) for the transports, firmware flashing, and the `devices.yml` schema, and picks up [`chumicro-repl`](https://chumicro.github.io/ChuMicro/repl/stable/) when you ask for an interactive session or a tail.  On top of those it adds the workspace-shaped pieces: a deploy-time config merge, a CLI that reads `workspace.yml`, board-state onboarding, firmware URL derivation, and the boot shim that lets a project ship an `app.py` with a `run()` instead of hand-writing a `code.py`.
+`chumicro-workspace` is the host-side CLI for running ChuMicro projects on real boards from your laptop.  It builds on [`chumicro-deploy`](https://chumicro.com/ChuMicro/deploy/stable/) for the transports, firmware flashing, and the `devices.yml` schema, and picks up [`chumicro-repl`](https://chumicro.com/ChuMicro/repl/stable/) when you ask for an interactive session or a tail.  On top of those it adds the workspace-shaped pieces: a deploy-time config merge, a CLI that reads `workspace.yml`, board-state onboarding, firmware URL derivation, and the boot shim that lets a project ship an `app.py` with a `run()` instead of hand-writing a `code.py`.
 
 This guide walks through the typical workflows end to end.  See the [API reference](api.md) for the module-level docs.
 
@@ -467,7 +467,7 @@ chumicro-workspace install-firmware --method uf2     # picks up firmware_source
 chumicro-workspace install-firmware --url https://example/custom.uf2 --method uf2
 ```
 
-With no `--url`, the URL is derived from the device entry in this order, by `derive_firmware_url` in [`chumicro-deploy`](https://chumicro.github.io/ChuMicro/deploy/stable/api/):
+With no `--url`, the URL is derived from the device entry in this order, by `derive_firmware_url` in [`chumicro-deploy`](https://chumicro.com/ChuMicro/deploy/stable/api/):
 
 1. `hardware.firmware_source` is set, so it is returned verbatim.
 2. The runtime is CircuitPython, so the Adafruit S3 bucket listing gives the latest stable build.
@@ -501,7 +501,7 @@ dump_devices(devices, Path("devices.yml"))
 
 ## Workbench-only
 
-This package runs on CPython and never on a microcontroller.  The on-device side of the workspace contract is [`chumicro-config`](https://chumicro.github.io/ChuMicro/config/stable/).
+This package runs on CPython and never on a microcontroller.  The on-device side of the workspace contract is [`chumicro-config`](https://chumicro.com/ChuMicro/config/stable/).
 
 ---
 

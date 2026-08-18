@@ -154,7 +154,7 @@ On device, `load_runtime_config()` reads this file back and returns a `RuntimeCo
 
 ### How the workspace tool produces it
 
-You can ignore this section if you're building the msgpack file yourself.  If you're using [`chumicro-workspace`](https://chumicro.github.io/ChuMicro/workspace/stable/), it composes the file from per-library TOML templates whose **source shape is nested** for human readability:
+You can ignore this section if you're building the msgpack file yourself.  If you're using [`chumicro-workspace`](https://chumicro.com/ChuMicro/workspace/stable/), it composes the file from per-library TOML templates whose **source shape is nested** for human readability:
 
 ```toml
 # project_config.toml, what the user edits.
