@@ -1,6 +1,6 @@
 # Contributor Cheat Sheet
 
-<img src="https://chumicro.com/assets/chumicro-head.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
+<img src="https://chumicro.com/assets/chumicro-head.png" alt="" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
 Everything you need to know on one page.  The full docs are linked if you want details.
 

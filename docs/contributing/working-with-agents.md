@@ -1,6 +1,6 @@
 # Working with AI Agents
 
-<img src="https://chumicro.com/assets/chumicro-head.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
+<img src="https://chumicro.com/assets/chumicro-head.png" alt="" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
 This project is set up to work well with AI coding agents. The rules are documented, the patterns are explicit, and agents follow the same gates as human contributors. This page explains what agents do here, what to expect from their behavior, how to collaborate effectively, and what to do when a session feels off.
 
