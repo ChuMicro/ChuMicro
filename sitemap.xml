@@ -51,4 +51,49 @@
   <url>
     <loc>https://chumicro.github.io/ChuMicro/repl/stable/</loc>
   </url>
+  <url>
+    <loc>https://chumicro.github.io/ChuMicro/guides/</loc>
+  </url>
+  <url>
+    <loc>https://chumicro.github.io/ChuMicro/guides/faq/</loc>
+  </url>
+  <url>
+    <loc>https://chumicro.github.io/ChuMicro/guides/troubleshooting/</loc>
+  </url>
+  <url>
+    <loc>https://chumicro.github.io/ChuMicro/guides/troubleshooting/board-not-found/</loc>
+  </url>
+  <url>
+    <loc>https://chumicro.github.io/ChuMicro/guides/troubleshooting/wifi-wont-connect/</loc>
+  </url>
+  <url>
+    <loc>https://chumicro.github.io/ChuMicro/guides/troubleshooting/tls-https-failures/</loc>
+  </url>
+  <url>
+    <loc>https://chumicro.github.io/ChuMicro/guides/troubleshooting/out-of-memory/</loc>
+  </url>
+  <url>
+    <loc>https://chumicro.github.io/ChuMicro/guides/troubleshooting/deploy-refused-importerror/</loc>
+  </url>
+  <url>
+    <loc>https://chumicro.github.io/ChuMicro/guides/troubleshooting/deploys-and-file-persistence/</loc>
+  </url>
+  <url>
+    <loc>https://chumicro.github.io/ChuMicro/guides/troubleshooting/persisting-data/</loc>
+  </url>
+  <url>
+    <loc>https://chumicro.github.io/ChuMicro/guides/troubleshooting/firmware-onto-a-new-board/</loc>
+  </url>
+  <url>
+    <loc>https://chumicro.github.io/ChuMicro/guides/troubleshooting/macos-circuitpy/</loc>
+  </url>
+  <url>
+    <loc>https://chumicro.github.io/ChuMicro/guides/troubleshooting/board-quirks/</loc>
+  </url>
+  <url>
+    <loc>https://chumicro.github.io/ChuMicro/guides/troubleshooting/circuitpython-ringio/</loc>
+  </url>
+  <url>
+    <loc>https://chumicro.github.io/ChuMicro/guides/wiring-wifi-credentials/</loc>
+  </url>
 </urlset>

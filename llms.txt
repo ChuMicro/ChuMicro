@@ -34,6 +34,12 @@ pip install chumicro-mqtt
 - [chumicro-deploy](https://chumicro.github.io/ChuMicro/deploy/stable/): Host-side device transports and deploy tooling for CircuitPython and MicroPython boards.
 - [chumicro-repl](https://chumicro.github.io/ChuMicro/repl/stable/): Host-side serial REPL for CircuitPython and MicroPython boards with traceback highlighting.
 
+## Guides
+
+- [Questions people ask](https://chumicro.github.io/ChuMicro/guides/faq/): why a board freezes on the network, whether the libraries use async, what they cost in flash, and how to test without hardware.
+- [Troubleshooting](https://chumicro.github.io/ChuMicro/guides/troubleshooting/): fixes keyed to a symptom, including a board that will not appear, WiFi that will not connect, TLS failures, refused deploys, and running out of memory.
+- [Wiring WiFi credentials](https://chumicro.github.io/ChuMicro/guides/wiring-wifi-credentials/): getting a network name and password onto a board without putting them in your code.
+
 ## Optional
 
 - [Source and examples](https://github.com/ChuMicro/ChuMicro): the repository, with a runnable example per library.
