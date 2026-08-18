@@ -33,8 +33,11 @@ def consume():
 
 runner = Runner()
 runner.add(client)
-handle = runner.add_generator(consume())
-runner.run_until(handle)
+runner.add_generator(consume())
+
+while True:
+    now_ms = runner.tick()   # the client does its frame I/O, the consumer drains
+    runner.wait(now_ms)      # then the CPU idles until the next event or deadline
 ```
 
 `MQTTClient.from_config(config, radio=...)` wires the same `fixed_connector_factory` for you from `mqtt.broker.host` / `mqtt.broker.port` and derives a per-device `client_id`.  The first `next_message()` call switches inbound delivery from the `on_message` callback to a bounded drop-oldest queue the generator drains; pick one inbound surface per client.  See `examples/receive_stream.py`.

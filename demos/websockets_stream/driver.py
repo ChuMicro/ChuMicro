@@ -153,7 +153,9 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 4
 
-        session.wait_for("DEMO_COMPLETE", timeout_s=5.0)
+        # The board lingers a few seconds after STREAM_CLOSED before it
+        # prints DEMO_COMPLETE, so this wait covers the linger too.
+        session.wait_for("DEMO_COMPLETE", timeout_s=15.0)
         print("driver: demo completed cleanly.")
         return 0
     except MarkerTimeoutError as marker_error:

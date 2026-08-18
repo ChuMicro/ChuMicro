@@ -1,72 +1,109 @@
-"""Board-side of the websockets_stream demo: receive a message stream.
+"""Receive a stream of websocket messages, without blocking the board.
 
-``receive_stream`` expresses the whole lifecycle top-to-bottom: wait
-for the wifi link with ``wait_for``, connect the ``WebSocketClient``,
-then loop ``yield from session.next_message()``: wait for a message,
-print it, wait for the next, until the server closes the stream.  The
-``Signal`` set from the wifi state-change callback resumes the
-generator once the link is up.
+This is the file that runs on the board.  It waits for wifi, opens a
+websocket to a small server running on your laptop, then reads messages
+as they arrive until the server closes the stream.  A heartbeat prints
+once a second through all of it, so you can see that waiting on the
+network never froze the program.
 
-The session and the receive generator are both registered with the
-runner: the session does the frame I/O each tick, the generator drains
-the messages.  Compare with the callback form (``ws.on_text`` /
-``ws.on_binary``): the generator loop reads wait-process-wait
-top-to-bottom instead of dispatching into a handler.
+``receive_stream`` below is the reading loop written as one function you
+read top to bottom: wait for a message, print it, wait for the next.
+Every ``yield from`` marks a place it pauses and the rest of the board
+gets its turn.  The alternative is the ``on_text`` / ``on_binary``
+callbacks, where the same work is split across handlers the library
+calls into.
 
-Marker lines (``WIFI_OK``, ``WS_OPEN``, ``MESSAGE``, ``STREAM_CLOSED``,
-``DEMO_COMPLETE``) drive the host driver via stdout markers.
+What you will see::
+
+    WIFI_OK ip=10.0.0.42
+    WS_OPEN
+    MESSAGE seq=1
+      text: hello 1
+      ...still ticking
+    MESSAGE seq=2
+      text: hello 2
+    STREAM_CLOSED count=2 code=1000
+    DEMO_COMPLETE
+      ...still ticking
+      ...still ticking
+
+Nothing stops after that.  The loop goes on turning, the way a board
+program does, and the script on your laptop closes the connection once
+it has seen what it came for.
+
+The UPPERCASE lines are for the script running on your laptop, which
+reads them to follow how far the board got.  They are ordinary ``print``
+calls: the format is just ``NAME key=value``, and the values have to be
+free of spaces and ``=`` signs so the laptop side can split them apart.
+That is why the message text goes on its own indented line.
 """
 
 from chumicro_config import load_runtime_config
 from chumicro_runner import Runner
-from chumicro_test_harness.markers import marker
 from chumicro_timing.waits import Signal, wait_for
 from chumicro_websockets import WebSocketClient
 from chumicro_wifi import WifiConfig, WifiService, WifiState
 
 
 def receive_stream(wifi, link_up, session, url):
+    """Read messages until the server closes the stream."""
     yield from wait_for(link_up)
-    marker("WIFI_OK", ip=wifi.ip)
+    print(f"WIFI_OK ip={wifi.ip}")
+
     session.connect(url)
+    # The session does the frame I/O each tick, so it needs a turn too.
     runner.add(session)
+
     received = 0
     while True:
         message = yield from session.next_message()
         if message is None:
-            break
+            break                       # the server closed the stream
         received += 1
-        text = message.text if message.is_text else repr(message.data)
-        marker("MESSAGE", seq=received)
-        print(f"  text: {text}")
-    marker("STREAM_CLOSED", count=received, code=session.last_close_code)
-    marker("DEMO_COMPLETE")
+        print(f"MESSAGE seq={received}")
+        print(f"  text: {message.text if message.is_text else message.data!r}")
+
+    print(f"STREAM_CLOSED count={received} code={session.last_close_code}")
+    print("DEMO_COMPLETE")
 
 
-_DEMO_DEADLINE_MS = 120_000
+def heartbeat(now_ms):
+    """Runs once a second, whatever else is going on."""
+    print("  ...still ticking")
 
-config = load_runtime_config()
-stream_url = config["websockets.stream.url"]
 
-wifi = WifiService(WifiConfig.from_config(config))
-ws = WebSocketClient.from_config(config, radio=wifi.adapter.radio)
-runner = Runner(on_handler_error=lambda entry, error: print("SERVICE_FAULT", entry.service, repr(error)))
-runner.add(wifi)
-
-link_up = Signal()
+def report_fault(entry, error):
+    """Runs if a service raises.  The loop keeps going; this says so."""
+    print(f"SERVICE_FAULT service={type(entry.service).__name__} "
+          f"error={type(error).__name__}")
+    print(f"  detail: {error!r}")
 
 
 def signal_link_up(_old, new):
+    """Tells the stream reader it can start."""
     if new == WifiState.CONNECTED:
         link_up.set(new)
 
 
-ws.on_open = lambda: marker("WS_OPEN")
+config = load_runtime_config()
+wifi = WifiService(WifiConfig.from_config(config))
+ws = WebSocketClient.from_config(config, radio=wifi.adapter.radio)
+ws.on_open = lambda: print("WS_OPEN")
+
+link_up = Signal()
 wifi.on_state_change(signal_link_up)
 
-receive_handle = runner.add_generator(
-    receive_stream(wifi, link_up, ws, stream_url),
+runner = Runner(on_handler_error=report_fault)
+runner.add(wifi)
+runner.add_periodic(heartbeat, period_ms=1000)
+runner.add_generator(
+    receive_stream(wifi, link_up, ws, config["websockets.stream.url"]),
 )
-if not runner.run_until(receive_handle, timeout_ms=_DEMO_DEADLINE_MS):
-    marker("DEMO_TIMEOUT", stage="stream")
-    raise SystemExit(1)
+
+# The main loop.  tick() gives every registered service one small step,
+# and wait() then parks the CPU until the next event or timer deadline.
+# It never ends, which is what a board program does.  Your own project's
+# loop looks exactly like this one.
+while True:
+    now_ms = runner.tick()
+    runner.wait(now_ms)

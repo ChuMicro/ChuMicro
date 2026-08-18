@@ -60,8 +60,9 @@ server = WebSocketServer(
 )
 
 while True:
-    if server.check(ticks_ms()):
-        server.handle(ticks_ms())
+    now = ticks_ms()          # one timestamp per pass, shared by check and handle
+    if server.check(now):
+        server.handle(now)
 ```
 
 ## What's included

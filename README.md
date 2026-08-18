@@ -56,6 +56,7 @@ Hand your services to the `Runner` and it deals out the turns.  Here's the scena
 
 ```python
 from chumicro_runner import Runner
+from chumicro_timing import Deadline, ticks_ms
 from chumicro_wifi import WifiConfig, WifiService
 
 wifi = WifiService(WifiConfig(ssid="home-wifi", password="…"))
@@ -67,17 +68,24 @@ runner = Runner()
 runner.add(wifi)                                  # connects, retries, reconnects on drop
 runner.add_periodic(toggle_led, period_ms=500)    # blinks no matter what wifi is doing
 
-if runner.run_until(lambda: wifi.connected, timeout_ms=20_000):
-    print("online:", wifi.ip)
-else:
-    print("no wifi yet, starting anyway")         # wifi keeps retrying in the background
+budget = Deadline(20_000, ticks_ms())             # how long to wait before starting anyway
+announced = False
 
 while True:
-    now = runner.tick()    # every service takes one small step
-    runner.wait(now)       # then the CPU idles until something actually needs it
+    now = runner.tick()            # every service takes one small step
+
+    if not announced:
+        if wifi.connected:
+            print("online:", wifi.ip)
+            announced = True
+        elif budget.expired(now):
+            print("no wifi yet, starting anyway")   # wifi keeps retrying in the background
+            announced = True
+
+    runner.wait(now)               # then the CPU idles until something actually needs it
 ```
 
-Unplug the router and this program does not hang.  The LED blinks through the retries, the twenty seconds run out, and the device starts working offline.  The WiFi service keeps retrying with backoff, and when the network comes back, `wifi.connected` flips true.  The last line matters too: `runner.wait()` sleeps the CPU until the next socket event or timer deadline instead of spinning the loop flat out, and on battery that idle time is what your runtime budget is made of.
+It is the same `while True` as the blink above, with more inside it.  Unplug the router and this program does not hang.  The LED blinks through the retries, the twenty seconds run out, and the device starts working offline.  The WiFi service keeps retrying with backoff, and when the network comes back, `wifi.connected` flips true.  The last line matters too: `runner.wait()` sleeps the CPU until the next socket event or timer deadline instead of spinning the loop flat out, and on battery that idle time is what your runtime budget is made of.
 
 ## Sequential work reads top to bottom
 
@@ -92,11 +100,14 @@ from chumicro_sockets.sockets_factory import connector_factory
 transport_factory = connector_factory(radio=wifi.adapter.radio)
 
 def fetch_forecast():
-    response = yield from get(transport_factory, "http://example.com/")
+    response = yield from get(transport_factory, "http://example.com/", timeout_ms=30_000)
     print(response.status_code, len(response.body))
 
 handle = runner.add_generator(fetch_forecast())
-runner.run_until(handle, timeout_ms=30_000)
+
+while not handle.done:
+    now = runner.tick()
+    runner.wait(now)
 ```
 
 The request advances between LED blinks and MQTT keepalives.  A slow server or a stalled TLS handshake (TLS is the encryption behind https) doesn't take the device down with it, and the timeout is an argument, not an architecture.  The runnable version of this file, WiFi wiring included, ships in the requests library's `examples/` folder.

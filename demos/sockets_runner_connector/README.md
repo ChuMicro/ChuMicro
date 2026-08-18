@@ -38,9 +38,11 @@ fan-out, complex error recovery, long-lived multi-phase sessions).
   runs whether the generator returns normally, raises, or gets
   cancelled mid-flight via `handle.cancel()`.  No separate teardown
   path.
-- **One `runner.run_until(echo_handle)` call at the end.**  The runner
-  flips `handle.done` to True the moment `echo_run` returns and
-  `run_until` exits cleanly.
+- **One `while True` loop at the end.**  The runner flips
+  `echo_handle.done` to True the moment `echo_run` returns, and the
+  loop breaks on it.  Same two lines (`tick`, `wait`) any ChuMicro
+  program runs, with a finish line and a deadline added because a demo
+  has to end.
 
 ## Run it
 

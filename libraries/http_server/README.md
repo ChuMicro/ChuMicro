@@ -51,8 +51,9 @@ def widget(request):
     return build_response(200, json={"id": request.path_params["id"]})
 
 while True:
-    if server.check(ticks_ms()):
-        server.handle(ticks_ms())
+    now = ticks_ms()          # one timestamp per pass, shared by check and handle
+    if server.check(now):
+        server.handle(now)
 ```
 
 ## What's included

@@ -120,8 +120,8 @@ def main(argv: list[str] | None = None) -> int:
         wifi_marker = session.wait_for("WIFI_OK", timeout_s=args.wifi_timeout_s)
         print(f"driver: board WIFI_OK ip={wifi_marker.values.get('ip')}")
 
-        fetching_marker = session.wait_for("FETCHING", timeout_s=10.0)
-        print(f"driver: board FETCHING url={fetching_marker.values.get('url')}")
+        session.wait_for("FETCHING", timeout_s=10.0)
+        print(f"driver: board FETCHING url={fetch_url}")
 
         fetched_marker = session.wait_for(
             "FETCHED", timeout_s=args.completion_timeout_s,
@@ -138,7 +138,9 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 4
 
-        session.wait_for("DEMO_COMPLETE", timeout_s=5.0)
+        # The board lingers a few seconds after FETCHED before it prints
+        # DEMO_COMPLETE, so this wait covers the linger too.
+        session.wait_for("DEMO_COMPLETE", timeout_s=15.0)
         print("driver: demo completed cleanly.")
         return 0
     except MarkerTimeoutError as marker_error:

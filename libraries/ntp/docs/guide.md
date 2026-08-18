@@ -113,10 +113,15 @@ from chumicro_runner import Runner
 
 runner = Runner()
 runner.add(client)        # check/handle wired up by the runner
-# inside your tick loop:
-now_ms = runner.tick()
-if request.done:
-    use(request.unix_seconds)
+
+while True:
+    now_ms = runner.tick()
+
+    if request.done:
+        use(request.unix_seconds)
+        break
+
+    runner.wait(now_ms)   # parks the CPU until the reply lands
 ```
 
 Single in-flight query: `client.busy` is `True` between `query()`

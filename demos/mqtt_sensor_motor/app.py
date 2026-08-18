@@ -1,41 +1,51 @@
-"""Board-side of the mqtt_sensor_motor demo: a temperature-controlled fan node.
+"""A temperature-controlled fan, driven over MQTT.
 
-Reads the on-chip temperature, publishes it as JSON telemetry every
-two seconds, and drives a PWM "motor" (a fan/pump ESC input) from
-speed commands the broker delivers.  Wires ``chumicro_wifi.WifiService``
-+ ``chumicro_mqtt.MQTTClient`` into one ``chumicro_runner.Runner`` and
-drives them with ``runner.run_until(...)`` (no async, no threads).
+This is the file that runs on the board.  It reads the chip's own
+temperature sensor, publishes a reading every two seconds, and spins a
+motor at whatever speed the broker tells it to.  The motor is a PWM
+signal on one GPIO pin, mirrored onto the onboard LED so you can see the
+speed on a bench with nothing wired up.
 
-It reads like a mainstream MQTT device sketch (paho / Adafruit
-MiniMQTT): set a Last Will, set the callbacks once, connect, let the
-loop run.  The demo deliberately leans on library behavior instead of
-reimplementing it:
+This is the biggest demo here, and it is the one shaped most like a real
+device.  Three things are worth reading for:
 
-* **Pre-connect queue.**  ``publish_telemetry`` calls ``publish()`` with
-  no CONNECTED guard.  A sample produced before the broker session is
-  up buffers in the client's bounded pre-connect queue and flushes on
-  CONNACK (the default ``when_disconnected="queue"`` policy), so the
-  telemetry cadence never has to state-check the client.
-* **Declarative subscribe.**  The command subscription is declared once
-  at startup with ``subscribe()`` (before ``connect()``), not inside
-  ``on_connect``.  The client records it in its desired set, puts it on
-  the wire on the first CONNACK, and replays it on every self-heal
-  reconnect, so the app carries no reconnect bookkeeping.
-* **Availability via Last Will.**  A retained ``"offline"`` will the
-  broker publishes if the board drops uncleanly, paired with a retained
-  ``"online"`` sent on connect.  A clean shutdown suppresses the will,
-  so the shutdown path publishes ``"offline"`` explicitly.
-* **Self-heal.**  The wifi callback composes the pair: ``mqtt.hold()``
-  while the link is down, ``mqtt.connect()`` the moment it returns, and
-  the socket-factory transport rebuilds the connection.
+* **Publishing does not check whether it is connected.**  Look at
+  ``publish_telemetry``: it just publishes.  If the broker session is not
+  up yet, the client holds the message and sends it once it is.
+* **The subscription is declared once, at startup.**  Not inside a
+  connect callback.  The client remembers it, puts it on the wire when it
+  connects, and puts it back after any reconnect, so nothing here has to
+  keep track of that.
+* **The board announces whether it is alive.**  ``set_will(...)`` leaves
+  a message with the broker to publish if this board falls off the
+  network, and the matching ``online`` goes out on connect.  Anything
+  watching the topic knows the difference between "quiet" and "gone".
 
-Command path: an inbound speed (int 0-100) is clamped, applied to the
-motor PWM (and mirrored onto the onboard LED so the bench shows speed),
-then echoed back retained on ``motor/state`` (the closed loop).
+The command path is a closed loop: a speed arrives, gets clamped to
+0-100, is applied to the motor, and is echoed back on a state topic so
+whoever sent it can see it took effect.
 
-Marker lines (``SENSOR_SOURCE``, ``MOTOR_READY``, ``WIFI_OK``,
-``MQTT_CONNECTED``, ``TELEMETRY_SENT``, ``MOTOR_APPLIED``,
-``DEMO_COMPLETE``) drive the host driver over stdout.
+What you will see::
+
+    SENSOR_SOURCE source=rp2-onchip
+    MOTOR_READY gpio=16 led=pwm
+    WIFI_OK ip=10.0.0.42
+    MQTT_CONNECTED broker=10.0.0.5:1883 client_id=chumicro-sensor-motor
+    TELEMETRY_SENT seq=1
+    MOTOR_APPLIED speed=75
+    TELEMETRY_SENT seq=2
+    MOTOR_APPLIED speed=0
+    TELEMETRY_SENT seq=3
+    DEMO_COMPLETE
+
+Nothing stops after that.  The loop goes on turning, the way a board
+program does, and the script on your laptop closes the connection once
+it has seen what it came for.
+
+The UPPERCASE lines are for the script running on your laptop, which
+reads them to follow how far the board got.  They are ordinary ``print``
+calls: the format is just ``NAME key=value``, and the values have to be
+free of spaces and ``=`` signs so the laptop side can split them apart.
 """
 
 import json
@@ -45,28 +55,23 @@ import sys
 from chumicro_config import load_runtime_config
 from chumicro_mqtt import MQTTClient
 from chumicro_runner import Runner
-from chumicro_test_harness.markers import marker
 from chumicro_timing import ticks_diff, ticks_ms
 from chumicro_wifi import WifiConfig, WifiService, WifiState
 
 #: A general-purpose GPIO broken out on both sweep form factors and free
 #: of any onboard function: Pico W ``GP16`` and Lolin S2 mini ``IO16``
 #: (labelled D4).  A real fan/pump ESC's signal wire goes here.
-_MOTOR_GPIO = 16
-_PWM_FREQUENCY_HZ = 1_000
+MOTOR_GPIO = 16
+PWM_FREQUENCY_HZ = 1_000
 #: 16-bit full scale shared by CircuitPython ``duty_cycle``, MicroPython
 #: ``duty_u16``, and the rp2 ADC's ``read_u16`` (one honest constant).
-_U16_FULL_SCALE = 65_535
+U16_FULL_SCALE = 65_535
 
-_TELEMETRY_INTERVAL_MS = 2_000
+TELEMETRY_INTERVAL_MS = 2_000
 #: The host driver needs three telemetry samples and two motor commands
 #: (speed 75 then 0) to see the full round trip; completion gates on both.
-_TELEMETRY_TARGET = 3
-_COMMAND_TARGET = 2
-_DEMO_DEADLINE_MS = 120_000
-#: Keep ticking this long after the last publish so the broker's QoS-1
-#: acks land before the clean disconnect tears the socket down.
-_FLUSH_DRAIN_MS = 750
+TELEMETRY_TARGET = 3
+COMMAND_TARGET = 2
 
 _synthetic_start_ms = ticks_ms()
 
@@ -95,21 +100,21 @@ if _impl_name == "circuitpython":
     SENSOR_SOURCE = "real"
 
     _motor_pwm = pwmio.PWMOut(
-        getattr(microcontroller.pin, f"GPIO{_MOTOR_GPIO}"),
-        frequency=_PWM_FREQUENCY_HZ,
+        getattr(microcontroller.pin, f"GPIO{MOTOR_GPIO}"),
+        frequency=PWM_FREQUENCY_HZ,
         duty_cycle=0,
     )
 
     def set_motor_duty(fraction):
-        _motor_pwm.duty_cycle = int(fraction * _U16_FULL_SCALE)
+        _motor_pwm.duty_cycle = int(fraction * U16_FULL_SCALE)
 
     try:
         _led_pwm = pwmio.PWMOut(
-            board.LED, frequency=_PWM_FREQUENCY_HZ, duty_cycle=0,
+            board.LED, frequency=PWM_FREQUENCY_HZ, duty_cycle=0,
         )
 
         def set_led(fraction):
-            _led_pwm.duty_cycle = int(fraction * _U16_FULL_SCALE)
+            _led_pwm.duty_cycle = int(fraction * U16_FULL_SCALE)
 
         LED_MODE = "pwm"
     except (TypeError, ValueError, RuntimeError):
@@ -130,17 +135,17 @@ elif _impl_name == "micropython":
     import machine
 
     _motor_pwm = machine.PWM(
-        machine.Pin(_MOTOR_GPIO), freq=_PWM_FREQUENCY_HZ, duty_u16=0,
+        machine.Pin(MOTOR_GPIO), freq=PWM_FREQUENCY_HZ, duty_u16=0,
     )
 
     def set_motor_duty(fraction):
-        _motor_pwm.duty_u16(int(fraction * _U16_FULL_SCALE))
+        _motor_pwm.duty_u16(int(fraction * U16_FULL_SCALE))
 
     if sys.platform == "rp2":
         _temperature_adc = machine.ADC(4)
 
         def read_celsius():
-            volts = _temperature_adc.read_u16() * (3.3 / _U16_FULL_SCALE)
+            volts = _temperature_adc.read_u16() * (3.3 / U16_FULL_SCALE)
             return 27.0 - (volts - 0.706) / 0.001721
 
         SENSOR_SOURCE = "real"
@@ -156,11 +161,11 @@ elif _impl_name == "micropython":
         read_celsius = _synthetic_celsius
         SENSOR_SOURCE = "synthetic"
         _led_pwm = machine.PWM(
-            machine.Pin(15), freq=_PWM_FREQUENCY_HZ, duty_u16=0,
+            machine.Pin(15), freq=PWM_FREQUENCY_HZ, duty_u16=0,
         )
 
         def set_led(fraction):
-            _led_pwm.duty_u16(int(fraction * _U16_FULL_SCALE))
+            _led_pwm.duty_u16(int(fraction * U16_FULL_SCALE))
 
         LED_MODE = "pwm"
 else:
@@ -186,8 +191,8 @@ telemetry_topic = f"demo/{client_id}/telemetry"
 command_topic = f"demo/{client_id}/motor/set"
 state_topic = f"demo/{client_id}/motor/state"
 
-marker("SENSOR_SOURCE", source=SENSOR_SOURCE)
-marker("MOTOR_READY", gpio=_MOTOR_GPIO, led=LED_MODE)
+print(f"SENSOR_SOURCE source={SENSOR_SOURCE}")
+print(f"MOTOR_READY gpio={MOTOR_GPIO} led={LED_MODE}")
 
 wifi = WifiService(WifiConfig.from_config(config))
 mqtt = MQTTClient.from_config(config, radio=wifi.adapter.radio)
@@ -210,6 +215,12 @@ commands_applied = 0
 current_speed = 0
 
 
+def announce_if_done():
+    """Say so once both halves have happened.  Either one can be last."""
+    if telemetry_sent >= TELEMETRY_TARGET and commands_applied >= COMMAND_TARGET:
+        print("DEMO_COMPLETE")
+
+
 def on_connect():
     """Connect-time setup, fired once the broker session is up.
 
@@ -218,7 +229,7 @@ def on_connect():
     subscription is declared once at startup, not here; the client
     replays it on every reconnect on its own.
     """
-    marker("MQTT_CONNECTED", broker=broker, client_id=client_id)
+    print(f"MQTT_CONNECTED broker={broker} client_id={client_id}")
     mqtt.publish(availability_topic, b"online", qos=1, retain=True)
 
 
@@ -232,7 +243,7 @@ def on_motor_command(topic, payload):
     try:
         requested = int(text)
     except ValueError:
-        marker("MOTOR_REJECTED", payload_hex=text.encode())
+        print(f"MOTOR_REJECTED payload_hex={text.encode().hex()}")
         return
     speed = max(0, min(100, requested))
     current_speed = speed
@@ -242,7 +253,8 @@ def on_motor_command(topic, payload):
     # State echo closes the loop: a retained value so a late subscriber
     # learns the current speed on its first SUBACK.
     mqtt.publish(state_topic, str(speed).encode(), qos=1, retain=True)
-    marker("MOTOR_APPLIED", speed=speed)
+    print(f"MOTOR_APPLIED speed={speed}")
+    announce_if_done()
 
 
 def publish_telemetry(now_ms):
@@ -259,12 +271,13 @@ def publish_telemetry(now_ms):
         "seq": telemetry_sent,
     }).encode()
     mqtt.publish(telemetry_topic, payload, qos=1)
-    marker("TELEMETRY_SENT", seq=telemetry_sent)
+    print(f"TELEMETRY_SENT seq={telemetry_sent}")
+    announce_if_done()
 
 
 def on_wifi_state(_old_state, new_state):
     if new_state == WifiState.CONNECTED:
-        marker("WIFI_OK", ip=wifi.ip)
+        print(f"WIFI_OK ip={wifi.ip}")
         mqtt.connect()  # link is back: reconnect now (also clears the hold)
     else:
         # WifiService reports link loss as RECONNECTING / FAILED, so any
@@ -276,37 +289,23 @@ mqtt.on_connect = on_connect
 mqtt.on_message = on_motor_command
 wifi.on_state_change(on_wifi_state)
 
-runner = Runner(
-    on_handler_error=lambda entry, error: print(
-        "SERVICE_FAULT", entry.service, repr(error),
-    ),
-)
+def report_fault(entry, error):
+    """Runs if a service raises.  The loop keeps going; this says so."""
+    print(f"SERVICE_FAULT service={type(entry.service).__name__} "
+          f"error={type(error).__name__}")
+    print(f"  detail: {error!r}")
+
+
+runner = Runner(on_handler_error=report_fault)
 runner.add(wifi)
 runner.add(mqtt)
-runner.add_periodic(publish_telemetry, period_ms=_TELEMETRY_INTERVAL_MS)
+runner.add_periodic(publish_telemetry, period_ms=TELEMETRY_INTERVAL_MS)
 
 
-def _demo_complete():
-    return (
-        telemetry_sent >= _TELEMETRY_TARGET
-        and commands_applied >= _COMMAND_TARGET
-    )
-
-
-if not runner.run_until(_demo_complete, timeout_ms=_DEMO_DEADLINE_MS):
-    print(
-        f"STATUS: FAIL_DEMO_DEADLINE "
-        f"telemetry_sent={telemetry_sent} "
-        f"commands_applied={commands_applied}",
-    )
-    raise SystemExit(1)
-
-# Graceful shutdown: a clean disconnect suppresses the Last Will, so
-# stop the motor and announce "offline" ourselves, then drain so the
-# QoS-1 acks land before the socket closes.
-set_motor_duty(0.0)
-set_led(0.0)
-mqtt.publish(availability_topic, b"offline", qos=1, retain=True)
-runner.run_until(timeout_ms=_FLUSH_DRAIN_MS)
-mqtt.disconnect()
-marker("DEMO_COMPLETE")
+# The main loop.  tick() gives every registered service one small step,
+# and wait() then parks the CPU until the next event or timer deadline.
+# It never ends, which is what a board program does.  Your own project's
+# loop looks exactly like this one.
+while True:
+    now_ms = runner.tick()
+    runner.wait(now_ms)

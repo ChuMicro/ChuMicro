@@ -7,9 +7,9 @@ subscriptions, and QoS 1 publish-with-PUBACK in both directions, in
 one command, with no broker setup beyond `brew install mosquitto`.
 
 The board wires `chumicro_wifi.WifiService` + `chumicro_mqtt.MQTTClient`
-into one `chumicro_runner.Runner` and drives them with
-`runner.run_until(..., timeout_ms=...)` (the packaged form of the
-tick-and-wait loop), the same shape the root README's
+into one `chumicro_runner.Runner` and drives them from a hand-written
+`while` loop: `runner.tick()` then `runner.wait(now_ms)`, once per
+pass, the same shape the root README's
 ["Give WiFi a deadline and keep blinking"](../../README.md#give-wifi-a-deadline-and-keep-blinking)
 walkthrough uses.  It reads like a mainstream MQTT quickstart: set a
 Last Will, set the callbacks once, connect, let the loop run.  All the

@@ -1,60 +1,100 @@
-"""Board-side of the requests_fetch demo: one-shot HTTP GET via a generator.
+"""Fetch one web page from a board, without the rest of the board stopping.
 
-``fetch_run`` expresses the whole lifecycle top-to-bottom: wait for the
-wifi link with ``wait_for``, build the connector factory, then
-``response = yield from get(transport_factory, url)`` driven by
-``Runner.add_generator``.  One request, no polling a handle, no
-``on_done`` callback; the ``Signal`` set from the wifi state-change
-callback resumes the generator once the link is up.
+This is the file that runs on the board.  It waits for wifi, makes one
+HTTP GET, prints what came back, and ticks a heartbeat through the whole
+thing so you can watch that fetching a page never froze the program.
 
-Compare with ``libraries/requests/examples/periodic_get.py``, which
-drives the long-lived ``HttpClient`` (``check`` / ``handle``) for
-repeated requests on one client.  The generator form here is for a
-one-shot fetch.
+What you will see::
 
-Marker lines (``WIFI_OK``, ``FETCHING``, ``FETCHED``, ``DEMO_COMPLETE``)
-drive the host driver via stdout markers.
+    WIFI_OK ip=10.0.0.42
+    FETCHING
+      GET http://10.0.0.5:54321/hello
+      ...still ticking
+      ...still ticking
+    FETCHED status=200 bytes=49
+    DEMO_COMPLETE
+      ...still ticking
+      ...still ticking
+
+Nothing stops after that.  The loop goes on turning, the way a board
+program does, and the script on your laptop closes the connection once
+it has seen what it came for.
+
+The UPPERCASE lines are for the script running on your laptop, which
+reads them to follow how far the board got.  They are ordinary ``print``
+calls: the format is just ``NAME key=value``, and the values have to be
+free of spaces and ``=`` signs so the laptop side can split them apart.
+That is why the URL above is printed on its own indented line rather
+than as ``url=...``; a URL with a ``?a=b`` query string would break the
+split.
+
+Two things worth trying:
+
+* Point ``requests.fetch.url`` at a page of your own and watch ``bytes=``
+  change.
+* Unplug your router before you start.  The heartbeat keeps printing
+  while the board retries the connection, which is the thing this whole
+  project exists for.
 """
 
 from chumicro_config import load_runtime_config
 from chumicro_requests.generators import get
 from chumicro_runner import Runner
 from chumicro_sockets.sockets_factory import connector_factory
-from chumicro_test_harness.markers import marker
 from chumicro_timing.waits import Signal, wait_for
 from chumicro_wifi import WifiConfig, WifiService, WifiState
 
 
 def fetch_run(wifi, link_up, url):
+    """The fetch, top to bottom.
+
+    Each ``yield from`` is a place this pauses and the rest of the board
+    runs.  It picks up on that same line when what it waited for is ready.
+    """
     yield from wait_for(link_up)
-    marker("WIFI_OK", ip=wifi.ip)
+    print(f"WIFI_OK ip={wifi.ip}")
+
     factory = connector_factory(radio=wifi.adapter.radio)
-    marker("FETCHING", url=url)
+    print("FETCHING")
+    print(f"  GET {url}")
+
     response = yield from get(factory, url)
-    marker("FETCHED", status=response.status_code, bytes=len(response.body))
-    marker("DEMO_COMPLETE")
+    print(f"FETCHED status={response.status_code} bytes={len(response.body)}")
+    print("DEMO_COMPLETE")
 
 
-_DEMO_DEADLINE_MS = 120_000
+def heartbeat(now_ms):
+    """Runs once a second, whatever else is going on."""
+    print("  ...still ticking")
 
-config = load_runtime_config()
-fetch_url = config["requests.fetch.url"]
 
-wifi = WifiService(WifiConfig.from_config(config))
-runner = Runner(on_handler_error=lambda entry, error: print("SERVICE_FAULT", entry.service, repr(error)))
-runner.add(wifi)
-
-link_up = Signal()
+def report_fault(entry, error):
+    """Runs if a service raises.  The loop keeps going; this says so."""
+    print(f"SERVICE_FAULT service={type(entry.service).__name__} "
+          f"error={type(error).__name__}")
+    print(f"  detail: {error!r}")
 
 
 def signal_link_up(_old, new):
+    """Tells the fetch it can start."""
     if new == WifiState.CONNECTED:
         link_up.set(new)
 
 
+config = load_runtime_config()
+wifi = WifiService(WifiConfig.from_config(config))
+link_up = Signal()
 wifi.on_state_change(signal_link_up)
 
-fetch_handle = runner.add_generator(fetch_run(wifi, link_up, fetch_url))
-if not runner.run_until(fetch_handle, timeout_ms=_DEMO_DEADLINE_MS):
-    marker("DEMO_TIMEOUT", stage="fetch")
-    raise SystemExit(1)
+runner = Runner(on_handler_error=report_fault)
+runner.add(wifi)
+runner.add_periodic(heartbeat, period_ms=1000)
+runner.add_generator(fetch_run(wifi, link_up, config["requests.fetch.url"]))
+
+# The main loop.  tick() gives every registered service one small step,
+# and wait() then parks the CPU until the next event or timer deadline.
+# It never ends, which is what a board program does.  Your own project's
+# loop looks exactly like this one.
+while True:
+    now_ms = runner.tick()
+    runner.wait(now_ms)

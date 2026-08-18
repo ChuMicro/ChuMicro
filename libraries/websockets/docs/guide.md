@@ -27,8 +27,11 @@ def receive():
 
 runner = Runner()
 runner.add(client)
-handle = runner.add_generator(receive())
-runner.run_until(handle)
+runner.add_generator(receive())
+
+while True:
+    now_ms = runner.tick()   # the client does its frame I/O, the consumer drains
+    runner.wait(now_ms)      # then the CPU idles until the next event or deadline
 ```
 
 The first `next_message()` call switches inbound delivery from the `on_text` / `on_binary` callbacks to a bounded queue the generator drains (drop-oldest); pick one inbound surface per client.  See `examples/receive_stream.py`.
@@ -102,8 +105,11 @@ runner.add_periodic(led_blink, period_ms=500)
 runner.add(sensor_service)
 
 while True:
-    runner.tick()
+    now_ms = runner.tick()   # every registered service takes one small step
+    runner.wait(now_ms)      # then the CPU parks until the next event or deadline
 ```
+
+`runner.wait(now_ms)` is what turns the loop above from a busy-spin into an idle one: it sleeps on the websocket until a frame arrives or the next blink is due.
 
 `check(now_ms) -> bool` reports whether work is pending; `handle(now_ms)`
 does at most one tick of progress, capped by `recv_budget_per_tick` and

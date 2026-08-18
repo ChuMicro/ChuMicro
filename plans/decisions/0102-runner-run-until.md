@@ -24,12 +24,12 @@ Every demo and every bounded drain hand-rolls the same tail loop — `while not 
 ## Rejected
 
 - **`Runner.run()` owning the app loop** — forfeits transparency (Decision 0080); `run_until` stays bounded and returns control.
-- **A raw `while` in every demo** — duplicates the wait / timeout / error semantics N times; this is the boilerplate `run_until` replaced.
+- **A raw `while` in every demo** — duplicates the wait / timeout / error semantics N times; this is the boilerplate `run_until` replaced. Teaching code is the exception: demos and examples pay that duplication on purpose so the loop stays on the page — see [Decision 0122](0122-demos-and-examples-write-the-loop-out.md).
 - **Swallowing `handle.error`** (returning `False` on task death) — hides the failure the handle form exists to surface.
 
 ## Consequences
 
-- Demos and bounded drains are one call: `handle = runner.add_generator(...); runner.run_until(handle)` is the standard tail.
+- Bounded drains in application code are one call: `handle = runner.add_generator(...); runner.run_until(handle)`. Demos and examples write that loop out instead ([Decision 0122](0122-demos-and-examples-write-the-loop-out.md)).
 - The main application loop is unchanged and still owns its `while True:`.
 - `run_until` adds no new blocking primitive — it composes `tick()` and `wait()`, so the tick-budget and no-async rules (Decisions 0080/0087) hold unchanged.
 - A timeout is only as tight as the runner's nearest deadline source; a caller wanting a hard bound registers one.
