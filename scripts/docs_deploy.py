@@ -121,6 +121,42 @@ def _hash_file(path: Path) -> str:
     ).stdout.strip().decode()
 
 
+#: The guides site's config.  Its pages are repository prose (questions,
+#: troubleshooting, wiring), published beside the per-library docs.
+GUIDES_CONFIG = ROOT / "guides" / "mkdocs.yml"
+
+#: Where the guides site lands on the docs branch.
+GUIDES_PREFIX = "guides"
+
+
+def _build_guides_site(destination: Path) -> int:
+    """Build the guides site into *destination*."""
+    return run_command([
+        sys.executable, "-m", "mkdocs", "build",
+        "-f", str(GUIDES_CONFIG),
+        "-d", str(destination),
+    ])
+
+
+def _guides_blobs(destination: Path) -> list[tuple[str, str]]:
+    """Return ``(blob, path)`` for every file of the built guides site."""
+    blobs: list[tuple[str, str]] = []
+    for built_file in sorted(destination.rglob("*")):
+        if built_file.is_file():
+            relative = built_file.relative_to(destination).as_posix()
+            blobs.append((_hash_file(built_file), f"{GUIDES_PREFIX}/{relative}"))
+    return blobs
+
+
+def _published_guides_paths(branch: str) -> list[str]:
+    """Return the guides files currently published on *branch*."""
+    listing = subprocess.run(
+        ["git", "ls-tree", "-r", "--name-only", branch, "--", f"{GUIDES_PREFIX}/"],
+        capture_output=True, cwd=ROOT, check=True,
+    ).stdout.decode().split()
+    return listing
+
+
 def inject_landing_page(branch: str) -> None:
     """Generate the landing page and commit it to *branch*.
 
@@ -156,6 +192,22 @@ def inject_landing_page(branch: str) -> None:
     sitemap_blob = _hash_blob(generate_sitemap().encode())
     llms_blob = _hash_blob(generate_llms_txt().encode())
 
+    # The guides site is built fresh each deploy and replaces whatever
+    # was published before, so a page dropped from its nav stops being
+    # served instead of lingering as an orphan.
+    guides_directory = Path(tempfile.mkdtemp(suffix=".guides"))
+    guides_blobs: list[tuple[str, str]] = []
+    stale_guides: list[str] = []
+    try:
+        if GUIDES_CONFIG.is_file() and _build_guides_site(guides_directory) == 0:
+            guides_blobs = _guides_blobs(guides_directory)
+            published = set(_published_guides_paths(branch))
+            stale_guides = sorted(published - {path for _, path in guides_blobs})
+        elif GUIDES_CONFIG.is_file():
+            print("WARNING: guides site failed to build; leaving it as published.")
+    finally:
+        shutil.rmtree(guides_directory, ignore_errors=True)
+
     # Hash the favicon if it exists.
     favicon_source_file = ROOT / "support" / "docs" / "favicon.png"
     favicon_blob = None
@@ -188,6 +240,7 @@ def inject_landing_page(branch: str) -> None:
             (llms_blob, "llms.txt"),
         ]
         root_files.extend(_verification_file_blobs())
+        root_files.extend(guides_blobs)
         for blob, path in root_files:
             subprocess.run(
                 ["git", "update-index", "--add", "--cacheinfo",
@@ -200,6 +253,13 @@ def inject_landing_page(branch: str) -> None:
             subprocess.run(
                 ["git", "update-index", "--add", "--cacheinfo",
                  f"100644,{favicon_blob},assets/images/favicon.png"],
+                env=index_environment, cwd=ROOT, check=True,
+            )
+
+        # Drop guides pages the site no longer builds.
+        for stale in stale_guides:
+            subprocess.run(
+                ["git", "update-index", "--force-remove", stale],
                 env=index_environment, cwd=ROOT, check=True,
             )
 
@@ -235,7 +295,7 @@ def inject_landing_page(branch: str) -> None:
 
     new_commit = subprocess.run(
         ["git", "commit-tree", new_tree, "-p", parent_commit,
-         "-m", "Regenerate landing page"],
+         "-m", "Regenerate landing page, sitemap, llms.txt, and guides"],
         capture_output=True, cwd=ROOT, check=True,
     ).stdout.strip().decode()
 

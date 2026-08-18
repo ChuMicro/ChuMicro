@@ -260,6 +260,53 @@ def _render_workbench_install(first_workbench: dict) -> str:
 #: the sitemap.  Every package's docs live one level below it.
 SITE_ROOT = "https://chumicro.github.io/ChuMicro"
 
+#: The guides site: repository prose (questions, troubleshooting, wiring)
+#: published alongside the per-library documentation.  Its config names
+#: which pages publish, so the URL list below reads that nav rather than
+#: guessing from the docs tree.
+GUIDES_CONFIG = ROOT / "guides" / "mkdocs.yml"
+
+#: Where the guides site is published, relative to the site root.
+GUIDES_PREFIX = "guides"
+
+
+def guides_urls() -> list[str]:
+    """Return every published guides URL, section root first.
+
+    Reads the guides nav so a page that is not published does not turn
+    up in the sitemap.  Returns an empty list when the site is absent.
+    """
+    if not GUIDES_CONFIG.is_file():
+        return []
+    import yaml  # noqa: PLC0415 - only the URL builders need a YAML parser
+
+    nav = yaml.safe_load(GUIDES_CONFIG.read_text()).get("nav") or []
+    pages: list[str] = []
+
+    def collect(entry: object) -> None:
+        if isinstance(entry, str):
+            pages.append(entry)
+        elif isinstance(entry, dict):
+            for value in entry.values():
+                collect(value)
+        elif isinstance(entry, list):
+            for value in entry:
+                collect(value)
+
+    collect(nav)
+
+    urls = [f"{SITE_ROOT}/{GUIDES_PREFIX}/"]
+    for page in pages:
+        slug = page.removesuffix(".md")
+        # mkdocs publishes index.md and README.md as their directory.
+        if slug in ("index", "README"):
+            continue
+        if slug.endswith("/index") or slug.endswith("/README"):
+            slug = slug.rsplit("/", 1)[0]
+        urls.append(f"{SITE_ROOT}/{GUIDES_PREFIX}/{slug}/")
+    return urls
+
+
 #: Where site-verification material lives.  See its README: one token
 #: file per search engine, plus any file published verbatim at the
 #: docs-site root.
@@ -302,7 +349,7 @@ def site_urls() -> list[str]:
     return [f"{SITE_ROOT}/"] + [
         f"{SITE_ROOT}/{package['name']}/stable/"
         for package in libraries + workbench
-    ]
+    ] + guides_urls()
 
 
 def generate_llms_txt() -> str:
@@ -349,6 +396,18 @@ def generate_llms_txt() -> str:
         for package in workbench
     )
     lines.extend([
+        "",
+        "## Guides",
+        "",
+        f"- [Questions people ask]({SITE_ROOT}/{GUIDES_PREFIX}/faq/): why a board "
+        "freezes on the network, whether the libraries use async, what they cost "
+        "in flash, and how to test without hardware.",
+        f"- [Troubleshooting]({SITE_ROOT}/{GUIDES_PREFIX}/troubleshooting/): fixes "
+        "keyed to a symptom, including a board that will not appear, WiFi that "
+        "will not connect, TLS failures, refused deploys, and running out of memory.",
+        f"- [Wiring WiFi credentials]({SITE_ROOT}/{GUIDES_PREFIX}/"
+        "wiring-wifi-credentials/): getting a network name and password onto a "
+        "board without putting them in your code.",
         "",
         "## Optional",
         "",

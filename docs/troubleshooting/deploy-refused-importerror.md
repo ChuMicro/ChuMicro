@@ -26,7 +26,7 @@ Use underscores.  Rename `back-porch` to `back_porch`, and `1sensor` to `sensor_
 
 ## `from shared.foo import bar` refused at deploy, or `ImportError` on boot
 
-The deploy search path roots at the `shared/` directory itself, so `shared/foo.py` ships as the top-level module `foo`.  There is no `shared` package on the board to import from.  (background: [Decision 0110](../../plans/decisions/0110-shared-imports-by-bare-module-name.md))
+The deploy search path roots at the `shared/` directory itself, so `shared/foo.py` ships as the top-level module `foo`.  There is no `shared` package on the board to import from.  (background: [Decision 0110](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0110-shared-imports-by-bare-module-name.md))
 
 Import shared modules by their bare name:
 

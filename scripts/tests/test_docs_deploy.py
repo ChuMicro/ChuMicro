@@ -290,3 +290,36 @@ class TestStaleKeyFiles:
         """Only files shaped like a key are candidates."""
         self._listing(monkeypatch, ["llms.txt", "robots.txt", "index.html"])
         assert docs_deploy._stale_key_files("gh-pages", "abc.txt") == []
+
+
+class TestGuidesSite:
+    """The guides site publishes under its own prefix."""
+
+    def test_built_files_land_under_the_guides_prefix(self, tmp_path, monkeypatch):
+        built = tmp_path / "site"
+        (built / "troubleshooting").mkdir(parents=True)
+        (built / "index.html").write_text("<html></html>")
+        (built / "troubleshooting" / "index.html").write_text("<html></html>")
+        monkeypatch.setattr(docs_deploy, "_hash_file", lambda path: "blob-sha")
+
+        blobs = docs_deploy._guides_blobs(built)
+
+        assert sorted(path for _, path in blobs) == [
+            "guides/index.html",
+            "guides/troubleshooting/index.html",
+        ]
+
+    def test_empty_build_publishes_nothing(self, tmp_path):
+        empty = tmp_path / "site"
+        empty.mkdir()
+        assert docs_deploy._guides_blobs(empty) == []
+
+    def test_build_command_names_the_config(self, tmp_path, monkeypatch):
+        commands: list[list[str]] = []
+        monkeypatch.setattr(
+            docs_deploy, "run_command", lambda command: commands.append(command) or 0,
+        )
+        docs_deploy._build_guides_site(tmp_path / "out")
+
+        assert commands[0][1:4] == ["-m", "mkdocs", "build"]
+        assert str(docs_deploy.GUIDES_CONFIG) in commands[0]

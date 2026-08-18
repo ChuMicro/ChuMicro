@@ -24,7 +24,7 @@ For a board not yet in `devices.yml`, pass the image URL with `--url <firmware-u
 
 ## A new board registers fine, then hits missing-module errors at deploy
 
-Vendors often ship boards with old firmware, sometimes well below the version ChuMicro supports (the floors are MicroPython 1.27 and CircuitPython 10.1).  The board runs, but library imports and API calls the older runtime lacks fail in confusing ways at deploy time.  (background: [Decision 0039](../../plans/decisions/0039-firmware-version-floor.md))
+Vendors often ship boards with old firmware, sometimes well below the version ChuMicro supports (the floors are MicroPython 1.27 and CircuitPython 10.1).  The board runs, but library imports and API calls the older runtime lacks fail in confusing ways at deploy time.  (background: [Decision 0039](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0039-firmware-version-floor.md))
 
 `add-device` prints an `OLD` warning naming the floor and the running version when you register a board below it.  Upgrade the firmware before troubleshooting anything else:
 

@@ -1,6 +1,6 @@
 # macOS CIRCUITPY deploy troubleshooting
 
-Covers the macOS-specific failure modes `chumicro-deploy` hits when writing to the CIRCUITPY USB drive.  The decision rationale (*why* the deploy code works the way it does) lives in [Decision 0033](../../plans/decisions/0033-macos-circuitpy-deploy-hardening.md); this page is the operational how-to for when something has gone wrong and you need to get unstuck.
+Covers the macOS-specific failure modes `chumicro-deploy` hits when writing to the CIRCUITPY USB drive.  The decision rationale (*why* the deploy code works the way it does) lives in [Decision 0033](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0033-macos-circuitpy-deploy-hardening.md); this page is the operational how-to for when something has gone wrong and you need to get unstuck.
 
 Linux deploys don't hit any of this.  Windows isn't currently supported.
 
@@ -138,6 +138,6 @@ macOS assigns `/Volumes/CIRCUITPY` in mount order: the first CircuitPython drive
 
 ## See also
 
-- [`chumicro-deploy` guide](../../workbench/deploy/docs/guide.md): full user guide for the deploy tool, including `RecoveringDeployer`.
-- [Decision 0033](../../plans/decisions/0033-macos-circuitpy-deploy-hardening.md): *why* the deploy code handles each of these cases the way it does (FAT32 hygiene, `os.sync` + settle, board-side stat poll, FSKit detection).
-- [Device testing guide](../contributing/device-testing.md): running `functional_tests/` against real boards via `devices.yml`.
+- [`chumicro-deploy` guide](https://chumicro.github.io/ChuMicro/deploy/stable/guide/): full user guide for the deploy tool, including `RecoveringDeployer`.
+- [Decision 0033](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0033-macos-circuitpy-deploy-hardening.md): *why* the deploy code handles each of these cases the way it does (FAT32 hygiene, `os.sync` + settle, board-side stat poll, FSKit detection).
+- [Device testing guide](https://github.com/ChuMicro/ChuMicro/blob/main/docs/contributing/device-testing.md): running `functional_tests/` against real boards via `devices.yml`.

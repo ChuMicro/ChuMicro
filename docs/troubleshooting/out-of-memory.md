@@ -12,7 +12,7 @@ In RAM deploy mode the whole library bootstrap sits on the heap, and the multi-K
 chumicro-workspace deploy <project> --deploy-mode flash
 ```
 
-(background: [Decision 0047](../../plans/decisions/0047-deploy-mode-flash-default.md))
+(background: [Decision 0047](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0047-deploy-mode-flash-default.md))
 
 ## A first `import chumicro_mqtt` partway through a run raises `MemoryError`
 

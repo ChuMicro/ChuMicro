@@ -65,7 +65,7 @@ from chumicro_sockets import ssl_context_with_ca
 context = ssl_context_with_ca(pem)   # returns CERT_REQUIRED with the CA loaded
 ```
 
-(background: [Decision 0067](../../plans/decisions/0067-mp-tls-default-trust.md))
+(background: [Decision 0067](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0067-mp-tls-default-trust.md))
 
 ## `UnsupportedSSLConfigError`, or a wedged chip, when serving HTTPS or `wss://` on a Pi Pico W
 

@@ -23,7 +23,7 @@ chumicro-workspace deploy <project> --no-wipe
 
 ## Messages stop after the first publish, or the boot counter never increments (`OSError: [Errno 2] ENOENT` on `/runtime_config.msgpack`)
 
-The board is deploying in RAM mode.  Flash is the default, so something opted in: a `deploy_mode: ram` line on the device's entry in `devices.yml`, or a `--deploy-mode ram` on the command.  RAM mode mounts your host source as `/remote/` on the device and never writes the board's flash or non-volatile memory, so absolute paths like `/runtime_config.msgpack` and any state a previous run saved simply aren't there.  Anything that counts across reboots or reads a file at a fixed absolute path fails.  (background: [Decision 0047](../../plans/decisions/0047-deploy-mode-flash-default.md))
+The board is deploying in RAM mode.  Flash is the default, so something opted in: a `deploy_mode: ram` line on the device's entry in `devices.yml`, or a `--deploy-mode ram` on the command.  RAM mode mounts your host source as `/remote/` on the device and never writes the board's flash or non-volatile memory, so absolute paths like `/runtime_config.msgpack` and any state a previous run saved simply aren't there.  Anything that counts across reboots or reads a file at a fixed absolute path fails.  (background: [Decision 0047](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0047-deploy-mode-flash-default.md))
 
 Put the device back on flash mode, which writes files to the board's own filesystem.  Drop the `deploy_mode: ram` line from its entry in `devices.yml`, or set flash explicitly:
 

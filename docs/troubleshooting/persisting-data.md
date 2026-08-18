@@ -13,7 +13,7 @@ import storage
 storage.disable_usb_drive()   # CircuitPython 9 and later
 ```
 
-or gate a remount on a GPIO pin in `boot.py`.  Note that the default kvstore `nvm` backend writes off-FAT and is unaffected; only filesystem-backed backends hit this window.  App config is deploy-time read-only by design.  (background: [Decision 0030](../../plans/decisions/0030-config-and-state.md))
+or gate a remount on a GPIO pin in `boot.py`.  Note that the default kvstore `nvm` backend writes off-FAT and is unaffected; only filesystem-backed backends hit this window.  App config is deploy-time read-only by design.  (background: [Decision 0030](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0030-config-and-state.md))
 
 ## `commit()` raises `KVStoreFull`
 
