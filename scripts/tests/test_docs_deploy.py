@@ -214,3 +214,25 @@ class TestFoldReleaseUrlsIntoRedirects:
 
         assert [c for c in recorded_commands if c[1] == "alias"] == []
         assert [c for c in recorded_commands if c[1] == "delete"] == []
+
+
+class TestVerificationFiles:
+    """Search Console's HTML-file method publishes at the docs root."""
+
+    def test_html_files_are_hashed_for_the_root(self, tmp_path, monkeypatch):
+        search_console = tmp_path / "search-console"
+        search_console.mkdir()
+        (search_console / "google123.html").write_text("google-site-verification\n")
+        monkeypatch.setattr(docs_deploy, "SEARCH_CONSOLE_DIR", search_console)
+
+        class Completed:
+            stdout = b"blob-sha\n"
+
+        monkeypatch.setattr(
+            docs_deploy.subprocess, "run", lambda *args, **kwargs: Completed(),
+        )
+        assert docs_deploy._verification_file_blobs() == [("blob-sha", "google123.html")]
+
+    def test_no_files_means_nothing_extra_at_the_root(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(docs_deploy, "SEARCH_CONSOLE_DIR", tmp_path / "absent")
+        assert docs_deploy._verification_file_blobs() == []

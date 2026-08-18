@@ -58,6 +58,28 @@ def copy_shared_docs_assets(doc_dirs: list[Path]) -> None:
             shutil.copy2(favicon_source_file, favicon_dest_file)
 
 
+#: Search Console's HTML-file method wants its file at the root of the
+#: property.  Anything dropped in here is published there verbatim; the
+#: directory's README explains both verification methods.
+SEARCH_CONSOLE_DIR = ROOT / "support" / "docs" / "search-console"
+
+
+def _verification_file_blobs() -> list[tuple[str, str]]:
+    """Return ``(blob, path)`` for each Search Console HTML file.
+
+    Empty when the HTML-tag method is in use, which is the usual case:
+    that token rides in the landing page's head instead.
+    """
+    blobs: list[tuple[str, str]] = []
+    for verification_file in sorted(SEARCH_CONSOLE_DIR.glob("*.html")):
+        blob = subprocess.run(
+            ["git", "hash-object", "-w", str(verification_file)],
+            capture_output=True, cwd=ROOT, check=True,
+        ).stdout.strip().decode()
+        blobs.append((blob, verification_file.name))
+    return blobs
+
+
 def inject_landing_page(branch: str) -> None:
     """Generate the landing page and commit it to *branch*.
 
@@ -115,8 +137,11 @@ def inject_landing_page(branch: str) -> None:
             env=index_environment, cwd=ROOT, check=True,
         )
 
-        # Upsert index.html and sitemap.xml at the root.
-        for blob, path in ((html_blob, "index.html"), (sitemap_blob, "sitemap.xml")):
+        # Upsert index.html, sitemap.xml, and any Search Console
+        # verification files at the root.
+        root_files = [(html_blob, "index.html"), (sitemap_blob, "sitemap.xml")]
+        root_files.extend(_verification_file_blobs())
+        for blob, path in root_files:
             subprocess.run(
                 ["git", "update-index", "--add", "--cacheinfo",
                  f"100644,{blob},{path}"],
