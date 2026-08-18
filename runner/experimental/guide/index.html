@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://chumicro.github.io/ChuMicro/runner/experimental/guide/">
+        <link rel="canonical" href="https://chumicro.com/ChuMicro/runner/experimental/guide/">
       
       
         <link rel="prev" href="./..">
@@ -1236,7 +1236,7 @@
 <li><strong>Blocks</strong> in <code>ipoll(timeout_ms)</code> over the registered sockets when any are registered; otherwise sleeps the timeout via <code>time.sleep_ms</code>.  Returns immediately when the nearest deadline has already passed or no deadline applies.</li>
 </ol>
 <p>Errors on a registered socket (<code>POLLERR</code> / <code>POLLHUP</code>) are routed to the owning service's optional <code>io_error(now_ms, eventmask)</code> hook so the service can transition cleanly to a failure state.  <code>POLLIN</code> / <code>POLLOUT</code> are wake signals only: <code>check</code> and <code>next_deadline</code> decide what runs on the next <code>tick</code>.</p>
-<p>Not sure which wait primitive a given job wants?  The timing guide's <a href="https://chumicro.github.io/ChuMicro/timing/stable/guide/#choosing-a-wait">Choosing a wait</a> table maps each question to its primitive across <code>chumicro_timing</code>, <code>chumicro_sockets</code>, and this service contract.</p>
+<p>Not sure which wait primitive a given job wants?  The timing guide's <a href="https://chumicro.com/ChuMicro/timing/stable/guide/#choosing-a-wait">Choosing a wait</a> table maps each question to its primitive across <code>chumicro_timing</code>, <code>chumicro_sockets</code>, and this service contract.</p>
 <h3 id="writing-a-service-that-participates-in-wait">Writing a service that participates in <code>wait</code><a class="headerlink" href="#writing-a-service-that-participates-in-wait" title="Permanent link">&para;</a></h3>
 <p>A socket-owning service exposes the duck-typed attributes the runner reads each loop.  All are optional: services without them work the same way they always did; the runner just won't wake for their I/O:</p>
 <table>

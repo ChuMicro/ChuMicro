@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
       <url>
-        <loc>https://chumicro.github.io/ChuMicro/runner/experimental/</loc>
+        <loc>https://chumicro.com/ChuMicro/runner/experimental/</loc>
       </url>
       <url>
-        <loc>https://chumicro.github.io/ChuMicro/runner/experimental/guide/</loc>
+        <loc>https://chumicro.com/ChuMicro/runner/experimental/guide/</loc>
       </url>
       <url>
-        <loc>https://chumicro.github.io/ChuMicro/runner/experimental/api/</loc>
+        <loc>https://chumicro.com/ChuMicro/runner/experimental/api/</loc>
       </url>
       <url>
-        <loc>https://chumicro.github.io/ChuMicro/runner/experimental/testing/</loc>
+        <loc>https://chumicro.com/ChuMicro/runner/experimental/testing/</loc>
       </url>
 </urlset>
