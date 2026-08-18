@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
       <url>
-        <loc>https://chumicro.github.io/ChuMicro/ntp/stable/</loc>
+        <loc>https://chumicro.com/ChuMicro/ntp/stable/</loc>
       </url>
       <url>
-        <loc>https://chumicro.github.io/ChuMicro/ntp/stable/guide/</loc>
+        <loc>https://chumicro.com/ChuMicro/ntp/stable/guide/</loc>
       </url>
       <url>
-        <loc>https://chumicro.github.io/ChuMicro/ntp/stable/api/</loc>
+        <loc>https://chumicro.com/ChuMicro/ntp/stable/api/</loc>
       </url>
 </urlset>
