@@ -1,6 +1,6 @@
 # Development with PyCharm
 
-<img src="../../support/docs/chumicro_tip.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
+<img src="https://chumicro.com/assets/chumicro-head.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
 This guide covers the full development workflow in PyCharm.  The project ships committed run configurations under `.idea/runConfigurations/`.  Open the project, set up an interpreter, and the run dropdown lists every common task without any extra setup.
 

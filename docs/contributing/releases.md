@@ -1,6 +1,6 @@
 # Releases and Promotion
 
-<img src="../../support/docs/chumicro_tip.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
+<img src="https://chumicro.com/assets/chumicro-head.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
 ChuMicro uses a two-channel release model: **experimental** (automatic) and **stable** (promoted by a maintainer).
 

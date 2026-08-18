@@ -1482,3 +1482,21 @@ works but makes social-card previews depend on a GitHub CDN path, and a page
 that serves its own images can be moved to a new host by changing one constant.
 
 Zensical-themed package sites carry their own navigation and stay out of this.
+
+## Repo-relative asset paths break when the markdown is also published
+
+A page in `docs/` is read in two places: on GitHub, where the reader is browsing
+the repository, and on the documentation site, where only that tree is
+published. `<img src="../../support/docs/chumicro_tip.png">` renders on GitHub
+and 404s on the site, because `support/` is not part of the published tree.
+Thirteen contributing pages shipped that way, and nothing caught it until a
+person looked at the page.
+
+Artwork that appears in published markdown goes at an absolute https URL on the
+site's own host (`/assets/`), which resolves from both places. Link paths to
+other repository files have the same problem and take the same fix.
+
+`scripts/tests/test_published_docs_assets.py` parametrizes over every image
+reference in every published docs tree and fails any relative path that resolves
+outside its own tree. It carries a test asserting the scan found something,
+because a pattern that matches nothing passes every other assertion in the file.
