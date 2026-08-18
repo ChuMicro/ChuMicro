@@ -22,7 +22,9 @@ from generate_landing_page import (
     _library_card,
     _render_section,
     generate,
+    generate_llms_txt,
     generate_sitemap,
+    site_urls,
 )
 
 
@@ -296,9 +298,9 @@ class TestVerificationMeta:
     ):
         search_console = tmp_path / "search-console"
         search_console.mkdir()
-        (search_console / "meta-tag.txt").write_text("token-abc\n")
+        (search_console / "google-meta-tag.txt").write_text("token-abc\n")
         monkeypatch.setattr(
-            generate_landing_page, "SEARCH_CONSOLE_DIR", search_console,
+            generate_landing_page, "VERIFICATION_DIR", search_console,
         )
         assert (
             '<meta name="google-site-verification" content="token-abc">'
@@ -309,7 +311,7 @@ class TestVerificationMeta:
         self, synthetic_doc_dirs, tmp_path, monkeypatch,
     ):
         monkeypatch.setattr(
-            generate_landing_page, "SEARCH_CONSOLE_DIR", tmp_path / "absent",
+            generate_landing_page, "VERIFICATION_DIR", tmp_path / "absent",
         )
         assert "google-site-verification" not in generate()
 
@@ -318,8 +320,74 @@ class TestVerificationMeta:
     ):
         search_console = tmp_path / "search-console"
         search_console.mkdir()
-        (search_console / "meta-tag.txt").write_text("\n")
+        (search_console / "google-meta-tag.txt").write_text("\n")
         monkeypatch.setattr(
-            generate_landing_page, "SEARCH_CONSOLE_DIR", search_console,
+            generate_landing_page, "VERIFICATION_DIR", search_console,
         )
         assert "google-site-verification" not in generate()
+
+
+class TestBingVerificationMeta:
+    """Bing's token rides in the same head, under its own tag name."""
+
+    def test_bing_token_becomes_msvalidate(
+        self, synthetic_doc_dirs, tmp_path, monkeypatch,
+    ):
+        verification = tmp_path / "site-verification"
+        verification.mkdir()
+        (verification / "bing-meta-tag.txt").write_text("bing-token\n")
+        monkeypatch.setattr(
+            generate_landing_page, "VERIFICATION_DIR", verification,
+        )
+        assert '<meta name="msvalidate.01" content="bing-token">' in generate()
+
+    def test_both_engines_can_be_verified_at_once(
+        self, synthetic_doc_dirs, tmp_path, monkeypatch,
+    ):
+        verification = tmp_path / "site-verification"
+        verification.mkdir()
+        (verification / "google-meta-tag.txt").write_text("g-token\n")
+        (verification / "bing-meta-tag.txt").write_text("b-token\n")
+        monkeypatch.setattr(
+            generate_landing_page, "VERIFICATION_DIR", verification,
+        )
+        html = generate()
+        assert 'content="g-token"' in html
+        assert 'content="b-token"' in html
+
+
+class TestGenerateLlmsTxt:
+    """Tests for generate_llms_txt."""
+
+    def test_names_every_package_with_its_stable_url(self, synthetic_doc_dirs):
+        llms = generate_llms_txt()
+        for name in ("lib_a", "lib_b", "tool_x"):
+            assert f"{SITE_ROOT}/{name}/stable/" in llms
+
+    def test_separates_libraries_from_host_tools(self, synthetic_doc_dirs):
+        llms = generate_llms_txt()
+        assert llms.index("## Libraries") < llms.index("## Host tools")
+        assert llms.index("lib_a") < llms.index("## Host tools") < llms.index("tool_x")
+
+    def test_opens_with_the_title_and_a_summary_blockquote(self, synthetic_doc_dirs):
+        lines = generate_llms_txt().splitlines()
+        assert lines[0] == "# ChuMicro"
+        assert lines[2].startswith("> ")
+
+    def test_carries_each_package_description(self, synthetic_doc_dirs):
+        assert "Synthetic library A description." in generate_llms_txt()
+
+
+class TestSiteUrls:
+    """The sitemap and the IndexNow ping work from one list."""
+
+    def test_site_root_leads(self, synthetic_doc_dirs):
+        assert site_urls()[0] == f"{SITE_ROOT}/"
+
+    def test_one_url_per_package(self, synthetic_doc_dirs):
+        assert len(site_urls()) == len(synthetic_doc_dirs) + 1
+
+    def test_sitemap_states_the_same_urls(self, synthetic_doc_dirs):
+        sitemap = generate_sitemap()
+        for url in site_urls():
+            assert f"<loc>{url}</loc>" in sitemap

@@ -22,6 +22,7 @@ import sys
 import tempfile
 from pathlib import Path
 
+import index_now
 from repo_layout import ROOT, discover_doc_dirs, read_version
 from shared import run_command
 
@@ -58,26 +59,45 @@ def copy_shared_docs_assets(doc_dirs: list[Path]) -> None:
             shutil.copy2(favicon_source_file, favicon_dest_file)
 
 
-#: Search Console's HTML-file method wants its file at the root of the
-#: property.  Anything dropped in here is published there verbatim; the
-#: directory's README explains both verification methods.
-SEARCH_CONSOLE_DIR = ROOT / "support" / "docs" / "search-console"
+#: A search engine's file-based proof of ownership belongs at the root
+#: of the property.  Anything dropped in here is published there
+#: verbatim; the directory's README explains each method.
+VERIFICATION_DIR = ROOT / "support" / "docs" / "site-verification"
+
+
+def _hash_blob(content: bytes) -> str:
+    """Write *content* as a git blob and return its hash."""
+    return subprocess.run(
+        ["git", "hash-object", "-w", "--stdin"],
+        input=content, capture_output=True, cwd=ROOT, check=True,
+    ).stdout.strip().decode()
 
 
 def _verification_file_blobs() -> list[tuple[str, str]]:
-    """Return ``(blob, path)`` for each Search Console HTML file.
+    """Return ``(blob, path)`` for each file published at the docs root.
 
-    Empty when the HTML-tag method is in use, which is the usual case:
-    that token rides in the landing page's head instead.
+    Covers both engines' file methods (`google<hash>.html`,
+    `BingSiteAuth.xml`) and the IndexNow key, which is published as
+    ``<key>.txt`` so a crawler can check the ping against it.
     """
     blobs: list[tuple[str, str]] = []
-    for verification_file in sorted(SEARCH_CONSOLE_DIR.glob("*.html")):
-        blob = subprocess.run(
-            ["git", "hash-object", "-w", str(verification_file)],
-            capture_output=True, cwd=ROOT, check=True,
-        ).stdout.strip().decode()
-        blobs.append((blob, verification_file.name))
+    for verification_file in sorted(VERIFICATION_DIR.glob("*.html")):
+        blobs.append((_hash_file(verification_file), verification_file.name))
+    for verification_file in sorted(VERIFICATION_DIR.glob("*.xml")):
+        blobs.append((_hash_file(verification_file), verification_file.name))
+
+    key = index_now.read_key()
+    if key:
+        blobs.append((_hash_blob(f"{key}\n".encode()), index_now.key_filename(key)))
     return blobs
+
+
+def _hash_file(path: Path) -> str:
+    """Write *path* as a git blob and return its hash."""
+    return subprocess.run(
+        ["git", "hash-object", "-w", str(path)],
+        capture_output=True, cwd=ROOT, check=True,
+    ).stdout.strip().decode()
 
 
 def inject_landing_page(branch: str) -> None:
@@ -92,7 +112,11 @@ def inject_landing_page(branch: str) -> None:
         branch: Git branch to commit the landing page to.
     """
     try:
-        from generate_landing_page import generate, generate_sitemap
+        from generate_landing_page import (
+            generate,
+            generate_llms_txt,
+            generate_sitemap,
+        )
     except Exception as error:
         print(f"  Landing page skipped: {error}")
         return
@@ -105,13 +129,11 @@ def inject_landing_page(branch: str) -> None:
         input=html.encode(), capture_output=True, cwd=ROOT, check=True,
     ).stdout.strip().decode()
 
-    # The sitemap rides along with the landing page: both describe the
-    # same set of packages, and a search engine reads the sitemap to
-    # find the per-package docs that the landing page links.
-    sitemap_blob = subprocess.run(
-        ["git", "hash-object", "-w", "--stdin"],
-        input=generate_sitemap().encode(), capture_output=True, cwd=ROOT, check=True,
-    ).stdout.strip().decode()
+    # The sitemap and llms.txt ride along with the landing page: all
+    # three describe the same set of packages, one for crawlers, one
+    # for answer engines, one for people.
+    sitemap_blob = _hash_blob(generate_sitemap().encode())
+    llms_blob = _hash_blob(generate_llms_txt().encode())
 
     # Hash the favicon if it exists.
     favicon_source_file = ROOT / "support" / "docs" / "favicon.png"
@@ -139,7 +161,11 @@ def inject_landing_page(branch: str) -> None:
 
         # Upsert index.html, sitemap.xml, and any Search Console
         # verification files at the root.
-        root_files = [(html_blob, "index.html"), (sitemap_blob, "sitemap.xml")]
+        root_files = [
+            (html_blob, "index.html"),
+            (sitemap_blob, "sitemap.xml"),
+            (llms_blob, "llms.txt"),
+        ]
         root_files.extend(_verification_file_blobs())
         for blob, path in root_files:
             subprocess.run(

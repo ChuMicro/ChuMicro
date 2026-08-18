@@ -8,8 +8,48 @@ import docs_deploy_retry
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def stub_index_now(monkeypatch: pytest.MonkeyPatch) -> list[bool]:
+    """Record the IndexNow ping instead of sending it.
+
+    ``deploy_with_retry`` pings after a successful push, so without
+    this every test in the module would reach the network.
+    """
+    pings: list[bool] = []
+    monkeypatch.setattr(
+        docs_deploy_retry.index_now, "ping", lambda: pings.append(True) or True,
+    )
+    return pings
+
+
 class TestDeployWithRetry:
     """Tests for deploy_with_retry."""
+
+    def test_successful_push_pings_index_now(
+        self, monkeypatch: pytest.MonkeyPatch, stub_index_now: list[bool],
+    ) -> None:
+        """The engines that read IndexNow hear about the new pages."""
+        monkeypatch.setattr(docs_deploy_retry, "_run", lambda *args, **kwargs: 0)
+        monkeypatch.setattr(docs_deploy_retry, "_fetch_gh_pages", lambda: None)
+
+        docs_deploy_retry.deploy_with_retry(
+            channel="stable", libraries=None, max_attempts=3, retry_delay=0,
+        )
+
+        assert stub_index_now == [True]
+
+    def test_failed_deploy_pings_nothing(
+        self, monkeypatch: pytest.MonkeyPatch, stub_index_now: list[bool],
+    ) -> None:
+        """Nothing was published, so there is nothing to announce."""
+        monkeypatch.setattr(docs_deploy_retry, "_run", lambda *args, **kwargs: 1)
+        monkeypatch.setattr(docs_deploy_retry, "_fetch_gh_pages", lambda: None)
+
+        docs_deploy_retry.deploy_with_retry(
+            channel="stable", libraries=None, max_attempts=1, retry_delay=0,
+        )
+
+        assert stub_index_now == []
 
     def test_succeeds_on_first_attempt(
         self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture,

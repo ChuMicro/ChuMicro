@@ -260,26 +260,105 @@ def _render_workbench_install(first_workbench: dict) -> str:
 #: the sitemap.  Every package's docs live one level below it.
 SITE_ROOT = "https://chumicro.github.io/ChuMicro"
 
-#: Where Search Console verification material lives.  See its README:
-#: ``meta-tag.txt`` holds the HTML-tag token, and any ``*.html`` file
-#: is published verbatim at the docs-site root.
-SEARCH_CONSOLE_DIR = ROOT / "support" / "docs" / "search-console"
+#: Where site-verification material lives.  See its README: one token
+#: file per search engine, plus any file published verbatim at the
+#: docs-site root.
+VERIFICATION_DIR = ROOT / "support" / "docs" / "site-verification"
+
+#: Token file to meta-tag name, in the order the tags are emitted.
+VERIFICATION_TAGS = (
+    ("google-meta-tag.txt", "google-site-verification"),
+    ("bing-meta-tag.txt", "msvalidate.01"),
+)
 
 
 def _verification_meta() -> str:
-    """Return the Search Console meta tag, or an empty string.
+    """Return the site-verification meta tags, or an empty string.
 
-    Google rechecks the tag after verifying, so it stays in the page
-    for as long as the property is verified.  With no token on disk
-    the head is left alone.
+    Both engines recheck their tag after verifying, so a tag stays in
+    the page for as long as its property is verified.  A token file
+    that is absent or blank contributes nothing.
     """
-    token_file = SEARCH_CONSOLE_DIR / "meta-tag.txt"
-    if not token_file.is_file():
-        return ""
-    token = token_file.read_text().strip()
-    if not token:
-        return ""
-    return f'  <meta name="google-site-verification" content="{token}">\n'
+    tags = []
+    for filename, meta_name in VERIFICATION_TAGS:
+        token_file = VERIFICATION_DIR / filename
+        if not token_file.is_file():
+            continue
+        token = token_file.read_text().strip()
+        if token:
+            tags.append(f'  <meta name="{meta_name}" content="{token}">\n')
+    return "".join(tags)
+
+
+def site_urls() -> list[str]:
+    """Return every public documentation URL, site root first.
+
+    One address per package, always the ``stable`` channel, because
+    that is the URL that stays put across releases.  The sitemap and
+    the IndexNow ping both work from this list, so a search engine
+    reading either sees the same site.
+    """
+    libraries, workbench = _discover_packages()
+    return [f"{SITE_ROOT}/"] + [
+        f"{SITE_ROOT}/{package['name']}/stable/"
+        for package in libraries + workbench
+    ]
+
+
+def generate_llms_txt() -> str:
+    """Return an llms.txt map of the documentation site.
+
+    Answer engines and coding assistants read this file (the
+    llmstxt.org convention) to learn what a project ships without
+    crawling every page.  It carries the same package set as the
+    landing page, in markdown a model can quote directly.
+    """
+    libraries, workbench = _discover_packages()
+    lines = [
+        "# ChuMicro",
+        "",
+        "> Python libraries for microcontrollers: WiFi, MQTT, HTTP client and "
+        "server, WebSockets, sockets, network time, timers, settings, and "
+        "storage that survives a reboot.  One codebase runs on CircuitPython, "
+        "MicroPython, and CPython.",
+        "",
+        "Every library keeps the main loop running: slow network work happens "
+        "a step at a time between ticks, so an LED keeps blinking while WiFi "
+        "reconnects.  Each library installs on its own.",
+        "",
+        "Install `chumicro-mqtt` (any library follows the same shape):",
+        "",
+        "```bash",
+        "circup bundle-add ChuMicro/ChuMicro-Bundle && circup install chumicro_mqtt",
+        "mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_mqtt",
+        "pip install chumicro-mqtt",
+        "```",
+        "",
+        "## Libraries",
+        "",
+    ]
+    lines.extend(
+        f"- [{package['package']}]({SITE_ROOT}/{package['name']}/stable/): "
+        f"{package['description']}"
+        for package in libraries
+    )
+    lines.extend(["", "## Host tools", ""])
+    lines.extend(
+        f"- [{package['package']}]({SITE_ROOT}/{package['name']}/stable/): "
+        f"{package['description']}"
+        for package in workbench
+    )
+    lines.extend([
+        "",
+        "## Optional",
+        "",
+        "- [Source and examples](https://github.com/ChuMicro/ChuMicro): the "
+        "repository, with a runnable example per library.",
+        "- [Bundle](https://github.com/ChuMicro/ChuMicro-Bundle): what circup "
+        "and mip install from.",
+        "",
+    ])
+    return "\n".join(lines)
 
 
 def generate_sitemap() -> str:
@@ -288,15 +367,8 @@ def generate_sitemap() -> str:
     Search engines discover the per-package documentation through this
     file: the landing page links each package's ``stable/`` URL, and
     the sitemap states the same set in the form crawlers read directly.
-    Each entry points at the ``stable`` channel, the URL that stays put
-    across releases.
     """
-    libraries, workbench = _discover_packages()
-    urls = [f"{SITE_ROOT}/"]
-    urls.extend(
-        f"{SITE_ROOT}/{package['name']}/stable/"
-        for package in libraries + workbench
-    )
+    urls = site_urls()
     entries = "\n".join(f"  <url>\n    <loc>{url}</loc>\n  </url>" for url in urls)
     return (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
