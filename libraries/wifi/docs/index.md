@@ -8,6 +8,21 @@ title: "chumicro-wifi: WiFi that reconnects itself on CircuitPython and MicroPyt
 
 One wifi service across CircuitPython on Adafruit boards and MicroPython on both ESP32 and Pi Pico W. Register it with `chumicro-runner` and your LED keeps blinking through every connect, drop, and reconnect. This library owns the radio (no `CIRCUITPY_WIFI_*` settings, no firmware-level auto-reconnect competing with you). On CPython there is no radio to drive, so the service runs against a host stand-in adapter that reports success immediately, and your host tests exercise the same state machine.
 
+## Install
+
+```bash
+# CircuitPython (after `circup bundle-add ChuMicro/ChuMicro-Bundle`)
+circup install chumicro_wifi
+
+# MicroPython
+mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_wifi
+
+# CPython
+pip install chumicro-wifi
+```
+
+No board running yet?  [Start here](https://chumicro.com/ChuMicro/guides/start-here/) goes from a new board to your own code running on it.  [Installing libraries](https://chumicro.com/ChuMicro/guides/install/) covers registering the bundle, the experimental channel, and the pre-compiled `.mpy` packages.
+
 ## Quick example
 
 ```python

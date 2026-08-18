@@ -8,6 +8,21 @@ title: "chumicro-runner: run many services in one loop on CircuitPython and Micr
 
 Your main loop is the two calls below: `runner.tick()` runs every registered service once on a shared timestamp, then `runner.wait()` idles the CPU until the next deadline or socket event.  Each service is one object with `check(now_ms)` and `handle(now_ms)`, so every state change happens in the order you wrote and a `print()` shows it.  Every networked library in ChuMicro (`chumicro-wifi`, `chumicro-sockets`, `chumicro-mqtt`, `chumicro-requests`, `chumicro-http-server`, `chumicro-websockets`) is shaped to register here, so your LED keeps blinking through a TLS handshake, a slow HTTP response, or a stalled MQTT peer: each of them gets the same share of every tick.
 
+## Install
+
+```bash
+# CircuitPython (after `circup bundle-add ChuMicro/ChuMicro-Bundle`)
+circup install chumicro_runner
+
+# MicroPython
+mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_runner
+
+# CPython
+pip install chumicro-runner
+```
+
+No board running yet?  [Start here](https://chumicro.com/ChuMicro/guides/start-here/) goes from a new board to your own code running on it.  [Installing libraries](https://chumicro.com/ChuMicro/guides/install/) covers registering the bundle, the experimental channel, and the pre-compiled `.mpy` packages.
+
 ## Quick example
 
 ```python

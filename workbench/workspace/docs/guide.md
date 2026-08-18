@@ -235,7 +235,7 @@ mpremote connect /dev/cu.usbmodem1101 mip install \
     github:ChuMicro/ChuMicro-Bundle/chumicro_mqtt
 ```
 
-`circup` uses hyphens (`chumicro-wifi`); `mip` uses the underscore import name (`chumicro_wifi`).  Swap `ChuMicro-Bundle` for `ChuMicro-Bundle-Experimental` to track the pre-release channel.  Files land at `/lib/chumicro_<name>/` either way, the same place `deploy --import-graph` writes them, so a project deployed afterward finds its imports.  Full install matrix, pre-compiled `.mpy` bytecode, and pip-on-CPython: [INSTALL.md](https://github.com/ChuMicro/ChuMicro/blob/main/INSTALL.md).
+`circup` uses hyphens (`chumicro-wifi`); `mip` uses the underscore import name (`chumicro_wifi`).  Swap `ChuMicro-Bundle` for `ChuMicro-Bundle-Experimental` to track the pre-release channel.  Files land at `/lib/chumicro_<name>/` either way, the same place `deploy --import-graph` writes them, so a project deployed afterward finds its imports.  Full install matrix, pre-compiled `.mpy` bytecode, and pip-on-CPython: [the install guide](https://chumicro.com/ChuMicro/guides/install/).
 
 ### Pointing the library channel at a mirror
 

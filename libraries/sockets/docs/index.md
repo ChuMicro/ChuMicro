@@ -8,6 +8,21 @@ title: "chumicro-sockets: TCP, TLS, and UDP for CircuitPython and MicroPython"
 
 Three entry points cover the shapes a device needs: `connector` dials out, `listener` accepts inbound connections, and `udp_socket` sends and receives datagrams.  TLS is a `tls=` flag on each, and custom-CA trust and server-side certificates work the same way everywhere.  Underneath, each entry picks the runtime's own substrate (CircuitPython's `socketpool`, MicroPython's `socket` plus `ssl`, CPython's stdlib) so your code never names one.
 
+## Install
+
+```bash
+# CircuitPython (after `circup bundle-add ChuMicro/ChuMicro-Bundle`)
+circup install chumicro_sockets
+
+# MicroPython
+mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_sockets
+
+# CPython
+pip install chumicro-sockets
+```
+
+No board running yet?  [Start here](https://chumicro.com/ChuMicro/guides/start-here/) goes from a new board to your own code running on it.  [Installing libraries](https://chumicro.com/ChuMicro/guides/install/) covers registering the bundle, the experimental channel, and the pre-compiled `.mpy` packages.
+
 ## Quick example
 
 ```python

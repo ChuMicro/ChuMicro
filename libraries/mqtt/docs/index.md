@@ -8,6 +8,21 @@ title: "chumicro-mqtt: non-blocking MQTT client for CircuitPython and MicroPytho
 
 Built on `chumicro-sockets` for TCP and TLS and `chumicro-timing` for ticks.  Every step of the protocol takes one tick of work, so your LED keeps blinking through CONNECT, SUBSCRIBE, PUBLISH, and PUBACK round-trips.
 
+## Install
+
+```bash
+# CircuitPython (after `circup bundle-add ChuMicro/ChuMicro-Bundle`)
+circup install chumicro_mqtt
+
+# MicroPython
+mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_mqtt
+
+# CPython
+pip install chumicro-mqtt
+```
+
+No board running yet?  [Start here](https://chumicro.com/ChuMicro/guides/start-here/) goes from a new board to your own code running on it.  [Installing libraries](https://chumicro.com/ChuMicro/guides/install/) covers registering the bundle, the experimental channel, and the pre-compiled `.mpy` packages.
+
 ## Quick example
 
 ```python

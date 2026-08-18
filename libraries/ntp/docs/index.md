@@ -8,6 +8,21 @@ title: "chumicro-ntp: network time (SNTP) for CircuitPython and MicroPython"
 
 Pure-Python, takes a UDP socket you provide, returns the server's transmit timestamp without blocking your tick loop.
 
+## Install
+
+```bash
+# CircuitPython (after `circup bundle-add ChuMicro/ChuMicro-Bundle`)
+circup install chumicro_ntp
+
+# MicroPython
+mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_ntp
+
+# CPython
+pip install chumicro-ntp
+```
+
+No board running yet?  [Start here](https://chumicro.com/ChuMicro/guides/start-here/) goes from a new board to your own code running on it.  [Installing libraries](https://chumicro.com/ChuMicro/guides/install/) covers registering the bundle, the experimental channel, and the pre-compiled `.mpy` packages.
+
 ## Quick example
 
 ```python

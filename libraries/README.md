@@ -33,7 +33,7 @@ Hardware-validated on the project bench: RP2040 (Raspberry Pi Pico W, both runti
 
 ## Install
 
-See [`INSTALL.md`](../INSTALL.md) for the full install matrix: CircuitPython via circup, MicroPython via mip, CPython via pip, the experimental channel, and pre-compiled `.mpy` bundles.
+See [the install guide](https://chumicro.com/ChuMicro/guides/install/) for the full install matrix: CircuitPython via circup, MicroPython via mip, CPython via pip, the experimental channel, and pre-compiled `.mpy` bundles.
 
 Each library's own README has a one-line install command for that library.
 

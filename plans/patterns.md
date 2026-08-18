@@ -1500,3 +1500,29 @@ other repository files have the same problem and take the same fix.
 reference in every published docs tree and fails any relative path that resolves
 outside its own tree. It carries a test asserting the scan found something,
 because a pattern that matches nothing passes every other assertion in the file.
+
+## What publishes is `docs_dir`, and nothing else
+
+The guides site builds from `docs/`. Everything outside it renders on GitHub and
+on PyPI but never appears on the documentation site: the root README, the folder
+READMEs, `CONTRIBUTING.md`, and until 2026-08-18 the whole install guide. The
+site had package cards, a FAQ, and symptom-indexed troubleshooting, and no path
+at all from "I have a board" to "my code is running on it", because every
+connective page lived one directory up.
+
+A doc that a reader needs from the site belongs in `docs/` with a nav entry.
+Moving one there means rewriting its repo-relative links, because a path like
+`README.md#try-an-example` resolves while browsing the repository and 404s once
+published. Absolute links to the published page work from both places, which is
+why library READMEs point at `chumicro.com/ChuMicro/guides/install/` rather than
+a GitHub blob URL: those READMEs are also the PyPI description.
+
+Nav labels are read by people who have not opened the page. "Workbench tools"
+sat over `contributing/workbench.md`, which is about adding a workbench package,
+so a beginner clicking it landed in contributor documentation.
+
+Commands in a getting-started page get verified against the parser, not against
+memory of another document. `python3 run.py flash-firmware` survived a draft of
+the start-here page; the workspace CLI spells it `install-firmware`, and
+`chumicro-deploy` is the tool that spells it `flash-firmware`. Reading
+`build_parser()` takes one command and settles it.

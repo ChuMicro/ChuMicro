@@ -8,6 +8,21 @@ title: "chumicro-websockets: WebSocket client and server for CircuitPython and M
 
 An LED keeps blinking through the handshake, frame I/O, and the close handshake. Both sides take small turns on every runner tick instead of holding the loop.
 
+## Install
+
+```bash
+# CircuitPython (after `circup bundle-add ChuMicro/ChuMicro-Bundle`)
+circup install chumicro_websockets
+
+# MicroPython
+mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_websockets
+
+# CPython
+pip install chumicro-websockets
+```
+
+No board running yet?  [Start here](https://chumicro.com/ChuMicro/guides/start-here/) goes from a new board to your own code running on it.  [Installing libraries](https://chumicro.com/ChuMicro/guides/install/) covers registering the bundle, the experimental channel, and the pre-compiled `.mpy` packages.
+
 ## Quick example
 
 ```python

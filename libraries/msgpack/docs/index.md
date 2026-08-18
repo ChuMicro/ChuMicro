@@ -8,6 +8,21 @@ title: "chumicro-msgpack: MessagePack for CircuitPython and MicroPython"
 
 Encodes Python objects to compact binary bytes and decodes them back.  On CircuitPython firmware that ships the native `msgpack` C module, every function delegates to that built-in and the pure-Python encoder never loads.
 
+## Install
+
+```bash
+# CircuitPython (after `circup bundle-add ChuMicro/ChuMicro-Bundle`)
+circup install chumicro_msgpack
+
+# MicroPython
+mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_msgpack
+
+# CPython
+pip install chumicro-msgpack
+```
+
+No board running yet?  [Start here](https://chumicro.com/ChuMicro/guides/start-here/) goes from a new board to your own code running on it.  [Installing libraries](https://chumicro.com/ChuMicro/guides/install/) covers registering the bundle, the experimental channel, and the pre-compiled `.mpy` packages.
+
 ## Quick example
 
 ```python
