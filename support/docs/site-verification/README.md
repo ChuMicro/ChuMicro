@@ -88,6 +88,11 @@ because an absent one is what tells the endpoint to look there.  Naming
 a subdirectory is what the script did until 2026-08-18, and it only
 ever weakened the claim.
 
+Confirmed working on 2026-08-18: with the key at the host root, no
+`keyLocation` in the payload, and the root property verified in Bing,
+the endpoint answers `200` rather than `202` or `403`.  A `200` is the
+one that means the submission was taken.
+
 A refused ping warns and leaves the deploy green.
 
 Rotating the key is one edit here.  The next deploy publishes the new
@@ -103,8 +108,13 @@ host, and the docs-deploy workflow pushes them to the
 because they only count at a host root:
 
 - `robots.txt`.  Crawlers read it at the root and nowhere else, so a
-  project path cannot advertise a sitemap this way.  The generated file
-  names every sitemap on the host.
+  project path cannot advertise a sitemap this way.
+- `sitemap.xml`, which is a sitemap **index** rather than a list of
+  URLs.  A sitemap at the host root is the only one whose scope is the
+  whole host, so submitting `https://chumicro.github.io/sitemap.xml`
+  once to a search engine covers every project below it.  Adding a
+  project adds a line to the index rather than a submission someone has
+  to remember to make.
 - The ownership tokens, which verify the root property and with it
   every path below.
 - The IndexNow key.

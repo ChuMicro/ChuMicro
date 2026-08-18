@@ -37,6 +37,9 @@ from shared import TEMPLATES_DIR
 #: The host this site occupies.  No trailing slash: callers add one.
 HOST = "https://chumicro.github.io"
 
+#: The hub's own pages, split out so ``sitemap.xml`` can be an index.
+PAGES_SITEMAP = "sitemap-pages.xml"
+
 #: Where the built site lands.  Gitignored: the site repository is the
 #: place it gets committed, the same way ``gh-pages`` holds the docs.
 SITE_DIR = ROOT / ".site-root"
@@ -212,26 +215,26 @@ def root_index_html() -> str:
 def root_robots_txt() -> str:
     """Return robots.txt for the whole host.
 
-    Only the root serves this file, so it names every sitemap on the
-    host: the hub's own and each project's.
+    Only the root serves this file, so it is the one place a crawler
+    can be told where the host's sitemap index lives.
     """
-    lines = [
+    return "\n".join([
         "User-agent: *",
         "Allow: /",
         "",
+        # The index reaches every sitemap on the host, so naming the
+        # children here as well would only repeat what it already says.
         f"Sitemap: {HOST}/sitemap.xml",
-    ]
-    lines.extend(f"Sitemap: {HOST}/{project['path']}/sitemap.xml" for project in PROJECTS)
-    lines.append("")
-    return "\n".join(lines)
+        "",
+    ])
 
 
-def root_sitemap() -> str:
-    """Return the hub's sitemap: the root page only.
+def root_pages_sitemap() -> str:
+    """Return the sitemap covering the hub's own pages.
 
-    Each project publishes its own sitemap covering its own pages, and
-    robots.txt names all of them, so listing project URLs here as well
-    would only tell a crawler the same thing twice.
+    Only the hub page lives at the host root today.  It sits in its own
+    file rather than in the index so the index stays what its name says
+    it is: a list of sitemaps.
     """
     entry = f"  <url>\n    <loc>{HOST}/</loc>\n  </url>"
     return (
@@ -239,6 +242,28 @@ def root_sitemap() -> str:
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
         f"{entry}\n"
         "</urlset>\n"
+    )
+
+
+def root_sitemap() -> str:
+    """Return the host's sitemap index: every sitemap on the host.
+
+    An index rather than a list of URLs, because a sitemap at the host
+    root is the only one whose scope is the whole host.  Submitting it
+    once to a search engine covers every project below it, including
+    ones added later: a new project adds a line here instead of a new
+    submission someone has to remember to make.
+    """
+    children = [f"{HOST}/{PAGES_SITEMAP}"]
+    children.extend(f"{HOST}/{project['path']}/sitemap.xml" for project in PROJECTS)
+    entries = "\n".join(
+        f"  <sitemap>\n    <loc>{child}</loc>\n  </sitemap>" for child in children
+    )
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+        f"{entries}\n"
+        "</sitemapindex>\n"
     )
 
 
@@ -351,6 +376,7 @@ def build(destination: Path) -> list[str]:
         ("index.html", root_index_html()),
         ("robots.txt", root_robots_txt()),
         ("sitemap.xml", root_sitemap()),
+        (PAGES_SITEMAP, root_pages_sitemap()),
         ("llms.txt", root_llms_txt()),
         ("README.md", root_readme()),
         # Pages runs Jekyll over a site repository unless told not to.
