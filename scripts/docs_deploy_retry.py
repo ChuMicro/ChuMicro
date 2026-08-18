@@ -22,6 +22,7 @@ import sys
 import time
 from pathlib import Path
 
+import index_now
 from repo_layout import ROOT
 
 
@@ -68,6 +69,10 @@ def deploy_with_retry(
         if push_status == 0:
             label = libraries or channel
             print(f"✓ {channel.capitalize()} docs deployed ({label}).")
+            # The pages are live; tell the engines that read IndexNow
+            # rather than waiting for their own crawl schedule.  A
+            # failed ping is reported and does not fail the deploy.
+            index_now.ping()
             return 0
 
         if attempt < max_attempts:

@@ -217,22 +217,42 @@ class TestFoldReleaseUrlsIntoRedirects:
 
 
 class TestVerificationFiles:
-    """Search Console's HTML-file method publishes at the docs root."""
+    """File-based proofs and the IndexNow key publish at the docs root."""
 
-    def test_html_files_are_hashed_for_the_root(self, tmp_path, monkeypatch):
-        search_console = tmp_path / "search-console"
-        search_console.mkdir()
-        (search_console / "google123.html").write_text("google-site-verification\n")
-        monkeypatch.setattr(docs_deploy, "SEARCH_CONSOLE_DIR", search_console)
+    def test_html_proof_publishes_at_the_root(self, tmp_path, monkeypatch):
+        """Search Console's file method uses google<hash>.html."""
+        verification = tmp_path / "site-verification"
+        verification.mkdir()
+        (verification / "google123.html").write_text("google-site-verification\n")
+        monkeypatch.setattr(docs_deploy, "VERIFICATION_DIR", verification)
+        monkeypatch.setattr(docs_deploy.index_now, "read_key", lambda: "")
+        monkeypatch.setattr(docs_deploy, "_hash_file", lambda path: "blob-sha")
 
-        class Completed:
-            stdout = b"blob-sha\n"
-
-        monkeypatch.setattr(
-            docs_deploy.subprocess, "run", lambda *args, **kwargs: Completed(),
-        )
         assert docs_deploy._verification_file_blobs() == [("blob-sha", "google123.html")]
 
-    def test_no_files_means_nothing_extra_at_the_root(self, tmp_path, monkeypatch):
-        monkeypatch.setattr(docs_deploy, "SEARCH_CONSOLE_DIR", tmp_path / "absent")
+    def test_xml_proof_publishes_too(self, tmp_path, monkeypatch):
+        """Bing's file method uses BingSiteAuth.xml."""
+        verification = tmp_path / "site-verification"
+        verification.mkdir()
+        (verification / "BingSiteAuth.xml").write_text("<users/>\n")
+        monkeypatch.setattr(docs_deploy, "VERIFICATION_DIR", verification)
+        monkeypatch.setattr(docs_deploy.index_now, "read_key", lambda: "")
+        monkeypatch.setattr(docs_deploy, "_hash_file", lambda path: "blob-sha")
+
+        assert docs_deploy._verification_file_blobs() == [
+            ("blob-sha", "BingSiteAuth.xml"),
+        ]
+
+    def test_indexnow_key_publishes_under_its_own_name(self, tmp_path, monkeypatch):
+        """A crawler checks the ping against <key>.txt at the root."""
+        monkeypatch.setattr(docs_deploy, "VERIFICATION_DIR", tmp_path / "absent")
+        monkeypatch.setattr(docs_deploy.index_now, "read_key", lambda: "abc123")
+        monkeypatch.setattr(docs_deploy, "_hash_blob", lambda content: "blob-sha")
+
+        assert docs_deploy._verification_file_blobs() == [("blob-sha", "abc123.txt")]
+
+    def test_nothing_configured_publishes_nothing_extra(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(docs_deploy, "VERIFICATION_DIR", tmp_path / "absent")
+        monkeypatch.setattr(docs_deploy.index_now, "read_key", lambda: "")
+
         assert docs_deploy._verification_file_blobs() == []
