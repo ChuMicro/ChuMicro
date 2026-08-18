@@ -1,6 +1,6 @@
 # Style Guide
 
-<img src="https://chumicro.com/assets/chumicro-head.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
+<img src="https://chumicro.com/assets/chumicro-head.png" alt="" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
 This is the definitive reference for code style in the ChuMicro workspace.  All code (library, infrastructure, and tests) follows these conventions unless explicitly noted.
 
@@ -350,7 +350,7 @@ Covered lines show in green, missed lines in red. Much easier than reading line 
 | `B`: bugbear | Common pitfalls like mutable default arguments, bare `except:`, unused loop variables |
 | `UP`: pyupgrade | Modernization: replaces old syntax with newer Python equivalents |
 
-**`CHU001`** (in the [`chumicro-checks`](https://chumicro.com/ChuMicro/checks/stable/) package) catches:
+**`CHU001`** (in the [`chumicro-checks`](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/checks) package) catches:
 
 - Single-letter variable names in assignments, parameters, and function names (`x` → use a descriptive name, `e` → `error`)
 - For-loop targets are exempt: `for i in range(10)` is fine

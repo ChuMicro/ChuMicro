@@ -1,6 +1,6 @@
 # Device Testing
 
-<img src="https://chumicro.com/assets/chumicro-head.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
+<img src="https://chumicro.com/assets/chumicro-head.png" alt="" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
 This guide covers the real-board testing workflow for ChuMicro libraries.
 

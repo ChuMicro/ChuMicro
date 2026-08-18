@@ -23,6 +23,9 @@ PUBLISHED_DOCS = (
 #: ``<img src="...">`` and ``![alt](...)`` in one pass.
 IMAGE_PATTERN = re.compile(r'<img[^>]*src="([^"]+)"|!\[[^\]]*\]\(([^)]+)\)')
 
+#: Whole ``<img ...>`` tags, for checking their attributes.
+IMG_TAG_PATTERN = re.compile(r"<img\b[^>]*>")
+
 
 def _image_sources() -> list[tuple[Path, str]]:
     """Return every image reference in the published docs trees."""
@@ -63,4 +66,35 @@ def test_image_resolves_once_published(page: Path, source: str):
         f"{page.relative_to(ROOT)} points at {source}, which resolves outside "
         f"{tree.relative_to(ROOT)} and will 404 on the documentation site.  "
         "Use an absolute https URL for artwork published at the site root."
+    )
+
+
+def _img_tags() -> list[tuple[Path, str]]:
+    """Return every raw ``<img>`` tag in the published docs trees."""
+    found = []
+    for tree in PUBLISHED_DOCS:
+        if not tree.is_dir():
+            continue
+        for page in sorted(tree.rglob("*.md")):
+            for match in IMG_TAG_PATTERN.finditer(page.read_text()):
+                found.append((page, match.group(0)))
+    return found
+
+
+@pytest.mark.parametrize(
+    ("page", "tag"),
+    _img_tags(),
+    ids=lambda value: value.name if isinstance(value, Path) else value[:40],
+)
+def test_img_tag_carries_an_alt_attribute(page: Path, tag: str):
+    """A screen reader reads the filename when alt is absent.
+
+    An empty ``alt=""`` is the right answer for decorative artwork and
+    satisfies this: the attribute being present is what tells a reader
+    the image was considered rather than forgotten.  Bing's site scan
+    reports the absent form as an error.
+    """
+    assert "alt=" in tag, (
+        f"{page.relative_to(ROOT)} has an <img> with no alt attribute.  "
+        'Use alt="" for decorative artwork, or describe what the image shows.'
     )
