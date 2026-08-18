@@ -1413,7 +1413,9 @@ substitutes for them:
 - The IndexNow key.  The spec permits a key outside the root when the ping
   names it in `keyLocation`, but the endpoint separately checks that the
   submitter owns the host.  On a shared `github.io` account nobody owns the
-  host until they claim the root repository.
+  host until they claim the root repository.  Once the key is at the root,
+  send no `keyLocation` at all: an absent one points the endpoint there, and
+  naming a path only narrows a claim that wants to be host-wide.
 
 IndexNow's status codes read backwards on a first attempt: a submission with a
 brand new key returns `202` while the key file is still a 404, then the same key

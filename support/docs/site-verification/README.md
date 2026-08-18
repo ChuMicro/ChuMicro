@@ -83,6 +83,11 @@ repository publishes at `https://chumicro.github.io/`, the deploy
 writes `<key>.txt` there, and Bing's root property covers every path on
 the host.  See the next section.
 
+The ping names no `keyLocation` now that the key answers at the root,
+because an absent one is what tells the endpoint to look there.  Naming
+a subdirectory is what the script did until 2026-08-18, and it only
+ever weakened the claim.
+
 A refused ping warns and leaves the deploy green.
 
 Rotating the key is one edit here.  The next deploy publishes the new
