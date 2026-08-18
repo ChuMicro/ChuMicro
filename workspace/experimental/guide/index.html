@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://chumicro.github.io/ChuMicro/workspace/experimental/guide/">
+        <link rel="canonical" href="https://chumicro.com/ChuMicro/workspace/experimental/guide/">
       
       
         <link rel="prev" href="./..">
@@ -1031,7 +1031,7 @@
 
 
 <h1 id="guide">Guide<a class="headerlink" href="#guide" title="Permanent link">&para;</a></h1>
-<p><code>chumicro-workspace</code> is the host-side CLI for running ChuMicro projects on real boards from your laptop.  It builds on <a href="https://chumicro.github.io/ChuMicro/deploy/stable/"><code>chumicro-deploy</code></a> for the transports, firmware flashing, and the <code>devices.yml</code> schema, and picks up <a href="https://chumicro.github.io/ChuMicro/repl/stable/"><code>chumicro-repl</code></a> when you ask for an interactive session or a tail.  On top of those it adds the workspace-shaped pieces: a deploy-time config merge, a CLI that reads <code>workspace.yml</code>, board-state onboarding, firmware URL derivation, and the boot shim that lets a project ship an <code>app.py</code> with a <code>run()</code> instead of hand-writing a <code>code.py</code>.</p>
+<p><code>chumicro-workspace</code> is the host-side CLI for running ChuMicro projects on real boards from your laptop.  It builds on <a href="https://chumicro.com/ChuMicro/deploy/stable/"><code>chumicro-deploy</code></a> for the transports, firmware flashing, and the <code>devices.yml</code> schema, and picks up <a href="https://chumicro.com/ChuMicro/repl/stable/"><code>chumicro-repl</code></a> when you ask for an interactive session or a tail.  On top of those it adds the workspace-shaped pieces: a deploy-time config merge, a CLI that reads <code>workspace.yml</code>, board-state onboarding, firmware URL derivation, and the boot shim that lets a project ship an <code>app.py</code> with a <code>run()</code> instead of hand-writing a <code>code.py</code>.</p>
 <p>This guide walks through the typical workflows end to end.  See the <a href="../api/">API reference</a> for the module-level docs.</p>
 <h2 id="workspace-layout">Workspace layout<a class="headerlink" href="#workspace-layout" title="Permanent link">&para;</a></h2>
 <p>A workspace has this shape:</p>
@@ -1428,7 +1428,7 @@
 </span><span id="__span-28-14"><a id="__codelineno-28-14" name="__codelineno-28-14" href="#__codelineno-28-14"></a><span class="c1"># Or override at the call site:</span>
 </span><span id="__span-28-15"><a id="__codelineno-28-15" name="__codelineno-28-15" href="#__codelineno-28-15"></a>chumicro-workspace<span class="w"> </span>install-firmware<span class="w"> </span>--url<span class="w"> </span>https://example/custom.uf2<span class="w"> </span>--method<span class="w"> </span>uf2
 </span></code></pre></div>
-<p>With no <code>--url</code>, the URL is derived from the device entry in this order, by <code>derive_firmware_url</code> in <a href="https://chumicro.github.io/ChuMicro/deploy/stable/api/"><code>chumicro-deploy</code></a>:</p>
+<p>With no <code>--url</code>, the URL is derived from the device entry in this order, by <code>derive_firmware_url</code> in <a href="https://chumicro.com/ChuMicro/deploy/stable/api/"><code>chumicro-deploy</code></a>:</p>
 <ol>
 <li><code>hardware.firmware_source</code> is set, so it is returned verbatim.</li>
 <li>The runtime is CircuitPython, so the Adafruit S3 bucket listing gives the latest stable build.</li>
@@ -1453,7 +1453,7 @@
 </span></code></pre></div>
 <p><code>update_device_hardware</code> raises <code>HardwareOverwriteError</code> when a hardware-once field would change; pass <code>force=True</code> when you really did swap boards.  <code>rename_device</code> also rewrites any <code>defaults.&lt;runtime&gt;</code> reference pointing at the old id.  <code>remove_device</code> deletes an entry, nulls any <code>defaults.&lt;runtime&gt;</code> that pointed at it so the file stays loadable, and returns the removed entry for callers that want to re-register under the same id.</p>
 <h2 id="workbench-only">Workbench-only<a class="headerlink" href="#workbench-only" title="Permanent link">&para;</a></h2>
-<p>This package runs on CPython and never on a microcontroller.  The on-device side of the workspace contract is <a href="https://chumicro.github.io/ChuMicro/config/stable/"><code>chumicro-config</code></a>.</p>
+<p>This package runs on CPython and never on a microcontroller.  The on-device side of the workspace contract is <a href="https://chumicro.com/ChuMicro/config/stable/"><code>chumicro-config</code></a>.</p>
 <hr />
 <div class="chumicro-footer">
 <p><a href="../">← Home</a></p>
