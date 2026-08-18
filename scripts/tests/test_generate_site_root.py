@@ -11,12 +11,14 @@ so renaming a real package cannot silently break or pass them.
 """
 
 from pathlib import Path
+from xml.etree import ElementTree
 
 import generate_landing_page
 import generate_site_root
 import pytest
 from generate_site_root import (
     HOST,
+    PAGES_SITEMAP,
     PROJECTS,
     _render_package_links,
     _structured_data,
@@ -24,6 +26,7 @@ from generate_site_root import (
     build,
     root_index_html,
     root_llms_txt,
+    root_pages_sitemap,
     root_robots_txt,
     root_sitemap,
 )
@@ -68,20 +71,35 @@ def verification_dir(tmp_path: Path, monkeypatch):
     return directory
 
 
-def test_robots_names_every_sitemap_on_the_host():
-    """robots.txt is only read at the root, so it advertises them all."""
+def test_robots_names_the_sitemap_index():
+    """The index reaches every child, so naming them too would repeat it."""
     robots = root_robots_txt()
     assert f"Sitemap: {HOST}/sitemap.xml" in robots
-    for project in PROJECTS:
-        assert f"Sitemap: {HOST}/{project['path']}/sitemap.xml" in robots
+    assert robots.count("Sitemap:") == 1
     assert "Allow: /" in robots
 
 
-def test_sitemap_lists_the_root_only():
-    """Each project ships its own sitemap; this one would only repeat them."""
+def test_sitemap_is_an_index_over_every_sitemap_on_the_host():
+    """One submission at the root has to reach every project below it."""
     sitemap = root_sitemap()
-    assert sitemap.count("<loc>") == 1
-    assert f"<loc>{HOST}/</loc>" in sitemap
+    assert "<sitemapindex" in sitemap
+    assert f"<loc>{HOST}/{PAGES_SITEMAP}</loc>" in sitemap
+    for project in PROJECTS:
+        assert f"<loc>{HOST}/{project['path']}/sitemap.xml</loc>" in sitemap
+
+
+def test_sitemap_index_parses_as_xml():
+    """A malformed index would fail silently in a webmaster console."""
+    root = ElementTree.fromstring(root_sitemap())
+    assert root.tag.endswith("sitemapindex")
+    assert len(root) == 1 + len(PROJECTS)
+
+
+def test_pages_sitemap_carries_the_hub_url():
+    """The index lists sitemaps, so the hub's own URL needs a file of its own."""
+    pages = root_pages_sitemap()
+    assert pages.count("<loc>") == 1
+    assert f"<loc>{HOST}/</loc>" in pages
 
 
 def test_index_canonicalizes_to_the_host_root(synthetic_packages, verification_dir):
@@ -156,11 +174,13 @@ def test_build_writes_every_root_file(tmp_path, synthetic_packages, verification
     destination = tmp_path / "site"
     written = build(destination)
 
-    assert {"index.html", "robots.txt", "sitemap.xml", "llms.txt"} <= set(written)
+    assert {
+        "index.html", "robots.txt", "sitemap.xml", PAGES_SITEMAP, "llms.txt",
+    } <= set(written)
 
 
 def test_no_project_path_collides_with_a_generated_file():
     """A folder named after a project repository would shadow its site."""
-    generated = {"index.html", "robots.txt", "sitemap.xml", "llms.txt"}
+    generated = {"index.html", "robots.txt", "sitemap.xml", PAGES_SITEMAP, "llms.txt"}
     for project in PROJECTS:
         assert project["path"] not in generated
