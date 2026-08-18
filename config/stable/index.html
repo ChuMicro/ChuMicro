@@ -289,6 +289,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#install" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Install
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#quick-example" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -413,6 +424,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#install" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Install
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#quick-example" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -455,12 +477,23 @@
 <h1 id="chumicro-config">chumicro-config<a class="headerlink" href="#chumicro-config" title="Permanent link">&para;</a></h1>
 <p><strong>Typed runtime configuration for ChuMicro libraries.</strong></p>
 <p>Every library reads its settings from one deployed <code>runtime_config.msgpack</code> using dotted keys. The app loads that file once at boot and hands the whole config to each library, which pulls its own prefix off it: <code>wifi.ssid</code> becomes <code>WifiConfig.ssid</code>, <code>mqtt.broker.host</code> becomes the broker the MQTT client dials.</p>
-<h2 id="quick-example">Quick example<a class="headerlink" href="#quick-example" title="Permanent link">&para;</a></h2>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_config</span><span class="w"> </span><span class="kn">import</span> <span class="n">load_runtime_config</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_wifi</span><span class="w"> </span><span class="kn">import</span> <span class="n">WifiConfig</span><span class="p">,</span> <span class="n">WifiService</span>
+<h2 id="install">Install<a class="headerlink" href="#install" title="Permanent link">&para;</a></h2>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># CircuitPython (after `circup bundle-add ChuMicro/ChuMicro-Bundle`)</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>circup<span class="w"> </span>install<span class="w"> </span>chumicro_config
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">config</span> <span class="o">=</span> <span class="n">load_runtime_config</span><span class="p">()</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="n">wifi</span> <span class="o">=</span> <span class="n">WifiService</span><span class="p">(</span><span class="n">WifiConfig</span><span class="o">.</span><span class="n">from_config</span><span class="p">(</span><span class="n">config</span><span class="p">))</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="c1"># MicroPython</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>mpremote<span class="w"> </span>mip<span class="w"> </span>install<span class="w"> </span>github:ChuMicro/ChuMicro-Bundle/chumicro_config
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="c1"># CPython</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>pip<span class="w"> </span>install<span class="w"> </span>chumicro-config
+</span></code></pre></div>
+<p>No board running yet?  <a href="https://chumicro.com/ChuMicro/guides/start-here/">Start here</a> goes from a new board to your own code running on it.  <a href="https://chumicro.com/ChuMicro/guides/install/">Installing libraries</a> covers registering the bundle, the experimental channel, and the pre-compiled <code>.mpy</code> packages.</p>
+<h2 id="quick-example">Quick example<a class="headerlink" href="#quick-example" title="Permanent link">&para;</a></h2>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_config</span><span class="w"> </span><span class="kn">import</span> <span class="n">load_runtime_config</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_wifi</span><span class="w"> </span><span class="kn">import</span> <span class="n">WifiConfig</span><span class="p">,</span> <span class="n">WifiService</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">config</span> <span class="o">=</span> <span class="n">load_runtime_config</span><span class="p">()</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="n">wifi</span> <span class="o">=</span> <span class="n">WifiService</span><span class="p">(</span><span class="n">WifiConfig</span><span class="o">.</span><span class="n">from_config</span><span class="p">(</span><span class="n">config</span><span class="p">))</span>
 </span></code></pre></div>
 <h2 id="documentation">Documentation<a class="headerlink" href="#documentation" title="Permanent link">&para;</a></h2>
 <ul>
