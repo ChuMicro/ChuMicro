@@ -169,3 +169,37 @@ matching `AAAA` records on `2606:50c0:8000::153` through
 `2606:50c0:8003::153`, and a `CNAME` on `www` pointing at
 `chumicro.github.io`.  GitHub redirects `www` to the apex once the
 apex is the configured domain.
+
+## Social preview card
+
+`support/docs/social-card.png` is what a link to the repository renders
+as in Slack, Discord, iMessage, and anywhere else that unfurls a URL.
+GitHub takes it at **repository Settings, Social preview**, which is an
+upload rather than anything the repository serves, so replacing the
+file here does not change what GitHub shows until someone uploads it
+again.
+
+It is 1280 by 640, the size GitHub asks for, and 395 KB against a 1 MB
+ceiling.  The page artwork is a different asset for a different job:
+`chumicro_hero.png` is 320 pixels wide because that is the size it
+renders at in a page header, and scaling it up to card size would show
+every pixel.
+
+Rebuild it from the source artwork with ImageMagick::
+
+    magick support/docs/chumicro.png -resize 470x470^ -gravity center \
+      -extent 470x470 \
+      \( -size 470x470 xc:none -fill white \
+         -draw "roundrectangle 0,0,469,469,34,34" \) \
+      -alpha set -compose DstIn -composite art.png
+    magick -size 1280x640 xc:'#0e0f10' art.png -gravity west \
+      -geometry +80+0 -composite -gravity northwest \
+      -font Arial-Bold -pointsize 88 -fill '#e87518' \
+      -annotate +625+178 'ChuMicro' \
+      -font Arial -pointsize 34 -fill '#e6edf3' \
+      -annotate +628+290 'Python for microcontrollers' \
+      -font Arial -pointsize 26 -fill '#8b949e' \
+      -annotate +628+345 'that keeps your main loop running' \
+      -font Arial -pointsize 24 -fill '#e8d296' \
+      -annotate +628+436 'CircuitPython     MicroPython     CPython' \
+      -strip -colors 200 support/docs/social-card.png
