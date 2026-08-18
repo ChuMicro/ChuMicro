@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
       <url>
-        <loc>https://chumicro.github.io/ChuMicro/kvstore/experimental/</loc>
+        <loc>https://chumicro.com/ChuMicro/kvstore/experimental/</loc>
       </url>
       <url>
-        <loc>https://chumicro.github.io/ChuMicro/kvstore/experimental/guide/</loc>
+        <loc>https://chumicro.com/ChuMicro/kvstore/experimental/guide/</loc>
       </url>
       <url>
-        <loc>https://chumicro.github.io/ChuMicro/kvstore/experimental/api/</loc>
+        <loc>https://chumicro.com/ChuMicro/kvstore/experimental/api/</loc>
       </url>
       <url>
-        <loc>https://chumicro.github.io/ChuMicro/kvstore/experimental/testing/</loc>
+        <loc>https://chumicro.com/ChuMicro/kvstore/experimental/testing/</loc>
       </url>
 </urlset>
