@@ -1,6 +1,6 @@
 # Creating a Pull Request
 
-<img src="../../support/docs/chumicro_tip.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
+<img src="https://chumicro.com/assets/chumicro-head.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
 This guide covers what happens once you have changes ready to submit. For environment setup and running tasks, see [CONTRIBUTING.md](https://github.com/ChuMicro/ChuMicro/blob/main/CONTRIBUTING.md) and its [Setting up](https://github.com/ChuMicro/ChuMicro/blob/main/CONTRIBUTING.md#setting-up) section.
 

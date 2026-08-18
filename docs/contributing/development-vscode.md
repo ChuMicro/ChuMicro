@@ -1,6 +1,6 @@
 # Development with VS Code
 
-<img src="../../support/docs/chumicro_tip.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
+<img src="https://chumicro.com/assets/chumicro-head.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
 This guide covers the full development workflow in Visual Studio Code.  The project ships committed task definitions and settings under `.vscode/`.  Once you select a Python interpreter, every common task is available from the Command Palette with no extra configuration.
 

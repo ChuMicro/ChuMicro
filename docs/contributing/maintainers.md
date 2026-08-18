@@ -1,6 +1,6 @@
 # Maintainer Runbook
 
-<img src="../../support/docs/chumicro_tip.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
+<img src="https://chumicro.com/assets/chumicro-head.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
 This page is the operational side of ChuMicro's public process: the settings that enforce it, the levers only a maintainer can pull, and what to do when something needs bypassing.  Contributors need nothing here; their view is [CONTRIBUTING.md](https://github.com/ChuMicro/ChuMicro/blob/main/CONTRIBUTING.md), [Creating a Pull Request](pull-requests.md), and [Releases and Promotion](releases.md).
 

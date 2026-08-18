@@ -1,6 +1,6 @@
 # Development with Other Editors
 
-<img src="../../support/docs/chumicro_tip.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
+<img src="https://chumicro.com/assets/chumicro-head.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
 This guide is for developers using editors other than PyCharm and VS Code: Neovim, Zed, Emacs, Sublime Text, Fleet, or anything else with a terminal.  You don't need IDE-specific configuration to work in this project.
 

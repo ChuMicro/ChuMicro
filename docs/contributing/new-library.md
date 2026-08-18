@@ -1,6 +1,6 @@
 # Adding a New Library
 
-<img src="../../support/docs/chumicro_tip.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
+<img src="https://chumicro.com/assets/chumicro-head.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
 This guide walks you through the full lifecycle of adding a new library to ChuMicro, from idea to published package.  If you're working with an AI agent, point it at the [`new-library` skill](https://github.com/ChuMicro/ChuMicro/tree/main/.github/skills/new-library/SKILL.md).
 

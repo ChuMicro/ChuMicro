@@ -1,6 +1,6 @@
 # Workspace, devices, and secrets
 
-<img src="../../support/docs/chumicro_tip.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
+<img src="https://chumicro.com/assets/chumicro-head.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
 Three gitignored files live at the root of every ChuMicro workspace.  Each does what its name says.  `python scripts/run.py setup` materializes starter versions on first run; edit them as needs come up.
 

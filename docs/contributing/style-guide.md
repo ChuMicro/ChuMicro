@@ -1,6 +1,6 @@
 # Style Guide
 
-<img src="../../support/docs/chumicro_tip.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
+<img src="https://chumicro.com/assets/chumicro-head.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
 This is the definitive reference for code style in the ChuMicro workspace.  All code (library, infrastructure, and tests) follows these conventions unless explicitly noted.
 
