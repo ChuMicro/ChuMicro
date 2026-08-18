@@ -1,3 +1,7 @@
+---
+title: "chumicro-timing: timers and deadlines without sleep, for CircuitPython and MicroPython"
+---
+
 # chumicro-timing
 
 **Cross-runtime millisecond tick helpers and periodic timing for CircuitPython, MicroPython, and CPython.**

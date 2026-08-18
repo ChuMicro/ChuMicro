@@ -1,3 +1,7 @@
+---
+title: "chumicro-repl: serial REPL for CircuitPython and MicroPython boards"
+---
+
 # chumicro-repl
 
 **Host-side serial REPL for CircuitPython and MicroPython boards.**

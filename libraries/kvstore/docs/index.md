@@ -1,3 +1,7 @@
+---
+title: "chumicro-kvstore: storage that survives a reboot on CircuitPython and MicroPython"
+---
+
 # chumicro-kvstore
 
 **Tiny mutable key-value store for runtime state that survives reboot.**

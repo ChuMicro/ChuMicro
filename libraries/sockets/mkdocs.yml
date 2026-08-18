@@ -1,4 +1,6 @@
 site_name: chumicro-sockets
+site_description: >-
+  TCP, TLS, and UDP sockets that behave the same on CircuitPython, MicroPython, and CPython, with timeouts your loop controls.
 site_url: https://chumicro.github.io/ChuMicro/sockets/
 repo_url: https://github.com/ChuMicro/ChuMicro/tree/main/libraries/sockets
 repo_name: Source

@@ -26,6 +26,8 @@ classifiers = [
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: Implementation :: MicroPython",
     "Topic :: Software Development :: Embedded Systems",
     "Topic :: System :: Hardware",
     "Operating System :: OS Independent",

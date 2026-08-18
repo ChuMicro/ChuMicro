@@ -1,3 +1,7 @@
+---
+title: "chumicro-compat: standard-library polyfills for CircuitPython and MicroPython"
+---
+
 # chumicro-compat
 
 **Cross-runtime compatibility polyfills for CircuitPython, MicroPython, and CPython.**

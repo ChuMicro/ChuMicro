@@ -1,3 +1,7 @@
+---
+title: "chumicro-websockets: WebSocket client and server for CircuitPython and MicroPython"
+---
+
 # chumicro-websockets
 
 **Non-blocking WebSocket (RFC 6455) client and server for CircuitPython, MicroPython, and CPython.**

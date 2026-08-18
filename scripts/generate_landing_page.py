@@ -256,6 +256,35 @@ def _render_workbench_install(first_workbench: dict) -> str:
     </div>"""
 
 
+#: Public root of the documentation site, used for canonical URLs and
+#: the sitemap.  Every package's docs live one level below it.
+SITE_ROOT = "https://chumicro.github.io/ChuMicro"
+
+
+def generate_sitemap() -> str:
+    """Return a sitemap.xml listing the site root and every package.
+
+    Search engines discover the per-package documentation through this
+    file: the landing page links each package's ``stable/`` URL, and
+    the sitemap states the same set in the form crawlers read directly.
+    Each entry points at the ``stable`` channel, the URL that stays put
+    across releases.
+    """
+    libraries, workbench = _discover_packages()
+    urls = [f"{SITE_ROOT}/"]
+    urls.extend(
+        f"{SITE_ROOT}/{package['name']}/stable/"
+        for package in libraries + workbench
+    )
+    entries = "\n".join(f"  <url>\n    <loc>{url}</loc>\n  </url>" for url in urls)
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+        f"{entries}\n"
+        "</urlset>\n"
+    )
+
+
 def generate() -> str:
     """Return the full landing page HTML."""
     libraries, workbench = _discover_packages()

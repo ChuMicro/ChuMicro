@@ -1,3 +1,7 @@
+---
+title: "chumicro-config: runtime settings for CircuitPython and MicroPython"
+---
+
 # chumicro-config
 
 **Typed runtime configuration for ChuMicro libraries.**

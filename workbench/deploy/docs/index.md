@@ -1,3 +1,7 @@
+---
+title: "chumicro-deploy: deploy code to CircuitPython and MicroPython boards"
+---
+
 # chumicro-deploy
 
 **Host-side transports and deploy tooling for CircuitPython and MicroPython boards.**

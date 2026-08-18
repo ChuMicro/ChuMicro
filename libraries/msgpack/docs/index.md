@@ -1,3 +1,7 @@
+---
+title: "chumicro-msgpack: MessagePack for CircuitPython and MicroPython"
+---
+
 # chumicro-msgpack
 
 **Cross-runtime [MessagePack](https://msgpack.org) serialization for CircuitPython, MicroPython, and CPython.**

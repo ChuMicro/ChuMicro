@@ -1,3 +1,7 @@
+---
+title: "chumicro-sockets: TCP, TLS, and UDP for CircuitPython and MicroPython"
+---
+
 # chumicro-sockets
 
 **One TCP, TLS, and UDP socket surface across CircuitPython, MicroPython, and CPython.**
