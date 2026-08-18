@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://chumicro.github.io/ChuMicro/requests/experimental/guide/">
+        <link rel="canonical" href="https://chumicro.com/ChuMicro/requests/experimental/guide/">
       
       
         <link rel="prev" href="./..">
@@ -1093,7 +1093,7 @@ neither MP nor CP bundles a trust store, by design.</p>
 clock. A board with no RTC battery and no NTP boots at 2021-01-01 (or epoch),
 which is "before" every modern cert's <code>not_valid_before</code> field, so the handshake
 fails with <code>ValueError("certificate validity starts in the future")</code>.
-Use <a href="https://chumicro.github.io/ChuMicro/ntp/stable/"><code>chumicro-ntp</code></a> to set the device clock from a public NTP server before the TLS handshake.  Cross-runtime, non-blocking, takes a UDP socket you provide.</p>
+Use <a href="https://chumicro.com/ChuMicro/ntp/stable/"><code>chumicro-ntp</code></a> to set the device clock from a public NTP server before the TLS handshake.  Cross-runtime, non-blocking, takes a UDP socket you provide.</p>
 <h2 id="examples">Examples<a class="headerlink" href="#examples" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
