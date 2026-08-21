@@ -1,5 +1,17 @@
 """Cross-runtime wrap-safe millisecond ticks and signed-difference math; values wrap every ~6.2 days."""
 
+# The wrap constants, the ticks_ms source-resolution order, and the ticks_add /
+# ticks_diff math in this module come from Adafruit_CircuitPython_Ticks:
+#
+#   Copyright (c) 2017 Scott Shawcroft, written for Adafruit Industries
+#   Copyright (c) 2021 Jeff Epler for Adafruit Industries
+#   Released under the MIT license.
+#   https://github.com/adafruit/Adafruit_CircuitPython_Ticks
+#
+# The same ticks_add / ticks_diff routines are published as a reference
+# implementation in CircuitPython's own supervisor.ticks_ms documentation, and
+# the OverflowError text matches MicroPython's time.ticks_add.
+
 import time
 
 try:
