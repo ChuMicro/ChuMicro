@@ -164,13 +164,19 @@ Every runtime reports a conversion on that same 0 to 65535 scale whatever the co
 
 ## The deadband
 
-An analog reading wanders.  The low bits of a 12-bit converter move a couple of counts with the wiper parked, which is 32 counts once the reading is scaled to 16 bits, and a noisier part on a long lead moves several times that.  `deadband` is how far the raw reading has to move before `value` is allowed to follow it, and it defaults to 512, held in `DEFAULT_DEADBAND`:
+An analog reading wanders, and it wanders further than a datasheet suggests.  A potentiometer on a Pi Pico W measured 1744 counts of spread with the wiper parked at the top of its travel, where a converter is noisiest, against the 655 counts one step spans at the default settings.
+
+Two things hold that still, and the first happens before you see the reading.  Each conversion is folded into the one before it rather than replacing it, so the number `check()` works from moves smoothly instead of leaping between noise extremes.  That matters more than the size of the noise: a leaping reading drags the deadband's anchor across a step boundary and back, and a smooth one does not.  It takes no extra conversion, because the loop already samples far faster than a hand can move a knob.  In the measurement above it took an untouched knob from around 16000 reported movements in four seconds to none.
+
+The smoothing is counted in ticks rather than milliseconds, so a loop running flat out settles inside a couple of milliseconds while a deliberately slow loop takes longer to catch up with a fast turn.
+
+`deadband` is the second, and is how far the smoothed reading has to move before `value` is allowed to follow it.  It defaults to 512, held in `DEFAULT_DEADBAND`:
 
 ```python
 brightness = AnalogKnob(board.A0, steps=10, deadband=512)     # the default
 ```
 
-512 sits well above the wander and well under the width of one step, so a parked wiper reports the same number pass after pass and every step is still reachable.  One step spans `RAW_RANGE // steps` counts, which is 655 at the default 100 steps:
+512 sits under the width of one step, so every step stays reachable, and the smoothing underneath is what keeps a parked wiper on one number.  A deadband alone cannot do that job on a noisy converter: it has to exceed the reading's whole peak-to-peak spread rather than half of it, because the anchor lands on whichever sample tripped it, and on the board measured above no value satisfies both that and staying under a step.  One step spans `RAW_RANGE // steps` counts, which is 655 at the default 100 steps:
 
 ```python
 from chumicro_knobs import DEFAULT_STEPS, RAW_RANGE

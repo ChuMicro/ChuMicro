@@ -6,6 +6,8 @@ import array  # pragma: no cover - MP runtime path
 
 import machine  # pragma: no cover - MP runtime path
 
+from chumicro_knobs._adapters.base import SMOOTHING_SHIFT  # pragma: no cover - MP runtime path
+
 try:  # pragma: no cover - MP runtime path
     from micropython import const
 except ImportError:
@@ -98,11 +100,15 @@ class MpAnalogSource:  # pragma: no cover - MP runtime path
 
     def __init__(self, pin) -> None:
         self._converter = machine.ADC(pin)
-        self.raw = self._converter.read_u16()
+        reading = self._converter.read_u16()
+        # Carried scaled up by the shift so the fraction it keeps survives integer division.
+        self._smoothed = reading << SMOOTHING_SHIFT
+        self.raw = reading
 
     def poll(self, now_ms: int) -> None:
-        """Convert once and keep the answer."""
-        self.raw = self._converter.read_u16()
+        """Convert once and fold the answer into the smoothed reading."""
+        self._smoothed += self._converter.read_u16() - (self._smoothed >> SMOOTHING_SHIFT)
+        self.raw = self._smoothed >> SMOOTHING_SHIFT
 
     def deinit(self) -> None:
         """Do nothing, because ``machine.ADC`` claims no pin it could hand back.

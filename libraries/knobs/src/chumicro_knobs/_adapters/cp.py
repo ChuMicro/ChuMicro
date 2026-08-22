@@ -5,6 +5,8 @@ __chumicro_runtimes__ = ("circuitpython",)  # pragma: no cover - CP runtime path
 import analogio  # pragma: no cover - CP runtime path
 import rotaryio  # pragma: no cover - CP runtime path
 
+from chumicro_knobs._adapters.base import SMOOTHING_SHIFT  # pragma: no cover - CP runtime path
+
 
 class CpEncoderSource:  # pragma: no cover - CP runtime path
     """Quadrature counting done by ``rotaryio.IncrementalEncoder`` in firmware.
@@ -37,11 +39,15 @@ class CpAnalogSource:  # pragma: no cover - CP runtime path
 
     def __init__(self, pin) -> None:
         self._converter = analogio.AnalogIn(pin)
-        self.raw = self._converter.value
+        reading = self._converter.value
+        # Carried scaled up by the shift so the fraction it keeps survives integer division.
+        self._smoothed = reading << SMOOTHING_SHIFT
+        self.raw = reading
 
     def poll(self, now_ms: int) -> None:
-        """Convert once and keep the answer."""
-        self.raw = self._converter.value
+        """Convert once and fold the answer into the smoothed reading."""
+        self._smoothed += self._converter.value - (self._smoothed >> SMOOTHING_SHIFT)
+        self.raw = self._smoothed >> SMOOTHING_SHIFT
 
     def deinit(self) -> None:
         """Release the pin this knob claimed."""

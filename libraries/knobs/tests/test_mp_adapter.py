@@ -297,8 +297,56 @@ def test_the_converter_reads_once_on_construction_and_once_on_every_poll() -> No
     converter.reading = 12_500
     source.poll(0)
 
-    assert source.raw == 12_500
     assert converter.conversions == 2
+
+
+def test_the_reading_moves_toward_a_new_voltage_instead_of_jumping_to_it() -> None:
+    """Each conversion moves the reading a fraction of the way, which is the smoothing.
+
+    A converter's noise leaps rather than drifts, and the deadband above this anchors on
+    whichever sample tripped it, so a leaping reading drags the anchor across a step
+    boundary and back.  Taking a fraction of each sample removes the leaping.
+    """
+    converter = FakeConverter(reading=0)
+    source = MpAnalogSource(converter)
+    converter.reading = 40_000
+
+    source.poll(0)
+    first = source.raw
+
+    assert 0 < first < 40_000
+
+    source.poll(1)
+
+    assert first < source.raw < 40_000
+
+
+def test_the_reading_arrives_at_a_held_voltage_and_stays_there() -> None:
+    """Smoothing delays a change rather than losing it, so a parked wiper reads true."""
+    converter = FakeConverter(reading=0)
+    source = MpAnalogSource(converter)
+    converter.reading = 40_000
+
+    for tick in range(200):
+        source.poll(tick)
+
+    assert source.raw == 40_000
+
+
+def test_a_reading_that_rattles_between_two_extremes_settles_between_them() -> None:
+    """Alternating samples average out instead of dragging the reading to each end.
+
+    This is the noise the smoothing exists for: without it ``raw`` would report whichever
+    extreme was sampled last, which is what makes an untouched knob look like it moved.
+    """
+    converter = FakeConverter(reading=30_000)
+    source = MpAnalogSource(converter)
+
+    for tick in range(200):
+        converter.reading = 30_000 if tick % 2 else 31_000
+        source.poll(tick)
+
+    assert 30_000 < source.raw < 31_000
 
 
 def test_the_converter_has_no_pin_to_hand_back() -> None:
