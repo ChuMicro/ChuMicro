@@ -214,6 +214,31 @@ milliseconds, and a 5 ms window could believe a gap in the middle of that.  Ten 
 against those while covering the tactile switches most buttons are.  Decision 0124 carries the
 rule; the guide carries the per-window cost.
 
+##### Measured on a Lolin S2 Mini, MicroPython 1.27.0
+
+The esp32 port is a different capture path from rp2040, not just a different board: its
+`Pin.irq` installs no hard handler and the ISR hands the callback to `mp_sched_schedule`, so
+the handler runs when the VM next reaches a safe point.  That is the path the adapter was
+written against and had only ever been reasoned about.
+
+- **`hard=True` raises `TypeError: extra keyword arguments given`** on this port, confirmed on
+  silicon.  An adapter that passed it unconditionally would fail at construction on every
+  esp32 board.  This is why neither adapter passes it.
+- **A starved loop loses nothing.**  Ticking once every 300 ms, so the loop was asleep for all
+  but a sliver of the run, all ten presses and releases arrived and `held_ms` read 51 to 63 ms.
+  Durations from the tick rather than the edge would have been multiples of 300.  The esp32
+  scheduler drains through `time.sleep_ms`, so the queue never backed up.
+- **The settle model is exact, not approximate.**  Spying on the ring from inside the interrupt
+  gives ground truth and library output from one gesture: 13 contact closures, 12 of them
+  lasting at least the 10 ms window, and 12 presses reported.  Prediction error zero.  Nothing
+  was lost to the scheduler and no bounce was mistaken for a press.
+- Peak ring backlog 3 of 32, no overflow, and zero heap growth per 1000 ticks.
+
+The functional suite passes 9 of 9 here as it does on rp2040.  Its pin candidates had to be
+narrowed to do so safely: the list must hold on every chip family, and the dangerous numbers
+differ per family, so anything that is SPI flash, PSRAM, native USB, or a strapping pin on any
+of them is out.  Driving one of those does not raise, it resets the board.
+
 Still open regardless of hardware:
 
 - Neither `_adapters/cp.py` nor `_adapters/mp.py` has executed on a board.  AGENTS.md requires
