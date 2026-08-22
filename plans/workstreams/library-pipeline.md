@@ -131,6 +131,39 @@ ones.  The TinyPICO and FeatherS3 matter most there, because they are esp32 part
 `Pin.irq` takes no `hard=` and whose handler runs through the scheduler.  That path has only
 ever been reasoned about.
 
+##### Measured on a Pi Pico W, CircuitPython 10.2.0
+
+A momentary switch straight from GP3 to ground, no debounce hardware, driven by hand.
+`functional_tests/test_cp_adapter_on_device.py` carries what runs unattended; these are the
+numbers behind it.
+
+- **Ten presses produce about thirty falling edges.**  Bounce arrives in bursts of three to
+  four edges that finish inside roughly 300 us, at the release as well as the press.  The
+  release bounces because an opening contact closes again on the way apart, so a falling-edge
+  counter sees both ends of a press.
+- **Those thirty edges reach the library as exactly ten presses**, with `overflowed` staying
+  false.  On CircuitPython the settle window is spent entirely inside the firmware scan, so
+  the bounce never reaches Python.
+- **The shortest hold that registered was 31 ms.**  A press shorter than `settle_ms` is
+  rejected as bounce by design, so a 20 ms window sets the floor on a deliberate tap.
+- **A tick costs nothing.**  Zero heap growth per 1000 `check()` calls after the first pass,
+  which boxes one integer as the clock leaves the small-int range.  A tick loop ran at 236 us.
+
+Measuring bounce at all took three instruments, and the first two lied:
+
+- `keypad` with debouncing disabled reported **no bounce**, because its scan floor is 1 ms and
+  the bursts are shorter than that.
+- A `digitalio` poll loop at 11.7 us per read also reported **no bounce**, for the same reason
+  one order of magnitude down.
+- `countio.Counter` counts edges in hardware and found them immediately.  It is the only one of
+  the three that cannot alias.  Two rp2040 constraints go with it: the pin must be on PWM
+  channel B, which means an odd GPIO, and `Edge.RISE_AND_FALL` raises `NotImplementedError`, so
+  a press has to be counted from one edge direction.
+
+The lesson generalizes past this library: an instrument that samples cannot bound something
+faster than its own sample rate, and reporting "no bounce" from one is a statement about the
+instrument.
+
 Still open regardless of hardware:
 
 - Neither `_adapters/cp.py` nor `_adapters/mp.py` has executed on a board.  AGENTS.md requires
