@@ -86,6 +86,35 @@ Twenty means `detent_steps=2`, forty means `4`, ten means `1`.  Set it and every
 
 A shaft that counts erratically rather than by a consistent factor is a wiring problem instead.  Modules with a `+` pin carry pull-up resistors that do nothing until it is powered, and on one measured here leaving it unwired dropped pulses at random, turning a steady two-per-detent into a mix of ones, twos and threes.
 
+### When the count drifts
+
+Turned at the speed a hand normally turns a knob, an encoder counts exactly: ten clicks out and ten back land on the number they started from, every time.  Spun hard, a cheap one starts to drift, and it is worth knowing why nothing in the stack stops that.
+
+Contacts bounce the same way a switch does, and at speed the bouncing produces transitions that look like real ones.  Nothing filters them.  CircuitPython's `rotaryio` sets no glitch filter on either the rp2040 or the esp32, so every edge reaches the counter, and the same is true of the interrupt this library installs on MicroPython.  What both do instead is reject transitions that a turning shaft cannot produce, which catches noise that changes both pins at once but not noise that happens to look like a step.
+
+`detent_steps` does the rest, and it does more than divide.  Partial steps stay banked until a whole detent is earned, so a shaft resting between detents and rocking across one boundary counts nothing however long it rocks.  That covers the ordinary case of a knob nudged by a passing hand.
+
+Adding a time-based filter would be the wrong fix, because a fast spin is made of short pulses too.  A window long enough to reject bounce at three thousand pulses a second would reject the fast turning it is trying to protect.  For a button the two cases barely overlap, so `settle_ms` works; for an encoder they are the same signal.
+
+The fix that does work is hardware, on the two quadrature lines:
+
+```
+CLK ──[ 10k ]──┬── to the pin
+               │
+             [10nF]
+               │
+              GND
+```
+
+Around 100 microseconds of smoothing, which is far below a real pulse and far above the bouncing.  Better encoder modules already carry these; the cheap ones leave the pads empty.
+
+Two things measured on a bare module with no smoothing, on an ESP32-S2:
+
+- Normal turning was exact.  Ten clicks out and ten back gave twenty detent events, every one of them a single step, ending on zero.
+- Spun far past what the part is rated for, the count drifted about eight percent over 136 detents, and the direction of the error changed between runs.  An error that changes sign is the contacts, not the counting.
+
+If a module has a `+` pin, wire it.  The pull-up resistors on the board do nothing until it is powered, and without them pulses drop at random rather than merely drifting under abuse.
+
 ## Holding the position inside a range
 
 `bounds=(low, high)` is an inclusive range that `position` stays inside, so a volume knob walks 0 to 20 and settles at each end rather than running off into numbers your program has no use for:
