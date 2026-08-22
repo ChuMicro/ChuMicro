@@ -239,6 +239,50 @@ narrowed to do so safely: the list must hold on every chip family, and the dange
 differ per family, so anything that is SPI flash, PSRAM, native USB, or a strapping pin on any
 of them is out.  Driving one of those does not raise, it resets the board.
 
+##### The runtime and silicon matrix, and what each cell is worth
+
+Both runtimes run green on both chip families, but the two suites do not prove the same thing
+and the table should not be read as if they did:
+
+| | CircuitPython 10.2.0 | MicroPython |
+|---|---|---|
+| Pi Pico W, rp2040 | 7 of 7, plus 10 presses by hand | 9 of 9, 1.28.0, plus presses by hand |
+| Lolin S2 Mini, ESP32-S2 | 7 of 7, plus 11 presses by hand | 9 of 9, 1.27.0, plus presses by hand |
+
+The MicroPython suite drives real edges, so it proves capture, debounce rejection, ring
+overflow, and interrupt detach.  The CircuitPython suite generates no edge at all: it proves
+that `keypad` accepts every interval and threshold `settle_ms` maps to, that the clock domains
+agree, that `deinit` hands the pin back, and that a tick allocates nothing.  That is the
+contract with the firmware, not the behaviour of a press.
+
+The asymmetry is forced.  CircuitPython enforces exclusive pin ownership, so a `digitalio`
+output cannot be opened on the pin `keypad.Keys` already holds, and the self-driving trick that
+makes the MicroPython suite unattended is unavailable.  Driving edges under CircuitPython needs
+a jumper between two GPIOs, one driven and one scanned, which is wiring a suite cannot assume.
+
+So every cell needed a finger on a contact before it meant a button works, and every cell has
+had one.  On the Pi Pico W, 30 hardware falling edges arrived as 10 clean press events.  On the
+S2, 11 presses gave 11 press events and 11 releases with holds of 33 to 51 ms, no overflow, on
+a 201 us tick.  Reading a green CircuitPython suite as proof that a press works is the mistake
+to avoid here: it is proof that the library agrees with `keypad`, and nothing had pressed
+anything.
+
+`keypad` being present on the S2 build was checked rather than assumed, since `CIRCUITPY_KEYPAD`
+rides `CIRCUITPY_FULL_BUILD` and a board that left it off would refuse at construction.
+
+Two things about that CircuitPython run are worth keeping.  The board's filesystem had to be
+reformatted first, because staging the library onto `/Volumes/CIRCUITPY` with `cp -r` tore the
+FAT: the board auto-reloads the moment the drive changes, so it was rewriting the filesystem
+while the host still was, and macOS added `._` AppleDouble files to the same directories.  The
+entries survived as unstattable and unremovable, which failed every later deploy.  That is now
+a pitfall in `AGENTS.md`, next to the existing rule about mount state.
+
+The same hand-staging also cost a rarer observation.  The board came up 49 seconds from a
+`supervisor.ticks_ms` wrap, which recurs only every 6.2 days and would have exercised the
+wrap-safe arithmetic on real hardware for the first time.  Copying the library soft-reset the
+board and zeroed the counter.  Observe first, deploy second, when the clock is the thing under
+test.
+
 Still open regardless of hardware:
 
 - Neither `_adapters/cp.py` nor `_adapters/mp.py` has executed on a board.  AGENTS.md requires
