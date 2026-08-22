@@ -68,6 +68,24 @@ Most panel-mount encoders click once per pulse cycle, and `detent_steps` default
 smooth = Encoder(board.GP16, board.GP17, detent_steps=1)
 ```
 
+### Finding your encoder's detent size
+
+Encoders disagree about this, and getting it wrong is quiet rather than loud.  A shaft that reports half your clicks is set to `4` on a part that gives `2`; one that reports double is set to `2` on a part that gives `4`.  Nothing raises, the number is just consistently off by a factor.
+
+Cheap modules commonly give 2 pulses per detent where a panel-mount part gives 4, so measure yours once rather than assume.  Count raw pulses with `detent_steps=1`, turn the shaft exactly ten clicks, and divide:
+
+```python
+counter = Encoder(board.GP16, board.GP17, detent_steps=1)
+
+while True:
+    counter.check(ticks_ms())
+    print(counter.position)      # turn ten clicks, then read this
+```
+
+Twenty means `detent_steps=2`, forty means `4`, ten means `1`.  Set it and every click moves `position` by exactly one.
+
+A shaft that counts erratically rather than by a consistent factor is a wiring problem instead.  Modules with a `+` pin carry pull-up resistors that do nothing until it is powered, and on one measured here leaving it unwired dropped pulses at random, turning a steady two-per-detent into a mix of ones, twos and threes.
+
 ## Holding the position inside a range
 
 `bounds=(low, high)` is an inclusive range that `position` stays inside, so a volume knob walks 0 to 20 and settles at each end rather than running off into numbers your program has no use for:

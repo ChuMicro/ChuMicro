@@ -239,6 +239,32 @@ narrowed to do so safely: the list must hold on every chip family, and the dange
 differ per family, so anything that is SPI flash, PSRAM, native USB, or a strapping pin on any
 of them is out.  Driving one of those does not raise, it resets the board.
 
+##### Knobs on real hardware, Lolin S2 Mini
+
+`chumicro_knobs` had never run on a board.  Eight functional tests now cover the
+CircuitPython contract with `rotaryio` and `analogio`, and a real KY-040 encoder wired to
+IO3 and IO5 exercised the decode:
+
+- **The decode is exact.**  Ten clicks one way and ten back gave ten `+1` events and ten
+  `-1`, furthest position `+10`, final position `0`, every delta `1`.  No detent doubled and
+  none dropped.
+- **The encoder is 2 pulses per detent, and the default is 4.**  Nothing raises when they
+  disagree; the count is just consistently off by a factor, which reads as a shaft that
+  reports half the clicks.  `rotaryio`'s own default is 4 and panel-mount parts match it,
+  but cheap modules commonly give 2.  The guide now carries a recipe for measuring it,
+  since it cannot be guessed.
+- **A module's `+` pin is not optional.**  Left unwired, the onboard pull-ups float and
+  pulses drop at random: a steady two-per-detent became a mix of ones, twos and threes,
+  with 16 pulses of movement netting `+4`.  Wiring it made every detent read exactly 2.
+
+Two instrument lessons came out of it, both the same shape as the buttons ones.  Reading a
+count as "the library is wrong" when the encoder's detent size was never established is
+inference, not measurement; the fix was to count raw pulses and group them by the gaps
+between, which finds the detent boundaries without needing to know how far anyone turned.
+And a rise-time check built from a Python polling loop resolves nothing under about 100 us,
+because each pass of the loop costs 20, so the numbers it produced were noise presented as
+evidence.
+
 ##### The runtime and silicon matrix, and what each cell is worth
 
 Both runtimes run green on both chip families, but the two suites do not prove the same thing
