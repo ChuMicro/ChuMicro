@@ -164,6 +164,46 @@ The lesson generalizes past this library: an instrument that samples cannot boun
 faster than its own sample rate, and reporting "no bounce" from one is a statement about the
 instrument.
 
+##### Measured on the same board reflashed to MicroPython 1.28.0
+
+Same switch, same pin, so the two runtimes are directly comparable.
+`functional_tests/test_mp_adapter_on_device.py` drives its edges from the chip; these came
+from a finger.
+
+- **The interrupt sees every edge the firmware scan was hiding.**  Ten presses put 68 edges
+  through `Pin.irq`, against the roughly 30 falling edges `countio` counted for the same
+  gesture.  On CircuitPython those never reach Python at all.
+- **The ring is sized right.**  Peak backlog was 4 of 32 slots on ordinary presses and 9 of 32
+  under 30 seconds of the fastest tapping a finger manages, which put 348 edges through.
+  `overflowed` never fired.
+- **The scheduled handler keeps up**, which is the evidence behind not passing `hard=` to
+  `Pin.irq`.  It was never behind by more than a third of the ring.
+- **A tick costs 489 us**, against 236 us for the same loop on CircuitPython.  That gap is the
+  settle window being spent in Python rather than in C.
+
+`settle_ms` is also the floor on the shortest press the library will report, which the docs
+had backwards.  The guide claimed raising it "never costs you a press."  It costs a lot of
+them.
+
+Ground truth came from a bare `Pin.irq` handler stamping every edge into an array, with no
+library and no debouncing, so closures could be counted without `settle_ms` in the way.
+Thirty seconds of the fastest tapping a finger manages closed the contact **107 times**, and
+**30 of those closures were shorter than 20 ms**.  The library reported 75 presses over the
+same gesture, which is the 77 that clear the default window.  So the default silently
+discards better than a quarter of fast tapping.
+
+Getting there took one more instrument correction, and this time the bad instrument was the
+press count itself.  348 raw edges against 75 reported presses is equally consistent with 75
+taps that bounced and 150 taps that did not, so the first reading of it, that the default was
+merely conservative, was a guess dressed as a measurement.  Counting closures independently
+of the library is what separated the two.
+
+Whether 20 ms is still the right default is open.  It is sized for an unmeasured switch, and a
+toggle or microswitch really can bounce that long; the tactile switch on the bench settled
+inside 300 us, so 5 ms was safe on it and let four times as many fast taps through.  The guide
+now carries the drop cost per window in a table.  Changing the default is an API decision and
+has not been made.
+
 Still open regardless of hardware:
 
 - Neither `_adapters/cp.py` nor `_adapters/mp.py` has executed on a board.  AGENTS.md requires
