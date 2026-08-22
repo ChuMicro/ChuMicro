@@ -198,11 +198,21 @@ taps that bounced and 150 taps that did not, so the first reading of it, that th
 merely conservative, was a guess dressed as a measurement.  Counting closures independently
 of the library is what separated the two.
 
-Whether 20 ms is still the right default is open.  It is sized for an unmeasured switch, and a
-toggle or microswitch really can bounce that long; the tactile switch on the bench settled
-inside 300 us, so 5 ms was safe on it and let four times as many fast taps through.  The guide
-now carries the drop cost per window in a table.  Changing the default is an API decision and
-has not been made.
+The default moved to 10 ms as a result.  The closure durations say what each window costs on
+this switch, and the library reports exactly the closures that clear its window:
+
+| `settle_ms` | Closures dropped | Reported presses |
+|---|---|---|
+| 20 | 30 of 107 | 77 |
+| 10 | 7 of 107 | 100 |
+| 5 | 4 of 107 | 103 |
+
+Nothing is given up at 10 on hardware like this, since the bounce settles inside 300 us and any
+of the three filters it completely.  The default cannot be 5, because it also has to hold for
+switches nobody measured: a big toggle or a worn microswitch can bounce for twenty
+milliseconds, and a 5 ms window could believe a gap in the middle of that.  Ten keeps margin
+against those while covering the tactile switches most buttons are.  Decision 0124 carries the
+rule; the guide carries the per-window cost.
 
 Still open regardless of hardware:
 
