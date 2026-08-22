@@ -54,6 +54,9 @@ class KeyMatrix(Buttons):
     Args:
         row_pins: Runtime pin objects for the rows.
         column_pins: Runtime pin objects for the columns.
+        ticks: The clock every duration here is judged by, ``chumicro_timing.ticks`` or
+            anything shaped like it.  Required, and it reaches the scan and every key below,
+            so the whole keypad measures against one time base.
         source: Pre-built edge source; overrides the pins.  Tests inject a fake here.
         columns_to_anodes: Which way the matrix's diodes face.  Leave it True when each
             diode's striped end points at a row pin, which is how ready-made keypads are built.
@@ -64,9 +67,6 @@ class KeyMatrix(Buttons):
         repeat_ms: Interval between repeat fires while held.  Zero disables it.
         repeat_delay_ms: Hold time before repeat starts.
         click_ms: Quiet time that closes a click series.  Zero disables click counting.
-        ticks: The clock every duration here is judged by, ``chumicro_timing.ticks`` or
-            anything shaped like it.  Required, and it reaches the scan and every key below,
-            so the whole keypad measures against one time base.
     """
 
     def __init__(
@@ -74,6 +74,7 @@ class KeyMatrix(Buttons):
         row_pins: object | None = None,
         column_pins: object | None = None,
         *,
+        ticks: object,
         source: object | None = None,
         columns_to_anodes: bool = True,
         settle_ms: int = DEFAULT_SETTLE_MS,
@@ -81,7 +82,6 @@ class KeyMatrix(Buttons):
         repeat_ms: int = 0,
         repeat_delay_ms: int = DEFAULT_REPEAT_DELAY_MS,
         click_ms: int = 0,
-        ticks: object,
     ) -> None:
         if source is None:
             if row_pins is None or column_pins is None:

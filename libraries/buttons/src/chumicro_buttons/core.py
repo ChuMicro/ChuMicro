@@ -45,6 +45,10 @@ class Button:
 
     Args:
         pin: Runtime pin object for the key, or None when a parent drives this button.
+        ticks: The clock every duration here is judged by, ``chumicro_timing.ticks`` or
+            anything shaped like it.  Required, and it is the only clock this library reads,
+            so the ticks you pass ``check(now_ms)`` and the settle window the source
+            debounces against share one time base by construction.
         source: Pre-built edge source; overrides ``pin``.  Tests inject a fake here.
         active_low: True when a pressed key reads low.  True suits a button wired to ground
             with the internal pull-up enabled, which is nearly always the wiring.
@@ -55,16 +59,13 @@ class Button:
         repeat_delay_ms: Hold time before repeat starts.
         click_ms: Quiet time after a release that closes a click series and publishes
             ``click_count``.  Zero disables click counting.
-        ticks: The clock every duration here is judged by, ``chumicro_timing.ticks`` or
-            anything shaped like it.  Required, and it is the only clock this library reads,
-            so the ticks you pass ``check(now_ms)`` and the settle window the source
-            debounces against share one time base by construction.
     """
 
     def __init__(
         self,
         pin: object | None = None,
         *,
+        ticks: object,
         source: object | None = None,
         active_low: bool = True,
         settle_ms: int = DEFAULT_SETTLE_MS,
@@ -72,7 +73,6 @@ class Button:
         repeat_ms: int = 0,
         repeat_delay_ms: int = DEFAULT_REPEAT_DELAY_MS,
         click_ms: int = 0,
-        ticks: object,
     ) -> None:
         self._ticks = ticks
 
@@ -273,6 +273,9 @@ class Buttons:
 
     Args:
         pins: Runtime pin objects, one per key.
+        ticks: The clock every duration here is judged by, ``chumicro_timing.ticks`` or
+            anything shaped like it.  Required, and it reaches the scan and every key below,
+            so the whole panel measures against one time base.
         source: Pre-built edge source; overrides ``pins``.  Tests inject a fake here.
         active_low: True when a pressed key reads low.
         settle_ms: Debounce window in milliseconds; 0 trusts the signal.
@@ -280,15 +283,13 @@ class Buttons:
         repeat_ms: Interval between repeat fires while held.  Zero disables it.
         repeat_delay_ms: Hold time before repeat starts.
         click_ms: Quiet time that closes a click series.  Zero disables click counting.
-        ticks: The clock every duration here is judged by, ``chumicro_timing.ticks`` or
-            anything shaped like it.  Required, and it reaches the scan and every key below,
-            so the whole panel measures against one time base.
     """
 
     def __init__(
         self,
         pins: object | None = None,
         *,
+        ticks: object,
         source: object | None = None,
         active_low: bool = True,
         settle_ms: int = DEFAULT_SETTLE_MS,
@@ -296,7 +297,6 @@ class Buttons:
         repeat_ms: int = 0,
         repeat_delay_ms: int = DEFAULT_REPEAT_DELAY_MS,
         click_ms: int = 0,
-        ticks: object,
     ) -> None:
         if source is not None:
             self._source = source
