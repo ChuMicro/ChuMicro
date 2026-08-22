@@ -34,6 +34,10 @@
 #   137,626 B across 14 libraries.  Regenerate deliberately (never
 #   automatically — that would defeat the ratchet) when a cut round lands.
 
+[buttons]
+stripped = 25520
+mpy = 9340
+
 [compat]
 stripped = 1940
 mpy = 1174
@@ -45,6 +49,10 @@ mpy = 2752
 [http_server]
 stripped = 48608
 mpy = 19405
+
+[knobs]
+stripped = 9782
+mpy = 5067
 
 [kvstore]
 stripped = 13470

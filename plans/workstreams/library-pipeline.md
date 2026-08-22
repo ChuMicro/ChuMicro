@@ -85,10 +85,169 @@ Macropad fact sheet (RP2040 + 8 MB QSPI):
 
 | Library | Sketch |
 |---|---|
-| **chumicro-buttons** | Runner-shaped service over a constructor-injected pin / key-matrix adapter.  `Button`, `Buttons`, `KeyMatrix`; emits `press / release / long_press / repeat / double / chord`.  Adapters: `keypad.Keys` + `keypad.KeyMatrix` (CP), `machine.Pin` capture IRQ for discrete pins and a polled scan for the matrix (MP), scripted fake (CPython).  Split and interrupt contract: [Decision 0124](../decisions/0124-buttons-and-knobs-libraries.md). |
-| **chumicro-knobs** | Runner-shaped service for position inputs.  `Encoder` (quadrature, detents, optional bounds / wrap / acceleration) and `AnalogKnob` (ADC with deadband + step quantization); both publish `position` + `delta`.  Adapters: `rotaryio.IncrementalEncoder` (CP), capture IRQ with a transition table (MP), scripted fake (CPython).  No dep on `chumicro-buttons` — an encoder's push switch is a `Button` the application wires up. |
+| **chumicro-buttons** | SHIPPED.  `Button`, `Buttons`, `KeyMatrix`.  See "Buttons and knobs as built" below. |
+| **chumicro-knobs** | SHIPPED.  `Encoder`, `AnalogKnob`.  See "Buttons and knobs as built" below. |
 | **chumicro-pixels** | Runner-shaped LED patterns: `Solid`, `Blink`, `Pulse`, `Fade`, `Chase`, `Flash`. Constructor-injected strip backend (CP `neopixel.NeoPixel`, MP `neopixel.NeoPixel`, single PWM pin, no-op).  Each pattern is a tick-driven generator; service composites them onto the strip. |
 | **chumicro-tone** *(optional)* | Non-blocking tone scheduler: `tone.beep(440, 50)` queues a tick-driven pulse train; backends are PWM (CP `pwmio`, MP `machine.PWM`), no-op.  Small (~80 lines).  Gravy. |
+
+#### Buttons and knobs as built
+
+Shaped by [Decision 0124](../decisions/0124-buttons-and-knobs-libraries.md); this section carries what the ADR deliberately does not.
+
+How each reading is captured:
+
+| | CircuitPython | MicroPython |
+|---|---|---|
+| `Button` / `Buttons` | `keypad.Keys` | `Pin.irq` into a preallocated ring |
+| `KeyMatrix` | `keypad.KeyMatrix` | polled scan |
+| `Encoder` | `rotaryio.IncrementalEncoder` | `Pin.irq` plus a transition table |
+| `AnalogKnob` | polled ADC | polled ADC |
+
+Facts read from the CircuitPython 10.2.0 and MicroPython 1.27.0 trees in `.tools/` rather than assumed:
+
+- `keypad.Keys(pins, *, value_when_pressed, pull=True, interval=0.020, max_events=64, debounce_threshold=1)`, and `KeyMatrix(row_pins, column_pins, *, columns_to_anodes=True, ...)` with the same timing arguments.  `settle_ms` maps onto `interval` and `debounce_threshold` together.
+- `keypad.Event.timestamp` is stamped from `supervisor_ticks_ms()` in the background scan, so it is already Decision 0014's tick base with no conversion.
+- `rotaryio.IncrementalEncoder` defaults `divisor=4` and documents `1` for encoders without detents, which is where `detent_steps` gets its default.
+- `countio.Counter` has no debounce parameter, which is why it is not used for buttons: one bouncy press lands as several counts and it cannot separate press from release.
+- `CIRCUITPY_KEYPAD` tracks `CIRCUITPY_FULL_BUILD`, which defaults on.  Boards without it are atmel-samd, already outside the class Decision 0015 supports, so there is no polled fallback.
+- Neither MicroPython adapter passes `hard=` to `Pin.irq`.  The scheduled handler the default gives is enough: the VM drains pending callbacks at every jump and call, so in a tick loop the queue empties far faster than contact bounce fills it.  Skipping it also sidesteps the esp32 port, whose `Pin.irq` takes no `hard=` at all.
+- The knobs MicroPython quadrature table matches CircuitPython's own `transitions[16]` in `shared-module/rotaryio/IncrementalEncoder.c` entry for entry, verified by parsing both.  That is deliberate: a shaft turned one way has to report the same sign on either runtime.  The code carries no reference to it, because a comment naming an upstream repo path is forbidden by the code-comment rules; this is its home.
+
+First-release sizes: buttons 28.0 KB stripped, knobs 9.3 KB.  Whole-library cost is why they are two installs rather than one.
+
+What each surface needs before it can be called verified.  The macropad is not the gate for
+most of it, and for one surface it is not sufficient:
+
+| Surface | Hardware | Bench today |
+|---|---|---|
+| `Button`, `Buttons` | A pin and a wire to ground | Yes, on every registered board |
+| `KeyMatrix` | A row-by-column grid, or wires plus diodes | No, wants the macropad or a breadboard |
+| `Encoder` | A rotary encoder module | No, wants the macropad or a two-dollar module |
+| `AnalogKnob` | A potentiometer on an ADC pin | No, and the macropad has none either |
+
+So the single-button and multi-button paths, which are most of both libraries, can be verified
+now: `keypad.Keys` on the CircuitPython boards and the `Pin.irq` capture on the MicroPython
+ones.  The TinyPICO and FeatherS3 matter most there, because they are esp32 parts whose
+`Pin.irq` takes no `hard=` and whose handler runs through the scheduler.  That path has only
+ever been reasoned about.
+
+##### Measured on a Pi Pico W, CircuitPython 10.2.0
+
+A momentary switch straight from GP3 to ground, no debounce hardware, driven by hand.
+`functional_tests/test_cp_adapter_on_device.py` carries what runs unattended; these are the
+numbers behind it.
+
+- **Ten presses produce about thirty falling edges.**  Bounce arrives in bursts of three to
+  four edges that finish inside roughly 300 us, at the release as well as the press.  The
+  release bounces because an opening contact closes again on the way apart, so a falling-edge
+  counter sees both ends of a press.
+- **Those thirty edges reach the library as exactly ten presses**, with `overflowed` staying
+  false.  On CircuitPython the settle window is spent entirely inside the firmware scan, so
+  the bounce never reaches Python.
+- **The shortest hold that registered was 31 ms.**  A press shorter than `settle_ms` is
+  rejected as bounce by design, so a 20 ms window sets the floor on a deliberate tap.
+- **A tick costs nothing.**  Zero heap growth per 1000 `check()` calls after the first pass,
+  which boxes one integer as the clock leaves the small-int range.  A tick loop ran at 236 us.
+
+Measuring bounce at all took three instruments, and the first two lied:
+
+- `keypad` with debouncing disabled reported **no bounce**, because its scan floor is 1 ms and
+  the bursts are shorter than that.
+- A `digitalio` poll loop at 11.7 us per read also reported **no bounce**, for the same reason
+  one order of magnitude down.
+- `countio.Counter` counts edges in hardware and found them immediately.  It is the only one of
+  the three that cannot alias.  Two rp2040 constraints go with it: the pin must be on PWM
+  channel B, which means an odd GPIO, and `Edge.RISE_AND_FALL` raises `NotImplementedError`, so
+  a press has to be counted from one edge direction.
+
+The lesson generalizes past this library: an instrument that samples cannot bound something
+faster than its own sample rate, and reporting "no bounce" from one is a statement about the
+instrument.
+
+##### Measured on the same board reflashed to MicroPython 1.28.0
+
+Same switch, same pin, so the two runtimes are directly comparable.
+`functional_tests/test_mp_adapter_on_device.py` drives its edges from the chip; these came
+from a finger.
+
+- **The interrupt sees every edge the firmware scan was hiding.**  Ten presses put 68 edges
+  through `Pin.irq`, against the roughly 30 falling edges `countio` counted for the same
+  gesture.  On CircuitPython those never reach Python at all.
+- **The ring is sized right.**  Peak backlog was 4 of 32 slots on ordinary presses and 9 of 32
+  under 30 seconds of the fastest tapping a finger manages, which put 348 edges through.
+  `overflowed` never fired.
+- **The scheduled handler keeps up**, which is the evidence behind not passing `hard=` to
+  `Pin.irq`.  It was never behind by more than a third of the ring.
+- **A tick costs 489 us**, against 236 us for the same loop on CircuitPython.  That gap is the
+  settle window being spent in Python rather than in C.
+
+`settle_ms` is also the floor on the shortest press the library will report, which the docs
+had backwards.  The guide claimed raising it "never costs you a press."  It costs a lot of
+them.
+
+Ground truth came from a bare `Pin.irq` handler stamping every edge into an array, with no
+library and no debouncing, so closures could be counted without `settle_ms` in the way.
+Thirty seconds of the fastest tapping a finger manages closed the contact **107 times**, and
+**30 of those closures were shorter than 20 ms**.  The library reported 75 presses over the
+same gesture, which is the 77 that clear the default window.  So the default silently
+discards better than a quarter of fast tapping.
+
+Getting there took one more instrument correction, and this time the bad instrument was the
+press count itself.  348 raw edges against 75 reported presses is equally consistent with 75
+taps that bounced and 150 taps that did not, so the first reading of it, that the default was
+merely conservative, was a guess dressed as a measurement.  Counting closures independently
+of the library is what separated the two.
+
+The default moved to 10 ms as a result.  The closure durations say what each window costs on
+this switch, and the library reports exactly the closures that clear its window:
+
+| `settle_ms` | Closures dropped | Reported presses |
+|---|---|---|
+| 20 | 30 of 107 | 77 |
+| 10 | 7 of 107 | 100 |
+| 5 | 4 of 107 | 103 |
+
+Nothing is given up at 10 on hardware like this, since the bounce settles inside 300 us and any
+of the three filters it completely.  The default cannot be 5, because it also has to hold for
+switches nobody measured: a big toggle or a worn microswitch can bounce for twenty
+milliseconds, and a 5 ms window could believe a gap in the middle of that.  Ten keeps margin
+against those while covering the tactile switches most buttons are.  Decision 0124 carries the
+rule; the guide carries the per-window cost.
+
+##### Measured on a Lolin S2 Mini, MicroPython 1.27.0
+
+The esp32 port is a different capture path from rp2040, not just a different board: its
+`Pin.irq` installs no hard handler and the ISR hands the callback to `mp_sched_schedule`, so
+the handler runs when the VM next reaches a safe point.  That is the path the adapter was
+written against and had only ever been reasoned about.
+
+- **`hard=True` raises `TypeError: extra keyword arguments given`** on this port, confirmed on
+  silicon.  An adapter that passed it unconditionally would fail at construction on every
+  esp32 board.  This is why neither adapter passes it.
+- **A starved loop loses nothing.**  Ticking once every 300 ms, so the loop was asleep for all
+  but a sliver of the run, all ten presses and releases arrived and `held_ms` read 51 to 63 ms.
+  Durations from the tick rather than the edge would have been multiples of 300.  The esp32
+  scheduler drains through `time.sleep_ms`, so the queue never backed up.
+- **The settle model is exact, not approximate.**  Spying on the ring from inside the interrupt
+  gives ground truth and library output from one gesture: 13 contact closures, 12 of them
+  lasting at least the 10 ms window, and 12 presses reported.  Prediction error zero.  Nothing
+  was lost to the scheduler and no bounce was mistaken for a press.
+- Peak ring backlog 3 of 32, no overflow, and zero heap growth per 1000 ticks.
+
+The functional suite passes 9 of 9 here as it does on rp2040.  Its pin candidates had to be
+narrowed to do so safely: the list must hold on every chip family, and the dangerous numbers
+differ per family, so anything that is SPI flash, PSRAM, native USB, or a strapping pin on any
+of them is out.  Driving one of those does not raise, it resets the board.
+
+Still open regardless of hardware:
+
+- Neither `_adapters/cp.py` nor `_adapters/mp.py` has executed on a board.  AGENTS.md requires
+  real-board verification for runtime-specific code.
+- Neither library has a `functional_tests/` suite.
+- How many edges a real bouncy switch emits per press, which decides whether the MicroPython
+  ring depth is right before `overflowed` starts firing on ordinary presses.
+- Whether row-major key numbering agrees between `keypad.KeyMatrix` and the MicroPython scan.
+  Both sides claim it and nothing on a host can hold them to it.
 
 ### Tier C — defer until hardware is on the bench
 

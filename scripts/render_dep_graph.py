@@ -79,12 +79,15 @@ NODES: dict[str, tuple[int, int]] = {
     "config":      (100,  300),
     "kvstore":     (300,  300),
     "runner":      (520,  300),
+    # Middle row, right: buttons reads the caller's clock arithmetic.
+    "buttons":     (740,  300),
     # Bottom row: foundation primitives (y=540).
     "msgpack":     (140,  540),
     "timing":      (480,  540),
     "sockets":     (840,  540),
     # Standalone cluster (top-left of foundation row, no edges).
     "compat":      (40,   640),
+    "knobs":       (220,  640),
 }
 
 # Workbench layout: composers on top, primitives below, lint-only
@@ -209,7 +212,7 @@ def render_svg(
     strict: dict[str, list[str]],
     di: dict[str, list[str]],
     nodes: dict[str, tuple[int, int]] = NODES,
-    standalone: set[str] = frozenset({"compat"}),
+    standalone: set[str] = frozenset({"compat", "knobs"}),
     node_w: int = NODE_W,
     node_h: int = NODE_H,
     canvas_w: int = CANVAS_W,

@@ -10,6 +10,9 @@
     <content url="file://$MODULE_DIR$">
       <sourceFolder url="file://$MODULE_DIR$/support/test_harness/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/support/test_harness/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/libraries/buttons/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/libraries/buttons/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/libraries/buttons/functional_tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/compat/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/compat/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/compat/functional_tests" isTestSource="true" />
@@ -19,6 +22,9 @@
       <sourceFolder url="file://$MODULE_DIR$/libraries/http_server/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/http_server/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/http_server/functional_tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/libraries/knobs/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/libraries/knobs/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/libraries/knobs/functional_tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/kvstore/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/kvstore/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/kvstore/functional_tests" isTestSource="true" />

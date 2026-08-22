@@ -30,6 +30,7 @@
 
   <!-- Strict-dep arrows (pyproject.toml dependencies) -->
   <g>
+  <line x1="805.0" y1="336" x2="545.0" y2="540" class="edge-strict" marker-end="url(#arrow-strict)" />
   <line x1="165.0" y1="336" x2="205.0" y2="540" class="edge-strict" marker-end="url(#arrow-strict)" />
   <line x1="645.0" y1="96" x2="165.0" y2="300" class="edge-strict" marker-end="url(#arrow-strict)" />
   <line x1="645.0" y1="96" x2="905.0" y2="540" class="edge-strict" marker-end="url(#arrow-strict)" />
@@ -99,6 +100,10 @@
     <text x="585.0" y="323.0" text-anchor="middle">chumicro-runner</text>
   </g>
   <g class="node default">
+    <rect x="740" y="300" width="130" height="36" rx="6" ry="6" />
+    <text x="805.0" y="323.0" text-anchor="middle">chumicro-buttons</text>
+  </g>
+  <g class="node default">
     <rect x="140" y="540" width="130" height="36" rx="6" ry="6" />
     <text x="205.0" y="563.0" text-anchor="middle">chumicro-msgpack</text>
   </g>
@@ -113,6 +118,10 @@
   <g class="node standalone">
     <rect x="40" y="640" width="130" height="36" rx="6" ry="6" />
     <text x="105.0" y="663.0" text-anchor="middle">chumicro-compat</text>
+  </g>
+  <g class="node standalone">
+    <rect x="220" y="640" width="130" height="36" rx="6" ry="6" />
+    <text x="285.0" y="663.0" text-anchor="middle">chumicro-knobs</text>
   </g>
   </g>
 
