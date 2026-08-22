@@ -144,7 +144,6 @@ __all__ = (
     "LAST_STATE",
     "QUADRATURE_STEPS",
     "FakeConverter",
-    "FakePin",
     "MpAnalogSource",
     "PinType",
     "Shaft",
@@ -156,14 +155,11 @@ class Shaft:
     """Two fake pins and the source watching them, turned one quadrature step at a time.
 
     ``state`` is where the shaft is parked when the source is built, as ``(pin_a, pin_b)``.
-    ``pin_class`` stands in a pin that behaves differently, such as one whose port takes no
-    hard interrupts.
     """
 
-    def __init__(self, state=(1, 1), *, detent_steps: int = 4, pin_class=None) -> None:
-        pin_class = pin_class if pin_class is not None else FakePin
-        self.pin_a = pin_class(state[0])
-        self.pin_b = pin_class(state[1])
+    def __init__(self, state=(1, 1), *, detent_steps: int = 4) -> None:
+        self.pin_a = FakePin(state[0])
+        self.pin_b = FakePin(state[1])
         self.source = MpEncoderSource(self.pin_a, self.pin_b, detent_steps=detent_steps)
 
     def move_to(self, state) -> None:

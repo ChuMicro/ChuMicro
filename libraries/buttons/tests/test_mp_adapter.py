@@ -106,16 +106,6 @@ class FakePin:
         self.handler(self)
 
 
-class PinWithoutHardInterrupts(FakePin):
-    """A pin whose irq() has no hard= parameter, so passing one is a TypeError."""
-
-    def irq(self, handler=None, trigger=0, hard=None) -> None:
-        """Refuse hard= the way some ports do, and install the handler otherwise."""
-        if hard is not None:
-            raise TypeError("irq() got an unexpected keyword argument 'hard'")
-        self.handler = handler
-
-
 def _fake_machine() -> FakeModule:
     """Return a ``machine`` stand-in whose ``Pin`` is the hand-driven fake."""
     machine = FakeModule()
@@ -208,22 +198,3 @@ def test_neither_source_builds_without_a_clock() -> None:
 
         with raises(TypeError):
             MpKeyMatrixSource((FakePin(),), (FakePin(),), settle_ms=SETTLE_MS)
-
-
-def test_a_port_that_rejects_hard_interrupts_still_captures_edges() -> None:
-    """Some ports take no hard= argument at all, and the source falls back rather than raising.
-
-    The fallback exists for a real port, so a fake that accepts every keyword would let a
-    regression through unnoticed.  This pin refuses hard= the way that port's does.
-    """
-    clock = UnwrappedTicks()
-    with SwapItem(sys.modules, "machine", _fake_machine()):
-        pin = PinWithoutHardInterrupts()
-        source = MpButtonSource((pin,), active_low=True, settle_ms=SETTLE_MS, ticks=clock)
-
-        assert pin.handler is not None
-
-        pin.fire(0)
-        source.poll(clock.ticks_ms() + SETTLE_MS)
-        assert source.next_event() is True
-        assert source.event_pressed is True

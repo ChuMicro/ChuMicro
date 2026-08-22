@@ -33,10 +33,9 @@ class MpEncoderSource:  # pragma: no cover - MP runtime path
     """Quadrature counting done by a pin interrupt this class installs and owns.
 
     MicroPython has no encoder peripheral binding, so both pins get an interrupt into one
-    handler, installed with ``hard=True`` so it runs at once rather than waiting for the
-    interpreter to reach a safe point.  That is what catches a spin starting and ending
-    between two passes of the loop.  ``pin_a`` and ``pin_b`` take a pin number or a
-    ``machine.Pin``, and ``detent_steps`` is the quadrature steps that make one detent.
+    handler, which is what catches a spin starting and ending between two passes of the
+    loop.  ``pin_a`` and ``pin_b`` take a pin number or a ``machine.Pin``, and
+    ``detent_steps`` is the quadrature steps that make one detent.
     """
 
     def __init__(self, pin_a, pin_b, *, detent_steps: int) -> None:
@@ -51,20 +50,10 @@ class MpEncoderSource:  # pragma: no cover - MP runtime path
         # Bound once and kept, so no callable is built on the way into an interrupt.
         self._edge_handler = self._on_edge
         edges = machine.Pin.IRQ_RISING | machine.Pin.IRQ_FALLING
-        self._attach_interrupt(self._pin_a, edges)
-        self._attach_interrupt(self._pin_b, edges)
+        self._pin_a.irq(handler=self._edge_handler, trigger=edges)
+        self._pin_b.irq(handler=self._edge_handler, trigger=edges)
 
         self.raw_position = 0
-
-    def _attach_interrupt(self, pin, trigger: int) -> None:
-        """Install the edge handler on ``pin``, hard where the port offers it."""
-        try:
-            pin.irq(handler=self._edge_handler, trigger=trigger, hard=True)
-        except TypeError:
-            # Some ports take no hard= and always schedule the handler instead.  The
-            # scheduler queue is short and a full one drops the callback, so a shaft
-            # spun hard can lose steps on those ports.
-            pin.irq(handler=self._edge_handler, trigger=trigger)
 
     def _on_edge(self, pin) -> None:
         """Fold one pin change into the detent count.  This runs in interrupt context.

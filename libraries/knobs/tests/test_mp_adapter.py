@@ -23,7 +23,6 @@ from _mp_helpers import (
     LAST_STATE,
     QUADRATURE_STEPS,
     FakeConverter,
-    FakePin,
     MpAnalogSource,
     PinType,
     Shaft,
@@ -267,32 +266,7 @@ def test_both_pins_are_watched_on_both_edges_from_inside_the_interrupt() -> None
         assert pin.mode == PinType.IN
         assert pin.pull == PinType.PULL_UP
         assert pin.trigger == both_edges
-        assert pin.hard is True
         assert pin.handler is not None
-
-
-def test_a_port_that_rejects_hard_interrupts_still_gets_its_handler() -> None:
-    """Some ports take no hard= argument at all, and the source falls back rather than raising.
-
-    The fallback exists for a real port, so a stub that accepts every keyword would let a
-    regression through.  This pin refuses hard= the way that port's does.
-    """
-    class PinWithoutHardInterrupts(FakePin):
-        """A pin whose irq() has no hard= parameter, so passing one is a TypeError."""
-
-        def irq(self, handler=None, trigger=0, hard=None):
-            if hard is not None:
-                raise TypeError("irq() got an unexpected keyword argument 'hard'")
-            self.handler = handler
-            self.trigger = trigger
-
-    shaft = Shaft(pin_class=PinWithoutHardInterrupts)
-
-    assert shaft.pin_a.handler is not None
-    assert shaft.pin_b.handler is not None
-
-    shaft.turn(8)
-    assert shaft.counted() == 2
 
 
 def test_deinit_takes_the_handler_off_both_pins() -> None:

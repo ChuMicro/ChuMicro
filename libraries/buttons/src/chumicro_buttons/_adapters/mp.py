@@ -110,7 +110,7 @@ class MpButtonSource(ButtonSource):  # pragma: no cover - MP runtime path
         while key_index < self.key_count:
             capture = _KeyEdgeCapture(self, key_index)
             self._captures.append(capture)
-            self._attach_interrupt(self._pins[key_index], capture.record, trigger)
+            self._pins[key_index].irq(handler=capture.record, trigger=trigger)
             key_index += 1
 
     def poll(self, now_ms: int) -> None:
@@ -246,17 +246,6 @@ class MpButtonSource(ButtonSource):  # pragma: no cover - MP runtime path
         # attribute load.  Everything that judges a duration uses the tick poll took.
         self._edge_times[write_index] = self._ticks_ms()
         self._write_index = next_write
-
-    def _attach_interrupt(self, pin: object, handler: object, trigger: int) -> None:
-        """Install ``handler`` on both edges of ``pin``, hard where the port offers it."""
-        try:
-            pin.irq(handler=handler, trigger=trigger, hard=True)
-        except TypeError:
-            # Some ports take no hard= and always schedule the handler instead.  That
-            # costs more than latency: the scheduler queue is short, a full one drops
-            # the callback, and the loss happens below this ring so overflowed cannot
-            # report it.  A capacitor on the pin is the fix, by making fewer edges.
-            pin.irq(handler=handler, trigger=trigger)
 
 
 class MpKeyMatrixSource(ButtonSource):  # pragma: no cover - MP runtime path

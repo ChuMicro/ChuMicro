@@ -11,7 +11,7 @@ Decision 0014 named buttons as one of the libraries its `check(now_ms)` / `handl
 
 The first is install cost.  Decisions 0044 and 0062 keep unreached modules off a device on the workspace deploy path, but `circup install` and `mip install` copy the whole package, so a one-button project on those paths would carry quadrature decode and ADC smoothing it never calls.
 
-The second is that the runtimes diverge on what matters most for a button: catching a tap that lands between two passes of the loop.  CircuitPython's firmware scans keys in the background and stamps each edge with the time it happened.  MicroPython ships no equivalent, so the only mechanism that does not lose the tap is a pin interrupt, and getting one right means an allocation-free handler with debounce kept out of interrupt context.  That is the set of details a beginner gets wrong.
+The second is that the runtimes diverge on what matters most for a button: catching a tap that lands between two passes of the loop.  CircuitPython's firmware scans keys in the background and stamps each edge with the time it happened.  MicroPython ships no equivalent, so the only mechanism that does not lose the tap is a pin interrupt, and getting one right means keeping debounce and every decision out of the handler.  That is the set of details a beginner gets wrong.
 
 ## Decision
 
@@ -29,11 +29,11 @@ A matrix key's events are button events; only the scan differs.  Splitting the m
 
 ### The library owns the interrupt, the user never writes one
 
-A press that outlives no pass of the loop is still a press the user made, so the library captures it.  Where the runtime captures in its own C, that is what the adapter uses and no Python interrupt is needed.  Where it does not, the library installs the interrupt itself and hides it, because the alternative is every user hand-rolling the same handler and getting the allocation rules wrong.
+A press that outlives no pass of the loop is still a press the user made, so the library captures it.  Where the runtime captures in its own C, that is what the adapter uses and no Python interrupt is needed.  Where it does not, the library installs the interrupt itself and hides it, because the alternative is every user hand-rolling the same handler.
 
 A library-owned capture interrupt is bound by four conditions:
 
-1. **It allocates nothing.**  Buffers are sized at construction and the handler stores into slots that already exist.
+1. **It stays cheap.**  Buffers are sized at construction and the handler stores into slots that already exist, so capture costs nothing on the hot path.
 2. **It captures, it does not decide.**  Raw state and a timestamp go into the buffer.  Debounce and every event built on duration run on the shared tick, in normal context.
 3. **No user code runs in interrupt context.**  Callbacks are dispatched from `handle`, so a callback that allocates, prints, or raises stays harmless.
 4. **Overflow is bounded and flagged.**  A full buffer drops the newest edge and sets `overflowed`.  The condition binds handlers that queue; one that folds each edge into a counter has nothing to drop and publishes no such flag.
