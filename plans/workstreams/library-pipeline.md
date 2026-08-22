@@ -115,12 +115,31 @@ Facts read from the CircuitPython 10.2.0 and MicroPython 1.27.0 trees in `.tools
 
 First-release sizes: buttons 28.0 KB stripped, knobs 9.3 KB.  Whole-library cost is why they are two installs rather than one.
 
-Still open, and gated on the macropad:
+What each surface needs before it can be called verified.  The macropad is not the gate for
+most of it, and for one surface it is not sufficient:
 
-- Neither `_adapters/cp.py` nor `_adapters/mp.py` has executed on hardware.  AGENTS.md requires real-board verification for runtime-specific code.
+| Surface | Hardware | Bench today |
+|---|---|---|
+| `Button`, `Buttons` | A pin and a wire to ground | Yes, on every registered board |
+| `KeyMatrix` | A row-by-column grid, or wires plus diodes | No, wants the macropad or a breadboard |
+| `Encoder` | A rotary encoder module | No, wants the macropad or a two-dollar module |
+| `AnalogKnob` | A potentiometer on an ADC pin | No, and the macropad has none either |
+
+So the single-button and multi-button paths, which are most of both libraries, can be verified
+now: `keypad.Keys` on the CircuitPython boards and the `Pin.irq` capture on the MicroPython
+ones.  The TinyPICO and FeatherS3 matter most there, because they are esp32 parts whose
+`Pin.irq` takes no `hard=` and whose handler runs through the scheduler.  That path has only
+ever been reasoned about.
+
+Still open regardless of hardware:
+
+- Neither `_adapters/cp.py` nor `_adapters/mp.py` has executed on a board.  AGENTS.md requires
+  real-board verification for runtime-specific code.
 - Neither library has a `functional_tests/` suite.
-- How many edges a real bouncy switch emits per press, which decides whether the MicroPython ring depth is right before `overflowed` starts firing on ordinary presses.
-- Whether row-major key numbering actually agrees between `keypad.KeyMatrix` and the MicroPython scan.  Both sides claim it and nothing on a host can hold them to it.
+- How many edges a real bouncy switch emits per press, which decides whether the MicroPython
+  ring depth is right before `overflowed` starts firing on ordinary presses.
+- Whether row-major key numbering agrees between `keypad.KeyMatrix` and the MicroPython scan.
+  Both sides claim it and nothing on a host can hold them to it.
 
 ### Tier C — defer until hardware is on the bench
 
