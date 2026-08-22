@@ -108,10 +108,12 @@ CLK ──[ 10k ]──┬── to the pin
 
 Around 100 microseconds of smoothing, which is far below a real pulse and far above the bouncing.  Better encoder modules already carry these; the cheap ones leave the pads empty.
 
-Two things measured on a bare module with no smoothing, on an ESP32-S2:
+Measured on a bare module with no smoothing, on an ESP32-S2 running each runtime in turn:
 
 - Normal turning was exact.  Ten clicks out and ten back gave twenty detent events, every one of them a single step, ending on zero.
-- Spun far past what the part is rated for, the count drifted about eight percent over 136 detents, and the direction of the error changed between runs.  An error that changes sign is the contacts, not the counting.
+- Spun by hand at about 1000 detents per second, far past what the part is rated for, the count drifted a few percent over roughly 230 detents.  The direction of the error changed between runs, and an error that changes sign is the contacts rather than the counting.
+
+Nobody reaches that speed turning a knob on purpose, so the practical answer is that an encoder counts what you turn.  The drift is worth knowing about only if something in your project spins a shaft rather than a wrist.
 
 If a module has a `+` pin, wire it.  The pull-up resistors on the board do nothing until it is powered, and without them pulses drop at random rather than merely drifting under abuse.
 

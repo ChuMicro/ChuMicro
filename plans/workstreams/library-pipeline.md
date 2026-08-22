@@ -257,6 +257,29 @@ IO3 and IO5 exercised the decode:
   pulses drop at random: a steady two-per-detent became a mix of ones, twos and threes,
   with 16 pulses of movement netting `+4`.  Wiring it made every detent read exactly 2.
 
+Spun far past the part's rating, the two runtimes were compared at matched speed, which took
+three attempts to arrange because the first two had no valid speed measurement attached:
+
+| | Travelled | Peak rate | Drift |
+|---|---|---|---|
+| MicroPython, `Pin.irq` into a Python table | 225 detents | 1050 detents/sec | 2.2 % |
+| CircuitPython, `rotaryio` on PCNT | 240 detents | 1043 detents/sec | 5.4 % |
+
+The Python decode drifted less than the hardware counter, which is worth recording because it
+is the opposite of the expected result.  The mechanism fits: PCNT counts edges of one line with
+the direction taken from the other line's level and holds no state, so it cannot reject a
+transition a real shaft could never make, while the transition table maps both-pins-changed to
+zero and throws it away.  An earlier MicroPython run saw 2.67 edges per detent and still
+drifted nothing, which is that rejection working.
+
+This is one matched pair rather than a distribution, and the gesture behind it is a human hand,
+so treat the direction as suggestive and the magnitudes as approximate.  Both runtimes count
+exactly at any speed a wrist produces; roughly 1000 detents per second is horsing around, and
+the drift matters only where something motorized turns the shaft.  The `MpEncoderSource` note
+that its table matches CircuitPython's `transitions[16]` entry for entry is the reason the two
+disagree here at all: the table is upstream's own, and the esp32 PCNT path is what departs
+from it.
+
 Two instrument lessons came out of it, both the same shape as the buttons ones.  Reading a
 count as "the library is wrong" when the encoder's detent size was never established is
 inference, not measurement; the fix was to count raw pulses and group them by the gaps
