@@ -40,21 +40,46 @@ def _candidates():
             yield getattr(board, name)
 
 
+def _trailing_number(name: str) -> int:
+    """Return the digits a pin name ends with, or -1 when it ends with none."""
+    digits = ""
+    index = len(name) - 1
+    while index >= 0 and name[index].isdigit():
+        digits = name[index] + digits
+        index -= 1
+    return int(digits) if digits else -1
+
+
 def _free_quadrature_pins():
-    """Return two pins ``rotaryio`` will watch together, or fail saying none were found."""
-    found = []
-    for pin in _candidates():
+    """Return two pins ``rotaryio`` will watch together, or fail saying none were found.
+
+    On RP2040 the two pins are read by one PIO state machine and have to be next to each
+    other in GPIO numbering, so the pair matters and cannot be assembled a pin at a time.
+    Candidates are therefore ordered by the number their name ends with and offered in
+    neighbouring pairs, and the firmware is left to say which pair it will take.  Ports
+    without the adjacency rule accept the first pair offered.
+    """
+    numbered = []
+    for name in dir(board):
+        if name.startswith("_") or name in _ATTACHED:
+            continue
+        number = _trailing_number(name)
+        if number >= 0:
+            numbered.append((number, getattr(board, name)))
+    numbered.sort(key=lambda entry: entry[0])
+
+    for index in range(len(numbered) - 1):
+        pin_a = numbered[index][1]
+        pin_b = numbered[index + 1][1]
         try:
-            claim = rotaryio.IncrementalEncoder(pin, pin)
+            claim = rotaryio.IncrementalEncoder(pin_a, pin_b)
         except (ValueError, TypeError, RuntimeError):
-            # A pin already in use, or one the same pin cannot pair with, is simply not a
-            # candidate; both raise before anything is held.
+            # Either pin may be spoken for, the two may be the same pad under different
+            # names, or the port may want them adjacent and these are not.
             continue
         claim.deinit()
-        found.append(pin)
-        if len(found) == 2:
-            return found[0], found[1]
-    raise AssertionError("no two free pins on this board for rotaryio to watch")
+        return pin_a, pin_b
+    raise AssertionError("no adjacent pair of free pins on this board for rotaryio")
 
 
 def _free_analog_pin():

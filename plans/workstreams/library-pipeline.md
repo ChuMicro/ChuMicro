@@ -260,16 +260,31 @@ IO3 and IO5 exercised the decode:
 Spun far past the part's rating, the two runtimes were compared at matched speed, which took
 three attempts to arrange because the first two had no valid speed measurement attached:
 
-| | Travelled | Peak detents/sec | Peak edges/sec | Drift |
+| Decode | Where | Travelled | Peak detents/sec | Drift |
 |---|---|---|---|---|
-| MicroPython on rp2040, Python table | 329 | 497 | 5055 | 0.3 % |
-| MicroPython on ESP32-S2, Python table | 225 | 1050 | 3382 | 2.2 % |
-| CircuitPython on ESP32-S2, PCNT | 240 | 1043 | not observable | 5.4 % |
+| Rejecting table | CircuitPython rp2040, sampled by PIO | 284 | 1017 | 0.4 % |
+| Rejecting table | MicroPython ESP32-S2, sampled by `Pin.irq` | 225 | 1050 | 2.2 % |
+| Stateless edge count | CircuitPython ESP32-S2, PCNT | 240 | 1043 | 5.4 % |
+| Rejecting table | MicroPython rp2040, sampled by `Pin.irq` | 329 | 497 | 0.3 % |
 
-Only the two ESP32-S2 rows are speed-matched and therefore comparable to each other.  The
-rp2040 row ran at about half the detent rate, so its lower drift cannot be read as a platform
-result; what it does establish is that the interrupt path absorbed a peak of 5055 edges per
+The first three rows are matched within three percent on speed, so they can be compared.  Both
+decodes that hold state stayed at or under 2.2 %, and the one that does not drifted 5.4 %, more
+than double the worst table result.  CircuitPython supplies both the best row and the worst,
+on one encoder at one speed, so the runtime is not the variable and neither is hardware against
+software.  What separates them is whether the decode can reject a transition a real shaft could
+never make.
+
+The fourth row ran at half the speed of the others and is supporting rather than comparable.
+What it establishes on its own is that the interrupt path absorbed a peak of 5055 edges per
 second, higher than either S2 run, and stayed within a third of a percent over 329 detents.
+
+This one was called before it was measured, which is why it carries more weight than the
+earlier comparisons here.  Reading `ports/raspberrypi/common-hal/rotaryio/IncrementalEncoder.c`
+showed PIO sampling feeding `shared_module_softencoder_state_update`, the same rejecting table
+`MpEncoderSource` carries, while the esp32 port counts edges of one line with the direction
+taken from the other line's level and holds no state at all.  That predicted which way rp2040
+CircuitPython would fall, and it fell that way.  It is still one run per cell, so the ordering
+is the result and the magnitudes are approximate.
 
 The Python decode drifted less than the hardware counter, which is worth recording because it
 is the opposite of the expected result.  The mechanism fits: PCNT counts edges of one line with
