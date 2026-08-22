@@ -269,7 +269,13 @@ Each queued edge takes its own `at_ms`, separate from the tick you pass to `chec
 | MicroPython | A capture interrupt the library installs and owns; your code never runs in interrupt context |
 | CPython | No GPIO exists, so `pin=` raises and points you at `FakeButtonSource` |
 
-The API is identical on all three.  On CircuitPython the modules this builds on (`keypad`, `digitalio`) are compiled into the firmware, so they cost nothing in your board's storage.
+The API is identical on all three.  On CircuitPython the modules this builds on are compiled into the firmware, so they cost nothing in your board's storage.
+
+### Not every MicroPython port has hard interrupts
+
+Most ports let the library take the edge in interrupt context, which is what makes a tap land with the time it actually happened.  Some, the ESP32 family among them, always hand the edge to a scheduler instead, and that scheduler holds only a few pending callbacks before it starts dropping them.  A contact that bounces hard enough can lose edges there before this library ever sees them, so `overflowed` will not report it.
+
+Nothing in your code changes, and for an ordinary press you will not notice.  If you are running on one of those ports and a button feels unreliable, the capacitor in the wiring section is the fix: it cuts the number of edges the contact makes, so fewer arrive to be dropped.
 
 ## Examples
 

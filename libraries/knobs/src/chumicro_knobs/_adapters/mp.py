@@ -61,8 +61,9 @@ class MpEncoderSource:  # pragma: no cover - MP runtime path
         try:
             pin.irq(handler=self._edge_handler, trigger=trigger, hard=True)
         except TypeError:
-            # Some ports take no hard= and always schedule the handler, which reaches
-            # the decode a little after the edge it reports.
+            # Some ports take no hard= and always schedule the handler instead.  The
+            # scheduler queue is short and a full one drops the callback, so a shaft
+            # spun hard can lose steps on those ports.
             pin.irq(handler=self._edge_handler, trigger=trigger)
 
     def _on_edge(self, pin) -> None:

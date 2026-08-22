@@ -110,7 +110,7 @@ Facts read from the CircuitPython 10.2.0 and MicroPython 1.27.0 trees in `.tools
 - `rotaryio.IncrementalEncoder` defaults `divisor=4` and documents `1` for encoders without detents, which is where `detent_steps` gets its default.
 - `countio.Counter` has no debounce parameter, which is why it is not used for buttons: one bouncy press lands as several counts and it cannot separate press from release.
 - `CIRCUITPY_KEYPAD` tracks `CIRCUITPY_FULL_BUILD`, which defaults on.  Boards without it are atmel-samd, already outside the class Decision 0015 supports, so there is no polled fallback.
-- MicroPython's esp32 port accepts no `hard=` argument on `Pin.irq`; rp2 does.
+- MicroPython's esp32 port accepts no `hard=` argument on `Pin.irq`; rp2 does.  Its `machine_pin_isr_handler` calls `mp_sched_schedule` and discards the return value, and `MICROPY_SCHEDULER_DEPTH` defaults to 4, so a full queue drops the edge in firmware, below the library's ring and invisible to `overflowed`.  Both adapters fall back to the scheduled form rather than refusing a supported board; the guide names the consequence and points at the capacitor as the mitigation, since fewer edges means fewer callbacks.
 - The knobs MicroPython quadrature table matches CircuitPython's own `transitions[16]` in `shared-module/rotaryio/IncrementalEncoder.c` entry for entry, verified by parsing both.  That is deliberate: a shaft turned one way has to report the same sign on either runtime.  The code carries no reference to it, because a comment naming an upstream repo path is forbidden by the code-comment rules; this is its home.
 
 First-release sizes: buttons 28.0 KB stripped, knobs 9.3 KB.  Whole-library cost is why they are two installs rather than one.

@@ -252,8 +252,10 @@ class MpButtonSource(ButtonSource):  # pragma: no cover - MP runtime path
         try:
             pin.irq(handler=handler, trigger=trigger, hard=True)
         except TypeError:
-            # The esp32 port's Pin.irq() takes no hard= at all: it always schedules the
-            # handler, which reaches the ring a little later than the edge it reports.
+            # Some ports take no hard= and always schedule the handler instead.  That
+            # costs more than latency: the scheduler queue is short, a full one drops
+            # the callback, and the loss happens below this ring so overflowed cannot
+            # report it.  A capacitor on the pin is the fix, by making fewer edges.
             pin.irq(handler=handler, trigger=trigger)
 
 
