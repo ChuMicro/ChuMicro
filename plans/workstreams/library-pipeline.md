@@ -260,10 +260,16 @@ IO3 and IO5 exercised the decode:
 Spun far past the part's rating, the two runtimes were compared at matched speed, which took
 three attempts to arrange because the first two had no valid speed measurement attached:
 
-| | Travelled | Peak rate | Drift |
-|---|---|---|---|
-| MicroPython, `Pin.irq` into a Python table | 225 detents | 1050 detents/sec | 2.2 % |
-| CircuitPython, `rotaryio` on PCNT | 240 detents | 1043 detents/sec | 5.4 % |
+| | Travelled | Peak detents/sec | Peak edges/sec | Drift |
+|---|---|---|---|---|
+| MicroPython on rp2040, Python table | 329 | 497 | 5055 | 0.3 % |
+| MicroPython on ESP32-S2, Python table | 225 | 1050 | 3382 | 2.2 % |
+| CircuitPython on ESP32-S2, PCNT | 240 | 1043 | not observable | 5.4 % |
+
+Only the two ESP32-S2 rows are speed-matched and therefore comparable to each other.  The
+rp2040 row ran at about half the detent rate, so its lower drift cannot be read as a platform
+result; what it does establish is that the interrupt path absorbed a peak of 5055 edges per
+second, higher than either S2 run, and stayed within a third of a percent over 329 detents.
 
 The Python decode drifted less than the hardware counter, which is worth recording because it
 is the opposite of the expected result.  The mechanism fits: PCNT counts edges of one line with
