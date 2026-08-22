@@ -59,13 +59,23 @@ def _quiet_panel(source, **options) -> Buttons:
 def test_a_panel_with_neither_pins_nor_source_is_refused() -> None:
     """Buttons() with nothing to read raises ValueError naming both arguments."""
     with raises(ValueError, match="pins= or source="):
-        Buttons()
+        Buttons(ticks=FakeTicks())
 
 
 def test_a_panel_given_an_empty_pin_sequence_is_refused() -> None:
     """An empty pins sequence is a config that resolved to nothing, not a zero-key panel."""
     with raises(ValueError, match="empty pins sequence"):
-        Buttons(pins=())
+        Buttons(pins=(), ticks=FakeTicks())
+
+
+def test_a_panel_built_without_a_clock_is_refused() -> None:
+    """Omitting ticks= raises TypeError rather than building a panel.
+
+    The clock has no default here, so a caller cannot end up with keys measuring
+    against a time base they never chose.
+    """
+    with raises(TypeError):
+        Buttons(source=FakeButtonSource())
 
 
 def test_a_panel_has_one_button_per_key_in_pin_order() -> None:

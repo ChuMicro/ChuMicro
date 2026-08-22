@@ -2,33 +2,21 @@
 
 import sys
 
-#: Full scale of the raw reading plus one.  Every runtime reports a conversion on the
-#: same 0 to 65535 scale, so dividing by this turns a reading into a fraction of a sweep.
+#: Full scale of the raw reading plus one.  Dividing a 0 to 65535 conversion by this turns
+#: it into a fraction of the sweep.
 RAW_RANGE = 65536
 
 #: How many positions a full sweep of the knob reports, numbered 0 to ``steps - 1``.
 DEFAULT_STEPS = 100
 
-#: How far the raw reading must move before ``value`` is allowed to follow it.  A
-#: converter left alone never sits still: the low bits of a 12-bit part wander a couple
-#: of counts with the wiper parked, which is 32 counts once the reading is scaled to 16
-#: bits, and a noisier part on a long lead wanders several times that.  512 sits well
-#: above the wander and still under one step at the default 100 steps, where a step
-#: spans 655 counts, so the reading stops dithering and every step stays reachable.
+#: How far the raw reading must move before ``value`` follows it.  A parked wiper still
+#: wanders a few counts, more on a noisy part or a long lead; 512 clears that and stays
+#: under one step at the default 100 steps, where a step spans 655 counts.
 DEFAULT_DEADBAND = 512
 
 
 def _select_analog_source(pin):
-    """Return the converter this runtime can build for one pin.
-
-    Imported per runtime so a board only parses the adapter it actually uses.
-
-    Args:
-        pin: Analog-capable pin, named the way this runtime names pins.
-
-    Returns:
-        A source honouring the ``AnalogSource`` contract.
-    """
+    """Return the converter this runtime can build for one pin."""
     runtime_name = sys.implementation.name
     if runtime_name == "circuitpython":  # pragma: no cover - CP runtime path
         from chumicro_knobs._adapters.cp import CpAnalogSource
@@ -46,34 +34,20 @@ def _select_analog_source(pin):
 class AnalogKnob:
     """One potentiometer or slider, read as a step number that stops rattling.
 
-    Every reading is a plain attribute refreshed by ``check(now_ms)``.  ``just_moved``
-    is true only for the tick the knob moved on, so a loop can read it without
-    consuming anything:
-
-        while True:
-            now = ticks_ms()
-            knob.check(now)
-            if knob.just_moved:
-                print("brightness", knob.value)
-
-    Two things separate this from reading the pin yourself.  ``deadband`` is the analog
-    counterpart of a button's debounce: a converter parked under a still wiper still
-    reports a different number every sample, and without a deadband those wobbles read
-    as a knob nobody touched.  Quantizing into ``steps`` then gives the reading a size a
-    person can aim at, so a volume control lands on 47 and stays there.
-
-    Sampling happens on the tick that asks for it, on every runtime.  A voltage has no
-    edge to miss between two passes of the loop, so there is no interrupt here and none
-    is needed.
+    Every reading is a plain attribute refreshed by ``check(now_ms)``, and ``just_moved`` is
+    true only for the tick the knob moved on.  ``deadband`` is the analog counterpart of a
+    button's debounce, and ``steps`` gives the reading a size a person can aim at, so a
+    volume control lands on 47 and stays there.  Sampling happens on the tick that asks for
+    it, because a voltage has no edge to miss between two passes of the loop.
 
     Args:
-        pin: Analog-capable pin, named the way this runtime names pins.  Pass a pin or
-            pass ``source``.
+        pin: Analog-capable pin, named the way this runtime names pins.  Pass a pin or pass
+            ``source``.
         source: Pre-built converter; overrides ``pin``.  Tests inject a fake here.
         steps: How many positions the sweep reports.  ``value`` runs 0 to ``steps - 1``.
         deadband: How far the raw 0 to 65535 reading must move before ``value`` follows.
-            Keep it under one step, which is ``65536 // steps`` counts, or the steps at
-            the edges become unreachable.
+            Keep it under one step, ``65536 // steps`` counts, or the steps at the edges
+            become unreachable.
     """
 
     def __init__(
@@ -103,7 +77,6 @@ class AnalogKnob:
         self.delta = 0
         #: True only on the tick ``value`` changed.
         self.just_moved = False
-
         #: Called with the new step number when the knob moves.
         self.on_change = None
 
@@ -111,10 +84,10 @@ class AnalogKnob:
         """Sample the pin and let ``value`` follow it when the reading cleared the deadband.
 
         Args:
-            now_ms: Shared tick timestamp for this pass of the loop.
+            now_ms: Tick this pass of the loop is measured from.
 
         Returns:
-            True when ``value`` changed, which is the runner's gate for ``handle``.
+            True when ``value`` changed, so a quiet tick can skip ``handle``.
         """
         source = self._source
         source.poll(now_ms)
@@ -133,11 +106,7 @@ class AnalogKnob:
         return self.just_moved
 
     def handle(self, now_ms: int) -> None:
-        """Call ``on_change`` when this tick's movement earned it.
-
-        Args:
-            now_ms: Shared tick timestamp for this pass of the loop.
-        """
+        """Call ``on_change`` when this tick's movement earned it."""
         if self.just_moved and self.on_change is not None:
             self.on_change(self.value)
 

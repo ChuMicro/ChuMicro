@@ -53,15 +53,16 @@ def test_a_default_button_long_presses_at_the_default_threshold() -> None:
     assert button.just_clicked is False
 
 
-def test_a_button_given_no_ticks_falls_back_to_the_library_clock() -> None:
-    """Omitting ticks= still measures held_ms from the edge the test stamped."""
+def test_a_button_built_without_a_clock_is_refused() -> None:
+    """Omitting ticks= raises TypeError rather than building a button.
+
+    The clock has no default here, so a caller cannot end up with a button
+    measuring against a time base it never chose.
+    """
     source = FakeButtonSource()
-    button = Button(source=source, long_press_ms=0)
 
-    source.press(at_ms=100)
-    button.check(160)
-
-    assert button.held_ms == 60
+    with raises(TypeError):
+        Button(source=source, long_press_ms=0)
 
 
 def test_a_button_with_no_pin_and_no_source_tells_you_to_tick_its_panel() -> None:

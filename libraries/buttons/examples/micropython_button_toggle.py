@@ -31,7 +31,7 @@ Runs on MicroPython.
 __chumicro_runtimes__ = ("micropython",)
 
 from chumicro_buttons import Button
-from chumicro_timing import ticks_ms
+from chumicro_timing import ticks, ticks_ms
 from machine import Pin
 
 # Set BUTTON_PIN to the GPIO number your button is wired to.
@@ -40,7 +40,7 @@ BUTTON_PIN = 14
 # Most boards expose the onboard LED as "LED"; some want a GPIO number here.
 led = Pin("LED", Pin.OUT)
 
-button = Button(pin=Pin(BUTTON_PIN), long_press_ms=500)
+button = Button(pin=Pin(BUTTON_PIN), ticks=ticks, long_press_ms=500)
 
 print("Press to toggle the LED.  Hold to turn it off.\n")
 

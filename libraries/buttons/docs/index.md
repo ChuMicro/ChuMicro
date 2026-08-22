@@ -10,9 +10,9 @@ Wire a button to a pin, read `button.just_pressed` in the loop you already wrote
 import board
 import digitalio
 from chumicro_buttons import Button
-from chumicro_timing import ticks_ms
+from chumicro_timing import ticks, ticks_ms
 
-button = Button(pin=board.GP14)
+button = Button(pin=board.GP14, ticks=ticks)
 
 led = digitalio.DigitalInOut(board.LED)
 led.direction = digitalio.Direction.OUTPUT

@@ -6,15 +6,9 @@ __chumicro_test_support__ = True
 class FakeButtonSource:
     """Edge source a test drives by hand instead of by hardware.
 
-    Queue the edges you want the button to see, then tick the button.  Each edge
-    carries its own timestamp, which is how a test exercises the case that matters
-    on a real board: an edge captured earlier than the tick that noticed it.
-
-        source = FakeButtonSource()
-        button = Button(source=source, ticks=FakeTicks())
-        source.press(at_ms=100)
-        button.check(120)
-        assert button.just_pressed
+    Queue the edges you want the button to see, then tick the button.  Each edge carries its
+    own timestamp, which is how a test exercises the case that matters on a real board: an
+    edge captured earlier than the tick that noticed it.
 
     Args:
         key_count: How many keys this source reports.

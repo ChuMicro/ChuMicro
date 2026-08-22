@@ -13,9 +13,9 @@ Wire a momentary button between a GPIO pin and GND.  The internal pull-up is swi
 ```python
 import board
 from chumicro_buttons import Button
-from chumicro_timing import ticks_ms
+from chumicro_timing import ticks, ticks_ms
 
-button = Button(pin=board.GP14)
+button = Button(pin=board.GP14, ticks=ticks)
 
 while True:
     now = ticks_ms()
@@ -69,17 +69,15 @@ A switch is two pieces of metal meeting, and they bounce apart a few times on th
 `settle_ms` is the only setting, and it defaults to 20:
 
 ```python
-button = Button(pin=board.GP14, settle_ms=20)   # the default, good for a tactile switch
-button = Button(pin=board.GP14, settle_ms=0)    # the signal is already clean
+button = Button(pin=board.GP14, ticks=ticks, settle_ms=20)   # the default, good for a tactile switch
+button = Button(pin=board.GP14, ticks=ticks, settle_ms=0)    # the signal is already clean
 ```
 
 The window is a quiet period, not a lockout.  An edge is believed once the signal has held its new state for `settle_ms`, and it is stamped with the moment it changed rather than the moment that became certain.  So raising the number costs you latency and never costs you a press.
 
 Set it to `0` when the button has debouncing hardware behind it.  The next section covers what that hardware looks like and which arrangements actually earn a zero.
 
-## Wiring, and when hardware debouncing is worth it
-
-Software debouncing is enough for almost every project.  Hardware earns its parts when a button feeds something you do not control, when the wire run is long enough to pick up noise, or when you want the press to register in microseconds instead of milliseconds.
+## Wiring
 
 ### A plain button
 
@@ -93,42 +91,17 @@ Wiring to 3V3 instead needs a pull-down resistor of your own, and `active_low=Fa
 
 10 kΩ draws 330 µA while the button is held, which matters on a battery if the button is held often.
 
-### An RC filter
+### Adding a capacitor
+
+Software debouncing is enough for almost every project.  A capacitor at the pin is worth adding when the wire run is long enough to pick up noise, or when the button feeds something you do not control.
 
 <img src="schematics/debounce-rc.svg" alt="A 10k pull-up, a 2.2k series resistor, and a 2.2uF capacitor forming an RC filter into a GPIO pin" width="480">
 
-A capacitor at the pin slows both edges so the bouncing never reaches it.  The two edges are not slowed equally: the capacitor refills through the pull-up but empties through the series resistor alone, giving 4.8 ms on press against 27 ms on release.
+The capacitor slows both edges so the bouncing never reaches the pin.  The two edges are not slowed equally: the capacitor refills through the pull-up but empties through the series resistor alone, giving 4.8 ms on press against 27 ms on release.
 
-The series resistor is the part tutorials leave out, and it does two jobs.  It limits the current the contacts carry when the capacitor dumps into them, and it has to stay well under the pull-up, because the pin's own pull-up is still switched on and divides against it.  At 2.2 kΩ the pressed pin sits near 0.5 V, a solid low.  At 10 kΩ it would sit near 1.4 V, which is not a low at all.
+The series resistor does two jobs.  It limits the current the contacts carry when the capacitor dumps into them, and it has to stay well under the pull-up, because the pin's own pull-up is still switched on and divides against it.  At 2.2 kΩ the pressed pin sits near 0.5 V, a solid low.  At 10 kΩ it would sit near 1.4 V, which is not a low at all.
 
-This buys a real improvement and it does not buy a guaranteed single edge, because a plain input has one threshold and no hysteresis you can count on.  Use `settle_ms=5` here rather than `0`.
-
-### An RC filter and a Schmitt trigger
-
-<img src="schematics/debounce-rc-schmitt.svg" alt="The same RC network feeding a 74HC14 Schmitt trigger inverter, whose output drives the GPIO pin" width="520">
-
-A 74HC14 switches at 1.8 V going up and 1.05 V coming down.  That gap is what turns a slow ramp into one clean edge.  With 2.2 µF the node takes 12 ms to fall to the lower point and 25 ms to climb to the upper one, so the contacts have long stopped moving before either is crossed.
-
-This is the arrangement that earns `settle_ms=0`.  Note that the output is inverted, so read it with `active_low=False`.
-
-### A latch and a three-terminal switch
-
-<img src="schematics/debounce-spdt-latch.svg" alt="An SPDT switch driving a cross-coupled NAND latch built from a 74HC00" width="500">
-
-An SPDT switch touches one contact at a time, and while the pole is in the air both latch inputs sit high and the latch holds whatever it had.  There is no timing to size and nothing to tune: the bouncing cannot reach the pin.  This also earns `settle_ms=0`, and it reads with `active_low=True`.
-
-The catch is the switch.  This is the only arrangement that needs three terminals, so it rules out the two-pin tactile buttons most projects use.
-
-### Choosing
-
-| Wiring | `settle_ms` | Worth it when |
-|---|---|---|
-| Plain button | 20 | Almost always |
-| RC filter | 5 | Long wires, or a noisy environment |
-| RC and Schmitt trigger | 0 | You need one guaranteed edge, or the fastest response |
-| SPDT and latch | 0 | You already have a three-terminal switch |
-
-A capacitor alone can never quite reach `settle_ms=0`, and picking a bigger one makes it worse rather than better: it lengthens the time the signal spends between the thresholds.  Turning a slow ramp into a single edge takes hysteresis, which is what the last two arrangements add.
+With this in place the bouncing is gone before the pin sees it, so turn `settle_ms` down to 5.  Leave it above zero: a plain input has one threshold and no hysteresis you can rely on, so the last word on a clean single edge still belongs to the settle window.  A bigger capacitor does not fix that and makes it worse, because it lengthens the time the signal spends near the threshold.
 
 ## Long press, repeat, and clicks
 
@@ -137,6 +110,7 @@ Three duration-driven events sit on top of the edges.  Each is off unless you as
 ```python
 button = Button(
     pin=board.GP14,
+    ticks=ticks,
     long_press_ms=500,      # 0 turns long press off
     repeat_ms=200,          # 0 turns auto-repeat off
     repeat_delay_ms=700,    # how long to hold before repeat starts
@@ -196,7 +170,7 @@ while True:
 ```python
 from chumicro_buttons import Buttons
 
-buttons = Buttons(pins=(board.GP14, board.GP15, board.GP16))
+buttons = Buttons(pins=(board.GP14, board.GP15, board.GP16), ticks=ticks)
 
 while True:
     now = ticks_ms()
@@ -227,6 +201,7 @@ from chumicro_buttons.matrix import KeyMatrix
 keypad = KeyMatrix(
     row_pins=(board.GP2, board.GP3, board.GP4, board.GP5),
     column_pins=(board.GP6, board.GP7, board.GP8),
+    ticks=ticks,
 )
 
 while True:
@@ -270,11 +245,12 @@ The one tunable is the capture buffer on MicroPython, sized at construction to h
 ```python
 from chumicro_buttons import Button
 from chumicro_buttons.testing import FakeButtonSource
+from chumicro_timing.testing import FakeTicks
 
 
 def test_hold_arms_the_reset():
     source = FakeButtonSource()
-    button = Button(source=source, long_press_ms=3000)
+    button = Button(source=source, ticks=FakeTicks(), long_press_ms=3000)
 
     source.press(at_ms=100)
     button.check(100)
@@ -299,7 +275,6 @@ The API is identical on all three.  On CircuitPython the modules this builds on 
 
 | Example | What it shows |
 |---|---|
-| [`button_events_simulated.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/buttons/examples/button_events_simulated.py) | Press, long press, repeat, and click counting on CPython, no board needed |
 | [`circuitpython_button_toggle.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/buttons/examples/circuitpython_button_toggle.py) | A button flips the onboard LED on CircuitPython (hardware) |
 | [`micropython_button_toggle.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/buttons/examples/micropython_button_toggle.py) | The same button on MicroPython (hardware) |
 

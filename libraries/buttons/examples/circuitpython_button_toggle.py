@@ -29,13 +29,13 @@ __chumicro_runtimes__ = ("circuitpython",)
 import board
 import digitalio
 from chumicro_buttons import Button
-from chumicro_timing import ticks_ms
+from chumicro_timing import ticks, ticks_ms
 
 # Set BUTTON_PIN to the pin attribute on the `board` module
 # (e.g. "D5", "GP14", "BUTTON") for your wiring.
 BUTTON_PIN = "GP14"
 
-button = Button(pin=getattr(board, BUTTON_PIN), long_press_ms=500)
+button = Button(pin=getattr(board, BUTTON_PIN), ticks=ticks, long_press_ms=500)
 
 led = digitalio.DigitalInOut(board.LED)
 led.direction = digitalio.Direction.OUTPUT

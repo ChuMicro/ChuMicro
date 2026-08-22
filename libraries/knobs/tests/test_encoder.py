@@ -12,6 +12,19 @@ from chumicro_timing.testing import FakeTicks
 # -- construction --
 
 
+def test_a_detent_size_below_one_is_refused() -> None:
+    """detent_steps of 0 lets a standstill satisfy the detent guard, so it is refused."""
+    from chumicro_knobs.testing import FakeEncoderSource
+
+    for bad_size in (0, -1):
+        try:
+            Encoder(source=FakeEncoderSource(), detent_steps=bad_size)
+        except ValueError as error:
+            assert "detent_steps" in str(error)
+        else:
+            raise AssertionError(f"detent_steps={bad_size} was accepted")
+
+
 def test_detent_steps_defaults_to_four() -> None:
     """The shipped default matches an encoder with one click per quadrature cycle."""
     assert DEFAULT_DETENT_STEPS == 4

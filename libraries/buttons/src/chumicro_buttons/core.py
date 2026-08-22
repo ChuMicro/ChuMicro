@@ -2,8 +2,8 @@
 
 import sys
 
-#: Quiet period a raw signal must hold before an edge is believed.  Zero trusts the
-#: signal as-is, which is what a hardware-debounced button wants.
+#: Quiet period a raw signal must hold before an edge is believed.  Zero trusts the signal
+#: as-is, which is what a hardware-debounced button wants.
 DEFAULT_SETTLE_MS = 20
 
 #: How long a press must be held before ``just_long_pressed`` fires.  Zero disables it.
@@ -13,18 +13,11 @@ DEFAULT_LONG_PRESS_MS = 500
 DEFAULT_REPEAT_DELAY_MS = 500
 
 
-def _select_source(pins, *, active_low, settle_ms):
+def _select_source(pins, *, active_low, settle_ms, ticks):
     """Return the edge source this runtime can build for ``pins``.
 
-    Imported per runtime so a board only parses the adapter it actually uses.
-
-    Args:
-        pins: Runtime pin objects, one per key.
-        active_low: True when a pressed key reads low, the wiring an internal pull-up gives.
-        settle_ms: Debounce window handed to the source.
-
-    Returns:
-        A source honouring the ``ButtonSource`` contract.
+    The MicroPython source measures its settle window against ``ticks``; the CircuitPython
+    scan debounces in firmware and takes none.
     """
     runtime_name = sys.implementation.name
     if runtime_name == "circuitpython":  # pragma: no cover - CP runtime path
@@ -32,7 +25,7 @@ def _select_source(pins, *, active_low, settle_ms):
         return CpButtonSource(pins, active_low=active_low, settle_ms=settle_ms)
     if runtime_name == "micropython":  # pragma: no cover - MP runtime path
         from chumicro_buttons._adapters.mp import MpButtonSource
-        return MpButtonSource(pins, active_low=active_low, settle_ms=settle_ms)
+        return MpButtonSource(pins, active_low=active_low, settle_ms=settle_ms, ticks=ticks)
     raise RuntimeError(
         "CPython has no GPIO to read.  Build the button with "
         "source=FakeButtonSource(...) from chumicro_buttons.testing and drive it "
@@ -43,38 +36,29 @@ def _select_source(pins, *, active_low, settle_ms):
 class Button:
     """One momentary button or switch, read as a debounced level plus what it meant.
 
-    Every reading is a plain attribute refreshed by ``check(now_ms)``.  The ``just_``
-    family is true only for the tick the thing happened on, so a loop can read them
-    without consuming anything:
-
-        while True:
-            now = ticks_ms()
-            button.check(now)
-            if button.just_pressed:
-                led.value = not led.value
-
-    A switch that stays where you put it uses the same object; ``pressed`` is the
-    reading that matters and the edges are how you notice it moved.
-
-    Constructing with ``pin`` builds the runtime's own source, which on CircuitPython
-    is the firmware ``keypad`` scan and on MicroPython is a capture interrupt.  Both
-    catch a tap that starts and ends between two passes of your loop.  A ``Button``
-    built with neither ``pin`` nor ``source`` is driven by the :class:`Buttons` that
-    owns it and has no ``check`` of its own.
+    Every reading is a plain attribute refreshed by ``check(now_ms)``, and the ``just_`` family
+    is true only for the tick the thing happened on, so a loop can read them without consuming
+    anything.  A switch that stays where you put it uses the same object, reading ``pressed``
+    and watching the edges for when it moved.  Constructing with ``pin`` builds the runtime's
+    own source, a firmware ``keypad`` scan on CircuitPython and a capture interrupt on
+    MicroPython, and both catch a tap that starts and ends between two passes of your loop.
 
     Args:
         pin: Runtime pin object for the key, or None when a parent drives this button.
         source: Pre-built edge source; overrides ``pin``.  Tests inject a fake here.
-        active_low: True when a pressed key reads low.  True suits a button wired to
-            ground with the internal pull-up enabled, which is nearly always the wiring.
-        settle_ms: Debounce window in milliseconds.  Zero trusts the signal, which is
-            what a button with hardware debouncing behind it wants.
+        active_low: True when a pressed key reads low.  True suits a button wired to ground
+            with the internal pull-up enabled, which is nearly always the wiring.
+        settle_ms: Debounce window in milliseconds.  Zero trusts the signal, which is what a
+            button with hardware debouncing behind it wants.
         long_press_ms: Hold time that fires ``just_long_pressed``.  Zero disables it.
         repeat_ms: Interval between ``just_repeated`` fires while held.  Zero disables it.
         repeat_delay_ms: Hold time before repeat starts.
         click_ms: Quiet time after a release that closes a click series and publishes
             ``click_count``.  Zero disables click counting.
-        ticks: ``chumicro_timing.ticks``-shaped source; defaults to the real one.
+        ticks: The clock every duration here is judged by, ``chumicro_timing.ticks`` or
+            anything shaped like it.  Required, and it is the only clock this library reads,
+            so the ticks you pass ``check(now_ms)`` and the settle window the source
+            debounces against share one time base by construction.
     """
 
     def __init__(
@@ -88,13 +72,15 @@ class Button:
         repeat_ms: int = 0,
         repeat_delay_ms: int = DEFAULT_REPEAT_DELAY_MS,
         click_ms: int = 0,
-        ticks: object | None = None,
+        ticks: object,
     ) -> None:
+        self._ticks = ticks
+
         if source is not None:
             self._source = source
         elif pin is not None:
             self._source = _select_source(
-                (pin,), active_low=active_low, settle_ms=settle_ms,
+                (pin,), active_low=active_low, settle_ms=settle_ms, ticks=ticks,
             )
         else:
             self._source = None
@@ -103,10 +89,6 @@ class Button:
         self._repeat_ms = repeat_ms
         self._repeat_delay_ms = repeat_delay_ms
         self._click_ms = click_ms
-
-        if ticks is None:
-            from chumicro_timing import ticks  # noqa: PLC0415 - DI fallback keeps the substrate optional
-        self._ticks = ticks
 
         #: True while the key is down, after debouncing.
         self.pressed = False
@@ -120,14 +102,13 @@ class Button:
         self.just_repeated = False
         #: True only on the tick a click series closed.
         self.just_clicked = False
-        #: Milliseconds the key has been down.  After a release it holds how long
-        #: that press lasted, so an ``on_release`` handler can read it, and it resets
-        #: on the next press.
+        #: Milliseconds the key has been down.  After a release it holds how long that press
+        #: lasted, so an ``on_release`` handler can read it, and it resets on the next press.
         self.held_ms = 0
         #: Presses in the click series that just closed; read it when ``just_clicked``.
         self.click_count = 0
-        #: True when capture dropped an edge since the last tick.  A signal this noisy
-        #: wants hardware debouncing; the guide's wiring section covers it.
+        #: True when capture dropped an edge since the last tick.  A signal this noisy wants
+        #: hardware debouncing.
         self.overflowed = False
 
         #: Called with no arguments when the key goes down.
@@ -153,10 +134,10 @@ class Button:
         """Drain captured edges and advance the timers by one tick.
 
         Args:
-            now_ms: Shared tick timestamp for this pass of the loop.
+            now_ms: Tick this pass of the loop is measured from.
 
         Returns:
-            True when anything happened, which is the runner's gate for ``handle``.
+            True when anything happened, so a quiet tick can skip ``handle``.
         """
         source = self._source
         if source is None:
@@ -167,8 +148,8 @@ class Button:
         source.poll(now_ms)
         self._begin_tick()
         while source.next_event():
-            # A lone Button owns key 0.  Multi-key sources are the Buttons panel's job,
-            # so anything else on the wire is not this button's news.
+            # A lone Button owns key 0.  Multi-key sources are the Buttons panel's job, so
+            # anything else on the wire is not this button's news.
             if source.event_key == 0:
                 self._apply_edge(source.event_pressed, source.event_ms)
         self.overflowed = source.overflowed
@@ -176,11 +157,7 @@ class Button:
         return self._advance(now_ms)
 
     def handle(self, now_ms: int) -> None:
-        """Call whichever callbacks this tick's readings earned.
-
-        Args:
-            now_ms: Shared tick timestamp for this pass of the loop.
-        """
+        """Call whichever callbacks this tick's readings earned."""
         if self.just_pressed and self.on_press is not None:
             self.on_press()
         if self.just_released and self.on_release is not None:
@@ -208,11 +185,9 @@ class Button:
     def _apply_edge(self, pressed: bool, event_ms: int) -> None:
         """Fold one debounced edge into the key's state.
 
-        Args:
-            pressed: True for a press edge, False for a release.
-            event_ms: Tick the edge happened at, which for a captured edge is earlier
-                than the tick that noticed it.  Durations measure from here so a slow
-                loop reports the hold the user actually performed.
+        ``event_ms`` is when the edge happened, which for a captured edge is earlier than the
+        tick that noticed it.  Durations measure from there, so a slow loop reports the hold
+        the user actually performed.
         """
         if pressed == self.pressed:
             return
@@ -236,9 +211,6 @@ class Button:
     def _advance(self, now_ms: int) -> bool:
         """Run the duration-driven events for this tick.
 
-        Args:
-            now_ms: Shared tick timestamp for this pass of the loop.
-
         Returns:
             True when this tick produced anything worth handling.
         """
@@ -258,10 +230,10 @@ class Button:
             if self._repeat_ms > 0:
                 behind_ms = ticks.ticks_diff(now_ms, self._repeat_next_ms)
                 if behind_ms >= 0:
-                    # Advance from the deadline that earned this fire, not from the tick
-                    # that noticed it, so a slow loop cannot stretch the cadence.  Same
-                    # phase-aligned arithmetic chumicro_timing.Rate uses.  Periods missed
-                    # during a stall collapse into this one fire rather than bursting.
+                    # Advance the next deadline from the deadline that earned this fire, not
+                    # from the tick that noticed it, so a slow loop cannot stretch the
+                    # cadence.  Whole periods missed during a stall are skipped over in one
+                    # step, so catching up fires once rather than bursting.
                     periods_missed = behind_ms // self._repeat_ms + 1
                     self._repeat_next_ms = ticks.ticks_add(
                         self._repeat_next_ms, periods_missed * self._repeat_ms,
@@ -273,9 +245,9 @@ class Button:
                 and self._press_is_click
                 and self.held_ms >= self._click_ms
             ):
-                # This press has outlived the click window, so it is a hold rather than
-                # a click.  Close whatever series was open instead of leaving it to be
-                # reopened by the eventual release.
+                # This press has outlived the click window, so it is a hold rather than a
+                # click.  Close whatever series was open instead of leaving it to be reopened
+                # by the eventual release.
                 self._press_is_click = False
                 if self._pending_clicks > 0:
                     self.click_count = self._pending_clicks
@@ -294,12 +266,10 @@ class Button:
 class Buttons:
     """Several keys on one source, ticked together and read one key at a time.
 
-    ``buttons[0]`` is a :class:`Button` carrying that key's readings and its own
-    callbacks.  The whole-panel callbacks take the key number instead, for the common
-    case of one handler covering every key.
-
-    On CircuitPython this is one firmware ``keypad`` scan across all the pins rather
-    than one per key, which is both cheaper and what makes chords land on the same tick.
+    ``buttons[0]`` is a :class:`Button` carrying that key's readings and its own callbacks, and
+    the whole-panel callbacks take the key number instead.  On CircuitPython this is one
+    firmware ``keypad`` scan across all the pins rather than one per key, which is both cheaper
+    and what makes chords land on the same tick.
 
     Args:
         pins: Runtime pin objects, one per key.
@@ -310,7 +280,9 @@ class Buttons:
         repeat_ms: Interval between repeat fires while held.  Zero disables it.
         repeat_delay_ms: Hold time before repeat starts.
         click_ms: Quiet time that closes a click series.  Zero disables click counting.
-        ticks: ``chumicro_timing.ticks``-shaped source; defaults to the real one.
+        ticks: The clock every duration here is judged by, ``chumicro_timing.ticks`` or
+            anything shaped like it.  Required, and it reaches the scan and every key below,
+            so the whole panel measures against one time base.
     """
 
     def __init__(
@@ -324,18 +296,18 @@ class Buttons:
         repeat_ms: int = 0,
         repeat_delay_ms: int = DEFAULT_REPEAT_DELAY_MS,
         click_ms: int = 0,
-        ticks: object | None = None,
+        ticks: object,
     ) -> None:
         if source is not None:
             self._source = source
         elif pins is not None:
             if len(pins) == 0:
-                # An empty sequence usually means the pin list came from config that
-                # resolved to nothing.  Building a zero-key panel would read as a
-                # program that simply never sees a press.
+                # An empty sequence usually means the pin list came from config that resolved
+                # to nothing.  Building a zero-key panel would read as a program that simply
+                # never sees a press.
                 raise ValueError("Buttons was given an empty pins sequence")
             self._source = _select_source(
-                pins, active_low=active_low, settle_ms=settle_ms,
+                pins, active_low=active_low, settle_ms=settle_ms, ticks=ticks,
             )
         else:
             raise ValueError("Buttons needs either pins= or source=")
@@ -366,10 +338,10 @@ class Buttons:
         """Drain captured edges into every key and advance their timers.
 
         Args:
-            now_ms: Shared tick timestamp for this pass of the loop.
+            now_ms: Tick this pass of the loop is measured from.
 
         Returns:
-            True when any key produced news this tick.
+            True when any key produced news this tick, so a quiet tick can skip ``handle``.
         """
         source = self._source
         source.poll(now_ms)
@@ -392,11 +364,7 @@ class Buttons:
         return fired
 
     def handle(self, now_ms: int) -> None:
-        """Call the per-key callbacks, then the whole-panel ones.
-
-        Args:
-            now_ms: Shared tick timestamp for this pass of the loop.
-        """
+        """Call the per-key callbacks, then the whole-panel ones."""
         keys = self.keys
         key_count = len(keys)
         index = 0

@@ -108,25 +108,35 @@ def test_every_scanned_key_reaches_the_button_of_the_same_number() -> None:
 def test_a_grid_with_no_pins_and_no_source_is_refused() -> None:
     """KeyMatrix() names both pin arguments and source= in its refusal."""
     with raises(ValueError, match="row_pins and column_pins, or source="):
-        KeyMatrix()
+        KeyMatrix(ticks=FakeTicks())
 
 
 def test_a_grid_given_an_empty_side_is_refused() -> None:
     """A grid with no rows or no columns has no keys, so it is refused rather than built."""
     with raises(ValueError, match="empty row_pins or column_pins"):
-        KeyMatrix(row_pins=(), column_pins=())
+        KeyMatrix(row_pins=(), column_pins=(), ticks=FakeTicks())
 
     with raises(ValueError, match="empty row_pins or column_pins"):
-        KeyMatrix(row_pins=(object(),), column_pins=())
+        KeyMatrix(row_pins=(object(),), column_pins=(), ticks=FakeTicks())
 
 
 def test_a_grid_missing_either_half_of_the_wiring_is_refused() -> None:
     """Rows without columns, or columns without rows, is not a grid and raises ValueError."""
     with raises(ValueError, match="row_pins and column_pins, or source="):
-        KeyMatrix(row_pins=(object(), object()))
+        KeyMatrix(row_pins=(object(), object()), ticks=FakeTicks())
 
     with raises(ValueError, match="row_pins and column_pins, or source="):
-        KeyMatrix(column_pins=(object(), object(), object()))
+        KeyMatrix(column_pins=(object(), object(), object()), ticks=FakeTicks())
+
+
+def test_a_grid_built_without_a_clock_is_refused() -> None:
+    """Omitting ticks= raises TypeError rather than building a grid.
+
+    The clock has no default here, so a caller cannot end up with keys measuring
+    against a time base they never chose.
+    """
+    with raises(TypeError):
+        KeyMatrix(source=_grid_source())
 
 
 def test_the_grid_forwards_its_timings_to_every_key() -> None:

@@ -34,9 +34,9 @@ Wire a momentary button between a GPIO pin and GND.  The internal pull-up is swi
 import board
 import digitalio
 from chumicro_buttons import Button
-from chumicro_timing import ticks_ms
+from chumicro_timing import ticks, ticks_ms
 
-button = Button(pin=board.GP14)
+button = Button(pin=board.GP14, ticks=ticks)
 
 led = digitalio.DigitalInOut(board.LED)
 led.direction = digitalio.Direction.OUTPUT
@@ -109,15 +109,15 @@ A switch is two pieces of metal meeting, and they bounce apart a few times on th
 `settle_ms` is the only setting.  It defaults to 20, which suits an ordinary tactile switch:
 
 ```python
-button = Button(pin=board.GP14, settle_ms=20)   # the default
-button = Button(pin=board.GP14, settle_ms=0)    # the signal is already clean
+button = Button(pin=board.GP14, ticks=ticks, settle_ms=20)   # the default
+button = Button(pin=board.GP14, ticks=ticks, settle_ms=0)    # the signal is already clean
 ```
 
 Set it to `0` when the button has debouncing hardware behind it, which buys back the settle delay.  The [guide](https://chumicro.com/ChuMicro/buttons/stable/guide/) has wiring diagrams with real component values for building that, and an honest account of when it is worth the parts.  For most projects the default is enough.
 
 ## Where this fits
 
-Depends on [`chumicro-timing`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/timing) for tick arithmetic.  Used directly in user apps; nothing downstream depends on it.
+Imports nothing.  It compares durations using the tick arithmetic you hand it, which is what `ticks=` is for, and [`chumicro-timing`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/timing) supplies the usual one.  Bring your own and this library never loads it.  Used directly in user apps; nothing downstream depends on it.
 
 Pairs with [`chumicro-runner`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner), which deals out turns to every service in your program:
 
@@ -131,27 +131,35 @@ A rotary encoder's push switch is a `Button` like any other, so an encoder with 
 
 Works on CPython, MicroPython, and CircuitPython.
 
-### CPython has no pins
+CircuitPython reads keys through the firmware's own background scan, which costs nothing in your board's storage because it is compiled into the firmware.  MicroPython has no equivalent, so the library installs and owns a capture interrupt there.  Either way the API is the same and you set none of it up.
 
-`Button(pin=...)` needs real hardware, so on a laptop it raises and tells you what to do instead.  Build the button with a `FakeButtonSource` and your press logic becomes an ordinary unit test:
+`pin=` needs real hardware, so on a laptop it raises and points you at the fake below.
+
+## Testing your code
+
+The `chumicro_buttons.testing` module provides `FakeButtonSource`, a hand-driven stand-in for the hardware, so press logic is an ordinary unit test with no board and no waiting:
 
 ```python
 from chumicro_buttons import Button
 from chumicro_buttons.testing import FakeButtonSource
+from chumicro_timing.testing import FakeTicks
 
 source = FakeButtonSource()
-button = Button(source=source)
+button = Button(source=source, ticks=FakeTicks())
 
 source.press(at_ms=100)
 button.check(120)
+
 assert button.just_pressed
+assert button.held_ms == 20      # measured from the edge, not from the tick
 ```
+
+Each queued edge carries its own `at_ms`, separate from the tick you pass to `check()`.  That gap is what lets a test cover slow-loop behavior on the host.
 
 ## Examples
 
 | Example | What it shows |
 |---|---|
-| [`button_events_simulated.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/buttons/examples/button_events_simulated.py) | Press, long press, repeat, and click counting on CPython, no board needed |
 | [`circuitpython_button_toggle.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/buttons/examples/circuitpython_button_toggle.py) | A button flips the onboard LED on CircuitPython |
 | [`micropython_button_toggle.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/buttons/examples/micropython_button_toggle.py) | The same button on MicroPython |
 

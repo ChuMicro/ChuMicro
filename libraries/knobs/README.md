@@ -121,7 +121,7 @@ The default 512 sits well above the wander and well under the 655 counts one ste
 
 ## Where this fits
 
-Depends on [`chumicro-timing`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/timing), whose `ticks_ms()` is where the timestamp you hand to `check()` comes from.  Used directly in user apps; nothing downstream depends on it.
+Depends on nothing.  The timestamp you hand to `check()` comes from wherever your loop already gets one, and [`chumicro-timing`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/timing)'s `ticks_ms()` is the usual source.  Used directly in user apps; nothing downstream depends on it.
 
 Pairs with [`chumicro-runner`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner), which deals out turns to every service in your program:
 
@@ -139,9 +139,11 @@ Works on CPython, MicroPython, and CircuitPython.
 
 `rotaryio` on RP2040 boards reads the two signal pins with one PIO state machine, which requires them to sit next to each other in GPIO numbering.  `board.GP16` and `board.GP17` work; `board.GP16` and `board.GP20` do not.  Other CircuitPython ports and every MicroPython port take any two pins.
 
-### CPython has no pins
+`pin_a`, `pin_b`, and `pin` need real hardware, so on a laptop they raise and point you at the fakes below.
 
-`Encoder(pin_a, pin_b)` and `AnalogKnob(pin)` need real hardware, so on a laptop they raise and tell you what to do instead.  Build the knob with a fake source and your logic becomes an ordinary unit test:
+## Testing your code
+
+The `chumicro_knobs.testing` module provides `FakeEncoderSource` and `FakeAnalogSource`, hand-driven stand-ins for the hardware, so knob logic is an ordinary unit test with no board:
 
 ```python
 from chumicro_knobs import Encoder
@@ -152,6 +154,7 @@ volume = Encoder(source=source, bounds=(0, 20))
 
 source.turn(3)
 volume.check(0)
+
 assert volume.position == 3
 ```
 
@@ -159,7 +162,6 @@ assert volume.position == 3
 
 | Example | What it shows |
 |---|---|
-| [`knob_readings_simulated.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/knobs/examples/knob_readings_simulated.py) | An encoder hitting its bounds and a deadband holding an analog reading still, on CPython, no board needed |
 | [`circuitpython_encoder_volume.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/knobs/examples/circuitpython_encoder_volume.py) | An encoder for volume and a potentiometer for brightness on CircuitPython |
 | [`micropython_encoder_volume.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/knobs/examples/micropython_encoder_volume.py) | The same two knobs on MicroPython |
 

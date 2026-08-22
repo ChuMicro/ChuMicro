@@ -2,19 +2,11 @@
 
 
 class ButtonSource:
-    """Duck-typed contract for the thing that turns hardware into clean edges.
+    """Contract for the reader that turns hardware into clean, debounced edges.
 
-    A source owns capture and debounce.  It never owns meaning: long press,
-    repeat, and click counting all live in :class:`~chumicro_buttons.core.Button`
-    so they behave identically on every runtime.
-
-    Draining is allocation-free by design.  ``next_event()`` advances an internal
-    cursor and reports whether an edge is available; the edge itself is published
-    on the three ``event_*`` attributes rather than returned as a tuple, because a
-    tuple per edge would allocate inside the tick loop.
-
-    A concrete source implements ``poll(now_ms)``, ``next_event()``, and
-    ``deinit()``, and keeps the attributes below current.
+    A source owns capture and debounce; long press, repeat, and click counting are decided
+    above it.  ``next_event()`` publishes an edge on the three ``event_*`` attributes rather
+    than returning a tuple, because a tuple per edge would allocate inside the tick loop.
     """
 
     # Plain class, not a Protocol: MicroPython has no typing module to import.
@@ -23,7 +15,6 @@ class ButtonSource:
     key_count = 0
 
     #: True when capture dropped at least one edge since the flag was last cleared.
-    #: Mirrors ``keypad.EventQueue.overflowed`` so it means one thing everywhere.
     overflowed = False
 
     #: Which key the current edge belongs to; only valid after ``next_event()`` is True.
@@ -32,21 +23,15 @@ class ButtonSource:
     #: True when the current edge is a press, False when it is a release.
     event_pressed = False
 
-    #: Tick the current edge happened at, in the ``chumicro_timing.ticks_ms`` domain.
+    #: Tick the current edge happened at, on the same clock the source was given.
     event_ms = 0
 
     def poll(self, now_ms: int) -> None:
-        """Take one capture step, and take the tick this pass is measured against.
+        """Take one capture step, and take ``now_ms`` as the tick this pass is measured from.
 
-        Sources that sample (a matrix scan, an injected fake) read the hardware here.
-        Sources backed by a background scan or an interrupt captured their edges
-        elsewhere, and have only ``now_ms`` to take: a source that debounces while
-        draining judges its settle window against the value handed in here, never
-        against a clock it reads for itself, so every duration in one pass of the loop
-        is measured from one instant.
-
-        Args:
-            now_ms: Shared tick timestamp for this pass of the loop.
+        A source that samples reads the hardware here.  A source that debounces while draining
+        judges its settle window against ``now_ms`` rather than a clock it reads for itself, so
+        every duration in one pass is measured from one instant.
         """
         raise NotImplementedError
 
@@ -54,8 +39,8 @@ class ButtonSource:
         """Advance to the next captured edge.
 
         Returns:
-            True when ``event_key`` / ``event_pressed`` / ``event_ms`` hold an
-            edge, False once the queue is drained for this tick.
+            True when ``event_key`` / ``event_pressed`` / ``event_ms`` hold an edge, False
+            once the queue is drained for this tick.
         """
         raise NotImplementedError
 

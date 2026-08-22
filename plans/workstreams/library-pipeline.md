@@ -85,10 +85,42 @@ Macropad fact sheet (RP2040 + 8 MB QSPI):
 
 | Library | Sketch |
 |---|---|
-| **chumicro-buttons** | Runner-shaped service over a constructor-injected pin / key-matrix adapter.  `Button`, `Buttons`, `KeyMatrix`; emits `press / release / long_press / repeat / double / chord`.  Adapters: `keypad.Keys` + `keypad.KeyMatrix` (CP), `machine.Pin` capture IRQ for discrete pins and a polled scan for the matrix (MP), scripted fake (CPython).  Split and interrupt contract: [Decision 0124](../decisions/0124-buttons-and-knobs-libraries.md). |
-| **chumicro-knobs** | Runner-shaped service for position inputs.  `Encoder` (quadrature, detents, optional bounds / wrap / acceleration) and `AnalogKnob` (ADC with deadband + step quantization); both publish `position` + `delta`.  Adapters: `rotaryio.IncrementalEncoder` (CP), capture IRQ with a transition table (MP), scripted fake (CPython).  No dep on `chumicro-buttons` — an encoder's push switch is a `Button` the application wires up. |
+| **chumicro-buttons** | SHIPPED.  `Button`, `Buttons`, `KeyMatrix`.  See "Buttons and knobs as built" below. |
+| **chumicro-knobs** | SHIPPED.  `Encoder`, `AnalogKnob`.  See "Buttons and knobs as built" below. |
 | **chumicro-pixels** | Runner-shaped LED patterns: `Solid`, `Blink`, `Pulse`, `Fade`, `Chase`, `Flash`. Constructor-injected strip backend (CP `neopixel.NeoPixel`, MP `neopixel.NeoPixel`, single PWM pin, no-op).  Each pattern is a tick-driven generator; service composites them onto the strip. |
 | **chumicro-tone** *(optional)* | Non-blocking tone scheduler: `tone.beep(440, 50)` queues a tick-driven pulse train; backends are PWM (CP `pwmio`, MP `machine.PWM`), no-op.  Small (~80 lines).  Gravy. |
+
+#### Buttons and knobs as built
+
+Shaped by [Decision 0124](../decisions/0124-buttons-and-knobs-libraries.md); this section carries what the ADR deliberately does not.
+
+How each reading is captured:
+
+| | CircuitPython | MicroPython |
+|---|---|---|
+| `Button` / `Buttons` | `keypad.Keys` | `Pin.irq` into a preallocated ring |
+| `KeyMatrix` | `keypad.KeyMatrix` | polled scan |
+| `Encoder` | `rotaryio.IncrementalEncoder` | `Pin.irq` plus a transition table |
+| `AnalogKnob` | polled ADC | polled ADC |
+
+Facts read from the CircuitPython 10.2.0 and MicroPython 1.27.0 trees in `.tools/` rather than assumed:
+
+- `keypad.Keys(pins, *, value_when_pressed, pull=True, interval=0.020, max_events=64, debounce_threshold=1)`, and `KeyMatrix(row_pins, column_pins, *, columns_to_anodes=True, ...)` with the same timing arguments.  `settle_ms` maps onto `interval` and `debounce_threshold` together.
+- `keypad.Event.timestamp` is stamped from `supervisor_ticks_ms()` in the background scan, so it is already Decision 0014's tick base with no conversion.
+- `rotaryio.IncrementalEncoder` defaults `divisor=4` and documents `1` for encoders without detents, which is where `detent_steps` gets its default.
+- `countio.Counter` has no debounce parameter, which is why it is not used for buttons: one bouncy press lands as several counts and it cannot separate press from release.
+- `CIRCUITPY_KEYPAD` tracks `CIRCUITPY_FULL_BUILD`, which defaults on.  Boards without it are atmel-samd, already outside the class Decision 0015 supports, so there is no polled fallback.
+- MicroPython's esp32 port accepts no `hard=` argument on `Pin.irq`; rp2 does.
+- The knobs MicroPython quadrature table matches CircuitPython's own `transitions[16]` in `shared-module/rotaryio/IncrementalEncoder.c` entry for entry, verified by parsing both.  That is deliberate: a shaft turned one way has to report the same sign on either runtime.  The code carries no reference to it, because a comment naming an upstream repo path is forbidden by the code-comment rules; this is its home.
+
+First-release sizes: buttons 28.0 KB stripped, knobs 9.3 KB.  Whole-library cost is why they are two installs rather than one.
+
+Still open, and gated on the macropad:
+
+- Neither `_adapters/cp.py` nor `_adapters/mp.py` has executed on hardware.  AGENTS.md requires real-board verification for runtime-specific code.
+- Neither library has a `functional_tests/` suite.
+- How many edges a real bouncy switch emits per press, which decides whether the MicroPython ring depth is right before `overflowed` starts firing on ordinary presses.
+- Whether row-major key numbering actually agrees between `keypad.KeyMatrix` and the MicroPython scan.  Both sides claim it and nothing on a host can hold them to it.
 
 ### Tier C — defer until hardware is on the bench
 

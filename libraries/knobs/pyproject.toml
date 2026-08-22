@@ -13,9 +13,6 @@ license-files = ["LICENSE"]
 authors = [
     { name = "ChuMicro" },
 ]
-dependencies = [
-    "chumicro-timing",
-]
 keywords = [
     "circuitpython", "micropython", "microcontroller", "embedded",
     "esp32", "rp2040", "rotary-encoder", "quadrature", "potentiometer", "adc",
@@ -34,6 +31,7 @@ classifiers = [
 test = [
     "pytest",
     "chumicro-test-harness",
+    "chumicro-timing",
 ]
 
 [project.urls]

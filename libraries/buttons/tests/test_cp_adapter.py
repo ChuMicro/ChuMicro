@@ -1,10 +1,12 @@
-"""Host-lane tests for the CircuitPython adapter's scan timing.
+"""Host-lane tests for the CircuitPython adapter's scan timing and its refusal.
 
 ``keypad_scan_timing`` is plain arithmetic with no firmware behind it, so the one
 knob the library exposes can be checked on a laptop: it turns ``settle_ms`` into the
-``interval`` and ``debounce_threshold`` a ``keypad`` scanner is built with.  The
-scanners themselves need the firmware module and are covered by ``functional_tests/``
-on a real board.
+``interval`` and ``debounce_threshold`` a ``keypad`` scanner is built with.  A laptop
+also has no ``keypad`` module, which is the same position a build compiled without one
+is in, so the refusal both sources give there is checked here too.  The scanners
+themselves need the firmware module and are covered by ``functional_tests/`` on a real
+board.
 
 The module is CircuitPython-marked, so a MicroPython deploy never carries it; this
 file stays on the host lane where importing it always resolves.
@@ -17,8 +19,21 @@ __chumicro_host_only__ = True
 from chumicro_buttons._adapters.cp import (
     MINIMUM_SCAN_INTERVAL_SECONDS,
     SCANS_PER_SETTLE_WINDOW,
+    CpButtonSource,
+    CpKeyMatrixSource,
+    keypad_module,
     keypad_scan_timing,
 )
+from chumicro_test_harness import raises, skip
+
+
+def _require_no_keypad() -> None:
+    """Skip loudly on a build that ships ``keypad``, where these sources scan instead."""
+    try:
+        import keypad  # noqa: F401
+    except ImportError:
+        return
+    skip("this build ships keypad, so these sources scan instead of refusing")
 
 
 def test_the_default_settle_window_splits_into_four_scans() -> None:
@@ -64,3 +79,36 @@ def test_a_sub_millisecond_window_still_takes_one_scan() -> None:
 
     assert interval_seconds == MINIMUM_SCAN_INTERVAL_SECONDS
     assert debounce_threshold == 1
+
+
+# -- Refusing a build with no keypad module ----------------------------
+
+
+def test_a_build_without_keypad_is_told_what_happened_and_what_to_do() -> None:
+    """keypad_module raises RuntimeError naming the module and both ways forward."""
+    _require_no_keypad()
+
+    with raises(RuntimeError, match="no keypad module"):
+        keypad_module()
+
+    with raises(RuntimeError, match="Flash a full build"):
+        keypad_module()
+
+    with raises(RuntimeError, match="FakeButtonSource"):
+        keypad_module()
+
+
+def test_neither_source_reads_the_pins_some_other_way() -> None:
+    """Discrete keys and a grid both raise the same RuntimeError, neither falling back.
+
+    Reading the pins a second way would have to guess at edges between two passes of
+    the loop, so a build with no scan behind it is refused at construction rather than
+    served by a source with weaker guarantees.
+    """
+    _require_no_keypad()
+
+    with raises(RuntimeError, match="no keypad module"):
+        CpButtonSource((object(),), active_low=True, settle_ms=20)
+
+    with raises(RuntimeError, match="no keypad module"):
+        CpKeyMatrixSource((object(),), (object(), object()), settle_ms=20)

@@ -11,11 +11,12 @@ Build the button with `source=` instead of `pin=`, then script the edges:
 ```python
 from chumicro_buttons import Button
 from chumicro_buttons.testing import FakeButtonSource
+from chumicro_timing.testing import FakeTicks
 
 
 def test_long_press_arms_the_factory_reset():
     source = FakeButtonSource()
-    button = Button(source=source, long_press_ms=3000)
+    button = Button(source=source, ticks=FakeTicks(), long_press_ms=3000)
     settings = Settings()
 
     source.press(at_ms=100)
@@ -28,7 +29,7 @@ def test_long_press_arms_the_factory_reset():
     assert settings.reset_armed
 ```
 
-No clock is injected here, so the button uses the real tick functions for its arithmetic while the test supplies every timestamp.  That keeps the test instant and deterministic.
+The button never reads a clock of its own.  It compares the timestamps you pass to `check()` using the arithmetic you hand it, so the test controls time completely and runs instantly.
 
 ## Edges carry their own time
 
@@ -49,11 +50,12 @@ Pass `key_count` and address each key by number.  Edges for different keys can b
 ```python
 from chumicro_buttons import Buttons
 from chumicro_buttons.testing import FakeButtonSource
+from chumicro_timing.testing import FakeTicks
 
 
 def test_both_shoulders_together_opens_the_menu():
     source = FakeButtonSource(key_count=2)
-    buttons = Buttons(source=source)
+    buttons = Buttons(source=source, ticks=FakeTicks())
 
     source.press(key_index=0, at_ms=100)
     source.press(key_index=1, at_ms=105)

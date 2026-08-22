@@ -248,7 +248,6 @@ On CircuitPython the modules this builds on (`rotaryio`, `analogio`) are compile
 
 | Example | What it shows |
 |---|---|
-| [`knob_readings_simulated.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/knobs/examples/knob_readings_simulated.py) | An encoder hitting its bounds and a deadband holding an analog reading still, on CPython, no board needed |
 | [`circuitpython_encoder_volume.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/knobs/examples/circuitpython_encoder_volume.py) | An encoder for volume and a potentiometer for brightness on CircuitPython (hardware) |
 | [`micropython_encoder_volume.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/knobs/examples/micropython_encoder_volume.py) | The same two knobs on MicroPython (hardware) |
 

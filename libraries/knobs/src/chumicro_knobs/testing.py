@@ -6,17 +6,8 @@ __chumicro_test_support__ = True
 class FakeEncoderSource:
     """Quadrature source a test turns by hand instead of by wrist.
 
-    Turn it, then tick the encoder.  ``turn`` moves it by whole detents, which is what
-    the runtime sources publish once they have divided the quadrature steps down:
-
-        source = FakeEncoderSource()
-        encoder = Encoder(source=source)
-        source.turn(3)
-        encoder.check(0)
-        assert encoder.position == 3
-
-    Several turns before one tick add up, which is how a test reproduces a fast spin
-    during a loop that stalled.
+    ``turn`` moves it by whole detents, which is what the runtime sources publish once they
+    have divided the quadrature steps down.  Several turns before one tick add up.
 
     Args:
         raw_position: Detent count the source starts from.
@@ -26,8 +17,7 @@ class FakeEncoderSource:
         self.raw_position = raw_position
         #: How many times a knob asked this source to capture.
         self.poll_calls = 0
-        #: Tick the last capture step was asked for, so a test can prove the knob hands
-        #: the loop's shared timestamp down rather than fetching one of its own.
+        #: Tick of the last capture, which proves the knob passes the loop's timestamp down.
         self.last_poll_ms = 0
         #: How many times a knob released this source.
         self.deinit_calls = 0
@@ -49,14 +39,8 @@ class FakeEncoderSource:
 class FakeAnalogSource:
     """Converter a test sets a reading on instead of turning a wiper.
 
-    Set the reading on the 0 to 65535 scale every runtime reports on, then tick the
-    knob.  Small moves are how a test proves the deadband is doing its job:
-
-        source = FakeAnalogSource()
-        knob = AnalogKnob(source=source)
-        source.set_raw(32768)
-        knob.check(0)
-        assert knob.value == 50
+    ``set_raw`` takes the 0 to 65535 scale every runtime reports on, so small moves between
+    ticks exercise the deadband.
 
     Args:
         raw: Reading the source starts from.
@@ -66,8 +50,7 @@ class FakeAnalogSource:
         self.raw = raw
         #: How many times a knob asked this source to convert.
         self.poll_calls = 0
-        #: Tick the last conversion was asked for, so a test can prove the knob hands the
-        #: loop's shared timestamp down rather than fetching one of its own.
+        #: Tick of the last conversion, which proves the knob passes the loop's timestamp down.
         self.last_poll_ms = 0
         #: How many times a knob released this source.
         self.deinit_calls = 0

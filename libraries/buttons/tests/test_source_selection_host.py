@@ -18,6 +18,7 @@ from chumicro_buttons import Button, Buttons
 from chumicro_buttons.core import _select_source
 from chumicro_buttons.matrix import KeyMatrix, _select_matrix_source
 from chumicro_test_harness import raises, skip
+from chumicro_timing.testing import FakeTicks
 
 
 def _require_cpython() -> None:
@@ -32,23 +33,33 @@ def test_selecting_a_source_on_cpython_points_at_fake_button_source() -> None:
     _require_cpython()
 
     with raises(RuntimeError, match="FakeButtonSource"):
-        _select_source((object(),), active_low=True, settle_ms=20)
+        _select_source((object(),), active_low=True, settle_ms=20, ticks=FakeTicks())
 
 
 def test_a_button_built_from_a_pin_refuses_on_cpython() -> None:
-    """Passing pin= on a host raises the same RuntimeError from the constructor."""
+    """Passing pin= on a host raises the same RuntimeError from the constructor.
+
+    Reaching the refusal at all takes the clock with it: the picker has no default
+    ticks= of its own, so a constructor that kept the clock to itself would raise
+    TypeError here instead.
+    """
     _require_cpython()
 
     with raises(RuntimeError, match="FakeButtonSource"):
-        Button(object())
+        Button(object(), ticks=FakeTicks())
 
 
 def test_a_panel_built_from_pins_refuses_on_cpython() -> None:
-    """Passing pins= on a host raises the same RuntimeError from the constructor."""
+    """Passing pins= on a host raises the same RuntimeError from the constructor.
+
+    Reaching the refusal at all takes the clock with it: the picker has no default
+    ticks= of its own, so a constructor that kept the clock to itself would raise
+    TypeError here instead.
+    """
     _require_cpython()
 
     with raises(RuntimeError, match="FakeButtonSource"):
-        Buttons((object(), object()))
+        Buttons((object(), object()), ticks=FakeTicks())
 
 
 def test_selecting_a_matrix_scan_on_cpython_points_at_fake_button_source() -> None:
@@ -61,6 +72,7 @@ def test_selecting_a_matrix_scan_on_cpython_points_at_fake_button_source() -> No
             (object(), object()),
             columns_to_anodes=True,
             settle_ms=20,
+            ticks=FakeTicks(),
         )
 
 
@@ -69,12 +81,14 @@ def test_a_grid_built_from_row_and_column_pins_refuses_on_cpython() -> None:
 
     Both pin arguments present is what takes the constructor past its own ValueError
     and into the per-runtime import, so this is the path the ValueError tests cannot
-    reach.
+    reach.  Reaching it also takes the clock with it: the picker has no default ticks=
+    of its own, so a constructor that kept the clock to itself would raise TypeError
+    here instead.
     """
     _require_cpython()
 
     with raises(RuntimeError, match="FakeButtonSource"):
-        KeyMatrix((object(), object()), (object(), object(), object()))
+        KeyMatrix((object(), object()), (object(), object(), object()), ticks=FakeTicks())
 
 
 def test_the_grid_forwards_its_diode_orientation_to_the_scan_picker() -> None:
@@ -87,7 +101,7 @@ def test_the_grid_forwards_its_diode_orientation_to_the_scan_picker() -> None:
     _require_cpython()
 
     with raises(RuntimeError, match="FakeButtonSource"):
-        KeyMatrix((object(),), (object(),), columns_to_anodes=True)
+        KeyMatrix((object(),), (object(),), columns_to_anodes=True, ticks=FakeTicks())
 
     with raises(RuntimeError, match="FakeButtonSource"):
-        KeyMatrix((object(),), (object(),), columns_to_anodes=False)
+        KeyMatrix((object(),), (object(),), columns_to_anodes=False, ticks=FakeTicks())
