@@ -22,7 +22,7 @@ The body below was written 2026-04-27 when the doc said "captured, no implementa
 
 In rough priority order:
 
-1. **Plug in the macropad and ship Tier B.**  `chumicro-input` + `chumicro-pixels` + (optional) `chumicro-tone`.  The libraries are board-agnostic — macropad is just the dev fixture for functional tests.  Each follows the established DNA (constructor-injected adapter, per-runtime selection ladder, `testing.py` fake, runner-shaped service).  No design decisions remaining; this is implementation.
+1. **Plug in the macropad and ship Tier B.**  `chumicro-buttons` + `chumicro-knobs` + `chumicro-pixels` + (optional) `chumicro-tone`.  The libraries are board-agnostic — macropad is just the dev fixture for functional tests.  Each follows the established DNA (constructor-injected adapter, per-runtime selection ladder, `testing.py` fake, runner-shaped service).  The input split, the capture-interrupt contract, and the debounce surface are settled in [Decision 0124](../decisions/0124-buttons-and-knobs-libraries.md); the rest is implementation.
 2. **`chumicro-presence` (device-feedback layer)** — the third-consumer trigger to make `chumicro-events` valuable beyond its current zero-consumer state.  Open shape question still in §"Device-feedback layer" below: subsume the StatusIndicator HAL or coexist?  Recommended subsume.  Pickable now without macropad — `chumicro-pixels` is the only dependency for the LED output, and a no-op pixels backend works for testing.
 3. **Promote Decision 0042 from `proposed` → `accepted`.**  The libraries shipping under it (logging, events, ntp) confirm the policy works; no edits needed, just the status flip after a quick review pass.  Trivial.
 4. **Audit existing libraries' `pyproject.toml` against Decision 0042.**  Check that `mqtt` / `requests` / `http_server` declare `chumicro-sockets` as a hard dep (they do, per Decision 0040) and that no library accidentally hard-depends on the decoration set (events / logging / future presence).  Quick verification, not redesign.
@@ -85,7 +85,8 @@ Macropad fact sheet (RP2040 + 8 MB QSPI):
 
 | Library | Sketch |
 |---|---|
-| **chumicro-input** | Runner-shaped service over a constructor-injected pin/keymatrix backend.  Emits `press / release / long_press / repeat / chord` events plus a quadrature-encoder helper with optional acceleration.  Backends: `keypad.Keys` (CP), `machine.Pin`+IRQ (MP), CPython fake driving events from a script. |
+| **chumicro-buttons** | Runner-shaped service over a constructor-injected pin / key-matrix adapter.  `Button`, `Buttons`, `KeyMatrix`; emits `press / release / long_press / repeat / double / chord`.  Adapters: `keypad.Keys` + `keypad.KeyMatrix` (CP), `machine.Pin` capture IRQ for discrete pins and a polled scan for the matrix (MP), scripted fake (CPython).  Split and interrupt contract: [Decision 0124](../decisions/0124-buttons-and-knobs-libraries.md). |
+| **chumicro-knobs** | Runner-shaped service for position inputs.  `Encoder` (quadrature, detents, optional bounds / wrap / acceleration) and `AnalogKnob` (ADC with deadband + step quantization); both publish `position` + `delta`.  Adapters: `rotaryio.IncrementalEncoder` (CP), capture IRQ with a transition table (MP), scripted fake (CPython).  No dep on `chumicro-buttons` — an encoder's push switch is a `Button` the application wires up. |
 | **chumicro-pixels** | Runner-shaped LED patterns: `Solid`, `Blink`, `Pulse`, `Fade`, `Chase`, `Flash`. Constructor-injected strip backend (CP `neopixel.NeoPixel`, MP `neopixel.NeoPixel`, single PWM pin, no-op).  Each pattern is a tick-driven generator; service composites them onto the strip. |
 | **chumicro-tone** *(optional)* | Non-blocking tone scheduler: `tone.beep(440, 50)` queues a tick-driven pulse train; backends are PWM (CP `pwmio`, MP `machine.PWM`), no-op.  Small (~80 lines).  Gravy. |
 
@@ -125,7 +126,7 @@ A small orchestrator library that:
 **What `chumicro-presence` does NOT do:**
 
 - It does **not** import wifi / mqtt / sockets directly.  It subscribes to events.  This keeps wifi and mqtt free of any UI concern and keeps presence from depending on the whole networking stack.
-- It does **not** own pin/strip drivers.  It composes `chumicro-pixels`, `chumicro-input`, etc.  If a user has no LED, presence still works — those outputs are just absent.
+- It does **not** own pin/strip drivers.  It composes `chumicro-pixels`, `chumicro-buttons`, etc.  If a user has no LED, presence still works — those outputs are just absent.
 - It does **not** define a fixed event vocabulary up front.  Topics are namespaced strings; the user's mapping decides which matter.
 
 **Open shape question:** does presence subsume the StatusIndicator HAL (single library, the HAL is just one of its outputs), or coexist with it (StatusIndicator inside `chumicro-compat` for thin uses, presence for thick uses)?  Recommend subsume — fewer concepts, and the "thin use" is just `presence.set_led("connecting")` without configuring anything else.
@@ -178,8 +179,8 @@ Tier B (input, pixels) is still gated on plugging in the macropad.  Tier C is st
 
 ## Critical files when implementation begins
 
-- **`libraries/wifi/src/chumicro_wifi/`** — canonical example of constructor-injected adapter + per-runtime selection ladder + `testing.py` fake.  Mirror for `chumicro-input` backends.
-- **`libraries/mqtt/src/chumicro_mqtt/`** — canonical runner-shaped service with check/handle and event callbacks.  Mirror for `chumicro-input` event emission.
+- **`libraries/wifi/src/chumicro_wifi/`** — canonical example of constructor-injected adapter + per-runtime selection ladder + `testing.py` fake.  Mirror for `chumicro-buttons` / `chumicro-knobs` adapters.
+- **`libraries/mqtt/src/chumicro_mqtt/`** — canonical runner-shaped service with check/handle and event callbacks.  Mirror for `chumicro-buttons` event emission.
 - **`libraries/sockets/src/chumicro_sockets/__init__.py`** — confirm UDP availability before scoping `chumicro-ntp`; current scope is TCP+TLS per Decision 0031.
 - **`plans/workstreams/archive/phase-7-integration.md` §"LED / UX hooks for service state"** — original StatusIndicator HAL idea; superseded by the device-feedback layer above when this workstream proceeds.
 
