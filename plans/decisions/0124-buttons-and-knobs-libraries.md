@@ -46,7 +46,7 @@ Polling stays correct where an edge cannot be missed by definition: a matrix sca
 
 ### One debounce knob
 
-`settle_ms=20` is the default and a lower value suits a signal that arrives already filtered.  There is no mode enum.  Wiring is documented in the library guide with schematics, and stops at a capacitor: arrangements that need logic gates are a different hobby from the one this library serves.
+`settle_ms=10` is the default, raised for a switch that bounces badly and lowered for one that arrives already filtered.  It is also the shortest press that can be reported, so the default is a balance rather than a safe maximum: measured on a bench switch, a 20 ms window discarded better than a quarter of fast tapping.  There is no mode enum.  Wiring is documented in the library guide with schematics, and stops at a capacitor: arrangements that need logic gates are a different hobby from the one this library serves.
 
 ### Per-tick state is plain attributes
 

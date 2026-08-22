@@ -3,8 +3,10 @@
 import sys
 
 #: Quiet period a raw signal must hold before an edge is believed.  Zero trusts the signal
-#: as-is, which is what a hardware-debounced button wants.
-DEFAULT_SETTLE_MS = 20
+#: as-is, which is what a hardware-debounced button wants.  It is also the shortest press
+#: that can be reported, so this default is a balance: a tactile switch settles inside a
+#: millisecond, a big toggle can bounce for twenty, and a fast tap can be over in ten.
+DEFAULT_SETTLE_MS = 10
 
 #: How long a press must be held before ``just_long_pressed`` fires.  Zero disables it.
 DEFAULT_LONG_PRESS_MS = 500
@@ -52,8 +54,9 @@ class Button:
         source: Pre-built edge source; overrides ``pin``.  Tests inject a fake here.
         active_low: True when a pressed key reads low.  True suits a button wired to ground
             with the internal pull-up enabled, which is nearly always the wiring.
-        settle_ms: Debounce window in milliseconds.  Zero trusts the signal, which is what a
-            button with hardware debouncing behind it wants.
+        settle_ms: Debounce window in milliseconds, and the shortest press that can be
+            reported.  Raise it for a switch that bounces badly, lower it for fast tapping,
+            and use zero for a button with hardware debouncing behind it.
         long_press_ms: Hold time that fires ``just_long_pressed``.  Zero disables it.
         repeat_ms: Interval between ``just_repeated`` fires while held.  Zero disables it.
         repeat_delay_ms: Hold time before repeat starts.

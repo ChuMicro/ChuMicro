@@ -71,7 +71,7 @@ You never set any of this up.  There is no capture mode to pick and no interrupt
 
 | Symbol | Description |
 |---|---|
-| `Button(pin, settle_ms=20, ...)` | One momentary button or switch on one pin |
+| `Button(pin, settle_ms=10, ...)` | One momentary button or switch on one pin |
 | `Buttons(pins, ...)` | Several keys on one scan, read as `buttons[0]`, `buttons[1]` |
 | `KeyMatrix(row_pins, column_pins, ...)` | A keypad wired as rows by columns, numbered row-major.  Imported from `chumicro_buttons.matrix` |
 
@@ -106,10 +106,10 @@ You never set any of this up.  There is no capture mode to pick and no interrupt
 
 A switch is two pieces of metal meeting, and they bounce apart a few times on the way.  Left alone, one press reads as several.
 
-`settle_ms` is the only setting.  It defaults to 20, which suits an ordinary tactile switch:
+`settle_ms` is the only setting.  It defaults to 10, which suits an ordinary tactile switch:
 
 ```python
-button = Button(pin=board.GP14, ticks=ticks, settle_ms=20)   # the default
+button = Button(pin=board.GP14, ticks=ticks, settle_ms=10)   # the default
 button = Button(pin=board.GP14, ticks=ticks, settle_ms=0)    # the signal is already clean
 ```
 

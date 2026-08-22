@@ -66,11 +66,11 @@ When a signal is so noisy that capture cannot keep up, `button.overflowed` goes 
 
 A switch is two pieces of metal meeting, and they bounce apart a few times on the way.  A small tactile switch settles in about one to five milliseconds; a bigger toggle or microswitch can take twenty.  Left alone, one press arrives as several.
 
-`settle_ms` is the only setting, and it defaults to 20:
+`settle_ms` is the only setting, and it defaults to 10:
 
 ```python
-button = Button(pin=board.GP14, ticks=ticks, settle_ms=20)   # the default, good for a tactile switch
-button = Button(pin=board.GP14, ticks=ticks, settle_ms=5)    # a clean switch, faster taps land
+button = Button(pin=board.GP14, ticks=ticks, settle_ms=10)   # the default
+button = Button(pin=board.GP14, ticks=ticks, settle_ms=20)   # a switch that bounces badly
 button = Button(pin=board.GP14, ticks=ticks, settle_ms=0)    # the signal is already clean
 ```
 
@@ -78,17 +78,18 @@ An edge is believed once the signal has held its new state for `settle_ms`, and 
 
 `settle_ms` also sets the shortest press the library will report, and on fast tapping that costs more than it sounds like.  A tap held for less than the window never holds its new state long enough to be believed, so it is discarded along with the bounce, silently.
 
-Measured on a Pi Pico W against a switch with no debounce hardware: 30 seconds of tapping as fast as a finger goes closed the contact 107 times, and 30 of those closures were shorter than 20 ms.  At the default the library reported 75 presses, which is the 77 that survived the window.  **More than a quarter of the taps were dropped.**  The same switch at `settle_ms=5` reported presses down to 6 ms.
+Measured on a Pi Pico W against a switch with no debounce hardware: 30 seconds of tapping as fast as a finger goes closed the contact 107 times.  Thirty of those closures were shorter than 20 ms and seven were shorter than 10 ms, so a 20 ms window would have dropped better than a quarter of them and the 10 ms default drops about six in a hundred.  That measurement is why the default is 10 rather than 20.
 
 That is the whole tradeoff, so pick the window from what the button is for:
 
 | `settle_ms` | Good for | Drops taps shorter than |
 |---|---|---|
-| 20 (default) | A button pressed deliberately, and any switch you have not measured | 20 ms, which is about a quarter of fast tapping |
-| 5 | Fast tapping, a game control, a tactile switch whose bounce settles inside a millisecond | 5 ms, which a finger rarely reaches |
-| 0 | Debouncing hardware behind the pin, or a signal driven by something already clean | nothing |
+| 20 | A toggle, a microswitch, or any big switch that bounces badly | 20 ms, about a quarter of fast tapping |
+| 10 (default) | A tactile switch, which is most buttons | 10 ms, about six taps in a hundred |
+| 5 | Fast tapping or a game control, on a switch you have measured | 5 ms, which a finger rarely reaches |
+| 0 | Debouncing hardware behind the pin, or a signal already clean | nothing |
 
-The default is 20 because an unmeasured switch might be a big one, and a toggle or microswitch really can bounce for twenty milliseconds.  A small tactile switch does not: the one measured above settled inside 300 microseconds, so 5 was safe on it and let four times as many fast taps through.  If your button is for tapping rather than pressing, measure yours and turn the window down.  The next section covers debouncing hardware and which arrangements actually earn a zero.
+The default is a compromise.  A small tactile switch settles inside a millisecond, so 10 is generous for one; a big toggle or microswitch can bounce for twenty, and on one of those a 10 ms gap in the middle of the bouncing can be believed as an edge.  Raise it to 20 for a big switch, and lower it for a button that is tapped rather than pressed.  The next section covers debouncing hardware and which arrangements actually earn a zero.
 
 ## Wiring
 

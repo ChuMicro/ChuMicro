@@ -34,7 +34,7 @@ def _quiet_button(source, **options) -> Button:
 
 def test_the_documented_defaults_are_the_shipped_ones() -> None:
     """The module constants hold the settle, long-press, and repeat-delay defaults."""
-    assert DEFAULT_SETTLE_MS == 20
+    assert DEFAULT_SETTLE_MS == 10
     assert DEFAULT_LONG_PRESS_MS == 500
     assert DEFAULT_REPEAT_DELAY_MS == 500
 
