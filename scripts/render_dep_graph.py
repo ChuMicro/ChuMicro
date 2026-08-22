@@ -79,6 +79,9 @@ NODES: dict[str, tuple[int, int]] = {
     "config":      (100,  300),
     "kvstore":     (300,  300),
     "runner":      (520,  300),
+    # Middle row, right: device input, leaf consumers of timing alone.
+    "buttons":     (740,  300),
+    "knobs":       (940,  300),
     # Bottom row: foundation primitives (y=540).
     "msgpack":     (140,  540),
     "timing":      (480,  540),
