@@ -305,21 +305,29 @@ Counting an encoder outside the loop is what keeps a spin whole across a slow pa
 
 On CircuitPython the modules this builds on (`rotaryio`, `analogio`) are compiled into the firmware, so they cost nothing in your board's storage.  One detail there is worth knowing before you pick pins: on RP2040 boards `rotaryio` reads both signal pins with one PIO state machine, which requires them to be next to each other in GPIO numbering, so `board.GP16` and `board.GP17` work together while `board.GP16` and `board.GP20` do not.  Other CircuitPython ports and every MicroPython port take any two pins.
 
-### An analog knob does not reach the top on ESP32
+### An analog knob loses some travel on ESP32
 
-A potentiometer wired across 3V3 sweeps the whole way on an RP2040 and stops about three quarters of the way up on an ESP32.  The same pot and the same code measured `1424` to `65535` on a Pi Pico W and `1440` to `49787` on a Lolin S2: the bottoms agree, and the top is short by a quarter.
+A potentiometer across 3V3 sweeps the whole way on an RP2040 and loses a piece of its travel on an ESP32.  Which piece depends on the runtime, because the two read the converter differently.  One pot, one position, one board, swapped between runtimes:
 
-This is the converter rather than anything here, and it is well known.  Adafruit's own board guides put the ESP32-S2 and S3 ceiling at "about 51000 or 2.57 volts", and CircuitPython tracks it as an open bug against the Espressif port, where the reported figures are 51157 on an S2 and 61543 on an S3 against a full 65535 on an RP2040.  The exact number varies between individual chips, so measure the one in front of you rather than trusting any of these.
+| | Sweep reached | Steps of 100 |
+|---|---|---|
+| RP2040, either runtime | 615 to 65535 | 0 to 99 |
+| ESP32-S2, CircuitPython | 1440 to 49787 | 2 to 75 |
+| ESP32-S2, MicroPython | 3796 to 65508 | 5 to 99 |
 
-The part that catches people is the shape of the failure.  The reading does not fall short gradually; it pins, so the last stretch of the knob's travel does nothing at all while the number sits still.  Nothing raises, because nothing is wrong enough to.
+CircuitPython converts the reading to millivolts through a calibration table and then scales it as though 3.3 V were full scale.  The calibration straightens out the converter's low end, so the bottom of the sweep is honest, but an ESP32 stops reading around 2.5 V and the top quarter is never produced.  MicroPython scales the raw count straight onto sixteen bits instead, so whatever saturates the converter becomes 65535 and the top arrives, while the converter's offset at the bottom goes uncorrected and the first few steps do not.
 
-With the default 100 steps an S2 reaches about step 75.  Ask for the steps you can actually reach:
+Neither is a fault in this library and the CircuitPython end is already known: Adafruit's board guides put the S2 and S3 ceiling near 51000 counts or 2.57 V, and CircuitPython carries an open bug reporting 51157 on an S2 against a full 65535 on an RP2040.  The exact figures vary between individual chips.
+
+The part that catches people is the shape of it.  A reading that runs out does not fade, it pins, so the last stretch of the knob's travel moves nothing while the number sits still and nothing raises.
+
+Measure the board in front of you rather than trusting the table: sweep from stop to stop and watch `raw`.  The numbers it stops at are your range.  Then ask for the steps you can reach:
 
 ```python
-volume = AnalogKnob(board.IO9, steps=75)      # an ESP32-S2 board
+volume = AnalogKnob(board.IO9, steps=75)      # an S2 under CircuitPython
 ```
 
-Or feed the wiper from a divider that keeps it under the ceiling, which costs resolution and buys back a sweep where the whole range means something.  To find your own ceiling, sweep the pot from stop to stop and watch `raw`: the number it stops climbing at is what you have.
+Or feed the wiper from a divider that keeps it inside the range you measured, which costs resolution and buys back a sweep where every step means something.
 
 ## Examples
 
