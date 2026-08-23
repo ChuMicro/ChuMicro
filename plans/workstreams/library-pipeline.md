@@ -333,12 +333,17 @@ the same board under CircuitPython, and on the S2 under CircuitPython:
 | Pi Pico W, CircuitPython | firmware `keypad.KeyMatrix` | GP5, GP4, GP3, GP2 | 0 to 15 |
 | Lolin S2, CircuitPython | firmware `keypad.KeyMatrix` | IO39, IO37, IO35, IO33 | 0 to 15 |
 
-That is worth more than any run alone.  CircuitPython hands the scanning to the firmware in C
-while MicroPython uses this library's own scan, so the agreement is between two separate
-implementations rather than one being self-consistent, and it survives the row pins landing on
-a different bank on a different chip family.  A host test cannot reach the claim at all,
-because a fake agrees with whatever it was written to agree with.  Hold times read 80 to 166 ms
-across the three, which is a finger every time.
+The first two runs are the ones that settle the numbering.  CircuitPython hands the scanning to
+the firmware in C while MicroPython uses this library's own scan, so those two agreeing on one
+board with one wiring is two separate implementations agreeing rather than one being
+self-consistent.  A host test cannot reach that claim at all, because a fake agrees with
+whatever it was written to agree with.
+
+The S2 run adds that the surface works on esp32 hardware, and no more than that.  Both
+CircuitPython runs went through the same `shared-module` scanning code, so it is not a second
+implementation, and the row pins sitting on different numbers between the two boards is where
+the wires were put rather than anything about the chips.  Hold times read 80 to 166 ms across
+the three, which is a finger every time.
 
 Rows and columns are interchangeable on a grid with no diodes, so the scan cannot tell which
 set is which and does not need to: the choice only decides which way the numbering runs.  What
