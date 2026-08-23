@@ -56,7 +56,7 @@ Applies to `libraries/` and `support/<name>/src/`, cross-runtime by default. Not
 ## Examples and demos
 
 - Examples import the public package only. No `if __name__ == "__main__":` guard. Hardware examples are prefixed `circuitpython_*.py` / `micropython_*.py`. Gated by `python scripts/run.py verify-examples`.
-- A demo's `app.py` imports only what it demonstrates, prints its own `NAME key=value` lines, and lingers a few seconds before exiting ([Decision 0123](../../plans/decisions/0123-demos-read-like-a-first-project.md)). No `chumicro_test_harness` import in board-side demo code.
+- A demo's `app.py` imports only what it demonstrates, prints its own `NAME key=value` lines, and never exits: it prints `DEMO_COMPLETE` when the work is done and lets the written-out loop carry on ([Decision 0123](../../plans/decisions/0123-demos-read-like-a-first-project.md)). No `chumicro_test_harness` import in board-side demo code.
 - Demos and examples write the main loop out: `while ...:`, then `runner.tick()`, then `runner.wait(now_ms)` ([Decision 0122](../../plans/decisions/0122-demos-and-examples-write-the-loop-out.md)). `run_until` hides the loop from the reader they exist to teach.
 - Never deploy a `code.py` / `main.py` containing `microcontroller.reset()` or `machine.reset()`.
 
