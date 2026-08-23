@@ -5,7 +5,7 @@ description: Sanity check at the end of a unit of work — preflight green, plan
 
 # Task Checkpoint
 
-Per [AGENTS.md → Keeping plans and docs current](../../../AGENTS.md#keeping-plans-and-docs-current), run this at the end of every unit of work — before moving on to the next unit or telling the user you're done.
+Per [AGENTS.md → Workflow](../../../AGENTS.md#workflow), run this at the end of every unit of work — before moving on to the next unit or telling the user you're done.
 
 **Trigger gate.** Did you just complete a unit of work that could be described in one commit subject?  If no, you're not at a checkpoint — go finish the work.
 
@@ -51,7 +51,7 @@ Narrative context, what was tried and rejected, and the rationale a future reade
 
 ## 4. Refresh `plans/next-up.md`
 
-Per [AGENTS.md → Keeping plans and docs current](../../../AGENTS.md#keeping-plans-and-docs-current), every checkpoint refreshes `plans/next-up.md`:
+Per [AGENTS.md → Workflow](../../../AGENTS.md#workflow), every checkpoint refreshes `plans/next-up.md`:
 
 - Remove the bullet for what just shipped from whichever section held it.  `## Now` is typical; `## Next`, `## Out of scope`, and `## Investigations` are also valid (see [plans/README.md](../../../plans/README.md) for the section list).
 - Add follow-ups discovered during the work as one-line entries under `## Next`.  If an entry would need more than a title, promote to `plans/workstreams/<slug>.md` and link from a one-line pointer here (enforced by CHU011).

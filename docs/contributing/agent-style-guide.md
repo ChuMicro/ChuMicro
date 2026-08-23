@@ -18,7 +18,7 @@ Two kinds of rule are non-negotiable.  Lint-backed ones a check enforces, so the
 
 ## Sentence form
 
-Write in sentences.  Em-dashes are banned outright: never use one, in code comments, docstrings, or any markdown prose.  Replace each with a period, a comma, a colon, or parentheses (an em-dash introducing a definition is usually a colon or a `which` clause in disguise), rewriting the sentence so it reads naturally.  A bare hyphen dropped in where the em-dash was is not a fix.  This is the project's ruling, set in [style-guide.md § Voice](style-guide.md#voice) and the repo's CLAUDE.md.  No em-dash earns its way out of it.
+Write in sentences.  Em-dashes are banned outright: never use one, in code comments, docstrings, or any markdown prose.  Replace each with a period, a comma, a colon, or parentheses (an em-dash introducing a definition is usually a colon or a `which` clause in disguise), rewriting the sentence so it reads naturally.  A bare hyphen dropped in where the em-dash was is not a fix.  This is the project's ruling, set in [style-guide.md § Voice](style-guide.md#voice) and AGENTS.md.  No em-dash earns its way out of it.
 
 Semicolons and arrows are the suspects that do answer to the ear.  They often paper over missing connective tissue, in which case two sentences or a comma-and-connector reads better.  When the connective tissue is there and the line reads well out loud, keep them.  Applies to code comments, docstrings, and all markdown prose.
 
