@@ -283,14 +283,24 @@ through `Deployer.deploy_diff()`, and `CHU034` enforces it.
 
 Another agent or the user may be working in this repo right now. Assume it.
 
-- Take a worktree for anything that will run long, switch branches, or touch
-  files another session is likely in:
-  `git worktree add .claude/worktrees/<slug> -b <type>/<slug>`.
-  That path is gitignored, so each session gets its own checkout and its own
-  branch and neither disturbs the other's working tree.
+- Work in the checkout you are already in. A clean tree, a routine merge, an
+  ordinary edit, a branch switch with nothing uncommitted: none of those need a
+  worktree, and standing one up costs more than it saves.
 
-- `git worktree list` shows what is already checked out before you start.
-  `git worktree remove .claude/worktrees/<slug>` cleans up once the PR lands.
+- Take a worktree only when you need two branches checked out at once, or when
+  another session is live in this tree and you would collide:
+  `git worktree add .claude/worktrees/<slug> -b <type>/<slug>`. That path is
+  gitignored. Remove it with `git worktree remove .claude/worktrees/<slug>`
+  once the work lands.
+
+- A fresh worktree has no built `mpy-cross`, so `check-size` fails there with a
+  `prepare-mpy-cross` remedy even though the binary already exists. Link
+  `.tools/micropython-<version>` in from the main checkout instead of
+  rebuilding.
+
+- `git worktree list` shows what is already checked out. Git refuses to check
+  out one branch in two places, so a branch another worktree holds gets merged
+  in place rather than in a new one.
 
 - Never switch branches under another session. If a checkout blocks on local
   changes you did not make, stop and surface it rather than reverting them.
