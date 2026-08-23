@@ -171,6 +171,21 @@ while True:
         print("brightness", brightness.value)     # 0 through 9
 ```
 
+Or on the runner, paced to fifty conversions a second:
+
+```python
+from chumicro_runner import Runner
+
+brightness.on_change = lambda step: print("brightness", step)
+
+runner = Runner()
+runner.add(brightness, period_ms=20)
+
+while True:
+    now = runner.tick()
+    runner.wait(now)
+```
+
 `steps` defaults to 100, held in `DEFAULT_STEPS`, which puts the middle of the sweep at 50 and the top at 99.  `delta` is the change for this tick, negative when the knob comes back down, and `raw` is the settled reading on the 0 to 65535 scale that `value` was worked out from:
 
 ```python
