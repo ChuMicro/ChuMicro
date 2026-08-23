@@ -27,6 +27,16 @@ while True:
 
 `check(now_ms)` does one small step: it collects whatever the hardware captured and updates the readings.  It never waits, so the rest of your program keeps running.
 
+On MicroPython there is no `board` module; pass a `machine.Pin` instead, and everything else on the page reads the same:
+
+```python
+from machine import Pin
+
+button = Button(pin=Pin(14), ticks=ticks)
+```
+
+Any GPIO that can read with a pull-up works.  On a Pico W that is every `GP` pin; on a classic ESP32, skip GPIO 34 to 39, which are input-only with no pull-ups.
+
 ## Reading the button
 
 Every reading is a plain attribute, refreshed by `check()`:
@@ -227,6 +237,16 @@ while True:
 ```
 
 Keys are numbered row-major, so `row * len(column_pins) + column`.  With the three columns above, key 4 is row 1, column 1.
+
+One capture note: CircuitPython scans the grid in the firmware's own background scan, so a tap between two passes of your loop still lands.  MicroPython scans once per `check(now_ms)`, because a grid has to be driven a row at a time, so on a loop that stalls for long stretches a very short tap on a matrix key can be missed.  Discrete buttons do not have that limit on either runtime.
+
+### Wiring the matrix and picking the pins
+
+Ready-made membrane keypads bring the grid out as one row of header pins, rows and columns mixed.  Wire them to any GPIOs that can both read with a pull-up and drive as an output: on a Pico W that is every `GP` pin, and on a classic ESP32 skip GPIO 34 to 39, which can do neither.  On MicroPython pass `machine.Pin` objects the same way as a discrete button.
+
+A membrane keypad has no diodes inside, and on a grid like that rows and columns are electrically interchangeable.  Which pins you call rows only decides which way the numbering runs, so a keypad that reports its keys in column order wants its two tuples swapped, not rewired.  If the header is unlabelled, press each key in reading order and note which pair of pins shorts together; the pin the whole first row of presses shares is your first row, and the pins it paired with are your columns in order.
+
+What a diode-less grid cannot do is three keys at once: three pressed keys forming a rectangle make the fourth corner read as pressed.  That is the wiring, not the library, and it is why grids built for chords carry a diode per key.  On a grid that does have diodes, `columns_to_anodes` tells the scan which way they face: leave it `True` when each diode's striped end points at a row pin.  Guessing wrong is quiet rather than damaging, so a diode keypad that reports nothing at all is the symptom to flip it on.
 
 ## Runner pattern
 

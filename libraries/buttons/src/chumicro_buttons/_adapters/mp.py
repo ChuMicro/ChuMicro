@@ -80,6 +80,9 @@ class MpButtonSource(ButtonSource):  # pragma: no cover - MP runtime path
         self._edge_times = array.array("i", [0] * ring_depth)
         self._write_index = 0
         self._read_index = 0
+        # Created here, before the interrupts attach, so an overflow in the handler rebinds
+        # an attribute that already exists instead of growing the instance dict.
+        self.overflowed = False
         #: Set when the ring drops an edge, so the next drain re-reads the pins.  It is
         #: separate from ``overflowed``, which the caller clears every tick.
         self._dropped_edges = False

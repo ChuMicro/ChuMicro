@@ -29,12 +29,9 @@ from chumicro_buttons._adapters.mp import DEFAULT_RING_DEPTH
 from chumicro_test_harness import skip
 from chumicro_timing import ticks, ticks_ms
 
-#: GPIO numbers to try for a free, self-triggering pin.  These are driven as outputs, so the
-#: list has to hold on every chip this library runs on, and the dangerous numbers differ per
-#: family: 6 to 11 are SPI flash on a classic esp32, 26 to 32 are flash and PSRAM on the S2
-#: and S3, 16 and 17 are PSRAM on a WROVER or a TinyPICO, and 19 and 20 are native USB on
-#: both S-series parts.  Driving any of those does not raise, it resets the board.  What is
-#: left below is safe everywhere, and 0, 2, 12, 15, 45 and 46 are left out as strapping pins.
+#: GPIO numbers to try for a free, self-triggering pin.  Driven as outputs, so every number
+#: here must carry no flash, PSRAM, USB, or strapping duty on any chip this library runs on;
+#: driving a reserved pin does not raise, it resets the board.
 _CANDIDATES = (5, 4, 13, 14, 18)
 
 #: Settle window these tests ask for.  Short enough that a test is not spent waiting and

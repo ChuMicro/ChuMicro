@@ -34,11 +34,9 @@ from chumicro_test_harness import skip
 #: quadrature signal and what lets a decode name a direction at all.
 _FORWARD = ((1, 1), (0, 1), (0, 0), (1, 0))
 
-#: GPIO numbers to try for free, self-triggering pins.  These are driven as outputs, so the
-#: list has to hold on every chip this library runs on, and the dangerous numbers differ per
-#: family: 6 to 11 are SPI flash on a classic esp32, 26 to 32 are flash and PSRAM on the S2
-#: and S3, 16 and 17 are PSRAM on a WROVER or TinyPICO, and 19 and 20 are native USB on both
-#: S-series parts.  Driving any of those does not raise, it resets the board.
+#: GPIO numbers to try for free, self-triggering pins.  Driven as outputs, so every number
+#: here must carry no flash, PSRAM, USB, or strapping duty on any chip this library runs on;
+#: driving a reserved pin does not raise, it resets the board.
 _CANDIDATES = (5, 4, 13, 14, 18)
 
 #: Pins to try for a converter.  26 to 28 are the only analog-capable ones on an rp2040,

@@ -1,4 +1,4 @@
-"""Debounced buttons, switches, and key matrices that never miss a tap."""
+"""Debounced buttons, switches, and key matrices: edges, long presses, repeats, and clicks."""
 
 import gc
 
