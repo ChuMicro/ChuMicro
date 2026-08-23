@@ -48,6 +48,21 @@ while not request.done:
 print("unix seconds:", request.unix_seconds)
 ```
 
+In a program with more going on, hand the loop to `chumicro-runner`:
+
+```python
+from chumicro_runner import Runner
+
+runner = Runner()
+runner.add(client)
+
+while not request.done:
+    now = runner.tick()
+    runner.wait(now)
+```
+
+`wait()` parks the CPU until the reply lands.
+
 ## Documentation
 
 - [User Guide](guide.md): getting started, bringing your own UDP transport, the runner pattern, and the failure modes a query can end in

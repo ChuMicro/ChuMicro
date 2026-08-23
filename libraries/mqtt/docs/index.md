@@ -47,6 +47,21 @@ while True:
         client.handle(now)
 ```
 
+The runner form of the same loop:
+
+```python
+from chumicro_runner import Runner
+
+runner = Runner()
+runner.add(client)
+
+while True:
+    now = runner.tick()
+    runner.wait(now)
+```
+
+`wait()` parks the CPU until broker traffic arrives or the next keepalive is due.
+
 ## Documentation
 
 - [User Guide](guide.md): connecting, publishing at QoS 0 and QoS 1, subscribing and pattern routing, last-will, TLS, wifi-drop self-heal, and the tuning knobs

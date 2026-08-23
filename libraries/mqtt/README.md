@@ -54,6 +54,21 @@ while True:
         client.handle(now)
 ```
 
+In a program with more going on, hand the loop to [`chumicro-runner`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner):
+
+```python
+from chumicro_runner import Runner
+
+runner = Runner()
+runner.add(client)
+
+while True:
+    now = runner.tick()
+    runner.wait(now)
+```
+
+`wait()` parks the CPU until broker traffic arrives or the next keepalive is due.
+
 QoS 0 + QoS 1 are implemented; QoS 2 raises `UnsupportedQoSError`.  Last-will, retained messages, wildcard topic matching (`topic_matches`), and a structured oversized-message policy are all built in.
 
 ## What's included

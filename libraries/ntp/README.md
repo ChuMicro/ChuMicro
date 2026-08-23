@@ -45,6 +45,21 @@ while not request.done:
 print("unix seconds:", request.unix_seconds)
 ```
 
+In a program with more going on, hand the loop to [`chumicro-runner`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner):
+
+```python
+from chumicro_runner import Runner
+
+runner = Runner()
+runner.add(client)
+
+while not request.done:
+    now = runner.tick()
+    runner.wait(now)
+```
+
+`wait()` parks the CPU until the reply lands.
+
 `chumicro_sockets.udp_socket` builds the default bound UDP socket.  Pass any object satisfying the `sendto` / `recvfrom_into` / `close` / `setblocking` contract (see `NTPClient`'s docstring) to `NTPClient(socket=...)`.  `chumicro_sockets.udp_socket` and `chumicro_sockets.testing.FakeUDPSocket` are the built-in producers.  `NTPClient.from_config` wires that default itself through the shared `chumicro_sockets.sockets_factory` module, imported lazily, so apps with a custom UDP transport keep `chumicro-sockets` out of their device deploy.
 
 ## What's included

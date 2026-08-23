@@ -48,6 +48,28 @@ print(response.json())     # parsed JSON when Content-Type is application/json
 
 `wifi.adapter.radio` is the board radio on CircuitPython and `None` on MicroPython and CPython, where the connector needs no radio.  Bringing your own socket instead of `chumicro-sockets` works too: `transport_factory` takes any `(host, port, use_tls)` callable.
 
+On the runner, the same fetch is a generator that runs top to bottom while other services keep the CPU between yields:
+
+```python
+from chumicro_requests.generators import get
+from chumicro_runner import Runner
+
+
+def fetch_once():
+    response = yield from get(
+        connector_factory(radio=wifi.adapter.radio),
+        "http://api.example.com/now",
+    )
+    print(response.status_code, response.text)
+
+
+runner = Runner()
+handle = runner.add_generator(fetch_once())
+while not handle.done:
+    now = runner.tick()
+    runner.wait(now)
+```
+
 ## Documentation
 
 - [User Guide](guide.md): generator flows and the `HttpClient` service, the POST / PUT / PATCH / DELETE verbs, redirects, body framing and decoding, streaming large bodies, bringing your own transport
