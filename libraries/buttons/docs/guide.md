@@ -266,6 +266,16 @@ while True:
 
 The runner captures one timestamp per pass and shares it with everything, so the button's idea of "now" matches the rest of the program.  A button also publishes its next timer through `next_deadline(now_ms)`, so `runner.wait(now)` sleeps exactly until a long press, an auto-repeat, or a click window is due rather than past it.  A press itself is an edge, not a timer: one that lands mid-sleep is captured with its real timestamp and reported at the next wake.
 
+Callbacks ride this loop with nothing extra.  `runner.tick()` calls `check` and then `handle`, so a program that sets the callbacks never reads the `just_` family:
+
+```python
+button.on_press = lambda: led.toggle()
+button.on_long_press = factory_reset
+runner.add(button)
+```
+
+A service that stalls inside its own `handle`, a TLS handshake step for example, stalls every service the same way.  The press is captured underneath the stall and its callback dispatches on the tick that follows, with `held_ms` measured from the edge rather than from the tick that got around to noticing.
+
 ## Memory notes
 
 `check()` allocates nothing in steady state.  Edges are drained through a preallocated buffer, the readings are plain attributes written in place, and the loops are indexed by hand rather than iterated.  A program can tick a button forever without the heap growing.
