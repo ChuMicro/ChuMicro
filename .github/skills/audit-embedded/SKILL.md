@@ -157,9 +157,9 @@ Audit each of these patterns honestly against the actual MicroPython / CircuitPy
 * **Descriptive names everywhere (Decision 0022).** Already enforced by `CHU001`; the audit-embedded angle is that `buf` / `mv` / `_pv` / `_bv` (cached-view shorthand) are *not* in the whitelisted abbreviation set despite appearing in patterns. If the audit sees one-letter view variables in library code, flag — `_payload_view` over `_pv`.
 * **Pre-encoded byte literals.** `PACKET_PINGREQ = b"\xc0\x00"` (module-level pre-encoded constant) beats encoding on demand. Look for `bytes([0xc0, 0x00])` or `struct.pack(...)` for fixed packets — usually a candidate for module-level pre-encoding.
 
-### 8. Comments and docstrings — flash bytes for nothing
+### 8. Comments and docstrings — prose quality, not flash
 
-The "code comments" rule in AGENTS.md says comments document the *why* of current code. The embedded angle adds: `.py` is what installs in practice, so every comment line is a flash byte on the device.
+The "code comments" rule in AGENTS.md says comments document the *why* of current code. A `.py` reaches a board with its docstrings and comments blanked: the workspace deploy transports run `chumicro_deploy.source_minify` on every staged file, and `bundle_manager`'s source stage runs the same strip on what `mip` and `circup` install (Decision 0090). Comment prose therefore costs the sdist, the repo reader, and the unstripped test lanes, and the audit weighs it for signal, not bytes.
 
 **Scope split with sibling skills.**
 
@@ -170,7 +170,7 @@ The "code comments" rule in AGENTS.md says comments document the *why* of curren
 * **Block comments narrating history.** "Previously this returned a list, we switched to deque for…" — belongs in the commit message. Delete.
 * **Stale TODO / FIXME / XXX.** Same. Delete unless actionable now.
 * **Docstring examples that drift from the API.** A docstring `>>> client.subscribe("topic")` while the method is now `client.subscribe("topic", qos=0)` — fix the example or drop it. Doctests don't run on-device anyway.
-* **Audit-pass per-change justification comments are flash bytes for nothing.**  Inline notes like `# bench-validated -25% allocation` or `# skips the bytes() copy` belong in the commit message body, not in shipped source.  Per-change comments document *why the diff exists* (audit reasoning) — they rot fast, they multiply across sites, and `.py` is what installs in practice, so each one is real flash on every board.  A general work-being-done comment at a strategy's home is OK sparingly; per-change notes are not.  Pre-existing per-change comments from earlier audits are legacy — don't proliferate, trim when convenient.  Parallel rule in `/audit-library` Anti-patterns; AGENTS.md → Code comments is the broader source.
+* **Audit-pass per-change justification comments carry no reader value.**  Inline notes like `# bench-validated -25% allocation` or `# skips the bytes() copy` belong in the commit message body, not in shipped source.  Per-change comments document *why the diff exists* (audit reasoning) — they rot fast and they multiply across sites.  A general work-being-done comment at a strategy's home is OK sparingly; per-change notes are not.  Pre-existing per-change comments from earlier audits are legacy — don't proliferate, trim when convenient.  Parallel rule in `/audit-library` Anti-patterns; AGENTS.md → Code comments is the broader source.
 
 ### 9. Docs match code — code is the source of truth
 
