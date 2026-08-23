@@ -27,6 +27,8 @@ pip install chumicro-mqtt
 - [chumicro-kvstore](https://chumicro.com/ChuMicro/kvstore/stable/): Tiny mutable key-value store for persisted runtime state (counters, timestamps, tokens) across CircuitPython, MicroPython, and CPython.
 - [chumicro-msgpack](https://chumicro.com/ChuMicro/msgpack/stable/): Compact MessagePack serialization for CircuitPython, MicroPython, and CPython: delegates to the native C module when available.
 - [chumicro-compat](https://chumicro.com/ChuMicro/compat/stable/): Cross-runtime compatibility polyfills for CircuitPython, MicroPython, and CPython: functools.partial and more.
+- [chumicro-buttons](https://chumicro.com/ChuMicro/buttons/stable/): Debounced buttons, switches, and key matrices for CircuitPython, MicroPython, and CPython: presses land even when your loop is busy.
+- [chumicro-knobs](https://chumicro.com/ChuMicro/knobs/stable/): Rotary encoders and analog knobs, read as a position that holds still
 
 ## Host tools
 
