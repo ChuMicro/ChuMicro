@@ -318,14 +318,22 @@ is with the pot untouched, so any reported movement is the library inventing it.
 |---|---|---|---|---|
 | Pi Pico W, CircuitPython | 656 | 1744 | ~12 500 movements per 15 s | 0 per 20 s |
 | Pi Pico W, MicroPython | 848 | — | — | 1 per 20 s |
-| Lolin S2, CircuitPython | 338 | 2125 | would span steps 42 to 45 | 0 per 20 s |
+| Lolin S2, CircuitPython | 338 | 2125 | would span 4 steps | 0 per 20 s |
+| Lolin S2, MicroPython | 608 | 4705 | would span 9 steps | 0 per 20 s |
 
-The two boards fail differently, which is why the source runs two filters rather than one.
-The Pico's 3V3 comes off a switching regulator and its noise is continuous, wide enough to
-walk the deadband's anchor across a step boundary and back; smoothing is what fixes that.  The
-S2 runs an LDO and is quiet by comparison at 338 counts, but its full spread reaches 2125, so
-the damage there comes from occasional samples more than a step out; the median is what fixes
-that.  Neither filter would have covered both boards.
+The four cells fail differently, which is why the source runs two filters rather than one.
+The Pico's 3V3 comes off a switching regulator and its noise is continuous, wide enough to walk
+the deadband's anchor across a step boundary and back; smoothing is what fixes that.  The S2
+runs an LDO and is quieter on average, but its full spread runs to two and four thousand
+counts, so the damage there comes from occasional samples several steps out; the median is what
+fixes that.  Neither filter would have covered every board.
+
+The two runtimes differ on one board as much as the two boards differ, and for a reason that
+shows up in both directions.  CircuitPython converts through a calibration table and averages
+two conversions, which halves the noise and caps the range; MicroPython scales the raw count
+with neither, which keeps the range and leaves the noise.  On the S2 that is 338 counts against
+608, and 2125 of spread against 4705, from one pot at one position with only the runtime
+changed.
 
 Sweeping tracks exactly on all three: 0 steps skipped anywhere, and move counts matching real
 step crossings rather than chatter, 661 and 600 and 293 events for gestures of that size.
