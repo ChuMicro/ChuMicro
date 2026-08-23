@@ -317,9 +317,13 @@ is with the pot untouched, so any reported movement is the library inventing it.
 | | Raw noise, middle 90 % | Raw full spread | Unfiltered | Filtered |
 |---|---|---|---|---|
 | Pi Pico W, CircuitPython | 656 | 1744 | ~12 500 movements per 15 s | 0 per 20 s |
-| Pi Pico W, MicroPython | 848 | — | — | 1 per 20 s |
+| Pi Pico W, MicroPython | 848 | not captured | not captured | 1 per 20 s |
 | Lolin S2, CircuitPython | 338 | 2125 | would span 4 steps | 0 per 20 s |
 | Lolin S2, MicroPython | 608 | 4705 | would span 9 steps | 0 per 20 s |
+
+The two blanks are a gap in the measuring rather than in the board: that run printed only the
+middle ninety percent and never the full spread or the step span an unfiltered reading would
+have covered.  Filling them wants the Pi Pico W back on the bench under MicroPython.
 
 The four cells fail differently, which is why the source runs two filters rather than one.
 The Pico's 3V3 comes off a switching regulator and its noise is continuous, wide enough to walk
