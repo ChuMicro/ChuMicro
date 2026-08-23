@@ -23,6 +23,23 @@ while True:
 
 `just_moved` is true for exactly one pass of the loop, so you can read it as often as you like without it firing twice.  `bounds` walks the number between 0 and 20 and stops it at both ends.
 
+In a program with more going on, hand the loop to `chumicro-runner` and let the callback do the reading:
+
+```python
+from chumicro_runner import Runner
+
+volume.on_change = lambda detents: print("volume", volume.position)
+
+runner = Runner()
+runner.add(volume)
+
+while True:
+    now = runner.tick()
+    runner.wait(now)
+```
+
+Every service in your program shares those same two lines.
+
 ## Documentation
 
 - [User Guide](guide.md): wiring an encoder, bounds and wrap, reading a potentiometer, the deadband that holds it still, callbacks, and wiring into a runner
