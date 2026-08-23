@@ -309,6 +309,41 @@ And a rise-time check built from a Python polling loop resolves nothing under ab
 because each pass of the loop costs 20, so the numbers it produced were noise presented as
 evidence.
 
+##### The analog knob on real potentiometers
+
+A wiper across 3V3 into an ADC pin, on a Pi Pico W and a Lolin S2 Mini.  Every number below
+is with the pot untouched, so any reported movement is the library inventing it.
+
+| | Raw noise, middle 90 % | Raw full spread | Unfiltered | Filtered |
+|---|---|---|---|---|
+| Pi Pico W, CircuitPython | 656 | 1744 | ~12 500 movements per 15 s | 0 per 20 s |
+| Pi Pico W, MicroPython | 848 | — | — | 1 per 20 s |
+| Lolin S2, CircuitPython | 338 | 2125 | would span steps 42 to 45 | 0 per 20 s |
+
+The two boards fail differently, which is why the source runs two filters rather than one.
+The Pico's 3V3 comes off a switching regulator and its noise is continuous, wide enough to
+walk the deadband's anchor across a step boundary and back; smoothing is what fixes that.  The
+S2 runs an LDO and is quiet by comparison at 338 counts, but its full spread reaches 2125, so
+the damage there comes from occasional samples more than a step out; the median is what fixes
+that.  Neither filter would have covered both boards.
+
+Sweeping tracks exactly on all three: 0 steps skipped anywhere, and move counts matching real
+step crossings rather than chatter, 661 and 600 and 293 events for gestures of that size.
+
+Two measurements had to be thrown away before those were trusted.  A knob parked against the
+top stop on the S2 read zero counts of noise and looked like proof of a clean supply; it was a
+saturated converter reporting a constant.  And a filter shift picked by replaying a captured
+buffer offline predicted a setting that left 593 movements a second live, because samples
+captured in a tight loop do not carry the correlation the noise has at the loop's own rate.
+Both numbers came from measuring something other than what the claim was about.
+
+An ESP32 cannot reach the top of a pot's travel at all, which is the converter and is already
+known: Adafruit's board guides put the S2 and S3 ceiling near 51000 counts or 2.57 V, and
+CircuitPython carries an open bug reporting 51157 on an S2 against a full 65535 on an RP2040.
+Measured here, the same pot swept 1424 to 65535 on the Pico and 1440 to 49787 on the S2.  The
+guide carries it because the failure pins rather than degrades, so the last quarter of a knob
+does nothing while nothing raises.
+
 ##### The runtime and silicon matrix, and what each cell is worth
 
 Both runtimes run green on both chip families, but the two suites do not prove the same thing
