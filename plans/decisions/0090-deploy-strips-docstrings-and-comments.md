@@ -2,7 +2,7 @@
 
 Status: `accepted`
 Date: `2026-06-13`
-Summary: Device deploys strip docstrings and `#` comments from every staged `.py`, blanking lines in place so deployed size tracks code not prose while statement line numbers stay stable.
+Summary: Every `.py` that lands on a board is stripped of docstrings and `#` comments, blanking lines in place so size tracks code, not prose, while statement line numbers stay stable.
 Related: 0087 (generator substrate, RAM-mode inline strip), 0047 (flash deploy-mode default), 0015 (minimum board tier)
 
 ## Context
@@ -11,7 +11,7 @@ Flash-mode deploy shipped raw `.py` verbatim while RAM mode already stripped doc
 
 ## Decision
 
-Both deploy paths strip docstrings and `#` comments from every staged `.py` before transfer, for CircuitPython and MicroPython.  RAM mode already did this inline through `ast.unparse`; flash and copy staging now do it too, through `chumicro_deploy.source_minify`.
+Every path that puts a `.py` on a board strips docstrings and `#` comments first, for CircuitPython and MicroPython: both workspace deploy paths, and the bundle's source channel that `mip` and `circup` install verbatim.  RAM mode already did this inline through `ast.unparse`; flash staging, copy staging, and `bundle_manager`'s source stage all run `chumicro_deploy.source_minify`.
 
 The strip blanks the removed lines in place instead of deleting them, so every kept statement keeps its original line number.  That is load-bearing: the on-device test runner splits a staged file into chunks at top-level statement line numbers computed host-side from the unstripped source, and a device traceback points at the line of the staged file.  Deleting lines would desync both.
 
@@ -21,6 +21,6 @@ The strip blanks the removed lines in place instead of deleting them, so every k
 
 ## Consequences
 
-A library's verbose maintainer-facing docstrings no longer cost device flash: `chumicro_sockets` drops from ~57 KB of `.py` to ~12 KB on a board, and the minimum tier stages a basic demo and the on-device unit sweep again.  Deployed bytes track code, so rewording a comment no longer changes what lands, which stabilizes size-gated behavior.
+A library's verbose maintainer-facing docstrings no longer cost device flash on any install path: `chumicro_sockets` drops from ~57 KB of `.py` to ~12 KB on a board, and the minimum tier stages a basic demo and the on-device unit sweep again.  Deployed bytes track code, so rewording a comment no longer changes what lands, which stabilizes size-gated behavior, and `check-size`'s stripped number is the size a bundle `.py` install lands.  The bundle repos hold stripped source; a person reading library code reads it in this repository or on PyPI, whose sdist keeps the prose.
 
 Deployed files carry no docstrings, so on-device `__doc__` is empty; embedded code rarely reads it, and RAM mode already had this property.  A line-based comment scanner can mis-handle a multi-line string, but the equivalence guard contains that by shipping the file verbatim.

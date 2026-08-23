@@ -30,6 +30,7 @@ from bundle_manager import (
     patch_experimental,
     pin_bundle_deps,
 )
+from chumicro_deploy.source_minify import strip_source
 
 
 class TestDeriveBundleId:
@@ -1488,6 +1489,37 @@ class TestBuildBundle:
         assert all(len(entry) == 2 for entry in manifest["urls"])
         assert any("__init__.py" in entry[0] for entry in manifest["urls"])
         assert any("core.py" in entry[0] for entry in manifest["urls"])
+
+    def test_staged_source_is_stripped_of_docstrings_and_comments(
+        self, tmp_path: Path,
+    ) -> None:
+        """The staged .py equals strip_source of the repo source and carries no prose.
+
+        mip and circup install the staged file verbatim, so this is the byte-for-byte
+        contract that docstrings and comments cost no device flash on the .py channel,
+        and that check-size's stripped number is the size a bundle install lands.
+        """
+        library_dir = _make_test_library(tmp_path)
+        package_dir = library_dir / "src" / "chumicro_fakelib"
+        source = (
+            '"""Module docstring that must not reach a board."""\n'
+            "\n"
+            "# A comment that must not reach a board either.\n"
+            "def hello():\n"
+            '    """Say hello."""\n'
+            "    return 'world'\n"
+        )
+        (package_dir / "core.py").write_text(source)
+        staging_dir = tmp_path / "staging"
+        staging_dir.mkdir()
+
+        build_bundle(library_dir, "0.1.0", staging_dir)
+
+        staged = (staging_dir / "chumicro_fakelib" / "core.py").read_text()
+        assert staged == strip_source(source)
+        assert "must not reach a board" not in staged
+        assert "Say hello" not in staged
+        assert "return 'world'" in staged
 
     def test_stable_uses_stable_bundle_repo_in_urls(self, tmp_path: Path) -> None:
         """Stable bundle URLs reference the stable bundle repo."""

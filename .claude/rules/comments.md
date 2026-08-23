@@ -14,4 +14,4 @@ paths:
 - Never record an audit finding in a comment. Per-change justification, before/after numbers, and sweep narrative go in the commit body.
 - When prose and code disagree, the code wins; fix the prose. The exception is prose encoding intent the code lost (a regressed feature, a claim never implemented): stop and ask which side is correct.
 - A degraded comment is deleted and rewritten from a fresh read of the code, never trimmed again.
-- Device deploys strip docstrings and comments from every staged `.py` ([Decision 0090](../../plans/decisions/0090-deploy-strips-docstrings-and-comments.md)). Compare against the repo source, and never rely on `__doc__` in library code.
+- Every `.py` that lands on a board is stripped of docstrings and comments, on the deploy paths and in the bundle's source channel ([Decision 0090](../../plans/decisions/0090-deploy-strips-docstrings-and-comments.md)). Compare against the repo source, and never rely on `__doc__` in library code.
