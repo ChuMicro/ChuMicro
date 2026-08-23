@@ -9,9 +9,7 @@
 #: the deadband above it.  That deadband anchors on whichever sample tripped it, so a reading
 #: that leaps between noise extremes drags the anchor across a step boundary and back.  This
 #: removes the leaping, which is what lets the deadband behave the way it reads.  Four is the
-#: shift the bench settled on: measured live against a potentiometer at the noisiest end of its
-#: travel, twenty seconds of an untouched knob reported around 12000 movements unsmoothed, 949
-#: at a shift of 2, and one at 4.
+#: smallest shift that holds a parked knob on one number; at two it still wanders.
 SMOOTHING_SHIFT = 4
 
 def middle_of_three(first: int, second: int, third: int) -> int:
@@ -19,9 +17,9 @@ def middle_of_three(first: int, second: int, third: int) -> int:
 
     Three is the smallest window with a middle, and one wild sample can never be the middle
     of three, so a lone bad conversion is discarded outright rather than averaged in.  That
-    is the half smoothing cannot do: fed one full-scale sample, a smoothed reading moved
-    almost three steps and took 39 conversions to come back, while this moved nothing.  It
-    costs no extra conversion, because the window holds readings the loop already took.
+    is the half smoothing cannot do: a wild sample averaged in walks the reading steps away
+    and takes dozens of conversions to drain back out, while a discarded one moves nothing.
+    It costs no extra conversion, because the window holds readings the loop already took.
 
     What it does not do is quieten continuous noise, where it is nearly useless alone, so it
     runs ahead of the smoothing rather than instead of it.
