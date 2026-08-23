@@ -53,6 +53,12 @@ matching lines is not research.
   `chumicro-checks` findings after it, so `| head` reports green on a red run.
   Never `head` or `tail` a gate. Redirect it to `.scratch/` and read the file.
 
+- When you do filter output, capture it first and filter the file, never the
+  live stream. `cmd > .scratch/out.txt 2>&1; echo "EXIT=$?"` leaves the whole
+  run on disk to read back when the filtered view turns out to be misleading.
+  A pipeline throws away everything the filter did not match, and it reports
+  the last stage's exit status rather than the command's.
+
 - Failure is suppressed or deferred by design under `--no-fail-on-traceback`,
   `--allow-no-tests`, `--skip-health-check`, and `--skip-demo`, and inside the
   per-target loops in `sweep-devices`, `deploy --all-devices`, and
@@ -312,8 +318,12 @@ Another agent or the user may be working in this repo right now. Assume it.
 - Write and edit files with the file tools. Never use `echo`, `printf`, `cat`,
   or a heredoc for file content. Commit messages are the one exception.
 
-- Send large captures to `.scratch/`, which is gitignored.
-  Disable pagers with `git --no-pager` or `| cat`.
+- `.scratch/` is this repo's scratch directory and it is gitignored. Temp
+  files, log captures, and gate output go there. Never write them to `/tmp` or
+  any other system temp directory, including one the harness offers, so the
+  artifact sits next to the work and is still there for the next command.
+
+- Disable pagers with `git --no-pager` or `| cat`.
 
 - Run `python scripts/run.py setup` to fix imports, never `pip install -e`.
 
