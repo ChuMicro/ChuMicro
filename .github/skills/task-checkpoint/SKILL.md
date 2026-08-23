@@ -33,7 +33,7 @@ python scripts/run.py preflight --coverage-threshold 94 --quiet > .scratch/prefl
 
 Then read `.scratch/preflight.txt`.  Do not pipe the gate through `tail`, `head`, or `grep`.  Two separate failures come from piping it:
 
-- A pipeline reports the last stage's exit status, so an `&&` chain hung off `| tail` will happily commit and push a red tree.  This shipped a CHU012 failure to main on 2026-07-05.
+- A pipeline reports the last stage's exit status, so an `&&` chain hung off `| tail` will happily commit and push a red tree.  This has already shipped a CHU012 failure to main.
 - Phases do not print their verdict last.  `run.py lint` prints ruff's `All checks passed!` *before* the `chumicro-checks` findings, so a `head` or a short `tail` shows green while the run is red.
 
 Read the file and confirm the phase summary shows `PASS` on every row and the run ends with `Preflight passed`.  Never fuse the gate with the commit in one `&&` chain: run it, read the verdict, then commit.  If it fails because of your work, fix it first.  If preflight is already red and the failure is not yours, surface and stop rather than shipping onto a broken `main`.

@@ -426,15 +426,34 @@ Four checks per sentence:
   `the algorithm`, or `the implementation`.
 - **Professional.** No colloquialisms, implicit objects, or ambiguous pronouns.
 
+Say it once, in the fewest words that carry it. Length is not thoroughness. A
+second pass removes words; it does not add qualifiers.
+
 Never ship:
 
-- Em-dashes, enforced by `CHU037`.
-- Litotes and disclaimers.
-- Empty adjectives: `comprehensive`, `robust`, `seamless`, `cutting-edge`.
-- Filler openers and history banners.
-- An abstract subject paired with a weak verb.
-- An abstract opener restated concretely after a colon.
-- `the` in front of a forward reference or a brand name.
+- **Em-dashes.** Enforced by `CHU037`.
+- **Litotes.** Affirming by negating the opposite: *not unlike*, *not
+  uncommon*, *necessary but not sufficient*, *does not cover it*. State the
+  positive claim.
+- **Tombstones.** A marker left where something used to be: *moved to X*,
+  *previously this did Y*, *formerly `old_name`*, a deprecation note, an
+  `## Update` banner. Delete the thing and the marker together. `git log` holds
+  the history.
+- **Status dates.** *As of 2026-08-23*, *validated 2026-07-05*, *current as of
+  the last audit*. A date in prose is stale the day after it is written. Dates
+  belong in commit messages and [`plans/field-notes/`](plans/field-notes/).
+- **Disclaimers.** *This may not be exhaustive*, *your mileage may vary*,
+  *note that this could change*. Either the claim holds or it does not.
+- **Restatements.** A sentence repeating what the heading, the previous
+  sentence, or the code already said.
+- **Empty adjectives.** `comprehensive`, `robust`, `seamless`, `cutting-edge`.
+  Name what the thing covers or survives.
+- **Filler openers.** `It is worth noting`, `Let's dive into`, `In this
+  section we will`.
+- **An abstract subject with a weak verb.** *The win is…*, *Its floor is…*.
+  Find the actor and let it act.
+- **An abstract opener restated concretely after a colon.** Delete the opener.
+- **`the` before a forward reference or a brand name.**
 
 Degraded prose gets rewritten from a fresh read of what the thing does. It is
 never trimmed again.
