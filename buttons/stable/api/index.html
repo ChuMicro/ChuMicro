@@ -1,0 +1,2386 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://chumicro.com/ChuMicro/buttons/stable/api/">
+      
+      
+        <link rel="prev" href="../guide/">
+      
+      
+        <link rel="next" href="../testing/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../img/favicon.png">
+      <meta name="generator" content="zensical-0.0.39">
+    
+    
+      
+        <title>API Reference - chumicro-buttons</title>
+      
+    
+    
+      
+        
+      
+      <link rel="stylesheet" href="../assets/stylesheets/modern/main.1e981d71.min.css">
+      
+        
+          
+        
+        <link rel="stylesheet" href="../assets/stylesheets/modern/palette.dfe2e883.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter:300,300i,400,400i,500,500i,700,700i%7CJetBrains+Mono:400,400i,700,700i&amp;display=fallback">
+        <style>:root{--md-text-font:"Inter";--md-code-font:"JetBrains Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,t)=>(e<<5)-e+t.charCodeAt(0)),0),__md_get=(e,t=localStorage,a=__md_scope)=>JSON.parse(t.getItem(a.pathname+"."+e)),__md_set=(e,t,a=localStorage,_=__md_scope)=>{try{a.setItem(_.pathname+"."+e,JSON.stringify(t))}catch(e){}},document.documentElement.setAttribute("data-platform",navigator.platform)</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="deep-orange" data-md-color-accent="amber">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer" aria-label="Navigation"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#api-reference" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../../" title="chumicro-buttons" class="md-header__button md-logo" aria-label="chumicro-buttons" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-book-open" viewBox="0 0 24 24"><path d="M12 7v14M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer" aria-label="Navigation">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-menu" viewBox="0 0 24 24"><path d="M4 5h16M4 12h16M4 19h16"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            chumicro-buttons
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              API Reference
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="none" data-md-color-scheme="slate" data-md-color-primary="deep-orange" data-md-color-accent="amber"  aria-hidden="true"  type="radio" name="__palette" id="__palette_0">
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search" aria-label="Search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-search" viewBox="0 0 24 24"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog" aria-label="Search">
+  <button type="button" class="md-search__button">
+    Search
+  </button>
+</div>
+      
+    
+    <div class="md-header__source">
+      
+        <a href="https://github.com/ChuMicro/ChuMicro/tree/main/libraries/buttons" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2026 Fonticons, Inc.--><path fill="currentColor" d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Source
+  </div>
+</a>
+      
+    </div>
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../../" title="chumicro-buttons" class="md-nav__button md-logo" aria-label="chumicro-buttons" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-book-open" viewBox="0 0 24 24"><path d="M12 7v14M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg>
+
+    </a>
+    chumicro-buttons
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/ChuMicro/ChuMicro/tree/main/libraries/buttons" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2026 Fonticons, Inc.--><path fill="currentColor" d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Source
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="./.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="././" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+
+<nav class="md-nav md-nav--secondary" aria-label="On this page">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      On this page
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#chumicro_buttonscore" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <code>chumicro_buttons.core</code>
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#chumicro_buttons.core" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        core
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="core">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_buttons.core.Button" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Button
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Button">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_buttons.core.Button.check" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        check
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_buttons.core.Button.handle" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        handle
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_buttons.core.Button.next_deadline" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        next_deadline
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_buttons.core.Button.deinit" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        deinit
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_buttons.core.Buttons" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Buttons
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Buttons">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_buttons.core.Buttons.check" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        check
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_buttons.core.Buttons.handle" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        handle
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_buttons.core.Buttons.next_deadline" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        next_deadline
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_buttons.core.Buttons.deinit" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        deinit
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_buttons.core.Buttons.__len__" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        __len__
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_buttons.core.Buttons.__getitem__" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        __getitem__
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#chumicro_buttonsmatrix" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <code>chumicro_buttons.matrix</code>
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#chumicro_buttons.matrix" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        matrix
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="matrix">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_buttons.matrix.KeyMatrix" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        KeyMatrix
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#chumicro_buttonstesting" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <code>chumicro_buttons.testing</code>
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#chumicro_buttons.testing" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        testing
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="testing">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_buttons.testing.FakeButtonSource" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        FakeButtonSource
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="FakeButtonSource">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_buttons.testing.FakeButtonSource.press" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        press
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_buttons.testing.FakeButtonSource.release" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        release
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_buttons.testing.FakeButtonSource.poll" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        poll
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_buttons.testing.FakeButtonSource.next_event" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        next_event
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_buttons.testing.FakeButtonSource.deinit" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        deinit
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../testing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Testing Helpers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  
+                    
+                    
+                    
+                      
+                    
+                    
+                      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+                      <div class="md-sidebar-button__wrapper">
+                        <label class="md-sidebar-button" for="__toc"></label>
+                      </div>
+                    
+                  
+                  <div class="md-sidebar__inner">
+                    
+
+
+<nav class="md-nav md-nav--secondary" aria-label="On this page">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      On this page
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#chumicro_buttonscore" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <code>chumicro_buttons.core</code>
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#chumicro_buttons.core" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        core
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="core">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_buttons.core.Button" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Button
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Button">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_buttons.core.Button.check" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        check
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_buttons.core.Button.handle" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        handle
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_buttons.core.Button.next_deadline" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        next_deadline
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_buttons.core.Button.deinit" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        deinit
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_buttons.core.Buttons" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Buttons
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Buttons">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_buttons.core.Buttons.check" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        check
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_buttons.core.Buttons.handle" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        handle
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_buttons.core.Buttons.next_deadline" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        next_deadline
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_buttons.core.Buttons.deinit" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        deinit
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_buttons.core.Buttons.__len__" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        __len__
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_buttons.core.Buttons.__getitem__" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        __getitem__
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#chumicro_buttonsmatrix" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <code>chumicro_buttons.matrix</code>
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#chumicro_buttons.matrix" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        matrix
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="matrix">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_buttons.matrix.KeyMatrix" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        KeyMatrix
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#chumicro_buttonstesting" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <code>chumicro_buttons.testing</code>
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#chumicro_buttons.testing" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        testing
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="testing">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_buttons.testing.FakeButtonSource" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        FakeButtonSource
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="FakeButtonSource">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_buttons.testing.FakeButtonSource.press" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        press
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_buttons.testing.FakeButtonSource.release" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        release
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_buttons.testing.FakeButtonSource.poll" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        poll
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_buttons.testing.FakeButtonSource.next_event" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        next_event
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_buttons.testing.FakeButtonSource.deinit" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        deinit
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+  
+  
+
+
+<h1 id="api-reference">API Reference<a class="headerlink" href="#api-reference" title="Permanent link">&para;</a></h1>
+<h2 id="chumicro_buttonscore"><code>chumicro_buttons.core</code><a class="headerlink" href="#chumicro_buttonscore" title="Permanent link">&para;</a></h2>
+<p><code>Button</code> reads one momentary button or switch: a debounced level, the edges either side of it, and the durations built on top (long press, auto-repeat, click counting).  <code>Buttons</code> reads several keys on one scan and hands you each as a <code>Button</code>.</p>
+
+
+<div class="doc doc-object doc-module">
+
+
+
+<h2 id="chumicro_buttons.core" class="doc doc-heading">
+            <code>chumicro_buttons.core</code>
+
+
+<a href="#chumicro_buttons.core" class="headerlink" title="Permanent link">&para;</a></h2>
+
+    <div class="doc doc-contents first">
+
+        <p>Buttons and switches: debounced level, edges, long press, repeat, and click counting.</p>
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="chumicro_buttons.core.Button" class="doc doc-heading">
+            <code>Button</code>
+
+
+<a href="#chumicro_buttons.core.Button" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+
+
+        <p>One momentary button or switch, read as a debounced level plus what it meant.</p>
+<p>Every reading is a plain attribute refreshed by <code>check(now_ms)</code>, and the <code>just_</code> family
+is true only for the tick the thing happened on, so a loop can read them without consuming
+anything.  A switch that stays where you put it uses the same object, reading <code>pressed</code>
+and watching the edges for when it moved.  Constructing with <code>pin</code> builds the runtime's
+own source, a firmware <code>keypad</code> scan on CircuitPython and a capture interrupt on
+MicroPython, and both catch a tap that starts and ends between two passes of your loop.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>pin</code>
+            </td>
+            <td>
+                  <code><span title="object">object</span> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Runtime pin object for the key, or None when a parent drives this button.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>ticks</code>
+            </td>
+            <td>
+                  <code><span title="object">object</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The clock every duration here is judged by, <code>chumicro_timing.ticks</code> or
+anything shaped like it.  Required, and it is the only clock this library reads,
+so the ticks you pass <code>check(now_ms)</code> and the settle window the source
+debounces against share one time base.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>source</code>
+            </td>
+            <td>
+                  <code><span title="object">object</span> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Pre-built edge source; overrides <code>pin</code>.  Tests inject a fake here.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>active_low</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>True when a pressed key reads low.  True suits a button wired to ground
+with the internal pull-up enabled, which is nearly always the wiring.</p>
+              </div>
+            </td>
+            <td>
+                  <code>True</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>settle_ms</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Debounce window in milliseconds, and the shortest press that can be
+reported.  Raise it for a switch that bounces badly, lower it for fast tapping,
+and use zero for a button with hardware debouncing behind it.</p>
+              </div>
+            </td>
+            <td>
+                  <code><span title="chumicro_buttons.core.DEFAULT_SETTLE_MS">DEFAULT_SETTLE_MS</span></code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>long_press_ms</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Hold time that fires <code>just_long_pressed</code>.  Zero disables it.</p>
+              </div>
+            </td>
+            <td>
+                  <code><span title="chumicro_buttons.core.DEFAULT_LONG_PRESS_MS">DEFAULT_LONG_PRESS_MS</span></code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>repeat_ms</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Interval between <code>just_repeated</code> fires while held.  Zero disables it.</p>
+              </div>
+            </td>
+            <td>
+                  <code>0</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>repeat_delay_ms</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Hold time before repeat starts.</p>
+              </div>
+            </td>
+            <td>
+                  <code><span title="chumicro_buttons.core.DEFAULT_REPEAT_DELAY_MS">DEFAULT_REPEAT_DELAY_MS</span></code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>click_ms</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Quiet time after a release that closes a click series and publishes
+<code>click_count</code>.  Zero disables click counting.</p>
+              </div>
+            </td>
+            <td>
+                  <code>0</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="chumicro_buttons.core.Button.check" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">check</span><span class="p">(</span><span class="n">now_ms</span><span class="p">)</span></code>
+
+<a href="#chumicro_buttons.core.Button.check" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Drain captured edges and advance the timers by one tick.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>now_ms</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Tick this pass of the loop is measured from.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>True when anything happened, so a quiet tick can skip <code>handle</code>.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="chumicro_buttons.core.Button.handle" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">handle</span><span class="p">(</span><span class="n">now_ms</span><span class="p">)</span></code>
+
+<a href="#chumicro_buttons.core.Button.handle" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Call whichever callbacks this tick's readings earned.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="chumicro_buttons.core.Button.next_deadline" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">next_deadline</span><span class="p">(</span><span class="n">now_ms</span><span class="p">)</span></code>
+
+<a href="#chumicro_buttons.core.Button.next_deadline" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Return the earliest tick a timer here fires at, or None while none is armed.</p>
+<p>The runner reads this before it sleeps, so a long press, an auto-repeat, or a
+click window fires on time instead of at the next unrelated wake.  A press is a
+pin edge rather than a timer, so no deadline can name one; an edge that lands
+mid-sleep is captured with its real timestamp and reported at the next tick.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="chumicro_buttons.core.Button.deinit" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">deinit</span><span class="p">()</span></code>
+
+<a href="#chumicro_buttons.core.Button.deinit" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Release the pins and any interrupt the source installed.</p>
+
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="chumicro_buttons.core.Buttons" class="doc doc-heading">
+            <code>Buttons</code>
+
+
+<a href="#chumicro_buttons.core.Buttons" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+
+
+        <p>Several keys on one source, ticked together and read one key at a time.</p>
+<p><code>buttons[0]</code> is a :class:<code>Button</code> carrying that key's readings and its own callbacks, and
+the whole-panel callbacks take the key number instead.  On CircuitPython this is one
+firmware <code>keypad</code> scan across all the pins rather than one per key, which is both cheaper
+and what makes chords land on the same tick.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>pins</code>
+            </td>
+            <td>
+                  <code><span title="object">object</span> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Runtime pin objects, one per key.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>ticks</code>
+            </td>
+            <td>
+                  <code><span title="object">object</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The clock every duration here is judged by, <code>chumicro_timing.ticks</code> or
+anything shaped like it.  Required, and it reaches the scan and every key below,
+so the whole panel measures against one time base.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>source</code>
+            </td>
+            <td>
+                  <code><span title="object">object</span> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Pre-built edge source; overrides <code>pins</code>.  Tests inject a fake here.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>active_low</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>True when a pressed key reads low.</p>
+              </div>
+            </td>
+            <td>
+                  <code>True</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>settle_ms</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Debounce window in milliseconds; 0 trusts the signal.</p>
+              </div>
+            </td>
+            <td>
+                  <code><span title="chumicro_buttons.core.DEFAULT_SETTLE_MS">DEFAULT_SETTLE_MS</span></code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>long_press_ms</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Hold time that fires <code>just_long_pressed</code>.  Zero disables it.</p>
+              </div>
+            </td>
+            <td>
+                  <code><span title="chumicro_buttons.core.DEFAULT_LONG_PRESS_MS">DEFAULT_LONG_PRESS_MS</span></code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>repeat_ms</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Interval between repeat fires while held.  Zero disables it.</p>
+              </div>
+            </td>
+            <td>
+                  <code>0</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>repeat_delay_ms</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Hold time before repeat starts.</p>
+              </div>
+            </td>
+            <td>
+                  <code><span title="chumicro_buttons.core.DEFAULT_REPEAT_DELAY_MS">DEFAULT_REPEAT_DELAY_MS</span></code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>click_ms</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Quiet time that closes a click series.  Zero disables click counting.</p>
+              </div>
+            </td>
+            <td>
+                  <code>0</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="chumicro_buttons.core.Buttons.check" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">check</span><span class="p">(</span><span class="n">now_ms</span><span class="p">)</span></code>
+
+<a href="#chumicro_buttons.core.Buttons.check" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Drain captured edges into every key and advance their timers.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>now_ms</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Tick this pass of the loop is measured from.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>True when any key produced news this tick, so a quiet tick can skip <code>handle</code>.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="chumicro_buttons.core.Buttons.handle" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">handle</span><span class="p">(</span><span class="n">now_ms</span><span class="p">)</span></code>
+
+<a href="#chumicro_buttons.core.Buttons.handle" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Call the per-key callbacks, then the whole-panel ones.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="chumicro_buttons.core.Buttons.next_deadline" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">next_deadline</span><span class="p">(</span><span class="n">now_ms</span><span class="p">)</span></code>
+
+<a href="#chumicro_buttons.core.Buttons.next_deadline" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Return the earliest tick any key's timer fires at, or None while none is armed.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="chumicro_buttons.core.Buttons.deinit" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">deinit</span><span class="p">()</span></code>
+
+<a href="#chumicro_buttons.core.Buttons.deinit" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Release the pins and any interrupt the source installed.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="chumicro_buttons.core.Buttons.__len__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="fm">__len__</span><span class="p">()</span></code>
+
+<a href="#chumicro_buttons.core.Buttons.__len__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Return how many keys this panel reads.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="chumicro_buttons.core.Buttons.__getitem__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="fm">__getitem__</span><span class="p">(</span><span class="n">key_index</span><span class="p">)</span></code>
+
+<a href="#chumicro_buttons.core.Buttons.__getitem__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Return the :class:<code>Button</code> for <code>key_index</code>.</p>
+
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+
+
+
+  </div>
+
+    </div>
+
+</div><h2 id="chumicro_buttonsmatrix"><code>chumicro_buttons.matrix</code><a class="headerlink" href="#chumicro_buttonsmatrix" title="Permanent link">&para;</a></h2>
+<p><code>KeyMatrix</code> reads a keypad wired as rows by columns.  Keys are numbered row-major and carry the same readings and callbacks as any other button.</p>
+
+
+<div class="doc doc-object doc-module">
+
+
+
+<h2 id="chumicro_buttons.matrix" class="doc doc-heading">
+            <code>chumicro_buttons.matrix</code>
+
+
+<a href="#chumicro_buttons.matrix" class="headerlink" title="Permanent link">&para;</a></h2>
+
+    <div class="doc doc-contents first">
+
+        <p>A keypad wired as rows by columns, read as the same buttons everything else reads.</p>
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="chumicro_buttons.matrix.KeyMatrix" class="doc doc-heading">
+            <code>KeyMatrix</code>
+
+
+<a href="#chumicro_buttons.matrix.KeyMatrix" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+            <p class="doc doc-class-bases">
+              Bases: <code><a class="autorefs autorefs-internal" href="./#chumicro_buttons.core.Buttons">Buttons</a></code></p>
+
+
+
+        <p>A keypad whose keys sit where a row crosses a column, read one key at a time.</p>
+<p>Wiring keys as a grid is what lets twelve of them share seven pins, and every key still
+reads as an ordinary button: <code>matrix[5]</code> is a :class:<code>~chumicro_buttons.core.Button</code> with
+its own <code>pressed</code>, its own edges, and its own long press, repeat, and click counting.
+Keys are numbered row-major, so the key at <code>row</code>, <code>column</code> is
+<code>row * len(column_pins) + column</code>, and with three columns key 4 is row 1, column 1.</p>
+<p>CircuitPython drives the grid in the firmware's own background scan; MicroPython drives it
+once per <code>check(now_ms)</code>, because a grid has to be scanned a row at a time and column
+interrupts would report keys nobody touched.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>row_pins</code>
+            </td>
+            <td>
+                  <code><span title="object">object</span> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Runtime pin objects for the rows.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>column_pins</code>
+            </td>
+            <td>
+                  <code><span title="object">object</span> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Runtime pin objects for the columns.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>ticks</code>
+            </td>
+            <td>
+                  <code><span title="object">object</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The clock every duration here is judged by, <code>chumicro_timing.ticks</code> or
+anything shaped like it.  Required, and it reaches the scan and every key below,
+so the whole keypad measures against one time base.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>source</code>
+            </td>
+            <td>
+                  <code><span title="object">object</span> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Pre-built edge source; overrides the pins.  Tests inject a fake here.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>columns_to_anodes</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Which way the matrix's diodes face.  Leave it True when each
+diode's striped end points at a row pin, which is how ready-made keypads are built.
+Guessing wrong is quiet rather than damaging: the diodes block the scan and no key
+ever reads as pressed, so a keypad that reports nothing is the symptom to try it on.</p>
+              </div>
+            </td>
+            <td>
+                  <code>True</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>settle_ms</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Debounce window in milliseconds; 0 trusts the signal.</p>
+              </div>
+            </td>
+            <td>
+                  <code><span title="chumicro_buttons.core.DEFAULT_SETTLE_MS">DEFAULT_SETTLE_MS</span></code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>long_press_ms</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Hold time that fires <code>just_long_pressed</code>.  Zero disables it.</p>
+              </div>
+            </td>
+            <td>
+                  <code><span title="chumicro_buttons.core.DEFAULT_LONG_PRESS_MS">DEFAULT_LONG_PRESS_MS</span></code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>repeat_ms</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Interval between repeat fires while held.  Zero disables it.</p>
+              </div>
+            </td>
+            <td>
+                  <code>0</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>repeat_delay_ms</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Hold time before repeat starts.</p>
+              </div>
+            </td>
+            <td>
+                  <code><span title="chumicro_buttons.core.DEFAULT_REPEAT_DELAY_MS">DEFAULT_REPEAT_DELAY_MS</span></code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>click_ms</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Quiet time that closes a click series.  Zero disables click counting.</p>
+              </div>
+            </td>
+            <td>
+                  <code>0</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+
+
+
+  </div>
+
+    </div>
+
+</div><h2 id="chumicro_buttonstesting"><code>chumicro_buttons.testing</code><a class="headerlink" href="#chumicro_buttonstesting" title="Permanent link">&para;</a></h2>
+<p><code>FakeButtonSource</code> stands in for the hardware so button logic can be tested on a host.  Queue the edges, tick the button, assert on what it made of them.</p>
+
+
+<div class="doc doc-object doc-module">
+
+
+
+<h2 id="chumicro_buttons.testing" class="doc doc-heading">
+            <code>chumicro_buttons.testing</code>
+
+
+<a href="#chumicro_buttons.testing" class="headerlink" title="Permanent link">&para;</a></h2>
+
+    <div class="doc doc-contents first">
+
+        <p>Test-support helpers: a hand-driven :class:<code>FakeButtonSource</code>.</p>
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="chumicro_buttons.testing.FakeButtonSource" class="doc doc-heading">
+            <code>FakeButtonSource</code>
+
+
+<a href="#chumicro_buttons.testing.FakeButtonSource" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+
+
+        <p>Edge source a test drives by hand instead of by hardware.</p>
+<p>Queue the edges you want the button to see, then tick the button.  Each edge carries its
+own timestamp, which is how a test exercises the case that matters on a real board: an
+edge captured earlier than the tick that noticed it.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>key_count</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>How many keys this source reports.</p>
+              </div>
+            </td>
+            <td>
+                  <code>1</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="chumicro_buttons.testing.FakeButtonSource.press" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">press</span><span class="p">(</span><span class="n">key_index</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">at_ms</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span></code>
+
+<a href="#chumicro_buttons.testing.FakeButtonSource.press" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Queue a press edge for <code>key_index</code> stamped at <code>at_ms</code>.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="chumicro_buttons.testing.FakeButtonSource.release" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">release</span><span class="p">(</span><span class="n">key_index</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">at_ms</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span></code>
+
+<a href="#chumicro_buttons.testing.FakeButtonSource.release" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Queue a release edge for <code>key_index</code> stamped at <code>at_ms</code>.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="chumicro_buttons.testing.FakeButtonSource.poll" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">poll</span><span class="p">(</span><span class="n">now_ms</span><span class="p">)</span></code>
+
+<a href="#chumicro_buttons.testing.FakeButtonSource.poll" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Record that a capture step was asked for; the queue is filled by the test.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="chumicro_buttons.testing.FakeButtonSource.next_event" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">next_event</span><span class="p">()</span></code>
+
+<a href="#chumicro_buttons.testing.FakeButtonSource.next_event" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Advance to the next queued edge, or report the queue drained.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="chumicro_buttons.testing.FakeButtonSource.deinit" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">deinit</span><span class="p">()</span></code>
+
+<a href="#chumicro_buttons.testing.FakeButtonSource.deinit" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Record that the button released this source.</p>
+
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+
+
+
+  </div>
+
+    </div>
+
+</div><hr />
+<div class="chumicro-footer">
+<p><a href="../">← Home</a></p>
+<p><a href="https://github.com/ChuMicro/ChuMicro/tree/main/libraries/buttons">Source</a> · \
+<a href="https://pypi.org/project/chumicro-buttons/">PyPI</a> · \
+<a href="https://github.com/ChuMicro/ChuMicro-Bundle">Bundle</a> · \
+<a href="https://github.com/ChuMicro/ChuMicro-Bundle-Experimental">Experimental Bundle</a></p>
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://zensical.org/" target="_blank" rel="noopener">
+      Zensical
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate":null,"base":"..","features":[],"search":"../assets/javascripts/workers/search.e2d2d235.min.js","tags":null,"translations":{"clipboard.copied":"Copied to clipboard","clipboard.copy":"Copy to clipboard","search.result.more.one":"1 more on this page","search.result.more.other":"# more on this page","search.result.none":"No matching documents","search.result.one":"1 matching document","search.result.other":"# matching documents","search.result.placeholder":"Type to start searching","search.result.term.missing":"Missing","select.version":"Select version"},"version":{"default":["stable","experimental"],"provider":"mike"}}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.dbc0afdc.min.js"></script>
+      
+    
+  </body>
+</html>
