@@ -67,6 +67,7 @@ from chumicro_deploy.runtime_marker import (
     file_targets_runtime,
     is_test_support_module,
 )
+from chumicro_deploy.source_minify import strip_source
 from repo_layout import (
     GITHUB_ORG,
     ROOT,
@@ -277,12 +278,20 @@ def build_bundle(
     output_dir = staging_dir / package_name
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Copy .py source files into the root package directory.
+    # Stage .py source stripped of docstrings and comments, the same
+    # strip_source every device deploy runs (Decision 0090): mip and circup
+    # install these files verbatim, so unstripped prose would land in flash.
+    # The strip blanks lines in place, keeping tracebacks aligned with the
+    # repo source, and ships a file verbatim when its own equivalence guard
+    # cannot prove the strip safe.
     for source_file in python_files:
         relative_path = source_file.relative_to(package_dir)
         python_dest_file = output_dir / relative_path
         python_dest_file.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source_file, python_dest_file)
+        python_dest_file.write_text(
+            strip_source(source_file.read_text(encoding="utf-8")),
+            encoding="utf-8",
+        )
 
     # Copy sibling data files declared via __chumicro_data_files__ (e.g.
     # chumicro_sockets/_ca_bundle.der).  The .py walk can't see a runtime
