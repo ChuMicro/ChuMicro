@@ -22,7 +22,7 @@ The body below was written 2026-04-27 when the doc said "captured, no implementa
 
 In rough priority order:
 
-1. **Plug in the macropad and ship Tier B.**  `chumicro-buttons` + `chumicro-knobs` + `chumicro-pixels` + (optional) `chumicro-tone`.  The libraries are board-agnostic — macropad is just the dev fixture for functional tests.  Each follows the established DNA (constructor-injected adapter, per-runtime selection ladder, `testing.py` fake, runner-shaped service).  The input split, the capture-interrupt contract, and the debounce surface are settled in [Decision 0124](../decisions/0124-buttons-and-knobs-libraries.md); the rest is implementation.
+1. **Plug in the macropad and finish Tier B.**  `chumicro-buttons` and `chumicro-knobs` are shipped; §"Buttons and knobs as built" below carries the bench record.  `chumicro-pixels` + (optional) `chumicro-tone` remain.  The libraries are board-agnostic — macropad is just the dev fixture for functional tests.  Each follows the established DNA (constructor-injected adapter, per-runtime selection ladder, `testing.py` fake, runner-shaped service).
 2. **`chumicro-presence` (device-feedback layer)** — the third-consumer trigger to make `chumicro-events` valuable beyond its current zero-consumer state.  Open shape question still in §"Device-feedback layer" below: subsume the StatusIndicator HAL or coexist?  Recommended subsume.  Pickable now without macropad — `chumicro-pixels` is the only dependency for the LED output, and a no-op pixels backend works for testing.
 3. **Promote Decision 0042 from `proposed` → `accepted`.**  The libraries shipping under it (logging, events, ntp) confirm the policy works; no edits needed, just the status flip after a quick review pass.  Trivial.
 4. **Audit existing libraries' `pyproject.toml` against Decision 0042.**  Check that `mqtt` / `requests` / `http_server` declare `chumicro-sockets` as a hard dep (they do, per Decision 0040) and that no library accidentally hard-depends on the decoration set (events / logging / future presence).  Quick verification, not redesign.
@@ -113,7 +113,7 @@ Facts read from the CircuitPython 10.2.0 and MicroPython 1.27.0 trees in `.tools
 - Neither MicroPython adapter passes `hard=` to `Pin.irq`.  The scheduled handler the default gives is enough: the VM drains pending callbacks at every jump and call, so in a tick loop the queue empties far faster than contact bounce fills it.  Skipping it also sidesteps the esp32 port, whose `Pin.irq` takes no `hard=` at all.
 - The knobs MicroPython quadrature table matches CircuitPython's own `transitions[16]` in `shared-module/rotaryio/IncrementalEncoder.c` entry for entry, verified by parsing both.  That is deliberate: a shaft turned one way has to report the same sign on either runtime.  The code carries no reference to it, because a comment naming an upstream repo path is forbidden by the code-comment rules; this is its home.
 
-First-release sizes: buttons 28.0 KB stripped, knobs 9.3 KB.  Whole-library cost is why they are two installs rather than one.
+First-release sizes: buttons 25520 B stripped, knobs 10671 B, per `size-budgets.toml`.  Whole-library cost is why they are two installs rather than one.
 
 What each surface needs before it can be called verified.  The macropad is not the gate for
 most of it, and for one surface it is not sufficient:
@@ -312,7 +312,7 @@ evidence.
 ##### The key matrix on a real grid
 
 A 4x4 membrane keypad, eight unlabelled pins wired in no particular order, on a Pi Pico W
-under both runtimes and on a Lolin S2 under CircuitPython.  `KeyMatrix` had never met a grid
+and a Lolin S2 Mini, under both runtimes on each.  `KeyMatrix` had never met a grid
 before this; everything until now was fakes and host tests.
 
 The pins were identified rather than guessed, which is worth keeping as a recipe.  Hold one key
@@ -323,9 +323,9 @@ are the columns in order, and the rest follow.  Here that came out as rows on GP
 GP2 and columns on GP9, GP8, GP7, GP6, which is the keypad's own order reversed against the
 header.
 
-Row-major numbering holds, three times over.  Pressing all sixteen keys in reading order
-reported indices 0 through 15 in exactly that sequence on the Pi Pico W under MicroPython, on
-the same board under CircuitPython, and on the S2 under CircuitPython:
+Row-major numbering holds, four times over.  Pressing all sixteen keys in reading order
+reported indices 0 through 15 in exactly that sequence on the Pi Pico W and the S2, under
+both runtimes on each:
 
 | | Scanned by | Reported |
 |---|---|---|
@@ -465,23 +465,13 @@ reformatted first, because staging the library onto `/Volumes/CIRCUITPY` with `c
 FAT: the board auto-reloads the moment the drive changes, so it was rewriting the filesystem
 while the host still was, and macOS added `._` AppleDouble files to the same directories.  The
 entries survived as unstattable and unremovable, which failed every later deploy.  That is now
-a pitfall in `AGENTS.md`, next to the existing rule about mount state.
+a pitfall in `plans/field-notes/hardware-traps.md`, next to the existing rule about mount state.
 
 The same hand-staging also cost a rarer observation.  The board came up 49 seconds from a
 `supervisor.ticks_ms` wrap, which recurs only every 6.2 days and would have exercised the
 wrap-safe arithmetic on real hardware for the first time.  Copying the library soft-reset the
 board and zeroed the counter.  Observe first, deploy second, when the clock is the thing under
 test.
-
-Still open regardless of hardware:
-
-- Neither `_adapters/cp.py` nor `_adapters/mp.py` has executed on a board.  AGENTS.md requires
-  real-board verification for runtime-specific code.
-- Neither library has a `functional_tests/` suite.
-- How many edges a real bouncy switch emits per press, which decides whether the MicroPython
-  ring depth is right before `overflowed` starts firing on ordinary presses.
-- Whether row-major key numbering agrees between `keypad.KeyMatrix` and the MicroPython scan.
-  Both sides claim it and nothing on a host can hold them to it.
 
 ### Tier C — defer until hardware is on the bench
 

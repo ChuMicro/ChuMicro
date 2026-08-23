@@ -50,7 +50,7 @@ class Button:
         ticks: The clock every duration here is judged by, ``chumicro_timing.ticks`` or
             anything shaped like it.  Required, and it is the only clock this library reads,
             so the ticks you pass ``check(now_ms)`` and the settle window the source
-            debounces against share one time base by construction.
+            debounces against share one time base.
         source: Pre-built edge source; overrides ``pin``.  Tests inject a fake here.
         active_low: True when a pressed key reads low.  True suits a button wired to ground
             with the internal pull-up enabled, which is nearly always the wiring.

@@ -1,6 +1,6 @@
 """Render the wiring and debounce schematics for the chumicro-buttons guide.
 
-Five SVGs land in ``libraries/buttons/docs/schematics/``:
+Three SVGs land in ``libraries/buttons/docs/schematics/``:
 
 * ``wiring-active-low.svg`` — a momentary switch to GND with the pin's own
   pull-up, which is what ``active_low=True`` (the default) expects.
@@ -12,7 +12,7 @@ Five SVGs land in ``libraries/buttons/docs/schematics/``:
 
 Run::
 
-    python scripts/render_button_schematics.py            # all five
+    python scripts/render_button_schematics.py            # all three
     python scripts/render_button_schematics.py --figure debounce-rc
 
 ``schemdraw`` is a host-only documentation tool.  It belongs in the

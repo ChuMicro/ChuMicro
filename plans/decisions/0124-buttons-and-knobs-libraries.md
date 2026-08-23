@@ -19,7 +19,7 @@ The second is that the runtimes diverge on what matters most for a button: catch
 
 `chumicro-buttons` owns every input that reads as on or off: `Button` and `Buttons` in `core.py`, `KeyMatrix` in `matrix.py`.  `chumicro-knobs` owns every input that holds a position: `Encoder` and `AnalogKnob`.  Both publish `delta` and are runner-shaped, but the reading itself is named for the device: an encoder reports `position` because it counts movement from wherever it started, an analog knob reports `value` because it points somewhere absolute.  Forcing one name across both would be false symmetry.
 
-Neither library depends on the other, and no base library sits under them.  What a base would hold is a three-line settle-window compare, an adapter-selection ladder the workspace already duplicates by policy across `sockets`, `wifi`, and `kvstore`, and a duck-typed runner contract that needs no import at all.  `chumicro-timing` is the only shared dependency, declared per [Decision 0042](0042-library-dependency-policy.md) Class 1.
+Neither library depends on the other, and no base library sits under them.  What a base would hold is a three-line settle-window compare, an adapter-selection ladder the workspace already duplicates by policy across `sockets`, `wifi`, and `kvstore`, and a duck-typed runner contract that needs no import at all.  `chumicro-buttons` declares `chumicro-timing` per [Decision 0042](0042-library-dependency-policy.md) Class 1; `chumicro-knobs` compares no two instants and depends on nothing.
 
 An encoder's push switch is a `Button` from the other library, wired together by the application and never by a cross-dep.
 
@@ -38,7 +38,7 @@ A library-owned capture interrupt is bound by four conditions:
 3. **No user code runs in interrupt context.**  Callbacks are dispatched from `handle`, so a callback that allocates, prints, or raises stays harmless.
 4. **Overflow is bounded and flagged.**  A full buffer drops the newest edge and sets `overflowed`.  The condition binds handlers that queue; one that folds each edge into a counter has nothing to drop and publishes no such flag.
 
-This narrows the blanket "No ISRs" line in `AGENTS.md` §"Library code rules".  What that rule protects is the cooperative model: no application control flow in interrupt context, nothing that can preempt the tick loop into an inconsistent state.  A handler meeting these four conditions takes nothing away from it.
+This narrows the blanket "No ISRs" line in `.claude/rules/library-code.md` §"Reactor budget".  What that rule protects is the cooperative model: no application control flow in interrupt context, nothing that can preempt the tick loop into an inconsistent state.  A handler meeting these four conditions takes nothing away from it.
 
 There is no knob for any of this.  No `capture=` argument, no interrupt mode, no opt-out.  Catching the press someone actually made is the behavior of a button library, not a setting, and a switch would only hand the user back the question the library exists to answer.
 
