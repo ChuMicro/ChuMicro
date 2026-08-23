@@ -309,6 +309,34 @@ And a rise-time check built from a Python polling loop resolves nothing under ab
 because each pass of the loop costs 20, so the numbers it produced were noise presented as
 evidence.
 
+##### The key matrix on a real grid
+
+A 4x4 membrane keypad, eight unlabelled pins wired to GP2 through GP9 in no particular order,
+on a Pi Pico W under MicroPython.  `KeyMatrix` had never met a grid before this; everything
+until now was fakes and host tests.
+
+The pins were identified rather than guessed, which is worth keeping as a recipe.  Hold one key
+and the row and column behind it short together, so driving each pin low in turn and reading
+the rest names the pair.  Press every key in reading order and the sequence of pairs gives the
+whole map: the pin common to the first four presses is the first row, the four it pairs with
+are the columns in order, and the rest follow.  Here that came out as rows on GP5, GP4, GP3,
+GP2 and columns on GP9, GP8, GP7, GP6, which is the keypad's own order reversed against the
+header.
+
+Row-major numbering holds.  Pressing all sixteen keys in reading order reported indices 0
+through 15 in exactly that sequence, so `row * len(column_pins) + column` is what the grid
+does and not only what the docs say.  Hold times read 113 to 166 ms, which is a finger.
+
+Rows and columns are interchangeable on a grid with no diodes, so the scan cannot tell which
+set is which and does not need to: the choice only decides which way the numbering runs.  What
+that hardware cannot do is three keys forming a rectangle, where a fourth reads as pressed.
+That is the grid rather than the library, and it is why `keypad.KeyMatrix` carries a
+`columns_to_anodes` argument for grids that do have diodes.
+
+This surface stays bench-verified rather than covered by a suite.  The self-driving trick the
+other suites use needs a pin to raise its own interrupt, and a matrix needs one pin shorted to
+another, which no board can do to itself.
+
 ##### The analog knob on real potentiometers
 
 A wiper across 3V3 into an ADC pin, on a Pi Pico W and a Lolin S2 Mini.  Every number below
