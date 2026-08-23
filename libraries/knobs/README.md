@@ -47,6 +47,23 @@ while True:
 
 The loop never pauses, so the rest of your program keeps running between turns.  `just_moved` is true for exactly one pass, which means you can read it as many times as you like without it firing twice.
 
+In a program with more going on, hand the loop to [`chumicro-runner`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner) and let the callback do the reading:
+
+```python
+from chumicro_runner import Runner
+
+volume.on_change = lambda detents: print("volume", volume.position)
+
+runner = Runner()
+runner.add(volume)
+
+while True:
+    now = runner.tick()
+    runner.wait(now)
+```
+
+Every service in your program shares those same two lines.
+
 ## A fast spin arrives whole
 
 An encoder reports movement as pulses on two signal pins, and one brisk flick of the wrist sends dozens of them.  If your loop stalls on a socket read or a flash write, a plain pin read looks at the wrong moments and most of the turn is gone.  The counting here happens outside your loop, so a tick that arrives late still reads the whole spin.

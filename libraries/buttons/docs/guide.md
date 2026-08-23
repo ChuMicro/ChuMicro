@@ -37,6 +37,23 @@ button = Button(pin=Pin(14), ticks=ticks)
 
 Any GPIO that can read with a pull-up works.  On a Pico W that is every `GP` pin; on a classic ESP32, skip GPIO 34 to 39, which are input-only with no pull-ups.
 
+In a program with more going on, hand the loop to `chumicro-runner` and let callbacks do the reading:
+
+```python
+from chumicro_runner import Runner
+
+button.on_press = lambda: print("pressed")
+
+runner = Runner()
+runner.add(button)
+
+while True:
+    now = runner.tick()
+    runner.wait(now)
+```
+
+The [runner section](#runner-pattern) below covers what that buys.
+
 ## Reading the button
 
 Every reading is a plain attribute, refreshed by `check()`:
