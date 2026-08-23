@@ -305,6 +305,22 @@ Counting an encoder outside the loop is what keeps a spin whole across a slow pa
 
 On CircuitPython the modules this builds on (`rotaryio`, `analogio`) are compiled into the firmware, so they cost nothing in your board's storage.  One detail there is worth knowing before you pick pins: on RP2040 boards `rotaryio` reads both signal pins with one PIO state machine, which requires them to be next to each other in GPIO numbering, so `board.GP16` and `board.GP17` work together while `board.GP16` and `board.GP20` do not.  Other CircuitPython ports and every MicroPython port take any two pins.
 
+### An analog knob does not reach the top on ESP32
+
+A potentiometer wired across 3V3 sweeps the whole way on an RP2040 and stops about three quarters of the way up on an ESP32.  The same pot and the same code measured `1424` to `65535` on a Pi Pico W and `1440` to `49787` on a Lolin S2: the bottoms agree, and the top is short by a quarter.
+
+This is the converter rather than anything here, and it is well known.  Adafruit's own board guides put the ESP32-S2 and S3 ceiling at "about 51000 or 2.57 volts", and CircuitPython tracks it as an open bug against the Espressif port, where the reported figures are 51157 on an S2 and 61543 on an S3 against a full 65535 on an RP2040.  The exact number varies between individual chips, so measure the one in front of you rather than trusting any of these.
+
+The part that catches people is the shape of the failure.  The reading does not fall short gradually; it pins, so the last stretch of the knob's travel does nothing at all while the number sits still.  Nothing raises, because nothing is wrong enough to.
+
+With the default 100 steps an S2 reaches about step 75.  Ask for the steps you can actually reach:
+
+```python
+volume = AnalogKnob(board.IO9, steps=75)      # an ESP32-S2 board
+```
+
+Or feed the wiper from a divider that keeps it under the ceiling, which costs resolution and buys back a sweep where the whole range means something.  To find your own ceiling, sweep the pot from stop to stop and watch `raw`: the number it stops climbing at is what you have.
+
 ## Examples
 
 | Example | What it shows |
