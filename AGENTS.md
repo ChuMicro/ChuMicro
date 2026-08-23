@@ -184,8 +184,13 @@ through `Deployer.deploy_diff()`, and `CHU034` enforces it.
   If preflight is already red on `main` from someone else's change, stop and
   say so.
 
+- Working code is not a finished unit of work. A unit is done when the ADRs,
+  workstream files, `plans/next-up.md`, user docs, scaffold templates, and CI
+  config your change touched are all correct in the same commit.
+
 - Close every unit of work with the
-  [`task-checkpoint`](.github/skills/task-checkpoint/SKILL.md) skill.
+  [`task-checkpoint`](.github/skills/task-checkpoint/SKILL.md) skill. It is the
+  gate that catches that paperwork. Run it rather than eyeballing the list.
   A unit of work is one commit subject. Several per session is normal.
 
 - A public-API or behavior change takes one `VERSION` bump per change-set,
@@ -268,6 +273,28 @@ through `Deployer.deploy_diff()`, and `CHU034` enforces it.
   `--no-verify`, no `--no-gpg-sign`, no force-push to `main`, and none of
   `reset --hard`, `checkout .`, `restore .`, `clean -f`, or `branch -D`.
 
+### Parallel sessions
+
+Another agent or the user may be working in this repo right now. Assume it.
+
+- Take a worktree for anything that will run long, switch branches, or touch
+  files another session is likely in:
+  `git worktree add .claude/worktrees/<slug> -b <type>/<slug>`.
+  That path is gitignored, so each session gets its own checkout and its own
+  branch and neither disturbs the other's working tree.
+
+- `git worktree list` shows what is already checked out before you start.
+  `git worktree remove .claude/worktrees/<slug>` cleans up once the PR lands.
+
+- Never switch branches under another session. If a checkout blocks on local
+  changes you did not make, stop and surface it rather than reverting them.
+
+- Run `sync-ide` and edit IDE config only from the main checkout. From a
+  worktree it writes paths that break in main.
+
+- Boards are shared too. Two sessions deploying to the same device race for the
+  mount, so check `chumicro-workspace devices` and run deploys one at a time.
+
 ### Housekeeping
 
 - No backwards compatibility before 1.0
@@ -310,7 +337,12 @@ through `Deployer.deploy_diff()`, and `CHU034` enforces it.
 
 - A [`plans/workstreams/<name>.md`](plans/workstreams/) file is a directive.
   Execute its next unshipped phase, append one line to `## Validation history`,
-  and update `Status:`. Never bounce to the user without a concrete blocker.
+  and set `Status:` to `shipped`, `parked`, or `superseded` when the work is
+  fully done. Never bounce to the user without a concrete blocker.
+
+- Every phase that lands updates its workstream in the same commit as the code.
+  A workstream whose file still describes the work as unshipped is a workstream
+  the next session will redo.
 
 - Remove the matching [`plans/next-up.md`](plans/next-up.md) bullet when the
   work lands. One bullet per item, no sub-bullets, no `## Done` section
