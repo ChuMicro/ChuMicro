@@ -113,7 +113,7 @@ Facts read from the CircuitPython 10.2.0 and MicroPython 1.27.0 trees in `.tools
 - Neither MicroPython adapter passes `hard=` to `Pin.irq`.  The scheduled handler the default gives is enough: the VM drains pending callbacks at every jump and call, so in a tick loop the queue empties far faster than contact bounce fills it.  Skipping it also sidesteps the esp32 port, whose `Pin.irq` takes no `hard=` at all.
 - The knobs MicroPython quadrature table matches CircuitPython's own `transitions[16]` in `shared-module/rotaryio/IncrementalEncoder.c` entry for entry, verified by parsing both.  That is deliberate: a shaft turned one way has to report the same sign on either runtime.  The code carries no reference to it, because a comment naming an upstream repo path is forbidden by the code-comment rules; this is its home.
 
-First-release sizes: buttons 25520 B stripped, knobs 10671 B, per `size-budgets.toml`.  Whole-library cost is why they are two installs rather than one.
+First-release sizes: buttons 26330 B stripped, knobs 10671 B, per `size-budgets.toml`.  Whole-library cost is why they are two installs rather than one.
 
 Every surface has now met real hardware, none of it the macropad:
 

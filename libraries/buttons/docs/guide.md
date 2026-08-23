@@ -264,7 +264,7 @@ while True:
     runner.wait(now)
 ```
 
-The runner captures one timestamp per pass and shares it with everything, so the button's idea of "now" matches the rest of the program.
+The runner captures one timestamp per pass and shares it with everything, so the button's idea of "now" matches the rest of the program.  A button also publishes its next timer through `next_deadline(now_ms)`, so `runner.wait(now)` sleeps exactly until a long press, an auto-repeat, or a click window is due rather than past it.  A press itself is an edge, not a timer: one that lands mid-sleep is captured with its real timestamp and reported at the next wake.
 
 ## Memory notes
 

@@ -172,6 +172,33 @@ class Button:
         if self.just_clicked and self.on_click is not None:
             self.on_click(self.click_count)
 
+    def next_deadline(self, now_ms: int) -> int | None:
+        """Return the earliest tick a timer here fires at, or None while none is armed.
+
+        The runner reads this before it sleeps, so a long press, an auto-repeat, or a
+        click window fires on time instead of at the next unrelated wake.  A press is a
+        pin edge rather than a timer, so no deadline can name one; an edge that lands
+        mid-sleep is captured with its real timestamp and reported at the next tick.
+        """
+        ticks = self._ticks
+        nearest = None
+        if self.pressed:
+            if self._long_press_ms > 0 and not self._long_fired:
+                nearest = ticks.ticks_add(self._press_ms, self._long_press_ms)
+            if self._repeat_ms > 0:
+                candidate = self._repeat_next_ms
+                if nearest is None or ticks.ticks_diff(candidate, nearest) < 0:
+                    nearest = candidate
+            if self._click_ms > 0 and self._press_is_click:
+                candidate = ticks.ticks_add(self._press_ms, self._click_ms)
+                if nearest is None or ticks.ticks_diff(candidate, nearest) < 0:
+                    nearest = candidate
+        if self._click_pending:
+            candidate = self._click_deadline_ms
+            if nearest is None or ticks.ticks_diff(candidate, nearest) < 0:
+                nearest = candidate
+        return nearest
+
     def deinit(self) -> None:
         """Release the pins and any interrupt the source installed."""
         if self._source is not None:
@@ -301,6 +328,7 @@ class Buttons:
         repeat_delay_ms: int = DEFAULT_REPEAT_DELAY_MS,
         click_ms: int = 0,
     ) -> None:
+        self._ticks = ticks
         if source is not None:
             self._source = source
         elif pins is not None:
@@ -379,6 +407,22 @@ class Buttons:
             if key.just_released and self.on_release is not None:
                 self.on_release(index)
             index += 1
+
+    def next_deadline(self, now_ms: int) -> int | None:
+        """Return the earliest tick any key's timer fires at, or None while none is armed."""
+        ticks = self._ticks
+        keys = self.keys
+        key_count = len(keys)
+        nearest = None
+        index = 0
+        while index < key_count:
+            candidate = keys[index].next_deadline(now_ms)
+            if candidate is not None and (
+                nearest is None or ticks.ticks_diff(candidate, nearest) < 0
+            ):
+                nearest = candidate
+            index += 1
+        return nearest
 
     def deinit(self) -> None:
         """Release the pins and any interrupt the source installed."""

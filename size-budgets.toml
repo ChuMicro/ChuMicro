@@ -35,7 +35,7 @@
 #   automatically — that would defeat the ratchet) when a cut round lands.
 
 [buttons]
-stripped = 25520
+stripped = 26330
 mpy = 9340
 
 [compat]
