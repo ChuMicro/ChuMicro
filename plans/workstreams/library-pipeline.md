@@ -311,9 +311,9 @@ evidence.
 
 ##### The key matrix on a real grid
 
-A 4x4 membrane keypad, eight unlabelled pins wired to GP2 through GP9 in no particular order,
-on a Pi Pico W under both runtimes.  `KeyMatrix` had never met a grid before this; everything
-until now was fakes and host tests.
+A 4x4 membrane keypad, eight unlabelled pins wired in no particular order, on a Pi Pico W
+under both runtimes and on a Lolin S2 under CircuitPython.  `KeyMatrix` had never met a grid
+before this; everything until now was fakes and host tests.
 
 The pins were identified rather than guessed, which is worth keeping as a recipe.  Hold one key
 and the row and column behind it short together, so driving each pin low in turn and reading
@@ -323,14 +323,22 @@ are the columns in order, and the rest follow.  Here that came out as rows on GP
 GP2 and columns on GP9, GP8, GP7, GP6, which is the keypad's own order reversed against the
 header.
 
-Row-major numbering holds, and it holds the same way on both runtimes.  Pressing all sixteen
-keys in reading order reported indices 0 through 15 in exactly that sequence under MicroPython,
-then again under CircuitPython on the same grid with the same wiring.  That is worth more than
-either run alone: CircuitPython hands the scanning to the firmware's `keypad.KeyMatrix` in C
-while MicroPython uses this library's own polled scan, so the two are separate implementations
-agreeing rather than one being self-consistent.  A host test cannot reach this, because a fake
-agrees with whatever it was written to agree with.  Hold times read 113 to 166 ms under
-MicroPython and 80 to 116 under CircuitPython, which is a finger either way.
+Row-major numbering holds, three times over.  Pressing all sixteen keys in reading order
+reported indices 0 through 15 in exactly that sequence on the Pi Pico W under MicroPython, on
+the same board under CircuitPython, and on the S2 under CircuitPython:
+
+| | Scanned by | Rows on | Reported |
+|---|---|---|---|
+| Pi Pico W, MicroPython | this library's polled scan | GP5, GP4, GP3, GP2 | 0 to 15 |
+| Pi Pico W, CircuitPython | firmware `keypad.KeyMatrix` | GP5, GP4, GP3, GP2 | 0 to 15 |
+| Lolin S2, CircuitPython | firmware `keypad.KeyMatrix` | IO39, IO37, IO35, IO33 | 0 to 15 |
+
+That is worth more than any run alone.  CircuitPython hands the scanning to the firmware in C
+while MicroPython uses this library's own scan, so the agreement is between two separate
+implementations rather than one being self-consistent, and it survives the row pins landing on
+a different bank on a different chip family.  A host test cannot reach the claim at all,
+because a fake agrees with whatever it was written to agree with.  Hold times read 80 to 166 ms
+across the three, which is a finger every time.
 
 Rows and columns are interchangeable on a grid with no diodes, so the scan cannot tell which
 set is which and does not need to: the choice only decides which way the numbering runs.  What
