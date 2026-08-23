@@ -106,8 +106,9 @@ including a fake you write for a test.
 
 ## Why does my button miss presses while the board is doing other work?
 
-A plain pin read only sees the moment you ask, so a tap that starts
-and ends while your loop is busy elsewhere is gone.
+Reading a pin tells you its level at that instant and nothing about
+what happened between reads, so a tap that starts and ends while your
+loop is busy elsewhere leaves no trace.
 [chumicro-buttons](https://chumicro.com/ChuMicro/buttons/stable/)
 captures the press underneath your loop, in the firmware's own key
 scan on CircuitPython and a library-owned interrupt on MicroPython,
@@ -224,7 +225,7 @@ When you do have a board, the same `pytest` runs on the silicon.
       "name": "Why does my button miss presses while the board is doing other work?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "A plain pin read only sees the moment you ask, so a tap that starts and ends while your loop is busy elsewhere is gone. chumicro-buttons captures the press underneath your loop, in the firmware's own key scan on CircuitPython and a library-owned interrupt on MicroPython, so the press lands at the next tick with its duration measured from the moment your finger did. Debouncing, long presses, auto-repeat, and click counting come with it. The same idea covers rotary encoders in chumicro-knobs: a fast spin is counted outside your loop and arrives whole."
+        "text": "Reading a pin tells you its level at that instant and nothing about what happened between reads, so a tap that starts and ends while your loop is busy elsewhere leaves no trace. chumicro-buttons captures the press underneath your loop, in the firmware's own key scan on CircuitPython and a library-owned interrupt on MicroPython, so the press lands at the next tick with its duration measured from the moment your finger did. Debouncing, long presses, auto-repeat, and click counting come with it. The same idea covers rotary encoders in chumicro-knobs: a fast spin is counted outside your loop and arrives whole."
       }
     },
     {
