@@ -166,7 +166,13 @@ Every runtime reports a conversion on that same 0 to 65535 scale whatever the co
 
 An analog reading wanders, and it wanders further than a datasheet suggests.  A potentiometer on a Pi Pico W measured 1744 counts of spread with the wiper parked at the top of its travel, where a converter is noisiest, against the 655 counts one step spans at the default settings.
 
-Two things hold that still, and the first happens before you see the reading.  Each conversion is folded into the one before it rather than replacing it, so the number `check()` works from moves smoothly instead of leaping between noise extremes.  That matters more than the size of the noise: a leaping reading drags the deadband's anchor across a step boundary and back, and a smooth one does not.  It takes no extra conversion, because the loop already samples far faster than a hand can move a knob.  In the measurement above it took an untouched knob from around 16000 reported movements in four seconds to none.
+Two stages hold that still before you ever see the reading, and they reject different things.
+
+The first is a median of the last three conversions.  A wild sample can never be the middle of three, so one bad reading is discarded rather than averaged in.  That is the case smoothing handles badly: fed a single full-scale sample, a smoothed reading walks almost three steps out and takes dozens of conversions to come back, while a median does not move at all.
+
+The second folds each surviving conversion into the one before it rather than replacing it, so the number `check()` works from moves smoothly instead of leaping between noise extremes.  That matters more than how wide the noise is, because a leaping reading drags the deadband's anchor across a step boundary and back while a smooth one does not.
+
+Neither substitutes for the other.  A median does almost nothing for continuous noise, and smoothing cannot throw a bad sample away.  Together they took an untouched knob at the noisiest end of its travel from around 12000 reported movements in twenty seconds to none.  Both are free of extra conversions, because they work on the readings the loop already takes.
 
 The smoothing is counted in ticks rather than milliseconds, so a loop running flat out settles inside a couple of milliseconds while a deliberately slow loop takes longer to catch up with a fast turn.
 

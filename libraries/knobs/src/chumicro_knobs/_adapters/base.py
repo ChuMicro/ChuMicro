@@ -2,24 +2,37 @@
 
 #: How much of each new conversion a smoothed reading takes, as a right shift: the reading
 #: keeps all but ``1 / 2 ** SMOOTHING_SHIFT`` of itself and takes the rest from the sample.
+#: It runs after the median below and carries the whole burden of continuous noise, because a
+#: median does nothing for that; the two reject different things and neither substitutes.
 #:
 #: A converter's noise is jumpy rather than merely wide, and it is the jumpiness that defeats
 #: the deadband above it.  That deadband anchors on whichever sample tripped it, so a reading
-#: that leaps between noise extremes drags the anchor with it, and once a leap is wider than
-#: one step the reported value flips every time.  Smoothing removes the leaping, which is what
-#: lets the deadband behave the way it reads.
-#:
-#: It costs one add and one shift per tick and takes no extra conversion, because the loop
-#: already samples far faster than a hand can move a knob.  Measured live against a
-#: potentiometer at the top of its travel, where this converter is noisiest, four seconds of
-#: an untouched knob reported 16116 movements unsmoothed, 593 at a shift of 2, 25 at 3, and
-#: none from 4 upward.  Four is the first that settles it, so it is the one used.
-#:
-#: The window is counted in ticks rather than milliseconds, so a loop that runs flat out
-#: settles inside a couple of milliseconds while a deliberately slow one takes longer.  Raise
-#: it for a noisier converter and lower it for a loop that ticks rarely and wants the knob to
-#: keep up.
+#: that leaps between noise extremes drags the anchor across a step boundary and back.  This
+#: removes the leaping, which is what lets the deadband behave the way it reads.  Four is the
+#: shift the bench settled on: measured live against a potentiometer at the noisiest end of its
+#: travel, twenty seconds of an untouched knob reported around 12000 movements unsmoothed, 949
+#: at a shift of 2, and one at 4.
 SMOOTHING_SHIFT = 4
+
+def middle_of_three(first: int, second: int, third: int) -> int:
+    """Return the middle of three readings, by comparison rather than by sorting.
+
+    Three is the smallest window with a middle, and one wild sample can never be the middle
+    of three, so a lone bad conversion is discarded outright rather than averaged in.  That
+    is the half smoothing cannot do: fed one full-scale sample, a smoothed reading moved
+    almost three steps and took 39 conversions to come back, while this moved nothing.  It
+    costs no extra conversion, because the window holds readings the loop already took.
+
+    What it does not do is quieten continuous noise, where it is nearly useless alone, so it
+    runs ahead of the smoothing rather than instead of it.
+    """
+    if first > second:
+        first, second = second, first
+    if second > third:
+        second = third
+    if first > second:
+        second = first
+    return second
 
 
 class EncoderSource:

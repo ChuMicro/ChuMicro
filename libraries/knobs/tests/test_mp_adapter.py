@@ -311,12 +311,18 @@ def test_the_reading_moves_toward_a_new_voltage_instead_of_jumping_to_it() -> No
     source = MpAnalogSource(converter)
     converter.reading = 40_000
 
+    # One sample at the new voltage is still a lone outlier and is dropped; the second
+    # makes it the majority of the window, and only then does the reading start to follow.
     source.poll(0)
+
+    assert source.raw == 0
+
+    source.poll(1)
     first = source.raw
 
     assert 0 < first < 40_000
 
-    source.poll(1)
+    source.poll(2)
 
     assert first < source.raw < 40_000
 
@@ -331,6 +337,47 @@ def test_the_reading_arrives_at_a_held_voltage_and_stays_there() -> None:
         source.poll(tick)
 
     assert source.raw == 40_000
+
+
+def test_one_wild_conversion_moves_the_reading_not_at_all() -> None:
+    """A lone outlier is discarded rather than averaged in, which smoothing cannot do.
+
+    A converter on a breadboard throws the occasional sample nowhere near the wiper.  Fed
+    into a smoothed reading, one full-scale sample walks the output several steps and takes
+    dozens of conversions to come back; it can never be the middle of three, so it is
+    dropped instead.
+    """
+    converter = FakeConverter(reading=32_768)
+    source = MpAnalogSource(converter)
+    for tick in range(60):
+        source.poll(tick)
+    settled = source.raw
+
+    converter.reading = 65_535
+    source.poll(60)
+    converter.reading = 32_768
+    source.poll(61)
+
+    assert source.raw == settled
+
+
+def test_two_wild_conversions_running_do_reach_the_reading() -> None:
+    """The window holds three, so a pair of outliers is a majority and is believed.
+
+    This is the limit worth knowing: the median rejects a spike, not a burst.  A signal that
+    is wrong twice running is indistinguishable from one that moved.
+    """
+    converter = FakeConverter(reading=32_768)
+    source = MpAnalogSource(converter)
+    for tick in range(60):
+        source.poll(tick)
+    settled = source.raw
+
+    converter.reading = 65_535
+    source.poll(60)
+    source.poll(61)
+
+    assert source.raw != settled
 
 
 def test_a_reading_that_rattles_between_two_extremes_settles_between_them() -> None:

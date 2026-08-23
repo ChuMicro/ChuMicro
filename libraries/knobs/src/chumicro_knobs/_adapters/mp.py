@@ -6,7 +6,7 @@ import array  # pragma: no cover - MP runtime path
 
 import machine  # pragma: no cover - MP runtime path
 
-from chumicro_knobs._adapters.base import SMOOTHING_SHIFT  # pragma: no cover - MP runtime path
+from chumicro_knobs._adapters.base import SMOOTHING_SHIFT, middle_of_three
 
 try:  # pragma: no cover - MP runtime path
     from micropython import const
@@ -101,13 +101,21 @@ class MpAnalogSource:  # pragma: no cover - MP runtime path
     def __init__(self, pin) -> None:
         self._converter = machine.ADC(pin)
         reading = self._converter.read_u16()
+        # The window starts full of the first reading so the median has three from the outset.
+        self._recent = [reading, reading, reading]
+        self._slot = 0
         # Carried scaled up by the shift so the fraction it keeps survives integer division.
         self._smoothed = reading << SMOOTHING_SHIFT
         self.raw = reading
 
     def poll(self, now_ms: int) -> None:
-        """Convert once and fold the answer into the smoothed reading."""
-        self._smoothed += self._converter.read_u16() - (self._smoothed >> SMOOTHING_SHIFT)
+        """Convert once, drop it if it is a lone outlier, and smooth what is left."""
+        recent = self._recent
+        recent[self._slot] = self._converter.read_u16()
+        slot = self._slot + 1
+        self._slot = 0 if slot >= 3 else slot
+        middle = middle_of_three(recent[0], recent[1], recent[2])
+        self._smoothed += middle - (self._smoothed >> SMOOTHING_SHIFT)
         self.raw = self._smoothed >> SMOOTHING_SHIFT
 
     def deinit(self) -> None:
