@@ -327,11 +327,12 @@ Row-major numbering holds, three times over.  Pressing all sixteen keys in readi
 reported indices 0 through 15 in exactly that sequence on the Pi Pico W under MicroPython, on
 the same board under CircuitPython, and on the S2 under CircuitPython:
 
-| | Scanned by | Rows on | Reported |
-|---|---|---|---|
-| Pi Pico W, MicroPython | this library's polled scan | GP5, GP4, GP3, GP2 | 0 to 15 |
-| Pi Pico W, CircuitPython | firmware `keypad.KeyMatrix` | GP5, GP4, GP3, GP2 | 0 to 15 |
-| Lolin S2, CircuitPython | firmware `keypad.KeyMatrix` | IO39, IO37, IO35, IO33 | 0 to 15 |
+| | Scanned by | Reported |
+|---|---|---|
+| Pi Pico W, MicroPython | this library's polled scan | 0 to 15 |
+| Pi Pico W, CircuitPython | firmware `keypad.KeyMatrix` | 0 to 15 |
+| Lolin S2, CircuitPython | firmware `keypad.KeyMatrix` | 0 to 15 |
+| Lolin S2, MicroPython | this library's polled scan | 0 to 15 |
 
 The first two runs are the ones that settle the numbering.  CircuitPython hands the scanning to
 the firmware in C while MicroPython uses this library's own scan, so those two agreeing on one
@@ -339,11 +340,20 @@ board with one wiring is two separate implementations agreeing rather than one b
 self-consistent.  A host test cannot reach that claim at all, because a fake agrees with
 whatever it was written to agree with.
 
-The S2 run adds that the surface works on esp32 hardware, and no more than that.  Both
-CircuitPython runs went through the same `shared-module` scanning code, so it is not a second
-implementation, and the row pins sitting on different numbers between the two boards is where
-the wires were put rather than anything about the chips.  Hold times read 80 to 166 ms across
-the three, which is a finger every time.
+The S2 runs add that both scanners work on esp32 hardware.  The CircuitPython one is not a
+second implementation of anything, since both CircuitPython runs go through the same
+`shared-module` scanning code; the MicroPython one is, because that polled scan is this
+library's and had only met rp2040.  Hold times read 80 to 166 ms across the four.
+
+The esp32 MicroPython run also caught a bug in the pin-identification script rather than in the
+library.  Reworking that scanner to reuse pin objects dropped the settling pause between
+driving a pin low and reading its neighbours, so a stale level could register as a spurious
+pair and shift which row the derivation called the first one.  `KeyMatrix` then reported the
+grid rotated by one row, every block of four still contiguous and consecutive, which is
+row-major numbering working against a mislabelled row order.  Feeding it the same row order the
+CircuitPython run used returned 0 to 15 exactly.  Any scanner that drives a pin and reads
+another needs that pause; the version without it looks like it works, because most of its
+answers are still right.
 
 Rows and columns are interchangeable on a grid with no diodes, so the scan cannot tell which
 set is which and does not need to: the choice only decides which way the numbering runs.  What
