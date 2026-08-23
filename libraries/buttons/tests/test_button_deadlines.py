@@ -8,6 +8,7 @@ nothing here reads a real clock or waits.
 
 from chumicro_buttons import Button, Buttons
 from chumicro_buttons.testing import FakeButtonSource
+from chumicro_runner import Runner
 from chumicro_timing.testing import FakeTicks
 
 
@@ -92,3 +93,29 @@ def test_a_panel_with_no_timers_armed_publishes_none() -> None:
     buttons.check(0)
 
     assert buttons.next_deadline(0) is None
+
+
+def test_the_runner_sleeps_exactly_to_a_registered_buttons_long_press() -> None:
+    """Runner.wait advances a fake clock to the long-press deadline and the next
+    tick fires the event, and a runner that stopped reading next_deadline would
+    leave the clock unmoved.
+
+    FakeTicks.sleep_ms advances the clock instead of sleeping, so the sleep
+    length is the distance the clock moved.
+    """
+    clock = FakeTicks(start_ms=1000)
+    runner = Runner(ticks=clock)
+    source = FakeButtonSource()
+    button = Button(source=source, ticks=clock, long_press_ms=500)
+    runner.add(button)
+
+    source.press(at_ms=1000)
+    now = runner.tick()
+    assert now == 1000
+    assert button.just_pressed is True
+
+    runner.wait(now)
+    assert clock.ticks_ms() == 1500
+
+    runner.tick()
+    assert button.just_long_pressed is True
