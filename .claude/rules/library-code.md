@@ -13,7 +13,7 @@ Applies to `libraries/` and `support/<name>/src/`, cross-runtime by default. Not
 
 - ≤5 ms per `tick()` / `handle()` call. Only `Runner.wait` blocks ([Decision 0080](../../plans/decisions/0080-runner-reactor.md)).
 - No `async` / `await` / `asyncio` / `uasyncio` ([Decision 0087](../../plans/decisions/0087-generators-for-sequential-io.md), `CHU033`).
-- No ISR carrying application control flow. A device library may own a capture interrupt when the handler allocates nothing, captures raw edges only, runs no user callback in interrupt context, and bounds and counts its overflow ([Decision 0124](../../plans/decisions/0124-buttons-and-knobs-libraries.md)).
+- No ISR carrying application control flow. A device library may own a capture interrupt when the handler allocates nothing, captures raw edges only, runs no user callback in interrupt context, and bounds and flags its overflow ([Decision 0124](../../plans/decisions/0124-buttons-and-knobs-libraries.md)).
 - No blocking TCP/TLS handshake. Use `chumicro_sockets`'s tick-driven connector ([Decision 0081](../../plans/decisions/0081-non-blocking-connect-via-tick-driven-connector.md)).
 - Offenders: `time.sleep(>0.005)`, `select.poll(>0)`, blocking `getaddrinfo`, `socket.recv()`, `machine.lightsleep`, MicroPython `os.urandom`.
 
