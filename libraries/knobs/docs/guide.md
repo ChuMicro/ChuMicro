@@ -1,0 +1,350 @@
+# User Guide
+
+## Overview
+
+A knob tells your program where it has been turned to, and getting that from a pin takes more than one read.  A rotary encoder reports turning as pulses on two signal pins, arriving fast enough that a busy loop misses most of a flick of the wrist.  A potentiometer gives you a voltage that never sits exactly still, so a program that prints it raw reports a knob nobody is touching.
+
+`chumicro_knobs` does that work.  `Encoder` reads a rotary encoder as a count of detents, the click you feel as the shaft turns, and `AnalogKnob` reads a potentiometer or slider as a step number out of however many steps you asked for.  Both are refreshed by `check(now_ms)`, both publish `delta` and `just_moved`, and both dispatch a callback from `handle(now_ms)`.
+
+The main reading is named for what each device actually knows.  An encoder counts movement from wherever it started, so it publishes `position`; an analog knob points somewhere absolute along its sweep, so it publishes `value`.
+
+## Getting started
+
+Wire the encoder's two signal pins to GPIO pins and its common pin to GND.  The internal pull-ups are switched on for you, so no extra parts are needed.
+
+```python
+import board
+from chumicro_knobs import Encoder
+from chumicro_timing import ticks_ms
+
+volume = Encoder(board.GP16, board.GP17)
+
+while True:
+    now = ticks_ms()
+    volume.check(now)
+
+    if volume.just_moved:
+        print("volume", volume.position)
+```
+
+`check(now_ms)` does one small step: it collects the counting that happened since the last pass and folds it into `position`.  It never waits, so the rest of your program keeps running between turns.
+
+On MicroPython the two pins are GPIO numbers or `machine.Pin` objects, and everything else on the page reads the same:
+
+```python
+from machine import Pin
+
+volume = Encoder(Pin(16), Pin(17))
+```
+
+## Reading the encoder
+
+Every reading is a plain attribute, refreshed by `check()`:
+
+```python
+volume.position       # detents counted so far
+volume.delta          # detents this tick added to position
+volume.just_moved     # True only on the tick position changed
+```
+
+`position` starts at zero and counts up as the shaft turns one way, down as it turns the other.  Swapping `pin_a` and `pin_b` swaps which way counts up, which is the fix when a knob reads backwards.
+
+`delta` is the movement for this tick alone, and several detents landing between two passes arrive together.  A loop that stalled for a socket read and came back to a shaft someone had spun seven clicks reports `delta` of 7 on one tick rather than seven ticks of 1:
+
+```python
+if volume.just_moved:
+    level += volume.delta       # the whole spin, in one go
+```
+
+`position` is a plain attribute you can write as well as read, which is how a value saved at shutdown goes back where it was:
+
+```python
+volume.position = saved_volume
+```
+
+Most panel-mount encoders click once per pulse cycle, and `detent_steps` defaults to `4` to match, so one click of the shaft moves `position` by one.  `DEFAULT_DETENT_STEPS` carries that number, and it is the same default CircuitPython's own `rotaryio.IncrementalEncoder` uses for its `divisor`.  A smooth encoder with no clicks in it wants `detent_steps=1`, which counts every pulse:
+
+```python
+smooth = Encoder(board.GP16, board.GP17, detent_steps=1)
+```
+
+### Finding your encoder's detent size
+
+Encoders disagree about this, and getting it wrong is quiet rather than loud.  A shaft that reports half your clicks is set to `4` on a part that gives `2`; one that reports double is set to `2` on a part that gives `4`.  Nothing raises, the number is just consistently off by a factor.
+
+Cheap modules commonly give 2 pulses per detent where a panel-mount part gives 4, so measure yours once rather than assume.  Count raw pulses with `detent_steps=1`, turn the shaft exactly ten clicks, and divide:
+
+```python
+counter = Encoder(board.GP16, board.GP17, detent_steps=1)
+
+while True:
+    counter.check(ticks_ms())
+    print(counter.position)      # turn ten clicks, then read this
+```
+
+Twenty means `detent_steps=2`, forty means `4`, ten means `1`.  Set it and every click moves `position` by exactly one.
+
+A shaft that counts erratically rather than by a consistent factor is a wiring problem instead.  Modules with a `+` pin carry pull-up resistors that do nothing until it is powered, and on one measured here leaving it unwired dropped pulses at random, turning a steady two-per-detent into a mix of ones, twos and threes.
+
+### When the count drifts
+
+Turned at the speed a hand normally turns a knob, an encoder counts exactly: ten clicks out and ten back land on the number they started from, every time.  Spun hard, a cheap one starts to drift, and it is worth knowing why nothing in the stack stops that.
+
+Contacts bounce the same way a switch does, and at speed the bouncing produces transitions that look like real ones.  Nothing filters them.  CircuitPython's `rotaryio` sets no glitch filter on either the rp2040 or the esp32, so every edge reaches the counter, and the same is true of the interrupt this library installs on MicroPython.  What both do instead is reject transitions that a turning shaft cannot produce, which catches noise that changes both pins at once but not noise that happens to look like a step.
+
+`detent_steps` does the rest, and it does more than divide.  Partial steps stay banked until a whole detent is earned, so a shaft resting between detents and rocking across one boundary counts nothing however long it rocks.  That covers the ordinary case of a knob nudged by a passing hand.
+
+Adding a time-based filter would be the wrong fix, because a fast spin is made of short pulses too.  A window long enough to reject bounce at three thousand pulses a second would reject the fast turning it is trying to protect.  For a button the two cases barely overlap, so `settle_ms` works; for an encoder they are the same signal.
+
+The fix that does work is hardware, on the two quadrature lines:
+
+```
+CLK ──[ 10k ]──┬── to the pin
+               │
+             [10nF]
+               │
+              GND
+```
+
+Around 100 microseconds of smoothing, which is far below a real pulse and far above the bouncing.  Better encoder modules already carry these; the cheap ones leave the pads empty.
+
+Measured on a bare module with no smoothing, on an ESP32-S2 running each runtime in turn:
+
+- Normal turning was exact.  Ten clicks out and ten back gave twenty detent events, every one of them a single step, ending on zero.
+- Spun by hand at about 1000 detents per second, far past what the part is rated for, the count drifted a few percent over roughly 230 detents.  The direction of the error changed between runs, and an error that changes sign is the contacts rather than the counting.
+
+Nobody reaches that speed turning a knob on purpose, so the practical answer is that an encoder counts what you turn.  The drift is worth knowing about only if something in your project spins a shaft rather than a wrist.
+
+If a module has a `+` pin, wire it.  The pull-up resistors on the board do nothing until it is powered, and without them pulses drop at random rather than merely drifting under abuse.
+
+## Holding the position inside a range
+
+`bounds=(low, high)` is an inclusive range that `position` stays inside, so a volume knob walks 0 to 20 and settles at each end rather than running off into numbers your program has no use for:
+
+```python
+volume = Encoder(board.GP16, board.GP17, bounds=(0, 20))
+```
+
+A knob held against a bound reports `delta` of 0 and `check()` returns False, so nothing downstream fires while the shaft keeps turning.  The turning that did not fit is dropped rather than banked, which means one detent back off the bound moves `position` by exactly one.  A range that does not contain zero starts at its nearer end: `bounds=(5, 9)` opens at 5.
+
+`wrap=True` carries `position` around the range instead of settling at the ends, which is what a menu ring or a hue selector wants.  On `bounds=(0, 3)`, five detents forward from 0 land on 1:
+
+```python
+menu = Encoder(board.GP16, board.GP17, bounds=(0, 3), wrap=True)
+```
+
+Wrapping needs a range to wrap inside, so `wrap=True` without `bounds` raises `ValueError` at construction rather than behaving oddly later.
+
+## An analog knob
+
+Wire the potentiometer's outer legs to 3V3 and GND, and its wiper to an analog-capable pin such as `board.A0`.  `steps` is how many positions a full sweep reports, and `value` runs from 0 at one end to `steps - 1` at the other:
+
+```python
+import board
+from chumicro_knobs import AnalogKnob
+from chumicro_timing import ticks_ms
+
+brightness = AnalogKnob(board.A0, steps=10)
+
+while True:
+    now = ticks_ms()
+    brightness.check(now)
+
+    if brightness.just_moved:
+        print("brightness", brightness.value)     # 0 through 9
+```
+
+`steps` defaults to 100, held in `DEFAULT_STEPS`, which puts the middle of the sweep at 50 and the top at 99.  `delta` is the change for this tick, negative when the knob comes back down, and `raw` is the settled reading on the 0 to 65535 scale that `value` was worked out from:
+
+```python
+print(brightness.value, brightness.delta, brightness.raw)
+```
+
+Every runtime reports a conversion on that same 0 to 65535 scale whatever the converter's native width is, so a 12-bit part on an RP2040 and a wider part elsewhere read through identical code.  `RAW_RANGE` is that scale, 65536, and the next section puts it to work.
+
+## The deadband
+
+An analog reading wanders, and it wanders further than a datasheet suggests.  A potentiometer on a Pi Pico W measured 1744 counts of spread with the wiper parked at the top of its travel, where a converter is noisiest, against the 655 counts one step spans at the default settings.
+
+Two stages hold that still before you ever see the reading, and they reject different things.
+
+The first is a median of the last three conversions.  A wild sample can never be the middle of three, so one bad reading is discarded rather than averaged in.  That is the case smoothing handles badly: fed a single full-scale sample, a smoothed reading walks almost three steps out and takes dozens of conversions to come back, while a median does not move at all.
+
+The second folds each surviving conversion into the one before it rather than replacing it, so the number `check()` works from moves smoothly instead of leaping between noise extremes.  That matters more than how wide the noise is, because a leaping reading drags the deadband's anchor across a step boundary and back while a smooth one does not.
+
+Neither substitutes for the other.  A median does almost nothing for continuous noise, and smoothing cannot throw a bad sample away.  Together they took an untouched knob at the noisiest end of its travel from around 12000 reported movements in twenty seconds to none.  Both are free of extra conversions, because they work on the readings the loop already takes.
+
+The smoothing is counted in ticks rather than milliseconds, so a loop running flat out settles inside a couple of milliseconds while a deliberately slow loop takes longer to catch up with a fast turn.
+
+`deadband` is the second, and is how far the smoothed reading has to move before `value` is allowed to follow it.  It defaults to 512, held in `DEFAULT_DEADBAND`:
+
+```python
+brightness = AnalogKnob(board.A0, steps=10, deadband=512)     # the default
+```
+
+512 sits under the width of one step, so every step stays reachable, and the smoothing underneath is what keeps a parked wiper on one number.  A deadband alone cannot do that job on a noisy converter: it has to exceed the reading's whole peak-to-peak spread rather than half of it, because the anchor lands on whichever sample tripped it, and on the board measured above no value satisfies both that and staying under a step.  One step spans `RAW_RANGE // steps` counts, which is 655 at the default 100 steps:
+
+```python
+from chumicro_knobs import DEFAULT_STEPS, RAW_RANGE
+
+step_width = RAW_RANGE // DEFAULT_STEPS      # 655
+```
+
+Keep `deadband` under that width.  A deadband two steps wide reports 2, 4, 6, 8 as a ten-step knob sweeps up and passes over the odd steps entirely, and a wide deadband also shortens the reachable ends of the sweep, where a pot that stops a few hundred counts short of the rail may never report step 0 again.  A finer sweep therefore wants a tighter deadband:
+
+```python
+fine = AnalogKnob(board.A1, steps=256, deadband=128)
+```
+
+`deadband=0` follows every sample, which is the setting for a signal that arrives clean already, from a filtered supply or a part with its own smoothing.
+
+One detail worth knowing when you watch these attributes: a move that clears the deadband updates `raw` even when the step it lands in is the one `value` already held.  `just_moved` reports on `value`, so it stays false on that tick and no callback fires.
+
+## Callbacks
+
+If you would rather be called than ask, set `on_change` and let `handle(now_ms)` dispatch it:
+
+```python
+volume.on_change = lambda detents: print("moved", detents)
+brightness.on_change = lambda step: print("brightness", step)
+
+while True:
+    now = ticks_ms()
+
+    if volume.check(now):
+        volume.handle(now)
+    if brightness.check(now):
+        brightness.handle(now)
+```
+
+`check()` returns True when the tick produced anything, which is the gate `handle()` sits behind.
+
+Each callback takes one argument, and the argument follows the reading each device publishes.  The encoder hands you the signed detent change for the tick, so a handler adds it to something.  The analog knob hands you the step it now points at, so a handler uses it directly:
+
+```python
+def set_volume(detents: int) -> None:
+    """Move the amplifier by however many clicks the shaft turned."""
+    amplifier.adjust(detents)
+
+
+def set_brightness(step: int) -> None:
+    """Take the screen straight to the step the knob is pointing at."""
+    screen.set_level(step)
+```
+
+Your callbacks run in your own loop, in normal context, so they can allocate, print, and raise like any other code.
+
+## Giving the pins back
+
+`deinit()` releases the pins a knob claimed, and on MicroPython it also lifts the interrupt off them so nothing counts afterwards:
+
+```python
+volume.deinit()
+brightness.deinit()
+```
+
+A program that builds its knobs at startup and runs forever never reaches for this.  One that rebuilds them, say a device that repurposes the same encoder when it changes mode, calls `deinit()` before building the replacement.
+
+## Runner pattern
+
+`check(now_ms)` and `handle(now_ms)` are the contract [`chumicro-runner`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner) expects, so a knob joins the rest of your services with one line:
+
+```python
+from chumicro_runner import Runner
+
+runner = Runner()
+runner.add(wifi)
+runner.add(volume)                          # checked every tick, handled when it has news
+runner.add(brightness, period_ms=20)        # fifty samples a second is faster than a hand
+
+while True:
+    now = runner.tick()
+    runner.wait(now)
+```
+
+The runner captures one timestamp per pass and shares it with everything, so a knob's idea of "now" matches the rest of the program.  The encoder belongs on every tick, since its `check()` is an attribute read and a subtraction.  An analog conversion costs more than that, and `period_ms` spaces those conversions out while still keeping up with any hand on the knob.
+
+## Memory notes
+
+`check()` allocates nothing in steady state.  The readings are plain attributes written in place, and each source publishes its count as an attribute rather than through a call that builds a value.  A program can tick a knob forever without the heap growing.
+
+The MicroPython encoder source holds a three-slot `array.array` sized when the knob is built, registers one bound handler once, and keeps its decode table in flash as `bytes`, so a pulse arriving mid-tick writes small integers into slots that already exist.  Each pulse folds straight into the count, so those three integers are the whole of what the source keeps and there is nothing here for you to size.
+
+## Testing
+
+`chumicro_knobs.testing` stands in for the hardware, so knob logic is an ordinary unit test with no board and no shaft to wear out:
+
+```python
+from chumicro_knobs import Encoder
+from chumicro_knobs.testing import FakeEncoderSource
+
+
+def test_the_volume_knob_stops_at_the_top():
+    source = FakeEncoderSource()
+    volume = Encoder(source=source, bounds=(0, 10))
+
+    source.turn(25)
+    volume.check(0)
+
+    assert volume.position == 10
+```
+
+Turns queued before a single `check()` add up, which is how a test covers the fast spin during a stalled loop.  `FakeAnalogSource` does the same job for a potentiometer, with `set_raw()` parking the wiper wherever the test wants it.  The [testing page](testing.md) goes further, including the deadband and what the fakes record.
+
+## Platform notes
+
+The API is identical on all three runtimes.  What changes underneath is how the turning gets counted:
+
+| Runtime | Rotary encoder | Analog knob |
+|---|---|---|
+| CircuitPython | `rotaryio.IncrementalEncoder`, counting in the firmware's own C, which on RP2040 is a state machine in the PIO block | `analogio.AnalogIn`, sampled on the tick that asks |
+| MicroPython | A pin interrupt on both signal pins, installed and owned by the library, decoding the pulse pattern with a small table | `machine.ADC.read_u16()`, sampled on the tick that asks |
+| CPython | No GPIO exists, so `pin_a=` raises and points you at `FakeEncoderSource` | No GPIO exists, so `pin=` raises and points you at `FakeAnalogSource` |
+
+Counting an encoder outside the loop is what keeps a spin whole across a slow pass, and it is set up for you on both device runtimes.  An analog knob is sampled on the tick that asks for it on every runtime, because a voltage is whatever it is at the instant it is read, with no edge that could go by unseen.
+
+On CircuitPython the modules this builds on (`rotaryio`, `analogio`) are compiled into the firmware, so they cost nothing in your board's storage.  One detail there is worth knowing before you pick pins: on RP2040 boards `rotaryio` reads both signal pins with one PIO state machine, which requires them to be next to each other in GPIO numbering, so `board.GP16` and `board.GP17` work together while `board.GP16` and `board.GP20` do not.  Other CircuitPython ports and every MicroPython port take any two pins.
+
+### An analog knob loses some travel on ESP32
+
+A potentiometer across 3V3 sweeps the whole way on an RP2040 and loses a piece of its travel on an ESP32.  Which piece depends on the runtime, because the two read the converter differently.  One pot, one position, one board, swapped between runtimes:
+
+| | Sweep reached | Steps of 100 |
+|---|---|---|
+| RP2040, either runtime | 615 to 65535 | 0 to 99 |
+| ESP32-S2, CircuitPython | 1440 to 49787 | 2 to 75 |
+| ESP32-S2, MicroPython | 3796 to 65508 | 5 to 99 |
+
+CircuitPython converts the reading to millivolts through a calibration table and then scales it as though 3.3 V were full scale.  The calibration straightens out the converter's low end, so the bottom of the sweep is honest, but an ESP32 stops reading around 2.5 V and the top quarter is never produced.  MicroPython scales the raw count straight onto sixteen bits instead, so whatever saturates the converter becomes 65535 and the top arrives, while the converter's offset at the bottom goes uncorrected and the first few steps do not.
+
+Neither is a fault in this library and the CircuitPython end is already known: Adafruit's board guides put the S2 and S3 ceiling near 51000 counts or 2.57 V, and CircuitPython carries an open bug reporting 51157 on an S2 against a full 65535 on an RP2040.  The exact figures vary between individual chips.
+
+The part that catches people is the shape of it.  A reading that runs out does not fade, it pins, so the last stretch of the knob's travel moves nothing while the number sits still and nothing raises.
+
+Measure the board in front of you rather than trusting the table: sweep from stop to stop and watch `raw`.  The numbers it stops at are your range.  Then ask for the steps you can reach:
+
+```python
+volume = AnalogKnob(board.IO9, steps=75)      # an S2 under CircuitPython
+```
+
+Or feed the wiper from a divider that keeps it inside the range you measured, which costs resolution and buys back a sweep where every step means something.
+
+## Examples
+
+| Example | What it shows |
+|---|---|
+| [`circuitpython_encoder_volume.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/knobs/examples/circuitpython_encoder_volume.py) | An encoder for volume and a potentiometer for brightness on CircuitPython (hardware) |
+| [`micropython_encoder_volume.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/knobs/examples/micropython_encoder_volume.py) | The same two knobs on MicroPython (hardware) |
+
+---
+
+<div class="chumicro-footer" markdown>
+
+[← Home](index.md)
+
+[Source](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/knobs) · \
+[PyPI](https://pypi.org/project/chumicro-knobs/) · \
+[Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) · \
+[Experimental Bundle](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental)
+
+</div>

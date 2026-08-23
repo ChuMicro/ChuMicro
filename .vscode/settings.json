@@ -7,9 +7,11 @@
     ],
     "python.analysis.extraPaths": [
         "support/test_harness/src",
+        "libraries/buttons/src",
         "libraries/compat/src",
         "libraries/config/src",
         "libraries/http_server/src",
+        "libraries/knobs/src",
         "libraries/kvstore/src",
         "libraries/mqtt/src",
         "libraries/msgpack/src",
