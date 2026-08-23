@@ -314,23 +314,40 @@ evidence.
 A wiper across 3V3 into an ADC pin, on a Pi Pico W and a Lolin S2 Mini.  Every number below
 is with the pot untouched, so any reported movement is the library inventing it.
 
-| | Raw noise, middle 90 % | Raw full spread | Unfiltered | Filtered |
-|---|---|---|---|---|
-| Pi Pico W, CircuitPython | 656 | 1744 | ~12 500 movements per 15 s | 0 per 20 s |
-| Pi Pico W, MicroPython | 848 | not captured | not captured | 1 per 20 s |
-| Lolin S2, CircuitPython | 338 | 2125 | would span 4 steps | 0 per 20 s |
-| Lolin S2, MicroPython | 608 | 4705 | would span 9 steps | 0 per 20 s |
+Every row is the wiper parked between 44 and 53 percent of its travel, because noise on a
+divider scales with the fraction of the supply being read and a measurement taken against a
+stop is not comparable to one taken mid-sweep.  Three readings were discarded for exactly that
+before this table settled.
 
-The two blanks are a gap in the measuring rather than in the board: that run printed only the
-middle ninety percent and never the full spread or the step span an unfiltered reading would
-have covered.  Filling them wants the Pi Pico W back on the bench under MicroPython.
+| | Parked at | Noise, middle 90 % | Full spread | Unfiltered would report | Filtered |
+|---|---|---|---|---|---|
+| Pi Pico W, CircuitPython | 53 % | 656 | 672 | 2 steps, 132 movements per 15 s | 0 per 20 s |
+| Pi Pico W, MicroPython | 44 % | 288 | 1217 | 2 steps | 0 per 20 s |
+| Lolin S2, CircuitPython | 44 % | 338 | 2125 | 4 steps | 0 per 20 s |
+| Lolin S2, MicroPython | 48 % | 608 | 4705 | 9 steps | 0 per 20 s |
 
-The four cells fail differently, which is why the source runs two filters rather than one.
-The Pico's 3V3 comes off a switching regulator and its noise is continuous, wide enough to walk
-the deadband's anchor across a step boundary and back; smoothing is what fixes that.  The S2
-runs an LDO and is quieter on average, but its full spread runs to two and four thousand
-counts, so the damage there comes from occasional samples several steps out; the median is what
-fixes that.  Neither filter would have covered every board.
+Against a stop the same boards read very differently: the Pico W measured 944 counts at 99 %
+under CircuitPython and 848 under MicroPython, against 656 and 288 mid-sweep.  That is the
+ratiometric divider doing what it should, and it is why the position is in the table.
+
+What the step wander follows is the tails, not the middle, which is why the source runs two
+filters rather than one.  Divide each full spread by its middle ninety percent and the cells
+line up: 1.0 on the Pico under CircuitPython, then 4.2, 6.3 and 7.7, and the steps an
+unfiltered reading would have covered go 2, 2, 4 and 9 in the same order.  A cell can be noisy
+in the middle and behave, or quiet in the middle and wander badly.
+
+The two mechanisms need different answers.  The Pico under CircuitPython has almost no tails at
+all, 672 of spread against 656 through the middle, but that noise is wide enough on its own to
+walk the deadband's anchor across a step boundary and back, and only smoothing settles it.  The
+S2 under MicroPython is no worse through the middle yet reaches 4705, so its damage comes from
+occasional samples several steps out, which smoothing would average in and only a median throws
+away.  Neither filter would have covered every board.
+
+The regulator does show up, but against a stop rather than mid-sweep, where the reading tracks
+the whole supply instead of a fraction of it.  There the Pico measured 944 and 848 counts
+against the S2's zero, which is a switching regulator against an LDO.  Mid-sweep the ordering
+does not survive, so the earlier reading of it as a board-level property was drawn from
+measurements taken at different positions.
 
 The two runtimes differ on one board as much as the two boards differ, and for a reason that
 shows up in both directions.  CircuitPython converts through a calibration table and averages
