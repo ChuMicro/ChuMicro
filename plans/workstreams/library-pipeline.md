@@ -1,6 +1,6 @@
 # Library pipeline — what to add next
 
-**Status:** Tier A + dep-policy + UDP all shipped between 2026-04-27 and 2026-05-06; Tier B (macropad-validated libs) and the device-feedback layer (`chumicro-presence`) are the open slices.  See **Findings from the 2026-05-06 review** below for what's actually pickup-able vs. still hardware-gated.
+**Status:** Tier A + dep-policy + UDP all shipped between 2026-04-27 and 2026-05-06; `chumicro-buttons` and `chumicro-knobs` shipped 2026-08-22 (§"Buttons and knobs as built" below).  The open slices are the rest of Tier B (`chumicro-pixels`, optional `chumicro-tone`) and the device-feedback layer (`chumicro-presence`).  See **Findings from the 2026-05-06 review** below for what's actually pickup-able vs. still hardware-gated.
 
 **Origin:** strategy conversation 2026-04-27. Survey of the Adafruit bundle + micropython-lib + existing chumicro libraries to identify cross-runtime gaps worth filling. Folds in and widens the **LED / UX hooks for service state** open question from `plans/workstreams/archive/phase-7-integration.md` §"LED / UX hooks for service state".
 
@@ -15,7 +15,7 @@ The body below was written 2026-04-27 when the doc said "captured, no implementa
 * **Dependency policy resolved as [Decision 0042](../decisions/0042-library-dependency-policy.md)** (`proposed`, 2026-04-27).  The "core infrastructure = hard dep + factory helper" / "decoration = optional callback" split this workstream proposed is now the formal contract.  `chumicro-requests` (Decision 0040) had already established the workable shape: hard `chumicro-sockets` dep + `chumicro_sockets_factory(radio=…)` helper + explicit constructor parameter.  Each new library starts under the right rules.
 * **UDP for sockets shipped as [Decision 0043](../decisions/0043-chumicro-sockets-udp.md)** (`accepted`).  The "first check whether sockets exposes UDP" prereq the workstream flagged for ntp is closed — `chumicro_sockets.udp_socket` exists and ntp consumes it.
 * **`presence` / device-feedback layer — still open.**  The orchestrator described in §"Device-feedback layer" hasn't been started.  No events bus consumer beyond wifi → mqtt indirection has materialized; the third-consumer trigger the workstream named hasn't fired yet.
-* **Tier B (input / pixels / tone) — still hardware-gated** on the macropad.  The libraries themselves don't depend on the macropad — they're constructor-injected backends — but the validation matrix needs the board plugged in to land them with a functional-test floor.  Macropad isn't on the bench in the current setup.
+* **Tier B — input shipped without the macropad; pixels / tone still hardware-gated.**  `chumicro-buttons` and `chumicro-knobs` landed with functional suites and a hand bench (a switch, a membrane keypad, a KY-040, a potentiometer) on rp2040 and ESP32-S2 boards already registered — the macropad turned out unnecessary for them.  `chumicro-pixels` and `chumicro-tone` still want it, or a NeoPixel strip and a PWM speaker on the bench.
 * **Tier C — still hardware-gated.**  Antennas not yet for LoRa, no GPS hardware wired, no stepper drivers.
 
 ### What's actually pickup-able now
@@ -32,7 +32,7 @@ In rough priority order:
 
 The original framing was *"survey + tier picks + dep-policy decision"*.  The survey paid out, the dep-policy decision shipped, Tier A is done.  Remaining workstream slice is:
 
-* **Macropad picks (Tier B)** when the macropad is on the bench.
+* **The rest of Tier B (`chumicro-pixels`, `chumicro-tone`)** when the macropad or a strip and speaker are on the bench.
 * **`chumicro-presence`** as the next net-new library, pickable without hardware.
 * **Tier C** as hardware arrives, library by library.
 * **Decision 0042 status flip** to `accepted` (housekeeping).
@@ -115,21 +115,18 @@ Facts read from the CircuitPython 10.2.0 and MicroPython 1.27.0 trees in `.tools
 
 First-release sizes: buttons 25520 B stripped, knobs 10671 B, per `size-budgets.toml`.  Whole-library cost is why they are two installs rather than one.
 
-What each surface needs before it can be called verified.  The macropad is not the gate for
-most of it, and for one surface it is not sufficient:
+Every surface has now met real hardware, none of it the macropad:
 
-| Surface | Hardware | Bench today |
+| Surface | Hardware used | Bench |
 |---|---|---|
-| `Button`, `Buttons` | A pin and a wire to ground | Yes, on every registered board |
-| `KeyMatrix` | A row-by-column grid, or wires plus diodes | No, wants the macropad or a breadboard |
-| `Encoder` | A rotary encoder module | No, wants the macropad or a two-dollar module |
-| `AnalogKnob` | A potentiometer on an ADC pin | No, and the macropad has none either |
+| `Button`, `Buttons` | A switch to ground, and self-driven GPIO edges | Suites green plus hand presses, both runtimes, rp2040 and ESP32-S2 |
+| `KeyMatrix` | A 4x4 membrane keypad | Hand-pressed, both runtimes, rp2040 and ESP32-S2 |
+| `Encoder` | A KY-040 module | Decoded exactly at hand speeds, both runtimes, rp2040 and ESP32-S2 |
+| `AnalogKnob` | A potentiometer on an ADC pin | Parked and swept, both runtimes, rp2040 and ESP32-S2 |
 
-So the single-button and multi-button paths, which are most of both libraries, can be verified
-now: `keypad.Keys` on the CircuitPython boards and the `Pin.irq` capture on the MicroPython
-ones.  The TinyPICO and FeatherS3 matter most there, because they are esp32 parts whose
-`Pin.irq` takes no `hard=` and whose handler runs through the scheduler.  That path has only
-ever been reasoned about.
+The esp32 capture path got the closest look, because its `Pin.irq` takes no `hard=` and its
+handler runs through the scheduler; until the Lolin S2 runs below, that path had only ever
+been reasoned about.
 
 ##### Measured on a Pi Pico W, CircuitPython 10.2.0
 
@@ -558,12 +555,12 @@ Three reasonable picks (preserved as the original survey):
 2. **Balanced.** A1 (logging) + decide dependency policy.  Logging is the natural place to live-test the "decoration dep" rule (it must not become a required dep).
 3. **Ambitious.** A1 + A3 (events) + start on presence/feedback skeleton + decide dep policy.  ← *what shipped.*
 
-Tier B (input, pixels) is still gated on plugging in the macropad.  Tier C is still gated on hardware.
+Tier B's input libraries shipped without the macropad; pixels and tone are still gated on it or on a strip and speaker.  Tier C is still gated on hardware.
 
 ## Critical files when implementation begins
 
-- **`libraries/wifi/src/chumicro_wifi/`** — canonical example of constructor-injected adapter + per-runtime selection ladder + `testing.py` fake.  Mirror for `chumicro-buttons` / `chumicro-knobs` adapters.
-- **`libraries/mqtt/src/chumicro_mqtt/`** — canonical runner-shaped service with check/handle and event callbacks.  Mirror for `chumicro-buttons` event emission.
+- **`libraries/wifi/src/chumicro_wifi/`** — canonical example of constructor-injected adapter + per-runtime selection ladder + `testing.py` fake.  `chumicro-buttons` / `chumicro-knobs` followed it; mirror for the `chumicro-pixels` strip backends next.
+- **`libraries/mqtt/src/chumicro_mqtt/`** — canonical runner-shaped service with check/handle and event callbacks.  `chumicro-buttons` followed it; mirror for `chumicro-pixels` pattern services next.
 - **`libraries/sockets/src/chumicro_sockets/__init__.py`** — confirm UDP availability before scoping `chumicro-ntp`; current scope is TCP+TLS per Decision 0031.
 - **`plans/workstreams/archive/phase-7-integration.md` §"LED / UX hooks for service state"** — original StatusIndicator HAL idea; superseded by the device-feedback layer above when this workstream proceeds.
 
@@ -575,5 +572,5 @@ Each new library follows the established DNA:
 - `testing.py` fake; CPython tests cover the full surface without hardware.
 - Runner-shaped if it has periodic work (`check(now_ms) -> bool` + `handle(now_ms)`).
 - Coverage gate ≥ 94 % under `python scripts/run.py test --coverage-threshold 94`.
-- Tier B libraries also ship a `functional_tests/` suite that runs against the macropad once plugged in.
+- Tier B libraries also ship a `functional_tests/` suite.  Buttons and knobs run theirs against any registered board with no wiring; pixels and tone will want the macropad or a strip and speaker.
 - Bundle pipeline check: `__chumicro_runtimes__` markers on per-runtime adapter files (Decision 0037).

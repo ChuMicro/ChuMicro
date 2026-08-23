@@ -3,7 +3,7 @@
 Status: `accepted`
 Date: `2026-08-21`
 Summary: Physical input ships as `chumicro-buttons` and `chumicro-knobs`, no base library and no cross-dep; each adapter captures edges however its runtime allows, with no user-facing knob.
-Related: [Decision 0014](0014-runner-pattern.md) (runner contract, which named buttons), [Decision 0051](0051-runner-shaped-as-project-policy.md) (runner-shape as project policy), [Decision 0010](0010-library-testability.md) (constructor injection, `testing.py`), [Decision 0042](0042-library-dependency-policy.md) (dependency policy), [Decision 0037](0037-runtime-file-marking.md) / [Decision 0044](0044-deploy-time-runtime-filtering.md) (runtime marking + deploy filtering), [Decision 0065](0065-device-library-scaffolding-cost.md) (no pure-passthrough `@property`), [Decision 0015](0015-board-architecture-support.md) (supported board class), `plans/workstreams/library-pipeline.md` §"Tier B" (the implementation contract and its open hardware gates).
+Related: [Decision 0014](0014-runner-pattern.md) (runner contract, which named buttons), [Decision 0051](0051-runner-shaped-as-project-policy.md) (runner-shape as project policy), [Decision 0010](0010-library-testability.md) (constructor injection, `testing.py`), [Decision 0042](0042-library-dependency-policy.md) (dependency policy), [Decision 0037](0037-runtime-file-marking.md) / [Decision 0044](0044-deploy-time-runtime-filtering.md) (runtime marking + deploy filtering), [Decision 0065](0065-device-library-scaffolding-cost.md) (no pure-passthrough `@property`), [Decision 0015](0015-board-architecture-support.md) (supported board class), `plans/workstreams/library-pipeline.md` §"Tier B" (the implementation contract and the bench record).
 
 ## Context
 
@@ -54,7 +54,7 @@ Polling stays correct where an edge cannot be missed by definition: a matrix sca
 
 ## Consequences
 
-`library-pipeline.md` §"Tier B" loses its `chumicro-input` row and gains these two, and carries the implementation contract, the measured sizes, and the open hardware gates.
+`library-pipeline.md` §"Tier B" loses its `chumicro-input` row and gains these two, and carries the implementation contract, the measured sizes, and the bench record.
 
 The MicroPython adapter carries the weight in both libraries, and that is the point rather than a regret.  CircuitPython users are buying a thin pass over firmware that already exists; MicroPython users are buying the interrupt handler they would otherwise write wrong.  The asymmetry in the source is what makes the API symmetric for the user.
 
