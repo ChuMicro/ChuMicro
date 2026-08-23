@@ -51,6 +51,23 @@ while True:
 
 The loop never pauses, so the rest of your program keeps running between presses.  `just_pressed` is true for exactly one pass, which means you can read it as many times as you like without it firing twice.
 
+In a program with more going on, hand the loop to [`chumicro-runner`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner) and let callbacks do the reading:
+
+```python
+from chumicro_runner import Runner
+
+button.on_press = lambda: print("pressed")
+
+runner = Runner()
+runner.add(button)
+
+while True:
+    now = runner.tick()
+    runner.wait(now)
+```
+
+`tick()` gives every registered service one small step and dispatches your callbacks; `wait()` parks the CPU until the next event, waking exactly when a long press, a repeat, or a click window is due.
+
 ## Presses land even when the loop is slow
 
 A tap is short.  If your loop stalls on a socket read or a flash write, a naive pin read looks at the wrong moment and the press is gone.  This library captures the edge when it happens instead of when you get around to asking.
