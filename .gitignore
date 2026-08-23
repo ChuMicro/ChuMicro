@@ -49,8 +49,11 @@ _library-backups/
 # * `surfaces/` - the browser-surface toolkit (Decision 0100).  It is a generated
 #   copy of a canonical shared with sibling repos, so it must stay tracked to be
 #   diffable against that canonical.
+# * `rules/` — path-scoped rules that load only when an agent opens a matching
+#   file.  Team-shared, same as AGENTS.md.
 .claude/*
 !.claude/agents
+!.claude/rules
 !.claude/skills
 !.claude/settings.json
 !.claude/surfaces
