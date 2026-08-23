@@ -312,7 +312,7 @@ evidence.
 ##### The key matrix on a real grid
 
 A 4x4 membrane keypad, eight unlabelled pins wired to GP2 through GP9 in no particular order,
-on a Pi Pico W under MicroPython.  `KeyMatrix` had never met a grid before this; everything
+on a Pi Pico W under both runtimes.  `KeyMatrix` had never met a grid before this; everything
 until now was fakes and host tests.
 
 The pins were identified rather than guessed, which is worth keeping as a recipe.  Hold one key
@@ -323,9 +323,14 @@ are the columns in order, and the rest follow.  Here that came out as rows on GP
 GP2 and columns on GP9, GP8, GP7, GP6, which is the keypad's own order reversed against the
 header.
 
-Row-major numbering holds.  Pressing all sixteen keys in reading order reported indices 0
-through 15 in exactly that sequence, so `row * len(column_pins) + column` is what the grid
-does and not only what the docs say.  Hold times read 113 to 166 ms, which is a finger.
+Row-major numbering holds, and it holds the same way on both runtimes.  Pressing all sixteen
+keys in reading order reported indices 0 through 15 in exactly that sequence under MicroPython,
+then again under CircuitPython on the same grid with the same wiring.  That is worth more than
+either run alone: CircuitPython hands the scanning to the firmware's `keypad.KeyMatrix` in C
+while MicroPython uses this library's own polled scan, so the two are separate implementations
+agreeing rather than one being self-consistent.  A host test cannot reach this, because a fake
+agrees with whatever it was written to agree with.  Hold times read 113 to 166 ms under
+MicroPython and 80 to 116 under CircuitPython, which is a finger either way.
 
 Rows and columns are interchangeable on a grid with no diodes, so the scan cannot tell which
 set is which and does not need to: the choice only decides which way the numbering runs.  What
