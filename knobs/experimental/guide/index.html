@@ -1,0 +1,1150 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://chumicro.com/ChuMicro/knobs/experimental/guide/">
+      
+      
+        <link rel="prev" href="./..">
+      
+      
+        <link rel="next" href="../api/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../img/favicon.png">
+      <meta name="generator" content="zensical-0.0.39">
+    
+    
+      
+        <title>User Guide - chumicro-knobs</title>
+      
+    
+    
+      
+        
+      
+      <link rel="stylesheet" href="../assets/stylesheets/modern/main.1e981d71.min.css">
+      
+        
+          
+        
+        <link rel="stylesheet" href="../assets/stylesheets/modern/palette.dfe2e883.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter:300,300i,400,400i,500,500i,700,700i%7CJetBrains+Mono:400,400i,700,700i&amp;display=fallback">
+        <style>:root{--md-text-font:"Inter";--md-code-font:"JetBrains Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,t)=>(e<<5)-e+t.charCodeAt(0)),0),__md_get=(e,t=localStorage,a=__md_scope)=>JSON.parse(t.getItem(a.pathname+"."+e)),__md_set=(e,t,a=localStorage,_=__md_scope)=>{try{a.setItem(_.pathname+"."+e,JSON.stringify(t))}catch(e){}},document.documentElement.setAttribute("data-platform",navigator.platform)</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="deep-orange" data-md-color-accent="amber">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer" aria-label="Navigation"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#user-guide" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../../" title="chumicro-knobs" class="md-header__button md-logo" aria-label="chumicro-knobs" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-book-open" viewBox="0 0 24 24"><path d="M12 7v14M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer" aria-label="Navigation">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-menu" viewBox="0 0 24 24"><path d="M4 5h16M4 12h16M4 19h16"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            chumicro-knobs
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              User Guide
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="none" data-md-color-scheme="slate" data-md-color-primary="deep-orange" data-md-color-accent="amber"  aria-hidden="true"  type="radio" name="__palette" id="__palette_0">
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search" aria-label="Search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-search" viewBox="0 0 24 24"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog" aria-label="Search">
+  <button type="button" class="md-search__button">
+    Search
+  </button>
+</div>
+      
+    
+    <div class="md-header__source">
+      
+        <a href="https://github.com/ChuMicro/ChuMicro/tree/main/libraries/knobs" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2026 Fonticons, Inc.--><path fill="currentColor" d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Source
+  </div>
+</a>
+      
+    </div>
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../../" title="chumicro-knobs" class="md-nav__button md-logo" aria-label="chumicro-knobs" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-book-open" viewBox="0 0 24 24"><path d="M12 7v14M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg>
+
+    </a>
+    chumicro-knobs
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/ChuMicro/ChuMicro/tree/main/libraries/knobs" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2026 Fonticons, Inc.--><path fill="currentColor" d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Source
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="./.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guide
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="././" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+
+<nav class="md-nav md-nav--secondary" aria-label="On this page">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      On this page
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Overview
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#getting-started" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Getting started
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reading-the-encoder" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Reading the encoder
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Reading the encoder">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#finding-your-encoders-detent-size" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Finding your encoder's detent size
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#when-the-count-drifts" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        When the count drifts
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#holding-the-position-inside-a-range" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Holding the position inside a range
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#an-analog-knob" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        An analog knob
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-deadband" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        The deadband
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#callbacks" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Callbacks
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#giving-the-pins-back" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Giving the pins back
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#runner-pattern" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Runner pattern
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#memory-notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Memory notes
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#testing" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Testing
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#platform-notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Platform notes
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Platform notes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#an-analog-knob-loses-some-travel-on-esp32" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        An analog knob loses some travel on ESP32
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Examples
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../testing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Testing Helpers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  
+                    
+                    
+                    
+                      
+                    
+                    
+                      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+                      <div class="md-sidebar-button__wrapper">
+                        <label class="md-sidebar-button" for="__toc"></label>
+                      </div>
+                    
+                  
+                  <div class="md-sidebar__inner">
+                    
+
+
+<nav class="md-nav md-nav--secondary" aria-label="On this page">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      On this page
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Overview
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#getting-started" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Getting started
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reading-the-encoder" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Reading the encoder
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Reading the encoder">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#finding-your-encoders-detent-size" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Finding your encoder's detent size
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#when-the-count-drifts" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        When the count drifts
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#holding-the-position-inside-a-range" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Holding the position inside a range
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#an-analog-knob" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        An analog knob
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-deadband" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        The deadband
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#callbacks" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Callbacks
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#giving-the-pins-back" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Giving the pins back
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#runner-pattern" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Runner pattern
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#memory-notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Memory notes
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#testing" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Testing
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#platform-notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Platform notes
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Platform notes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#an-analog-knob-loses-some-travel-on-esp32" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        An analog knob loses some travel on ESP32
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Examples
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+  
+  
+
+
+<h1 id="user-guide">User Guide<a class="headerlink" href="#user-guide" title="Permanent link">&para;</a></h1>
+<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
+<p>A knob tells your program where it has been turned to, and getting that from a pin takes more than one read.  A rotary encoder reports turning as pulses on two signal pins, arriving fast enough that a busy loop misses most of a flick of the wrist.  A potentiometer gives you a voltage that never sits exactly still, so a program that prints it raw reports a knob nobody is touching.</p>
+<p><code>chumicro_knobs</code> does that work.  <code>Encoder</code> reads a rotary encoder as a count of detents, the click you feel as the shaft turns, and <code>AnalogKnob</code> reads a potentiometer or slider as a step number out of however many steps you asked for.  Both are refreshed by <code>check(now_ms)</code>, both publish <code>delta</code> and <code>just_moved</code>, and both dispatch a callback from <code>handle(now_ms)</code>.</p>
+<p>The main reading is named for what each device actually knows.  An encoder counts movement from wherever it started, so it publishes <code>position</code>; an analog knob points somewhere absolute along its sweep, so it publishes <code>value</code>.</p>
+<h2 id="getting-started">Getting started<a class="headerlink" href="#getting-started" title="Permanent link">&para;</a></h2>
+<p>Wire the encoder's two signal pins to GPIO pins and its common pin to GND.  The internal pull-ups are switched on for you, so no extra parts are needed.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">board</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_knobs</span><span class="w"> </span><span class="kn">import</span> <span class="n">Encoder</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_timing</span><span class="w"> </span><span class="kn">import</span> <span class="n">ticks_ms</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="n">volume</span> <span class="o">=</span> <span class="n">Encoder</span><span class="p">(</span><span class="n">board</span><span class="o">.</span><span class="n">GP16</span><span class="p">,</span> <span class="n">board</span><span class="o">.</span><span class="n">GP17</span><span class="p">)</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">now</span> <span class="o">=</span> <span class="n">ticks_ms</span><span class="p">()</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">volume</span><span class="o">.</span><span class="n">check</span><span class="p">(</span><span class="n">now</span><span class="p">)</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="k">if</span> <span class="n">volume</span><span class="o">.</span><span class="n">just_moved</span><span class="p">:</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>        <span class="nb">print</span><span class="p">(</span><span class="s2">"volume"</span><span class="p">,</span> <span class="n">volume</span><span class="o">.</span><span class="n">position</span><span class="p">)</span>
+</span></code></pre></div>
+<p><code>check(now_ms)</code> does one small step: it collects the counting that happened since the last pass and folds it into <code>position</code>.  It never waits, so the rest of your program keeps running between turns.</p>
+<p>On MicroPython the two pins are GPIO numbers or <code>machine.Pin</code> objects, and everything else on the page reads the same:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">machine</span><span class="w"> </span><span class="kn">import</span> <span class="n">Pin</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">volume</span> <span class="o">=</span> <span class="n">Encoder</span><span class="p">(</span><span class="n">Pin</span><span class="p">(</span><span class="mi">16</span><span class="p">),</span> <span class="n">Pin</span><span class="p">(</span><span class="mi">17</span><span class="p">))</span>
+</span></code></pre></div>
+<h2 id="reading-the-encoder">Reading the encoder<a class="headerlink" href="#reading-the-encoder" title="Permanent link">&para;</a></h2>
+<p>Every reading is a plain attribute, refreshed by <code>check()</code>:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">volume</span><span class="o">.</span><span class="n">position</span>       <span class="c1"># detents counted so far</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">volume</span><span class="o">.</span><span class="n">delta</span>          <span class="c1"># detents this tick added to position</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">volume</span><span class="o">.</span><span class="n">just_moved</span>     <span class="c1"># True only on the tick position changed</span>
+</span></code></pre></div>
+<p><code>position</code> starts at zero and counts up as the shaft turns one way, down as it turns the other.  Swapping <code>pin_a</code> and <code>pin_b</code> swaps which way counts up, which is the fix when a knob reads backwards.</p>
+<p><code>delta</code> is the movement for this tick alone, and several detents landing between two passes arrive together.  A loop that stalled for a socket read and came back to a shaft someone had spun seven clicks reports <code>delta</code> of 7 on one tick rather than seven ticks of 1:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">if</span> <span class="n">volume</span><span class="o">.</span><span class="n">just_moved</span><span class="p">:</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>    <span class="n">level</span> <span class="o">+=</span> <span class="n">volume</span><span class="o">.</span><span class="n">delta</span>       <span class="c1"># the whole spin, in one go</span>
+</span></code></pre></div>
+<p><code>position</code> is a plain attribute you can write as well as read, which is how a value saved at shutdown goes back where it was:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">volume</span><span class="o">.</span><span class="n">position</span> <span class="o">=</span> <span class="n">saved_volume</span>
+</span></code></pre></div>
+<p>Most panel-mount encoders click once per pulse cycle, and <code>detent_steps</code> defaults to <code>4</code> to match, so one click of the shaft moves <code>position</code> by one.  <code>DEFAULT_DETENT_STEPS</code> carries that number, and it is the same default CircuitPython's own <code>rotaryio.IncrementalEncoder</code> uses for its <code>divisor</code>.  A smooth encoder with no clicks in it wants <code>detent_steps=1</code>, which counts every pulse:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">smooth</span> <span class="o">=</span> <span class="n">Encoder</span><span class="p">(</span><span class="n">board</span><span class="o">.</span><span class="n">GP16</span><span class="p">,</span> <span class="n">board</span><span class="o">.</span><span class="n">GP17</span><span class="p">,</span> <span class="n">detent_steps</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+</span></code></pre></div>
+<h3 id="finding-your-encoders-detent-size">Finding your encoder's detent size<a class="headerlink" href="#finding-your-encoders-detent-size" title="Permanent link">&para;</a></h3>
+<p>Encoders disagree about this, and getting it wrong is quiet rather than loud.  A shaft that reports half your clicks is set to <code>4</code> on a part that gives <code>2</code>; one that reports double is set to <code>2</code> on a part that gives <code>4</code>.  Nothing raises, the number is just consistently off by a factor.</p>
+<p>Cheap modules commonly give 2 pulses per detent where a panel-mount part gives 4, so measure yours once rather than assume.  Count raw pulses with <code>detent_steps=1</code>, turn the shaft exactly ten clicks, and divide:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">counter</span> <span class="o">=</span> <span class="n">Encoder</span><span class="p">(</span><span class="n">board</span><span class="o">.</span><span class="n">GP16</span><span class="p">,</span> <span class="n">board</span><span class="o">.</span><span class="n">GP17</span><span class="p">,</span> <span class="n">detent_steps</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>    <span class="n">counter</span><span class="o">.</span><span class="n">check</span><span class="p">(</span><span class="n">ticks_ms</span><span class="p">())</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>    <span class="nb">print</span><span class="p">(</span><span class="n">counter</span><span class="o">.</span><span class="n">position</span><span class="p">)</span>      <span class="c1"># turn ten clicks, then read this</span>
+</span></code></pre></div>
+<p>Twenty means <code>detent_steps=2</code>, forty means <code>4</code>, ten means <code>1</code>.  Set it and every click moves <code>position</code> by exactly one.</p>
+<p>A shaft that counts erratically rather than by a consistent factor is a wiring problem instead.  Modules with a <code>+</code> pin carry pull-up resistors that do nothing until it is powered, and on one measured here leaving it unwired dropped pulses at random, turning a steady two-per-detent into a mix of ones, twos and threes.</p>
+<h3 id="when-the-count-drifts">When the count drifts<a class="headerlink" href="#when-the-count-drifts" title="Permanent link">&para;</a></h3>
+<p>Turned at the speed a hand normally turns a knob, an encoder counts exactly: ten clicks out and ten back land on the number they started from, every time.  Spun hard, a cheap one starts to drift, and it is worth knowing why nothing in the stack stops that.</p>
+<p>Contacts bounce the same way a switch does, and at speed the bouncing produces transitions that look like real ones.  Nothing filters them.  CircuitPython's <code>rotaryio</code> sets no glitch filter on either the rp2040 or the esp32, so every edge reaches the counter, and the same is true of the interrupt this library installs on MicroPython.  What both do instead is reject transitions that a turning shaft cannot produce, which catches noise that changes both pins at once but not noise that happens to look like a step.</p>
+<p><code>detent_steps</code> does the rest, and it does more than divide.  Partial steps stay banked until a whole detent is earned, so a shaft resting between detents and rocking across one boundary counts nothing however long it rocks.  That covers the ordinary case of a knob nudged by a passing hand.</p>
+<p>Adding a time-based filter would be the wrong fix, because a fast spin is made of short pulses too.  A window long enough to reject bounce at three thousand pulses a second would reject the fast turning it is trying to protect.  For a button the two cases barely overlap, so <code>settle_ms</code> works; for an encoder they are the same signal.</p>
+<p>The fix that does work is hardware, on the two quadrature lines:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>CLK ──[ 10k ]──┬── to the pin
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>               │
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>             [10nF]
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>               │
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>              GND
+</span></code></pre></div>
+<p>Around 100 microseconds of smoothing, which is far below a real pulse and far above the bouncing.  Better encoder modules already carry these; the cheap ones leave the pads empty.</p>
+<p>Measured on a bare module with no smoothing, on an ESP32-S2 running each runtime in turn:</p>
+<ul>
+<li>Normal turning was exact.  Ten clicks out and ten back gave twenty detent events, every one of them a single step, ending on zero.</li>
+<li>Spun by hand at about 1000 detents per second, far past what the part is rated for, the count drifted a few percent over roughly 230 detents.  The direction of the error changed between runs, and an error that changes sign is the contacts rather than the counting.</li>
+</ul>
+<p>Nobody reaches that speed turning a knob on purpose, so the practical answer is that an encoder counts what you turn.  The drift is worth knowing about only if something in your project spins a shaft rather than a wrist.</p>
+<p>If a module has a <code>+</code> pin, wire it.  The pull-up resistors on the board do nothing until it is powered, and without them pulses drop at random rather than merely drifting under abuse.</p>
+<h2 id="holding-the-position-inside-a-range">Holding the position inside a range<a class="headerlink" href="#holding-the-position-inside-a-range" title="Permanent link">&para;</a></h2>
+<p><code>bounds=(low, high)</code> is an inclusive range that <code>position</code> stays inside, so a volume knob walks 0 to 20 and settles at each end rather than running off into numbers your program has no use for:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="n">volume</span> <span class="o">=</span> <span class="n">Encoder</span><span class="p">(</span><span class="n">board</span><span class="o">.</span><span class="n">GP16</span><span class="p">,</span> <span class="n">board</span><span class="o">.</span><span class="n">GP17</span><span class="p">,</span> <span class="n">bounds</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">20</span><span class="p">))</span>
+</span></code></pre></div>
+<p>A knob held against a bound reports <code>delta</code> of 0 and <code>check()</code> returns False, so nothing downstream fires while the shaft keeps turning.  The turning that did not fit is dropped rather than banked, which means one detent back off the bound moves <code>position</code> by exactly one.  A range that does not contain zero starts at its nearer end: <code>bounds=(5, 9)</code> opens at 5.</p>
+<p><code>wrap=True</code> carries <code>position</code> around the range instead of settling at the ends, which is what a menu ring or a hue selector wants.  On <code>bounds=(0, 3)</code>, five detents forward from 0 land on 1:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="n">menu</span> <span class="o">=</span> <span class="n">Encoder</span><span class="p">(</span><span class="n">board</span><span class="o">.</span><span class="n">GP16</span><span class="p">,</span> <span class="n">board</span><span class="o">.</span><span class="n">GP17</span><span class="p">,</span> <span class="n">bounds</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span> <span class="n">wrap</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</span></code></pre></div>
+<p>Wrapping needs a range to wrap inside, so <code>wrap=True</code> without <code>bounds</code> raises <code>ValueError</code> at construction rather than behaving oddly later.</p>
+<h2 id="an-analog-knob">An analog knob<a class="headerlink" href="#an-analog-knob" title="Permanent link">&para;</a></h2>
+<p>Wire the potentiometer's outer legs to 3V3 and GND, and its wiper to an analog-capable pin such as <code>board.A0</code>.  <code>steps</code> is how many positions a full sweep reports, and <code>value</code> runs from 0 at one end to <code>steps - 1</code> at the other:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">board</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_knobs</span><span class="w"> </span><span class="kn">import</span> <span class="n">AnalogKnob</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_timing</span><span class="w"> </span><span class="kn">import</span> <span class="n">ticks_ms</span>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="n">brightness</span> <span class="o">=</span> <span class="n">AnalogKnob</span><span class="p">(</span><span class="n">board</span><span class="o">.</span><span class="n">A0</span><span class="p">,</span> <span class="n">steps</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>
+</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a>    <span class="n">now</span> <span class="o">=</span> <span class="n">ticks_ms</span><span class="p">()</span>
+</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a>    <span class="n">brightness</span><span class="o">.</span><span class="n">check</span><span class="p">(</span><span class="n">now</span><span class="p">)</span>
+</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a>
+</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a>    <span class="k">if</span> <span class="n">brightness</span><span class="o">.</span><span class="n">just_moved</span><span class="p">:</span>
+</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a>        <span class="nb">print</span><span class="p">(</span><span class="s2">"brightness"</span><span class="p">,</span> <span class="n">brightness</span><span class="o">.</span><span class="n">value</span><span class="p">)</span>     <span class="c1"># 0 through 9</span>
+</span></code></pre></div>
+<p><code>steps</code> defaults to 100, held in <code>DEFAULT_STEPS</code>, which puts the middle of the sweep at 50 and the top at 99.  <code>delta</code> is the change for this tick, negative when the knob comes back down, and <code>raw</code> is the settled reading on the 0 to 65535 scale that <code>value</code> was worked out from:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="nb">print</span><span class="p">(</span><span class="n">brightness</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="n">brightness</span><span class="o">.</span><span class="n">delta</span><span class="p">,</span> <span class="n">brightness</span><span class="o">.</span><span class="n">raw</span><span class="p">)</span>
+</span></code></pre></div>
+<p>Every runtime reports a conversion on that same 0 to 65535 scale whatever the converter's native width is, so a 12-bit part on an RP2040 and a wider part elsewhere read through identical code.  <code>RAW_RANGE</code> is that scale, 65536, and the next section puts it to work.</p>
+<h2 id="the-deadband">The deadband<a class="headerlink" href="#the-deadband" title="Permanent link">&para;</a></h2>
+<p>An analog reading wanders, and it wanders further than a datasheet suggests.  A potentiometer on a Pi Pico W measured 1744 counts of spread with the wiper parked at the top of its travel, where a converter is noisiest, against the 655 counts one step spans at the default settings.</p>
+<p>Two stages hold that still before you ever see the reading, and they reject different things.</p>
+<p>The first is a median of the last three conversions.  A wild sample can never be the middle of three, so one bad reading is discarded rather than averaged in.  That is the case smoothing handles badly: fed a single full-scale sample, a smoothed reading walks almost three steps out and takes dozens of conversions to come back, while a median does not move at all.</p>
+<p>The second folds each surviving conversion into the one before it rather than replacing it, so the number <code>check()</code> works from moves smoothly instead of leaping between noise extremes.  That matters more than how wide the noise is, because a leaping reading drags the deadband's anchor across a step boundary and back while a smooth one does not.</p>
+<p>Neither substitutes for the other.  A median does almost nothing for continuous noise, and smoothing cannot throw a bad sample away.  Together they took an untouched knob at the noisiest end of its travel from around 12000 reported movements in twenty seconds to none.  Both are free of extra conversions, because they work on the readings the loop already takes.</p>
+<p>The smoothing is counted in ticks rather than milliseconds, so a loop running flat out settles inside a couple of milliseconds while a deliberately slow loop takes longer to catch up with a fast turn.</p>
+<p><code>deadband</code> is the second, and is how far the smoothed reading has to move before <code>value</code> is allowed to follow it.  It defaults to 512, held in <code>DEFAULT_DEADBAND</code>:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="n">brightness</span> <span class="o">=</span> <span class="n">AnalogKnob</span><span class="p">(</span><span class="n">board</span><span class="o">.</span><span class="n">A0</span><span class="p">,</span> <span class="n">steps</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">deadband</span><span class="o">=</span><span class="mi">512</span><span class="p">)</span>     <span class="c1"># the default</span>
+</span></code></pre></div>
+<p>512 sits under the width of one step, so every step stays reachable, and the smoothing underneath is what keeps a parked wiper on one number.  A deadband alone cannot do that job on a noisy converter: it has to exceed the reading's whole peak-to-peak spread rather than half of it, because the anchor lands on whichever sample tripped it, and on the board measured above no value satisfies both that and staying under a step.  One step spans <code>RAW_RANGE // steps</code> counts, which is 655 at the default 100 steps:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_knobs</span><span class="w"> </span><span class="kn">import</span> <span class="n">DEFAULT_STEPS</span><span class="p">,</span> <span class="n">RAW_RANGE</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="n">step_width</span> <span class="o">=</span> <span class="n">RAW_RANGE</span> <span class="o">//</span> <span class="n">DEFAULT_STEPS</span>      <span class="c1"># 655</span>
+</span></code></pre></div>
+<p>Keep <code>deadband</code> under that width.  A deadband two steps wide reports 2, 4, 6, 8 as a ten-step knob sweeps up and passes over the odd steps entirely, and a wide deadband also shortens the reachable ends of the sweep, where a pot that stops a few hundred counts short of the rail may never report step 0 again.  A finer sweep therefore wants a tighter deadband:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="n">fine</span> <span class="o">=</span> <span class="n">AnalogKnob</span><span class="p">(</span><span class="n">board</span><span class="o">.</span><span class="n">A1</span><span class="p">,</span> <span class="n">steps</span><span class="o">=</span><span class="mi">256</span><span class="p">,</span> <span class="n">deadband</span><span class="o">=</span><span class="mi">128</span><span class="p">)</span>
+</span></code></pre></div>
+<p><code>deadband=0</code> follows every sample, which is the setting for a signal that arrives clean already, from a filtered supply or a part with its own smoothing.</p>
+<p>One detail worth knowing when you watch these attributes: a move that clears the deadband updates <code>raw</code> even when the step it lands in is the one <code>value</code> already held.  <code>just_moved</code> reports on <code>value</code>, so it stays false on that tick and no callback fires.</p>
+<h2 id="callbacks">Callbacks<a class="headerlink" href="#callbacks" title="Permanent link">&para;</a></h2>
+<p>If you would rather be called than ask, set <code>on_change</code> and let <code>handle(now_ms)</code> dispatch it:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="n">volume</span><span class="o">.</span><span class="n">on_change</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">detents</span><span class="p">:</span> <span class="nb">print</span><span class="p">(</span><span class="s2">"moved"</span><span class="p">,</span> <span class="n">detents</span><span class="p">)</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="n">brightness</span><span class="o">.</span><span class="n">on_change</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">step</span><span class="p">:</span> <span class="nb">print</span><span class="p">(</span><span class="s2">"brightness"</span><span class="p">,</span> <span class="n">step</span><span class="p">)</span>
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>
+</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a>    <span class="n">now</span> <span class="o">=</span> <span class="n">ticks_ms</span><span class="p">()</span>
+</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a>
+</span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a>    <span class="k">if</span> <span class="n">volume</span><span class="o">.</span><span class="n">check</span><span class="p">(</span><span class="n">now</span><span class="p">):</span>
+</span><span id="__span-15-8"><a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a>        <span class="n">volume</span><span class="o">.</span><span class="n">handle</span><span class="p">(</span><span class="n">now</span><span class="p">)</span>
+</span><span id="__span-15-9"><a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a>    <span class="k">if</span> <span class="n">brightness</span><span class="o">.</span><span class="n">check</span><span class="p">(</span><span class="n">now</span><span class="p">):</span>
+</span><span id="__span-15-10"><a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a>        <span class="n">brightness</span><span class="o">.</span><span class="n">handle</span><span class="p">(</span><span class="n">now</span><span class="p">)</span>
+</span></code></pre></div>
+<p><code>check()</code> returns True when the tick produced anything, which is the gate <code>handle()</code> sits behind.</p>
+<p>Each callback takes one argument, and the argument follows the reading each device publishes.  The encoder hands you the signed detent change for the tick, so a handler adds it to something.  The analog knob hands you the step it now points at, so a handler uses it directly:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">set_volume</span><span class="p">(</span><span class="n">detents</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="w">    </span><span class="sd">"""Move the amplifier by however many clicks the shaft turned."""</span>
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>    <span class="n">amplifier</span><span class="o">.</span><span class="n">adjust</span><span class="p">(</span><span class="n">detents</span><span class="p">)</span>
+</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>
+</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a>
+</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="k">def</span><span class="w"> </span><span class="nf">set_brightness</span><span class="p">(</span><span class="n">step</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a><span class="w">    </span><span class="sd">"""Take the screen straight to the step the knob is pointing at."""</span>
+</span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a>    <span class="n">screen</span><span class="o">.</span><span class="n">set_level</span><span class="p">(</span><span class="n">step</span><span class="p">)</span>
+</span></code></pre></div>
+<p>Your callbacks run in your own loop, in normal context, so they can allocate, print, and raise like any other code.</p>
+<h2 id="giving-the-pins-back">Giving the pins back<a class="headerlink" href="#giving-the-pins-back" title="Permanent link">&para;</a></h2>
+<p><code>deinit()</code> releases the pins a knob claimed, and on MicroPython it also lifts the interrupt off them so nothing counts afterwards:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="n">volume</span><span class="o">.</span><span class="n">deinit</span><span class="p">()</span>
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="n">brightness</span><span class="o">.</span><span class="n">deinit</span><span class="p">()</span>
+</span></code></pre></div>
+<p>A program that builds its knobs at startup and runs forever never reaches for this.  One that rebuilds them, say a device that repurposes the same encoder when it changes mode, calls <code>deinit()</code> before building the replacement.</p>
+<h2 id="runner-pattern">Runner pattern<a class="headerlink" href="#runner-pattern" title="Permanent link">&para;</a></h2>
+<p><code>check(now_ms)</code> and <code>handle(now_ms)</code> are the contract <a href="https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner"><code>chumicro-runner</code></a> expects, so a knob joins the rest of your services with one line:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_runner</span><span class="w"> </span><span class="kn">import</span> <span class="n">Runner</span>
+</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>
+</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="n">runner</span> <span class="o">=</span> <span class="n">Runner</span><span class="p">()</span>
+</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="n">runner</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">wifi</span><span class="p">)</span>
+</span><span id="__span-18-5"><a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a><span class="n">runner</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">volume</span><span class="p">)</span>                          <span class="c1"># checked every tick, handled when it has news</span>
+</span><span id="__span-18-6"><a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a><span class="n">runner</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">brightness</span><span class="p">,</span> <span class="n">period_ms</span><span class="o">=</span><span class="mi">20</span><span class="p">)</span>        <span class="c1"># fifty samples a second is faster than a hand</span>
+</span><span id="__span-18-7"><a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a>
+</span><span id="__span-18-8"><a id="__codelineno-18-8" name="__codelineno-18-8" href="#__codelineno-18-8"></a><span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+</span><span id="__span-18-9"><a id="__codelineno-18-9" name="__codelineno-18-9" href="#__codelineno-18-9"></a>    <span class="n">now</span> <span class="o">=</span> <span class="n">runner</span><span class="o">.</span><span class="n">tick</span><span class="p">()</span>
+</span><span id="__span-18-10"><a id="__codelineno-18-10" name="__codelineno-18-10" href="#__codelineno-18-10"></a>    <span class="n">runner</span><span class="o">.</span><span class="n">wait</span><span class="p">(</span><span class="n">now</span><span class="p">)</span>
+</span></code></pre></div>
+<p>The runner captures one timestamp per pass and shares it with everything, so a knob's idea of "now" matches the rest of the program.  The encoder belongs on every tick, since its <code>check()</code> is an attribute read and a subtraction.  An analog conversion costs more than that, and <code>period_ms</code> spaces those conversions out while still keeping up with any hand on the knob.</p>
+<h2 id="memory-notes">Memory notes<a class="headerlink" href="#memory-notes" title="Permanent link">&para;</a></h2>
+<p><code>check()</code> allocates nothing in steady state.  The readings are plain attributes written in place, and each source publishes its count as an attribute rather than through a call that builds a value.  A program can tick a knob forever without the heap growing.</p>
+<p>The MicroPython encoder source holds a three-slot <code>array.array</code> sized when the knob is built, registers one bound handler once, and keeps its decode table in flash as <code>bytes</code>, so a pulse arriving mid-tick writes small integers into slots that already exist.  Each pulse folds straight into the count, so those three integers are the whole of what the source keeps and there is nothing here for you to size.</p>
+<h2 id="testing">Testing<a class="headerlink" href="#testing" title="Permanent link">&para;</a></h2>
+<p><code>chumicro_knobs.testing</code> stands in for the hardware, so knob logic is an ordinary unit test with no board and no shaft to wear out:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_knobs</span><span class="w"> </span><span class="kn">import</span> <span class="n">Encoder</span>
+</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">chumicro_knobs.testing</span><span class="w"> </span><span class="kn">import</span> <span class="n">FakeEncoderSource</span>
+</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>
+</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a>
+</span><span id="__span-19-5"><a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a><span class="k">def</span><span class="w"> </span><span class="nf">test_the_volume_knob_stops_at_the_top</span><span class="p">():</span>
+</span><span id="__span-19-6"><a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a>    <span class="n">source</span> <span class="o">=</span> <span class="n">FakeEncoderSource</span><span class="p">()</span>
+</span><span id="__span-19-7"><a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a>    <span class="n">volume</span> <span class="o">=</span> <span class="n">Encoder</span><span class="p">(</span><span class="n">source</span><span class="o">=</span><span class="n">source</span><span class="p">,</span> <span class="n">bounds</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">10</span><span class="p">))</span>
+</span><span id="__span-19-8"><a id="__codelineno-19-8" name="__codelineno-19-8" href="#__codelineno-19-8"></a>
+</span><span id="__span-19-9"><a id="__codelineno-19-9" name="__codelineno-19-9" href="#__codelineno-19-9"></a>    <span class="n">source</span><span class="o">.</span><span class="n">turn</span><span class="p">(</span><span class="mi">25</span><span class="p">)</span>
+</span><span id="__span-19-10"><a id="__codelineno-19-10" name="__codelineno-19-10" href="#__codelineno-19-10"></a>    <span class="n">volume</span><span class="o">.</span><span class="n">check</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+</span><span id="__span-19-11"><a id="__codelineno-19-11" name="__codelineno-19-11" href="#__codelineno-19-11"></a>
+</span><span id="__span-19-12"><a id="__codelineno-19-12" name="__codelineno-19-12" href="#__codelineno-19-12"></a>    <span class="k">assert</span> <span class="n">volume</span><span class="o">.</span><span class="n">position</span> <span class="o">==</span> <span class="mi">10</span>
+</span></code></pre></div>
+<p>Turns queued before a single <code>check()</code> add up, which is how a test covers the fast spin during a stalled loop.  <code>FakeAnalogSource</code> does the same job for a potentiometer, with <code>set_raw()</code> parking the wiper wherever the test wants it.  The <a href="../testing/">testing page</a> goes further, including the deadband and what the fakes record.</p>
+<h2 id="platform-notes">Platform notes<a class="headerlink" href="#platform-notes" title="Permanent link">&para;</a></h2>
+<p>The API is identical on all three runtimes.  What changes underneath is how the turning gets counted:</p>
+<table>
+<thead>
+<tr>
+<th>Runtime</th>
+<th>Rotary encoder</th>
+<th>Analog knob</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CircuitPython</td>
+<td><code>rotaryio.IncrementalEncoder</code>, counting in the firmware's own C, which on RP2040 is a state machine in the PIO block</td>
+<td><code>analogio.AnalogIn</code>, sampled on the tick that asks</td>
+</tr>
+<tr>
+<td>MicroPython</td>
+<td>A pin interrupt on both signal pins, installed and owned by the library, decoding the pulse pattern with a small table</td>
+<td><code>machine.ADC.read_u16()</code>, sampled on the tick that asks</td>
+</tr>
+<tr>
+<td>CPython</td>
+<td>No GPIO exists, so <code>pin_a=</code> raises and points you at <code>FakeEncoderSource</code></td>
+<td>No GPIO exists, so <code>pin=</code> raises and points you at <code>FakeAnalogSource</code></td>
+</tr>
+</tbody>
+</table>
+<p>Counting an encoder outside the loop is what keeps a spin whole across a slow pass, and it is set up for you on both device runtimes.  An analog knob is sampled on the tick that asks for it on every runtime, because a voltage is whatever it is at the instant it is read, with no edge that could go by unseen.</p>
+<p>On CircuitPython the modules this builds on (<code>rotaryio</code>, <code>analogio</code>) are compiled into the firmware, so they cost nothing in your board's storage.  One detail there is worth knowing before you pick pins: on RP2040 boards <code>rotaryio</code> reads both signal pins with one PIO state machine, which requires them to be next to each other in GPIO numbering, so <code>board.GP16</code> and <code>board.GP17</code> work together while <code>board.GP16</code> and <code>board.GP20</code> do not.  Other CircuitPython ports and every MicroPython port take any two pins.</p>
+<h3 id="an-analog-knob-loses-some-travel-on-esp32">An analog knob loses some travel on ESP32<a class="headerlink" href="#an-analog-knob-loses-some-travel-on-esp32" title="Permanent link">&para;</a></h3>
+<p>A potentiometer across 3V3 sweeps the whole way on an RP2040 and loses a piece of its travel on an ESP32.  Which piece depends on the runtime, because the two read the converter differently.  One pot, one position, one board, swapped between runtimes:</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Sweep reached</th>
+<th>Steps of 100</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>RP2040, either runtime</td>
+<td>615 to 65535</td>
+<td>0 to 99</td>
+</tr>
+<tr>
+<td>ESP32-S2, CircuitPython</td>
+<td>1440 to 49787</td>
+<td>2 to 75</td>
+</tr>
+<tr>
+<td>ESP32-S2, MicroPython</td>
+<td>3796 to 65508</td>
+<td>5 to 99</td>
+</tr>
+</tbody>
+</table>
+<p>CircuitPython converts the reading to millivolts through a calibration table and then scales it as though 3.3 V were full scale.  The calibration straightens out the converter's low end, so the bottom of the sweep is honest, but an ESP32 stops reading around 2.5 V and the top quarter is never produced.  MicroPython scales the raw count straight onto sixteen bits instead, so whatever saturates the converter becomes 65535 and the top arrives, while the converter's offset at the bottom goes uncorrected and the first few steps do not.</p>
+<p>Neither is a fault in this library and the CircuitPython end is already known: Adafruit's board guides put the S2 and S3 ceiling near 51000 counts or 2.57 V, and CircuitPython carries an open bug reporting 51157 on an S2 against a full 65535 on an RP2040.  The exact figures vary between individual chips.</p>
+<p>The part that catches people is the shape of it.  A reading that runs out does not fade, it pins, so the last stretch of the knob's travel moves nothing while the number sits still and nothing raises.</p>
+<p>Measure the board in front of you rather than trusting the table: sweep from stop to stop and watch <code>raw</code>.  The numbers it stops at are your range.  Then ask for the steps you can reach:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="n">volume</span> <span class="o">=</span> <span class="n">AnalogKnob</span><span class="p">(</span><span class="n">board</span><span class="o">.</span><span class="n">IO9</span><span class="p">,</span> <span class="n">steps</span><span class="o">=</span><span class="mi">75</span><span class="p">)</span>      <span class="c1"># an S2 under CircuitPython</span>
+</span></code></pre></div>
+<p>Or feed the wiper from a divider that keeps it inside the range you measured, which costs resolution and buys back a sweep where every step means something.</p>
+<h2 id="examples">Examples<a class="headerlink" href="#examples" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Example</th>
+<th>What it shows</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://github.com/ChuMicro/ChuMicro/blob/main/libraries/knobs/examples/circuitpython_encoder_volume.py"><code>circuitpython_encoder_volume.py</code></a></td>
+<td>An encoder for volume and a potentiometer for brightness on CircuitPython (hardware)</td>
+</tr>
+<tr>
+<td><a href="https://github.com/ChuMicro/ChuMicro/blob/main/libraries/knobs/examples/micropython_encoder_volume.py"><code>micropython_encoder_volume.py</code></a></td>
+<td>The same two knobs on MicroPython (hardware)</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<div class="chumicro-footer">
+<p><a href="../">← Home</a></p>
+<p><a href="https://github.com/ChuMicro/ChuMicro/tree/main/libraries/knobs">Source</a> · \
+<a href="https://pypi.org/project/chumicro-knobs/">PyPI</a> · \
+<a href="https://github.com/ChuMicro/ChuMicro-Bundle">Bundle</a> · \
+<a href="https://github.com/ChuMicro/ChuMicro-Bundle-Experimental">Experimental Bundle</a></p>
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://zensical.org/" target="_blank" rel="noopener">
+      Zensical
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate":null,"base":"..","features":[],"search":"../assets/javascripts/workers/search.e2d2d235.min.js","tags":null,"translations":{"clipboard.copied":"Copied to clipboard","clipboard.copy":"Copy to clipboard","search.result.more.one":"1 more on this page","search.result.more.other":"# more on this page","search.result.none":"No matching documents","search.result.one":"1 matching document","search.result.other":"# matching documents","search.result.placeholder":"Type to start searching","search.result.term.missing":"Missing","select.version":"Select version"},"version":{"default":["stable","experimental"],"provider":"mike"}}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.dbc0afdc.min.js"></script>
+      
+    
+  </body>
+</html>
