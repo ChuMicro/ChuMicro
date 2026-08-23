@@ -306,6 +306,26 @@ And a rise-time check built from a Python polling loop resolves nothing under ab
 because each pass of the loop costs 20, so the numbers it produced were noise presented as
 evidence.
 
+##### Capture through real network blocks, Lolin S2 Mini
+
+The starved-loop runs above starved the loop with sleep; these starved it with real
+`wrap_socket` TLS handshakes and a blocking HTTPS read against a public host, the blocking
+shapes the workspace still carries.  The keypad's top-left key played a discrete button:
+its column driven low, its row watched by the capture interrupt.  On this bench the S2's
+grid sits on rows 3, 5, 7, 9 and columns 39, 37, 35, 33.
+
+A key held through five handshakes plus a 17 KB download, 12790 ms with no tick anywhere
+inside it, read `pressed` with `held_ms` 12919 at the first tick after, `overflowed` false.
+A held press survives any block, timed from its edge.
+
+Taps are sharper.  Steady tapping put 18 presses into each quiet 5 s window; during 1.7 to
+1.9 s handshake stalls the interrupt recorded presses stamped inside the stall, 3 in one
+window and 2 in the next, which is the esp32 scheduler pumping scheduled callbacks through
+the handshake's socket waits.  Those counts run under the quiet rate, so a handshake's
+compute-bound stretches can swallow a complete tap: capture holds through a block's I/O
+waits, not through its raw crypto math.  The polled matrix scan measured its documented
+cost exactly, 17 presses per quiet window and zero during every stall.
+
 ##### The key matrix on a real grid
 
 A 4x4 membrane keypad, eight unlabelled pins wired in no particular order, on a Pi Pico W
