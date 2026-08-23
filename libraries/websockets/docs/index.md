@@ -47,6 +47,21 @@ while client.state != WebSocketState.CLOSED:
 
 `wifi.adapter.radio` is the board radio on CircuitPython and `None` on MicroPython and CPython, where the connector needs no radio.  Bringing your own socket instead of `chumicro-sockets` works too: `transport_factory` takes any `(host, port, use_tls)` callable.
 
+In a program with more going on, hand the loop to `chumicro-runner`:
+
+```python
+from chumicro_runner import Runner
+
+runner = Runner()
+runner.add(client)
+
+while True:
+    now = runner.tick()
+    runner.wait(now)
+```
+
+`wait()` parks the CPU until frames arrive or the next ping is due.
+
 ## Documentation
 
 - [User Guide](guide.md): generator flows, client and server services, callbacks, bring-your-own transport, memory notes, and per-tick knobs

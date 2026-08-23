@@ -56,6 +56,21 @@ while True:
         server.handle(now)
 ```
 
+In a program with more going on, hand the loop to [`chumicro-runner`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner):
+
+```python
+from chumicro_runner import Runner
+
+runner = Runner()
+runner.add(server)
+
+while True:
+    now = runner.tick()
+    runner.wait(now)
+```
+
+`wait()` sleeps on the listening socket until a request arrives, which turns the loop from a busy spin into an idle one.
+
 ## What's included
 
 | Symbol | Purpose |
