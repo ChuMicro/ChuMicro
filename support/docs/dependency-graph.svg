@@ -44,6 +44,7 @@
   <line x1="465.0" y1="96" x2="905.0" y2="540" class="edge-strict" marker-end="url(#arrow-strict)" />
   <line x1="465.0" y1="96" x2="545.0" y2="540" class="edge-strict" marker-end="url(#arrow-strict)" />
   <line x1="585.0" y1="336" x2="545.0" y2="540" class="edge-strict" marker-end="url(#arrow-strict)" />
+  <line x1="985.0" y1="336" x2="545.0" y2="540" class="edge-strict" marker-end="url(#arrow-strict)" />
   <line x1="1005.0" y1="96" x2="905.0" y2="540" class="edge-strict" marker-end="url(#arrow-strict)" />
   <line x1="1005.0" y1="96" x2="545.0" y2="540" class="edge-strict" marker-end="url(#arrow-strict)" />
   <line x1="105.0" y1="96" x2="165.0" y2="300" class="edge-strict" marker-end="url(#arrow-strict)" />
@@ -59,6 +60,7 @@
   <line x1="645.0" y1="96" x2="585.0" y2="300" class="edge-di" marker-end="url(#arrow-di)" />
   <line x1="825.0" y1="96" x2="585.0" y2="300" class="edge-di" marker-end="url(#arrow-di)" />
   <line x1="1005.0" y1="96" x2="585.0" y2="300" class="edge-di" marker-end="url(#arrow-di)" />
+  <line x1="985.0" y1="300" x2="585.0" y2="336" class="edge-di" marker-end="url(#arrow-di)" />
   </g>
 
   <!-- Package boxes -->
@@ -102,6 +104,10 @@
   <g class="node default">
     <rect x="740" y="300" width="130" height="36" rx="6" ry="6" />
     <text x="805.0" y="323.0" text-anchor="middle">chumicro-buttons</text>
+  </g>
+  <g class="node default">
+    <rect x="920" y="300" width="130" height="36" rx="6" ry="6" />
+    <text x="985.0" y="323.0" text-anchor="middle">chumicro-screens</text>
   </g>
   <g class="node default">
     <rect x="140" y="540" width="130" height="36" rx="6" ry="6" />

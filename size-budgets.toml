@@ -79,6 +79,10 @@ mpy = 20141
 stripped = 21669
 mpy = 6831
 
+[screens]
+stripped = 2312
+mpy = 1268
+
 [sockets]
 stripped = 34164
 mpy = 15831

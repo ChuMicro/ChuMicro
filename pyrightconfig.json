@@ -19,6 +19,7 @@
     "libraries/ntp/src",
     "libraries/requests/src",
     "libraries/runner/src",
+    "libraries/screens/src",
     "libraries/sockets/src",
     "libraries/timing/src",
     "libraries/websockets/src",

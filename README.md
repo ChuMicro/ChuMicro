@@ -256,6 +256,7 @@ Each library installs independently and pulls in as little as possible.  Install
 | **[runner](libraries/runner/)** | The scheduler.  Register your services, call `runner.tick()` in your loop, everyone gets a turn.  `runner.wait()` idles the CPU between events. |
 | **[buttons](libraries/buttons/)** | Buttons, switches, and key matrices.  A press lands even when your loop is busy, and debouncing, long presses, auto-repeat, and click counting come with it. |
 | **[knobs](libraries/knobs/)** | Rotary encoders and analog knobs, read as a number that holds still.  A fast spin arrives whole; a parked wiper stops jittering. |
+| **[screens](libraries/screens/)** | Display flushing paced by the tick.  A full-frame bus transfer spreads across loop passes, so buttons and network keep their turn while pixels move. |
 | **[wifi](libraries/wifi/)** | One WiFi service for both device runtimes.  Connects, retries with backoff, reconnects on drop, and tells your app what changed. |
 | **[requests](libraries/requests/)** | HTTP/1.1 client.  A slow server or a TLS handshake never freezes your loop. |
 | **[http_server](libraries/http_server/)** | HTTP/1.1 server with a `@server.route` decorator.  TLS where the runtime supports it; the guide has the current map. |

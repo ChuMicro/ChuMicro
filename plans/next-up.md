@@ -12,7 +12,9 @@
 
 ## Next
 
-- [ ] **Display libraries: Decision 0125 accepted; implementation blocked on the bench hardware list.**  `chumicro-screens` (pixel panels, framebuf-shaped protocol over firmware framebuf/displayio) and `chumicro-segments` (segment controllers) enter `libraries/` via the `new-library` skill once the first-wave hardware set is named; drivers ship validated-only.
+- [ ] **Display libraries: `chumicro-screens` core landed; drivers wait on the bench.**  `ScreenService` (tick-paced flush over the duck-typed panel protocol, Decision 0125) shipped with tests, docs, and a simulated example.  Next slices, each gated on bench hardware: the GC9A01A round TFT driver (color RAM strategy per panel), then SSD1306/SH1106 I2C mono, PCD8544, and `chumicro-segments` (MAX7219).
+
+- [ ] **The `new-library` scaffold's testing.py stub carries the retired runtime marker.**  It emits `__chumicro_runtimes__ = ("cpython",)` where `.claude/rules/library-code.md` says `__chumicro_test_support__ = True` with no runtime marker; every shipped testing.py already uses the test-support marker.  Fix the template in `chumicro_workspace`'s scaffold payloads and check whether a CHU rule should catch the stale marker.
 
 - [ ] **`chumicro_test_harness.markers.marker` has no caller left.**  Decision 0123 moved every demo `app.py` to plain `print` for its `NAME key=value` lines, and the demos were the helper's only consumer; the sole remaining reference is `support/test_harness/tests/test_markers.py`.  Decide between deleting it with its lazy export in `chumicro_test_harness/__init__.py` and keeping it documented for people writing their own on-device tests.  Either way `markers.py` can join `_DEMO_UNUSED_HARNESS_MODULES` in `deploy_api.py`, which is flash back on a 256 KB board.  Note the guarantee that goes with it: `marker()` raised at develop time on a value carrying whitespace or `=`, where a hand-written print fails silently on the host parser instead.
 

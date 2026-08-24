@@ -18,6 +18,7 @@ Small, focused libraries for microcontrollers and laptops.  Every library instal
 | **[runner](runner/)** | The task scheduler.  Register your services, call `runner.tick()` in your loop, everyone gets a turn.  No async needed. |
 | **[buttons](buttons/)** | Debounced buttons, switches, and key matrices.  Presses are captured beneath your loop, so a tap lands even when the loop is busy elsewhere. |
 | **[knobs](knobs/)** | Rotary encoders and analog knobs.  Quadrature is counted outside your loop, and ADC readings are held still by a median, smoothing, and a deadband. |
+| **[screens](screens/)** | Paced display flushing.  Draw the frame, call `show()`, and the flush crosses the bus one bounded transfer per tick instead of stalling the loop. |
 | **[compat](compat/)** | Standard-library features that CircuitPython and MicroPython are missing (like `functools.partial`). |
 | **[msgpack](msgpack/)** | Compact binary serialization, smaller than JSON for typical payloads.  Good for settings and sensor data.  Wire-compatible with PyPI `msgpack(use_single_float=True)`. |
 | **[config](config/)** | Type-checked runtime config with a shared dotted-key shape (`wifi.ssid`, `mqtt.broker.host`); each library reads its settings via `<Name>Config.from_config(...)`. |
@@ -44,7 +45,7 @@ Each library's own README has a one-line install command for that library.
 The stack runs roughly bottom-up:
 
 - **Primitives:** `timing`, `runner`.  Depended on by most others.
-- **Physical input:** `buttons`, `knobs`.
+- **Physical input and output:** `buttons`, `knobs`, `screens`.
 - **Persistence and serialization:** `msgpack`, `config`, `kvstore`.
 - **Networking transport and protocols:** `wifi` (link), `sockets` (TCP / TLS / UDP), then the app protocols `ntp`, `requests`, `http_server`, `websockets`, and `mqtt`.
 
@@ -60,6 +61,7 @@ The SVG is regenerated from each library's pyproject.toml by [`scripts/render_de
 - **"I have multiple things happening in my loop"** → [runner](runner/) (includes timing)
 - **"I need a button that doesn't miss presses"** → [buttons](buttons/)
 - **"I need a rotary encoder or a potentiometer read cleanly"** → [knobs](knobs/)
+- **"I need a display refresh that doesn't freeze my loop"** → [screens](screens/)
 - **"I need to store settings or send data compactly"** → [msgpack](msgpack/)
 - **"I need to read deploy-time config on the device"** → [config](config/) (with [msgpack](msgpack/))
 - **"I need to persist a counter across reboots"** → [kvstore](kvstore/)
