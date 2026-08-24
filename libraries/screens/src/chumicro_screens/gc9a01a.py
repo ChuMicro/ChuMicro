@@ -1,13 +1,21 @@
-"""GC9A01A driver: a 240x240 round color TFT as a chumicro-screens panel.
+"""GC9A01A drivers: a 240x240 round color TFT as chumicro-screens panels.
 
-The driver owns a full RGB565 frame buffer (115,200 bytes), so it needs
-a board whose free heap holds one; PSRAM-class boards qualify, 256 KB
-boards do not.  Drawing happens on ``frame``, a
-``framebuf.FrameBuffer`` in RGB565, at C speed.  ``flush()`` is the
-ScreenService panel protocol: each advance sends one strip of
-``transfer_rows`` rows as a self-contained transfer (window, then
-memory write), so a full frame spreads across ticks instead of
-blocking one.
+Two panel classes share the bus protocol and initialization sequence
+and differ in how the frame lives in RAM:
+
+- ``GC9A01A`` owns a full RGB565 frame buffer (115,200 bytes) and
+  needs a board whose free heap holds one; PSRAM-class boards
+  qualify.  Drawing happens at 16-bit depth.
+- ``GC9A01AIndexed`` owns an 8-bit indexed frame (57,600 bytes) plus
+  a 256-entry RGB565 palette, fitting 256 KB-class boards.  Each
+  flush advance expands one strip through the palette with
+  ``FrameBuffer.blit``, which converts at C speed.
+
+Either way drawing happens on ``frame``, a ``framebuf.FrameBuffer``,
+and ``flush()`` is the ScreenService panel protocol: each advance
+sends one strip of ``transfer_rows`` rows as a self-contained
+transfer (window, then memory write), so a full frame spreads across
+ticks instead of blocking one.
 
 Construction blocks about 350 ms while the panel resets and runs its
 initialization sequence.
@@ -79,6 +87,80 @@ def _sleep_ms(duration_ms: int) -> None:
     time.sleep(duration_ms / 1000)
 
 
+def _reset_panel(reset: object, sleep_ms: object) -> None:
+    """Pulse the reset line low, then hold high through panel wake-up."""
+    reset(1)
+    sleep_ms(5)
+    reset(0)
+    sleep_ms(20)
+    reset(1)
+    sleep_ms(150)
+
+
+def _run_init(spi: object, chip_select: object, data_command: object,
+              sleep_ms: object) -> None:
+    """Walk the initialization sequence, honoring its embedded delays."""
+    sequence = _INIT_SEQUENCE
+    index = 0
+    while index < len(sequence):
+        command_byte = sequence[index]
+        control = sequence[index + 1]
+        count = control & 0x7F
+        _write_command(spi, chip_select, data_command, command_byte,
+                       sequence[index + 2:index + 2 + count])
+        index += 2 + count
+        if control & 0x80:
+            sleep_ms(sequence[index])
+            index += 1
+
+
+def _write_command(spi: object, chip_select: object, data_command: object,
+                   command_byte: int, data: bytes) -> None:
+    """Send one command with its data bytes; init path only, allocates."""
+    chip_select(0)
+    data_command(0)
+    spi.write(bytes((command_byte,)))
+    if data:
+        data_command(1)
+        spi.write(data)
+    chip_select(1)
+
+
+def _write_strip(spi: object, chip_select: object, data_command: object,
+                 row_window: bytes, strip_view: memoryview) -> None:
+    """One self-contained transfer: window commands, then pixel data."""
+    chip_select(0)
+    data_command(0)
+    spi.write(_COLUMN_ADDRESS_COMMAND)
+    data_command(1)
+    spi.write(_FULL_WIDTH_WINDOW)
+    data_command(0)
+    spi.write(_ROW_ADDRESS_COMMAND)
+    data_command(1)
+    spi.write(row_window)
+    data_command(0)
+    spi.write(_MEMORY_WRITE_COMMAND)
+    data_command(1)
+    spi.write(strip_view)
+    chip_select(1)
+
+
+def _strip_bounds(transfer_rows: int) -> list:
+    """Split 240 rows into ``(row_start, row_count, window)`` strips."""
+    strips = []
+    row_start = 0
+    while row_start < HEIGHT:
+        row_count = transfer_rows
+        if row_start + row_count > HEIGHT:
+            row_count = HEIGHT - row_start
+        row_end = row_start + row_count - 1
+        window = bytes((row_start >> 8, row_start & 0xFF,
+                        row_end >> 8, row_end & 0xFF))
+        strips.append((row_start, row_count, window))
+        row_start += row_count
+    return strips
+
+
 class GC9A01A:
     """Round TFT panel: draw on ``frame``, flush through ScreenService.
 
@@ -117,97 +199,121 @@ class GC9A01A:
         self.width = WIDTH
         self.height = HEIGHT
         self._buffer = bytearray(WIDTH * HEIGHT * 2)
-        self._buffer_view = memoryview(self._buffer)
+        buffer_view = memoryview(self._buffer)
         # Construction-time import: keeps the module importable on
         # CPython, where framebuf does not exist.
         import framebuf
         self.frame = framebuf.FrameBuffer(self._buffer, WIDTH, HEIGHT,
                                           framebuf.RGB565)
-        self._strips = self._build_strips(transfer_rows)
+        self._strips = [
+            (window, buffer_view[row_start * _ROW_BYTES:
+                                 (row_start + row_count) * _ROW_BYTES])
+            for row_start, row_count, window in _strip_bounds(transfer_rows)]
         if sleep_ms is None:
             sleep_ms = _sleep_ms
-        self._reset_panel(sleep_ms)
-        self._run_init(sleep_ms)
-
-    def _build_strips(self, transfer_rows: int) -> list:
-        """Precompute each strip's row window and buffer view once."""
-        strips = []
-        row_start = 0
-        while row_start < HEIGHT:
-            row_count = transfer_rows
-            if row_start + row_count > HEIGHT:
-                row_count = HEIGHT - row_start
-            row_end = row_start + row_count - 1
-            window = bytes((row_start >> 8, row_start & 0xFF,
-                            row_end >> 8, row_end & 0xFF))
-            offset = row_start * _ROW_BYTES
-            view = self._buffer_view[offset:offset + row_count * _ROW_BYTES]
-            strips.append((window, view))
-            row_start += row_count
-        return strips
-
-    def _reset_panel(self, sleep_ms: object) -> None:
-        reset = self._reset
-        reset(1)
-        sleep_ms(5)
-        reset(0)
-        sleep_ms(20)
-        reset(1)
-        sleep_ms(150)
-
-    def _run_init(self, sleep_ms: object) -> None:
-        sequence = _INIT_SEQUENCE
-        index = 0
-        while index < len(sequence):
-            command_byte = sequence[index]
-            control = sequence[index + 1]
-            count = control & 0x7F
-            self._write_command(command_byte,
-                                sequence[index + 2:index + 2 + count])
-            index += 2 + count
-            if control & 0x80:
-                sleep_ms(sequence[index])
-                index += 1
-
-    def _write_command(self, command_byte: int, data: bytes) -> None:
-        """Send one command with its data bytes; init path only, allocates."""
-        chip_select = self._chip_select
-        data_command = self._data_command
-        spi = self._spi
-        chip_select(0)
-        data_command(0)
-        spi.write(bytes((command_byte,)))
-        if data:
-            data_command(1)
-            spi.write(data)
-        chip_select(1)
+        _reset_panel(reset, sleep_ms)
+        _run_init(spi, chip_select, data_command, sleep_ms)
 
     def flush(self) -> object:
         """Send the frame one strip per advance; the panel protocol."""
-        write_strip = self._write_strip
+        spi = self._spi
+        chip_select = self._chip_select
+        data_command = self._data_command
         first = True
         for window, view in self._strips:
             if not first:
                 yield
             first = False
-            write_strip(window, view)
+            _write_strip(spi, chip_select, data_command, window, view)
 
-    def _write_strip(self, row_window: bytes, strip_view: memoryview) -> None:
-        """One self-contained transfer: window commands, then pixel data."""
+
+class GC9A01AIndexed:
+    """Round TFT panel for 256 KB-class boards: 8-bit frame, palette.
+
+    The full-color :class:`GC9A01A` frame is 115,200 bytes; this
+    variant holds the frame at one byte per pixel (57,600 bytes) plus
+    a 256-entry palette, about half the RAM, so a Pico W-class heap
+    fits it.  Drawing on ``frame`` uses palette indexes as colors:
+    assign an index a color with ``set_color``, then draw with the
+    index.  Index 0 starts black.
+
+    Each flush advance expands one strip of ``transfer_rows`` rows
+    through the palette into a small RGB565 strip buffer with
+    ``FrameBuffer.blit``, which runs the conversion in C, then sends
+    the strip.  Bus wiring and injection match :class:`GC9A01A`.
+
+    Construct early: the 57,600-byte frame needs a contiguous block,
+    which a fragmented heap may no longer hold.
+
+    Args:
+        spi: SPI bus wired to the panel, clock and data lines.
+        chip_select: Output pin on the panel's CS line.
+        data_command: Output pin on the panel's DC line.
+        reset: Output pin on the panel's RST line.
+        transfer_rows: Rows sent per flush advance, 1 to 240.
+        sleep_ms: Millisecond-sleep callable used during panel init.
+            Defaults to the real clock.
+    """
+
+    def __init__(self, spi: object, chip_select: object, data_command: object,
+                 reset: object, *, transfer_rows: int = 10,
+                 sleep_ms: object | None = None) -> None:
+        if not 1 <= transfer_rows <= HEIGHT:
+            raise ValueError("transfer_rows must be 1 to 240")
+        self._spi = spi
+        self._chip_select = chip_select
+        self._data_command = data_command
+        self._reset = reset
+        self.width = WIDTH
+        self.height = HEIGHT
+        self._buffer = bytearray(WIDTH * HEIGHT)
+        # Construction-time import: keeps the module importable on
+        # CPython, where framebuf does not exist.
+        import framebuf
+        self.frame = framebuf.FrameBuffer(self._buffer, WIDTH, HEIGHT,
+                                          framebuf.GS8)
+        strip_buffer = bytearray(transfer_rows * _ROW_BYTES)
+        strip_view = memoryview(strip_buffer)
+        self._strip_frame = framebuf.FrameBuffer(strip_buffer, WIDTH,
+                                                 transfer_rows,
+                                                 framebuf.RGB565)
+        self._palette_frame = framebuf.FrameBuffer(bytearray(256 * 2), 256, 1,
+                                                   framebuf.RGB565)
+        self._strips = [
+            (row_start, window, strip_view[:row_count * _ROW_BYTES])
+            for row_start, row_count, window in _strip_bounds(transfer_rows)]
+        if sleep_ms is None:
+            sleep_ms = _sleep_ms
+        _reset_panel(reset, sleep_ms)
+        _run_init(spi, chip_select, data_command, sleep_ms)
+
+    def set_color(self, index: int, red: int, green: int, blue: int) -> None:
+        """Assign palette entry ``index`` the given 8-bit channels.
+
+        Drawing ``index`` on ``frame`` renders this color from the
+        next flush on; already-drawn pixels holding the index change
+        with it.
+
+        Args:
+            index: Palette slot, 0 to 255.
+            red: Red channel, 0 to 255.
+            green: Green channel, 0 to 255.
+            blue: Blue channel, 0 to 255.
+        """
+        self._palette_frame.pixel(index, 0, color565(red, green, blue))
+
+    def flush(self) -> object:
+        """Expand and send one strip per advance; the panel protocol."""
         spi = self._spi
         chip_select = self._chip_select
         data_command = self._data_command
-        chip_select(0)
-        data_command(0)
-        spi.write(_COLUMN_ADDRESS_COMMAND)
-        data_command(1)
-        spi.write(_FULL_WIDTH_WINDOW)
-        data_command(0)
-        spi.write(_ROW_ADDRESS_COMMAND)
-        data_command(1)
-        spi.write(row_window)
-        data_command(0)
-        spi.write(_MEMORY_WRITE_COMMAND)
-        data_command(1)
-        spi.write(strip_view)
-        chip_select(1)
+        frame = self.frame
+        strip_frame = self._strip_frame
+        palette_frame = self._palette_frame
+        first = True
+        for row_start, window, view in self._strips:
+            if not first:
+                yield
+            first = False
+            strip_frame.blit(frame, 0, -row_start, -1, palette_frame)
+            _write_strip(spi, chip_select, data_command, window, view)

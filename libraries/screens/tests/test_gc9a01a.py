@@ -11,9 +11,16 @@ import sys
 
 
 class _FramebufStub:
-    """Stand-in for ``framebuf`` on host runtimes that lack it."""
+    """Stand-in for ``framebuf`` on host runtimes that lack it.
+
+    ``pixel`` and ``blit`` implement the one conversion the drivers
+    use, a GS8 source through a 256-entry palette into an RGB565
+    destination, with real clipping, so tests assert on the bytes the
+    driver puts on the bus rather than on stub bookkeeping.
+    """
 
     RGB565 = 1
+    GS8 = 2
 
     class FrameBuffer:
         def __init__(self, buffer, width, height, pixel_format):
@@ -22,11 +29,38 @@ class _FramebufStub:
             self.height = height
             self.pixel_format = pixel_format
 
+        # framebuf's own signature names the coordinates x and y.
+        def pixel(self, x, y, value):  # noqa: CHU001
+            offset = (y * self.width + x) * 2
+            self.buffer[offset] = value & 0xFF
+            self.buffer[offset + 1] = value >> 8
+
+        # framebuf's own signature names the coordinates x and y.
+        def blit(self, source, x, y, key=-1, palette=None):  # noqa: CHU001
+            for source_y in range(source.height):
+                dest_y = y + source_y
+                if not 0 <= dest_y < self.height:
+                    continue
+                for source_x in range(source.width):
+                    dest_x = x + source_x
+                    if not 0 <= dest_x < self.width:
+                        continue
+                    value = source.buffer[source_y * source.width + source_x]
+                    if value == key:
+                        continue
+                    if palette is not None:
+                        entry = value * 2
+                        value = (palette.buffer[entry]
+                                 | (palette.buffer[entry + 1] << 8))
+                    offset = (dest_y * self.width + dest_x) * 2
+                    self.buffer[offset] = value & 0xFF
+                    self.buffer[offset + 1] = value >> 8
+
 
 sys.modules.setdefault("framebuf", _FramebufStub())
 
 from chumicro_screens import ScreenService  # noqa: E402
-from chumicro_screens.gc9a01a import GC9A01A, color565  # noqa: E402
+from chumicro_screens.gc9a01a import GC9A01A, GC9A01AIndexed, color565  # noqa: E402
 from chumicro_test_harness import raises, skip  # noqa: E402
 from chumicro_timing.testing import FakeTicks  # noqa: E402
 
@@ -44,6 +78,22 @@ def _skip_unless_frame_buffer_headroom() -> None:
             "GC9A01A owns a 115,200 B RGB565 frame buffer; exceeds "
             "264 KB-board headroom (intrinsic allocation); validated "
             "on PSRAM + CPython",
+        )
+
+
+def _skip_unless_indexed_headroom() -> None:
+    """Loud-skip when the indexed frame plus recorded strips overflow."""
+    try:
+        import gc
+
+        free = gc.mem_free()
+    except (ImportError, AttributeError):
+        return  # CPython has no gc.mem_free; run the test.
+    if free < 400_000:
+        skip(
+            "GC9A01AIndexed tests hold the 57,600 B frame plus every "
+            "strip FakeSpi records; the driver itself fits a 264 KB "
+            "board and the bench validates it there",
         )
 
 
@@ -198,3 +248,101 @@ def test_color565_packs_channels_in_bus_byte_order() -> None:
     assert color565(0, 0, 255) == 0x1F00
     assert color565(255, 255, 255) == 0xFFFF
     assert color565(0, 0, 0) == 0x0000
+
+
+def make_indexed_panel(transfer_rows: int = 10) -> tuple:
+    spi = FakeSpi()
+    reset = FakePin()
+    delays = DelayRecorder()
+    panel = GC9A01AIndexed(spi, FakePin(), FakePin(), reset,
+                           transfer_rows=transfer_rows, sleep_ms=delays)
+    return panel, spi, delays, reset
+
+
+def test_indexed_construction_resets_then_inits() -> None:
+    """Reset and init match the full-color driver; the frame is 8-bit."""
+    _skip_unless_indexed_headroom()
+    panel, spi, delays, reset = make_indexed_panel()
+    assert reset.states == [1, 0, 1]
+    assert delays.delays == [5, 20, 150, 120, 20]
+    assert spi.writes[0] == b"\xfe"
+    assert spi.writes[-1] == b"\x29"
+    assert len(spi.writes) == 34
+    assert len(panel._buffer) == 240 * 240
+    assert panel.width == 240
+    assert panel.height == 240
+
+
+def test_indexed_transfer_rows_bounds() -> None:
+    """transfer_rows outside 1..240 is refused."""
+    with raises(ValueError):
+        make_indexed_panel(transfer_rows=0)
+    with raises(ValueError):
+        make_indexed_panel(transfer_rows=241)
+
+
+def test_indexed_flush_expands_through_the_palette() -> None:
+    """Drawn indexes leave the bus as their palette's RGB565 bytes."""
+    _skip_unless_indexed_headroom()
+    panel, spi, delays, reset = make_indexed_panel(transfer_rows=60)
+    panel.set_color(7, 255, 0, 0)
+    panel._buffer[0] = 7
+    panel._buffer[1] = 7
+    base = len(spi.writes)
+    flush = panel.flush()
+    next(flush)
+    strip = spi.writes[base:]
+    assert strip[0] == b"\x2a"
+    assert strip[1] == b"\x00\x00\x00\xef"
+    assert strip[2] == b"\x2b"
+    assert strip[3] == b"\x00\x00\x00\x3b"
+    assert strip[4] == b"\x2c"
+    assert len(strip[5]) == 60 * 480
+    assert strip[5][:4] == b"\xf8\x00\xf8\x00"
+    assert strip[5][4:6] == b"\x00\x00"
+
+
+def test_indexed_palette_edit_recolors_drawn_pixels() -> None:
+    """A set_color after drawing changes what the next flush sends."""
+    _skip_unless_indexed_headroom()
+    panel, spi, delays, reset = make_indexed_panel(transfer_rows=60)
+    panel.set_color(5, 255, 0, 0)
+    panel._buffer[60 * 240] = 5
+    flush = panel.flush()
+    next(flush)
+    panel.set_color(5, 0, 0, 255)
+    base = len(spi.writes)
+    next(flush)
+    assert spi.writes[base + 5][:2] == b"\x00\x1f"
+    assert spi.writes[base + 3] == b"\x00\x3c\x00\x77"
+
+
+def test_indexed_partial_last_strip() -> None:
+    """240 rows in 100-row strips ends with a 40-row strip."""
+    _skip_unless_indexed_headroom()
+    panel, spi, delays, reset = make_indexed_panel(transfer_rows=100)
+    base = len(spi.writes)
+    flush = panel.flush()
+    while True:
+        try:
+            next(flush)
+        except StopIteration:
+            break
+    data_lengths = [len(write) for write in spi.writes[base:]
+                    if len(write) > 4]
+    assert data_lengths == [100 * 480, 100 * 480, 40 * 480]
+    assert spi.writes[base + 15] == b"\x00\xc8\x00\xef"
+
+
+def test_indexed_frame_completes_under_screen_service() -> None:
+    """ScreenService drives one indexed frame to done in four handles."""
+    _skip_unless_indexed_headroom()
+    panel, spi, delays, reset = make_indexed_panel(transfer_rows=60)
+    service = ScreenService(panel, refresh_interval_ms=0, ticks=FakeTicks())
+    base = len(spi.writes)
+    service.show()
+    for tick in range(4):
+        assert service.check(tick) is True
+        service.handle(tick)
+    assert service.check(5) is False
+    assert len(spi.writes) - base == 4 * 6

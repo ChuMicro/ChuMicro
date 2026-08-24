@@ -650,6 +650,29 @@ maps every primary onto another clean primary.
 
 Reference implementation: `chumicro_screens.gc9a01a.color565`.
 
+## Indexed frames convert at C speed through blit's palette, not viper
+
+When a full-color frame buffer exceeds a 256 KB board's heap, hold the
+frame at `framebuf.GS8` (one byte per pixel) plus a palette that is
+itself a FrameBuffer: 256 x 1 in the destination format.
+`destination.blit(frame, 0, -row_start, -1, palette)` then expands one
+strip per flush advance, mapping every source byte through the palette
+in C (`modframebuf.c` reads `palette.pixel(value, 0)` per pixel), and
+clipping to the destination bounds so only the strip's pixels are
+touched.  A 240 x 10 strip expands in well under a millisecond where
+the equivalent Python loop takes tens of milliseconds.  Bonus: editing
+a palette entry recolors every drawn pixel holding that index on the
+next flush.
+
+Reach for viper only after this fails, because viper code anywhere in
+a module breaks arch-neutral compilation: `mpy-cross` without `-march`
+refuses it (`SyntaxError: invalid arch`, measured on 1.27.0), which
+fails the `check-size` gate and would force the bundle's `.mpy`
+channel per-arch.  A nested def keeps CPython imports working but not
+`mpy-cross`, which compiles the whole file.
+
+Reference implementation: `chumicro_screens.gc9a01a.GC9A01AIndexed`.
+
 When a module exists on CPython but not on MicroPython/CircuitPython
 (or vice versa), write a thin shim with runtime detection.
 

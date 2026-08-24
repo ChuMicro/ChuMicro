@@ -114,6 +114,70 @@ RGB565 literal renders the wrong color.  Construction blocks about
 10-row strip, measured at 3.3 ms average on a LOLIN S2 Mini at
 40 MHz, and a full frame crosses in 24 advances.
 
+## The round TFT on 256 KB boards
+
+`GC9A01AIndexed` drives the same panel from boards whose heap cannot
+hold a 115 KB frame.  The frame is one byte per pixel (57,600 bytes)
+plus a 256-entry palette: assign an index a color with `set_color`,
+then draw with the index.  Each flush advance expands one strip
+through the palette with `FrameBuffer.blit`, which converts at C
+speed, then sends it:
+
+```python
+from machine import SPI, Pin
+from chumicro_screens import ScreenService
+from chumicro_screens.gc9a01a import GC9A01AIndexed
+
+spi = SPI(0, baudrate=40_000_000, polarity=0, phase=0,
+          sck=Pin(6), mosi=Pin(7), miso=Pin(4))
+panel = GC9A01AIndexed(spi,
+                       Pin(5, Pin.OUT, value=1),   # CS
+                       Pin(8, Pin.OUT, value=0),   # DC
+                       Pin(9, Pin.OUT, value=1))   # RST
+screen = ScreenService(panel, refresh_interval_ms=100)
+
+BLACK, WHITE = 0, 1
+panel.set_color(WHITE, 255, 255, 255)
+panel.frame.fill(BLACK)
+panel.frame.text("hello", 100, 116, WHITE)
+screen.show()
+```
+
+Editing a palette entry recolors every drawn pixel holding that index
+from the next flush on, which makes theme swaps and blink effects one
+`set_color` call instead of a redraw.  Construct the panel early: the
+frame needs one contiguous 57,600-byte block, which a fragmented heap
+may no longer hold.
+
+## The round TFT on CircuitPython
+
+CircuitPython renders displays in firmware, so the panel plugs into
+displayio instead of ScreenService: `make_display` feeds the panel's
+initialization sequence into `busdisplay.BusDisplay` and the firmware
+repaints changed regions in the background, inside the tick budget.
+The app owns the bus and injects it:
+
+```python
+import board
+import busio
+import displayio
+import fourwire
+from chumicro_screens.gc9a01a_displayio import make_display
+
+displayio.release_displays()
+spi = busio.SPI(clock=board.IO7, MOSI=board.IO11)
+display = make_display(fourwire.FourWire(
+    spi, command=board.IO9, chip_select=board.IO12,
+    reset=board.IO5, baudrate=40_000_000))
+
+group = displayio.Group()
+display.root_group = group   # build the scene with displayio
+```
+
+From there everything is standard displayio: bitmaps, palettes, tile
+grids, and groups.  There is no byte-order trap on this path; the
+firmware's color converter handles the panel's byte order.
+
 ## Runner pattern
 
 `ScreenService` implements `check(now_ms)` / `handle(now_ms)`, so it registers like any other service, and `next_deadline(now_ms)` lets `runner.wait()` sleep until the next flush is actually due:
@@ -162,7 +226,7 @@ assert panel.flushes_completed == 1
 
 ## Platform notes
 
-The service behaves identically on CPython, MicroPython, and CircuitPython.  Panel drivers are where the runtimes differ: a MicroPython framebuf driver pages its frame across advances, while a CircuitPython displayio panel refreshes in the background and its flush is a single advance.  Hardware drivers are added per controller as each passes bench validation; `GC9A01A` is MicroPython-only today, with the displayio path queued.
+The service behaves identically on CPython, MicroPython, and CircuitPython.  Panel drivers are where the runtimes differ: on MicroPython the framebuf drivers (`GC9A01A`, `GC9A01AIndexed`) page their frame across advances under ScreenService, while on CircuitPython `make_display` hands the panel to displayio and the firmware owns refresh with no service in the loop.  Hardware drivers are added per controller as each passes bench validation.
 
 ## Examples
 
@@ -170,6 +234,8 @@ The service behaves identically on CPython, MicroPython, and CircuitPython.  Pan
 |---|---|
 | [`paced_flush.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/screens/examples/paced_flush.py) | A three-row frame flushing one row per loop pass, simulated on CPython |
 | [`micropython_gc9a01a_round.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/screens/examples/micropython_gc9a01a_round.py) | A seconds counter on the round TFT, redrawn once a second while the loop stays live (MicroPython hardware) |
+| [`micropython_gc9a01a_indexed.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/screens/examples/micropython_gc9a01a_indexed.py) | The same counter from a Pi Pico W through the indexed driver (MicroPython hardware) |
+| [`circuitpython_gc9a01a_round.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/screens/examples/circuitpython_gc9a01a_round.py) | A color card on the round TFT via displayio, with a blinking notch proving live refresh (CircuitPython hardware) |
 
 ---
 

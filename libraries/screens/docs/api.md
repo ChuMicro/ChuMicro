@@ -8,6 +8,10 @@
 
 ::: chumicro_screens.gc9a01a
 
+## `chumicro_screens.gc9a01a_displayio`
+
+::: chumicro_screens.gc9a01a_displayio
+
 ## `chumicro_screens.testing`
 
 ::: chumicro_screens.testing

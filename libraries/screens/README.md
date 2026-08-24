@@ -75,7 +75,9 @@ for loop_pass in range(4):
 | Symbol | Description |
 |---|---|
 | `chumicro_screens.gc9a01a.GC9A01A` | 240x240 round color TFT over SPI (MicroPython; needs a PSRAM-class board for its 115 KB frame buffer) |
+| `chumicro_screens.gc9a01a.GC9A01AIndexed` | The same panel at one byte per pixel plus a 256-entry palette, fitting 256 KB-class boards (MicroPython) |
 | `chumicro_screens.gc9a01a.color565(red, green, blue)` | Pack a color for the driver's `frame` drawing methods |
+| `chumicro_screens.gc9a01a_displayio.make_display(display_bus)` | The panel as a displayio `BusDisplay` (CircuitPython; the firmware owns refresh, no ScreenService involved) |
 
 ### Testing
 
@@ -93,7 +95,7 @@ Works on CPython, MicroPython, and CircuitPython.
 
 ### Drivers ship after bench validation
 
-Per-controller drivers are added as each passes validation on real boards.  First on the bench: `GC9A01A` (MicroPython, validated on a LOLIN S2 Mini; a 10-row strip averages 3.3 ms at 40 MHz SPI).  Its CircuitPython path via displayio, and reduced-RAM strategies for 256 KB boards, are queued.  Writing your own panel is one method: `flush()` returning an iterator that does one bounded bus transfer per advance.
+Per-controller drivers are added as each passes validation on real boards.  First on the bench: `GC9A01A` (MicroPython, validated on a LOLIN S2 Mini; a 10-row strip averages 3.3 ms at 40 MHz SPI).  `GC9A01AIndexed` carries the same panel onto 256 KB-class boards, and `gc9a01a_displayio.make_display` is the CircuitPython path.  Writing your own panel is one method: `flush()` returning an iterator that does one bounded bus transfer per advance.
 
 ## Examples
 
@@ -101,6 +103,8 @@ Per-controller drivers are added as each passes validation on real boards.  Firs
 |---|---|
 | [`paced_flush.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/screens/examples/paced_flush.py) | A three-row frame flushing one row per loop pass on CPython, no hardware needed |
 | [`micropython_gc9a01a_round.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/screens/examples/micropython_gc9a01a_round.py) | A seconds counter on the round TFT, redrawn once a second while the loop stays live (MicroPython hardware) |
+| [`micropython_gc9a01a_indexed.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/screens/examples/micropython_gc9a01a_indexed.py) | The same counter from a Pi Pico W through the indexed driver (MicroPython hardware) |
+| [`circuitpython_gc9a01a_round.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/screens/examples/circuitpython_gc9a01a_round.py) | A color card on the round TFT via displayio, with a blinking notch proving live refresh (CircuitPython hardware) |
 
 ## Contributing
 
