@@ -101,13 +101,13 @@ class GC9A01A:
         data_command: Output pin on the panel's DC line.
         reset: Output pin on the panel's RST line.
         transfer_rows: Rows sent per flush advance, 1 to 240.
-        delay_ms: Millisecond-sleep callable used during panel init.
+        sleep_ms: Millisecond-sleep callable used during panel init.
             Defaults to the real clock.
     """
 
     def __init__(self, spi: object, chip_select: object, data_command: object,
                  reset: object, *, transfer_rows: int = 10,
-                 delay_ms: object | None = None) -> None:
+                 sleep_ms: object | None = None) -> None:
         if not 1 <= transfer_rows <= HEIGHT:
             raise ValueError("transfer_rows must be 1 to 240")
         self._spi = spi
@@ -124,10 +124,10 @@ class GC9A01A:
         self.frame = framebuf.FrameBuffer(self._buffer, WIDTH, HEIGHT,
                                           framebuf.RGB565)
         self._strips = self._build_strips(transfer_rows)
-        if delay_ms is None:
-            delay_ms = _sleep_ms
-        self._reset_panel(delay_ms)
-        self._run_init(delay_ms)
+        if sleep_ms is None:
+            sleep_ms = _sleep_ms
+        self._reset_panel(sleep_ms)
+        self._run_init(sleep_ms)
 
     def _build_strips(self, transfer_rows: int) -> list:
         """Precompute each strip's row window and buffer view once."""
@@ -146,16 +146,16 @@ class GC9A01A:
             row_start += row_count
         return strips
 
-    def _reset_panel(self, delay_ms: object) -> None:
+    def _reset_panel(self, sleep_ms: object) -> None:
         reset = self._reset
         reset(1)
-        delay_ms(5)
+        sleep_ms(5)
         reset(0)
-        delay_ms(20)
+        sleep_ms(20)
         reset(1)
-        delay_ms(150)
+        sleep_ms(150)
 
-    def _run_init(self, delay_ms: object) -> None:
+    def _run_init(self, sleep_ms: object) -> None:
         sequence = _INIT_SEQUENCE
         index = 0
         while index < len(sequence):
@@ -166,7 +166,7 @@ class GC9A01A:
                                 sequence[index + 2:index + 2 + count])
             index += 2 + count
             if control & 0x80:
-                delay_ms(sequence[index])
+                sleep_ms(sequence[index])
                 index += 1
 
     def _write_command(self, command_byte: int, data: bytes) -> None:

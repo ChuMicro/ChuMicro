@@ -91,6 +91,7 @@ NODES: dict[str, tuple[int, int]] = {
     # Standalone cluster (top-left of foundation row, no edges).
     "compat":      (40,   640),
     "knobs":       (220,  640),
+    "charlcd":     (400,  640),
 }
 
 # Workbench layout: composers on top, primitives below, lint-only

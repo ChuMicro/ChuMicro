@@ -3,17 +3,15 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "{distribution}"
+name = "chumicro-charlcd"
 dynamic = ["version"]
-# TODO: replace with a one-line description; rendered on the docs landing page
-# and on PyPI. An empty value renders as an empty card.
-description = ""
+description = "HD44780 character LCDs behind PCF8574 I2C backpacks; one driver for CircuitPython and MicroPython"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [
-    {{ name = "{author}" }},
+    { name = "ChuMicro" },
 ]
 keywords = [
     "circuitpython", "micropython", "microcontroller", "embedded",
@@ -35,7 +33,14 @@ test = [
     "chumicro-test-harness",
 ]
 
-{project_urls}[tool.hatch.version]
+[project.urls]
+Homepage = "https://github.com/ChuMicro/ChuMicro"
+Documentation = "https://chumicro.com/ChuMicro/charlcd/stable/"
+Source = "https://github.com/ChuMicro/ChuMicro/tree/main/libraries/charlcd"
+Issues = "https://github.com/ChuMicro/ChuMicro/issues"
+Bundle = "https://github.com/ChuMicro/ChuMicro-Bundle"
+
+[tool.hatch.version]
 path = "VERSION"
 pattern = "(?P<version>\\S+)"
 
@@ -44,5 +49,5 @@ only-include = ["src/", "VERSION", "README.md", "tests/", "examples/", "docs/"]
 exclude = [".gitignore"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/{import_name}"]
+packages = ["src/chumicro_charlcd"]
 

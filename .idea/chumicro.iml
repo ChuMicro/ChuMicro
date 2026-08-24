@@ -13,6 +13,9 @@
       <sourceFolder url="file://$MODULE_DIR$/libraries/buttons/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/buttons/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/buttons/functional_tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/libraries/charlcd/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/libraries/charlcd/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/libraries/charlcd/functional_tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/compat/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/compat/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/compat/functional_tests" isTestSource="true" />

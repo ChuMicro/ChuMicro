@@ -9,6 +9,7 @@
   "extraPaths": [
     "support/test_harness/src",
     "libraries/buttons/src",
+    "libraries/charlcd/src",
     "libraries/compat/src",
     "libraries/config/src",
     "libraries/http_server/src",

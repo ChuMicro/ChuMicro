@@ -82,7 +82,7 @@ def make_panel(transfer_rows: int = 10) -> tuple:
     reset = FakePin()
     delays = DelayRecorder()
     panel = GC9A01A(spi, FakePin(), FakePin(), reset,
-                    transfer_rows=transfer_rows, delay_ms=delays)
+                    transfer_rows=transfer_rows, sleep_ms=delays)
     return panel, spi, delays, reset
 
 
