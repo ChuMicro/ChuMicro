@@ -25,7 +25,8 @@ standards.
 - **`chumicro-screens`** covers pixel-addressable panels; monochrome and color
   are one library with pixel format as an axis, matching how both firmware
   layers model it. The drawing protocol adopts `framebuf`'s method vocabulary
-  rather than inventing a new API. On MicroPython the surface is a firmware
+  rather than inventing a new API; its portable color contract is
+  indexed-palette, pinned in [Decision 0126](0126-canvas-indexed-palette.md). On MicroPython the surface is a firmware
   `framebuf.FrameBuffer` and the flush is a generator that yields between page
   writes so each resume fits the tick budget. On CircuitPython the same surface
   is implemented over a `displayio.Bitmap` with `bitmaptools` ops and
