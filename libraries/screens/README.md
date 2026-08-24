@@ -70,6 +70,13 @@ for loop_pass in range(4):
 |---|---|
 | `panel.flush()` | Duck-typed: returns an iterator; each advance performs one bounded bus transfer (a page, strip, or window) |
 
+### Drivers
+
+| Symbol | Description |
+|---|---|
+| `chumicro_screens.gc9a01a.GC9A01A` | 240x240 round color TFT over SPI (MicroPython; needs a PSRAM-class board for its 115 KB frame buffer) |
+| `chumicro_screens.gc9a01a.color565(red, green, blue)` | Pack a color for the driver's `frame` drawing methods |
+
 ### Testing
 
 | Symbol | Description |
@@ -86,13 +93,14 @@ Works on CPython, MicroPython, and CircuitPython.
 
 ### Drivers ship after bench validation
 
-The package currently provides the pacing service and the panel protocol; per-controller hardware drivers are added as each passes validation on real boards.  Writing your own panel is one method: `flush()` returning an iterator that does one bounded bus transfer per advance.
+Per-controller drivers are added as each passes validation on real boards.  First on the bench: `GC9A01A` (MicroPython, validated on a LOLIN S2 Mini; a 10-row strip averages 3.3 ms at 40 MHz SPI).  Its CircuitPython path via displayio, and reduced-RAM strategies for 256 KB boards, are queued.  Writing your own panel is one method: `flush()` returning an iterator that does one bounded bus transfer per advance.
 
 ## Examples
 
 | Example | What it shows |
 |---|---|
 | [`paced_flush.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/screens/examples/paced_flush.py) | A three-row frame flushing one row per loop pass on CPython, no hardware needed |
+| [`micropython_gc9a01a_round.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/screens/examples/micropython_gc9a01a_round.py) | A seconds counter on the round TFT, redrawn once a second while the loop stays live (MicroPython hardware) |
 
 ## Contributing
 

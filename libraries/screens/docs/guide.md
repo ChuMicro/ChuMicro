@@ -81,6 +81,39 @@ Two behaviors worth knowing:
 - `show()` during an active flush marks the *next* frame.  The current frame always finishes; the fresh content flushes after the floor elapses.
 - A panel error mid-flush propagates out of `handle()` and drops that frame.  The service goes idle; the next `show()` schedules a fresh flush.
 
+## The GC9A01A round TFT
+
+The first shipped driver: a 240x240 round color TFT over SPI, on
+MicroPython.  It owns a full RGB565 frame buffer (115,200 bytes), so
+it needs a PSRAM-class board.  The app constructs the bus and pins and
+injects them; the driver never imports `machine`:
+
+```python
+from machine import SPI, Pin
+from chumicro_screens import ScreenService
+from chumicro_screens.gc9a01a import GC9A01A, color565
+
+spi = SPI(1, baudrate=40_000_000, polarity=0, phase=0,
+          sck=Pin(7), mosi=Pin(11), miso=Pin(3))
+panel = GC9A01A(spi,
+                Pin(12, Pin.OUT, value=1),   # CS
+                Pin(9, Pin.OUT, value=0),    # DC
+                Pin(5, Pin.OUT, value=1))    # RST
+screen = ScreenService(panel, refresh_interval_ms=100)
+
+panel.frame.fill(0)
+panel.frame.text("hello", 100, 116, color565(255, 255, 255))
+screen.show()
+```
+
+`panel.frame` is a real `framebuf.FrameBuffer`, so all framebuf
+drawing works at C speed.  Colors always come from `color565`: the
+frame stores pixels in the panel's on-wire byte order, and a raw
+RGB565 literal renders the wrong color.  Construction blocks about
+350 ms for panel reset and init.  Each flush advance sends one
+10-row strip, measured at 3.3 ms average on a LOLIN S2 Mini at
+40 MHz, and a full frame crosses in 24 advances.
+
 ## Runner pattern
 
 `ScreenService` implements `check(now_ms)` / `handle(now_ms)`, so it registers like any other service, and `next_deadline(now_ms)` lets `runner.wait()` sleep until the next flush is actually due:
@@ -129,13 +162,14 @@ assert panel.flushes_completed == 1
 
 ## Platform notes
 
-The service behaves identically on CPython, MicroPython, and CircuitPython.  Panel drivers are where the runtimes differ: a MicroPython framebuf driver pages its frame across advances, while a CircuitPython displayio panel refreshes in the background and its flush is a single advance.  Hardware drivers are added per controller as each passes bench validation.
+The service behaves identically on CPython, MicroPython, and CircuitPython.  Panel drivers are where the runtimes differ: a MicroPython framebuf driver pages its frame across advances, while a CircuitPython displayio panel refreshes in the background and its flush is a single advance.  Hardware drivers are added per controller as each passes bench validation; `GC9A01A` is MicroPython-only today, with the displayio path queued.
 
 ## Examples
 
 | Example | What it shows |
 |---|---|
 | [`paced_flush.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/screens/examples/paced_flush.py) | A three-row frame flushing one row per loop pass, simulated on CPython |
+| [`micropython_gc9a01a_round.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/screens/examples/micropython_gc9a01a_round.py) | A seconds counter on the round TFT, redrawn once a second while the loop stays live (MicroPython hardware) |
 
 ---
 

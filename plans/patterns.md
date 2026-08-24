@@ -628,7 +628,27 @@ from chumicro_sockets import UnsupportedSSLConfigError  # noqa: E402
 Related: AGENTS.md "Production tolerance that paper-overs a fake's hardcoded value" (sibling rule about production not bending to tests), `_SwapAttribute` helper in `libraries/sockets/tests/test_cp_adapter.py`.
 
 
-## Cross-runtime shim
+## framebuf RGB565 is little-endian; SPI color panels read big-endian
+
+MicroPython's `framebuf.FrameBuffer` stores RGB565 pixels low byte
+first, while GC9A01A/ST77xx-class panels read the high byte first, so
+a buffer flushed raw shows channel-rotated colors (intended red shows
+blue, green shows red, blue shows green) even though hand-built
+big-endian test fills looked correct on the same wiring.  Bench-bitten
+2026-08-23 on the GC9A01A: the smoke script's hand-packed fills passed,
+the framebuf-backed driver rotated.
+
+The zero-cost fix: the driver's `color565` helper pre-swaps the packed
+value so the little-endian buffer bytes land on the wire in panel
+order.  Byte-swapping at flush time in Python is never the answer (a
+per-pixel pass blows the tick budget).  Consequence: raw RGB565
+literals like `0xF800` render wrong on such a driver's `frame`; colors
+must come from the helper, and the driver docstring says so.  A
+labeled test card (color bars captioned with their names) is the bench
+check that catches this class; solid fills cannot, because a rotation
+maps every primary onto another clean primary.
+
+Reference implementation: `chumicro_screens.gc9a01a.color565`.
 
 When a module exists on CPython but not on MicroPython/CircuitPython
 (or vice versa), write a thin shim with runtime detection.
