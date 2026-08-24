@@ -149,6 +149,13 @@ from the next flush on, which makes theme swaps and blink effects one
 frame needs one contiguous 57,600-byte block, which a fragmented heap
 may no longer hold.
 
+Bench datum from a Pi Pico W, whose `machine.SPI` clamps a 40 MHz
+request to 24 MHz: the default 6-row strip peaks at 3.2 ms per
+advance and a full frame crosses in 40 advances, about 122 ms.
+Per-advance cost is almost all per-row work, so taller strips barely
+shorten the frame; raise `transfer_rows` only when your chip's own
+bench shows the headroom.
+
 ## The round TFT on CircuitPython
 
 CircuitPython renders displays in firmware, so the panel plugs into
@@ -235,6 +242,7 @@ The service behaves identically on CPython, MicroPython, and CircuitPython.  Pan
 | [`paced_flush.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/screens/examples/paced_flush.py) | A three-row frame flushing one row per loop pass, simulated on CPython |
 | [`micropython_gc9a01a_round.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/screens/examples/micropython_gc9a01a_round.py) | A seconds counter on the round TFT, redrawn once a second while the loop stays live (MicroPython hardware) |
 | [`micropython_gc9a01a_indexed.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/screens/examples/micropython_gc9a01a_indexed.py) | The same counter from a Pi Pico W through the indexed driver (MicroPython hardware) |
+| [`micropython_gc9a01a_card.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/screens/examples/micropython_gc9a01a_card.py) | A labeled color card to run first after wiring; each bar names its color, so swapped channels and rotated mounts are visible at a glance (MicroPython hardware) |
 | [`circuitpython_gc9a01a_round.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/screens/examples/circuitpython_gc9a01a_round.py) | A color card on the round TFT via displayio, with a blinking notch proving live refresh (CircuitPython hardware) |
 
 ---

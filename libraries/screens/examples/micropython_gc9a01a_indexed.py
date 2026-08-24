@@ -8,7 +8,7 @@ substituted.
 GC9A01AIndexed holds the frame at one byte per pixel plus a
 256-entry palette, about half the RAM of the full-color driver, so a
 Pico W heap fits it.  Drawing uses palette indexes as colors; each
-loop pass expands and sends one 10-row strip, so the loop never
+loop pass expands and sends one 6-row strip, so the loop never
 blocks longer than a few milliseconds.
 
 Example output::

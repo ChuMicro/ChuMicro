@@ -245,6 +245,14 @@ class GC9A01AIndexed:
     Construct early: the 57,600-byte frame needs a contiguous block,
     which a fragmented heap may no longer hold.
 
+    ``transfer_rows`` defaults for the driver's target class.  Sizing
+    datum from the Pi Pico W bench, where ``machine.SPI`` clamps a
+    40 MHz request to 24 MHz: per-advance cost is about 0.2 ms fixed
+    plus 0.5 ms per row, so a 6-row strip peaks at 3.2 ms inside a
+    5 ms tick and a full frame crosses in 40 advances, about 122 ms.
+    Taller strips barely shorten the frame; a faster chip can raise
+    ``transfer_rows`` as its own bench allows.
+
     Args:
         spi: SPI bus wired to the panel, clock and data lines.
         chip_select: Output pin on the panel's CS line.
@@ -256,7 +264,7 @@ class GC9A01AIndexed:
     """
 
     def __init__(self, spi: object, chip_select: object, data_command: object,
-                 reset: object, *, transfer_rows: int = 10,
+                 reset: object, *, transfer_rows: int = 6,
                  sleep_ms: object | None = None) -> None:
         if not 1 <= transfer_rows <= HEIGHT:
             raise ValueError("transfer_rows must be 1 to 240")
