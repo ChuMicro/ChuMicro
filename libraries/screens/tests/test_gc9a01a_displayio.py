@@ -10,22 +10,9 @@ __chumicro_host_only__ = True
 
 import sys
 
+from _screen_stubs import BusDisplayStub
 
-class _BusDisplayStub:
-    """Stand-in for ``busdisplay`` on runtimes without displayio."""
-
-    class BusDisplay:
-        def __init__(self, display_bus, init_sequence, *, width, height,
-                     rotation, auto_refresh):
-            self.display_bus = display_bus
-            self.init_sequence = bytes(init_sequence)
-            self.width = width
-            self.height = height
-            self.rotation = rotation
-            self.auto_refresh = auto_refresh
-
-
-sys.modules.setdefault("busdisplay", _BusDisplayStub())
+sys.modules.setdefault("busdisplay", BusDisplayStub())
 
 from chumicro_screens import gc9a01a_displayio  # noqa: E402
 from chumicro_screens.gc9a01a_displayio import make_display  # noqa: E402

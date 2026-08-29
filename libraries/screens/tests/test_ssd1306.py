@@ -11,7 +11,7 @@ __chumicro_host_only__ = True
 
 import sys
 
-from _framebuf_stub import FramebufStub
+from _screen_stubs import FramebufStub
 
 sys.modules.setdefault("framebuf", FramebufStub())
 

@@ -29,3 +29,10 @@ Adafruit_CircuitPython_GC9A01A, also MIT licensed:
 Copyright (c) 2021 Tyler Crumpton
 Copyright (c) 2025 Tim C for Adafruit Industries
 
+The SSD1306 initialization sequences in
+src/chumicro_screens/ssd1306.py and
+src/chumicro_screens/ssd1306_displayio.py, and the displayio panel
+parameters the latter passes, are derived from
+Adafruit_CircuitPython_DisplayIO_SSD1306, also MIT licensed:
+
+Copyright (c) 2019 Scott Shawcroft for Adafruit Industries

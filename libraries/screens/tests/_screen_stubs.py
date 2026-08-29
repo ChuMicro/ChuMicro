@@ -1,16 +1,17 @@
-"""Shared ``framebuf`` stub for the cross-runtime screens driver tests.
+"""Shared ``sys.modules`` stubs for the cross-runtime screens tests.
 
 The MicroPython panel drivers build their frame on
-``framebuf.FrameBuffer``.  CPython has no ``framebuf`` at all, and
-CircuitPython's display layer is ``displayio``, so neither host runtime
-supplies one.  Each driver test file seeds ``sys.modules`` with this
-stub before importing its driver so the construction-time import
-succeeds and the tests can assert on the bytes the driver puts on the
-bus.
+``framebuf.FrameBuffer``; the CircuitPython factories hand their panel
+to ``busdisplay.BusDisplay``.  Neither module exists on a host runtime:
+CPython has no ``framebuf`` and no displayio, and CircuitPython's
+display layer is displayio rather than framebuf.  Each driver test file
+seeds ``sys.modules`` with the stub it needs before importing its
+driver, so the module-load import succeeds and the tests can assert on
+what the driver hands the firmware.
 
-The stub is shared rather than copied per test file because
+The stubs are shared rather than copied per test file because
 ``sys.modules.setdefault`` leaves the winner decided by collection
-order: a stub carrying only the formats one driver needs would fail the
+order: a stub carrying only what one driver needs would fail the
 other's import when it happened to load first.
 
 Plain classes rather than ``types.ModuleType`` instances because the MP
@@ -19,7 +20,7 @@ and CP unix-ports omit the ``types`` module.
 This module is staged onto the device next to the importing test file by
 the pytest-device staging path (underscore-prefixed sibling modules ride
 along as ``extra_modules``); on the host and unix-port runs the test
-file's directory is on ``sys.path`` so ``from _framebuf_stub import ...``
+file's directory is on ``sys.path`` so ``from _screen_stubs import ...``
 resolves there too.
 """
 
@@ -95,3 +96,22 @@ class FramebufStub:
                     offset = (dest_y * self.width + dest_x) * 2
                     self.buffer[offset] = value & 0xFF
                     self.buffer[offset + 1] = value >> 8
+
+
+class BusDisplayStub:
+    """Stand-in for ``busdisplay`` on runtimes without displayio.
+
+    ``BusDisplay`` takes its panel arguments by keyword and records
+    them, exposing each as an attribute too, so a test can read either
+    ``display.kwargs["color_depth"]`` or ``display.width``.  The real
+    constructor's keyword set differs per panel family, which is why
+    this one captures rather than names them.
+    """
+
+    class BusDisplay:
+        def __init__(self, display_bus, init_sequence, **kwargs):
+            self.display_bus = display_bus
+            self.init_sequence = bytes(init_sequence)
+            self.kwargs = kwargs
+            for name, value in kwargs.items():
+                setattr(self, name, value)
