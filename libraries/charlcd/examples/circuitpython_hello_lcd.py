@@ -1,8 +1,8 @@
 """Hello on a 16x2 backpacked LCD from CircuitPython.
 
-Wiring for a LOLIN S2 Mini: SDA=IO33, SCL=IO35, backpack VCC to 5 V
-(VBUS) for full contrast, GND to GND.  Any board works with its own
-I2C pins; the backpack's default address is 0x27.
+Wiring for a Pi Pico W: SDA=GP4, SCL=GP5, backpack VCC to VBUS for
+full contrast, GND to GND.  Any board works with its own I2C pins;
+the backpack's default address is 0x27.
 
 Example output::
 
@@ -14,7 +14,7 @@ import board
 import busio
 from chumicro_charlcd import CharLcd, CircuitPythonTransport
 
-bus = busio.I2C(board.IO35, board.IO33)  # SCL, SDA
+bus = busio.I2C(board.GP5, board.GP4)  # SCL, SDA
 lcd = CharLcd(CircuitPythonTransport(bus))
 
 lcd.write("chumicro charlcd", row=0)

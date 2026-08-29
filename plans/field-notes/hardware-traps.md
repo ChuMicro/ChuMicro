@@ -25,3 +25,21 @@ They mount as `/Volumes/CIRCUITPY` and `/Volumes/CIRCUITPY 1`. That is normal di
 ## replace_all is a literal substring swap
 
 Before renaming a short identifier like `_foo`, grep for longer names containing it (`_apply_foo`).
+
+## PCF8574 LCD backpacks without pull-ups
+
+Many LCM1602-class backpacks leave the SDA and SCL pull-ups unpopulated, and the two runtimes then fail differently on the same board. MicroPython's `machine.I2C` enables the rp2040's internal pull-ups on construction (`ports/rp2/machine_i2c.c`), which carry the bus below 200 kHz and fail every write at the port's 400 kHz default: on a Pi Pico W a 50-write loop to a backpack at 0x27 measured 0/50 at 400 kHz, 50/50 at 200 kHz, and 50/50 at 100 kHz. CircuitPython's `busio.I2C` raises `RuntimeError: No pull up found on SDA or SCL` and never constructs; its check drives both lines low with the internal pull-downs, releases every pull, and requires the line back high within 3 us (`ports/raspberrypi/common-hal/busio/I2C.c`), so internal pull-ups cannot satisfy it by design.
+
+To tell whether external pull-ups are present, read the pins with the internal pull-down engaged. `Pin(4, Pin.IN, Pin.PULL_DOWN)` reading 0 means nothing stronger holds the line; a 4.7 kOhm pull-up reads 1. Adding 4.7 kOhm from each line to 3V3 took the same board to 50/50 at 400 kHz and let CircuitPython construct.
+
+## An I2C scan passes on a bus that cannot write
+
+`scan()` is not evidence the bus works. The rp2040 I2C block does not support zero-length writes, so both runtimes bit-bang them: MicroPython builds a temporary `SoftI2C` (`ports/rp2/machine_i2c.c`), CircuitPython keeps a `bitbangio.I2C` beside the hardware peripheral (`ports/raspberrypi/common-hal/busio/I2C.c`). The bit-banged path clocks slower than the hardware path, so a marginal bus answers a scan and then fails every real transfer. Confirm with a `writeto` loop.
+
+## displayio holds pins across a soft reload
+
+A display registered by an earlier deploy still owns its pins after the next deploy's soft reboot, because the clean slate wipes the filesystem and not the board's RAM. A GC9A01A example wired chip-select to GP5 on a Pi Pico W, and the next charlcd deploy to that board raised `ValueError: GP5 in use` from `busio.I2C(board.GP5, board.GP4)`. `displayio.release_displays()` frees the pins, and so does a power cycle.
+
+## Auto-reload off makes a REPL tail look dead
+
+A CircuitPython board reporting `Auto-reload is off.` does not re-run `code.py` when the host writes to CIRCUITPY, so `chumicro-repl --tail` attaches to a finished program and captures nothing. Send Ctrl-D over the serial port to soft reboot and produce output.

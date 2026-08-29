@@ -66,7 +66,7 @@ transport = MicropythonTransport(bus, address=0x3F)
 
 ## Timing
 
-The controller's busy flag is never read; timed waits are simpler, universal, and the datasheet numbers are generous.  `clear()` sleeps 2 ms, the one genuinely slow command.  Each character costs four I2C writes (two nibbles, two enable states), so a full 16-character row is 68 bus transactions; on a 100 kHz bus budget roughly 10 ms for a full-row rewrite and keep per-tick updates short, or run the bus at 400 kHz.  The `sleep_ms` constructor seam injects a recorder in tests so nothing actually waits.
+The controller's busy flag is never read; timed waits are simpler, universal, and the datasheet numbers are generous.  `clear()` sleeps 2 ms, the one genuinely slow command.  Each character costs four I2C writes (two nibbles, two enable states), so a full 16-character row is 68 bus transactions; on a 100 kHz bus budget roughly 10 ms for a full-row rewrite and keep per-tick updates short.  The PCF8574 is a Standard-mode 100 kHz part, so headroom comes from writing fewer cells rather than from a faster bus.  The `sleep_ms` constructor seam injects a recorder in tests so nothing actually waits.
 
 ## Testing
 
@@ -89,6 +89,8 @@ assert decode_bytes(transport.raw)[0] == (0, 0x80 | 0x40)
 ## Platform notes
 
 The core and both transports run on CPython, MicroPython, and CircuitPython; nothing in the library imports a hardware module, so host tests exercise the identical code the device runs.  One hardware note: the backpack's contrast circuit wants 5 V on VCC; from 3V3 most panels are faint or blank.
+
+The two runtimes disagree on bus speed.  `busio.I2C` defaults to 100 kHz, which the PCF8574 is rated for; `machine.I2C` defaults to 400 kHz on rp2, which it is not.  Pass `freq=100_000` when constructing a MicroPython bus.  Backpacks vary on whether they populate the SDA and SCL pull-ups, and a board relying on the MCU's internal pull-ups will not clock reliably above 100 kHz; 4.7 kΩ to 3V3 on each line fixes it.
 
 ## Examples
 
