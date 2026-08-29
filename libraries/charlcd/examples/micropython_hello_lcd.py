@@ -1,8 +1,10 @@
 """Hello on a 16x2 backpacked LCD from MicroPython.
 
 Wiring for a Pi Pico W: SDA=GP4, SCL=GP5, backpack VCC to VBUS for
-full contrast, GND to GND.  Any board works with its own I2C pins;
-the backpack's default address is 0x27.
+full contrast, GND to GND.  For a LOLIN S2 Mini use SDA=IO33,
+SCL=IO35 and VCC to 5 V.  The backpack's default address is 0x27, and
+its SDA and SCL lines want 4.7 kOhm pull-ups to 3V3 if the board does
+not carry them.
 
 Example output::
 
@@ -14,7 +16,8 @@ from chumicro_charlcd import CharLcd, MicropythonTransport
 from machine import I2C, Pin
 
 # The PCF8574 is a 100 kHz part and machine.I2C defaults to 400 kHz on
-# rp2, so the frequency is pinned rather than inherited.
+# both the rp2 and esp32 ports, so the frequency is pinned rather than
+# inherited.
 bus = I2C(0, sda=Pin(4), scl=Pin(5), freq=100_000)
 lcd = CharLcd(MicropythonTransport(bus))
 

@@ -90,7 +90,7 @@ assert decode_bytes(transport.raw)[0] == (0, 0x80 | 0x40)
 
 The core and both transports run on CPython, MicroPython, and CircuitPython; nothing in the library imports a hardware module, so host tests exercise the identical code the device runs.  One hardware note: the backpack's contrast circuit wants 5 V on VCC; from 3V3 most panels are faint or blank.
 
-The two runtimes disagree on bus speed.  `busio.I2C` defaults to 100 kHz, which the PCF8574 is rated for; `machine.I2C` defaults to 400 kHz on rp2, which it is not.  Pass `freq=100_000` when constructing a MicroPython bus.  Backpacks vary on whether they populate the SDA and SCL pull-ups, and a board relying on the MCU's internal pull-ups will not clock reliably above 100 kHz; 4.7 kΩ to 3V3 on each line fixes it.
+The two runtimes disagree on bus speed.  `busio.I2C` defaults to 100 kHz, which the PCF8574 is rated for; `machine.I2C` defaults to 400 kHz on both the rp2 and esp32 ports, which it is not.  Pass `freq=100_000` when constructing a MicroPython bus.  Backpacks vary on whether they populate the SDA and SCL pull-ups, and a board relying on the MCU's internal pull-ups will not clock reliably above 100 kHz; 4.7 kΩ to 3V3 on each line fixes it.  CircuitPython refuses outright, since `busio.I2C` tests for an external pull-up before it will construct.
 
 ## Examples
 
