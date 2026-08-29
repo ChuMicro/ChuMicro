@@ -1,63 +1,18 @@
 """Host-lane tests for the GC9A01A panel driver.
 
 Runs on CPython and the unix ports through host fakes; silicon is
-covered by the functional bench.  The framebuf stub below satisfies
-the module-load import on runtimes that do not ship framebuf.
+covered by the functional bench.  The shared framebuf stub seeded
+below satisfies the module-load import on runtimes that do not ship
+framebuf.
 """
 
 __chumicro_host_only__ = True
 
 import sys
 
+from _framebuf_stub import FramebufStub
 
-class _FramebufStub:
-    """Stand-in for ``framebuf`` on host runtimes that lack it.
-
-    ``pixel`` and ``blit`` implement the one conversion the drivers
-    use, a GS8 source through a 256-entry palette into an RGB565
-    destination, with real clipping, so tests assert on the bytes the
-    driver puts on the bus rather than on stub bookkeeping.
-    """
-
-    RGB565 = 1
-    GS8 = 2
-
-    class FrameBuffer:
-        def __init__(self, buffer, width, height, pixel_format):
-            self.buffer = buffer
-            self.width = width
-            self.height = height
-            self.pixel_format = pixel_format
-
-        # framebuf's own signature names the coordinates x and y.
-        def pixel(self, x, y, value):  # noqa: CHU001
-            offset = (y * self.width + x) * 2
-            self.buffer[offset] = value & 0xFF
-            self.buffer[offset + 1] = value >> 8
-
-        # framebuf's own signature names the coordinates x and y.
-        def blit(self, source, x, y, key=-1, palette=None):  # noqa: CHU001
-            for source_y in range(source.height):
-                dest_y = y + source_y
-                if not 0 <= dest_y < self.height:
-                    continue
-                for source_x in range(source.width):
-                    dest_x = x + source_x
-                    if not 0 <= dest_x < self.width:
-                        continue
-                    value = source.buffer[source_y * source.width + source_x]
-                    if value == key:
-                        continue
-                    if palette is not None:
-                        entry = value * 2
-                        value = (palette.buffer[entry]
-                                 | (palette.buffer[entry + 1] << 8))
-                    offset = (dest_y * self.width + dest_x) * 2
-                    self.buffer[offset] = value & 0xFF
-                    self.buffer[offset + 1] = value >> 8
-
-
-sys.modules.setdefault("framebuf", _FramebufStub())
+sys.modules.setdefault("framebuf", FramebufStub())
 
 from chumicro_screens import ScreenService  # noqa: E402
 from chumicro_screens.gc9a01a import GC9A01A, GC9A01AIndexed, color565  # noqa: E402
