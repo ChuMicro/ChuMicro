@@ -43,3 +43,30 @@ A display registered by an earlier deploy still owns its pins after the next dep
 ## Auto-reload off makes a REPL tail look dead
 
 A CircuitPython board reporting `Auto-reload is off.` does not re-run `code.py` when the host writes to CIRCUITPY, so `chumicro-repl --tail` attaches to a finished program and captures nothing. Send Ctrl-D over the serial port to soft reboot and produce output.
+
+## displayio's background refresh stalls the app loop
+
+Background refresh is free to the library, not to the loop.  displayio
+repaints from C without an app-side flush, so `ScreenService` has nothing
+to do on CircuitPython, but the repaint runs in the VM's background-task
+hook and user code does not advance while a transfer is on the bus.
+
+Measured on a LOLIN S2 Mini under CircuitPython 10.2.0, an SSD1306 128x64
+over I2C, timing 3000 passes of a fixed loop body that dirties one pixel
+each pass:
+
+| Bus | mean | p99 | steady-state max | passes over 5 ms |
+|---|---|---|---|---|
+| 100 kHz | 0.93 ms | 5.46 ms | 29.8 ms | 112 / 3000 |
+| 400 kHz | 0.78 ms | 2.75 ms | 11.4 ms | 19 / 3000 |
+
+The first round's max is larger again, 111.8 ms at 100 kHz and 40.5 ms at
+400 kHz, which is the initial full-screen repaint after `root_group` is
+assigned; later rounds settle to the numbers above.  With the bitmap left
+unmutated the tail disappears entirely (max 2.3 ms), so the cost tracks
+dirty regions rather than the display merely existing.
+
+Two consequences.  A 5 ms tick budget is exceeded on roughly 0.6 % of
+passes at 400 kHz and 3.7 % at 100 kHz, so a CircuitPython app driving a
+display cannot assume the budget holds.  And bus frequency is the lever:
+four times the clock cut the steady-state worst case by 2.6x.
