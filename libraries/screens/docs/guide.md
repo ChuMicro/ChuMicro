@@ -194,7 +194,13 @@ display.root_group = group   # build the scene with displayio
 
 From there everything is standard displayio: bitmaps, palettes, tile
 grids, and groups.  There is no byte-order trap on this path; the
-firmware's color converter handles the panel's byte order.
+firmware's color converter handles the panel's byte order.  That
+converter is also where the time goes: on a Pi Pico W a repaint costs
+about 5.5 us per dirty pixel, so a 16x16 change is 1.7 ms and a
+whole-screen change is 318 ms in one stall, automatic or from
+`display.refresh()` alike.  Change small regions per tick, and let a
+full redraw happen only where a third of a second of stall is
+acceptable.
 
 ## The SSD1306 mono OLED
 

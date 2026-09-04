@@ -70,3 +70,28 @@ Two consequences.  A 5 ms tick budget is exceeded on roughly 0.6 % of
 passes at 400 kHz and 3.7 % at 100 kHz, so a CircuitPython app driving a
 display cannot assume the budget holds.  And bus frequency is the lever:
 four times the clock cut the steady-state worst case by 2.6x.
+
+The same probe on a Pi Pico W under CircuitPython 10.2.1 with a GC9A01A
+240x240 round TFT over SPI at 40 MHz (`.scratch/probe_cp_gc9a01a_jitter.py`,
+a 2-color full-screen bitmap plus a 16x16 notch on its own palette;
+the loop body alone costs 2.55 ms on this RP2040):
+
+| Case | mean | p99 | max | passes over 5 ms |
+|---|---|---|---|---|
+| auto refresh, one pixel per pass, steady | 2.75 ms | 3.5 ms | 6.4 ms | 9 to 15 / 3000 |
+| auto refresh, first round | 2.86 ms | 3.5 ms | 338.6 ms | 10 / 3000 |
+| auto refresh, 16x16 notch per pass | 2.85 ms | 4.6 ms | 7.4 ms | 4 / 3000 |
+| `refresh()`, one dirty pixel | 0.37 ms | 0.79 ms | 0.95 ms | 0 / 200 |
+| `refresh()`, 16x16 notch | 1.70 ms | 2.23 ms | 2.53 ms | 0 / 200 |
+| `refresh()`, full screen | 318 ms | 318.5 ms | 318.5 ms | 20 / 20 |
+
+The cost tracks the dirty area, not the bus: 115,200 bytes cross a
+40 MHz bus in about 23 ms, and the full-screen repaint takes 318 ms,
+about 5.5 us per pixel in the firmware's color converter on the RP2040
+(the 16x16 notch at 1.7 ms is 6.6 us per pixel, the same slope plus a
+fixed cost).  A whole-frame change on this board therefore stalls the
+loop for a third of a second whether the refresh is automatic or called
+from a handler, while the MicroPython indexed driver on the same board
+moves a whole frame in 124 ms spread over strips of at most 3.4 ms.  A
+CircuitPython canvas that wants the tick budget has to dirty bands, not
+the frame.

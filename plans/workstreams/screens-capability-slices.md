@@ -62,7 +62,14 @@ vocabulary and add what the protocol needs.  The CircuitPython backend is an 8-b
 `draw_polygon`, `blit` (all verified in 10.2.0); `text` blits
 `terminalio.FONT` glyph regions.  A runner-shaped facade gives CircuitPython
 the same `show`/`check`/`handle`/`next_deadline` loop contract as
-`ScreenService`, near-no-ops under firmware refresh.  Verify at build:
+`ScreenService`.  It cannot be a no-op: the Pico W bench measured the
+firmware's repaint at about 5.5 us per dirty pixel, 318 ms for a whole
+240x240 frame in one stall whether automatic or from `display.refresh()`,
+against 124 ms spread over 3.4 ms strips for the MicroPython indexed
+driver on the same board.  The facade has to hold `auto_refresh=False` and
+band its refreshes, dirtying and refreshing one strip of the bitmap per
+`handle()` so no tick pays for more than a few thousand pixels; the field
+note carries the table.  Verify at build:
 in-place `Bitmap` mutation flags dirty regions under `auto_refresh`;
 `draw_circle` semantics against `framebuf.ellipse(r, r)`; terminalio glyph
 metrics.  Bench gate: one labeled-card app file drawing identically (font
@@ -203,6 +210,15 @@ actually wants on-device images.
   to GP4 and GP5 for the run and switched back, which is the per-board
   wiring edit Phase 1 leaves.  Not run: charlcd on the S2 cells (the wire
   traffic is byte-identical to the validated build, per the audit's
-  equivalence probe and the tests) and the GC9A01A drivers after their
-  constructor change (a collect before the frame and `time.sleep_ms` as
-  the default sleep).
+  equivalence probe and the tests).
+- 2026-09-04: round TFT on the Pico W under both runtimes.  MicroPython
+  1.28.0: the labeled card read right and the indexed counter ran; a probe
+  over `mpremote run` timed 6-row strips at 3.07 ms mean and 3.37 ms worst,
+  124 ms a frame, 133 B per frame (the generator), 69,584 B for the panel,
+  126 KB free after.  CircuitPython 10.2.1: the displayio card and notch
+  read right; the jitter probe (`.scratch/probe_cp_gc9a01a_jitter.py`,
+  rebooted into with `.scratch/cp_reboot_and_tail.py` since the deploy path
+  leaves auto-reload off) gave the table now in
+  `plans/field-notes/hardware-traps.md`: 5.5 us per dirty pixel, 318 ms for
+  a whole frame, 1.7 ms for a 16x16 notch.  Phase 2's CircuitPython facade
+  is constrained by it, above.  Not run: the round TFT on the S2 cells.

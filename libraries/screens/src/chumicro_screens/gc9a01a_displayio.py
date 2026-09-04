@@ -3,10 +3,13 @@
 CircuitPython renders displays in firmware: ``busdisplay.BusDisplay``
 repaints changed regions from C in the background, so ScreenService is
 not involved.  The repaint runs from the firmware's background hook and
-stalls the app loop for the whole transfer, so a 5 ms tick budget does
-not hold under ``auto_refresh``; an app that needs the budget passes
-``auto_refresh=False`` and calls ``display.refresh()`` from a handler
-of its own choosing.  ``make_display`` feeds the panel's initialization
+stalls the app loop for the whole transfer, and its cost tracks the
+dirty area: on a Pi Pico W a 16x16 change costs 1.7 ms and a
+whole-screen change 318 ms, automatic or from ``display.refresh()``
+alike, so a 5 ms tick budget holds only for small changes per tick.
+An app that needs the budget passes ``auto_refresh=False``, calls
+``display.refresh()`` from a handler of its own choosing, and keeps
+each change small.  ``make_display`` feeds the panel's initialization
 sequence into that machinery and returns the ``BusDisplay``; from there
 the app uses displayio directly: build a ``displayio.Group``, assign it
 to ``root_group``, and mutate bitmaps or palettes to draw.
