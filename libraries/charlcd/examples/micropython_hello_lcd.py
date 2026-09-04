@@ -12,14 +12,13 @@ Example output::
 """
 __chumicro_runtimes__ = ("micropython",)
 
-from chumicro_charlcd import CharLcd, MicropythonTransport
-from machine import I2C, Pin
+from chumicro_charlcd import CharLcd, MicroPythonTransport
+from chumicro_compat.wiring import i2c_bus
 
-# The PCF8574 is a 100 kHz part and machine.I2C defaults to 400 kHz on
-# both the rp2 and esp32 ports, so the frequency is pinned rather than
-# inherited.
-bus = I2C(0, sda=Pin(4), scl=Pin(5), freq=100_000)
-lcd = CharLcd(MicropythonTransport(bus))
+# The PCF8574 is a 100 kHz part, so the bus is pinned there rather than
+# left at the 400 kHz default.
+bus = i2c_bus(0, scl=5, sda=4, frequency=100_000)
+lcd = CharLcd(MicroPythonTransport(bus))
 
 lcd.write("chumicro charlcd", row=0)
 lcd.write("hello!", row=1, column=5)

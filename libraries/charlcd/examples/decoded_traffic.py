@@ -12,6 +12,8 @@ Example output::
       data    0x69
     backlight off byte: 0x00
 """
+__chumicro_runtimes__ = ("cpython",)
+
 from chumicro_charlcd import CharLcd
 from chumicro_charlcd.testing import RecordingTransport, decode_bytes
 

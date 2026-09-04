@@ -2,7 +2,7 @@
 
 ``CharLcd`` speaks the HD44780 protocol against a one-method transport
 seam, so the core never imports a bus API and runs on every runtime.
-``CircuitPythonTransport`` and ``MicropythonTransport`` are the two
+``CircuitPythonTransport`` and ``MicroPythonTransport`` are the two
 shipped seam implementations; both take an already-constructed I2C
 bus, so the library imports no hardware modules at all.
 
@@ -21,22 +21,35 @@ mode-forcing sequence.
 
 import time
 
-_REGISTER_SELECT = 0x01
-_ENABLE = 0x04
-_BACKLIGHT = 0x08
+try:
+    from micropython import const
+except ImportError:
+    def const(value):
+        return value
 
-# DDRAM base address per row.  Two entries serve a 16x2; the last two
-# make the same class drive a 20x4 unmodified.
-_ROW_ADDRESSES = (0x00, 0x40, 0x14, 0x54)
+# The backpack bit map above; chumicro_charlcd.testing mirrors these
+# three for decoding, since a folded const leaves no name to import.
+_REGISTER_SELECT = const(0x01)
+_ENABLE = const(0x04)
+_BACKLIGHT = const(0x08)
 
+# HD44780 instructions.
+_CLEAR_DISPLAY = const(0x01)
+_ENTRY_MODE_INCREMENT = const(0x06)
+_DISPLAY_OFF = const(0x08)
+_DISPLAY_ON_CURSOR_OFF = const(0x0C)
+_FUNCTION_SET_4BIT_2LINE_5X8 = const(0x28)
+_SET_DDRAM_ADDRESS = const(0x80)
+# DDRAM address of the second line; a four-row panel continues lines 0
+# and 1 into rows 2 and 3 after ``columns`` cells.
+_SECOND_LINE = const(0x40)
 
-def _sleep_ms(duration_ms: int) -> None:
-    """Sleep via ``time.sleep_ms`` when present, otherwise ``time.sleep``."""
-    runtime_sleep_ms = getattr(time, "sleep_ms", None)
-    if runtime_sleep_ms is not None:
-        runtime_sleep_ms(duration_ms)
-        return
-    time.sleep(duration_ms / 1000)
+try:
+    from time import sleep_ms as _sleep_ms
+except ImportError:
+    def _sleep_ms(duration_ms: int) -> None:
+        """Millisecond sleep for runtimes without ``time.sleep_ms``."""
+        time.sleep(duration_ms / 1000)
 
 
 class CharLcd:
@@ -45,68 +58,89 @@ class CharLcd:
     Args:
         transport: Object with ``write_byte(value)`` putting one raw
             byte on the PCF8574.  ``CircuitPythonTransport`` or
-            ``MicropythonTransport`` on a device; tests inject
+            ``MicroPythonTransport`` on a device; tests inject
             ``chumicro_charlcd.testing.RecordingTransport``.
-        columns: Panel width in character cells.
-        rows: Panel height in rows.  Text is clipped to the row, not
-            wrapped: HD44780 wrapping lands mid-line on the other row
-            and never reads as intended.
+        columns: Panel width in character cells, 1 to 40.
+        rows: Panel height in rows, 1 to 4.  Text is clipped to the
+            row, not wrapped: HD44780 wrapping lands mid-line on the
+            other row and never reads as intended.
         sleep_ms: Millisecond-sleep callable used for the controller's
             timed waits.  Defaults to the real clock; tests inject a
             recorder so nothing actually waits.
+
+    Raises:
+        ValueError: For a geometry the controller cannot address.
     """
 
     def __init__(self, transport: object, *, columns: int = 16, rows: int = 2,
                  sleep_ms: object | None = None) -> None:
+        if not 1 <= columns <= 40:
+            raise ValueError(f"columns {columns} outside 1..40")
+        if not 1 <= rows <= 4:
+            raise ValueError(f"rows {rows} outside 1..4")
         if sleep_ms is None:
             sleep_ms = _sleep_ms
         self._transport = transport
         self._sleep_ms = sleep_ms
         self.columns = columns
         self.rows = rows
+        self._row_addresses = (0x00, _SECOND_LINE, columns, _SECOND_LINE + columns)
         self._backlight = _BACKLIGHT
         self._initialize_panel()
 
     def _initialize_panel(self) -> None:
         """Force the controller to a known state, then configure it.
 
-        Three 8-bit "function set" nibbles land the controller in a
-        known mode from any starting state (fresh power-up, a reset
-        that interrupted a 4-bit pair, a warm MCU reboot against a
-        still-configured panel); one more drops it to 4-bit mode.
+        Three writes of 0x3, the high nibble of the 8-bit-mode function
+        set, land the controller in a known mode from any starting
+        state (fresh power-up, a reset that interrupted a 4-bit pair, a
+        warm MCU reboot against a still-configured panel); a fourth
+        write of 0x2 drops it to 4-bit mode.
         """
         self._sleep_ms(50)              # power-on settle
         for wait_ms in (5, 1, 1):       # >=4.1 ms, >=100 us, >=100 us
             self._write_nibble(0x03, 0)
             self._sleep_ms(wait_ms)
         self._write_nibble(0x02, 0)     # 4-bit from here on
-        self._command(0x28)             # function set: 4-bit, 2 lines, 5x8
-        self._command(0x08)             # display off while configuring
+        self._command(_FUNCTION_SET_4BIT_2LINE_5X8)
+        self._command(_DISPLAY_OFF)     # off while configuring
         self.clear()
-        self._command(0x06)             # entry mode: cursor advances
-        self._command(0x0C)             # display on, cursor hidden
+        self._command(_ENTRY_MODE_INCREMENT)
+        self._command(_DISPLAY_ON_CURSOR_OFF)
 
     def clear(self) -> None:
         """Blank the panel and home the cursor."""
-        self._command(0x01)
-        self._sleep_ms(2)               # the one genuinely slow command
+        self._command(_CLEAR_DISPLAY)
+        self._sleep_ms(2)               # clear needs 1.52 ms; every other instruction 37 us
 
     def write(self, text: str, *, row: int = 0, column: int = 0) -> None:
         """Write ``text`` starting at (``row``, ``column``), clipped to the row.
 
         Args:
-            text: Characters to draw; anything past the row's end is
-                dropped.
+            text: Characters to draw, each a code point below 256, the
+                controller's own 8-bit character set; anything past the
+                row's end is dropped.
             row: Target row, 0-based.
             column: Starting cell in the row, 0-based.
+
+        Raises:
+            ValueError: For a position outside the panel, or a character
+                the 8-bit set cannot hold.
         """
         if not 0 <= row < self.rows:
             raise ValueError(f"row {row} outside 0..{self.rows - 1}")
         if not 0 <= column < self.columns:
             raise ValueError(f"column {column} outside 0..{self.columns - 1}")
-        self._command(0x80 | (_ROW_ADDRESSES[row] + column))
-        for character in text[:self.columns - column]:
-            self._send(ord(character), _REGISTER_SELECT)
+        self._command(_SET_DDRAM_ADDRESS | (self._row_addresses[row] + column))
+        remaining = self.columns - column
+        for character in text:
+            if remaining == 0:
+                break
+            remaining -= 1
+            code = ord(character)
+            if code > 0xFF:
+                raise ValueError(f"{character!r} is outside the panel's 8-bit character set")
+            self._send(code, _REGISTER_SELECT)
 
     @property
     def backlight(self) -> bool:
@@ -138,7 +172,8 @@ class CircuitPythonTransport:
 
     Locks around every byte so display traffic interleaves politely
     with sensors on a shared bus; at human update rates the lock
-    churn is invisible.
+    churn is invisible.  The lock is taken by spinning, so the
+    transport assumes no other code holds the bus across a write.
 
     Args:
         i2c: A constructed ``busio.I2C`` bus.
@@ -163,7 +198,7 @@ class CircuitPythonTransport:
             i2c.unlock()
 
 
-class MicropythonTransport:
+class MicroPythonTransport:
     """PCF8574 byte writes on a ``machine.I2C`` bus.
 
     Args:

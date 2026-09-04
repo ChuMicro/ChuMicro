@@ -2,8 +2,11 @@
 
 __chumicro_test_support__ = True
 
-_REGISTER_SELECT = 0x01
-_ENABLE = 0x04
+#: The PCF8574 bit map the core drives, mirrored here so a test can
+#: assert on raw bytes: register select, enable, and backlight.
+REGISTER_SELECT = 0x01
+ENABLE = 0x04
+BACKLIGHT = 0x08
 
 
 class RecordingTransport:
@@ -34,10 +37,10 @@ def decode_nibbles(raw: list) -> list:
     for pair_index in range(0, len(raw), 2):
         high = raw[pair_index]
         low = raw[pair_index + 1]
-        assert high & _ENABLE, "first write of a pair must pulse enable high"
-        assert not low & _ENABLE, "second write must drop enable"
-        assert high & ~_ENABLE == low, "only the enable bit may change"
-        nibbles.append((low & _REGISTER_SELECT, low >> 4))
+        assert high & ENABLE, "first write of a pair must pulse enable high"
+        assert not low & ENABLE, "second write must drop enable"
+        assert high & ~ENABLE == low, "only the enable bit may change"
+        nibbles.append((low & REGISTER_SELECT, low >> 4))
     return nibbles
 
 

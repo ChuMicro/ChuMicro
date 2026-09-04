@@ -7,12 +7,12 @@ HD44780 panels behind the ubiquitous PCF8574 I2C backpack.  The protocol core is
 ## Quick example
 
 ```python
-# MicroPython; CircuitPython swaps the two constructor lines.
-from chumicro_charlcd import CharLcd, MicropythonTransport
-from machine import I2C, Pin
+# MicroPython; CircuitPython swaps in CircuitPythonTransport.
+from chumicro_charlcd import CharLcd, MicroPythonTransport
+from chumicro_compat.wiring import i2c_bus
 
-bus = I2C(0, sda=Pin(33), scl=Pin(35))
-lcd = CharLcd(MicropythonTransport(bus))
+bus = i2c_bus(0, scl=35, sda=33, frequency=100_000)
+lcd = CharLcd(MicroPythonTransport(bus))
 
 lcd.write("hello", row=0)
 lcd.write("chumicro", row=1, column=4)

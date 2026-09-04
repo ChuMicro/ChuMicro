@@ -29,12 +29,12 @@ For bundle setup, pre-compiled `.mpy` bundles, the experimental channel, and det
 ## Quick example
 
 ```python
-# MicroPython; CircuitPython swaps the two constructor lines.
-from chumicro_charlcd import CharLcd, MicropythonTransport
-from machine import I2C, Pin
+# MicroPython; CircuitPython swaps in CircuitPythonTransport.
+from chumicro_charlcd import CharLcd, MicroPythonTransport
+from chumicro_compat.wiring import i2c_bus
 
-bus = I2C(0, sda=Pin(33), scl=Pin(35))
-lcd = CharLcd(MicropythonTransport(bus))
+bus = i2c_bus(0, scl=35, sda=33, frequency=100_000)
+lcd = CharLcd(MicroPythonTransport(bus))
 
 lcd.write("hello", row=0)
 lcd.write("chumicro", row=1, column=4)
@@ -47,8 +47,8 @@ lcd.backlight = False        # lands immediately, no text update needed
 
 | Symbol | Description |
 |---|---|
-| `CharLcd(transport, columns=16, rows=2, sleep_ms=None)` | HD44780 protocol against a byte-write transport; 16x2 and 20x4 geometries |
-| `CharLcd.write(text, row=0, column=0)` | Write text at a cell, clipped to the row instead of HD44780's mid-line wrap |
+| `CharLcd(transport, *, columns=16, rows=2, sleep_ms=None)` | HD44780 protocol against a byte-write transport; any geometry up to 40x4, row addresses derived from `columns` |
+| `CharLcd.write(text, *, row=0, column=0)` | Write text at a cell, clipped to the row instead of HD44780's mid-line wrap; code points above 255 raise `ValueError` |
 | `CharLcd.clear()` | Blank the panel and home the cursor |
 | `CharLcd.backlight` | Assignable backlight state; toggles land immediately |
 
@@ -57,7 +57,7 @@ lcd.backlight = False        # lands immediately, no text update needed
 | Symbol | Description |
 |---|---|
 | `CircuitPythonTransport(i2c, address=0x27)` | PCF8574 on `busio.I2C`, locking per write so sensors share the bus politely |
-| `MicropythonTransport(i2c, address=0x27)` | The same against `machine.I2C` |
+| `MicroPythonTransport(i2c, address=0x27)` | The same against `machine.I2C` |
 
 ### Testing
 
@@ -68,7 +68,7 @@ lcd.backlight = False        # lands immediately, no text update needed
 
 ## Where this fits
 
-No dependencies; the app constructs its runtime's I2C bus and hands it to a transport.  Sibling display families live in [`chumicro-screens`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/screens) (pixel panels).
+The driver takes any constructed I2C bus of its runtime and imports nothing else.  The examples and quick starts resolve that bus by GPIO number through [`chumicro-compat`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/compat)'s `wiring`, which is why the package declares it.  Sibling display families live in [`chumicro-screens`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/screens) (pixel panels).
 
 ## Platform support
 

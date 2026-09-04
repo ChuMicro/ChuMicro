@@ -1,9 +1,13 @@
 """Public exports for the chumicro-charlcd package."""
 
+import gc
+
 from chumicro_charlcd.core import (
     CharLcd,
     CircuitPythonTransport,
-    MicropythonTransport,
+    MicroPythonTransport,
 )
 
-__all__ = ["CharLcd", "CircuitPythonTransport", "MicropythonTransport"]
+__all__ = ["CharLcd", "CircuitPythonTransport", "MicroPythonTransport"]
+
+gc.collect()

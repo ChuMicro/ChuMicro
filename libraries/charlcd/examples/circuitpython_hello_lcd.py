@@ -12,11 +12,10 @@ Example output::
 """
 __chumicro_runtimes__ = ("circuitpython",)
 
-import board
-import busio
 from chumicro_charlcd import CharLcd, CircuitPythonTransport
+from chumicro_compat.wiring import i2c_bus
 
-bus = busio.I2C(board.GP5, board.GP4)  # SCL, SDA
+bus = i2c_bus(0, scl=5, sda=4, frequency=100_000)
 lcd = CharLcd(CircuitPythonTransport(bus))
 
 lcd.write("chumicro charlcd", row=0)

@@ -26,6 +26,7 @@ def test_status_row_positions_and_writes():
 | `RecordingTransport.raw` | Every byte the core put on the bus, in order. |
 | `decode_nibbles(raw)` | Folds (enable high, enable low) pairs into `(register_select, nibble)` tuples; use on init traffic, which starts in 4-bit mode-force nibbles. |
 | `decode_bytes(raw)` | Folds nibble pairs into `(register_select, value)` tuples; use on post-init traffic. |
+| `REGISTER_SELECT` / `ENABLE` / `BACKLIGHT` | The PCF8574 bit map, for asserting on raw bytes such as a backlight toggle. |
 
 Passing `sleep_ms=[].append` (or any recorder) at construction keeps tests from actually waiting out the controller's timed delays.
 
