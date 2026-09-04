@@ -128,8 +128,9 @@ class SSD1306:
     3.7 ms with a worst case of 3.9 ms, inside a 5 ms tick, and a full
     frame crosses in 8 advances.  Every larger setting leaves the
     budget, four pages costing 12.6 ms, and so does one page at
-    100 kHz, at 13.0 ms.  A panel sharing a tick budget therefore wants
-    a 400 kHz bus and the default; the knob serves callers pacing the
+    100 kHz, at 13.0 ms.  A Pi Pico W measures one page at 3.5 ms mean
+    and 3.8 ms worst.  A panel sharing a tick budget therefore wants a
+    400 kHz bus and the default; the knob serves callers pacing the
     flush themselves.
 
     Args:

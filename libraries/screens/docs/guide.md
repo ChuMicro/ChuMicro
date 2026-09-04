@@ -221,7 +221,8 @@ Colors are 0 (dark) and 1 (lit), and `set_contrast(value)` sets the
 drive current, which is brightness on an emissive panel.  Bench datum
 from a LOLIN S2 Mini at 400 kHz: one page per advance averages 3.7 ms
 with a worst case of 3.9 ms, inside a 5 ms tick, and a frame crosses
-in 8 advances.  Four pages per advance costs 12.6 ms and one page at
+in 8 advances; a Pi Pico W measures the same page at 3.5 ms mean and
+3.8 ms worst.  Four pages per advance costs 12.6 ms and one page at
 100 kHz costs 13.0 ms, both outside the budget, so a paced panel wants
 a 400 kHz bus and the default `transfer_pages`.  An advance allocates
 nothing: the buffer carries the panel's control byte ahead of every

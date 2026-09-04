@@ -188,6 +188,21 @@ actually wants on-device images.
   `mp_machine_i2c_transfer_adaptor`); a `gc.collect()` ahead of each
   GC9A01A frame allocation cut peak live heap by 8.8 to 15.6 KB in the
   example's import chain; `CharLcd.write` went from 96 B to 0 B per row.
-  The two SSD1306 init tables now match command for command.  Bench
-  pending for the stride layout and the aligned CircuitPython table:
-  Pico W and S2 under both runtimes.
+  The two SSD1306 init tables now match command for command.
+- 2026-09-04: bench, one screen and one board at a time.  SSD1306 on all
+  four cells (S2 CircuitPython 10.2.0, S2 MicroPython 1.27.0, Pico W
+  MicroPython 1.28.0, Pico W CircuitPython 10.2.1): clean `deploy-example`
+  runs and a visual check of the border, labels, and counter or bar on each.
+  On the Pico W MicroPython cell a probe over `mpremote run` timed the stride
+  layout at 3.49 ms mean and 3.79 ms worst per page at 400 kHz, with 2288 B
+  allocated across twenty frames, which is one generator per frame and
+  nothing per advance.  `compat/examples/blink.py` ran clean on the same
+  four cells, so the Decision 0127 resolvers hold on both chip families
+  under both runtimes.  charlcd hello on the Pico W under both runtimes,
+  both rows read.  The rp2 cells needed the examples' S2 numbers switched
+  to GP4 and GP5 for the run and switched back, which is the per-board
+  wiring edit Phase 1 leaves.  Not run: charlcd on the S2 cells (the wire
+  traffic is byte-identical to the validated build, per the audit's
+  equivalence probe and the tests) and the GC9A01A drivers after their
+  constructor change (a collect before the frame and `time.sleep_ms` as
+  the default sleep).
