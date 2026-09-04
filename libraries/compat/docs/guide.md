@@ -2,9 +2,9 @@
 
 ## Overview
 
-`chumicro-compat` provides lightweight reimplementations of CPython standard-library features that are missing or incomplete on MicroPython and CircuitPython.  It allows library authors to use familiar Python patterns across all three runtimes without depending on modules that don't exist on microcontrollers.
+`chumicro-compat` holds two kinds of shim.  `chumicro_compat.functools` reimplements a CPython standard-library feature that MicroPython and CircuitPython leave out, so library code uses the familiar pattern on all three runtimes.  `chumicro_compat.wiring` resolves pins and buses from MCU GPIO numbers, so one construction block runs on both device runtimes.
 
-On CPython, the real C implementations are re-exported for zero overhead.  On MicroPython and CircuitPython, pure-Python polyfills provide the same API.
+On CPython the real C implementation of `partial` is re-exported for zero overhead.  The wiring resolvers raise there, because a laptop has no GPIO, and a test injects a fake in their place.
 
 ## functools.partial
 
@@ -96,15 +96,53 @@ print(p(1883))       # broker.local:1883 tls=True
 > works on CPython but raises `TypeError` on MicroPython / CircuitPython,
 > whose builtins take those arguments positionally only.
 
+## Pins and buses by GPIO number
+
+The wire between a board and a part has one identity, its MCU GPIO number, and each runtime spells it differently: `machine.Pin(6)` on MicroPython, `board.GP6` or `board.IO6` on CircuitPython, with the alias changing per board definition.  `chumicro_compat.wiring` takes the number and returns what the runtime's own API takes, so moving an app between runtimes leaves its pin references alone.
+
+### An output pin
+
+`digital_output(gpio, value=)` returns a callable pin: `pin(1)` drives high, `pin(0)` drives low, and `pin()` reads the level back.  On MicroPython that is a `machine.Pin` in output mode; on CircuitPython it is a `digitalio.DigitalInOut` behind the same call shape.  `value` is the level driven at construction, so a chip select idles high from its first instant.
+
+```python
+from chumicro_compat.wiring import digital_output
+
+chip_select = digital_output(5, value=1)
+data_command = digital_output(8, value=0)
+chip_select(0)   # assert
+chip_select(1)   # release
+```
+
+### SPI and I2C buses
+
+`spi_bus` and `i2c_bus` return the runtime's native bus on the GPIO numbers given: `machine.SPI` or `busio.SPI`, `machine.I2C` or `busio.I2C`.  The first argument is the MicroPython controller id, which decides which pins are legal on rp2 and esp32; CircuitPython derives the controller from the pins and ignores it.
+
+```python
+from chumicro_compat.wiring import i2c_bus, spi_bus
+
+spi = spi_bus(0, sck=6, mosi=7, baudrate=40_000_000)
+i2c = i2c_bus(0, scl=5, sda=4, frequency=100_000)
+```
+
+On CircuitPython `spi_bus` locks the bus once to apply `baudrate`, `polarity`, and `phase`, so a driver that only writes needs no further configuration.  A consumer that reconfigures the bus per transaction, `fourwire.FourWire` for one, still takes its own baudrate.  `i2c_bus` defaults `frequency` to 400 kHz on both runtimes, where MicroPython's own default is 400 kHz and CircuitPython's is 100 kHz.  A part rated for 100 kHz, such as a PCF8574 LCD backpack, wants the number passed.
+
+### Pin objects pass through
+
+A port whose pins are not a flat integer, stm32's `PA5` for one, hands the runtime's pin object in place of the number.  A `machine.Pin` comes back as it was given, mode and all, and a `microcontroller.Pin` is wrapped the same way a number is.  A bus resolver given an already-constructed bus returns it unchanged.
+
+### One file on both runtimes
+
+[`blink.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/compat/examples/blink.py) is one example file marked for both device runtimes: it resolves GPIO15 with `digital_output` and toggles it on a `chumicro_timing` deadline.  That number is a LOLIN S2 Mini's onboard LED and a Pi Pico W's GP15 header pin.
+
 ## Platform notes
 
-| Runtime | Implementation |
-|---|---|
-| CPython | Re-exports `functools.partial` (C implementation, zero overhead) |
-| MicroPython | Pure-Python polyfill |
-| CircuitPython | Pure-Python polyfill |
+| Runtime | `functools.partial` | `wiring` |
+|---|---|---|
+| CPython | Re-exports the C implementation, zero overhead | Raises `RuntimeError`; inject a fake |
+| MicroPython | Pure-Python polyfill | `machine.Pin`, `machine.SPI`, `machine.I2C` |
+| CircuitPython | Pure-Python polyfill | `digitalio.DigitalInOut` behind a callable, `busio.SPI`, `busio.I2C` |
 
-The public API is identical across all runtimes.  Code that imports `partial` from `chumicro_compat.functools` will work on any supported runtime without changes.
+The public API is identical across all runtimes.  Code that imports `partial` from `chumicro_compat.functools` works on any supported runtime without changes, and code that resolves its pins through `chumicro_compat.wiring` carries the same GPIO numbers to both device runtimes.
 
 ## Examples
 
@@ -115,6 +153,7 @@ The [examples](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/compat/e
 | `partial_basic.py` | Freeze one positional argument to a function |
 | `partial_keyword_override.py` | Freeze keyword args, override at call time |
 | `partial_callback.py` | Wire a callback with frozen context (embedded pattern) |
+| `blink.py` | Blink GPIO15 from one file that runs on both device runtimes |
 
 ---
 

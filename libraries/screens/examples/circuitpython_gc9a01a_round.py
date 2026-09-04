@@ -3,7 +3,7 @@
 Wiring for a LOLIN S2 Mini: SCL=IO7, SDA=IO11, CS=IO12, DC=IO9,
 RST=IO5, VCC=3V3, GND=GND.  The panel's SCL/SDA silk is SPI clock and
 data, not I2C.  For a Pi Pico W wire SCK=GP6, MOSI=GP7, CS=GP5,
-DC=GP8, RST=GP9 and swap the pin names below to GP numbers.
+DC=GP8, RST=GP9 and change the GPIO numbers below to match.
 
 displayio repaints changed regions in the background at C speed, so
 there is no ScreenService here: mutate a palette and the panel
@@ -19,17 +19,16 @@ Example output::
 """
 __chumicro_runtimes__ = ("circuitpython",)
 
-import board
-import busio
 import displayio
 import fourwire
+from chumicro_compat.wiring import gpio_pin, spi_bus
 from chumicro_screens.gc9a01a_displayio import make_display
 from chumicro_timing import ticks_add, ticks_diff, ticks_ms
 
 displayio.release_displays()
-spi = busio.SPI(clock=board.IO7, MOSI=board.IO11)
+spi = spi_bus(1, sck=7, mosi=11)
 display = make_display(fourwire.FourWire(
-    spi, command=board.IO9, chip_select=board.IO12, reset=board.IO5,
+    spi, command=gpio_pin(9), chip_select=gpio_pin(12), reset=gpio_pin(5),
     baudrate=40_000_000))
 
 bar_palette = displayio.Palette(3)

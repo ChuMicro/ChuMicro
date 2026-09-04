@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "chumicro-compat"
 dynamic = ["version"]
-description = "Cross-runtime compatibility polyfills for CircuitPython, MicroPython, and CPython: functools.partial and more."
+description = "Cross-runtime compatibility polyfills for CircuitPython, MicroPython, and CPython: functools.partial, and pins and buses by GPIO number on both device runtimes."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
@@ -15,7 +15,7 @@ authors = [
 ]
 keywords = [
     "circuitpython", "micropython", "microcontroller", "embedded",
-    "esp32", "rp2040", "polyfill", "functools",
+    "esp32", "rp2040", "polyfill", "functools", "gpio", "pins",
 ]
 classifiers = [
     "Development Status :: 2 - Pre-Alpha",

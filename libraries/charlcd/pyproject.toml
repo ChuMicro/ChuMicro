@@ -7,6 +7,9 @@ name = "chumicro-charlcd"
 dynamic = ["version"]
 description = "HD44780 character LCDs behind PCF8574 I2C backpacks; one driver for CircuitPython and MicroPython"
 readme = "README.md"
+dependencies = [
+    "chumicro-compat>=0.4",
+]
 requires-python = ">=3.11"
 license = "MIT"
 license-files = ["LICENSE"]

@@ -7,6 +7,7 @@ name = "chumicro-screens"
 dynamic = ["version"]
 description = "Tick-paced display flushing for pixel screens; no bus transfer stalls your loop"
 dependencies = [
+    "chumicro-compat>=0.4",
     "chumicro-timing>=0.8",
 ]
 readme = "README.md"

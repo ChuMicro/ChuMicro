@@ -20,15 +20,14 @@ Example output::
 """
 __chumicro_runtimes__ = ("circuitpython",)
 
-import board
-import busio
 import displayio
 import i2cdisplaybus
+from chumicro_compat.wiring import i2c_bus
 from chumicro_screens.ssd1306_displayio import make_display
 from chumicro_timing import ticks_add, ticks_diff, ticks_ms
 
 displayio.release_displays()
-i2c = busio.I2C(board.IO35, board.IO33)  # SCL, SDA
+i2c = i2c_bus(0, scl=35, sda=33, frequency=400_000)
 display = make_display(i2cdisplaybus.I2CDisplayBus(i2c, device_address=0x3C))
 
 DARK, LIT = 0, 1

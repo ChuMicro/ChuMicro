@@ -18,12 +18,12 @@ Example output::
 """
 __chumicro_runtimes__ = ("micropython",)
 
+from chumicro_compat.wiring import i2c_bus
 from chumicro_screens import ScreenService
 from chumicro_screens.ssd1306 import SSD1306
 from chumicro_timing import ticks_add, ticks_diff, ticks_ms
-from machine import I2C, Pin
 
-bus = I2C(0, sda=Pin(33), scl=Pin(35), freq=400_000)
+bus = i2c_bus(0, scl=35, sda=33, frequency=400_000)
 panel = SSD1306(bus)
 screen = ScreenService(panel, refresh_interval_ms=100)
 

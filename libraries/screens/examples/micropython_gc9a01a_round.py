@@ -3,7 +3,7 @@
 Wiring for a LOLIN S2 Mini: SCL=IO7, SDA=IO11, CS=IO12, DC=IO9,
 RST=IO5, VCC=3V3, GND=GND.  The panel's SCL/SDA silk is SPI clock and
 data, not I2C.  Any MicroPython board works with its own SPI-capable
-pins substituted.
+GPIO numbers substituted.
 
 The redraw happens once a second; the ~115 KB frame then crosses the
 bus one 10-row strip per loop pass, so the loop never blocks longer
@@ -16,17 +16,16 @@ Example output::
 """
 __chumicro_runtimes__ = ("micropython",)
 
+from chumicro_compat.wiring import digital_output, spi_bus
 from chumicro_screens import ScreenService
 from chumicro_screens.gc9a01a import GC9A01A, color565
 from chumicro_timing import ticks_add, ticks_diff, ticks_ms
-from machine import SPI, Pin
 
-spi = SPI(1, baudrate=40_000_000, polarity=0, phase=0,
-          sck=Pin(7), mosi=Pin(11), miso=Pin(3))
+spi = spi_bus(1, sck=7, mosi=11, miso=3, baudrate=40_000_000)
 panel = GC9A01A(spi,
-                Pin(12, Pin.OUT, value=1),
-                Pin(9, Pin.OUT, value=0),
-                Pin(5, Pin.OUT, value=1))
+                digital_output(12, value=1),
+                digital_output(9, value=0),
+                digital_output(5, value=1))
 screen = ScreenService(panel, refresh_interval_ms=100)
 
 white = color565(255, 255, 255)

@@ -20,7 +20,7 @@ Small, focused libraries for microcontrollers and laptops.  Every library instal
 | **[knobs](knobs/)** | Rotary encoders and analog knobs.  Quadrature is counted outside your loop, and ADC readings are held still by a median, smoothing, and a deadband. |
 | **[screens](screens/)** | Paced display flushing.  Draw the frame, call `show()`, and the flush crosses the bus one bounded transfer per tick instead of stalling the loop. |
 | **[charlcd](charlcd/)** | HD44780 character LCDs behind PCF8574 I2C backpacks (LCM1602 class).  One driver, both device runtimes, host-testable to the byte. |
-| **[compat](compat/)** | Standard-library features that CircuitPython and MicroPython are missing (like `functools.partial`). |
+| **[compat](compat/)** | Standard-library features that CircuitPython and MicroPython are missing (like `functools.partial`), and pins and buses by GPIO number so one construction block runs on both. |
 | **[msgpack](msgpack/)** | Compact binary serialization, smaller than JSON for typical payloads.  Good for settings and sensor data.  Wire-compatible with PyPI `msgpack(use_single_float=True)`. |
 | **[config](config/)** | Type-checked runtime config with a shared dotted-key shape (`wifi.ssid`, `mqtt.broker.host`); each library reads its settings via `<Name>Config.from_config(...)`. |
 | **[kvstore](kvstore/)** | Tiny persistent key-value store for counters, timestamps, and tokens.  Picks the right backend (NVM / NVS / LittleFS) for your board. |
@@ -76,3 +76,4 @@ The SVG is regenerated from each library's pyproject.toml by [`scripts/render_de
 - **"I need a WebSocket client or server"** → [websockets](websockets/)
 - **"I want my app to react when WiFi connects or drops"** → [wifi](wifi/)'s guide covers state-change callbacks and signals
 - **"`functools.partial` doesn't exist on my board"** → [compat](compat/)
+- **"My pin names change every time I switch runtimes"** → [compat](compat/)'s `wiring` resolves GPIO numbers on both
