@@ -12,6 +12,14 @@
 
 ::: chumicro_screens.gc9a01a_displayio
 
+## `chumicro_screens.ssd1306`
+
+::: chumicro_screens.ssd1306
+
+## `chumicro_screens.ssd1306_displayio`
+
+::: chumicro_screens.ssd1306_displayio
+
 ## `chumicro_screens.testing`
 
 ::: chumicro_screens.testing

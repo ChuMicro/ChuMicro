@@ -1,7 +1,7 @@
 """Test configuration for the chumicro-screens package.
 
 Puts this directory on ``sys.path`` so test files can import the
-sibling ``_framebuf_stub`` module under pytest's ``importlib`` import
+sibling ``_screen_stubs`` module under pytest's ``importlib`` import
 mode, which, unlike ``prepend`` mode, does not add a test file's own
 directory to the path.  The cross-runtime harness and the on-device
 collector resolve sibling helpers through their own staging paths.

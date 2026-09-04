@@ -87,4 +87,7 @@ def test_init_sequence_parses_as_packed_commands() -> None:
     assert commands[0] == 0xAE             # display off first
     assert commands[-1] == 0xAF            # display on last
     assert 0x8D in commands                # charge pump enabled
-    assert len(commands) == 13
+    assert 0x81 not in commands            # brightness is displayio's, applied after the table
+    assert (0x40 in commands and 0xD3 in commands
+            and 0xA4 in commands)          # scroll and test-pattern state forced back
+    assert len(commands) == 15

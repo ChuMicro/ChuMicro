@@ -122,6 +122,36 @@ actually wants on-device images.
 
 ## Rejected
 
+- **A shared base class for `GC9A01A` and `GC9A01AIndexed`.**  They repeat
+  about 20 lines of constructor and the flush skeleton, and a base would
+  save them at the cost of a class object, an MRO lookup per attribute, and
+  a shared `__init__` whose two halves differ in every buffer.  Decision
+  0126 makes the indexed shape the canvas and the full-color one a native
+  extra, so they diverge further in Phase 2.  Two named classes stay.
+- **Converging `_strip_bounds` and `_page_windows`, or hoisting the flush
+  generator skeleton into `core.py`.**  The two chunking loops encode
+  different wire formats, and a shared generator helper would take a
+  callable per item, minting a bound method per frame and adding a Python
+  call per advance to save four lines per driver.  Each driver keeps its
+  own.
+- **Sending the GC9A01A column window once per frame.**  CASET is constant
+  and the memory-write-continue command would cut the per-strip fixed cost
+  by roughly 60 %, about 5 ms of a 123 ms Pico W frame.  The
+  self-contained-strip contract (a dropped frame leaves no half-set window)
+  is what makes the paced protocol safe, and Phase 4's dirty window needs
+  per-strip RASET again, so the strips stay self-contained.
+- **`const()` shims in the two displayio modules.**  Each holds one or zero
+  private integers read at construction only; the five-line shim costs more
+  flash than the dict entries it removes.  `ssd1306.py` and `gc9a01a.py`
+  carry the shim because their tables earn it.
+- **A Python `__call__` pin wrapper on a CircuitPython framebuf path.**
+  Phase 1's `digital_output` wraps `digitalio.DigitalInOut` in a callable,
+  which costs a method lookup and a frame per call, about 20 us on an
+  rp2040, and `_write_strip` makes eight pin calls per strip.  That is fine
+  for the displayio path, which toggles no pins from Python, and moot while
+  the framebuf drivers ship to MicroPython only.  A framebuf driver on
+  CircuitPython would resolve the pin's `value` attribute once at
+  construction instead of calling through the wrapper per strip.
 - **JPG decode on MicroPython.**  Huffman plus IDCT is branchy bit-twiddling
   where viper's speedup still lands at seconds per image.  Offline
   conversion (raw RGB565 blobs, or phase 7's palettized BMP) is the answer;
@@ -148,3 +178,16 @@ actually wants on-device images.
   compat 0.4.0 at 1949 B of mpy against the old 1174 B ceiling, of which
   the new module is 1291 B.  No Pico W or S2 was on the bench during the
   session, so the migrated examples have not yet run on a board.
+- 2026-09-04: five audits (embedded and code-quality on screens and
+  charlcd, plus a first-principles runtime pass) applied in the same
+  session.  Measured on the MicroPython unix port before and after: the
+  frame's last `handle()` went from 64 B to 0 B through a two-argument
+  `next()`; SSD1306 pages now leave in one `writeto` from a stride-laid
+  buffer, which retires the 129-byte combined-buffer copy the rp2 port's
+  `writevto` adaptor made per page (`extmod/machine_i2c.c`
+  `mp_machine_i2c_transfer_adaptor`); a `gc.collect()` ahead of each
+  GC9A01A frame allocation cut peak live heap by 8.8 to 15.6 KB in the
+  example's import chain; `CharLcd.write` went from 96 B to 0 B per row.
+  The two SSD1306 init tables now match command for command.  Bench
+  pending for the stride layout and the aligned CircuitPython table:
+  Pico W and S2 under both runtimes.

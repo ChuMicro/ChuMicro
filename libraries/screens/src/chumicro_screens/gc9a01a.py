@@ -17,18 +17,25 @@ sends one strip of ``transfer_rows`` rows as a self-contained
 transfer (window, then memory write), so a full frame spreads across
 ticks instead of blocking one.
 
-Construction blocks about 350 ms while the panel resets and runs its
-initialization sequence.
+Construction blocks 330 to 365 ms, depending on the board, while the
+panel resets and runs its initialization sequence.
 """
 
 __chumicro_runtimes__ = ("micropython",)
 
+import gc
 import time
 
-WIDTH = 240
-HEIGHT = 240
+try:
+    from micropython import const
+except ImportError:
+    def const(value):
+        return value
 
-_ROW_BYTES = WIDTH * 2
+WIDTH = const(240)
+HEIGHT = const(240)
+
+_ROW_BYTES = const(WIDTH * 2)
 _COLUMN_ADDRESS_COMMAND = b"\x2a"
 _ROW_ADDRESS_COMMAND = b"\x2b"
 _MEMORY_WRITE_COMMAND = b"\x2c"
@@ -76,15 +83,6 @@ def color565(red: int, green: int, blue: int) -> int:
     """
     value = ((red & 0xF8) << 8) | ((green & 0xFC) << 3) | (blue >> 3)
     return ((value & 0xFF) << 8) | (value >> 8)
-
-
-def _sleep_ms(duration_ms: int) -> None:
-    """Sleep via ``time.sleep_ms`` when present, otherwise ``time.sleep``."""
-    runtime_sleep_ms = getattr(time, "sleep_ms", None)
-    if runtime_sleep_ms is not None:
-        runtime_sleep_ms(duration_ms)
-        return
-    time.sleep(duration_ms / 1000)
 
 
 def _reset_panel(reset: object, sleep_ms: object) -> None:
@@ -195,9 +193,11 @@ class GC9A01A:
         self._spi = spi
         self._chip_select = chip_select
         self._data_command = data_command
-        self._reset = reset
         self.width = WIDTH
         self.height = HEIGHT
+        # The frame needs one contiguous block, so reclaim the compile
+        # scratch the import chain left interleaved with live objects.
+        gc.collect()
         self._buffer = bytearray(WIDTH * HEIGHT * 2)
         buffer_view = memoryview(self._buffer)
         # Construction-time import: keeps the module importable on
@@ -210,7 +210,7 @@ class GC9A01A:
                                  (row_start + row_count) * _ROW_BYTES])
             for row_start, row_count, window in _strip_bounds(transfer_rows)]
         if sleep_ms is None:
-            sleep_ms = _sleep_ms
+            sleep_ms = time.sleep_ms
         _reset_panel(reset, sleep_ms)
         _run_init(spi, chip_select, data_command, sleep_ms)
 
@@ -247,18 +247,20 @@ class GC9A01AIndexed:
 
     ``transfer_rows`` defaults for the driver's target class.  Sizing
     datum from the Pi Pico W bench, where ``machine.SPI`` clamps a
-    40 MHz request to 24 MHz: per-advance cost is about 0.2 ms fixed
-    plus 0.5 ms per row, so a 6-row strip peaks at 3.2 ms inside a
-    5 ms tick and a full frame crosses in 40 advances, about 122 ms.
-    Taller strips barely shorten the frame; a faster chip can raise
-    ``transfer_rows`` as its own bench allows.
+    40 MHz request to 24 MHz: the default 6-row strip measured 3.6 ms
+    at worst, inside a 5 ms tick, and a full frame crosses in 40
+    advances, about 123 ms.  The strip size was fitted with a model of
+    0.2 ms fixed plus 0.5 ms per row.  Taller strips barely shorten the
+    frame; a faster chip can raise ``transfer_rows`` as its own bench
+    allows.
 
     Args:
         spi: SPI bus wired to the panel, clock and data lines.
         chip_select: Output pin on the panel's CS line.
         data_command: Output pin on the panel's DC line.
         reset: Output pin on the panel's RST line.
-        transfer_rows: Rows sent per flush advance, 1 to 240.
+        transfer_rows: Rows sent per flush advance, 1 to 240.  Each row
+            costs 480 bytes of strip buffer on top of the frame.
         sleep_ms: Millisecond-sleep callable used during panel init.
             Defaults to the real clock.
     """
@@ -271,12 +273,12 @@ class GC9A01AIndexed:
         self._spi = spi
         self._chip_select = chip_select
         self._data_command = data_command
-        self._reset = reset
         self.width = WIDTH
         self.height = HEIGHT
+        # The frame needs one contiguous block, so reclaim the compile
+        # scratch the import chain left interleaved with live objects.
+        gc.collect()
         self._buffer = bytearray(WIDTH * HEIGHT)
-        # Construction-time import: keeps the module importable on
-        # CPython, where framebuf does not exist.
         import framebuf
         self.frame = framebuf.FrameBuffer(self._buffer, WIDTH, HEIGHT,
                                           framebuf.GS8)
@@ -291,7 +293,7 @@ class GC9A01AIndexed:
             (row_start, window, strip_view[:row_count * _ROW_BYTES])
             for row_start, row_count, window in _strip_bounds(transfer_rows)]
         if sleep_ms is None:
-            sleep_ms = _sleep_ms
+            sleep_ms = time.sleep_ms
         _reset_panel(reset, sleep_ms)
         _run_init(spi, chip_select, data_command, sleep_ms)
 

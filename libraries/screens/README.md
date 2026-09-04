@@ -78,6 +78,9 @@ for loop_pass in range(4):
 | `chumicro_screens.gc9a01a.GC9A01AIndexed` | The same panel at one byte per pixel plus a 256-entry palette, fitting 256 KB-class boards (MicroPython) |
 | `chumicro_screens.gc9a01a.color565(red, green, blue)` | Pack a color for the driver's `frame` drawing methods |
 | `chumicro_screens.gc9a01a_displayio.make_display(display_bus)` | The panel as a displayio `BusDisplay` (CircuitPython; the firmware owns refresh, no ScreenService involved) |
+| `chumicro_screens.ssd1306.SSD1306` | 128x64 or 128x32 monochrome OLED over I2C, one page per flush advance (MicroPython) |
+| `chumicro_screens.ssd1306.SSD1306.set_contrast(value)` | Drive current, 0 to 255, which is brightness on an emissive panel |
+| `chumicro_screens.ssd1306_displayio.make_display(display_bus)` | The mono OLED as a displayio `BusDisplay` (CircuitPython) |
 
 ### Testing
 
@@ -87,7 +90,7 @@ for loop_pass in range(4):
 
 ## Where this fits
 
-Depends on [`chumicro-timing`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/timing) for tick arithmetic.  Apps typically register the service with [`chumicro-runner`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner), though a hand-written loop calling `check()` / `handle()` works the same.
+Depends on [`chumicro-timing`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/timing) for tick arithmetic, and on [`chumicro-compat`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/compat) for the examples' pins and buses by GPIO number; the drivers themselves take any bus and callable pins the app constructs.  Apps typically register the service with [`chumicro-runner`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner), though a hand-written loop calling `check()` / `handle()` works the same.
 
 ## Platform support
 
@@ -95,7 +98,7 @@ Works on CPython, MicroPython, and CircuitPython.
 
 ### Drivers ship after bench validation
 
-Per-controller drivers are added as each passes validation on real boards.  First on the bench: `GC9A01A` (MicroPython, validated on a LOLIN S2 Mini; a 10-row strip averages 3.3 ms at 40 MHz SPI).  `GC9A01AIndexed` carries the same panel onto 256 KB-class boards, and `gc9a01a_displayio.make_display` is the CircuitPython path.  Writing your own panel is one method: `flush()` returning an iterator that does one bounded bus transfer per advance.
+Per-controller drivers are added as each passes validation on real boards.  The round GC9A01A TFT ships as `GC9A01A` (MicroPython, validated on a LOLIN S2 Mini; a 10-row strip averages 3.3 ms at 40 MHz SPI), `GC9A01AIndexed` for 256 KB-class boards (validated on a Pi Pico W), and `gc9a01a_displayio.make_display` on CircuitPython.  The SSD1306 mono OLED ships as `SSD1306` (MicroPython; one page per advance averages 3.7 ms at 400 kHz) and `ssd1306_displayio.make_display` on CircuitPython, both validated on the S2.  Writing your own panel is one method: `flush()` returning an iterator that does one bounded bus transfer per advance.
 
 ## Examples
 
@@ -106,6 +109,8 @@ Per-controller drivers are added as each passes validation on real boards.  Firs
 | [`micropython_gc9a01a_indexed.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/screens/examples/micropython_gc9a01a_indexed.py) | The same counter from a Pi Pico W through the indexed driver (MicroPython hardware) |
 | [`micropython_gc9a01a_card.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/screens/examples/micropython_gc9a01a_card.py) | A labeled color card to run first after wiring; each bar names its color, so swapped channels and rotated mounts are visible at a glance (MicroPython hardware) |
 | [`circuitpython_gc9a01a_round.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/screens/examples/circuitpython_gc9a01a_round.py) | A color card on the round TFT via displayio, with a blinking notch proving live refresh (CircuitPython hardware) |
+| [`micropython_ssd1306_counter.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/screens/examples/micropython_ssd1306_counter.py) | A bordered seconds counter on the mono OLED, one page per loop pass (MicroPython hardware) |
+| [`circuitpython_ssd1306_counter.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/screens/examples/circuitpython_ssd1306_counter.py) | A border and a growing bar on the mono OLED via displayio (CircuitPython hardware) |
 
 ## Contributing
 

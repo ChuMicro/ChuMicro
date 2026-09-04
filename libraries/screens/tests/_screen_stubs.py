@@ -39,8 +39,8 @@ class FramebufStub:
     - ``RGB565`` stores two little-endian bytes per pixel.
     - ``GS8`` stores one byte per pixel.
     - ``MONO_VLSB`` packs eight vertically stacked pixels into one byte,
-      so byte ``(y // 8) * width + x`` carries row ``y`` in bit
-      ``y % 8``.
+      so byte ``(y // 8) * stride + x`` carries row ``y`` in bit
+      ``y % 8``; ``stride`` defaults to the width, as in framebuf.
 
     ``blit`` implements the one conversion the color drivers use, a GS8
     source through a 256-entry palette into an RGB565 destination, with
@@ -53,16 +53,17 @@ class FramebufStub:
     GS8 = 2
 
     class FrameBuffer:
-        def __init__(self, buffer, width, height, pixel_format):
+        def __init__(self, buffer, width, height, pixel_format, stride=None):
             self.buffer = buffer
             self.width = width
             self.height = height
             self.pixel_format = pixel_format
+            self.stride = width if stride is None else stride
 
         # framebuf's own signature names the coordinates x and y.
         def pixel(self, x, y, value):  # noqa: CHU001
             if self.pixel_format == FramebufStub.MONO_VLSB:
-                offset = (y // 8) * self.width + x
+                offset = (y // 8) * self.stride + x
                 mask = 1 << (y % 8)
                 if value:
                     self.buffer[offset] |= mask

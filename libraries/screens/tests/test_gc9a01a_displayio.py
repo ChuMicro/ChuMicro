@@ -14,12 +14,17 @@ from _screen_stubs import BusDisplayStub
 
 sys.modules.setdefault("busdisplay", BusDisplayStub())
 
-from chumicro_screens import gc9a01a_displayio  # noqa: E402
+from chumicro_screens import gc9a01a, gc9a01a_displayio  # noqa: E402
 from chumicro_screens.gc9a01a_displayio import make_display  # noqa: E402
 
 
 class FakeFourWire:
     """Opaque bus object; the factory must pass it through untouched."""
+
+
+def test_init_table_matches_the_micropython_driver() -> None:
+    """Both runtimes bring the panel up with one table, so neither can drift."""
+    assert gc9a01a_displayio._INIT_SEQUENCE == gc9a01a._INIT_SEQUENCE
 
 
 def test_make_display_builds_the_bus_display() -> None:

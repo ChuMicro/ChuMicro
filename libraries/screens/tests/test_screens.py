@@ -7,7 +7,7 @@ through the test harness.
 
 from chumicro_screens import ScreenService
 from chumicro_screens.testing import FakePanel
-from chumicro_test_harness import raises
+from chumicro_test_harness import raises, skip
 from chumicro_timing import ticks_ms
 from chumicro_timing.testing import FakeTicks
 
@@ -162,6 +162,29 @@ def test_default_clock_construction_flushes() -> None:
     assert service.check(now_ms) is True
     service.handle(now_ms)
     assert panel.flushes_completed == 1
+
+
+def test_advancing_and_finishing_a_frame_allocate_nothing() -> None:
+    """A thousand mid-frame advances plus the frame's end stay under the 64-byte churn bar."""
+    import gc
+
+    if not hasattr(gc, "mem_alloc"):
+        skip("CPython has no gc.mem_alloc; the MicroPython and CircuitPython ports measure this")
+    panel = FakePanel(transfers_per_flush=1001)
+    service = ScreenService(panel, refresh_interval_ms=0, ticks=FakeTicks())
+    service.show()
+    service.handle(0)
+    gc.collect()
+    gc.disable()
+    try:
+        before = gc.mem_alloc()
+        for tick in range(1000):
+            service.handle(tick)
+        allocated = gc.mem_alloc() - before
+    finally:
+        gc.enable()
+    assert panel.flushes_completed == 1
+    assert allocated <= 64
 
 
 def test_zero_transfer_panel_completes_in_one_tick() -> None:

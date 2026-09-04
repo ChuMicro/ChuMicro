@@ -32,7 +32,7 @@ for loop_pass in range(4):
 
 ## Documentation
 
-- [User Guide](guide.md): pacing a flush, the panel protocol, wiring into a runner
+- [User Guide](guide.md): pacing a flush, the panel protocol, the GC9A01A and SSD1306 drivers on both runtimes, wiring into a runner
 - [API Reference](api.md): every public class and method, generated from the source docstrings
 - [Testing Helpers](testing.md): using `FakePanel` in your tests
 

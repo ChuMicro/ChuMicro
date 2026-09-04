@@ -3,12 +3,15 @@
 The controller holds its frame as pages of eight vertically stacked
 pixels, one byte per column, which is exactly ``framebuf``'s
 ``MONO_VLSB`` layout.  ``frame`` therefore draws straight into the
-bytes the panel reads, with no conversion pass at flush time.
+bytes the panel reads, with no conversion pass at flush time.  The
+buffer carries the panel's data control byte ahead of every page row,
+so a page and its prefix leave in one ``writeto`` with no copy on
+either I2C port.
 
 ``flush()`` is the ScreenService panel protocol: each advance sends
 ``transfer_pages`` pages as a self-contained transfer (address window,
-then pixel data), so a full frame spreads across ticks instead of
-blocking one.  The stock drivers push the whole buffer in a single
+then one write per page), so a full frame spreads across ticks instead
+of blocking one.  The stock drivers push the whole buffer in a single
 blocking write, which a cooperative loop cannot afford.
 
 Drawing is one bit per pixel: 0 is dark, 1 is lit.  The panel is
@@ -29,7 +32,7 @@ except ImportError:
         return value
 
 # Co=0, D/C#=1: every byte after this one in the write is pixel data.
-_CONTROL_DATA = b"\x40"
+_CONTROL_DATA = const(0x40)
 # Co=0, D/C#=0: every byte after this one in the write is a command.
 _CONTROL_COMMAND = const(0x00)
 
@@ -55,21 +58,15 @@ _SET_VCOM_DESELECT = const(0xDB)
 _PAGE_HEIGHT = const(8)
 
 
-def _sleep_ms(duration_ms: int) -> None:
-    """Sleep via ``time.sleep_ms`` when present, otherwise ``time.sleep``."""
-    runtime_sleep_ms = getattr(time, "sleep_ms", None)
-    if runtime_sleep_ms is not None:
-        runtime_sleep_ms(duration_ms)
-        return
-    time.sleep(duration_ms / 1000)
-
-
-def _init_sequence(width: int, height: int) -> bytes:
-    """Build the power-on command sequence for one panel geometry.
+def _init_sequence(height: int) -> bytes:
+    """Build the power-on command sequence for one panel height.
 
     Multiplex ratio is the row count less one, and the COM pin
     configuration selects sequential or alternating pins, which is the
-    one place a 32-row panel differs from a 64-row one.
+    one place a 32-row panel differs from a 64-row one.  Start line,
+    display offset, and resume-from-RAM restate the power-on defaults
+    so a warm MCU reboot against a scrolled or test-patterned panel
+    lands in a known state.
     """
     com_pins = 0x02 if height == 32 else 0x12
     return bytes((
@@ -83,7 +80,7 @@ def _init_sequence(width: int, height: int) -> bytes:
         _SET_COM_PIN_CONFIG, com_pins,
         _SET_DISPLAY_CLOCK, 0x80,        # default divide, ~370 kHz oscillator
         _SET_PRECHARGE, 0xF1,            # internal charge pump timing
-        _SET_VCOM_DESELECT, 0x30,
+        _SET_VCOM_DESELECT, 0x30,        # 0.83 x VCC, the same on both runtimes
         _SET_CONTRAST, 0xFF,
         _RESUME_FROM_RAM,                # show RAM, not an all-on test pattern
         _SET_NORMAL_DISPLAY,
@@ -120,8 +117,8 @@ class SSD1306:
     """Monochrome OLED panel: draw on ``frame``, flush through ScreenService.
 
     The bus is injected: the app constructs the I2C bus and passes it
-    in, so the driver never imports ``machine``.  The bus needs
-    ``writeto`` and ``writevto``.
+    in, so the driver never imports ``machine``.  The bus needs only
+    ``writeto``.
 
     ``frame`` is a ``framebuf.FrameBuffer`` in ``MONO_VLSB``, so every
     framebuf drawing method applies and colors are 0 or 1.
@@ -157,27 +154,36 @@ class SSD1306:
         if not 1 <= transfer_pages <= pages:
             raise ValueError(f"transfer_pages must be 1 to {pages}")
         if sleep_ms is None:
-            sleep_ms = _sleep_ms
+            sleep_ms = time.sleep_ms
         self._i2c = i2c
         self._address = address
         self._sleep_ms = sleep_ms
         self.width = width
         self.height = height
         self.pages = pages
-        self._buffer = bytearray(width * pages)
+        # One control byte ahead of every page row, so a page leaves the
+        # buffer as a single write; framebuf reads the rows at a stride
+        # one wider than the panel to step over the prefixes.
+        row_stride = width + 1
+        self._buffer = bytearray(pages * row_stride)
+        page = 0
+        while page < pages:
+            self._buffer[page * row_stride] = _CONTROL_DATA
+            page += 1
         buffer_view = memoryview(self._buffer)
         import framebuf
-        self.frame = framebuf.FrameBuffer(self._buffer, width, height,
-                                          framebuf.MONO_VLSB)
+        self.frame = framebuf.FrameBuffer(buffer_view[1:], width, height,
+                                          framebuf.MONO_VLSB, row_stride)
         self._windows = []
         for commands, first_page, page_count in _page_windows(
                 width, pages, transfer_pages):
-            start = first_page * width
-            view = buffer_view[start:start + page_count * width]
-            self._windows.append((commands, view))
-        # writevto sends the control byte and the pixel view as one
-        # transaction, so a page crosses the bus without a copy.
-        self._write_list = [_CONTROL_DATA, None]
+            views = []
+            page = first_page
+            while page < first_page + page_count:
+                start = page * row_stride
+                views.append(buffer_view[start:start + row_stride])
+                page += 1
+            self._windows.append((commands, tuple(views)))
         self._command_buffer = bytearray(2)
         self._command_buffer[0] = _CONTROL_COMMAND
         self._run_init()
@@ -186,7 +192,7 @@ class SSD1306:
         """Walk the power-on sequence and wait for the charge pump."""
         self._i2c.writeto(self._address,
                           bytes((_CONTROL_COMMAND,))
-                          + _init_sequence(self.width, self.height))
+                          + _init_sequence(self.height))
         self._sleep_ms(100)
 
     def set_contrast(self, value: int) -> None:
@@ -209,12 +215,11 @@ class SSD1306:
         """Send the frame one page group per advance; the panel protocol."""
         i2c = self._i2c
         address = self._address
-        write_list = self._write_list
         first = True
-        for commands, view in self._windows:
+        for commands, views in self._windows:
             if not first:
                 yield
             first = False
             i2c.writeto(address, commands)
-            write_list[1] = view
-            i2c.writevto(address, write_list)
+            for view in views:
+                i2c.writeto(address, view)

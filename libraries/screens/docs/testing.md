@@ -21,7 +21,7 @@ def test_status_page_redraws_once_per_update():
     assert panel.transfers_completed == 4
 ```
 
-A frame completes after exactly `transfers_per_flush` calls to `handle()`, mirroring how a real paged driver spreads a frame across ticks.
+A frame completes after `transfers_per_flush` calls to `handle()`, or one call when that is 0, mirroring how a real paged driver spreads a frame across ticks.
 
 ## Test hooks
 

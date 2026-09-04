@@ -1,27 +1,31 @@
 """GC9A01A on CircuitPython: the 240x240 round color TFT via displayio.
 
 CircuitPython renders displays in firmware: ``busdisplay.BusDisplay``
-repaints changed regions from C in the background, inside the tick
-budget, so ScreenService is not involved.  ``make_display`` feeds the
-panel's initialization sequence into that machinery and returns the
-``BusDisplay``; from there the app uses displayio directly: build a
-``displayio.Group``, assign it to ``root_group``, and mutate bitmaps
-or palettes to draw.
+repaints changed regions from C in the background, so ScreenService is
+not involved.  The repaint runs from the firmware's background hook and
+stalls the app loop for the whole transfer, so a 5 ms tick budget does
+not hold under ``auto_refresh``; an app that needs the budget passes
+``auto_refresh=False`` and calls ``display.refresh()`` from a handler
+of its own choosing.  ``make_display`` feeds the panel's initialization
+sequence into that machinery and returns the ``BusDisplay``; from there
+the app uses displayio directly: build a ``displayio.Group``, assign it
+to ``root_group``, and mutate bitmaps or palettes to draw.
 
 The app owns the bus.  Release any prior displays, construct the SPI
-bus and a ``fourwire.FourWire`` around it, and pass the FourWire in::
+bus and a ``fourwire.FourWire`` around it, and pass the FourWire in.
+The numbers are MCU GPIO numbers, which ``chumicro_compat.wiring``
+resolves; a hand-built ``busio.SPI`` and ``board`` pins work too::
 
-    import board
-    import busio
     import displayio
     import fourwire
+    from chumicro_compat.wiring import gpio_pin, spi_bus
     from chumicro_screens.gc9a01a_displayio import make_display
 
     displayio.release_displays()
-    spi = busio.SPI(clock=board.IO7, MOSI=board.IO11)
+    spi = spi_bus(1, sck=7, mosi=11)
     display = make_display(fourwire.FourWire(
-        spi, command=board.IO9, chip_select=board.IO12,
-        reset=board.IO5, baudrate=40_000_000))
+        spi, command=gpio_pin(9), chip_select=gpio_pin(12),
+        reset=gpio_pin(5), baudrate=40_000_000))
 """
 
 __chumicro_runtimes__ = ("circuitpython",)
@@ -57,11 +61,6 @@ def make_display(display_bus: object, *, rotation: int = 0,
                  auto_refresh: bool = True) -> object:
     """Build the ``busdisplay.BusDisplay`` driving a GC9A01A panel.
 
-    The display bus is injected: the app constructs the SPI bus and
-    wraps it in a ``fourwire.FourWire`` naming the chip-select,
-    data-command, and reset pins, then passes the FourWire in, so this
-    module never touches ``board`` or ``busio``.
-
     Args:
         display_bus: ``fourwire.FourWire`` wired to the panel.
         rotation: Display rotation in degrees, 0, 90, 180, or 270.
@@ -74,7 +73,7 @@ def make_display(display_bus: object, *, rotation: int = 0,
         ``root_group``.
     """
     # Function-scope import: keeps the module importable on runtimes
-    # without displayio, where only the constants are reachable.
+    # without displayio.
     import busdisplay
     return busdisplay.BusDisplay(display_bus, _INIT_SEQUENCE,
                                  width=WIDTH, height=HEIGHT,

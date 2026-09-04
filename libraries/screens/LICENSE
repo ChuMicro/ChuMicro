@@ -23,7 +23,8 @@ SOFTWARE.
 ---
 
 The GC9A01A initialization sequence in
-src/chumicro_screens/gc9a01a.py is derived from
+src/chumicro_screens/gc9a01a.py and
+src/chumicro_screens/gc9a01a_displayio.py is derived from
 Adafruit_CircuitPython_GC9A01A, also MIT licensed:
 
 Copyright (c) 2021 Tyler Crumpton

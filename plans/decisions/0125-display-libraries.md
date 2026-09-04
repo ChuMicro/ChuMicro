@@ -30,7 +30,11 @@ standards.
   `framebuf.FrameBuffer` and the flush is a generator that yields between page
   writes so each resume fits the tick budget. On CircuitPython the same surface
   is implemented over a `displayio.Bitmap` with `bitmaptools` ops and
-  `terminalio.FONT`, and flush is near-free under background refresh.
+  `terminalio.FONT`, and flush costs the library nothing under background
+  refresh: the firmware repaints from its background hook, which stalls the
+  app loop for the whole transfer (11.4 ms at worst on a 128x64 OLED at
+  400 kHz, 29.8 ms at 100 kHz), so an app that keeps the 5 ms tick passes
+  `auto_refresh=False` and refreshes from a handler of its own.
   Full-RGB scene-graph work on CircuitPython stays native `displayio` code,
   outside the protocol.
 - **`chumicro-segments`** covers segment controllers (TM1637, HT16K33, MAX7219
@@ -73,6 +77,6 @@ Rejected alternatives:
   writes) from its actual resolution.
 - Consumers on any install channel need nothing beyond chumicro packages, and
   the workspace deploy stages everything it ships.
-- Two numbers are bench-measured before the budget claims are trusted:
-  CircuitPython refresh jitter under `auto_refresh`, and MicroPython per-page
-  flush duration.
+- Both budget numbers are bench-measured: CircuitPython refresh jitter under
+  `auto_refresh` is the stall above, and one MicroPython SSD1306 page at
+  400 kHz flushes in 3.7 ms mean and 3.9 ms worst, inside the tick.

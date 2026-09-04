@@ -28,10 +28,6 @@ class FakeI2C:
     def writeto(self, address, buffer) -> None:
         self.writes.append((address, bytes(buffer)))
 
-    def writevto(self, address, buffers) -> None:
-        joined = b"".join(bytes(part) for part in buffers)
-        self.writes.append((address, joined))
-
 
 def build_panel(**kwargs) -> tuple:
     """Construct a panel on a fake bus and drop the init traffic."""
@@ -60,6 +56,16 @@ def test_init_turns_the_display_on_and_enables_the_charge_pump():
     assert payload[0] == 0x00                    # command-stream control byte
     assert payload[1] == 0xAE                    # display off while configuring
     assert payload[-3:] == bytes((0x8D, 0x14, 0xAF))
+
+
+def test_init_forces_the_scroll_and_test_pattern_state_back():
+    """Start line, offset, and resume-from-RAM restate the power-on defaults."""
+    _, _, init_writes = build_panel()
+
+    payload = init_writes[0][1]
+    assert b"\x40" in payload                    # start line 0
+    assert b"\xd3\x00" in payload                # display offset 0
+    assert 0xA4 in payload                       # show RAM, not all-on
 
 
 def test_multiplex_and_com_pins_follow_the_row_count():
@@ -91,9 +97,13 @@ def test_a_full_frame_takes_one_advance_per_page():
 
 
 def test_transfer_pages_groups_pages_into_fewer_advances():
-    panel, _, _ = build_panel(transfer_pages=4)
+    panel, i2c, _ = build_panel(transfer_pages=4)
 
     assert drain(panel) == 2
+    assert len(i2c.writes) == 10                 # two windows, eight page writes
+    for _, payload in i2c.writes[1:5]:
+        assert payload[0] == 0x40
+        assert len(payload) == 129
 
 
 def test_a_trailing_group_carries_only_the_pages_that_remain():
@@ -102,7 +112,7 @@ def test_a_trailing_group_carries_only_the_pages_that_remain():
     advances = drain(panel)
 
     assert advances == 3
-    last_commands = i2c.writes[-2][1]
+    last_commands = i2c.writes[-3][1]            # window ahead of pages 6 and 7
     assert last_commands[-2:] == bytes((6, 7))   # page span of the short group
 
 
@@ -129,16 +139,33 @@ def test_a_drawn_pixel_reaches_the_bus_in_its_own_page():
     assert set(i2c.writes[1][1][1:]) == {0}      # page 0 stays dark
 
 
-def test_show_during_a_flush_does_not_disturb_the_frame_in_flight():
+def test_drawing_at_page_edges_never_touches_a_control_byte():
+    """framebuf's stride steps over the prefix ahead of every page row."""
+    panel, i2c, _ = build_panel()
+    panel.frame.pixel(127, 7, 1)                 # page 0, last column, top bit
+    panel.frame.pixel(0, 8, 1)                   # page 1, first column, low bit
+
+    drain(panel)
+
+    assert i2c.writes[1][1][1 + 127] == 0b1000_0000
+    assert i2c.writes[3][1][0] == 0x40
+    assert i2c.writes[3][1][1] == 0b1
+
+
+def test_drawing_mid_flush_lands_only_in_pages_still_to_send():
+    """A page already on the bus is never resent; a later page carries the new pixel."""
     panel, i2c, _ = build_panel()
     flush = panel.flush()
-    next(flush)
-    panel.frame.pixel(0, 0, 1)
+    next(flush)                                  # page 0 crossed the bus
+    panel.frame.pixel(0, 0, 1)                   # page 0, already sent
+    panel.frame.pixel(3, 63, 1)                  # page 7, bit 7, still to send
 
     for _ in flush:
         pass
 
-    assert i2c.writes[1][1][1] == 0              # page 0 already crossed the bus
+    assert len(i2c.writes) == 16
+    assert i2c.writes[1][1][1] == 0              # page 0 as it went out
+    assert i2c.writes[15][1][1 + 3] == 0b1000_0000
 
 
 def test_set_contrast_sends_the_level_and_refuses_an_out_of_range_one():

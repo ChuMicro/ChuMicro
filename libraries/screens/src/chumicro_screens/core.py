@@ -1,5 +1,9 @@
 """Runner-shaped flush pacing for pixel displays."""
 
+# Handed to next() as the exhausted-iterator result, so a finished flush
+# costs no StopIteration object.
+_FLUSH_DONE = object()
+
 
 class ScreenService:
     """Paces a display panel's flush so no single tick blocks on the bus.
@@ -81,9 +85,8 @@ class ScreenService:
             flush = self._panel.flush()
             self._active_flush = flush
         try:
-            next(flush)
-        except StopIteration:
-            self._active_flush = None
+            if next(flush, _FLUSH_DONE) is _FLUSH_DONE:
+                self._active_flush = None
         except BaseException:
             self._active_flush = None
             raise

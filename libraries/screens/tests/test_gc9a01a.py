@@ -1,4 +1,4 @@
-"""Host-lane tests for the GC9A01A panel driver.
+"""Host-lane tests for the GC9A01A panel drivers.
 
 Runs on CPython and the unix ports through host fakes; silicon is
 covered by the functional bench.  The shared framebuf stub seeded
@@ -21,7 +21,7 @@ from chumicro_timing.testing import FakeTicks  # noqa: E402
 
 
 def _skip_unless_frame_buffer_headroom() -> None:
-    """Loud-skip on heaps that cannot hold the driver's frame buffer."""
+    """Loud-skip on heaps that cannot hold the full-color frame buffer."""
     try:
         import gc
 
@@ -37,18 +37,18 @@ def _skip_unless_frame_buffer_headroom() -> None:
 
 
 def _skip_unless_indexed_headroom() -> None:
-    """Loud-skip when the indexed frame plus recorded strips overflow."""
+    """Loud-skip on heaps that cannot hold the indexed frame plus a 100-row strip."""
     try:
         import gc
 
         free = gc.mem_free()
     except (ImportError, AttributeError):
         return  # CPython has no gc.mem_free; run the test.
-    if free < 400_000:
+    if free < 128_000:
         skip(
-            "GC9A01AIndexed tests hold the 57,600 B frame plus every "
-            "strip FakeSpi records; the driver itself fits a 264 KB "
-            "board and the bench validates it there",
+            "GC9A01AIndexed tests need the 57,600 B frame plus up to "
+            "48,000 B of strip buffer; this host lane's heap is smaller, "
+            "and the bench validates the driver on a 264 KB board",
         )
 
 
@@ -63,13 +63,20 @@ class FakePin:
 
 
 class FakeSpi:
-    """Records every write as an owned bytes copy."""
+    """Records each write's length and its first eight bytes.
+
+    Whole strips would hold hundreds of kilobytes across a frame, more
+    than the boards the indexed driver targets can spare, and every
+    assertion below reads window bytes, lengths, or a strip's head.
+    """
 
     def __init__(self) -> None:
         self.writes: list[bytes] = []
+        self.lengths: list[int] = []
 
     def write(self, data: object) -> None:
-        self.writes.append(bytes(data))
+        self.lengths.append(len(data))
+        self.writes.append(bytes(data[:8]))
 
 
 class DelayRecorder:
@@ -82,12 +89,12 @@ class DelayRecorder:
         self.delays.append(duration_ms)
 
 
-def make_panel(transfer_rows: int = 10) -> tuple:
+def make_panel(panel_class: object = GC9A01A, transfer_rows: int = 10) -> tuple:
     spi = FakeSpi()
     reset = FakePin()
     delays = DelayRecorder()
-    panel = GC9A01A(spi, FakePin(), FakePin(), reset,
-                    transfer_rows=transfer_rows, sleep_ms=delays)
+    panel = panel_class(spi, FakePin(), FakePin(), reset,
+                        transfer_rows=transfer_rows, sleep_ms=delays)
     return panel, spi, delays, reset
 
 
@@ -109,11 +116,12 @@ def test_construction_resets_then_inits() -> None:
 
 
 def test_transfer_rows_bounds() -> None:
-    """transfer_rows outside 1..240 is refused."""
-    with raises(ValueError):
-        make_panel(transfer_rows=0)
-    with raises(ValueError):
-        make_panel(transfer_rows=241)
+    """transfer_rows outside 1..240 is refused by both drivers."""
+    for panel_class in (GC9A01A, GC9A01AIndexed):
+        with raises(ValueError):
+            make_panel(panel_class, transfer_rows=0)
+        with raises(ValueError):
+            make_panel(panel_class, transfer_rows=241)
 
 
 def test_flush_sends_self_contained_strips() -> None:
@@ -129,25 +137,25 @@ def test_flush_sends_self_contained_strips() -> None:
     assert strip[2] == b"\x2b"
     assert strip[3] == b"\x00\x00\x00\x3b"
     assert strip[4] == b"\x2c"
-    assert len(strip[5]) == 60 * 480
+    assert spi.lengths[base + 5] == 60 * 480
     next(flush)
     assert spi.writes[base + 9] == b"\x00\x3c\x00\x77"
 
 
 def test_flush_advance_count_and_completion() -> None:
-    """A 60-row strip frame completes in exactly four advances."""
+    """A 60-row strip frame yields three times, and every strip is six writes."""
     _skip_unless_frame_buffer_headroom()
     panel, spi, delays, reset = make_panel(transfer_rows=60)
     base = len(spi.writes)
     flush = panel.flush()
-    advances = 0
+    yields = 0
     while True:
         try:
             next(flush)
         except StopIteration:
             break
-        advances += 1
-    assert advances == 3
+        yields += 1
+    assert yields == 3
     assert len(spi.writes) - base == 4 * 6
 
 
@@ -162,14 +170,13 @@ def test_partial_last_strip() -> None:
             next(flush)
         except StopIteration:
             break
-    data_lengths = [len(write) for write in spi.writes[base:]
-                    if len(write) > 4]
+    data_lengths = [length for length in spi.lengths[base:] if length > 4]
     assert data_lengths == [100 * 480, 100 * 480, 40 * 480]
     assert spi.writes[base + 15] == b"\x00\xc8\x00\xef"
 
 
 def test_strip_data_comes_from_the_frame_buffer() -> None:
-    """Strip N carries the buffer bytes for its rows."""
+    """Strip N carries the buffer bytes for its rows, in the order stored."""
     _skip_unless_frame_buffer_headroom()
     panel, spi, delays, reset = make_panel(transfer_rows=60)
     panel._buffer[0] = 0xAB
@@ -205,19 +212,10 @@ def test_color565_packs_channels_in_bus_byte_order() -> None:
     assert color565(0, 0, 0) == 0x0000
 
 
-def make_indexed_panel(transfer_rows: int = 10) -> tuple:
-    spi = FakeSpi()
-    reset = FakePin()
-    delays = DelayRecorder()
-    panel = GC9A01AIndexed(spi, FakePin(), FakePin(), reset,
-                           transfer_rows=transfer_rows, sleep_ms=delays)
-    return panel, spi, delays, reset
-
-
 def test_indexed_construction_resets_then_inits() -> None:
     """Reset and init match the full-color driver; the frame is 8-bit."""
     _skip_unless_indexed_headroom()
-    panel, spi, delays, reset = make_indexed_panel()
+    panel, spi, delays, reset = make_panel(GC9A01AIndexed)
     assert reset.states == [1, 0, 1]
     assert delays.delays == [5, 20, 150, 120, 20]
     assert spi.writes[0] == b"\xfe"
@@ -228,21 +226,13 @@ def test_indexed_construction_resets_then_inits() -> None:
     assert panel.height == 240
 
 
-def test_indexed_transfer_rows_bounds() -> None:
-    """transfer_rows outside 1..240 is refused."""
-    with raises(ValueError):
-        make_indexed_panel(transfer_rows=0)
-    with raises(ValueError):
-        make_indexed_panel(transfer_rows=241)
-
-
 def test_indexed_flush_expands_through_the_palette() -> None:
     """Drawn indexes leave the bus as their palette's RGB565 bytes."""
     _skip_unless_indexed_headroom()
-    panel, spi, delays, reset = make_indexed_panel(transfer_rows=60)
+    panel, spi, delays, reset = make_panel(GC9A01AIndexed, transfer_rows=60)
     panel.set_color(7, 255, 0, 0)
-    panel._buffer[0] = 7
-    panel._buffer[1] = 7
+    panel.frame.pixel(0, 0, 7)
+    panel.frame.pixel(1, 0, 7)
     base = len(spi.writes)
     flush = panel.flush()
     next(flush)
@@ -252,7 +242,7 @@ def test_indexed_flush_expands_through_the_palette() -> None:
     assert strip[2] == b"\x2b"
     assert strip[3] == b"\x00\x00\x00\x3b"
     assert strip[4] == b"\x2c"
-    assert len(strip[5]) == 60 * 480
+    assert spi.lengths[base + 5] == 60 * 480
     assert strip[5][:4] == b"\xf8\x00\xf8\x00"
     assert strip[5][4:6] == b"\x00\x00"
 
@@ -260,9 +250,9 @@ def test_indexed_flush_expands_through_the_palette() -> None:
 def test_indexed_palette_edit_recolors_drawn_pixels() -> None:
     """A set_color after drawing changes what the next flush sends."""
     _skip_unless_indexed_headroom()
-    panel, spi, delays, reset = make_indexed_panel(transfer_rows=60)
+    panel, spi, delays, reset = make_panel(GC9A01AIndexed, transfer_rows=60)
     panel.set_color(5, 255, 0, 0)
-    panel._buffer[60 * 240] = 5
+    panel.frame.pixel(0, 60, 5)
     flush = panel.flush()
     next(flush)
     panel.set_color(5, 0, 0, 255)
@@ -275,7 +265,7 @@ def test_indexed_palette_edit_recolors_drawn_pixels() -> None:
 def test_indexed_partial_last_strip() -> None:
     """240 rows in 100-row strips ends with a 40-row strip."""
     _skip_unless_indexed_headroom()
-    panel, spi, delays, reset = make_indexed_panel(transfer_rows=100)
+    panel, spi, delays, reset = make_panel(GC9A01AIndexed, transfer_rows=100)
     base = len(spi.writes)
     flush = panel.flush()
     while True:
@@ -283,8 +273,7 @@ def test_indexed_partial_last_strip() -> None:
             next(flush)
         except StopIteration:
             break
-    data_lengths = [len(write) for write in spi.writes[base:]
-                    if len(write) > 4]
+    data_lengths = [length for length in spi.lengths[base:] if length > 4]
     assert data_lengths == [100 * 480, 100 * 480, 40 * 480]
     assert spi.writes[base + 15] == b"\x00\xc8\x00\xef"
 
@@ -292,7 +281,7 @@ def test_indexed_partial_last_strip() -> None:
 def test_indexed_frame_completes_under_screen_service() -> None:
     """ScreenService drives one indexed frame to done in four handles."""
     _skip_unless_indexed_headroom()
-    panel, spi, delays, reset = make_indexed_panel(transfer_rows=60)
+    panel, spi, delays, reset = make_panel(GC9A01AIndexed, transfer_rows=60)
     service = ScreenService(panel, refresh_interval_ms=0, ticks=FakeTicks())
     base = len(spi.writes)
     service.show()
