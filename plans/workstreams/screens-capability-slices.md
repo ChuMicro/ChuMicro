@@ -53,25 +53,41 @@ through `sys.modules` fakes on CPython and both unix ports.
 
 ## Phase 2. Canvas protocol and the CircuitPython backend (Decision 0126)
 
-Next.  The portable surface: framebuf method vocabulary with palette
-indexes as colors and `set_color(index, red, green, blue)` as the only
-color entry.  `GC9A01AIndexed` is already the MicroPython shape; align its
-vocabulary and add what the protocol needs.  The CircuitPython backend is an 8-bit indexed
-`displayio.Bitmap` + `displayio.Palette` in a full-screen `TileGrid`, with
-`bitmaptools` mapping: `fill_region`, `draw_line`, `draw_circle`,
-`draw_polygon`, `blit` (all verified in 10.2.0); `text` blits
-`terminalio.FONT` glyph regions.  A runner-shaped facade gives CircuitPython
-the same `show`/`check`/`handle`/`next_deadline` loop contract as
-`ScreenService`.  It cannot be a no-op: the Pico W bench measured the
-firmware's repaint at about 5.5 us per dirty pixel, 318 ms for a whole
-240x240 frame in one stall whether automatic or from `display.refresh()`,
-against 124 ms spread over 3.4 ms strips for the MicroPython indexed
-driver on the same board.  The facade has to hold `auto_refresh=False` and
-band its refreshes, dirtying and refreshing one strip of the bitmap per
-`handle()` so no tick pays for more than a few thousand pixels; the field
-note carries the table.  Verify at build:
-in-place `Bitmap` mutation flags dirty regions under `auto_refresh`;
-`draw_circle` semantics against `framebuf.ellipse(r, r)`; terminalio glyph
+Next, in two slices.  The Pico W bench settled the backend: displayio's
+refresh pipeline costs about 6 us per dirty pixel on the RP2040 however
+the frame is chunked (318 ms for a whole frame in one stall, 510 ms in
+480-pixel chunks that fit the tick, with the frame stored twice), while a
+16-bit `displayio.Bitmap` drawn with `bitmaptools` in the panel's byte
+order and streamed over `busio.SPI` from its own buffer crosses in 44 to
+65 ms in strips of 1.5 to 3.9 ms, and its 117 KB frame fits a fresh Pico W
+heap with 57 KB to spare.  The hardware-traps field note carries all three
+tables.
+
+**Phase 2a, the CircuitPython GC9A01A driver.**  `chumicro_screens.gc9a01a`
+becomes cross-runtime: the panel bring-up, window commands, strip loop, and
+`flush()` generator are already runtime-neutral, and the frame backend is
+selected at construction, `framebuf` on MicroPython and a 16-bit
+`displayio.Bitmap` on CircuitPython.  On CircuitPython the SPI bus is locked
+once at construction (the resolver already configures it), strips are
+pre-sliced 16-bit views of the bitmap's buffer, and the pins are the
+callables `digital_output` returns.  `ScreenService` paces it unchanged, so
+the loop code is the MicroPython loop code.  Gate: the labeled card and the
+seconds counter on Pico W+CircuitPython and S2+CircuitPython, a strip
+timing probe on each, and zero bytes per advance.
+
+**Phase 2b, the canvas vocabulary.**  Palette indexes as colors and
+`set_color(index, red, green, blue)` as the only color entry on both
+backends.  On MicroPython the canvas is `GC9A01AIndexed.frame` itself
+(framebuf's methods, GS8 storage, palette expansion at flush).  On
+CircuitPython it is a thin class over the 16-bit bitmap mapping the same
+method names to `bitmaptools`: `fill` and `fill_rect` to `fill_region`,
+`line` to `draw_line`, `circle` to `draw_circle`, `poly` to `draw_polygon`,
+`blit` to `blit`, `pixel` to item access, and `text` to `terminalio.FONT`
+glyph blits until Phase 3 lands; `set_color` maps the index to a pre-swapped
+RGB565 value that drawing writes, so a later `set_color` recolors on
+MicroPython only, as Decision 0126 now states.  Canvas primitives record
+their dirty bounds for Phase 4.  Verify at build: `draw_circle` against
+`framebuf.ellipse(r, r)`, `draw_polygon` outline semantics, terminalio glyph
 metrics.  Bench gate: one labeled-card app file drawing identically (font
 metrics aside) on S2+CircuitPython, Pico W+CircuitPython, and
 Pico W+MicroPython.
@@ -220,5 +236,11 @@ actually wants on-device images.
   rebooted into with `.scratch/cp_reboot_and_tail.py` since the deploy path
   leaves auto-reload off) gave the table now in
   `plans/field-notes/hardware-traps.md`: 5.5 us per dirty pixel, 318 ms for
-  a whole frame, 1.7 ms for a 16x16 notch.  Phase 2's CircuitPython facade
-  is constrained by it, above.  Not run: the round TFT on the S2 cells.
+  a whole frame, 1.7 ms for a 16x16 notch.  Two more probes on the same
+  board settled Phase 2's backend: chunked displayio refresh
+  (`.scratch/probe_cp_paths.py`) costs 4.1 ms per 480 pixels and 510 ms a
+  frame in any chunk shape, and a 16-bit bitmap streamed over `busio.SPI`
+  by hand (`.scratch/probe_cp_direct.py`) crosses in 44 to 65 ms in strips
+  of 1.5 to 3.9 ms with a correct card on the panel.  Decision 0126's body
+  now names the streamed frame as the CircuitPython backend.  Not run: the
+  round TFT on the S2 cells.

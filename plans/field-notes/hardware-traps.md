@@ -92,6 +92,37 @@ about 5.5 us per pixel in the firmware's color converter on the RP2040
 fixed cost).  A whole-frame change on this board therefore stalls the
 loop for a third of a second whether the refresh is automatic or called
 from a handler, while the MicroPython indexed driver on the same board
-moves a whole frame in 124 ms spread over strips of at most 3.4 ms.  A
-CircuitPython canvas that wants the tick budget has to dirty bands, not
-the frame.
+moves a whole frame in 124 ms spread over strips of at most 3.4 ms.
+
+Chunking the frame through displayio does not change the slope.  With a
+shadow bitmap and a displayed bitmap of the same size, copying one
+rectangle of about 480 pixels per advance with `bitmaptools.blit` and
+calling `display.refresh()` so exactly that rectangle is dirty
+(`.scratch/probe_cp_paths.py`, part 1, 16 colors), every chunk shape
+costs the same: 4.1 ms mean, 4.6 to 5.5 ms worst, 507 to 520 ms for a
+whole frame, and the two bitmaps take 57.7 KB.  Each refresh call carries
+about 1.5 ms of fixed cost on top of the per-pixel slope, so the shape
+of the chunk is irrelevant and the tick budget admits about 480 pixels
+per refresh on this chip.  Colors per pixel do not matter either: 256 and
+16 colors measure the same slope.
+
+Bypassing displayio's pipeline does.  A `displayio.Bitmap(240, 240, 65536)`
+drawn with `bitmaptools` in the panel's RGB565 byte order exposes its
+buffer as 16-bit items, and `busio.SPI.write(view, start=, end=)` streams
+a strip of it straight to the panel after the same window commands the
+MicroPython driver sends (`.scratch/probe_cp_direct.py`, panel brought up
+by hand over `busio.SPI` and `digitalio`):
+
+| Strip | mean | worst | frame |
+|---|---|---|---|
+| 6 rows | 1.49 ms | 1.89 ms | 64.5 ms |
+| 10 rows | 2.06 ms | 2.50 ms | 52.6 ms |
+| 20 rows | 3.56 ms | 3.94 ms | 44.3 ms |
+
+The frame takes 116,784 bytes of the 174,176 free on a fresh Pico W
+heap, and the card it drew read right on the panel.  That is the fastest
+whole-frame path measured on this board under either runtime, because
+the bus is the only cost.  The probe's 100 bytes of allocation per strip
+is its own `time.monotonic_ns()` integers; a driver with pre-sliced views
+has none.  After a displayio session had churned the heap, the same
+115,200-byte allocation failed, so the frame has to be allocated first.
