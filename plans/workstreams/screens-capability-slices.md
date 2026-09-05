@@ -1,6 +1,6 @@
 # Workstream: screens capability slices
 
-Status: **active**, Phases 1 and 2 shipped and Phase 3 next.  Planned during the
+Status: **active**, Phases 1 to 3 shipped and Phase 4 next.  Planned during the
 GC9A01A matrix validation session so a cold pickup has the shapes, the
 measured constraints, and the order.  The goal, set by the maintainer the
 same day: one app's rendering and construction code runs on both device
@@ -103,13 +103,25 @@ metrics.  Bench gate: one labeled-card app file drawing identically (font
 metrics aside) on S2+CircuitPython, Pico W+CircuitPython, and
 Pico W+MicroPython.
 
-## Phase 3. Fonts over the canvas (no viper)
+## Phase 3. Fonts over the canvas (no viper): shipped
 
-Pre-converted glyph bitmaps placed by one Python layer over two C blit
-backends (`FrameBuffer.blit` with a 2-pixel palette; `bitmaptools.blit`).
-Needs a host-side font converter; open choice at pickup: adopt the
-ecosystem's font-to-py format or a chumicro-native one.  Landing this
-retires Decision 0126's per-runtime-font caveat on `text`.
+`chumicro_screens.fonts.Font` wraps a font-to-py module
+([Decision 0128](../decisions/0128-fonts-from-font-to-py-modules.md)
+settled the format on the ecosystem's, with no chumicro converter) and
+draws it at the same pixels on both runtimes: `text(canvas, string,
+x, y, index)` and `width(string)`.  On MicroPython each glyph blits
+straight from the module's read-only bytes, because `FrameBuffer.blit`
+takes a `(buffer, width, height, MONO_HLSB)` list as its source, through
+a two-entry GS8 palette whose background entry is the skipped key (the
+key compares after the palette lookup).  On CircuitPython the glyphs are
+loaded once at construction into a 1-bit `displayio.Bitmap` sheet, each
+through `bitmaptools.readinto` into a stamp bitmap and one blit, and
+drawn through `BitmapCanvas.blit_bits`, the three-call scratch path the
+built-in `text` now shares.  `gc9a01a_font_counter.py`
+plus `sans20.py` (DejaVu Sans at 20 px, font-to-py output checked in
+beside the example so the deploy ships it) is the example.  The canvas's
+own `text` keeps its per-runtime built-in font; Decision 0126 says so
+and points at 0128 for pixel-identical text.
 
 ## Phase 4. Dirty-window partial updates
 
@@ -272,3 +284,36 @@ actually wants on-device images.
   CircuitPython port.  The MicroPython branch is closed by the port tests,
   which drive it through a fake SPI, and by the earlier run on the
   MicroPython Pico W, whose pin and bus calls the refactor kept.
+- 2026-09-05: Phase 3 shipped and benched on the CircuitPython Pico W
+  (10.2.1).  The first deploy raised `MemoryError` allocating the frame,
+  and so did the known-good `gc9a01a_counter.py` on the same board: the
+  boot straight after a host write has about 50 KB less heap than the
+  next soft reboot (hardware-traps.md carries the numbers), so every
+  run below is the second boot after its write.  A probe through the
+  shipped driver (`.scratch/probe_font_cp.py`, panel constructed before
+  the font module is imported) measured `Font.text` on the 7-glyph
+  "seconds" in DejaVu Sans 20 at 7.4 ms mean and 8.4 ms worst, 1.06 ms
+  a glyph, 0 bytes per call; the sheet build took 157 ms once; the font
+  cost 4,400 B plus 4,704 B for the module, with 32.5 KB free after the
+  panel, canvas, and font.  Before two changes the same probe read
+  9.7 ms mean, 5,200 B, and 305 ms: the sheet build went from 1,920
+  row-slice copies to one `readinto` and one blit per glyph, and
+  `blit_bits` recolors in one pass unless the text is black.  Importing
+  `chumicro_screens.fonts` and the 17 KB `sans20.py` ahead of the panel
+  left no 115,200-byte block even on a clean boot (a heap probe with the
+  same imports and a collection between each found the block, so it is
+  the compile garbage interleaving with the next module's objects); with
+  both imports after the panel the example ran on three consecutive
+  boots, and the guide and docstring carry that order.  82 tests on
+  CPython, 63 on the MicroPython port (real framebuf drawing the
+  list-form source), and 58 on the CircuitPython port.
+- 2026-09-05: Phase 3 benched on the MicroPython Pico W (1.28.0).
+  `deploy-example` ran `gc9a01a_font_counter.py` clean, nine frames in
+  the capture, and the panel read right on both cells.  The probe
+  (`.scratch/probe_font_mp.py` over `mpremote run`) measured the same
+  7-glyph `Font.text` at 3.96 ms mean and 4.20 ms worst, 0.57 ms a
+  glyph, 560 B per call (80 B a glyph: the module's `get_ch` returns a
+  tuple and a memoryview slice, and the string iteration a character),
+  the font object at 592 B plus 4,768 B for the module, construction
+  37 ms (96 `get_ch` calls for the width table), and 117.7 KB free
+  after the panel and font.

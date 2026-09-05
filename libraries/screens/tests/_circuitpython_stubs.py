@@ -158,6 +158,28 @@ class BitmaptoolsStub:
                 if bitmap[x, y] == old_color:
                     bitmap[x, y] = new_color
 
+    @staticmethod
+    def readinto(bitmap, file, bits_per_pixel, element_size=1,
+                 reverse_pixels_in_element=False, swap_bytes_in_element=False,
+                 reverse_rows=False):
+        """Fill ``bitmap`` row by row from packed pixels read off ``file``.
+
+        Models the one shape the canvas reads, one bit per pixel in
+        single bytes; ``reverse_pixels_in_element`` puts the row's first
+        pixel in the most significant bit, as the firmware does.
+        """
+        if bits_per_pixel != 1 or element_size != 1 or swap_bytes_in_element:
+            raise ValueError("the stub reads 1-bit pixels in single bytes only")
+        row_size = (bitmap.width + 7) // 8
+        for y in range(bitmap.height):
+            row = file.read(row_size)
+            if len(row) != row_size:
+                raise EOFError
+            target_y = bitmap.height - 1 - y if reverse_rows else y
+            for x in range(bitmap.width):
+                bit = 7 - (x & 7) if reverse_pixels_in_element else x & 7
+                bitmap[x, target_y] = (row[x >> 3] >> bit) & 1
+
 
 class _Glyph:
     def __init__(self, bitmap, tile_index, width, height):

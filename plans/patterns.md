@@ -673,6 +673,33 @@ channel per-arch.  A nested def keeps CPython imports working but not
 
 Reference implementation: `chumicro_screens.gc9a01a.GC9A01AIndexed`.
 
+## Packed 1-bit glyphs blit in C on both runtimes without a copy
+
+A font-to-py module stores each glyph as rows of `(width + 7) // 8`
+bytes, most significant bit first, which is framebuf's `MONO_HLSB`
+layout.  Two firmware facts let one Python layer draw it at C speed on
+both runtimes:
+
+- `FrameBuffer.blit` accepts a `(buffer, width, height, format[,
+  stride])` tuple or list as its source and reads the buffer read-only
+  (`get_readonly_framebuffer` in `modframebuf.c`, 1.27.0), so a
+  `bytes` glyph blits with no `bytearray` copy and no `FrameBuffer`
+  object; reuse one list and assign its first two slots per glyph.
+  With a palette, `key` compares against the *mapped* value, so the
+  transparent entry is whatever the palette maps the background bit
+  to, chosen to differ from the foreground index.
+- A CircuitPython 10.2 `displayio.Bitmap` with two values per pixel
+  stores rows byte-packed most significant bit first (rows padded to
+  32 bits), and `bitmaptools.readinto(bitmap, io.BytesIO(rows), 1,
+  element_size=1, reverse_pixels_in_element=True)` loads exactly those
+  packed rows through a public call, no per-pixel Python.  Read each
+  glyph into a stamp bitmap of its own width and blit the stamp into
+  one sheet, a few C calls per glyph, and `bitmaptools.blit` draws any
+  glyph as a region of the sheet.
+
+Reference implementation: `chumicro_screens.fonts.Font` and
+`chumicro_screens.bitmap_canvas.BitmapCanvas.blit_bits`.
+
 When a module exists on CPython but not on MicroPython/CircuitPython
 (or vice versa), write a thin shim with runtime detection.
 

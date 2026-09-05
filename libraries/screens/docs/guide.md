@@ -163,10 +163,12 @@ blink effects one `set_color` call instead of a redraw; on
 CircuitPython the frame holds colors rather than indexes, so a later
 `set_color` applies to later drawing only.  Two more CircuitPython
 limits follow from what `bitmaptools` has a C path for: `ellipse`
-draws unfilled circles only and `poly` outlines only, and `text`
-renders the runtime's own built-in font, whose metrics differ from
-framebuf's 8x8.  Construct the panel early: the frame needs one
-contiguous block, which a fragmented heap may no longer hold.
+draws unfilled circles only and `poly` outlines only, and the canvas's
+own `text` renders the runtime's built-in font, whose metrics differ
+from framebuf's 8x8; a converted font drawn through `Font` (below)
+lands on the same pixels on both runtimes.  Construct the panel early:
+the frame needs one contiguous block, which a fragmented heap may no
+longer hold.
 
 Bench datum from a Pi Pico W, whose `machine.SPI` clamps a 40 MHz
 request to 24 MHz: the default 6-row strip measured 3.6 ms per
@@ -180,6 +182,65 @@ Under CircuitPython the same board streams a 6-row strip in 1.4 ms
 mean and 2.0 ms worst, 62 ms a frame, since no palette expansion
 happens per strip; the `gc9a01a_card.py` and `gc9a01a_counter.py`
 examples are one file each and run on both runtimes.
+
+## Fonts on the canvas
+
+`chumicro_screens.fonts.Font` draws a proportional font on the canvas
+with one call shape on both runtimes and lays the text out at the same
+pixels on both.  The font is a module written on the host by
+[font-to-py](https://github.com/peterhinch/micropython-font-to-py)
+from a TrueType or OpenType file and shipped beside the app:
+
+```bash
+pip install font_to_py
+font_to_py -x DejaVuSans.ttf 20 sans20.py
+```
+
+`-x` selects horizontal mapping, the layout both runtimes blit, and
+`Font` refuses a vertically mapped module.  Construct the panel first,
+then import the font layer and the font module: the panel's frame is
+the largest block the app allocates, and on a Pi Pico W under
+CircuitPython the 115,200-byte frame no longer fits once those two
+modules have been compiled ahead of it.
+
+```python
+panel = GC9A01AIndexed(spi, chip_select, data_command, reset)
+
+import sans20
+from chumicro_screens.fonts import Font
+
+font = Font(sans20)
+label = "12:34"
+font.text(panel.frame, label, (panel.width - font.width(label)) // 2, 100, WHITE)
+```
+
+`text(canvas, string, x, y, index)` puts the first glyph's top-left at
+(x, y) and draws only the glyphs' set pixels in the palette index, so
+the canvas shows through the rest; `width(string)` is the pixels a
+string spans; `height`, `baseline`, and `max_width` are the module's
+metrics.  A character the module lacks draws as the glyph the module
+substitutes, `?` unless it was converted with another.
+
+Each runtime blits glyphs in C.  On MicroPython a glyph goes straight
+from the module's buffer through a two-entry palette, so a font costs
+its module and a few hundred bytes.  On CircuitPython the glyphs are
+loaded once at construction into a 1-bit `displayio.Bitmap` sheet,
+`height` rows of the glyph widths summed in bits (about 3 KB for a
+20-pixel ASCII font), plus a 16-bit scratch bitmap the size of the
+widest glyph.  `Font` targets `GC9A01AIndexed.frame`: on
+MicroPython its palette is built for the 8-bit frame, so the 16-bit
+`GC9A01A.frame` and the mono OLED are outside it.  The
+`gc9a01a_font_counter.py` example centers a 20-pixel count on both
+runtimes with `sans20.py`, its DejaVu Sans module.
+
+Bench data from a Pi Pico W drawing the 7-glyph word "seconds" in
+that font: MicroPython takes 4.0 ms mean and 4.2 ms worst per call,
+0.57 ms a glyph, allocating 80 bytes a glyph inside the module's own
+`get_ch`; CircuitPython takes 7.4 ms mean and 8.4 ms worst, 1.06 ms a
+glyph, allocating nothing, and builds the sheet in 157 ms at
+construction.  A `text` call is app redraw work rather than a tick,
+but a long string on CircuitPython is worth splitting across passes
+when the loop keeps a 5 ms budget.
 
 ## The round TFT through displayio
 
@@ -332,6 +393,7 @@ The service behaves identically on CPython, MicroPython, and CircuitPython.  Pan
 | [`micropython_gc9a01a_round.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/screens/examples/micropython_gc9a01a_round.py) | A seconds counter on the round TFT, redrawn once a second while the loop stays live (MicroPython hardware) |
 | [`gc9a01a_card.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/screens/examples/gc9a01a_card.py) | A labeled color card to run first after wiring, one file for both runtimes through the portable canvas; each bar names its color, so swapped channels and rotated mounts are visible at a glance |
 | [`gc9a01a_counter.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/screens/examples/gc9a01a_counter.py) | The seconds counter from a Pi Pico W through the portable canvas, one file for both runtimes |
+| [`gc9a01a_font_counter.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/screens/examples/gc9a01a_font_counter.py) | The seconds counter in a 20-pixel proportional font from a font-to-py module (`sans20.py` beside it), centered with `font.width()`, one file for both runtimes |
 | [`circuitpython_gc9a01a_round.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/screens/examples/circuitpython_gc9a01a_round.py) | A color card on the round TFT via displayio, with a blinking notch proving live refresh (CircuitPython hardware) |
 | [`micropython_ssd1306_counter.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/screens/examples/micropython_ssd1306_counter.py) | A bordered seconds counter on the mono OLED, one page per loop pass (MicroPython hardware) |
 | [`circuitpython_ssd1306_counter.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/screens/examples/circuitpython_ssd1306_counter.py) | A border and a growing bar on the mono OLED via displayio (CircuitPython hardware) |

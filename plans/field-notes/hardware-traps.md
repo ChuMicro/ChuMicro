@@ -127,6 +127,23 @@ is its own `time.monotonic_ns()` integers; a driver with pre-sliced views
 has none.  After a displayio session had churned the heap, the same
 115,200-byte allocation failed, so the frame has to be allocated first.
 
+## A CircuitPython boot straight after a host write has less heap
+
+The soft reboot that follows a host write to CIRCUITPY starts with tens
+of kilobytes less heap than the next one.  Measured on a Pi Pico W under
+CircuitPython 10.2.1 with one `code.py` (`.scratch/probe_heap_cp.py`)
+that prints `gc.mem_free()` and the largest `bytearray` it can allocate:
+the boot right after a deploy's write began with 124,624 bytes free and
+a largest block of 114,688, and a second Ctrl-D with nothing written in
+between began with 177,872 free and 165,888 largest, 142,336 after the
+driver and canvas imports.  `GC9A01AIndexed`'s 115,200-byte frame fails
+on the first boot and allocates on the second with 48 KB to spare, so
+`deploy-example`'s own run of a round-TFT example reports `MemoryError`
+on this cell and the example runs on the next soft reboot.  Bench a
+large-frame program by sending a second Ctrl-D after the deploy, and
+read a first-boot `MemoryError` as this trap before reading it as a
+regression.
+
 ## CircuitPython board builds lack the two-argument next()
 
 `next(iterator, default)` works on the CircuitPython unix port and on

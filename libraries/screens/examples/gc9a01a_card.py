@@ -12,8 +12,9 @@ which catches the mistakes a solid fill cannot: swapped color
 channels render "RED" on a blue bar, and a rotated or mirrored mount
 moves the bars off their named positions.  When every label sits on
 its own color, the wiring and the byte order are both right.  The
-two runtimes draw their own built-in fonts, so the labels differ in
-size, not in place.
+two runtimes draw their own built-in fonts here, so the labels differ
+in size, not in place; ``gc9a01a_font_counter.py`` draws a converted
+font that lands on the same pixels on both.
 
 Example output::
 

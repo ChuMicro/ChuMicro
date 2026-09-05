@@ -12,6 +12,10 @@
 
 ::: chumicro_screens.bitmap_canvas
 
+## `chumicro_screens.fonts`
+
+::: chumicro_screens.fonts
+
 ## `chumicro_screens.gc9a01a_displayio`
 
 ::: chumicro_screens.gc9a01a_displayio

@@ -26,15 +26,17 @@ class BitmapCanvas:
 
     Coordinates clip to the frame as framebuf's do.  ``ellipse`` draws
     circles only and ``poly`` outlines only, since those are the shapes
-    ``bitmaptools`` has a C path for; ``text`` renders the runtime's
-    built-in font glyph by glyph through a two-color scratch bitmap.
+    ``bitmaptools`` has a C path for.  ``text`` renders the runtime's
+    built-in font, and ``blit_bits`` is the 1-bit glyph primitive under
+    it that ``chumicro_screens.fonts.Font`` draws converted fonts
+    through.
 
     Args:
         bitmap: The 16-bit ``displayio.Bitmap`` holding the frame.
         colors: 256 pre-swapped RGB565 values, one per palette index.
         tools: The ``bitmaptools`` module.
         font: The ``terminalio.FONT`` built-in font.
-        scratch: A 16-bit bitmap the size of one glyph.
+        scratch: A 16-bit bitmap the size of one built-in glyph.
     """
 
     def __init__(self, bitmap: object, colors: object, tools: object,
@@ -143,34 +145,63 @@ class BitmapCanvas:
 
     def text(self, string: str, x: int, y: int, index: int = 1) -> None:  # noqa: CHU001 - framebuf's own names
         """Draw ``string`` in the built-in font with its top-left at (x, y)."""
-        value = self._colors[index]
-        # The scratch's background must be a value the text is not, so the
-        # final blit can skip it.
-        background = 0xFFFF if value != 0xFFFF else 0xFFFE
-        tools = self._tools
-        bitmap = self._bitmap
-        scratch = self._scratch
         font = self._font
         glyph_width = self._glyph_width
         glyph_height = self._glyph_height
         tiles_per_row = font.bitmap.width // glyph_width
         cursor = x
-        top = y if y > 0 else 0
-        source_y = 0 if y > 0 else -y
         for character in string:
             glyph = font.get_glyph(ord(character))
             if glyph is not None:
-                sheet_x = (glyph.tile_index % tiles_per_row) * glyph_width
-                sheet_y = (glyph.tile_index // tiles_per_row) * glyph_height
-                tools.blit(scratch, glyph.bitmap, 0, 0, x1=sheet_x, y1=sheet_y,
-                           x2=sheet_x + glyph_width, y2=sheet_y + glyph_height)
-                tools.replace_color(scratch, 0, background)
-                tools.replace_color(scratch, 1, value)
-                left = cursor if cursor > 0 else 0
-                source_x = 0 if cursor > 0 else -cursor
-                if (left < self.width and top < self.height
-                        and source_x < glyph_width and source_y < glyph_height):
-                    tools.blit(bitmap, scratch, left, top, x1=source_x, y1=source_y,
-                               x2=glyph_width, y2=glyph_height,
-                               skip_source_index=background)
+                self.blit_bits(glyph.bitmap,
+                               (glyph.tile_index % tiles_per_row) * glyph_width,
+                               (glyph.tile_index // tiles_per_row) * glyph_height,
+                               glyph_width, glyph_height, cursor, y, index,
+                               self._scratch)
             cursor += glyph_width
+
+    def blit_bits(self, sheet: object, sheet_x: int, sheet_y: int, width: int,
+                  height: int, x: int, y: int, index: int, scratch: object) -> None:  # noqa: CHU001 - framebuf's own names
+        """Draw the set bits of a region of a 1-bit bitmap at (x, y) in palette index ``index``.
+
+        The region is ``width`` by ``height`` pixels of ``sheet`` from
+        (sheet_x, sheet_y).  Clear bits leave the frame untouched, and
+        the region clips at the frame edges.  ``scratch`` is a 16-bit
+        bitmap at least the region's size; the bits are copied into it,
+        the set bits recolored there, and the result blitted into the
+        frame with the clear bits skipped, three ``bitmaptools`` calls
+        with no Python per pixel.  Black text costs one more pass,
+        since black is the value the clear bits already hold.
+
+        Args:
+            sheet: A ``displayio.Bitmap`` with two values per pixel.
+            sheet_x: Left column of the region in ``sheet``.
+            sheet_y: Top row of the region in ``sheet``.
+            width: Region width in pixels.
+            height: Region height in pixels.
+            x: Frame column the region's left edge lands on.
+            y: Frame row the region's top edge lands on.
+            index: Palette index the set bits draw in.
+            scratch: A 16-bit ``displayio.Bitmap`` at least ``width`` by
+                ``height``.
+        """
+        if x >= self.width or y >= self.height or x + width <= 0 or y + height <= 0:
+            return
+        value = self._colors[index]
+        tools = self._tools
+        tools.blit(scratch, sheet, 0, 0, x1=sheet_x, y1=sheet_y,
+                   x2=sheet_x + width, y2=sheet_y + height)
+        # The copied bits are 0 and 1.  The final blit skips the clear
+        # bits' value, so that value must differ from the text's.
+        if value == 0:
+            background = 0xFFFF
+            tools.replace_color(scratch, 0, background)
+            tools.replace_color(scratch, 1, value)
+        else:
+            background = 0
+            if value != 1:
+                tools.replace_color(scratch, 1, value)
+        left = x if x > 0 else 0
+        top = y if y > 0 else 0
+        tools.blit(self._bitmap, scratch, left, top, x1=left - x, y1=top - y,
+                   x2=width, y2=height, skip_source_index=background)

@@ -312,8 +312,10 @@ class GC9A01AIndexed:
     On MicroPython it is the ``framebuf.FrameBuffer`` itself; on
     CircuitPython it is a canvas over a 16-bit ``displayio.Bitmap``
     that draws circles rather than general ellipses, polygon outlines
-    rather than fills, and the runtime's own font, whose metrics differ
-    from framebuf's 8x8.
+    rather than fills, and its ``text`` in the runtime's own built-in
+    font, whose metrics differ from framebuf's 8x8.
+    ``chumicro_screens.fonts.Font`` draws a converted font at the same
+    pixels on both runtimes.
 
     RAM differs by runtime.  MicroPython holds the frame at one byte per
     pixel (57,600 bytes) plus a 256-entry palette, about half the RAM

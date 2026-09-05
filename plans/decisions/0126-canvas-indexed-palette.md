@@ -49,9 +49,10 @@ per runtime.
   refresh cost.
 - Canvas primitives record their dirty bounds; refresh strategies consume
   them backend-side without app changes.
-- `text` promises call-shape portability, not pixel-identical output: each
-  backend renders its runtime's built-in font until a cross-runtime font
-  layer lands.
+- The canvas's own `text` promises call-shape portability, not
+  pixel-identical output: each backend renders its runtime's built-in font.
+  Pixel-identical text is a converted font drawn through the font layer,
+  [Decision 0128](0128-fonts-from-font-to-py-modules.md).
 - Construction stays injected (bus and pin objects, Decision 0010); the
   [Decision 0127](0127-pins-by-gpio-number.md) resolvers shrink it to shared
   GPIO numbers, and full portability begins at the canvas.
