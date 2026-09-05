@@ -38,9 +38,13 @@
 stripped = 26330
 mpy = 9340
 
+[charlcd]
+stripped = 4322
+mpy = 1827
+
 [compat]
-stripped = 1940
-mpy = 1174
+stripped = 4442
+mpy = 1949
 
 [config]
 stripped = 5214
@@ -78,6 +82,10 @@ mpy = 20141
 [runner]
 stripped = 21669
 mpy = 6831
+
+[screens]
+stripped = 44408
+mpy = 14290
 
 [sockets]
 stripped = 34164

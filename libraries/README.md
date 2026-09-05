@@ -18,7 +18,9 @@ Small, focused libraries for microcontrollers and laptops.  Every library instal
 | **[runner](runner/)** | The task scheduler.  Register your services, call `runner.tick()` in your loop, everyone gets a turn.  No async needed. |
 | **[buttons](buttons/)** | Debounced buttons, switches, and key matrices.  Presses are captured beneath your loop, so a tap lands even when the loop is busy elsewhere. |
 | **[knobs](knobs/)** | Rotary encoders and analog knobs.  Quadrature is counted outside your loop, and ADC readings are held still by a median, smoothing, and a deadband. |
-| **[compat](compat/)** | Standard-library features that CircuitPython and MicroPython are missing (like `functools.partial`). |
+| **[screens](screens/)** | Paced display flushing.  Draw the frame, call `show()`, and the flush crosses the bus one bounded transfer per tick instead of stalling the loop. |
+| **[charlcd](charlcd/)** | HD44780 character LCDs behind PCF8574 I2C backpacks (LCM1602 class).  One driver, both device runtimes, host-testable to the byte. |
+| **[compat](compat/)** | Standard-library features that CircuitPython and MicroPython are missing (like `functools.partial`), and pins and buses by GPIO number so one construction block runs on both. |
 | **[msgpack](msgpack/)** | Compact binary serialization, smaller than JSON for typical payloads.  Good for settings and sensor data.  Wire-compatible with PyPI `msgpack(use_single_float=True)`. |
 | **[config](config/)** | Type-checked runtime config with a shared dotted-key shape (`wifi.ssid`, `mqtt.broker.host`); each library reads its settings via `<Name>Config.from_config(...)`. |
 | **[kvstore](kvstore/)** | Tiny persistent key-value store for counters, timestamps, and tokens.  Picks the right backend (NVM / NVS / LittleFS) for your board. |
@@ -44,7 +46,7 @@ Each library's own README has a one-line install command for that library.
 The stack runs roughly bottom-up:
 
 - **Primitives:** `timing`, `runner`.  Depended on by most others.
-- **Physical input:** `buttons`, `knobs`.
+- **Physical input and output:** `buttons`, `knobs`, `screens`, `charlcd`.
 - **Persistence and serialization:** `msgpack`, `config`, `kvstore`.
 - **Networking transport and protocols:** `wifi` (link), `sockets` (TCP / TLS / UDP), then the app protocols `ntp`, `requests`, `http_server`, `websockets`, and `mqtt`.
 
@@ -60,6 +62,8 @@ The SVG is regenerated from each library's pyproject.toml by [`scripts/render_de
 - **"I have multiple things happening in my loop"** → [runner](runner/) (includes timing)
 - **"I need a button that doesn't miss presses"** → [buttons](buttons/)
 - **"I need a rotary encoder or a potentiometer read cleanly"** → [knobs](knobs/)
+- **"I need a display refresh that doesn't freeze my loop"** → [screens](screens/)
+- **"I have one of those blue 16x2 LCDs with the I2C backpack"** → [charlcd](charlcd/)
 - **"I need to store settings or send data compactly"** → [msgpack](msgpack/)
 - **"I need to read deploy-time config on the device"** → [config](config/) (with [msgpack](msgpack/))
 - **"I need to persist a counter across reboots"** → [kvstore](kvstore/)
@@ -72,3 +76,4 @@ The SVG is regenerated from each library's pyproject.toml by [`scripts/render_de
 - **"I need a WebSocket client or server"** → [websockets](websockets/)
 - **"I want my app to react when WiFi connects or drops"** → [wifi](wifi/)'s guide covers state-change callbacks and signals
 - **"`functools.partial` doesn't exist on my board"** → [compat](compat/)
+- **"My pin names change every time I switch runtimes"** → [compat](compat/)'s `wiring` resolves GPIO numbers on both

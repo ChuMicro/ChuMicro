@@ -54,6 +54,7 @@ DI_DEPS: dict[str, list[str]] = {
     "http_server": ["runner"],
     "mqtt": ["runner"],
     "websockets": ["runner"],
+    "screens": ["runner"],
 }
 
 # Workbench DI / soft-dep relationships.  ``chumicro-workspace`` imports
@@ -81,6 +82,8 @@ NODES: dict[str, tuple[int, int]] = {
     "runner":      (520,  300),
     # Middle row, right: buttons reads the caller's clock arithmetic.
     "buttons":     (740,  300),
+    # Middle row, right: screens paces a panel's flush under the runner.
+    "screens":     (920,  300),
     # Bottom row: foundation primitives (y=540).
     "msgpack":     (140,  540),
     "timing":      (480,  540),
@@ -88,6 +91,7 @@ NODES: dict[str, tuple[int, int]] = {
     # Standalone cluster (top-left of foundation row, no edges).
     "compat":      (40,   640),
     "knobs":       (220,  640),
+    "charlcd":     (400,  640),
 }
 
 # Workbench layout: composers on top, primitives below, lint-only

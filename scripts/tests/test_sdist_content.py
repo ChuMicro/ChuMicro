@@ -160,7 +160,21 @@ class TestCheckLibrarySdist:
             library, canonical_license=tmp_path / "LICENSE",
         )
         assert len(problems) == 1
-        assert "differs from the repo root LICENSE" in problems[0]
+        assert "does not start with the repo root LICENSE" in problems[0]
+
+    def test_appended_attribution_passes(self, tmp_path: Path):
+        library = _make_library(
+            tmp_path, "mqtt", "0.11.4",
+            sdist_dirs=["tests", "examples", "docs"],
+        )
+        canonical = (tmp_path / "LICENSE").read_bytes()
+        (library / "LICENSE").write_bytes(
+            canonical + b"\nPortions Copyright (c) 2021 Upstream Author\n",
+        )
+        problems = check_library_sdist(
+            library, canonical_license=tmp_path / "LICENSE",
+        )
+        assert problems == []
 
     def test_sdist_without_license_flagged(self, tmp_path: Path):
         library = _make_library(tmp_path, "mqtt", "0.11.4", sdist_dirs=None)

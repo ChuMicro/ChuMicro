@@ -44,6 +44,10 @@ ban-relative-imports = "all"
 "**/tests/**" = ["TID252"]
 "**/functional_tests/**" = ["TID252"]
 "**/examples/**" = ["TID252"]
+# libraries/screens/examples/sans20.py is font_to_py output, regenerable
+# from the command in its header; the tool's index lambda trips E731 and
+# E741.
+"libraries/screens/examples/sans20.py" = ["E731", "E741"]
 # .github/skills/ holds host-only eval and report drivers (CPython, run
 # directly, never deployed). E501 is relaxed because the render_*.py report
 # generators embed long HTML/CSS/prompt literals that reflowing would mangle

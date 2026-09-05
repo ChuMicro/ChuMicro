@@ -4,6 +4,10 @@
 
 ::: chumicro_compat.functools
 
+## `chumicro_compat.wiring`
+
+::: chumicro_compat.wiring
+
 ---
 
 <div class="chumicro-footer" markdown>

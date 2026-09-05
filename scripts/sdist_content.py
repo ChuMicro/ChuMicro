@@ -102,7 +102,10 @@ def check_library_sdist(
     # Every published artifact declares License: MIT, so it must carry
     # the actual text (PyPI wheels land it in .dist-info/licenses/).
     # The per-package copy exists for the build; the root file is the
-    # single source of truth, so drift fails the build loudly.
+    # single source of truth, so drift fails the build loudly.  A
+    # library that absorbed third-party code appends that code's
+    # copyright lines after the canonical text, so the check is a
+    # prefix match, not equality.
     if canonical_license is None:
         canonical_license = ROOT / "LICENSE"
     license_path = library_dir / "LICENSE"
@@ -112,10 +115,11 @@ def check_library_sdist(
             "the package dir (published artifacts must carry the text "
             "they declare)"
         )
-    elif license_path.read_bytes() != canonical_license.read_bytes():
+    elif not license_path.read_bytes().startswith(canonical_license.read_bytes()):
         problems.append(
-            f"{name}: LICENSE differs from the repo root LICENSE — the "
-            "root file is canonical; re-copy it"
+            f"{name}: LICENSE does not start with the repo root LICENSE "
+            "— the root text is canonical; third-party attributions "
+            "append after it"
         )
 
     test_extra = (

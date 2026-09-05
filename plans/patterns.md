@@ -628,7 +628,139 @@ from chumicro_sockets import UnsupportedSSLConfigError  # noqa: E402
 Related: AGENTS.md "Production tolerance that paper-overs a fake's hardcoded value" (sibling rule about production not bending to tests), `_SwapAttribute` helper in `libraries/sockets/tests/test_cp_adapter.py`.
 
 
-## Cross-runtime shim
+## framebuf RGB565 is little-endian; SPI color panels read big-endian
+
+MicroPython's `framebuf.FrameBuffer` stores RGB565 pixels low byte
+first, while GC9A01A/ST77xx-class panels read the high byte first, so
+a buffer flushed raw shows channel-rotated colors (intended red shows
+blue, green shows red, blue shows green) even though hand-built
+big-endian test fills looked correct on the same wiring.  Bench-bitten
+2026-08-23 on the GC9A01A: the smoke script's hand-packed fills passed,
+the framebuf-backed driver rotated.
+
+The zero-cost fix: the driver's `color565` helper pre-swaps the packed
+value so the little-endian buffer bytes land on the wire in panel
+order.  Byte-swapping at flush time in Python is never the answer (a
+per-pixel pass blows the tick budget).  Consequence: raw RGB565
+literals like `0xF800` render wrong on such a driver's `frame`; colors
+must come from the helper, and the driver docstring says so.  A
+labeled test card (color bars captioned with their names) is the bench
+check that catches this class; solid fills cannot, because a rotation
+maps every primary onto another clean primary.
+
+Reference implementation: `chumicro_screens.gc9a01a.color565`.
+
+## Indexed frames convert at C speed through blit's palette, not viper
+
+When a full-color frame buffer exceeds a 256 KB board's heap, hold the
+frame at `framebuf.GS8` (one byte per pixel) plus a palette that is
+itself a FrameBuffer: 256 x 1 in the destination format.
+`destination.blit(frame, 0, -row_start, -1, palette)` then expands one
+strip per flush advance, mapping every source byte through the palette
+in C (`modframebuf.c` reads `palette.pixel(value, 0)` per pixel), and
+clipping to the destination bounds so only the strip's pixels are
+touched.  A 240 x 10 strip expands in well under a millisecond where
+the equivalent Python loop takes tens of milliseconds.  Bonus: editing
+a palette entry recolors every drawn pixel holding that index on the
+next flush.
+
+Reach for viper only after this fails, because viper code anywhere in
+a module breaks arch-neutral compilation: `mpy-cross` without `-march`
+refuses it (`SyntaxError: invalid arch`, measured on 1.27.0), which
+fails the `check-size` gate and would force the bundle's `.mpy`
+channel per-arch.  A nested def keeps CPython imports working but not
+`mpy-cross`, which compiles the whole file.
+
+On CircuitPython the same 8-bit frame expands through `bitmaptools`:
+`blit` copies the strip's indexes raw into a 16-bit strip bitmap, then
+one `replace_color(strip, index, color)` pass per assigned color
+rewrites them in place, allocation-free, about 0.29 us per pixel per
+pass on an RP2040 plus 1.5 us per pixel for the copy.  Two traps: a
+pass rewrites *values*, so a color below 256 can be mistaken for an
+index by a later pass (move those indexes to temporaries above 255
+that no color uses first, and map the temporaries last, after every
+index value has left the strip); and `ulab` is not the shortcut it
+looks like, because every ndarray operation allocates (slice
+assignment copies its source, operators allocate stride scratch,
+comparisons allocate the mask), 12 KB per strip measured.
+
+Reference implementation: `chumicro_screens.gc9a01a._expansion_passes`.
+
+## A framebuf subclass records what it draws; super() is the only way back to C
+
+`framebuf.FrameBuffer` subclasses in Python on MicroPython (the stock
+`ssd1306.py` driver does it), so a canvas can wrap every primitive with
+bookkeeping and stay a real framebuf: `blit` takes the subclass as a
+source because `get_readonly_framebuffer` casts through
+`mp_obj_cast_to_native_base` (1.27.0), so a strip expands from it with
+no wrapper.  Two facts shape the overrides:
+
+- Reach the base through `super().method(...)`, never
+  `framebuf.FrameBuffer.method(self, ...)`.  The instance is an
+  `mp_obj_instance_t` whose native framebuf lives in `subobj[0]`;
+  `super()` and attribute lookup substitute it, while an explicit
+  unbound call hands the instance itself to C code that reads it as a
+  framebuf struct.  The compiler emits `LOAD_SUPER_METHOD` for the
+  `super().name(...)` form, so the call allocates nothing.
+- The native methods take positional arguments only
+  (`MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN`), so forward `key` and
+  `palette` positionally; a keyword raises `TypeError`.
+
+Each override costs one Python frame and its bookkeeping, about 110 us
+on an RP2040 over the 28 us bare call, which is why `pixel` inlines
+its bookkeeping and per-pixel loops belong in `blit`.  Load the
+subclass's module with the driver rather than at construction: its
+class objects otherwise land in the free region the frame is about to
+take.
+
+The frame itself goes before the driver.  A module's compile grows its
+parse tree in place at the bottom of the heap's largest free region,
+and a large allocation made while the tree is alive (a big function's
+bytecode, a qstr pool doubling) lands above the tree and stays, so
+importing a 13 KB driver on a Pi Pico W under CircuitPython leaves
+115,072 bytes in one block where 166,720 were free at boot, and no
+trimming short of removing a class moves that plateau
+(plans/field-notes/hardware-traps.md, "A large module's compile pins
+the top of the heap").  A frame that needs the block is allocated by
+the app as its first statement and handed to the driver, which is what
+`GC9A01AIndexed(..., bitmap=)` is for.
+
+A column window streams from a strip laid out at the frame's width
+without slicing on CircuitPython, because `busio.SPI.write(buffer,
+start=, end=)` bounds the write in the buffer's own items (pixels, for
+a 16-bit `displayio.Bitmap` view).  `machine.SPI.write` has no bounds,
+so the MicroPython driver re-lays the strip at the window's width
+through a per-flush `FrameBuffer` over the same buffer instead.
+
+Reference implementation: `chumicro_screens.framebuf_canvas.FramebufCanvas`
+and `chumicro_screens.gc9a01a.GC9A01AIndexed.flush`.
+
+## Packed 1-bit glyphs blit in C on both runtimes without a copy
+
+A font-to-py module stores each glyph as rows of `(width + 7) // 8`
+bytes, most significant bit first, which is framebuf's `MONO_HLSB`
+layout.  Two firmware facts let one Python layer draw it at C speed on
+both runtimes:
+
+- `FrameBuffer.blit` accepts a `(buffer, width, height, format[,
+  stride])` tuple or list as its source and reads the buffer read-only
+  (`get_readonly_framebuffer` in `modframebuf.c`, 1.27.0), so a
+  `bytes` glyph blits with no `bytearray` copy and no `FrameBuffer`
+  object; reuse one list and assign its first two slots per glyph.
+  With a palette, `key` compares against the *mapped* value, so the
+  transparent entry is whatever the palette maps the background bit
+  to, chosen to differ from the foreground index.
+- A CircuitPython 10.2 `displayio.Bitmap` with two values per pixel
+  stores rows byte-packed most significant bit first (rows padded to
+  32 bits), and `bitmaptools.readinto(bitmap, io.BytesIO(rows), 1,
+  element_size=1, reverse_pixels_in_element=True)` loads exactly those
+  packed rows through a public call, no per-pixel Python.  Read each
+  glyph into a stamp bitmap of its own width and blit the stamp into
+  one sheet, a few C calls per glyph, and `bitmaptools.blit` draws any
+  glyph as a region of the sheet.
+
+Reference implementation: `chumicro_screens.fonts.Font` and
+`chumicro_screens.bitmap_canvas.BitmapCanvas.blit_bits`.
 
 When a module exists on CPython but not on MicroPython/CircuitPython
 (or vice versa), write a thin shim with runtime detection.
