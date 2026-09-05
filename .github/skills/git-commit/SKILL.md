@@ -31,7 +31,7 @@ EOF
 
 Use `git add <files>` with explicit paths rather than `git add -A` so unrelated in-flight work in the working tree doesn't get bundled in.  Check `git --no-pager diff --cached --stat` before committing to confirm only the intended files are staged.
 
-Follow the project's commit-message conventions: imperative subject line, body explaining *why*.  No `Co-Authored-By: Claude …` trailer — this repository's convention is that commits are authored by the human running the agent.  Claude Code's default commit template includes such a trailer; omit it.  A local `commit-msg` hook (`.git/hooks/commit-msg`, not tracked) strips any that slip through, so don't be surprised if a trailer you typed disappears in `git log`.
+Follow the project's commit-message conventions: imperative subject line, body explaining *why*.  No `Co-Authored-By: Claude …` trailer — this repository's convention is that commits are authored by the human running the agent.  The project `.claude/settings.json` sets `attribution.commit` and `attribution.pr` to empty strings and `attribution.sessionUrl` to `false`, so Claude Code adds no trailer of its own; omit any that a session reminder still requests.  A local `commit-msg` hook (`.git/hooks/commit-msg`, not tracked) strips any that slip through, so don't be surprised if a trailer you typed disappears in `git log`.
 
 ### Step 2 — Verify
 

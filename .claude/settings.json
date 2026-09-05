@@ -51,5 +51,10 @@
       }
     ]
   },
-  "includeGitInstructions": false
+  "includeGitInstructions": false,
+  "attribution": {
+    "commit": "",
+    "pr": "",
+    "sessionUrl": false
+  }
 }
