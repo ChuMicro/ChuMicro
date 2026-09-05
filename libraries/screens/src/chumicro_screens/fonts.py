@@ -43,12 +43,10 @@ class Font:
 
     RAM: on MicroPython the font costs its module plus a few hundred
     bytes; on CircuitPython the sheet adds ``height`` rows of the glyph
-    widths summed, in bits, about 3 KB for a 20-pixel ASCII font, plus
-    a 16-bit scratch bitmap of the widest glyph.  Import the module and
-    construct ``Font`` after the panel: the panel's frame wants the
-    heap's largest free block, and on a Pi Pico W under CircuitPython
-    the 115,200-byte frame no longer fits once a font module has been
-    compiled ahead of it.
+    widths summed, in bits, about 3 KB for a 20-pixel ASCII font, and
+    the canvas grows its scratch bitmap to the widest glyph on the first
+    draw.  Construct the panel before the font: the panel's frame wants
+    the heap's largest free block.
 
     ``text`` targets the indexed canvas, ``GC9A01AIndexed.frame``: on
     MicroPython the palette it blits through is built for an 8-bit
@@ -138,7 +136,6 @@ class Font:
                 bitmaptools.blit(sheet, stamp, sheet_x[slot], 0)
         self._sheet = sheet
         self._sheet_x = sheet_x
-        self._scratch = displayio.Bitmap(self.max_width, height, 65536)
 
     def width(self, string: str) -> int:
         """Return the pixels ``string`` spans when drawn, the sum of its glyph widths.
@@ -195,7 +192,6 @@ class Font:
         sheet = self._sheet
         sheet_x = self._sheet_x
         widths = self._widths
-        scratch = self._scratch
         height = self.height
         cursor = x
         for character in string:
@@ -203,5 +199,5 @@ class Font:
             width = widths[slot]
             if width:
                 canvas.blit_bits(sheet, sheet_x[slot], 0, width, height,
-                                 cursor, y, index, scratch)
+                                 cursor, y, index)
             cursor += width

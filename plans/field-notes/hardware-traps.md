@@ -127,22 +127,26 @@ is its own `time.monotonic_ns()` integers; a driver with pre-sliced views
 has none.  After a displayio session had churned the heap, the same
 115,200-byte allocation failed, so the frame has to be allocated first.
 
-## A CircuitPython boot straight after a host write has less heap
+## A hand-copied code.py shrinks the next CircuitPython boot; the deploy path does not
 
-The soft reboot that follows a host write to CIRCUITPY starts with tens
-of kilobytes less heap than the next one.  Measured on a Pi Pico W under
-CircuitPython 10.2.1 with one `code.py` (`.scratch/probe_heap_cp.py`)
-that prints `gc.mem_free()` and the largest `bytearray` it can allocate:
-the boot right after a deploy's write began with 124,624 bytes free and
-a largest block of 114,688, and a second Ctrl-D with nothing written in
-between began with 177,872 free and 165,888 largest, 142,336 after the
-driver and canvas imports.  `GC9A01AIndexed`'s 115,200-byte frame fails
-on the first boot and allocates on the second with 48 KB to spare, so
-`deploy-example`'s own run of a round-TFT example reports `MemoryError`
-on this cell and the example runs on the next soft reboot.  Bench a
-large-frame program by sending a second Ctrl-D after the deploy, and
-read a first-boot `MemoryError` as this trap before reading it as a
-regression.
+The soft reboot that followed a `cp` of a probe onto CIRCUITPY started
+with 124,624 bytes free and a largest block of 114,688, and the next
+Ctrl-D with nothing written in between started with 177,872 free and
+165,888 largest (Pi Pico W, CircuitPython 10.2.1, a `code.py` that
+prints `gc.mem_free()` and the largest `bytearray` it can allocate).
+The same probe shipped through `chumicro-deploy deploy --file-map`
+started the boot the deploy itself triggers, right after its own write,
+with 179,120 free and 165,888 largest, and the counter example's import
+chain followed by a 16-bit `GC9A01AIndexed` frame allocated on that
+boot with 30 KB to spare.  The `cp` had also left `._code.py` on the
+drive, the AppleDouble file the section above warns about, mirrored
+from the `com.apple.provenance` attribute macOS puts on the source.
+Hand copies are the trap in heap as well as in the filesystem; a
+measurement is only a measurement when the deploy path staged it.
+Three `MemoryError` failures at the 115,200-byte frame that
+`deploy-example` reported on this board at the start of the same
+session, before any hand copy, did not reproduce through the deploy
+path afterwards and are unexplained.
 
 ## CircuitPython board builds lack the two-argument next()
 

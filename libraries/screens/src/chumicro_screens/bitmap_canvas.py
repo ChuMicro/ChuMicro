@@ -3,9 +3,10 @@
 ``BitmapCanvas`` is what ``GC9A01AIndexed.frame`` is on CircuitPython:
 the same method names an app calls on a ``framebuf.FrameBuffer`` under
 MicroPython, with palette indexes as colors, so one drawing file runs on
-both runtimes.  Each primitive resolves its index through the panel's
-palette as it draws, so the bitmap holds the panel's own 16-bit values
-and streams to it without conversion.
+both runtimes.  Each primitive writes the value ``colors`` gives its
+index: the index itself when the frame is 8-bit and the panel expands
+the palette at flush, or the pre-swapped RGB565 color when the frame
+is 16-bit and streams to the panel without conversion.
 """
 
 __chumicro_runtimes__ = ("circuitpython",)
@@ -29,27 +30,32 @@ class BitmapCanvas:
     ``bitmaptools`` has a C path for.  ``text`` renders the runtime's
     built-in font, and ``blit_bits`` is the 1-bit glyph primitive under
     it that ``chumicro_screens.fonts.Font`` draws converted fonts
-    through.
+    through; both share one scratch bitmap that grows to the largest
+    glyph drawn.
 
     Args:
-        bitmap: The 16-bit ``displayio.Bitmap`` holding the frame.
-        colors: 256 pre-swapped RGB565 values, one per palette index.
+        bitmap: The ``displayio.Bitmap`` holding the frame, 8 or 16
+            bits per pixel.
+        colors: The value each of the 256 palette indexes draws as:
+            the identity sequence for an 8-bit frame, the pre-swapped
+            RGB565 colors for a 16-bit one.
         tools: The ``bitmaptools`` module.
         font: The ``terminalio.FONT`` built-in font.
-        scratch: A 16-bit bitmap the size of one built-in glyph.
+        displayio: The ``displayio`` module, for the scratch bitmap.
     """
 
     def __init__(self, bitmap: object, colors: object, tools: object,
-                 font: object, scratch: object) -> None:
+                 font: object, displayio: object) -> None:
         self._bitmap = bitmap
         self._colors = colors
         self._tools = tools
         self._font = font
-        self._scratch = scratch
+        self._displayio = displayio
+        self._scratch = None
+        self._values = 1 << bitmap.bits_per_value
         self.width = bitmap.width
         self.height = bitmap.height
-        self._glyph_width = scratch.width
-        self._glyph_height = scratch.height
+        self._glyph_width, self._glyph_height = font.get_bounding_box()
 
     def fill(self, index: int) -> None:
         self._tools.fill_region(self._bitmap, 0, 0, self.width, self.height,
@@ -156,22 +162,23 @@ class BitmapCanvas:
                 self.blit_bits(glyph.bitmap,
                                (glyph.tile_index % tiles_per_row) * glyph_width,
                                (glyph.tile_index // tiles_per_row) * glyph_height,
-                               glyph_width, glyph_height, cursor, y, index,
-                               self._scratch)
+                               glyph_width, glyph_height, cursor, y, index)
             cursor += glyph_width
 
     def blit_bits(self, sheet: object, sheet_x: int, sheet_y: int, width: int,
-                  height: int, x: int, y: int, index: int, scratch: object) -> None:  # noqa: CHU001 - framebuf's own names
+                  height: int, x: int, y: int, index: int) -> None:  # noqa: CHU001 - framebuf's own names
         """Draw the set bits of a region of a 1-bit bitmap at (x, y) in palette index ``index``.
 
         The region is ``width`` by ``height`` pixels of ``sheet`` from
         (sheet_x, sheet_y).  Clear bits leave the frame untouched, and
-        the region clips at the frame edges.  ``scratch`` is a 16-bit
-        bitmap at least the region's size; the bits are copied into it,
-        the set bits recolored there, and the result blitted into the
-        frame with the clear bits skipped, three ``bitmaptools`` calls
-        with no Python per pixel.  Black text costs one more pass,
-        since black is the value the clear bits already hold.
+        the region clips at the frame edges.  The bits are copied into
+        the canvas's scratch bitmap, the set bits recolored there, and
+        the result blitted into the frame with the clear bits skipped,
+        three ``bitmaptools`` calls with no Python per pixel.  A value
+        of 0 costs one more pass, since 0 is what the clear bits hold.
+        The scratch is allocated on first use and again whenever a
+        larger region arrives, so the first draw of a bigger font
+        allocates once.
 
         Args:
             sheet: A ``displayio.Bitmap`` with two values per pixel.
@@ -182,11 +189,20 @@ class BitmapCanvas:
             x: Frame column the region's left edge lands on.
             y: Frame row the region's top edge lands on.
             index: Palette index the set bits draw in.
-            scratch: A 16-bit ``displayio.Bitmap`` at least ``width`` by
-                ``height``.
         """
         if x >= self.width or y >= self.height or x + width <= 0 or y + height <= 0:
             return
+        scratch = self._scratch
+        if scratch is None or scratch.width < width or scratch.height < height:
+            scratch_width = width
+            scratch_height = height
+            if scratch is not None:
+                if scratch.width > scratch_width:
+                    scratch_width = scratch.width
+                if scratch.height > scratch_height:
+                    scratch_height = scratch.height
+            scratch = self._scratch = self._displayio.Bitmap(scratch_width, scratch_height,
+                                                             self._values)
         value = self._colors[index]
         tools = self._tools
         tools.blit(scratch, sheet, 0, 0, x1=sheet_x, y1=sheet_y,
@@ -194,7 +210,7 @@ class BitmapCanvas:
         # The copied bits are 0 and 1.  The final blit skips the clear
         # bits' value, so that value must differ from the text's.
         if value == 0:
-            background = 0xFFFF
+            background = self._values - 1
             tools.replace_color(scratch, 0, background)
             tools.replace_color(scratch, 1, value)
         else:

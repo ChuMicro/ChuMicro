@@ -2,7 +2,7 @@
 
 Status: `accepted`
 Date: `2026-08-24`
-Summary: Portable canvas: framebuf vocabulary with palette indexes and `set_color`; GS8 framebuf on MicroPython, a 16-bit `displayio.Bitmap` streamed over SPI on CircuitPython, paced by `ScreenService`.
+Summary: Portable canvas: framebuf vocabulary with palette indexes and `set_color`; an 8-bit frame on both runtimes, expanded per strip in C, with a 16-bit CircuitPython opt-in.
 Related: [Decision 0125](0125-display-libraries.md) (the firmware-layer criterion and the protocol this refines), [Decision 0080](0080-runner-reactor.md) (tick budget), [Decision 0051](0051-runner-shaped-as-project-policy.md) (runner shape), [Decision 0092](0092-no-backwards-compat-before-publication.md) (pre-1.0 reshaping), [Decision 0127](0127-pins-by-gpio-number.md) (portable pin references)
 
 ## Context
@@ -27,20 +27,28 @@ per runtime.
 - `set_color(index, red, green, blue)` is the only color entry point: 8-bit
   channels in, backend-private conversion out, pre-swapped RGB565 on both
   runtimes. Raw color values (`color565`) are a MicroPython-native extra
-  outside the protocol. On MicroPython a later `set_color` recolors every
-  drawn pixel holding the index from the next flush; on CircuitPython it
-  applies to later drawing only, because that frame holds colors rather
-  than indexes.
-- Backends: MicroPython is a GS8 `framebuf.FrameBuffer` expanded through a
-  palette blit (the `GC9A01AIndexed` shape). CircuitPython is a 16-bit
-  `displayio.Bitmap` drawn with `bitmaptools` in the panel's byte order and
-  streamed strip by strip over `busio.SPI` from its own buffer, with the
-  panel brought up and windowed by hand exactly as the MicroPython drivers
-  do. displayio's refresh pipeline is not in the path: on an RP2040 it costs
-  about 6 us per dirty pixel however the frame is chunked (318 ms for a
-  whole 240x240 frame in one stall, 510 ms in tick-sized chunks), while the
-  streamed frame crosses in 44 to 65 ms in strips under 4 ms; the
-  hardware-traps field note carries the tables.
+  outside the protocol. A later `set_color` recolors every drawn pixel
+  holding the index from the next flush on both runtimes; only the 16-bit
+  CircuitPython frame below holds colors rather than indexes and applies it
+  to later drawing.
+- Backends: the frame is one byte per pixel on both runtimes and each flush
+  advance expands one strip through the palette in C. MicroPython is a GS8
+  `framebuf.FrameBuffer` expanded through a palette blit (the
+  `GC9A01AIndexed` shape). CircuitPython is an 8-bit `displayio.Bitmap`
+  drawn with `bitmaptools` as indexes; each strip is copied raw into a
+  16-bit strip bitmap and expanded by one `bitmaptools.replace_color` pass
+  per assigned color, two for a color whose pre-swapped value is below 256
+  since it could be mistaken for an index, then streamed over `busio.SPI`
+  from the strip's buffer, with the panel brought up and windowed by hand
+  exactly as the MicroPython drivers do. The cost grows with the palette (on
+  an RP2040 about 0.42 ms per pass on a 3-row strip and 34 ms per color per
+  frame), so `frame_bits=16` keeps the earlier shape as an opt-in: a 16-bit
+  `displayio.Bitmap` holding colors, streamed with no expansion in strips
+  under 2 ms, 62 ms a frame, at twice the RAM. displayio's refresh pipeline
+  is in neither path: on an RP2040 it costs about 6 us per dirty pixel
+  however the frame is chunked (318 ms for a whole 240x240 frame in one
+  stall, 510 ms in tick-sized chunks); the hardware-traps field note
+  carries the tables.
 - One runner-shaped service on both runtimes: `ScreenService` drives the
   same `flush()` protocol everywhere, so `show()`, `check(now_ms)`,
   `handle(now_ms)`, and `next_deadline(now_ms)` are the loop contract on
@@ -62,13 +70,16 @@ per runtime.
 Rejected alternatives:
 
 - **Full-color values as the portable vocabulary** — drags byte order into
-  app code, and on MicroPython a full-color frame excludes the 256 KB board
-  class. Indexes are what apps speak on both runtimes; what the backend
-  stores is its own business. The CircuitPython backend stores 16-bit
-  pixels because the firmware offers no C-speed palette expansion outside
-  displayio's pipeline, and a Pico W's larger CircuitPython heap holds the
-  117 KB frame with about 43 KB to spare, driver code included, when it is
-  allocated first.
+  app code, and a full-color frame excludes the 256 KB board class on
+  MicroPython and leaves a Pico W under CircuitPython about 43 KB for
+  everything else. Indexes are what apps speak on both runtimes; what the
+  backend stores is its own business.
+- **`ulab` for the CircuitPython strip expansion** — its boolean-mask
+  assignment runs in C, but every array operation allocates:
+  `ndarray_assign_view` copies its source, each operator allocates shape
+  and stride scratch, and a comparison allocates its mask. Measured on the
+  Pico W at 12 KB per 6-row strip for seven colors, and no faster than the
+  `replace_color` passes (6.7 ms against 7.9 ms), which allocate nothing.
 - **Pacing displayio by chunked refresh** — a shadow bitmap copied into the
   displayed one about 480 pixels per advance fits the tick (4.1 ms mean on
   an RP2040) but takes 510 ms per frame and stores the frame twice, a
@@ -85,9 +96,9 @@ Rejected alternatives:
 - `chumicro-screens` grows the canvas protocol and its CircuitPython
   backend; `GC9A01AIndexed` is already the MicroPython shape. Pre-1.0
   surfaces reshape freely under Decision 0092.
-- The CircuitPython backend's frame is the largest allocation an app makes
-  on a 256 KB board, so it is constructed before anything else, the same
-  rule `GC9A01AIndexed` already carries.
+- The frame is the largest allocation an app makes on a 256 KB board, so
+  the panel is constructed before anything else on both runtimes; the
+  16-bit CircuitPython frame depends on it.
 - Fonts, image loading, and dirty-window refresh each land once at the
   canvas level and serve both runtimes
   ([workstream](../workstreams/screens-capability-slices.md)).

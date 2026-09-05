@@ -74,7 +74,7 @@ for loop_pass in range(4):
 
 | Symbol | Description |
 |---|---|
-| `chumicro_screens.gc9a01a.GC9A01AIndexed` | 240x240 round color TFT over SPI as the portable canvas: palette indexes, framebuf's method names on `frame`, one drawing file for both runtimes (57,600-byte frame on MicroPython, 115,200 on CircuitPython) |
+| `chumicro_screens.gc9a01a.GC9A01AIndexed` | 240x240 round color TFT over SPI as the portable canvas: palette indexes, framebuf's method names on `frame`, one drawing file for both runtimes; a 57,600-byte frame expanded per strip in C, or `frame_bits=16` on CircuitPython for a 115,200-byte frame with no expansion |
 | `chumicro_screens.gc9a01a.GC9A01AIndexed.set_color(index, red, green, blue)` | The only color entry: assign a palette index, then draw with it |
 | `chumicro_screens.gc9a01a.GC9A01A` | The same panel drawn with raw `color565` values at 16-bit depth, both runtimes; a 115 KB frame |
 | `chumicro_screens.gc9a01a.color565(red, green, blue)` | Pack a color for `GC9A01A.frame` drawing |
@@ -108,7 +108,7 @@ Works on CPython, MicroPython, and CircuitPython.
 
 ### Drivers ship after bench validation
 
-Per-controller drivers are added as each passes validation on real boards.  The round GC9A01A TFT ships as `GC9A01AIndexed`, the portable canvas validated on a Pi Pico W under both runtimes (6-row strips at 3.4 ms worst on MicroPython and 1.9 ms worst on CircuitPython), `GC9A01A` in raw 16-bit color (validated on a LOLIN S2 Mini; a 10-row strip averages 3.3 ms at 40 MHz SPI), and `gc9a01a_displayio.make_display` for displayio's own ecosystem on CircuitPython.  The SSD1306 mono OLED ships as `SSD1306` (MicroPython; one page per advance averages 3.7 ms at 400 kHz) and `ssd1306_displayio.make_display` on CircuitPython, both validated on the S2.  `fonts.Font` draws a font-to-py module on the canvas, validated on the Pi Pico W under both runtimes (a 7-glyph word in 20-pixel DejaVu Sans takes 4.0 ms on MicroPython and 7.4 ms on CircuitPython).  Writing your own panel is one method: `flush()` returning an iterator that does one bounded bus transfer per advance.
+Per-controller drivers are added as each passes validation on real boards.  The round GC9A01A TFT ships as `GC9A01AIndexed`, the portable canvas validated on a Pi Pico W under both runtimes (6-row strips at 3.4 ms worst on MicroPython; 3-row strips at 4.4 ms mean with black and four colors on CircuitPython, or 6-row strips at 1.9 ms worst with `frame_bits=16`), `GC9A01A` in raw 16-bit color (validated on a LOLIN S2 Mini; a 10-row strip averages 3.3 ms at 40 MHz SPI), and `gc9a01a_displayio.make_display` for displayio's own ecosystem on CircuitPython.  The SSD1306 mono OLED ships as `SSD1306` (MicroPython; one page per advance averages 3.7 ms at 400 kHz) and `ssd1306_displayio.make_display` on CircuitPython, both validated on the S2.  `fonts.Font` draws a font-to-py module on the canvas, validated on the Pi Pico W under both runtimes (a 7-glyph word in 20-pixel DejaVu Sans takes 4.0 ms on MicroPython and 7.4 ms on CircuitPython).  Writing your own panel is one method: `flush()` returning an iterator that does one bounded bus transfer per advance.
 
 ## Examples
 

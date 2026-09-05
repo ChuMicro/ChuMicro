@@ -671,7 +671,20 @@ fails the `check-size` gate and would force the bundle's `.mpy`
 channel per-arch.  A nested def keeps CPython imports working but not
 `mpy-cross`, which compiles the whole file.
 
-Reference implementation: `chumicro_screens.gc9a01a.GC9A01AIndexed`.
+On CircuitPython the same 8-bit frame expands through `bitmaptools`:
+`blit` copies the strip's indexes raw into a 16-bit strip bitmap, then
+one `replace_color(strip, index, color)` pass per assigned color
+rewrites them in place, allocation-free, about 0.29 us per pixel per
+pass on an RP2040 plus 1.5 us per pixel for the copy.  Two traps: a
+pass rewrites *values*, so a color below 256 can be mistaken for an
+index by a later pass (move those indexes to temporaries above 255
+that no color uses first, and map the temporaries last, after every
+index value has left the strip); and `ulab` is not the shortcut it
+looks like, because every ndarray operation allocates (slice
+assignment copies its source, operators allocate stride scratch,
+comparisons allocate the mask), 12 KB per strip measured.
+
+Reference implementation: `chumicro_screens.gc9a01a._expansion_passes`.
 
 ## Packed 1-bit glyphs blit in C on both runtimes without a copy
 

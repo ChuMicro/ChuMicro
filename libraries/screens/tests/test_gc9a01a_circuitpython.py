@@ -1,11 +1,12 @@
-"""CPython-lane tests for the GC9A01A drivers' CircuitPython frame backend.
+"""CPython-lane tests for the GC9A01A drivers' CircuitPython frame backends.
 
 Seeds ``displayio``, ``bitmaptools``, and ``terminalio`` with the stubs
 in ``_circuitpython_stubs`` and swaps the driver's ``framebuf`` binding
 to None, which is what a CircuitPython board looks like to it.  The
-asserts read the bytes each canvas primitive leaves in the 16-bit
-frame and the bytes a flush puts on a locking bus.  Silicon is covered
-by the functional bench.
+asserts read the indexes each canvas primitive leaves in the 8-bit
+frame, the colors a 16-bit frame holds, and the bytes a flush puts on a
+locking bus after the palette passes.  Silicon is covered by the
+functional bench.
 """
 
 __chumicro_runtimes__ = ("cpython",)
@@ -20,7 +21,6 @@ sys.modules.setdefault("terminalio", TerminalioStub())
 
 import pytest  # noqa: E402
 from chumicro_screens import ScreenService, gc9a01a  # noqa: E402
-from chumicro_screens.bitmap_canvas import BitmapCanvas  # noqa: E402
 from chumicro_screens.gc9a01a import GC9A01A, GC9A01AIndexed, color565  # noqa: E402
 from chumicro_test_harness import raises  # noqa: E402
 from chumicro_timing.testing import FakeTicks  # noqa: E402
@@ -72,27 +72,40 @@ class FakeBusioSpi:
         self.writes.append(bytes(data[:8]))
 
 
-def make_panel(panel_class=GC9A01AIndexed, transfer_rows=6, refusals=0):
+def make_panel(transfer_rows=None, refusals=0, frame_bits=8):
     spi = FakeBusioSpi(refusals=refusals)
     delays = []
-    panel = panel_class(spi, FakePin(), FakePin(), FakePin(),
-                        transfer_rows=transfer_rows, sleep_ms=delays.append)
+    panel = GC9A01AIndexed(spi, FakePin(), FakePin(), FakePin(),
+                           transfer_rows=transfer_rows, frame_bits=frame_bits,
+                           sleep_ms=delays.append)
+    return panel, spi, delays
+
+
+def make_full_color_panel(transfer_rows=10):
+    spi = FakeBusioSpi()
+    delays = []
+    panel = GC9A01A(spi, FakePin(), FakePin(), FakePin(),
+                    transfer_rows=transfer_rows, sleep_ms=delays.append)
     return panel, spi, delays
 
 
 def frame_bytes(panel, column, row):
-    """The two bytes the frame holds for one pixel, as they cross the bus."""
-    if isinstance(panel.frame, BitmapCanvas):
-        bitmap = panel.frame._bitmap
-    else:
-        bitmap = panel.frame
+    """The two bytes a 16-bit frame holds for one pixel, as they cross the bus."""
     offset = (row * WIDTH + column) * 2
-    return bytes(bitmap[offset:offset + 2])
+    return bytes(panel.frame._bitmap[offset:offset + 2])
 
 
 def swapped(value):
     """The on-wire bytes of a pre-swapped ``color565`` value."""
     return bytes((value & 0xFF, value >> 8))
+
+
+def first_strip(panel, spi):
+    """Run one advance and return the head of the pixel data it put on the bus."""
+    base = len(spi.writes)
+    flush = panel.flush()
+    next(flush)
+    return spi.writes[base + 5]
 
 
 def test_init_runs_under_the_lock_and_releases_it():
@@ -105,16 +118,44 @@ def test_init_runs_under_the_lock_and_releases_it():
     assert not spi.locked
 
 
-def test_indexed_frame_is_a_16_bit_bitmap_the_size_of_the_panel():
-    panel, _, _ = make_panel()
+def test_the_default_frame_is_8_bit_in_3_row_strips():
+    panel, spi, _ = make_panel()
     bitmap = panel.frame._bitmap
-    assert (bitmap.width, bitmap.height) == (WIDTH, HEIGHT)
-    assert len(memoryview(bitmap)) == WIDTH * HEIGHT * 2
+    assert (bitmap.width, bitmap.height, bitmap.bits_per_value) == (WIDTH, HEIGHT, 8)
+    assert len(memoryview(bitmap)) == WIDTH * HEIGHT
     assert panel.frame.width == WIDTH
+    base = len(spi.writes)
+    for _advance in panel.flush():
+        pass
+    data_lengths = [length for length in spi.lengths[base:] if length > 4]
+    assert len(data_lengths) == 80
+    assert data_lengths[0] == 3 * ROW_BYTES
+
+
+def test_frame_bits_16_holds_colors_in_6_row_strips():
+    panel, spi, _ = make_panel(frame_bits=16)
+    bitmap = panel.frame._bitmap
+    assert bitmap.bits_per_value == 16
+    assert len(memoryview(bitmap)) == WIDTH * HEIGHT * 2
+    base = len(spi.writes)
+    for _advance in panel.flush():
+        pass
+    data_lengths = [length for length in spi.lengths[base:] if length > 4]
+    assert len(data_lengths) == 40
+    assert data_lengths[0] == 6 * ROW_BYTES
+
+
+def test_frame_bits_and_transfer_rows_are_validated():
+    with raises(ValueError, match="frame_bits"):
+        make_panel(frame_bits=12)
+    with raises(ValueError, match="transfer_rows"):
+        make_panel(transfer_rows=0)
+    with raises(ValueError, match="transfer_rows"):
+        make_panel(transfer_rows=241)
 
 
 def test_full_color_frame_is_the_bitmap_itself():
-    panel, _, _ = make_panel(GC9A01A, transfer_rows=10)
+    panel, _, _ = make_full_color_panel()
     assert panel.frame.width == WIDTH
     assert len(memoryview(panel.frame)) == WIDTH * HEIGHT * 2
 
@@ -157,28 +198,88 @@ def test_a_frame_is_strips_many_advances_and_bus_bytes():
     assert data_lengths == [100 * ROW_BYTES, 100 * ROW_BYTES, 40 * ROW_BYTES]
 
 
-def test_set_color_then_pixel_puts_the_swapped_color_in_the_frame():
-    panel, spi, _ = make_panel()
+def test_the_8_bit_frame_holds_indexes_and_the_strip_carries_their_colors():
+    panel, spi, _ = make_panel(transfer_rows=60)
     panel.set_color(7, 255, 0, 0)
-    panel.frame.pixel(3, 2, 7)
-    assert frame_bytes(panel, 3, 2) == b"\xf8\x00"
-    assert panel.frame.pixel(3, 2) == 7
-    assert panel.frame.pixel(4, 2) == 0
-    assert panel.frame.pixel(-1, 2) is None
+    panel.frame.pixel(0, 0, 7)
+    panel.frame.pixel(1, 0, 7)
+    assert panel.frame._bitmap[0, 0] == 7
+    assert panel.frame.pixel(0, 0) == 7
+    assert panel.frame.pixel(2, 0) == 0
+    assert panel.frame.pixel(-1, 0) is None
+    assert first_strip(panel, spi)[:6] == b"\xf8\x00\xf8\x00\x00\x00"
 
 
-def test_set_color_after_drawing_applies_to_later_drawing_only():
-    panel, _, _ = make_panel()
+def test_set_color_after_drawing_recolors_the_8_bit_frame_on_the_next_flush():
+    panel, spi, _ = make_panel(transfer_rows=60)
+    panel.set_color(5, 255, 0, 0)
+    panel.frame.pixel(0, 0, 5)
+    assert first_strip(panel, spi)[:2] == b"\xf8\x00"
+    panel.set_color(5, 0, 0, 255)
+    assert first_strip(panel, spi)[:2] == b"\x00\x1f"
+
+
+def test_an_advance_of_the_8_bit_frame_leaves_later_strips_correct():
+    panel, spi, _ = make_panel(transfer_rows=60)
+    panel.set_color(1, 255, 255, 255)
+    panel.frame.pixel(0, 0, 1)
+    panel.frame.pixel(1, 60, 1)
+    panel.frame.pixel(0, 61, 1)
+    base = len(spi.writes)
+    flush = panel.flush()
+    next(flush)
+    next(flush)
+    assert spi.writes[base + 5][:4] == b"\xff\xff\x00\x00"
+    assert spi.writes[base + 11][:4] == b"\x00\x00\xff\xff"
+
+
+def test_a_color_below_256_never_masquerades_as_another_index():
+    panel, spi, _ = make_panel(transfer_rows=60)
+    panel.set_color(3, 255, 0, 0)          # pre-swapped red is 0x00F8, the number 248
+    panel.set_color(248, 255, 255, 255)
+    panel.frame.pixel(0, 0, 3)
+    panel.frame.pixel(1, 0, 248)
+    panel.frame.pixel(2, 0, 0)
+    assert first_strip(panel, spi)[:6] == b"\xf8\x00\xff\xff\x00\x00"
+
+
+def test_two_indexes_whose_colors_are_each_other_swap_cleanly():
+    panel, spi, _ = make_panel(transfer_rows=60)
+    panel.set_color(3, 0, 160, 0)          # pre-swapped value 5
+    panel.set_color(5, 0, 96, 0)           # pre-swapped value 3
+    assert (panel._colors[3], panel._colors[5]) == (5, 3)
+    panel.frame.pixel(0, 0, 3)
+    panel.frame.pixel(1, 0, 5)
+    assert first_strip(panel, spi)[:4] == b"\x05\x00\x03\x00"
+
+
+def test_expansion_passes_skip_identities_and_pick_temporaries_no_color_uses():
+    palette = [0] * 256
+    assigned = bytearray(256)
+    assigned[0] = 1
+    assert gc9a01a._expansion_passes(palette, assigned) == []
+    assigned[1] = 1
+    palette[1] = 256
+    assigned[2] = 1
+    palette[2] = 7
+    assigned[9] = 1
+    palette[9] = 9
+    assert gc9a01a._expansion_passes(palette, assigned) == [(1, 256), (2, 257), (257, 7)]
+
+
+def test_16_bit_set_color_after_drawing_applies_to_later_drawing_only():
+    panel, _, _ = make_panel(frame_bits=16)
     panel.set_color(5, 255, 0, 0)
     panel.frame.pixel(0, 0, 5)
     panel.set_color(5, 0, 0, 255)
     panel.frame.pixel(1, 0, 5)
     assert frame_bytes(panel, 0, 0) == swapped(color565(255, 0, 0))
     assert frame_bytes(panel, 1, 0) == swapped(color565(0, 0, 255))
+    assert panel.frame.pixel(1, 0) == 5
 
 
-def test_the_strip_sent_is_the_drawn_frame():
-    panel, spi, _ = make_panel(transfer_rows=60)
+def test_16_bit_strip_is_the_drawn_frame():
+    panel, spi, _ = make_panel(transfer_rows=60, frame_bits=16)
     panel.set_color(1, 255, 255, 255)
     panel.frame.pixel(0, 0, 1)
     panel.frame.pixel(1, 60, 1)
@@ -193,22 +294,19 @@ def test_the_strip_sent_is_the_drawn_frame():
 def test_fill_and_fill_rect_clip_to_the_frame():
     panel, _, _ = make_panel()
     canvas = panel.frame
-    panel.set_color(2, 0, 255, 0)
     canvas.fill(2)
-    assert frame_bytes(panel, 239, 239) == swapped(color565(0, 255, 0))
-    panel.set_color(3, 0, 0, 255)
+    assert canvas.pixel(239, 239) == 2
     canvas.fill_rect(-10, -10, 20, 20, 3)
-    assert frame_bytes(panel, 9, 9) == swapped(color565(0, 0, 255))
-    assert frame_bytes(panel, 10, 9) == swapped(color565(0, 255, 0))
+    assert canvas.pixel(9, 9) == 3
+    assert canvas.pixel(10, 9) == 2
     canvas.fill_rect(235, 235, 50, 50, 3)
-    assert frame_bytes(panel, 239, 239) == swapped(color565(0, 0, 255))
+    assert canvas.pixel(239, 239) == 3
     canvas.fill_rect(300, 300, 5, 5, 3)
 
 
 def test_rect_outline_and_the_line_helpers():
     panel, _, _ = make_panel()
     canvas = panel.frame
-    panel.set_color(1, 255, 255, 255)
     canvas.rect(10, 10, 5, 4, 1)
     assert canvas.pixel(10, 10) == 1
     assert canvas.pixel(14, 13) == 1
@@ -226,7 +324,6 @@ def test_rect_outline_and_the_line_helpers():
 def test_line_and_circle_and_polygon_draw_through_bitmaptools():
     panel, _, _ = make_panel()
     canvas = panel.frame
-    panel.set_color(1, 255, 255, 255)
     canvas.line(0, 0, 3, 3, 1)
     assert canvas.pixel(2, 2) == 1
     canvas.ellipse(120, 120, 10, 10, 1)
@@ -248,24 +345,32 @@ def test_shapes_without_a_c_path_are_refused():
         panel.frame.poly(0, 0, [0, 0, 4, 0, 4, 4], 1, True)
 
 
-def test_text_places_each_glyph_in_its_color_and_leaves_the_background():
+def test_text_places_each_glyph_in_its_index_and_leaves_the_background():
     panel, _, _ = make_panel()
     canvas = panel.frame
-    panel.set_color(1, 255, 255, 255)
-    panel.set_color(4, 255, 128, 0)
     canvas.fill(1)
     canvas.text("AB", 10, 20, 4)
-    orange = swapped(color565(255, 128, 0))
-    white = swapped(color565(255, 255, 255))
-    assert frame_bytes(panel, 11, 21) == orange       # inside the first glyph
-    assert frame_bytes(panel, 10, 20) == white        # the tile's border stays
-    assert frame_bytes(panel, 17, 21) == orange       # inside the second glyph
-    assert frame_bytes(panel, 16, 21) == white        # the gap between tiles
-    assert frame_bytes(panel, 22, 21) == white        # past the string
+    assert canvas.pixel(11, 21) == 4        # inside the first glyph
+    assert canvas.pixel(10, 20) == 1        # the tile's border stays
+    assert canvas.pixel(17, 21) == 4        # inside the second glyph
+    assert canvas.pixel(16, 21) == 1        # the gap between tiles
+    assert canvas.pixel(22, 21) == 1        # past the string
 
 
-def test_text_in_white_and_black_still_skips_the_background():
+def test_text_in_index_zero_and_index_255_skips_the_background():
     panel, _, _ = make_panel()
+    canvas = panel.frame
+    canvas.fill(2)
+    canvas.text("A", 0, 0, 0)
+    assert canvas.pixel(1, 1) == 0
+    assert canvas.pixel(0, 0) == 2
+    canvas.text("A", 10, 0, 255)
+    assert canvas.pixel(11, 1) == 255
+    assert canvas.pixel(10, 0) == 2
+
+
+def test_16_bit_text_in_white_and_black_still_skips_the_background():
+    panel, _, _ = make_panel(frame_bits=16)
     canvas = panel.frame
     panel.set_color(1, 255, 255, 255)
     panel.set_color(2, 0, 255, 0)
@@ -281,7 +386,6 @@ def test_text_in_white_and_black_still_skips_the_background():
 def test_text_clips_at_the_frame_edges_and_skips_unknown_glyphs():
     panel, _, _ = make_panel()
     canvas = panel.frame
-    panel.set_color(1, 255, 255, 255)
     canvas.text("A", -2, -2, 1)                  # the block spans (-1, -1) to (2, 8)
     assert canvas.pixel(0, 0) == 1
     assert canvas.pixel(2, 3) == 1
@@ -293,15 +397,13 @@ def test_text_clips_at_the_frame_edges_and_skips_unknown_glyphs():
     assert canvas.pixel(239, 239) == 1
 
 
-def test_blit_copies_a_canvas_in_and_honors_the_key():
+def test_blit_copies_a_bitmap_of_indexes_in_and_honors_the_key():
     panel, _, _ = make_panel()
-    panel.set_color(1, 255, 255, 255)
-    panel.set_color(2, 255, 0, 0)
-    sprite = DisplayioStub.Bitmap(2, 2, 65536)
-    sprite[0, 0] = color565(255, 0, 0)
-    sprite[1, 0] = color565(255, 255, 255)
-    sprite[0, 1] = color565(255, 255, 255)
-    sprite[1, 1] = color565(255, 0, 0)
+    sprite = DisplayioStub.Bitmap(2, 2, 256)
+    sprite[0, 0] = 2
+    sprite[1, 0] = 1
+    sprite[0, 1] = 1
+    sprite[1, 1] = 2
     canvas = panel.frame
     canvas.blit(sprite, 5, 5, 2)
     assert canvas.pixel(5, 5) == 0
@@ -310,3 +412,16 @@ def test_blit_copies_a_canvas_in_and_honors_the_key():
     assert canvas.pixel(0, 0) == 1
     assert canvas.pixel(0, 1) == 2
     canvas.blit(sprite, 300, 300)
+
+
+def test_16_bit_blit_copies_colors_in_and_honors_the_key():
+    panel, _, _ = make_panel(frame_bits=16)
+    panel.set_color(1, 255, 255, 255)
+    panel.set_color(2, 255, 0, 0)
+    sprite = DisplayioStub.Bitmap(2, 2, 65536)
+    sprite[0, 0] = color565(255, 0, 0)
+    sprite[1, 0] = color565(255, 255, 255)
+    canvas = panel.frame
+    canvas.blit(sprite, 5, 5, 2)
+    assert canvas.pixel(5, 5) == 0
+    assert canvas.pixel(6, 5) == 1

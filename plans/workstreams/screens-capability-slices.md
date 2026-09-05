@@ -123,6 +123,29 @@ beside the example so the deploy ships it) is the example.  The canvas's
 own `text` keeps its per-runtime built-in font; Decision 0126 says so
 and points at 0128 for pixel-identical text.
 
+## Phase 3a. The 8-bit CircuitPython frame: shipped
+
+The 16-bit CircuitPython frame left a Pi Pico W about 43 KB for
+everything else, too little for a screen beside wifi and MQTT, and
+made every module compiled ahead of the panel a threat to its 115 KB
+block.  `GC9A01AIndexed` now defaults to an 8-bit `displayio.Bitmap`
+on CircuitPython too (`frame_bits=8`; `frame_bits=16` keeps the
+earlier shape), drawn with `bitmaptools` as indexes through a
+`BitmapCanvas` whose `colors` is the identity, and expanded per strip
+at flush: a raw `bitmaptools.blit` into a 16-bit strip bitmap, then one
+`replace_color` pass per assigned color.  A color whose pre-swapped
+value is below 256 could be mistaken for an index by a later pass, so
+`_expansion_passes` moves such indexes to temporaries above 255 that no
+color uses, maps the rest directly, and maps the temporaries last; an
+index equal to its own color (black at 0) needs no pass, and the plan
+is rebuilt once per frame after a `set_color`.  `set_color` therefore
+recolors drawn pixels on CircuitPython as on MicroPython, and the
+canvas's scratch bitmap now belongs to the canvas, sized to its frame's
+depth and grown to the largest glyph drawn.  The default strip drops to
+3 rows on that path.  `ulab`, the other candidate for the expansion,
+allocates on every array operation (Decision 0126 records the
+measurement), so it is out.
+
 ## Phase 4. Dirty-window partial updates
 
 The canvas records the bounds of every primitive it executes, so this is
@@ -317,3 +340,23 @@ actually wants on-device images.
   the font object at 592 B plus 4,768 B for the module, construction
   37 ms (96 `get_ch` calls for the width table), and 117.7 KB free
   after the panel and font.
+- 2026-09-05: Phase 3a shipped and benched on the CircuitPython Pico W
+  (10.2.1), every probe staged through `chumicro-deploy deploy` after
+  the session's hand copies were found to leave `._code.py` on the
+  drive and a smaller boot heap (hardware-traps.md).  The standalone
+  expansion probe (`.scratch/probe_expand_cp.py`) put the raw 8-bit to
+  16-bit strip copy at 1.98 ms for 6 rows and 1.07 ms for 3, each
+  `replace_color` pass at 0.83 ms and 0.43 ms, a 4-bit frame's copy
+  slower than 8-bit, and `ulab`'s mask expansion at 6.7 ms and 12 KB of
+  allocation for seven colors on a 6-row strip.  Through the shipped
+  driver (`.scratch/probe_indexed8_cp.py`, three warm-up frames) the
+  default 3-row advance measured 2.5 ms mean and 3.4 ms worst with
+  black and white (209 ms a frame), 4.4 and 5.4 ms with four more
+  colors (358 ms), 6.1 and 6.9 ms with seven (492 ms), 0 bytes across
+  ten advances every time; the panel took 70.9 KB and left 97.8 KB
+  free, the 20-pixel font 5.4 KB more, and a `set_color` recolored the
+  ring and count on the panel without a redraw.  The counter example's
+  import chain plus a 16-bit frame allocated on the deploy's own boot
+  with 30 KB free, so the earlier first-boot failures stay unexplained
+  and the font example imports at the top again.  93 tests on CPython,
+  63 on the MicroPython port, 58 on the CircuitPython port.

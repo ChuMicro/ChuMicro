@@ -36,16 +36,19 @@ def _no_framebuf(monkeypatch):
     monkeypatch.setattr(fonts, "framebuf", None)
 
 
-def make_canvas():
-    bitmap = DisplayioStub.Bitmap(WIDTH, HEIGHT, 65536)
-    colors = array.array("H", bytes(512))
-    colors[1] = color565(255, 255, 255)
-    colors[2] = color565(0, 255, 0)
-    colors[3] = color565(0, 0, 255)
-    colors[7] = color565(255, 0, 0)
-    font = TerminalioStub().FONT
-    scratch = DisplayioStub.Bitmap(*font.get_bounding_box(), 65536)
-    return BitmapCanvas(bitmap, colors, BitmaptoolsStub, font, scratch)
+def make_canvas(frame_bits=16):
+    """A canvas over a 16-bit frame holding colors, or an 8-bit one holding indexes."""
+    if frame_bits == 8:
+        bitmap = DisplayioStub.Bitmap(WIDTH, HEIGHT, 256)
+        colors = bytes(range(256))
+    else:
+        bitmap = DisplayioStub.Bitmap(WIDTH, HEIGHT, 65536)
+        colors = array.array("H", bytes(512))
+        colors[1] = color565(255, 255, 255)
+        colors[2] = color565(0, 255, 0)
+        colors[3] = color565(0, 0, 255)
+        colors[7] = color565(255, 0, 0)
+    return BitmapCanvas(bitmap, colors, BitmaptoolsStub, TerminalioStub().FONT, DisplayioStub)
 
 
 def row(canvas, y, x_start, count):  # noqa: CHU001 - framebuf's own names
@@ -133,3 +136,24 @@ def test_the_built_in_font_still_draws_through_the_shared_glyph_path():
     assert canvas.pixel(2, 2) == 7
     assert canvas.pixel(1, 1) == 2
     assert canvas.pixel(6, 2) == 2
+
+
+def test_the_scratch_grows_to_the_largest_glyph_drawn():
+    canvas = make_canvas()
+    canvas.text("A", 0, 0, 7)
+    assert (canvas._scratch.width, canvas._scratch.height) == (6, 12)
+    Font(FontModuleStub()).text(canvas, "B", 0, 0, 7)
+    assert (canvas._scratch.width, canvas._scratch.height) == (9, 12)
+    assert canvas.pixel(8, 0) == 7
+
+
+def test_an_8_bit_canvas_draws_indexes_including_zero_and_255():
+    canvas = make_canvas(frame_bits=8)
+    canvas.fill(3)
+    font = Font(FontModuleStub())
+    font.text(canvas, "C", 0, 0, 0)
+    assert row(canvas, 0, 0, 4) == [0, 0, 0, 3]
+    assert row(canvas, 1, 0, 4) == [0, 3, 3, 3]
+    font.text(canvas, "C", 5, 0, 255)
+    assert row(canvas, 0, 5, 4) == [255, 255, 255, 3]
+    assert row(canvas, 1, 5, 4) == [255, 3, 3, 3]

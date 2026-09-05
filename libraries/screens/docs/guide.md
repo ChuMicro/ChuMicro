@@ -130,13 +130,10 @@ MicroPython and CircuitPython.  Colors are palette indexes: assign an
 index a color with `set_color`, then draw with the index, and `frame`
 answers framebuf's method names on both runtimes: `fill`, `pixel`,
 `hline`, `vline`, `line`, `rect`, `fill_rect`, `ellipse`, `poly`,
-`blit`, `text`.  On MicroPython the frame is one byte per pixel
-(57,600 bytes) plus a 256-entry palette, so a Pico W heap fits it, and
-each flush advance expands one strip through the palette with
-`FrameBuffer.blit` at C speed.  On CircuitPython the frame is 16-bit
-(115,200 bytes, which a Pico W holds with about 43 KB to spare, driver
-code included, when the panel is constructed first) drawn through
-`bitmaptools`, and each advance streams a strip straight over the bus:
+`blit`, `text`.  The frame is one byte per pixel (57,600 bytes) plus
+a 256-entry palette on both runtimes, so a Pico W heap fits it under
+either, and each flush advance expands one strip through the palette
+in C before the strip crosses the bus:
 
 ```python
 from chumicro_compat.wiring import digital_output, spi_bus
@@ -157,12 +154,10 @@ panel.frame.text("hello", 100, 116, WHITE)
 screen.show()
 ```
 
-On MicroPython, editing a palette entry recolors every drawn pixel
-holding that index from the next flush on, which makes theme swaps and
-blink effects one `set_color` call instead of a redraw; on
-CircuitPython the frame holds colors rather than indexes, so a later
-`set_color` applies to later drawing only.  Two more CircuitPython
-limits follow from what `bitmaptools` has a C path for: `ellipse`
+Editing a palette entry recolors every drawn pixel holding that index
+from the next flush on, on both runtimes, which makes theme swaps and
+blink effects one `set_color` call instead of a redraw.  Two
+CircuitPython limits follow from what `bitmaptools` has a C path for: `ellipse`
 draws unfilled circles only and `poly` outlines only, and the canvas's
 own `text` renders the runtime's built-in font, whose metrics differ
 from framebuf's 8x8; a converted font drawn through `Font` (below)
@@ -178,10 +173,27 @@ advance at worst and a full frame crosses in 40 advances, about
 strip also costs 480 bytes of buffer on top of the frame.  Raise
 `transfer_rows` only when your chip's own bench shows the headroom.
 
-Under CircuitPython the same board streams a 6-row strip in 1.4 ms
-mean and 2.0 ms worst, 62 ms a frame, since no palette expansion
-happens per strip; the `gc9a01a_card.py` and `gc9a01a_counter.py`
-examples are one file each and run on both runtimes.
+Under CircuitPython the expansion is a raw `bitmaptools.blit` of the
+strip into a 16-bit strip bitmap and one `replace_color` pass per
+assigned color, two for a color whose pre-swapped value is below 256
+(pure red among them), so the advance grows with the palette.  Black
+at index 0 needs no pass.  On the same Pi Pico W at the default 3-row
+strip:
+
+| Palette | Passes | Advance mean | Advance worst | Frame |
+|---|---|---|---|---|
+| black and white | 1 | 2.5 ms | 3.4 ms | 209 ms |
+| black and four colors | 5 | 4.4 ms | 5.4 ms | 358 ms |
+| black and seven colors | 9 | 6.1 ms | 6.9 ms | 492 ms |
+
+Keep the palette to about five passes at 3 rows, or set
+`transfer_rows=2` for more colors inside a 5 ms tick.  `frame_bits=16`
+holds a 16-bit frame (115,200 bytes) instead: no expansion, a 6-row
+strip in 1.4 ms mean and 2.0 ms worst, 62 ms a frame, but `set_color`
+applies to later drawing only and a Pico W keeps about 43 KB for
+everything else, so construct that panel before anything else.  The
+`gc9a01a_card.py` and `gc9a01a_counter.py` examples are one file each
+and run on both runtimes.
 
 ## Fonts on the canvas
 
@@ -197,15 +209,10 @@ font_to_py -x DejaVuSans.ttf 20 sans20.py
 ```
 
 `-x` selects horizontal mapping, the layout both runtimes blit, and
-`Font` refuses a vertically mapped module.  Construct the panel first,
-then import the font layer and the font module: the panel's frame is
-the largest block the app allocates, and on a Pi Pico W under
-CircuitPython the 115,200-byte frame no longer fits once those two
-modules have been compiled ahead of it.
+`Font` refuses a vertically mapped module.  Construct the panel before
+the font, so the frame gets the heap's largest block:
 
 ```python
-panel = GC9A01AIndexed(spi, chip_select, data_command, reset)
-
 import sans20
 from chumicro_screens.fonts import Font
 

@@ -14,11 +14,6 @@ pixels under MicroPython and CircuitPython, and ``font.width()``
 centers each string.  The small tag at the bottom is in the canvas's
 built-in font, the one line whose face differs between the runtimes.
 
-The font layer and the font module are imported after the panel
-exists.  The panel's frame is the largest block the app allocates, and
-on a Pi Pico W under CircuitPython the 115,200-byte frame no longer
-fits once those two modules have been compiled ahead of it.
-
 Example output::
 
     frame 1 shown
@@ -26,8 +21,10 @@ Example output::
 """
 __chumicro_runtimes__ = ("circuitpython", "micropython")
 
+import sans20
 from chumicro_compat.wiring import digital_output, spi_bus
 from chumicro_screens import ScreenService
+from chumicro_screens.fonts import Font
 from chumicro_screens.gc9a01a import GC9A01AIndexed
 from chumicro_timing import ticks_add, ticks_diff, ticks_ms
 
@@ -37,10 +34,6 @@ panel = GC9A01AIndexed(spi,
                        digital_output(8, value=0),
                        digital_output(9, value=1))
 screen = ScreenService(panel, refresh_interval_ms=100)
-
-import sans20  # noqa: E402 - the frame is allocated first, see the docstring
-from chumicro_screens.fonts import Font  # noqa: E402 - the frame is allocated first, see the docstring
-
 font = Font(sans20)
 
 BLACK, WHITE, ACCENT = 0, 1, 2
