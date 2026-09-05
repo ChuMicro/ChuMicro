@@ -44,7 +44,12 @@ class FakePin:
 
 
 class FakeBusioSpi:
-    """A ``busio.SPI`` shape: writes need the lock, and it can refuse it."""
+    """A ``busio.SPI`` shape: writes need the lock, it can refuse it, and ``write`` takes bounds.
+
+    ``start`` and ``end`` count the buffer's own items, as the firmware's
+    do; the stub bitmaps behind the views count bytes, so here an item
+    is a byte.
+    """
 
     def __init__(self, refusals=0):
         self.refusals = refusals
@@ -66,10 +71,35 @@ class FakeBusioSpi:
         self.unlock_count += 1
         self.locked = False
 
-    def write(self, data):
+    def write(self, data, *, start=0, end=None):
         assert self.locked, "write outside the lock"
-        self.lengths.append(len(data))
-        self.writes.append(bytes(data[:8]))
+        view = memoryview(data)[start:end]
+        self.lengths.append(len(view))
+        self.writes.append(bytes(view[:8]))
+
+
+def run_flush(panel, spi):
+    """Drive one flush to its end and return how many strips it put on the bus.
+
+    A one-strip flush and an empty one both end on their first advance,
+    so the strips are counted by their memory-write commands.
+    """
+    base = len(spi.writes)
+    flush = panel.flush()
+    while True:
+        try:
+            next(flush)
+        except StopIteration:
+            break
+    return spi.writes[base:].count(b"\x2c")
+
+
+def make_drained_panel(transfer_rows=60, frame_bits=8):
+    """A panel with red at index 7 whose construction-time frame has been flushed."""
+    panel, spi, _ = make_panel(transfer_rows=transfer_rows, frame_bits=frame_bits)
+    panel.set_color(7, 255, 0, 0)
+    run_flush(panel, spi)
+    return panel, spi
 
 
 def make_panel(transfer_rows=None, refusals=0, frame_bits=8):
@@ -425,3 +455,120 @@ def test_16_bit_blit_copies_colors_in_and_honors_the_key():
     canvas.blit(sprite, 5, 5, 2)
     assert canvas.pixel(5, 5) == 0
     assert canvas.pixel(6, 5) == 1
+
+
+def test_a_new_canvas_is_wholly_dirty_and_each_primitive_records_its_clipped_box():
+    panel, _, _ = make_panel()
+    canvas = panel.frame
+    assert canvas.take_dirty() == (0, 0, WIDTH, HEIGHT)
+    assert canvas.take_dirty() is None
+    canvas.fill_rect(-10, -10, 20, 20, 3)
+    assert canvas.take_dirty() == (0, 0, 10, 10)
+    canvas.pixel(30, 40, 1)
+    canvas.pixel(-1, 0, 1)
+    assert canvas.take_dirty() == (30, 40, 31, 41)
+    assert canvas.pixel(30, 40) == 1
+    assert canvas.take_dirty() is None
+    canvas.line(9, 9, 3, 5, 1)
+    assert canvas.take_dirty() == (3, 5, 10, 10)
+    canvas.ellipse(120, 120, 10, 10, 1)
+    assert canvas.take_dirty() == (110, 110, 131, 131)
+    canvas.ellipse(2, 2, 6, 6, 1)
+    assert canvas.take_dirty() == (0, 0, 9, 9)
+    canvas.poly(100, 100, [0, 0, 4, 0, 4, 4], 1)
+    assert canvas.take_dirty() == (100, 100, 105, 105)
+    canvas.rect(50, 50, 4, 3, 1)
+    assert canvas.take_dirty() == (50, 50, 54, 53)
+    canvas.fill(2)
+    assert canvas.take_dirty() == (0, 0, WIDTH, HEIGHT)
+
+
+def test_text_blit_and_dirty_record_their_boxes():
+    panel, _, _ = make_panel()
+    canvas = panel.frame
+    canvas.take_dirty()
+    canvas.text("AB", 10, 20, 4)
+    assert canvas.take_dirty() == (10, 20, 22, 32)
+    canvas.text("A", 238, 238, 1)
+    assert canvas.take_dirty() == (238, 238, WIDTH, HEIGHT)
+    sprite = DisplayioStub.Bitmap(2, 2, 256)
+    canvas.blit(sprite, 5, 5)
+    assert canvas.take_dirty() == (5, 5, 7, 7)
+    canvas.blit(sprite, -1, 239)
+    assert canvas.take_dirty() == (0, 239, 1, HEIGHT)
+    canvas.blit(sprite, 300, 300)
+    assert canvas.take_dirty() is None
+    canvas.dirty(200, 200, 100, 100)
+    assert canvas.take_dirty() == (200, 200, WIDTH, HEIGHT)
+
+
+def test_a_flush_with_nothing_drawn_ends_at_once_with_no_bus_traffic():
+    panel, spi = make_drained_panel()
+    base = len(spi.writes)
+    assert run_flush(panel, spi) == 0
+    assert len(spi.writes) == base
+    assert spi.lock_count == spi.unlock_count
+
+
+def test_the_8_bit_flush_sends_the_touched_strip_one_row_write_per_dirty_row():
+    panel, spi = make_drained_panel()
+    panel.frame.vline(100, 120, 11, 7)
+    base = len(spi.writes)
+    locks = spi.lock_count
+    assert run_flush(panel, spi) == 1
+    strip = spi.writes[base:]
+    assert len(strip) == 5 + 60
+    assert strip[1] == b"\x00\x64\x00\x64"
+    assert strip[3] == b"\x00\x78\x00\xb3"
+    assert spi.lengths[base + 5:base + 65] == [2] * 60
+    assert strip[5] == b"\xf8\x00"
+    assert strip[15] == b"\xf8\x00"
+    assert strip[16] == b"\x00\x00"
+    assert spi.lock_count == locks + 1
+    assert not spi.locked
+
+
+def test_the_8_bit_flush_sends_a_full_width_band_as_whole_strips():
+    panel, spi = make_drained_panel()
+    panel.frame.fill_rect(0, 55, WIDTH, 10, 7)
+    base = len(spi.writes)
+    assert run_flush(panel, spi) == 2
+    assert spi.writes[base + 1] == b"\x00\x00\x00\xef"
+    assert spi.writes[base + 3] == b"\x00\x00\x00\x3b"
+    assert spi.lengths[base + 5] == 60 * ROW_BYTES
+    assert spi.writes[base + 9] == b"\x00\x3c\x00\x77"
+    assert spi.lengths[base + 11] == 60 * ROW_BYTES
+
+
+def test_the_16_bit_flush_windows_its_rows_from_the_frame():
+    panel, spi = make_drained_panel(frame_bits=16)
+    panel.frame.pixel(10, 0, 7)
+    panel.frame.pixel(12, 0, 1)
+    base = len(spi.writes)
+    assert run_flush(panel, spi) == 1
+    assert spi.writes[base + 1] == b"\x00\x0a\x00\x0c"
+    assert spi.writes[base + 3] == b"\x00\x00\x00\x3b"
+    assert spi.lengths[base + 5:base + 65] == [6] * 60
+    assert spi.writes[base + 5] == b"\xf8\x00\x00\x00\x00\x00"
+    assert spi.writes[base + 6] == b"\x00\x00\x00\x00\x00\x00"
+
+
+def test_set_color_marks_the_8_bit_frame_and_leaves_the_16_bit_frame_clean():
+    panel, spi = make_drained_panel()
+    panel.set_color(7, 0, 255, 0)
+    assert run_flush(panel, spi) == 4
+    panel, spi = make_drained_panel(frame_bits=16)
+    panel.set_color(7, 0, 255, 0)
+    assert run_flush(panel, spi) == 0
+
+
+def test_a_partial_flush_under_screen_service_takes_only_its_strips_worth_of_handles():
+    panel, spi = make_drained_panel()
+    service = ScreenService(panel, refresh_interval_ms=0, ticks=FakeTicks())
+    panel.frame.fill_rect(20, 100, 50, 61, 7)
+    service.show()
+    for tick in range(2):
+        assert service.check(tick) is True
+        service.handle(tick)
+    assert service.check(3) is False
+    assert panel.frame.take_dirty() is None

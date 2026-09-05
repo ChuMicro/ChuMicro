@@ -55,8 +55,13 @@ per runtime.
   both, and app loop code is identical across runtimes. Apps that want
   displayio's scene graph use the displayio factories instead and take its
   refresh cost.
-- Canvas primitives record their dirty bounds; refresh strategies consume
-  them backend-side without app changes.
+- Canvas primitives record their dirty bounds, `dirty(x, y, width, height)`
+  marks a region written behind the canvas, and `take_dirty()` hands the
+  union to the flush, which sends the strips covering that rectangle
+  windowed to its columns and nothing when the frame is clean. A
+  `set_color` on an 8-bit frame marks the whole frame, since drawn pixels
+  change color. Apps redraw what changed and never address the window
+  themselves.
 - The canvas's own `text` promises call-shape portability, not
   pixel-identical output: each backend renders its runtime's built-in font.
   Pixel-identical text is a converted font drawn through the font layer,

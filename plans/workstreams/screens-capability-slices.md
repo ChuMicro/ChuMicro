@@ -1,6 +1,7 @@
 # Workstream: screens capability slices
 
-Status: **active**, Phases 1 to 3 shipped and Phase 4 next.  Planned during the
+Status: **active**, Phases 1 to 4 shipped and Phases 5 to 7 parked
+until a project wants them.  Planned during the
 GC9A01A matrix validation session so a cold pickup has the shapes, the
 measured constraints, and the order.  The goal, set by the maintainer the
 same day: one app's rendering and construction code runs on both device
@@ -146,15 +147,31 @@ depth and grown to the largest glyph drawn.  The default strip drops to
 allocates on every array operation (Decision 0126 records the
 measurement), so it is out.
 
-## Phase 4. Dirty-window partial updates
+## Phase 4. Dirty-window partial updates: shipped
 
-The canvas records the bounds of every primitive it executes, so this is
-bookkeeping: the MicroPython flush sends only the strips covering the dirty
-rectangle, which means parametrizing the column window (the constant
-`_FULL_WIDTH_WINDOW` today); CircuitPython already refreshes dirty regions
-in firmware.  Bench gate on the Pico W: a small-region update lands near the
-per-strip cost (a full frame is 123 ms there), and the labeled card renders
-correctly after mixed partial and full flushes.
+Both canvases record the bounds of every primitive, and
+`GC9A01AIndexed.flush` sends the strips covering that rectangle,
+each windowed to its columns, or nothing when the frame is clean.  On
+MicroPython the canvas is `chumicro_screens.framebuf_canvas.FramebufCanvas`,
+a `framebuf.FrameBuffer` subclass whose overrides record and forward
+through `super()` (the only safe route back to the native base;
+plans/patterns.md records why), loaded with the driver so its class
+objects do not split the region the frame takes.  A narrow window
+re-lays the strip at the window's width through a per-flush
+`FrameBuffer` over the same buffer, because `machine.SPI` writes
+whole buffers only; that is 64 bytes per partial frame on top of the
+generator.  On CircuitPython both frame depths stream each row of a
+narrow window through `busio.SPI.write`'s `start` and `end`, which
+count the buffer's own items, and allocate nothing; the 8-bit path's
+`replace_color` passes still cover the strip's full width.  Strips
+sit on the fixed `transfer_rows` grid.  `set_color` on an 8-bit frame
+marks the whole frame, and `dirty(x, y, width, height)` marks a
+region written behind the canvas.  The counter examples draw their
+static parts once and redraw only the count band.  `test_gc9a01a.py`
+on the MicroPython lane needed a 216K heap override: the file's
+57,600-byte frame plus a 33,600-byte strip buffer no longer fit the
+largest free block once the framebuf stub grew the vocabulary the
+subclass forwards to.
 
 ## Phase 5. Viper shipping carve-out (tooling; only if phase 6 proceeds)
 
@@ -360,3 +377,28 @@ actually wants on-device images.
   with 30 KB free, so the earlier first-boot failures stay unexplained
   and the font example imports at the top again.  93 tests on CPython,
   63 on the MicroPython port, 58 on the CircuitPython port.
+- 2026-09-05: Phase 4 shipped and benched on the MicroPython Pico W
+  (1.28.0).  `deploy-example` ran the reshaped `gc9a01a_counter.py`
+  clean, nine frames in the capture.  A probe through the shipped
+  driver (`.scratch/probe_partial_mp2.py` over `mpremote run`, 6-row
+  strips) measured the whole frame at 40 advances, 3.19 ms mean and
+  3.65 ms worst, 128 ms; the counter's 56x8 band at 2 advances, 1.35
+  and 1.60 ms, 2.7 ms a flush; a 16x16 notch at 4 advances, 0.65 and
+  1.01 ms, 2.6 ms; a 1-pixel column down the whole frame at 40
+  advances of 0.29 ms mean and 0.78 ms worst, 11.5 ms; a full-width
+  10-row band at 3 advances, 3.3 and 3.5 ms, 10 ms; a 200x120 region
+  at 20 advances, 2.7 and 3.2 ms, 54 ms; a clean frame at 0.4 ms; a
+  `set_color` at the full 40 again.  Allocation was 288 bytes per
+  full flush (the generator and the bounds tuple), 352 per narrow
+  one, and 0 per advance.  The panel took 64,928 bytes and left
+  121 KB free.  The canvas's call overhead: a bare `pixel` is 28 us
+  on this RP2040, a subclass override that only calls `super()` is
+  93 us, and the shipped override with its bookkeeping 140 us, so
+  the docstrings say 110 us over the C call.  119 tests on CPython,
+  83 on the MicroPython port (the real subclass), 71 on the
+  CircuitPython port.  The CircuitPython Pico W cell is not yet run:
+  the bench board carried MicroPython this session and reflashing it
+  was left to the maintainer, so the narrow row-write path on
+  `busio.SPI` is covered by the port tests and the fake's `start` and
+  `end` only.  No panel image was checked by eye either; the
+  maintainer's card check on both runtimes closes the gate.

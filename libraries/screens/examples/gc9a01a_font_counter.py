@@ -13,6 +13,9 @@ runtime's own C blit, so the caption and the count land on the same
 pixels under MicroPython and CircuitPython, and ``font.width()``
 centers each string.  The small tag at the bottom is in the canvas's
 built-in font, the one line whose face differs between the runtimes.
+The ring, the caption, and the tag are drawn once; each second clears
+and redraws the count alone, so the flush sends the few strips that
+band covers rather than the frame.
 
 Example output::
 
@@ -41,7 +44,10 @@ panel.set_color(WHITE, 255, 255, 255)
 panel.set_color(ACCENT, 255, 128, 0)
 frame = panel.frame
 caption = "seconds"
-caption_x = (panel.width - font.width(caption)) // 2
+frame.fill(BLACK)
+frame.ellipse(120, 120, 118, 118, ACCENT)
+font.text(frame, caption, (panel.width - font.width(caption)) // 2, 84, WHITE)
+frame.text("chumicro screens", 56, 200, WHITE)
 
 seconds = 0
 next_draw_ms = ticks_ms()
@@ -51,11 +57,8 @@ while True:
         next_draw_ms = ticks_add(now_ms, 1000)
         seconds += 1
         count = str(seconds)
-        frame.fill(BLACK)
-        frame.ellipse(120, 120, 118, 118, ACCENT)
-        font.text(frame, caption, caption_x, 84, WHITE)
+        frame.fill_rect(60, 116, 120, font.height, BLACK)
         font.text(frame, count, (panel.width - font.width(count)) // 2, 116, ACCENT)
-        frame.text("chumicro screens", 56, 200, WHITE)
         screen.show()
         print("frame", seconds, "shown")
     if screen.check(now_ms):

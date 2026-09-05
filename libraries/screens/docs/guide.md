@@ -165,6 +165,50 @@ lands on the same pixels on both runtimes.  Construct the panel early:
 the frame needs one contiguous block, which a fragmented heap may no
 longer hold.
 
+A flush sends only what changed.  The canvas records the rectangle
+every primitive touched, and the flush sends the strips covering it,
+each windowed to its columns, so an app that redraws a band of digits
+pays a few advances rather than a frame.  The first flush after
+construction sends the whole frame, and so does the flush after a
+`set_color`, since drawn pixels holding the index change color.  Draw
+the static parts once, then clear and redraw only what moves:
+
+```python
+frame.fill(BLACK)                          # once
+frame.ellipse(120, 120, 118, 118, ACCENT)
+frame.text("SECONDS", 92, 100, WHITE)
+
+frame.fill_rect(92, 124, 56, 8, BLACK)     # every second
+frame.text(str(seconds), 116, 124, WHITE)
+screen.show()                              # two 6-row strips, not forty
+```
+
+Code that writes the frame's buffer directly marks its region with
+`frame.dirty(x, y, width, height)`, and `frame.take_dirty()` is what
+the flush reads.  On MicroPython the canvas is
+`chumicro_screens.framebuf_canvas.FramebufCanvas`, a
+`framebuf.FrameBuffer` subclass that also answers `width` and
+`height`; each of its methods costs one Python frame and its
+bookkeeping on top of the C primitive, about 110 us on an RP2040
+against 28 us for a bare `pixel`, the same shape as the CircuitPython
+canvas, so per-pixel loops belong in `blit` on both.
+
+Measured on the Pi Pico W under MicroPython with the default 6-row
+strip, where a whole frame is 40 advances at 3.2 ms mean and 3.6 ms
+worst, 128 ms:
+
+| Redraw | Strips | Advance mean | Advance worst | Flush |
+|---|---|---|---|---|
+| the counter's 56x8 band | 2 | 1.3 ms | 1.6 ms | 2.7 ms |
+| a 16x16 notch | 4 | 0.6 ms | 1.0 ms | 2.6 ms |
+| a 1-pixel column, top to bottom | 40 | 0.3 ms | 0.8 ms | 11.5 ms |
+| a full-width 10-row band | 3 | 3.3 ms | 3.5 ms | 10.0 ms |
+| a 200x120 region | 20 | 2.7 ms | 3.2 ms | 54 ms |
+| nothing drawn | 0 | | | 0.4 ms |
+
+A strip costs about 0.2 ms plus 2 us per pixel it carries, so a narrow
+window shortens every advance as well as skipping strips.
+
 Bench datum from a Pi Pico W, whose `machine.SPI` clamps a 40 MHz
 request to 24 MHz: the default 6-row strip measured 3.6 ms per
 advance at worst and a full frame crosses in 40 advances, about
@@ -365,7 +409,7 @@ Draw and `show()` from any other handler; the screen service flushes on its own 
 
 ## Memory notes
 
-Idle ticks allocate nothing: `check()` is comparisons only.  Starting a frame allocates one generator; the cost is per frame, not per tick, and only when `show()` was called.  Advancing a frame allocates nothing, and the drivers measure 0 bytes per advance on both runtimes.  Finishing a frame allocates nothing on MicroPython, where the service reads the iterator's end through two-argument `next()`; CircuitPython board builds leave that form out, so there a finished frame costs one `StopIteration`, about 96 bytes, per frame rather than per tick.
+Idle ticks allocate nothing: `check()` is comparisons only.  Starting a frame allocates one generator; the cost is per frame, not per tick, and only when `show()` was called.  Advancing a frame allocates nothing, and the drivers measure 0 bytes per advance on both runtimes.  A partial flush narrower than the frame adds one strip `FrameBuffer` and one view, about 100 bytes per frame, on MicroPython, whose `machine.SPI` writes whole buffers only; CircuitPython streams each row of a narrow window through `busio.SPI.write`'s `start` and `end` and adds nothing.  Finishing a frame allocates nothing on MicroPython, where the service reads the iterator's end through two-argument `next()`; CircuitPython board builds leave that form out, so there a finished frame costs one `StopIteration`, about 96 bytes, per frame rather than per tick.
 
 ## Testing
 
@@ -390,7 +434,7 @@ assert panel.flushes_completed == 1
 
 ## Platform notes
 
-The service behaves identically on CPython, MicroPython, and CircuitPython.  Panel drivers are where the runtimes differ: on MicroPython the framebuf drivers (`GC9A01A`, `GC9A01AIndexed`, `SSD1306`) page their frame across advances under ScreenService, while on CircuitPython `gc9a01a_displayio.make_display` and `ssd1306_displayio.make_display` hand the panel to displayio and the firmware owns refresh with no service in the loop.  Hardware drivers are added per controller as each passes bench validation.
+The service behaves identically on CPython, MicroPython, and CircuitPython.  Panel drivers are where the runtimes differ.  `GC9A01AIndexed` runs on both: its `frame` is a `FramebufCanvas` over framebuf on MicroPython and a `BitmapCanvas` over a `displayio.Bitmap` on CircuitPython, and both record the bounds the flush sends.  `GC9A01A` draws raw 16-bit color on both, `SSD1306` is MicroPython-only, and `gc9a01a_displayio.make_display` and `ssd1306_displayio.make_display` hand a panel to displayio on CircuitPython, where the firmware owns refresh with no service in the loop.  Hardware drivers are added per controller as each passes bench validation.
 
 ## Examples
 

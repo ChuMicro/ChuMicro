@@ -8,6 +8,10 @@
 
 ::: chumicro_screens.gc9a01a
 
+## `chumicro_screens.framebuf_canvas`
+
+::: chumicro_screens.framebuf_canvas
+
 ## `chumicro_screens.bitmap_canvas`
 
 ::: chumicro_screens.bitmap_canvas

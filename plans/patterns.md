@@ -686,6 +686,42 @@ comparisons allocate the mask), 12 KB per strip measured.
 
 Reference implementation: `chumicro_screens.gc9a01a._expansion_passes`.
 
+## A framebuf subclass records what it draws; super() is the only way back to C
+
+`framebuf.FrameBuffer` subclasses in Python on MicroPython (the stock
+`ssd1306.py` driver does it), so a canvas can wrap every primitive with
+bookkeeping and stay a real framebuf: `blit` takes the subclass as a
+source because `get_readonly_framebuffer` casts through
+`mp_obj_cast_to_native_base` (1.27.0), so a strip expands from it with
+no wrapper.  Two facts shape the overrides:
+
+- Reach the base through `super().method(...)`, never
+  `framebuf.FrameBuffer.method(self, ...)`.  The instance is an
+  `mp_obj_instance_t` whose native framebuf lives in `subobj[0]`;
+  `super()` and attribute lookup substitute it, while an explicit
+  unbound call hands the instance itself to C code that reads it as a
+  framebuf struct.  The compiler emits `LOAD_SUPER_METHOD` for the
+  `super().name(...)` form, so the call allocates nothing.
+- The native methods take positional arguments only
+  (`MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN`), so forward `key` and
+  `palette` positionally; a keyword raises `TypeError`.
+
+Each override costs one Python frame, about 30 us on an RP2040, which
+is why `pixel` inlines its bookkeeping and per-pixel loops belong in
+`blit`.  Load the subclass's module with the driver rather than at
+construction: its class objects otherwise land in the free region the
+frame is about to take.
+
+A column window streams from a strip laid out at the frame's width
+without slicing on CircuitPython, because `busio.SPI.write(buffer,
+start=, end=)` bounds the write in the buffer's own items (pixels, for
+a 16-bit `displayio.Bitmap` view).  `machine.SPI.write` has no bounds,
+so the MicroPython driver re-lays the strip at the window's width
+through a per-flush `FrameBuffer` over the same buffer instead.
+
+Reference implementation: `chumicro_screens.framebuf_canvas.FramebufCanvas`
+and `chumicro_screens.gc9a01a.GC9A01AIndexed.flush`.
+
 ## Packed 1-bit glyphs blit in C on both runtimes without a copy
 
 A font-to-py module stores each glyph as rows of `(width + 7) // 8`

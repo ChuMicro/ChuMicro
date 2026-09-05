@@ -22,9 +22,12 @@ and differ in what ``frame`` is:
 Either way ``flush()`` is the ScreenService panel protocol: each
 advance sends one strip of ``transfer_rows`` rows as a self-contained
 transfer (window, then memory write) straight from the frame's buffer,
-so a full frame spreads across ticks instead of blocking one.  On
-CircuitPython that bypasses displayio's refresh pipeline, whose cost
-grows with the dirty area; the bus is the only cost here.
+so a full frame spreads across ticks instead of blocking one.  The
+portable canvas records what was drawn, and ``GC9A01AIndexed``'s
+flush sends only the strips covering that rectangle, windowed to its
+columns, so a redraw of a few digits costs a few advances rather than
+a frame.  On CircuitPython that bypasses displayio's refresh pipeline,
+whose cost grows with the dirty area; the bus is the only cost here.
 
 Construction blocks 330 to 365 ms, depending on the board, while the
 panel resets and runs its initialization sequence.
@@ -44,6 +47,11 @@ try:
     import framebuf
 except ImportError:
     framebuf = None
+else:
+    # Loaded with the driver rather than at construction, so the
+    # canvas class's objects sit with the import-time code instead of
+    # splitting the free region the frame is about to take.
+    from chumicro_screens.framebuf_canvas import FramebufCanvas
 
 try:
     from time import sleep_ms as _sleep_ms
@@ -160,7 +168,7 @@ def _bring_up(spi: object, chip_select: object, data_command: object,
 
 
 def _write_strip(spi: object, chip_select: object, data_command: object,
-                 row_window: bytes, strip_view: memoryview,
+                 column_window: bytes, row_window: bytes, strip_view: memoryview,
                  locking: bool) -> None:
     """One self-contained transfer: window commands, then pixel data.
 
@@ -176,7 +184,7 @@ def _write_strip(spi: object, chip_select: object, data_command: object,
         data_command(0)
         spi.write(_COLUMN_ADDRESS_COMMAND)
         data_command(1)
-        spi.write(_FULL_WIDTH_WINDOW)
+        spi.write(column_window)
         data_command(0)
         spi.write(_ROW_ADDRESS_COMMAND)
         data_command(1)
@@ -185,6 +193,46 @@ def _write_strip(spi: object, chip_select: object, data_command: object,
         spi.write(_MEMORY_WRITE_COMMAND)
         data_command(1)
         spi.write(strip_view)
+        chip_select(1)
+    finally:
+        if locking:
+            spi.unlock()
+
+
+def _write_strip_rows(spi: object, chip_select: object, data_command: object,
+                      column_window: bytes, row_window: bytes, strip_view: memoryview,
+                      row_count: int, row_items: int, first_item: int,
+                      item_count: int, locking: bool) -> None:
+    """One self-contained transfer of a column window, one ``busio`` write per row.
+
+    The rows of a narrowed window are not contiguous in a strip laid
+    out at the frame's width, and a ``busio.SPI`` write takes ``start``
+    and ``end`` in the buffer's own items, so each row goes as its own
+    bounded write with no slice allocated.  ``machine.SPI`` has no such
+    bounds, which is why the MicroPython path re-lays the strip
+    instead and sends it through ``_write_strip``.
+    """
+    if locking:
+        while not spi.try_lock():
+            pass
+    try:
+        chip_select(0)
+        data_command(0)
+        spi.write(_COLUMN_ADDRESS_COMMAND)
+        data_command(1)
+        spi.write(column_window)
+        data_command(0)
+        spi.write(_ROW_ADDRESS_COMMAND)
+        data_command(1)
+        spi.write(row_window)
+        data_command(0)
+        spi.write(_MEMORY_WRITE_COMMAND)
+        data_command(1)
+        row = 0
+        while row < row_count:
+            spi.write(strip_view, start=first_item, end=first_item + item_count)
+            first_item += row_items
+            row += 1
         chip_select(1)
     finally:
         if locking:
@@ -250,17 +298,30 @@ def _expansion_passes(palette: object, assigned: bytearray) -> list:
     return passes
 
 
-def _frame_strips(view: memoryview, transfer_rows: int) -> list:
+def _strip_views(view: memoryview, transfer_rows: int, rows: int) -> list:
     """Pre-slice one view per strip so an advance allocates nothing.
 
-    ``view`` may count bytes or 16-bit items, depending on the buffer
-    behind it, so a row's length in items is measured rather than assumed.
+    ``view`` holds ``rows`` rows: the whole frame, so each strip's view
+    starts at its own rows, or one ``transfer_rows``-row strip buffer
+    that every strip shares, so each view starts at row 0.  The view
+    may count bytes or 16-bit items, depending on the buffer behind it,
+    so a row's length in items is measured rather than assumed.
     """
-    items_per_row = len(view) // HEIGHT
-    return [
-        (row_start, window, view[row_start * items_per_row:
-                                 (row_start + row_count) * items_per_row])
-        for row_start, row_count, window in _strip_bounds(transfer_rows)]
+    items_per_row = len(view) // rows
+    strips = []
+    for row_start, row_count, window in _strip_bounds(transfer_rows):
+        first = row_start * items_per_row if rows == HEIGHT else 0
+        strips.append((row_start, row_count, window,
+                       view[first:first + row_count * items_per_row]))
+    return strips
+
+
+def _set_window(window: bytearray, first: int, last: int) -> None:
+    """Write the panel's inclusive address range into a 4-byte window in place."""
+    window[0] = first >> 8
+    window[1] = first & 0xFF
+    window[2] = last >> 8
+    window[3] = last & 0xFF
 
 
 class GC9A01A:
@@ -321,7 +382,7 @@ class GC9A01A:
             view = memoryview(self._buffer)
             self.frame = framebuf.FrameBuffer(self._buffer, WIDTH, HEIGHT,
                                               framebuf.RGB565)
-        self._strips = _frame_strips(view, transfer_rows)
+        self._strips = _strip_views(view, transfer_rows, HEIGHT)
         if sleep_ms is None:
             sleep_ms = _sleep_ms
         _bring_up(spi, chip_select, data_command, reset, sleep_ms, self._locking)
@@ -333,11 +394,12 @@ class GC9A01A:
         data_command = self._data_command
         locking = self._locking
         first = True
-        for _row_start, window, view in self._strips:
+        for _row_start, _row_count, window, view in self._strips:
             if not first:
                 yield
             first = False
-            _write_strip(spi, chip_select, data_command, window, view, locking)
+            _write_strip(spi, chip_select, data_command, _FULL_WIDTH_WINDOW,
+                         window, view, locking)
 
 
 class GC9A01AIndexed:
@@ -348,13 +410,27 @@ class GC9A01AIndexed:
     starts black.  ``frame`` offers framebuf's method vocabulary on
     both runtimes: ``fill``, ``pixel``, ``hline``, ``vline``, ``line``,
     ``rect``, ``fill_rect``, ``ellipse``, ``poly``, ``blit``, ``text``.
-    On MicroPython it is the ``framebuf.FrameBuffer`` itself; on
-    CircuitPython it is a canvas over a ``displayio.Bitmap`` that draws
-    circles rather than general ellipses, polygon outlines rather than
-    fills, and its ``text`` in the runtime's own built-in font, whose
-    metrics differ from framebuf's 8x8.
-    ``chumicro_screens.fonts.Font`` draws a converted font at the same
-    pixels on both runtimes.
+    On MicroPython it is a ``chumicro_screens.framebuf_canvas.FramebufCanvas``,
+    a ``framebuf.FrameBuffer`` that also records what it drew; on
+    CircuitPython it is a ``chumicro_screens.bitmap_canvas.BitmapCanvas``
+    over a ``displayio.Bitmap`` that draws circles rather than general
+    ellipses, polygon outlines rather than fills, and its ``text`` in
+    the runtime's own built-in font, whose metrics differ from
+    framebuf's 8x8.  ``chumicro_screens.fonts.Font`` draws a converted
+    font at the same pixels on both runtimes.
+
+    A flush sends only what changed.  The canvas records the bounds
+    of every primitive since the last flush, and the flush sends the
+    strips covering that rectangle, each windowed to its columns, so
+    an app that redraws a few digits pays for a few advances and an
+    app that fills the frame pays for the whole frame.  A frame with
+    nothing drawn on it flushes in one empty advance.  Redraw only what
+    changed to collect the saving: clear the region with ``fill_rect``
+    and draw over it, rather than ``fill`` and redraw everything.
+    Every ``set_color`` after the first flush marks the whole frame,
+    since drawn pixels holding the index change color.  ``dirty(x, y,
+    width, height)`` on the canvas marks a region drawn behind its
+    back, and ``take_dirty()`` is what the flush reads.
 
     The frame is one byte per pixel (57,600 bytes) plus a 256-entry
     palette on both runtimes, so a Pi Pico W heap holds it under either,
@@ -369,14 +445,16 @@ class GC9A01AIndexed:
     plus 0.45 ms per pass, 2.5 ms with black and white, 4.4 ms with four
     more colors, 6.1 ms with seven, and a frame about 175 ms plus 35 ms
     per pass, so five passes fit a 5 ms tick at 3 rows and a larger
-    palette wants ``transfer_rows=2``.  ``frame_bits=16`` trades RAM for that time on
-    CircuitPython: a 16-bit frame (115,200 bytes) holds colors rather
-    than indexes, so no expansion runs and a 6-row strip streams in
-    1.4 ms mean and 2.0 ms worst, 62 ms a frame, but ``set_color``
-    applies to later drawing only, and a Pi Pico W holds the frame with
-    about 43 KB to spare only when the panel is constructed before
-    anything else.  MicroPython's frame is 8-bit whatever ``frame_bits``
-    says.
+    palette wants ``transfer_rows=2``.  The passes cover the strip's
+    full width whatever the window, so a narrow window on that path
+    saves bus time and the copy but not the passes.  ``frame_bits=16``
+    trades RAM for that time on CircuitPython: a 16-bit frame (115,200
+    bytes) holds colors rather than indexes, so no expansion runs and
+    a 6-row strip streams in 1.4 ms mean and 2.0 ms worst, 62 ms a
+    frame, but ``set_color`` applies to later drawing only, and a Pi
+    Pico W holds the frame with about 43 KB to spare only when the
+    panel is constructed before anything else.  MicroPython's frame is
+    8-bit whatever ``frame_bits`` says.
 
     Construct early: the frame needs one contiguous block, which a
     fragmented heap may no longer hold.
@@ -388,7 +466,9 @@ class GC9A01AIndexed:
     crosses in 40 advances, about 123 ms, fitted with a model of 0.2 ms
     fixed plus 0.5 ms per row, so taller strips barely shorten the
     frame.  A faster chip can raise ``transfer_rows`` as its own bench
-    allows.
+    allows.  Strips sit on a fixed grid of ``transfer_rows`` rows, so a
+    partial flush sends whole strips from the one holding the top dirty
+    row to the one holding the bottom.
 
     Args:
         spi: SPI bus wired to the panel, clock and data lines.
@@ -419,6 +499,8 @@ class GC9A01AIndexed:
         self._locking = hasattr(spi, "try_lock")
         self.width = WIDTH
         self.height = HEIGHT
+        self._transfer_rows = transfer_rows
+        self._column_window = bytearray(4)
         self._strip = None
         self._assigned = None
         self._passes = None
@@ -435,18 +517,15 @@ class GC9A01AIndexed:
             if frame_bits == 16:
                 bitmap = _frame_bitmap(65536)
                 canvas_colors = self._colors
-                self._strips = _frame_strips(memoryview(bitmap), transfer_rows)
+                self._strips = _strip_views(memoryview(bitmap), transfer_rows, HEIGHT)
             else:
                 bitmap = _frame_bitmap(_PALETTE_SIZE)
                 canvas_colors = bytes(range(_PALETTE_SIZE))
                 self._assigned = bytearray(_PALETTE_SIZE)
                 self._assigned[0] = 1
                 self._strip = displayio.Bitmap(WIDTH, transfer_rows, 65536)
-                strip_view = memoryview(self._strip)
-                self._items_per_row = len(strip_view) // transfer_rows
-                self._strips = [
-                    (row_start, window, strip_view[:row_count * self._items_per_row])
-                    for row_start, row_count, window in _strip_bounds(transfer_rows)]
+                self._strips = _strip_views(memoryview(self._strip), transfer_rows,
+                                            transfer_rows)
             self._bitmap = bitmap
             self.frame = BitmapCanvas(bitmap, canvas_colors, bitmaptools,
                                       terminalio.FONT, displayio)
@@ -455,18 +534,15 @@ class GC9A01AIndexed:
             # scratch the import chain left interleaved with live objects.
             gc.collect()
             self._buffer = bytearray(WIDTH * HEIGHT)
-            self.frame = framebuf.FrameBuffer(self._buffer, WIDTH, HEIGHT,
-                                              framebuf.GS8)
-            strip_buffer = bytearray(transfer_rows * _ROW_BYTES)
-            strip_view = memoryview(strip_buffer)
-            self._strip_frame = framebuf.FrameBuffer(strip_buffer, WIDTH,
+            self.frame = FramebufCanvas(self._buffer, WIDTH, HEIGHT, framebuf.GS8)
+            self._strip_buffer = bytearray(transfer_rows * _ROW_BYTES)
+            self._strip_frame = framebuf.FrameBuffer(self._strip_buffer, WIDTH,
                                                      transfer_rows,
                                                      framebuf.RGB565)
             self._palette_frame = framebuf.FrameBuffer(
                 bytearray(_PALETTE_SIZE * 2), _PALETTE_SIZE, 1, framebuf.RGB565)
-            self._strips = [
-                (row_start, window, strip_view[:row_count * _ROW_BYTES])
-                for row_start, row_count, window in _strip_bounds(transfer_rows)]
+            self._strips = _strip_views(memoryview(self._strip_buffer), transfer_rows,
+                                        transfer_rows)
         if sleep_ms is None:
             sleep_ms = _sleep_ms
         _bring_up(spi, chip_select, data_command, reset, sleep_ms, self._locking)
@@ -476,8 +552,9 @@ class GC9A01AIndexed:
 
         Drawing ``index`` on ``frame`` renders this color from the next
         flush on, and already-drawn pixels holding the index change with
-        it.  On a 16-bit CircuitPython frame the color applies to
-        drawing done after the call instead.
+        it, so the call marks the whole frame for that flush.  On a
+        16-bit CircuitPython frame the color applies to drawing done
+        after the call instead, and nothing is marked.
 
         Args:
             index: Palette slot, 0 to 255.
@@ -488,39 +565,81 @@ class GC9A01AIndexed:
         value = color565(red, green, blue)
         if self._palette_frame is not None:
             self._palette_frame.pixel(index, 0, value)
+            self.frame.dirty(0, 0, WIDTH, HEIGHT)
             return
         self._colors[index] = value
         if self._assigned is not None:
             self._assigned[index] = 1
             self._passes = None
+            self.frame.dirty(0, 0, WIDTH, HEIGHT)
 
     def flush(self) -> object:
-        """Expand and send one strip per advance; the panel protocol."""
+        """Expand and send one strip per advance over the drawn rectangle; the panel protocol."""
+        frame = self.frame
+        bounds = frame.take_dirty()
+        if bounds is None:
+            return
+        left, top, right, bottom = bounds
+        width = right - left
         spi = self._spi
         chip_select = self._chip_select
         data_command = self._data_command
         locking = self._locking
-        frame = self.frame
+        transfer_rows = self._transfer_rows
+        column_window = self._column_window
+        _set_window(column_window, left, right - 1)
         strip_frame = self._strip_frame
         palette_frame = self._palette_frame
+        narrow_view = None
         strip = self._strip
-        if strip is not None:
+        if strip_frame is not None:
+            if width != WIDTH:
+                # A narrowed strip is re-laid at the window's width so
+                # its rows are contiguous for machine.SPI, which writes
+                # whole buffers only.  This is the one flush that
+                # allocates past its generator: one FrameBuffer and one
+                # view, about 100 bytes, per partial frame.
+                strip_frame = framebuf.FrameBuffer(self._strip_buffer, width,
+                                                   transfer_rows, framebuf.RGB565)
+                narrow_view = memoryview(self._strip_buffer)[:transfer_rows * width * 2]
+        elif strip is not None:
             tools = self._tools
             bitmap = self._bitmap
-            items_per_row = self._items_per_row
             passes = self._passes
             if passes is None:
                 passes = self._passes = _expansion_passes(self._colors, self._assigned)
+        strips = self._strips
+        index = top // transfer_rows
+        last = (bottom - 1) // transfer_rows
         first = True
-        for row_start, window, view in self._strips:
+        while index <= last:
             if not first:
                 yield
             first = False
+            row_start, row_count, window, view = strips[index]
+            index += 1
             if strip_frame is not None:
-                strip_frame.blit(frame, 0, -row_start, -1, palette_frame)
-            elif strip is not None:
-                tools.blit(strip, bitmap, 0, 0, x1=0, y1=row_start, x2=WIDTH,
-                           y2=row_start + len(view) // items_per_row)
+                strip_frame.blit(frame, -left, -row_start, -1, palette_frame)
+                if narrow_view is not None:
+                    view = narrow_view
+                    if row_count != transfer_rows:
+                        view = narrow_view[:row_count * width * 2]
+                _write_strip(spi, chip_select, data_command, column_window,
+                             window, view, locking)
+                continue
+            row_items = len(view) // row_count
+            if strip is not None:
+                tools.blit(strip, bitmap, 0, 0, x1=left, y1=row_start, x2=right,
+                           y2=row_start + row_count)
                 for old, new in passes:
                     tools.replace_color(strip, old, new)
-            _write_strip(spi, chip_select, data_command, window, view, locking)
+                first_item = 0
+            else:
+                first_item = left * (row_items // WIDTH)
+            if width == WIDTH:
+                _write_strip(spi, chip_select, data_command, column_window,
+                             window, view, locking)
+            else:
+                _write_strip_rows(spi, chip_select, data_command, column_window,
+                                  window, view, row_count, row_items, first_item,
+                                  width * (row_items // WIDTH), locking)

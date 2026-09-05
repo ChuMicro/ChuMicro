@@ -98,6 +98,30 @@ def make_panel(panel_class: object = GC9A01A, transfer_rows: int = 10) -> tuple:
     return panel, spi, delays, reset
 
 
+def run_flush(panel: object, spi: FakeSpi) -> int:
+    """Drive one flush to its end and return how many strips it put on the bus.
+
+    A one-strip flush and an empty one both end on their first advance,
+    so the strips are counted by their memory-write commands.
+    """
+    base = len(spi.writes)
+    flush = panel.flush()
+    while True:
+        try:
+            next(flush)
+        except StopIteration:
+            break
+    return spi.writes[base:].count(b"\x2c")
+
+
+def make_drained_indexed_panel(transfer_rows: int = 60) -> tuple:
+    """An indexed panel with red at index 7 whose construction-time frame has been flushed."""
+    panel, spi, _delays, _reset = make_panel(GC9A01AIndexed, transfer_rows=transfer_rows)
+    panel.set_color(7, 255, 0, 0)
+    run_flush(panel, spi)
+    return panel, spi
+
+
 def test_construction_resets_then_inits() -> None:
     """Reset pulses 1-0-1 with the datasheet delays, then the init runs."""
     _skip_unless_frame_buffer_headroom()
@@ -290,3 +314,95 @@ def test_indexed_frame_completes_under_screen_service() -> None:
         service.handle(tick)
     assert service.check(5) is False
     assert len(spi.writes) - base == 4 * 6
+
+
+def test_indexed_frame_is_a_framebuf_canvas_that_starts_dirty() -> None:
+    """The frame records its bounds and reports the whole panel before the first flush."""
+    _skip_unless_indexed_headroom()
+    panel, spi, delays, reset = make_panel(GC9A01AIndexed, transfer_rows=60)
+    assert (panel.frame.width, panel.frame.height) == (240, 240)
+    assert panel.frame.take_dirty() == (0, 0, 240, 240)
+    assert run_flush(panel, spi) == 0
+
+
+def test_indexed_flush_sends_only_the_strips_the_drawing_touched() -> None:
+    """A short vertical line lands as one strip windowed to its column."""
+    _skip_unless_indexed_headroom()
+    panel, spi = make_drained_indexed_panel()
+    panel.frame.vline(100, 120, 11, 7)
+    base = len(spi.writes)
+    assert run_flush(panel, spi) == 1
+    strip = spi.writes[base:]
+    assert len(strip) == 6
+    assert strip[1] == b"\x00\x64\x00\x64"
+    assert strip[3] == b"\x00\x78\x00\xb3"
+    assert spi.lengths[base + 5] == 60 * 2
+    assert strip[5][:6] == b"\xf8\x00\xf8\x00\xf8\x00"
+
+
+def test_indexed_flush_with_nothing_drawn_sends_nothing() -> None:
+    """A flush after a clean frame ends on its first advance with no bus traffic."""
+    _skip_unless_indexed_headroom()
+    panel, spi = make_drained_indexed_panel()
+    base = len(spi.writes)
+    assert run_flush(panel, spi) == 0
+    assert len(spi.writes) == base
+    service = ScreenService(panel, refresh_interval_ms=0, ticks=FakeTicks())
+    service.show()
+    assert service.check(0) is True
+    service.handle(0)
+    assert service.check(1) is False
+    assert len(spi.writes) == base
+
+
+def test_indexed_narrow_strip_carries_the_dirty_columns_only() -> None:
+    """Two pixels three columns apart send a three-pixel-wide strip with the gap between them."""
+    _skip_unless_indexed_headroom()
+    panel, spi = make_drained_indexed_panel()
+    panel.set_color(9, 0, 0, 255)
+    run_flush(panel, spi)
+    panel.frame.pixel(10, 0, 7)
+    panel.frame.pixel(12, 0, 9)
+    base = len(spi.writes)
+    assert run_flush(panel, spi) == 1
+    assert spi.writes[base + 1] == b"\x00\x0a\x00\x0c"
+    assert spi.lengths[base + 5] == 60 * 3 * 2
+    assert spi.writes[base + 5][:6] == b"\xf8\x00\x00\x00\x00\x1f"
+
+
+def test_indexed_dirty_rows_across_a_strip_boundary_send_both_strips() -> None:
+    """A full-width band over rows 55 to 64 sends strips 0 and 1 at full width."""
+    _skip_unless_indexed_headroom()
+    panel, spi = make_drained_indexed_panel()
+    panel.frame.fill_rect(0, 55, 240, 10, 7)
+    base = len(spi.writes)
+    assert run_flush(panel, spi) == 2
+    assert spi.writes[base + 1] == b"\x00\x00\x00\xef"
+    assert spi.writes[base + 3] == b"\x00\x00\x00\x3b"
+    assert spi.writes[base + 9] == b"\x00\x3c\x00\x77"
+    assert spi.lengths[base + 5] == 60 * 480
+    assert spi.lengths[base + 11] == 60 * 480
+
+
+def test_indexed_narrow_flush_ends_on_a_shorter_last_strip() -> None:
+    """With 70-row strips, a line down column 5 from row 210 sends the 30-row last strip one pixel wide."""
+    _skip_unless_indexed_headroom()
+    panel, spi = make_drained_indexed_panel(transfer_rows=70)
+    panel.frame.vline(5, 210, 26, 7)
+    base = len(spi.writes)
+    assert run_flush(panel, spi) == 1
+    assert spi.writes[base + 1] == b"\x00\x05\x00\x05"
+    assert spi.writes[base + 3] == b"\x00\xd2\x00\xef"
+    assert spi.lengths[base + 5] == 30 * 2
+    assert spi.writes[base + 5][:4] == b"\xf8\x00\xf8\x00"
+
+
+def test_indexed_set_color_marks_the_whole_frame() -> None:
+    """Recoloring an index after a flush resends every strip at full width."""
+    _skip_unless_indexed_headroom()
+    panel, spi = make_drained_indexed_panel()
+    panel.set_color(7, 0, 255, 0)
+    base = len(spi.writes)
+    assert run_flush(panel, spi) == 4
+    assert spi.writes[base + 1] == b"\x00\x00\x00\xef"
+    assert spi.lengths[base + 5] == 60 * 480
