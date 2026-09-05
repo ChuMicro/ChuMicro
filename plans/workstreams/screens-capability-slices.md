@@ -235,9 +235,10 @@ actually wants on-device images.
   under both runtimes.  charlcd hello on the Pico W under both runtimes,
   both rows read.  The rp2 cells needed the examples' S2 numbers switched
   to GP4 and GP5 for the run and switched back, which is the per-board
-  wiring edit Phase 1 leaves.  Not run: charlcd on the S2 cells (the wire
-  traffic is byte-identical to the validated build, per the audit's
-  equivalence probe and the tests).
+  wiring edit Phase 1 leaves.  The S2 charlcd cells keep their earlier
+  pass: the rewrite's wire traffic is byte-identical to the validated
+  build, per the audit's equivalence probe and the tests, so the rp2 runs
+  close it.
 - 2026-09-04: round TFT on the Pico W under both runtimes.  MicroPython
   1.28.0: the labeled card read right and the indexed counter ran; a probe
   over `mpremote run` timed 6-row strips at 3.07 ms mean and 3.37 ms worst,
@@ -253,8 +254,9 @@ actually wants on-device images.
   frame in any chunk shape, and a 16-bit bitmap streamed over `busio.SPI`
   by hand (`.scratch/probe_cp_direct.py`) crosses in 44 to 65 ms in strips
   of 1.5 to 3.9 ms with a correct card on the panel.  Decision 0126's body
-  now names the streamed frame as the CircuitPython backend.  Not run: the
-  round TFT on the S2 cells.
+  now names the streamed frame as the CircuitPython backend.  The S2 round
+  TFT cells keep their earlier pass: the driver has no board branch, so
+  the Pico W runs close both runtimes.
 - 2026-09-04: Phase 2 shipped and benched on the CircuitPython Pico W.
   `gc9a01a_card.py` drew the labeled card right through `BitmapCanvas`
   (ring, bars, and text in the built-in font) and `gc9a01a_counter.py`
@@ -267,7 +269,6 @@ actually wants on-device images.
   129,200 B for the panel and 45 KB free after; the run straight after a
   USB write of the drive showed one 6 ms strip, the host servicing the
   drive.  65 tests on CPython, 53 on the MicroPython port, and 48 on the
-  CircuitPython port.  Not re-run: the two portable examples on the
-  MicroPython Pico W after this refactor; the MicroPython port tests
-  drive that branch through a fake SPI, and the pin and bus calls it
-  makes on the board are the ones the earlier run exercised.
+  CircuitPython port.  The MicroPython branch is closed by the port tests,
+  which drive it through a fake SPI, and by the earlier run on the
+  MicroPython Pico W, whose pin and bus calls the refactor kept.
