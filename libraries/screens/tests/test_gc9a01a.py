@@ -47,7 +47,7 @@ def _skip_unless_indexed_headroom() -> None:
     if free < 128_000:
         skip(
             "GC9A01AIndexed tests need the 57,600 B frame plus up to "
-            "48,000 B of strip buffer; this host lane's heap is smaller, "
+            "33,600 B of strip buffer; this host lane's heap is smaller, "
             "and the bench validates the driver on a 264 KB board",
         )
 
@@ -263,9 +263,9 @@ def test_indexed_palette_edit_recolors_drawn_pixels() -> None:
 
 
 def test_indexed_partial_last_strip() -> None:
-    """240 rows in 100-row strips ends with a 40-row strip."""
+    """240 rows in 70-row strips ends with a 30-row strip."""
     _skip_unless_indexed_headroom()
-    panel, spi, delays, reset = make_panel(GC9A01AIndexed, transfer_rows=100)
+    panel, spi, delays, reset = make_panel(GC9A01AIndexed, transfer_rows=70)
     base = len(spi.writes)
     flush = panel.flush()
     while True:
@@ -274,8 +274,8 @@ def test_indexed_partial_last_strip() -> None:
         except StopIteration:
             break
     data_lengths = [length for length in spi.lengths[base:] if length > 4]
-    assert data_lengths == [100 * 480, 100 * 480, 40 * 480]
-    assert spi.writes[base + 15] == b"\x00\xc8\x00\xef"
+    assert data_lengths == [70 * 480, 70 * 480, 70 * 480, 30 * 480]
+    assert spi.writes[base + 21] == b"\x00\xd2\x00\xef"
 
 
 def test_indexed_frame_completes_under_screen_service() -> None:

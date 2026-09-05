@@ -1,22 +1,23 @@
-"""Count seconds on a GC9A01A round TFT from a 256 KB-class board.
+"""Count seconds on a GC9A01A round TFT while the loop stays live: one file, both runtimes.
 
 Wiring for a Pi Pico W: SCK=GP6, MOSI=GP7, CS=GP5, DC=GP8, RST=GP9,
 VCC=3V3, GND=GND.  The panel's SCL/SDA silk is SPI clock and data,
-not I2C.  Any MicroPython board works with its own SPI-capable GPIO
-numbers substituted.
+not I2C.  For a LOLIN S2 Mini wire SCL=IO7, SDA=IO11, CS=IO12,
+DC=IO9, RST=IO5 and make the numbers below controller 1, sck=7,
+mosi=11, miso=3, and pins 12, 9, 5.
 
-GC9A01AIndexed holds the frame at one byte per pixel plus a
-256-entry palette, about half the RAM of the full-color driver, so a
-Pico W heap fits it.  Drawing uses palette indexes as colors; each
-loop pass expands and sends one 6-row strip, so the loop never
-blocks longer than a few milliseconds.
+The redraw happens once a second; the frame then crosses the bus one
+strip per loop pass, so the loop never blocks longer than a few
+milliseconds on either runtime.  On MicroPython the frame is one byte
+per pixel expanded through the palette per strip; on CircuitPython it
+is 16-bit and streams straight over the bus, bypassing displayio.
 
 Example output::
 
     frame 1 shown
     frame 2 shown
 """
-__chumicro_runtimes__ = ("micropython",)
+__chumicro_runtimes__ = ("circuitpython", "micropython")
 
 from chumicro_compat.wiring import digital_output, spi_bus
 from chumicro_screens import ScreenService

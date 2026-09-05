@@ -1,8 +1,32 @@
 """Runner-shaped flush pacing for pixel displays."""
 
 # Handed to next() as the exhausted-iterator result, so a finished flush
-# costs no StopIteration object.
+# costs no StopIteration object where the runtime's next() takes one.
 _FLUSH_DONE = object()
+
+
+def _advance_with_default(flush: object) -> bool:
+    """Advance ``flush`` and return True once it is exhausted, allocating nothing."""
+    return next(flush, _FLUSH_DONE) is _FLUSH_DONE
+
+
+def _advance_catching(flush: object) -> bool:
+    """Advance ``flush`` and return True once it is exhausted; costs one StopIteration."""
+    try:
+        next(flush)
+    except StopIteration:
+        return True
+    return False
+
+
+# CircuitPython board builds leave the two-argument next() out, so the
+# runtime picks which advance it gets once, at import.
+try:
+    next(iter(()), None)
+except TypeError:  # pragma: no cover - CircuitPython board builds only
+    _advance = _advance_catching
+else:
+    _advance = _advance_with_default
 
 
 class ScreenService:
@@ -85,7 +109,7 @@ class ScreenService:
             flush = self._panel.flush()
             self._active_flush = flush
         try:
-            if next(flush, _FLUSH_DONE) is _FLUSH_DONE:
+            if _advance(flush):
                 self._active_flush = None
         except BaseException:
             self._active_flush = None

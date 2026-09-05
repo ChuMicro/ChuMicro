@@ -126,3 +126,14 @@ the bus is the only cost.  The probe's 100 bytes of allocation per strip
 is its own `time.monotonic_ns()` integers; a driver with pre-sliced views
 has none.  After a displayio session had churned the heap, the same
 115,200-byte allocation failed, so the frame has to be allocated first.
+
+## CircuitPython board builds lack the two-argument next()
+
+`next(iterator, default)` works on the CircuitPython unix port and on
+MicroPython, so the port suites pass, and a Pi Pico W under CircuitPython
+10.2.1 raised `TypeError: function takes 1 positional arguments but 2
+were given` from the same line the first time `gc9a01a_counter.py`
+advanced a flush.  `chumicro_screens.core` now tries
+`next(iter(()), None)` at import and falls back to catching
+`StopIteration`, which costs one 96-byte exception object per finished
+frame on the board and nothing on the other runtimes.

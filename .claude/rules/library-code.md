@@ -49,6 +49,7 @@ Applies to `libraries/` and `support/<name>/src/`, cross-runtime by default. Not
 - Mark runtime-specific files `__chumicro_runtimes__ = ("circuitpython",)`. Mark `testing.py` fakes `__chumicro_test_support__ = True` with no runtime marker.
 - f-strings for formatting. `const()`, `memoryview`, and pre-allocated buffers here only.
 - No `__slots__`; neither device runtime implements it.
+- No two-argument `next(iterator, default)` on a board path. CircuitPython board builds raise `TypeError` on it while the unix port accepts it, so the port suite passes and the board fails. Catch `StopIteration`, or select the form at import the way `chumicro_screens.core` does.
 - No pure-passthrough `@property`. Properties that compute or transform stay.
 - Descriptive names, no single letters except `_`, abbreviations expanded (`environment`, `buffer`, `source`, `command`, `message`, `error`, `reference`, `address`, `exception`, `execute`). `CHU001` enforces it. Suppress only to match an upstream API.
 - Prefer pure-Python implementations that run on all three runtimes.

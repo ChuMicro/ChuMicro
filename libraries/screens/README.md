@@ -74,9 +74,11 @@ for loop_pass in range(4):
 
 | Symbol | Description |
 |---|---|
-| `chumicro_screens.gc9a01a.GC9A01A` | 240x240 round color TFT over SPI (MicroPython; needs a PSRAM-class board for its 115 KB frame buffer) |
-| `chumicro_screens.gc9a01a.GC9A01AIndexed` | The same panel at one byte per pixel plus a 256-entry palette, fitting 256 KB-class boards (MicroPython) |
-| `chumicro_screens.gc9a01a.color565(red, green, blue)` | Pack a color for the driver's `frame` drawing methods |
+| `chumicro_screens.gc9a01a.GC9A01AIndexed` | 240x240 round color TFT over SPI as the portable canvas: palette indexes, framebuf's method names on `frame`, one drawing file for both runtimes (57,600-byte frame on MicroPython, 115,200 on CircuitPython) |
+| `chumicro_screens.gc9a01a.GC9A01AIndexed.set_color(index, red, green, blue)` | The only color entry: assign a palette index, then draw with it |
+| `chumicro_screens.gc9a01a.GC9A01A` | The same panel drawn with raw `color565` values at 16-bit depth, both runtimes; a 115 KB frame |
+| `chumicro_screens.gc9a01a.color565(red, green, blue)` | Pack a color for `GC9A01A.frame` drawing |
+| `chumicro_screens.bitmap_canvas.BitmapCanvas` | What `GC9A01AIndexed.frame` is on CircuitPython: framebuf's method names over a 16-bit `displayio.Bitmap` drawn with `bitmaptools` |
 | `chumicro_screens.gc9a01a_displayio.make_display(display_bus)` | The panel as a displayio `BusDisplay` (CircuitPython; the firmware owns refresh, no ScreenService involved) |
 | `chumicro_screens.ssd1306.SSD1306` | 128x64 or 128x32 monochrome OLED over I2C, one page per flush advance (MicroPython) |
 | `chumicro_screens.ssd1306.SSD1306.set_contrast(value)` | Drive current, 0 to 255, which is brightness on an emissive panel |
@@ -98,7 +100,7 @@ Works on CPython, MicroPython, and CircuitPython.
 
 ### Drivers ship after bench validation
 
-Per-controller drivers are added as each passes validation on real boards.  The round GC9A01A TFT ships as `GC9A01A` (MicroPython, validated on a LOLIN S2 Mini; a 10-row strip averages 3.3 ms at 40 MHz SPI), `GC9A01AIndexed` for 256 KB-class boards (validated on a Pi Pico W), and `gc9a01a_displayio.make_display` on CircuitPython.  The SSD1306 mono OLED ships as `SSD1306` (MicroPython; one page per advance averages 3.7 ms at 400 kHz) and `ssd1306_displayio.make_display` on CircuitPython, both validated on the S2.  Writing your own panel is one method: `flush()` returning an iterator that does one bounded bus transfer per advance.
+Per-controller drivers are added as each passes validation on real boards.  The round GC9A01A TFT ships as `GC9A01AIndexed`, the portable canvas validated on a Pi Pico W under both runtimes (6-row strips at 3.4 ms worst on MicroPython and 1.9 ms worst on CircuitPython), `GC9A01A` in raw 16-bit color (validated on a LOLIN S2 Mini; a 10-row strip averages 3.3 ms at 40 MHz SPI), and `gc9a01a_displayio.make_display` for displayio's own ecosystem on CircuitPython.  The SSD1306 mono OLED ships as `SSD1306` (MicroPython; one page per advance averages 3.7 ms at 400 kHz) and `ssd1306_displayio.make_display` on CircuitPython, both validated on the S2.  Writing your own panel is one method: `flush()` returning an iterator that does one bounded bus transfer per advance.
 
 ## Examples
 
@@ -106,8 +108,8 @@ Per-controller drivers are added as each passes validation on real boards.  The 
 |---|---|
 | [`paced_flush.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/screens/examples/paced_flush.py) | A three-row frame flushing one row per loop pass on CPython, no hardware needed |
 | [`micropython_gc9a01a_round.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/screens/examples/micropython_gc9a01a_round.py) | A seconds counter on the round TFT, redrawn once a second while the loop stays live (MicroPython hardware) |
-| [`micropython_gc9a01a_indexed.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/screens/examples/micropython_gc9a01a_indexed.py) | The same counter from a Pi Pico W through the indexed driver (MicroPython hardware) |
-| [`micropython_gc9a01a_card.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/screens/examples/micropython_gc9a01a_card.py) | A labeled color card to run first after wiring; each bar names its color, so swapped channels and rotated mounts are visible at a glance (MicroPython hardware) |
+| [`gc9a01a_card.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/screens/examples/gc9a01a_card.py) | A labeled color card to run first after wiring, one file for both runtimes through the portable canvas; each bar names its color, so swapped channels and rotated mounts are visible at a glance |
+| [`gc9a01a_counter.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/screens/examples/gc9a01a_counter.py) | The seconds counter from a Pi Pico W through the portable canvas, one file for both runtimes |
 | [`circuitpython_gc9a01a_round.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/screens/examples/circuitpython_gc9a01a_round.py) | A color card on the round TFT via displayio, with a blinking notch proving live refresh (CircuitPython hardware) |
 | [`micropython_ssd1306_counter.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/screens/examples/micropython_ssd1306_counter.py) | A bordered seconds counter on the mono OLED, one page per loop pass (MicroPython hardware) |
 | [`circuitpython_ssd1306_counter.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/screens/examples/circuitpython_ssd1306_counter.py) | A border and a growing bar on the mono OLED via displayio (CircuitPython hardware) |

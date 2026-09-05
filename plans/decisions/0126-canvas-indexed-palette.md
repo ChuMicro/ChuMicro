@@ -66,7 +66,8 @@ Rejected alternatives:
   stores is its own business. The CircuitPython backend stores 16-bit
   pixels because the firmware offers no C-speed palette expansion outside
   displayio's pipeline, and a Pico W's larger CircuitPython heap holds the
-  117 KB frame with 57 KB to spare when it is allocated first.
+  117 KB frame with about 43 KB to spare, driver code included, when it is
+  allocated first.
 - **Pacing displayio by chunked refresh** — a shadow bitmap copied into the
   displayed one about 480 pixels per advance fits the tick (4.1 ms mean on
   an RP2040) but takes 510 ms per frame and stores the frame twice, a

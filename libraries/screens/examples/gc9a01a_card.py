@@ -1,21 +1,25 @@
-"""Draw a labeled color card on a GC9A01A round TFT: the wiring check.
+"""Draw a labeled color card on a GC9A01A round TFT: one file, both runtimes.
 
 Wiring for a Pi Pico W: SCK=GP6, MOSI=GP7, CS=GP5, DC=GP8, RST=GP9,
 VCC=3V3, GND=GND.  The panel's SCL/SDA silk is SPI clock and data,
-not I2C.  Any MicroPython board works with its own SPI-capable GPIO
-numbers substituted.
+not I2C.  For a LOLIN S2 Mini wire SCL=IO7, SDA=IO11, CS=IO12,
+DC=IO9, RST=IO5 and make the numbers below controller 1, sck=7,
+mosi=11, miso=3, and pins 12, 9, 5.  The same numbers serve
+MicroPython and CircuitPython, and so does every line after them.
 
 Run this first after wiring a panel.  Each bar carries its own name,
 which catches the mistakes a solid fill cannot: swapped color
 channels render "RED" on a blue bar, and a rotated or mirrored mount
 moves the bars off their named positions.  When every label sits on
-its own color, the wiring and the byte order are both right.
+its own color, the wiring and the byte order are both right.  The
+two runtimes draw their own built-in fonts, so the labels differ in
+size, not in place.
 
 Example output::
 
     card shown
 """
-__chumicro_runtimes__ = ("micropython",)
+__chumicro_runtimes__ = ("circuitpython", "micropython")
 
 from chumicro_compat.wiring import digital_output, spi_bus
 from chumicro_screens import ScreenService

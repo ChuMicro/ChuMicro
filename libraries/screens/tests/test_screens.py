@@ -5,7 +5,7 @@ CPython via pytest and on the MicroPython / CircuitPython unix ports
 through the test harness.
 """
 
-from chumicro_screens import ScreenService
+from chumicro_screens import ScreenService, core
 from chumicro_screens.testing import FakePanel
 from chumicro_test_harness import raises, skip
 from chumicro_timing import ticks_ms
@@ -185,6 +185,15 @@ def test_advancing_and_finishing_a_frame_allocate_nothing() -> None:
         gc.enable()
     assert panel.flushes_completed == 1
     assert allocated <= 64
+
+
+def test_both_advance_shapes_report_the_end_of_a_flush() -> None:
+    """Either advance returns False while transfers remain and True once the iterator is spent."""
+    for advance in (core._advance_with_default, core._advance_catching):
+        flush = iter((None, None))
+        assert advance(flush) is False
+        assert advance(flush) is False
+        assert advance(flush) is True
 
 
 def test_zero_transfer_panel_completes_in_one_tick() -> None:

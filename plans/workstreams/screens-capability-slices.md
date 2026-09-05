@@ -1,6 +1,6 @@
 # Workstream: screens capability slices
 
-Status: **active**, Phase 1 shipped and Phase 2 next.  Planned during the
+Status: **active**, Phases 1 and 2 shipped and Phase 3 next.  Planned during the
 GC9A01A matrix validation session so a cold pickup has the shapes, the
 measured constraints, and the order.  The goal, set by the maintainer the
 same day: one app's rendering and construction code runs on both device
@@ -51,9 +51,20 @@ runtimes.  Compat bumped to 0.4.0.  A CPython host raises `RuntimeError`
 from every resolver, and the 22 host-only tests drive both device branches
 through `sys.modules` fakes on CPython and both unix ports.
 
-## Phase 2. Canvas protocol and the CircuitPython backend (Decision 0126)
+## Phase 2. Canvas protocol and the CircuitPython backend (Decision 0126): shipped
 
-Next, in two slices.  The Pico W bench settled the backend: displayio's
+Shipped as one slice.  `chumicro_screens.gc9a01a` is cross-runtime: the
+frame backend is chosen by whether `framebuf` imports, `GC9A01AIndexed`
+speaks the same palette-index vocabulary on both runtimes, and on
+CircuitPython its `frame` is `chumicro_screens.bitmap_canvas.BitmapCanvas`,
+a CircuitPython-marked module so MicroPython boards never carry it.  The
+streamed strips take a `busio` lock per transfer.  `ScreenService` selects
+its advance once at import, because CircuitPython board builds leave the
+two-argument `next()` out (the unix port has it, which is why no host lane
+caught the `TypeError` the Pico W raised).  `gc9a01a_card.py` and
+`gc9a01a_counter.py` are one file each for both runtimes.  Dirty-bounds
+recording did not land with the canvas; it is Phase 4's own bookkeeping.
+The Pico W bench settled the backend: displayio's
 refresh pipeline costs about 6 us per dirty pixel on the RP2040 however
 the frame is chunked (318 ms for a whole frame in one stall, 510 ms in
 480-pixel chunks that fit the tick, with the frame stored twice), while a
@@ -244,3 +255,19 @@ actually wants on-device images.
   of 1.5 to 3.9 ms with a correct card on the panel.  Decision 0126's body
   now names the streamed frame as the CircuitPython backend.  Not run: the
   round TFT on the S2 cells.
+- 2026-09-04: Phase 2 shipped and benched on the CircuitPython Pico W.
+  `gc9a01a_card.py` drew the labeled card right through `BitmapCanvas`
+  (ring, bars, and text in the built-in font) and `gc9a01a_counter.py`
+  counted under `ScreenService`; the first run raised `TypeError` from the
+  two-argument `next()` the sentinel advance used, which the board build
+  lacks, so `core.py` now picks its advance at import.  A probe through
+  the shipped driver (`.scratch/probe_gc9a01a_timing_cp.py`) measured
+  6-row strips at 1.43 ms mean and 1.95 ms worst across two runs, 62 ms
+  a frame, 128 B per frame (the generator) and nothing per advance,
+  129,200 B for the panel and 45 KB free after; the run straight after a
+  USB write of the drive showed one 6 ms strip, the host servicing the
+  drive.  65 tests on CPython, 53 on the MicroPython port, and 48 on the
+  CircuitPython port.  Not re-run: the two portable examples on the
+  MicroPython Pico W after this refactor; the MicroPython port tests
+  drive that branch through a fake SPI, and the pin and bus calls it
+  makes on the board are the ones the earlier run exercised.

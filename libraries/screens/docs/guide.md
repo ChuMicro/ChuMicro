@@ -81,12 +81,15 @@ Two behaviors worth knowing:
 - `show()` during an active flush marks the *next* frame.  The current frame always finishes; the fresh content flushes after the floor elapses.
 - A panel error mid-flush propagates out of `handle()` and drops that frame.  The service goes idle; the next `show()` schedules a fresh flush.
 
-## The GC9A01A round TFT
+## The GC9A01A round TFT in full color
 
-The first shipped driver: a 240x240 round color TFT over SPI, on
-MicroPython.  It owns a full RGB565 frame buffer (115,200 bytes), so
-it needs a PSRAM-class board.  The app constructs the bus and pins and
-injects them; the driver never imports `machine`:
+`GC9A01A` drives the 240x240 round color TFT over SPI at 16-bit depth
+with raw `color565` values.  It owns a full RGB565 frame (115,200
+bytes), so it wants a PSRAM-class board on MicroPython, where `frame`
+is a `framebuf.FrameBuffer`; on CircuitPython `frame` is a
+`displayio.Bitmap` for `bitmaptools` to draw on, and the Pico W's
+larger heap holds it.  The app constructs the bus and pins and injects
+them; the driver never imports `machine` or `busio`:
 
 ```python
 from chumicro_compat.wiring import digital_output, spi_bus
@@ -120,14 +123,20 @@ RGB565 literal renders the wrong color.  Construction blocks 330 to
 10-row strip, measured at 3.3 ms average on a LOLIN S2 Mini at
 40 MHz, and a full frame crosses in 24 advances.
 
-## The round TFT on 256 KB boards
+## The portable canvas: the round TFT on both runtimes
 
-`GC9A01AIndexed` drives the same panel from boards whose heap cannot
-hold a 115 KB frame.  The frame is one byte per pixel (57,600 bytes)
-plus a 256-entry palette: assign an index a color with `set_color`,
-then draw with the index.  Each flush advance expands one strip
-through the palette with `FrameBuffer.blit`, which converts at C
-speed, then sends it:
+`GC9A01AIndexed` is the panel whose drawing code runs unchanged on
+MicroPython and CircuitPython.  Colors are palette indexes: assign an
+index a color with `set_color`, then draw with the index, and `frame`
+answers framebuf's method names on both runtimes: `fill`, `pixel`,
+`hline`, `vline`, `line`, `rect`, `fill_rect`, `ellipse`, `poly`,
+`blit`, `text`.  On MicroPython the frame is one byte per pixel
+(57,600 bytes) plus a 256-entry palette, so a Pico W heap fits it, and
+each flush advance expands one strip through the palette with
+`FrameBuffer.blit` at C speed.  On CircuitPython the frame is 16-bit
+(115,200 bytes, which a Pico W holds with about 43 KB to spare, driver
+code included, when the panel is constructed first) drawn through
+`bitmaptools`, and each advance streams a strip straight over the bus:
 
 ```python
 from chumicro_compat.wiring import digital_output, spi_bus
@@ -148,11 +157,16 @@ panel.frame.text("hello", 100, 116, WHITE)
 screen.show()
 ```
 
-Editing a palette entry recolors every drawn pixel holding that index
-from the next flush on, which makes theme swaps and blink effects one
-`set_color` call instead of a redraw.  Construct the panel early: the
-frame needs one contiguous 57,600-byte block, which a fragmented heap
-may no longer hold.
+On MicroPython, editing a palette entry recolors every drawn pixel
+holding that index from the next flush on, which makes theme swaps and
+blink effects one `set_color` call instead of a redraw; on
+CircuitPython the frame holds colors rather than indexes, so a later
+`set_color` applies to later drawing only.  Two more CircuitPython
+limits follow from what `bitmaptools` has a C path for: `ellipse`
+draws unfilled circles only and `poly` outlines only, and `text`
+renders the runtime's own built-in font, whose metrics differ from
+framebuf's 8x8.  Construct the panel early: the frame needs one
+contiguous block, which a fragmented heap may no longer hold.
 
 Bench datum from a Pi Pico W, whose `machine.SPI` clamps a 40 MHz
 request to 24 MHz: the default 6-row strip measured 3.6 ms per
@@ -162,12 +176,19 @@ advance at worst and a full frame crosses in 40 advances, about
 strip also costs 480 bytes of buffer on top of the frame.  Raise
 `transfer_rows` only when your chip's own bench shows the headroom.
 
-## The round TFT on CircuitPython
+Under CircuitPython the same board streams a 6-row strip in 1.4 ms
+mean and 2.0 ms worst, 62 ms a frame, since no palette expansion
+happens per strip; the `gc9a01a_card.py` and `gc9a01a_counter.py`
+examples are one file each and run on both runtimes.
 
-CircuitPython renders displays in firmware, so the panel plugs into
-displayio instead of ScreenService: `make_display` feeds the panel's
-initialization sequence into `busdisplay.BusDisplay` and the firmware
-repaints changed regions in the background.  That repaint runs from
+## The round TFT through displayio
+
+CircuitPython can also render the panel in firmware: `make_display`
+feeds the panel's initialization sequence into `busdisplay.BusDisplay`
+and displayio repaints changed regions in the background, which opens
+its scene graph, `adafruit_display_text`, and the `gifio` and `jpegio`
+decoders.  Pick this path for that ecosystem, and the canvas above for
+a paced loop.  The repaint runs from
 the firmware's background hook and stalls the app loop for the whole
 transfer, measured at 11.4 ms at worst on a 128x64 OLED at 400 kHz
 and 29.8 ms at 100 kHz, so a 5 ms tick budget does not hold under
@@ -276,7 +297,7 @@ Draw and `show()` from any other handler; the screen service flushes on its own 
 
 ## Memory notes
 
-Idle ticks allocate nothing: `check()` is comparisons only.  Starting a frame allocates one generator; the cost is per frame, not per tick, and only when `show()` was called.  Advancing a frame and finishing it allocate nothing: the service reads the iterator's end through a sentinel rather than catching `StopIteration`, and the MicroPython drivers measure 0 bytes per advance against the real `framebuf`.
+Idle ticks allocate nothing: `check()` is comparisons only.  Starting a frame allocates one generator; the cost is per frame, not per tick, and only when `show()` was called.  Advancing a frame allocates nothing, and the drivers measure 0 bytes per advance on both runtimes.  Finishing a frame allocates nothing on MicroPython, where the service reads the iterator's end through two-argument `next()`; CircuitPython board builds leave that form out, so there a finished frame costs one `StopIteration`, about 96 bytes, per frame rather than per tick.
 
 ## Testing
 
@@ -309,8 +330,8 @@ The service behaves identically on CPython, MicroPython, and CircuitPython.  Pan
 |---|---|
 | [`paced_flush.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/screens/examples/paced_flush.py) | A three-row frame flushing one row per loop pass, simulated on CPython |
 | [`micropython_gc9a01a_round.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/screens/examples/micropython_gc9a01a_round.py) | A seconds counter on the round TFT, redrawn once a second while the loop stays live (MicroPython hardware) |
-| [`micropython_gc9a01a_indexed.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/screens/examples/micropython_gc9a01a_indexed.py) | The same counter from a Pi Pico W through the indexed driver (MicroPython hardware) |
-| [`micropython_gc9a01a_card.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/screens/examples/micropython_gc9a01a_card.py) | A labeled color card to run first after wiring; each bar names its color, so swapped channels and rotated mounts are visible at a glance (MicroPython hardware) |
+| [`gc9a01a_card.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/screens/examples/gc9a01a_card.py) | A labeled color card to run first after wiring, one file for both runtimes through the portable canvas; each bar names its color, so swapped channels and rotated mounts are visible at a glance |
+| [`gc9a01a_counter.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/screens/examples/gc9a01a_counter.py) | The seconds counter from a Pi Pico W through the portable canvas, one file for both runtimes |
 | [`circuitpython_gc9a01a_round.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/screens/examples/circuitpython_gc9a01a_round.py) | A color card on the round TFT via displayio, with a blinking notch proving live refresh (CircuitPython hardware) |
 | [`micropython_ssd1306_counter.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/screens/examples/micropython_ssd1306_counter.py) | A bordered seconds counter on the mono OLED, one page per loop pass (MicroPython hardware) |
 | [`circuitpython_ssd1306_counter.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/screens/examples/circuitpython_ssd1306_counter.py) | A border and a growing bar on the mono OLED via displayio (CircuitPython hardware) |
