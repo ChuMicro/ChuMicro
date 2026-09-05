@@ -436,6 +436,8 @@ actually wants on-device images.
   host write started at 124,880 free with the same 115,072 largest
   before any import (hardware-traps.md carries both).  The counter
   example ran clean through `deploy-example`, nineteen frames in the
-  capture; the by-eye check of the count ticking inside the ring is
-  the maintainer's.  122 tests on CPython, 84 on the MicroPython port,
-  72 on the CircuitPython port.
+  capture, and the by-eye check passed on the maintainer's read: the
+  count ticking inside a steady ring, five-strip partial flushes each
+  second.  Phase 4's bench gate is closed on both runtimes.  122 tests
+  on CPython, 84 on the MicroPython port, 72 on the CircuitPython
+  port.
