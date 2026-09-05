@@ -171,7 +171,17 @@ static parts once and redraw only the count band.  `test_gc9a01a.py`
 on the MicroPython lane needed a 216K heap override: the file's
 57,600-byte frame plus a 33,600-byte strip buffer no longer fit the
 largest free block once the framebuf stub grew the vocabulary the
-subclass forwards to.
+subclass forwards to.  The Pico W bench found the driver's own
+compile pinning the heap's largest block at 115,072 bytes, 128 short
+of a 16-bit frame (the field note "A large module's compile pins the
+top of the heap" carries the mechanism), so both panel classes take
+`bitmap=`: the app allocates the `displayio.Bitmap` before any
+import and hands it in, which leaves 41,680 bytes free after the
+panel where the driver's own allocation fails.  The CircuitPython
+halves of the indexed panel, `frame_bitmap` and `expansion_passes`,
+live in `bitmap_canvas.py` to keep the driver's compile smaller, and
+`take_dirty` returns an empty rectangle rather than `None` so the
+flush unpacks it without a branch.
 
 ## Phase 5. Viper shipping carve-out (tooling; only if phase 6 proceeds)
 
@@ -396,9 +406,36 @@ actually wants on-device images.
   93 us, and the shipped override with its bookkeeping 140 us, so
   the docstrings say 110 us over the C call.  119 tests on CPython,
   83 on the MicroPython port (the real subclass), 71 on the
-  CircuitPython port.  The CircuitPython Pico W cell is not yet run:
-  the bench board carried MicroPython this session and reflashing it
-  was left to the maintainer, so the narrow row-write path on
-  `busio.SPI` is covered by the port tests and the fake's `start` and
-  `end` only.  No panel image was checked by eye either; the
-  maintainer's card check on both runtimes closes the gate.
+  CircuitPython port.  The by-eye check on the MicroPython board
+  (`.scratch/visual_partial.py`: a full card, five two-strip count
+  updates, a 40-strip hairline, a two-strip bar, a full recolor)
+  passed on the maintainer's read and photo: ring, caption, count,
+  hairline, and bar all where drawn, nothing else on the panel.
+- 2026-09-05: Phase 4 benched on the CircuitPython Pico W (10.2.1)
+  after the board swap, every probe staged as `code.py` through
+  `chumicro-deploy deploy --directory` with the library under `/lib`
+  (`.scratch/probe_partial_cp.py`, a 5 s settle and two warm-up
+  frames first).  8-bit frame, 3-row strips, three passes: the frame
+  80 advances at 3.52 ms mean and 4.06 ms worst, 282 ms; the
+  counter's 56x12 band 5 advances at 2.69 and 2.96 ms, 13.5 ms; a
+  16x16 notch 6 advances, 14.7 ms; a 1-pixel column 80 advances at
+  2.11 ms mean, 169 ms, the passes covering the full width; a
+  full-width 10-row band solid in the accent color 4 advances at
+  4.46 ms, since a pass rewrites every matching pixel; a 200x120
+  region 40 advances, 135 ms; a recolor to a value above 255 dropped
+  a pass and the mean by 0.36 ms.  16-bit frame handed in through
+  `bitmap=`, 6-row strips: the frame 40 advances at 1.59 ms mean and
+  1.89 ms worst, 64 ms; the band 3 advances, 4.1 ms; the notch 4
+  advances, 4.5 ms; the column 40 advances at 0.82 ms, 33 ms; the
+  region 20 advances, 34 ms; a `set_color` flushed nothing; 41,680
+  bytes free after the panel.  Zero bytes across ten advances on the
+  full-width and the row-write path at both depths.  Before the
+  handed-in frame the 16-bit panel raised `MemoryError` on every
+  boot: the largest block after the driver's import is 115,072 there
+  (the Phase 3a driver left 142,912), and a boot straight after the
+  host write started at 124,880 free with the same 115,072 largest
+  before any import (hardware-traps.md carries both).  The counter
+  example ran clean through `deploy-example`, nineteen frames in the
+  capture; the by-eye check of the count ticking inside the ring is
+  the maintainer's.  122 tests on CPython, 84 on the MicroPython port,
+  72 on the CircuitPython port.

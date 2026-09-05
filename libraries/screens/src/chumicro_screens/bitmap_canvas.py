@@ -9,12 +9,16 @@ the palette at flush, or the pre-swapped RGB565 color when the frame
 is 16-bit and streams to the panel without conversion.  Each primitive
 also records the rectangle it touched, and ``take_dirty`` hands the
 union to the panel, whose flush sends the strips covering it rather
-than the whole frame.
+than the whole frame.  ``frame_bitmap`` and ``expansion_passes`` are
+the panel's CircuitPython halves, kept here so the driver module's
+compile stays small: its bytecode lands above its parse tree, and a
+bigger driver file leaves a Pi Pico W no block for a 16-bit frame.
 """
 
 __chumicro_runtimes__ = ("circuitpython",)
 
 import array
+import gc
 
 try:
     from micropython import const
@@ -23,6 +27,68 @@ except ImportError:
         return value
 
 _PALETTE_SIZE = const(256)
+
+
+def frame_bitmap(width: int, height: int, values: int) -> object:  # noqa: CHU001 - framebuf's own names
+    """Allocate a ``displayio.Bitmap`` frame at ``values`` per pixel; the largest block an app asks for.
+
+    The collect first reclaims the compile scratch the import chain
+    left interleaved with live objects, so the frame gets one
+    contiguous block.
+
+    Args:
+        width: Frame width in pixels.
+        height: Frame height in pixels.
+        values: Distinct values per pixel, 256 for an index frame or
+            65536 for a color one.
+    """
+    import displayio
+    gc.collect()
+    return displayio.Bitmap(width, height, values)
+
+
+def expansion_passes(palette: object, assigned: bytearray) -> list:
+    """Plan the ``replace_color`` passes that turn a strip of indexes into colors.
+
+    A pass rewrites every pixel holding ``old`` as ``new``, so an index
+    whose color is a number below 256 could be mistaken for another
+    index by a later pass.  Such indexes first move to a temporary value
+    above 255 that no color uses, the other indexes take their colors
+    directly, and the temporaries take their colors last, after every
+    index value has left the strip.  An index equal to its own color
+    needs no pass, which is what index 0 in black is.
+
+    Args:
+        palette: The 256 pre-swapped RGB565 colors, by index.
+        assigned: One byte per index, non-zero once ``set_color`` has
+            assigned it.
+
+    Returns:
+        ``(old, new)`` pairs in the order to apply them.
+    """
+    colors = set()
+    for index in range(_PALETTE_SIZE):
+        if assigned[index]:
+            colors.add(palette[index])
+    passes = []
+    deferred = []
+    temporary = _PALETTE_SIZE
+    for index in range(_PALETTE_SIZE):
+        if not assigned[index]:
+            continue
+        color = palette[index]
+        if color == index:
+            continue
+        if color >= _PALETTE_SIZE:
+            passes.append((index, color))
+            continue
+        while temporary in colors:
+            temporary += 1
+        passes.append((index, temporary))
+        deferred.append((temporary, color))
+        temporary += 1
+    passes.extend(deferred)
+    return passes
 
 
 class BitmapCanvas:
@@ -77,23 +143,23 @@ class BitmapCanvas:
         """
         self._mark(x, y, x + width, y + height)
 
-    def take_dirty(self) -> tuple | None:
+    def take_dirty(self) -> tuple:
         """Return the bounds of everything drawn since the last call, and start afresh.
 
         The bounds are ``(left, top, right, bottom)`` with ``right``
-        and ``bottom`` exclusive, clipped to the frame; ``None`` when
-        nothing was drawn.
+        and ``bottom`` exclusive, clipped to the frame; ``(0, 0, 0, 0)``
+        when nothing was drawn.
         """
         left = self._left
         right = self._right
         if left >= right:
-            return None
-        bounds = (left, self._top, right, self._bottom)
+            return (0, 0, 0, 0)
+        result = (left, self._top, right, self._bottom)
         self._left = self.width
         self._top = self.height
         self._right = 0
         self._bottom = 0
-        return bounds
+        return result
 
     def _mark(self, left: int, top: int, right: int, bottom: int) -> None:
         """Union a rectangle into the dirty bounds, clipped to the frame."""

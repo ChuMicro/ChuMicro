@@ -127,26 +127,47 @@ is its own `time.monotonic_ns()` integers; a driver with pre-sliced views
 has none.  After a displayio session had churned the heap, the same
 115,200-byte allocation failed, so the frame has to be allocated first.
 
-## A hand-copied code.py shrinks the next CircuitPython boot; the deploy path does not
+## The boot straight after a host write sometimes starts 52 KB short
 
-The soft reboot that followed a `cp` of a probe onto CIRCUITPY started
-with 124,624 bytes free and a largest block of 114,688, and the next
-Ctrl-D with nothing written in between started with 177,872 free and
-165,888 largest (Pi Pico W, CircuitPython 10.2.1, a `code.py` that
-prints `gc.mem_free()` and the largest `bytearray` it can allocate).
-The same probe shipped through `chumicro-deploy deploy --file-map`
-started the boot the deploy itself triggers, right after its own write,
-with 179,120 free and 165,888 largest, and the counter example's import
-chain followed by a 16-bit `GC9A01AIndexed` frame allocated on that
-boot with 30 KB to spare.  The `cp` had also left `._code.py` on the
-drive, the AppleDouble file the section above warns about, mirrored
-from the `com.apple.provenance` attribute macOS puts on the source.
-Hand copies are the trap in heap as well as in the filesystem; a
-measurement is only a measurement when the deploy path staged it.
-Three `MemoryError` failures at the 115,200-byte frame that
-`deploy-example` reported on this board at the start of the same
-session, before any hand copy, did not reproduce through the deploy
-path afterwards and are unexplained.
+A Pi Pico W under CircuitPython 10.2.1 boots with either 178,544 bytes
+free and a largest block of 166,720, or 124,880 free and 115,072
+largest, exactly 53,248 bytes apart, measured by a `code.py` that
+prints `gc.mem_free()` and the largest `bytearray` it can allocate
+before importing anything.  The short boot has followed a hand `cp`
+onto CIRCUITPY (which also leaves `._code.py`, the AppleDouble file
+the section above warns about) and it has followed
+`chumicro-deploy deploy --directory` with nothing copied by hand; the
+next Ctrl-D with no write in between has started long every time.  A
+16-bit `GC9A01AIndexed` frame needs 115,200 bytes in one block, 128
+more than the short boot holds before a single import, so on that
+boot it fails whatever the app does, and a `MemoryError` at that
+allocation on a deploy's own boot is this and not the driver.  The
+next section is the other reason the same allocation fails.
+
+## A large module's compile pins the top of the heap
+
+Importing `chumicro_screens.gc9a01a` on a long boot leaves the largest
+free block at 115,072 bytes: 166,720 at boot, 158,784 after
+`chumicro_compat.wiring`, 115,072 after the driver, and there it stays
+through the rest of the chain (Pi Pico W, CircuitPython 10.2.1, the
+Phase 4 driver at 13,338 stripped bytes).  The Phase 3a driver, at
+11,744, left 142,912, and a 16-bit frame plus the counter example fit
+with 45 KB spare.  The parser grows one chunk in place at the bottom of
+the largest free region, and any allocation too big for the holes
+below it while the tree is alive, the bytecode of a big function or a
+qstr pool (pools start at 10 entries and double, so the 320-entry pool
+arrives near the 300th name absent from the firmware's ROM table),
+lands right above the tree and stays after the tree is freed.  Neither
+trimming the driver's identifiers to the old count nor cutting 1.3 KB
+of its source moved the plateau; removing a 2 KB class did, so the
+step is a placement threshold and not a smooth cost.  The fix that
+holds is to allocate the frame before importing the driver:
+`displayio.Bitmap(240, 240, 65536)` as the app's first statement,
+handed in through `GC9A01AIndexed(..., frame_bits=16, bitmap=...)`,
+leaves 41,680 free after the panel on the same boot.  The per-import
+probe is `.scratch/probe_heap_steps.py`, and
+`.scratch/qstr_budget.py` counts the non-ROM names an import chain
+interns against the Pico W build's `qstrdefs.generated.h`.
 
 ## CircuitPython board builds lack the two-argument next()
 

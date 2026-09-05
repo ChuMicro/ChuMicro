@@ -20,7 +20,7 @@ sys.modules.setdefault("bitmaptools", BitmaptoolsStub())
 sys.modules.setdefault("terminalio", TerminalioStub())
 
 import pytest  # noqa: E402
-from chumicro_screens import ScreenService, gc9a01a  # noqa: E402
+from chumicro_screens import ScreenService, bitmap_canvas, gc9a01a  # noqa: E402
 from chumicro_screens.gc9a01a import GC9A01A, GC9A01AIndexed, color565  # noqa: E402
 from chumicro_test_harness import raises  # noqa: E402
 from chumicro_timing.testing import FakeTicks  # noqa: E402
@@ -287,14 +287,14 @@ def test_expansion_passes_skip_identities_and_pick_temporaries_no_color_uses():
     palette = [0] * 256
     assigned = bytearray(256)
     assigned[0] = 1
-    assert gc9a01a._expansion_passes(palette, assigned) == []
+    assert bitmap_canvas.expansion_passes(palette, assigned) == []
     assigned[1] = 1
     palette[1] = 256
     assigned[2] = 1
     palette[2] = 7
     assigned[9] = 1
     palette[9] = 9
-    assert gc9a01a._expansion_passes(palette, assigned) == [(1, 256), (2, 257), (257, 7)]
+    assert bitmap_canvas.expansion_passes(palette, assigned) == [(1, 256), (2, 257), (257, 7)]
 
 
 def test_16_bit_set_color_after_drawing_applies_to_later_drawing_only():
@@ -461,14 +461,14 @@ def test_a_new_canvas_is_wholly_dirty_and_each_primitive_records_its_clipped_box
     panel, _, _ = make_panel()
     canvas = panel.frame
     assert canvas.take_dirty() == (0, 0, WIDTH, HEIGHT)
-    assert canvas.take_dirty() is None
+    assert canvas.take_dirty() == (0, 0, 0, 0)
     canvas.fill_rect(-10, -10, 20, 20, 3)
     assert canvas.take_dirty() == (0, 0, 10, 10)
     canvas.pixel(30, 40, 1)
     canvas.pixel(-1, 0, 1)
     assert canvas.take_dirty() == (30, 40, 31, 41)
     assert canvas.pixel(30, 40) == 1
-    assert canvas.take_dirty() is None
+    assert canvas.take_dirty() == (0, 0, 0, 0)
     canvas.line(9, 9, 3, 5, 1)
     assert canvas.take_dirty() == (3, 5, 10, 10)
     canvas.ellipse(120, 120, 10, 10, 1)
@@ -497,7 +497,7 @@ def test_text_blit_and_dirty_record_their_boxes():
     canvas.blit(sprite, -1, 239)
     assert canvas.take_dirty() == (0, 239, 1, HEIGHT)
     canvas.blit(sprite, 300, 300)
-    assert canvas.take_dirty() is None
+    assert canvas.take_dirty() == (0, 0, 0, 0)
     canvas.dirty(200, 200, 100, 100)
     assert canvas.take_dirty() == (200, 200, WIDTH, HEIGHT)
 
@@ -562,6 +562,37 @@ def test_set_color_marks_the_8_bit_frame_and_leaves_the_16_bit_frame_clean():
     assert run_flush(panel, spi) == 0
 
 
+def test_a_preallocated_bitmap_becomes_the_frame_on_either_depth():
+    spi = FakeBusioSpi()
+    frame = DisplayioStub.Bitmap(WIDTH, HEIGHT, 65536)
+    panel = GC9A01AIndexed(spi, FakePin(), FakePin(), FakePin(), frame_bits=16,
+                           bitmap=frame, sleep_ms=lambda ms: None)
+    assert panel.frame._bitmap is frame
+    panel.set_color(1, 255, 255, 255)
+    panel.frame.pixel(0, 0, 1)
+    assert frame[0, 0] == 0xFFFF
+    indexes = DisplayioStub.Bitmap(WIDTH, HEIGHT, 256)
+    panel = GC9A01AIndexed(spi, FakePin(), FakePin(), FakePin(), bitmap=indexes,
+                           sleep_ms=lambda ms: None)
+    assert panel.frame._bitmap is indexes
+    full_color = GC9A01A(spi, FakePin(), FakePin(), FakePin(), bitmap=frame,
+                         sleep_ms=lambda ms: None)
+    assert full_color.frame is frame
+
+
+def test_a_preallocated_bitmap_of_the_wrong_shape_is_refused():
+    spi = FakeBusioSpi()
+    with raises(ValueError, match="240 by 240"):
+        GC9A01AIndexed(spi, FakePin(), FakePin(), FakePin(), frame_bits=16,
+                       bitmap=DisplayioStub.Bitmap(128, 64, 65536), sleep_ms=lambda ms: None)
+    with raises(ValueError, match="frame_bits"):
+        GC9A01AIndexed(spi, FakePin(), FakePin(), FakePin(), frame_bits=8,
+                       bitmap=DisplayioStub.Bitmap(WIDTH, HEIGHT, 65536), sleep_ms=lambda ms: None)
+    with raises(ValueError, match="frame_bits"):
+        GC9A01A(spi, FakePin(), FakePin(), FakePin(),
+                bitmap=DisplayioStub.Bitmap(WIDTH, HEIGHT, 256), sleep_ms=lambda ms: None)
+
+
 def test_a_partial_flush_under_screen_service_takes_only_its_strips_worth_of_handles():
     panel, spi = make_drained_panel()
     service = ScreenService(panel, refresh_interval_ms=0, ticks=FakeTicks())
@@ -571,4 +602,4 @@ def test_a_partial_flush_under_screen_service_takes_only_its_strips_worth_of_han
         assert service.check(tick) is True
         service.handle(tick)
     assert service.check(3) is False
-    assert panel.frame.take_dirty() is None
+    assert panel.frame.take_dirty() == (0, 0, 0, 0)

@@ -209,6 +209,27 @@ worst, 128 ms:
 A strip costs about 0.2 ms plus 2 us per pixel it carries, so a narrow
 window shortens every advance as well as skipping strips.
 
+The same redraws on the Pi Pico W under CircuitPython, first at the
+default 8-bit frame and 3-row strip with black, white, and one accent
+color (three passes), then at `frame_bits=16` with 6-row strips:
+
+| Redraw | 8-bit strips | 8-bit flush | 16-bit strips | 16-bit flush |
+|---|---|---|---|---|
+| whole frame | 80 | 282 ms | 40 | 64 ms |
+| the counter's 56x12 band | 5 | 13.5 ms | 3 | 4.1 ms |
+| a 16x16 notch | 6 | 14.7 ms | 4 | 4.5 ms |
+| a 1-pixel column, top to bottom | 80 | 169 ms | 40 | 33 ms |
+| a 200x120 region | 40 | 135 ms | 20 | 34 ms |
+| nothing drawn | 0 | 0.4 ms | 0 | 0.3 ms |
+
+On the 8-bit frame the palette passes cover the strip's full width
+whatever the window, so a narrow window saves the copy and the bus
+but not the passes: the 1-pixel column still costs 2.1 ms a strip
+against 3.5 ms at full width.  On the 16-bit frame each row of a
+narrow window is its own bus write, about 0.1 ms, so a window wider
+than about 160 pixels costs slightly more per strip than the full
+width; the strip count is where that frame's saving is.
+
 Bench datum from a Pi Pico W, whose `machine.SPI` clamps a 40 MHz
 request to 24 MHz: the default 6-row strip measured 3.6 ms per
 advance at worst and a full frame crosses in 40 advances, about
@@ -231,11 +252,29 @@ strip:
 | black and seven colors | 9 | 6.1 ms | 6.9 ms | 492 ms |
 
 Keep the palette to about five passes at 3 rows, or set
-`transfer_rows=2` for more colors inside a 5 ms tick.  `frame_bits=16`
-holds a 16-bit frame (115,200 bytes) instead: no expansion, a 6-row
-strip in 1.4 ms mean and 2.0 ms worst, 62 ms a frame, but `set_color`
-applies to later drawing only and a Pico W keeps about 43 KB for
-everything else, so construct that panel before anything else.  The
+`transfer_rows=2` for more colors inside a 5 ms tick.  A pass rewrites
+every pixel holding its index, so a strip solid in one color costs
+each of its passes about 0.5 ms more than a mostly black one.
+`frame_bits=16` holds a 16-bit frame (115,200 bytes) instead: no
+expansion, a 6-row strip in 1.6 ms mean and 1.9 ms worst, 64 ms a
+frame, but `set_color` applies to later drawing only.  On a Pico W
+that frame only fits when it is allocated before anything else, ahead
+of the driver's own compile: importing `chumicro_screens.gc9a01a`
+leaves the heap's largest block at 115,072 bytes there, 128 short.
+Allocate the bitmap first and hand it in:
+
+```python
+import displayio
+frame_bitmap = displayio.Bitmap(240, 240, 65536)   # before any other import
+
+from chumicro_compat.wiring import digital_output, spi_bus
+from chumicro_screens import ScreenService
+from chumicro_screens.gc9a01a import GC9A01AIndexed
+
+panel = GC9A01AIndexed(spi, cs, dc, rst, frame_bits=16, bitmap=frame_bitmap)
+```
+
+That leaves a Pico W about 42 KB after the panel.  The
 `gc9a01a_card.py` and `gc9a01a_counter.py` examples are one file each
 and run on both runtimes.
 

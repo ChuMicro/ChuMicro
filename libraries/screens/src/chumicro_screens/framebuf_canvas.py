@@ -63,23 +63,23 @@ class FramebufCanvas(framebuf.FrameBuffer):
         """
         self._mark(x, y, x + width, y + height)
 
-    def take_dirty(self) -> tuple | None:
+    def take_dirty(self) -> tuple:
         """Return the bounds of everything drawn since the last call, and start afresh.
 
         The bounds are ``(left, top, right, bottom)`` with ``right``
-        and ``bottom`` exclusive, clipped to the frame; ``None`` when
-        nothing was drawn.
+        and ``bottom`` exclusive, clipped to the frame; ``(0, 0, 0, 0)``
+        when nothing was drawn.
         """
         left = self._left
         right = self._right
         if left >= right:
-            return None
-        bounds = (left, self._top, right, self._bottom)
+            return (0, 0, 0, 0)
+        result = (left, self._top, right, self._bottom)
         self._left = self.width
         self._top = self.height
         self._right = 0
         self._bottom = 0
-        return bounds
+        return result
 
     def _mark(self, left: int, top: int, right: int, bottom: int) -> None:
         """Union a rectangle into the dirty bounds, clipped to the frame."""

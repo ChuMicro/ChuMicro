@@ -74,7 +74,7 @@ for loop_pass in range(4):
 
 | Symbol | Description |
 |---|---|
-| `chumicro_screens.gc9a01a.GC9A01AIndexed` | 240x240 round color TFT over SPI as the portable canvas: palette indexes, framebuf's method names on `frame`, one drawing file for both runtimes; a 57,600-byte frame expanded per strip in C, or `frame_bits=16` on CircuitPython for a 115,200-byte frame with no expansion; a flush sends only the strips a redraw touched, windowed to its columns |
+| `chumicro_screens.gc9a01a.GC9A01AIndexed` | 240x240 round color TFT over SPI as the portable canvas: palette indexes, framebuf's method names on `frame`, one drawing file for both runtimes; a 57,600-byte frame expanded per strip in C, or `frame_bits=16` on CircuitPython for a 115,200-byte frame with no expansion, handed in through `bitmap=` when it must be allocated ahead of the imports; a flush sends only the strips a redraw touched, windowed to its columns |
 | `chumicro_screens.gc9a01a.GC9A01AIndexed.set_color(index, red, green, blue)` | The only color entry: assign a palette index, then draw with it; after a flush it marks the whole frame for the next one |
 | `chumicro_screens.gc9a01a.GC9A01A` | The same panel drawn with raw `color565` values at 16-bit depth, both runtimes; a 115 KB frame, always flushed whole |
 | `chumicro_screens.gc9a01a.color565(red, green, blue)` | Pack a color for `GC9A01A.frame` drawing |

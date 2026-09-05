@@ -43,7 +43,7 @@ def test_a_new_canvas_is_wholly_dirty_until_taken() -> None:
     canvas, _ = make_canvas()
     assert (canvas.width, canvas.height) == (WIDTH, HEIGHT)
     assert canvas.take_dirty() == (0, 0, WIDTH, HEIGHT)
-    assert canvas.take_dirty() is None
+    assert canvas.take_dirty() == (0, 0, 0, 0)
 
 
 def test_fill_rect_records_its_clipped_bounds_and_draws() -> None:
@@ -59,7 +59,7 @@ def test_fill_rect_records_its_clipped_bounds_and_draws() -> None:
     assert canvas.take_dirty() == (18, 6, WIDTH, HEIGHT)
     canvas.fill_rect(30, 30, 2, 2, 2)
     canvas.fill_rect(1, 1, 0, 4, 2)
-    assert canvas.take_dirty() is None
+    assert canvas.take_dirty() == (0, 0, 0, 0)
 
 
 def test_fill_and_scroll_dirty_the_whole_frame() -> None:
@@ -82,10 +82,10 @@ def test_pixel_write_records_one_pixel_and_a_read_records_nothing() -> None:
     assert canvas.take_dirty() == (3, 4, 4, 5)
     assert canvas.pixel(3, 4) == 7
     assert buffer[4 * WIDTH + 3] == 7
-    assert canvas.take_dirty() is None
+    assert canvas.take_dirty() == (0, 0, 0, 0)
     canvas.pixel(WIDTH, 0, 7)
     canvas.pixel(0, -1, 7)
-    assert canvas.take_dirty() is None
+    assert canvas.take_dirty() == (0, 0, 0, 0)
     assert canvas.pixel(WIDTH, 0) is None
 
 
@@ -145,7 +145,7 @@ def test_blit_records_the_source_size_from_a_canvas_or_a_list() -> None:
     assert canvas.take_dirty() == (0, 0, 1, 1)
     assert buffer[0] == 8
     canvas.blit(sprite, WIDTH, 0)
-    assert canvas.take_dirty() is None
+    assert canvas.take_dirty() == (0, 0, 0, 0)
 
 
 def test_a_bare_framebuffer_source_dirties_to_the_far_edges() -> None:
@@ -176,7 +176,7 @@ def test_drawing_unions_and_dirty_marks_by_hand() -> None:
     canvas.dirty(19, 7, 1, 1)
     assert canvas.take_dirty() == (19, 7, WIDTH, HEIGHT)
     canvas.dirty(-3, -3, 2, 2)
-    assert canvas.take_dirty() is None
+    assert canvas.take_dirty() == (0, 0, 0, 0)
 
 
 def test_the_canvas_is_a_framebuf_source_through_a_palette() -> None:

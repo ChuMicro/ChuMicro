@@ -148,6 +148,14 @@ def test_transfer_rows_bounds() -> None:
             make_panel(panel_class, transfer_rows=241)
 
 
+def test_a_preallocated_bitmap_is_refused_where_framebuf_owns_the_frame() -> None:
+    """Both drivers raise ValueError naming CircuitPython when bitmap is passed on the framebuf path."""
+    for panel_class in (GC9A01A, GC9A01AIndexed):
+        with raises(ValueError, match="CircuitPython"):
+            panel_class(FakeSpi(), FakePin(), FakePin(), FakePin(), bitmap=bytearray(4),
+                        sleep_ms=DelayRecorder())
+
+
 def test_flush_sends_self_contained_strips() -> None:
     """Each advance writes window commands plus that strip's rows."""
     _skip_unless_frame_buffer_headroom()

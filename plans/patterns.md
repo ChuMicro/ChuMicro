@@ -706,11 +706,24 @@ no wrapper.  Two facts shape the overrides:
   (`MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN`), so forward `key` and
   `palette` positionally; a keyword raises `TypeError`.
 
-Each override costs one Python frame, about 30 us on an RP2040, which
-is why `pixel` inlines its bookkeeping and per-pixel loops belong in
-`blit`.  Load the subclass's module with the driver rather than at
-construction: its class objects otherwise land in the free region the
-frame is about to take.
+Each override costs one Python frame and its bookkeeping, about 110 us
+on an RP2040 over the 28 us bare call, which is why `pixel` inlines
+its bookkeeping and per-pixel loops belong in `blit`.  Load the
+subclass's module with the driver rather than at construction: its
+class objects otherwise land in the free region the frame is about to
+take.
+
+The frame itself goes before the driver.  A module's compile grows its
+parse tree in place at the bottom of the heap's largest free region,
+and a large allocation made while the tree is alive (a big function's
+bytecode, a qstr pool doubling) lands above the tree and stays, so
+importing a 13 KB driver on a Pi Pico W under CircuitPython leaves
+115,072 bytes in one block where 166,720 were free at boot, and no
+trimming short of removing a class moves that plateau
+(plans/field-notes/hardware-traps.md, "A large module's compile pins
+the top of the heap").  A frame that needs the block is allocated by
+the app as its first statement and handed to the driver, which is what
+`GC9A01AIndexed(..., bitmap=)` is for.
 
 A column window streams from a strip laid out at the frame's width
 without slicing on CircuitPython, because `busio.SPI.write(buffer,
