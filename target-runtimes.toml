@@ -62,8 +62,13 @@ http_server = { micropython = "208K", circuitpython = "192K" }
 # fuller framebuf stub: the chunked file's largest free block at 192K
 # falls under the frame itself, 200K is the smallest green budget.
 # min+16K.  The driver on a real Pico W leaves 126 KB free after the
-# panel (workstreams/screens-capability-slices.md).
-screens = { micropython = "216K" }
+# panel (workstreams/screens-capability-slices.md).  The CircuitPython
+# lane runs the same file whole and skips every test that holds the
+# frame, so what it pays for is the file's own compile plus the stub
+# and the two canvases it imports: measured 2026-09-05 at 120K it dies
+# loading framebuf_canvas.py, and 128K is the smallest green budget.
+# min+16K.
+screens = { micropython = "216K", circuitpython = "144K" }
 requests = { micropython = "224K", circuitpython = "224K" }
 mqtt = { micropython = "240K", circuitpython = "240K" }
 websockets = { micropython = "240K", circuitpython = "208K" }

@@ -312,25 +312,29 @@ metrics.  A character the module lacks draws as the glyph the module
 substitutes, `?` unless it was converted with another.
 
 Each runtime blits glyphs in C.  On MicroPython a glyph goes straight
-from the module's buffer through a two-entry palette, so a font costs
-its module and a few hundred bytes.  On CircuitPython the glyphs are
-loaded once at construction into a 1-bit `displayio.Bitmap` sheet,
-`height` rows of the glyph widths summed in bits (about 3 KB for a
-20-pixel ASCII font), plus a 16-bit scratch bitmap the size of the
-widest glyph.  `Font` targets `GC9A01AIndexed.frame`: on
-MicroPython its palette is built for the 8-bit frame, so the 16-bit
-`GC9A01A.frame` and the mono OLED are outside it.  The
-`gc9a01a_font_counter.py` example centers a 20-pixel count on both
-runtimes with `sans20.py`, its DejaVu Sans module.
+from the module's buffer through a two-entry palette built in the
+canvas's own pixel format, so a font costs its module and a few
+hundred bytes and one `Font` draws on every frame this library's
+panels expose: `GC9A01AIndexed.frame` in a palette index,
+`SSD1306.frame` in 0 or 1, and `GC9A01A.frame` in a `color565`
+value.  On CircuitPython the glyphs are loaded once at construction
+into a 1-bit `displayio.Bitmap` sheet, `height` rows of the glyph
+widths summed in bits (about 3 KB for a 20-pixel ASCII font), plus a
+scratch bitmap the size of the widest glyph, and `Font` draws on
+`GC9A01AIndexed.frame`.  The `gc9a01a_font_counter.py` example
+centers a 20-pixel count on both runtimes with `sans20.py`, its
+DejaVu Sans module, and `micropython_ssd1306_font_counter.py` does
+the same on the mono OLED.
 
 Bench data from a Pi Pico W drawing the 7-glyph word "seconds" in
-that font: MicroPython takes 4.0 ms mean and 4.2 ms worst per call,
-0.57 ms a glyph, allocating 80 bytes a glyph inside the module's own
-`get_ch`; CircuitPython takes 7.4 ms mean and 8.4 ms worst, 1.06 ms a
-glyph, allocating nothing, and builds the sheet in 157 ms at
-construction.  A `text` call is app redraw work rather than a tick,
-but a long string on CircuitPython is worth splitting across passes
-when the loop keeps a 5 ms budget.
+that font: on the indexed frame MicroPython takes 4.0 ms mean and
+4.2 ms worst per call, 0.57 ms a glyph, allocating 80 bytes a glyph
+inside the module's own `get_ch`; on the OLED's 1-bit frame 5.9 ms
+mean and 6.3 ms worst, 608 bytes a call; CircuitPython takes 7.4 ms
+mean and 8.4 ms worst, 1.06 ms a glyph, allocating nothing, and
+builds the sheet in 157 ms at construction.  A `text` call is app
+redraw work rather than a tick, but a long string on CircuitPython is
+worth splitting across passes when the loop keeps a 5 ms budget.
 
 ## The round TFT through displayio
 
@@ -405,6 +409,13 @@ in 8 advances; a Pi Pico W measures the same page at 3.5 ms mean and
 a 400 kHz bus and the default `transfer_pages`.  An advance allocates
 nothing: the buffer carries the panel's control byte ahead of every
 page row, so a page leaves in one `writeto` on either I2C port.
+
+`frame` is a `FramebufCanvas`, so a flush sends only the pages
+covering the rows drawn since the last one: on the Pi Pico W a whole
+frame is 8 pages and 28.5 ms, a redraw of one 20-pixel line of text
+is 3 pages and 11 ms, and a clean frame is 0.3 ms.  `Font` draws on
+it in 0 or 1, which is what `micropython_ssd1306_font_counter.py`
+shows.
 
 ## The mono OLED on CircuitPython
 
@@ -486,6 +497,7 @@ The service behaves identically on CPython, MicroPython, and CircuitPython.  Pan
 | [`gc9a01a_font_counter.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/screens/examples/gc9a01a_font_counter.py) | The seconds counter in a 20-pixel proportional font from a font-to-py module (`sans20.py` beside it), centered with `font.width()`, one file for both runtimes |
 | [`circuitpython_gc9a01a_round.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/screens/examples/circuitpython_gc9a01a_round.py) | A color card on the round TFT via displayio, with a blinking notch proving live refresh (CircuitPython hardware) |
 | [`micropython_ssd1306_counter.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/screens/examples/micropython_ssd1306_counter.py) | A bordered seconds counter on the mono OLED, one page per loop pass (MicroPython hardware) |
+| [`micropython_ssd1306_font_counter.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/screens/examples/micropython_ssd1306_font_counter.py) | The mono OLED counter in a 20-pixel proportional font from `sans20.py`, redrawing only the count line's three pages each second (MicroPython hardware) |
 | [`circuitpython_ssd1306_counter.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/screens/examples/circuitpython_ssd1306_counter.py) | A border and a growing bar on the mono OLED via displayio (CircuitPython hardware) |
 
 ---

@@ -122,7 +122,13 @@ built-in `text` now shares.  `gc9a01a_font_counter.py`
 plus `sans20.py` (DejaVu Sans at 20 px, font-to-py output checked in
 beside the example so the deploy ships it) is the example.  The canvas's
 own `text` keeps its per-runtime built-in font; Decision 0126 says so
-and points at 0128 for pixel-identical text.
+and points at 0128 for pixel-identical text.  On MicroPython the
+palette is built in the canvas's own `pixel_format`, which
+`FramebufCanvas` publishes, so `Font` also draws on `SSD1306.frame` in
+0 or 1 and on `GC9A01A.frame` in a `color565` value; both of those
+frames are `FramebufCanvas` now, and their flushes send only the
+pages or strips covering the drawn rows.
+`micropython_ssd1306_font_counter.py` is the OLED example.
 
 ## Phase 3a. The 8-bit CircuitPython frame: shipped
 
@@ -441,3 +447,17 @@ actually wants on-device images.
   second.  Phase 4's bench gate is closed on both runtimes.  122 tests
   on CPython, 84 on the MicroPython port, 72 on the CircuitPython
   port.
+- 2026-09-05: `Font` on the mono OLED, benched on the MicroPython Pico W
+  (1.28.0) with the SSD1306 on GP4 and GP5.  `micropython_ssd1306_font_counter.py`
+  ran clean through `deploy-example`, ten frames in the capture, and the
+  maintainer's photo showed the border, the 20-pixel caption, and the
+  count centered.  The probe (`.scratch/probe_font_oled_mp.py` over
+  `mpremote run`) measured the 7-glyph caption on the 1-bit frame at
+  5.87 ms mean and 6.28 ms worst, 608 bytes a call (560 of them the
+  module's `get_ch`, the rest the `_text_framebuf` frame), the whole
+  frame at 8 pages and 28.5 ms, the count line at 3 pages and 11.0 ms,
+  a clean frame at 0.3 ms.  The CircuitPython lane's heap budget went
+  to 144K: the test file with the fuller stub and both canvases dies
+  loading the canvas module at 120K, and 128K is the smallest green
+  budget.  130 tests on CPython, 91 on the MicroPython port (real
+  framebuf on every format), 79 on the CircuitPython port.

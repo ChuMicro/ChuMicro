@@ -221,6 +221,21 @@ def test_strip_data_comes_from_the_frame_buffer() -> None:
     assert spi.writes[base + 11][0] == 0xCD
 
 
+def test_full_color_flush_sends_only_the_strips_covering_the_drawn_rows() -> None:
+    """After a first frame, a line on row 130 sends the 60-row strip holding it and nothing else."""
+    _skip_unless_frame_buffer_headroom()
+    panel, spi, delays, reset = make_panel(transfer_rows=60)
+    run_flush(panel, spi)
+    base = len(spi.writes)
+    assert run_flush(panel, spi) == 0
+    assert len(spi.writes) == base
+    panel.frame.hline(0, 130, 240, color565(255, 0, 0))
+    assert run_flush(panel, spi) == 1
+    assert spi.writes[base + 1] == b"\x00\x00\x00\xef"
+    assert spi.writes[base + 3] == b"\x00\x78\x00\xb3"
+    assert spi.lengths[base + 5] == 60 * 480
+
+
 def test_frame_completes_under_screen_service() -> None:
     """ScreenService drives one frame to done in strips-many handles."""
     _skip_unless_frame_buffer_headroom()

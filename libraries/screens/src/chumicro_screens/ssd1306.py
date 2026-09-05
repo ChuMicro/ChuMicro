@@ -11,8 +11,11 @@ either I2C port.
 ``flush()`` is the ScreenService panel protocol: each advance sends
 ``transfer_pages`` pages as a self-contained transfer (address window,
 then one write per page), so a full frame spreads across ticks instead
-of blocking one.  The stock drivers push the whole buffer in a single
-blocking write, which a cooperative loop cannot afford.
+of blocking one, and only the page groups covering the rows drawn
+since the last flush go at all, so a counter redrawing one line of
+text sends one or two pages rather than eight.  The stock drivers push
+the whole buffer in a single blocking write, which a cooperative loop
+cannot afford.
 
 Drawing is one bit per pixel: 0 is dark, 1 is lit.  The panel is
 emissive and generates its own drive voltage on an internal charge
@@ -120,8 +123,11 @@ class SSD1306:
     in, so the driver never imports ``machine``.  The bus needs only
     ``writeto``.
 
-    ``frame`` is a ``framebuf.FrameBuffer`` in ``MONO_VLSB``, so every
-    framebuf drawing method applies and colors are 0 or 1.
+    ``frame`` is a ``chumicro_screens.framebuf_canvas.FramebufCanvas``
+    in ``MONO_VLSB``, so every framebuf drawing method applies, colors
+    are 0 or 1, ``chumicro_screens.fonts.Font`` draws on it, and the
+    rows each primitive touched decide which pages the next flush
+    sends.  A new panel sends its whole frame on the first flush.
 
     ``transfer_pages`` bounds one flush advance.  Sizing data from the
     LOLIN S2 Mini bench, 128x64 panel: at 400 kHz one page averages
@@ -173,8 +179,10 @@ class SSD1306:
             page += 1
         buffer_view = memoryview(self._buffer)
         import framebuf
-        self.frame = framebuf.FrameBuffer(buffer_view[1:], width, height,
-                                          framebuf.MONO_VLSB, row_stride)
+
+        from chumicro_screens.framebuf_canvas import FramebufCanvas
+        self.frame = FramebufCanvas(buffer_view[1:], width, height,
+                                    framebuf.MONO_VLSB, row_stride)
         self._windows = []
         for commands, first_page, page_count in _page_windows(
                 width, pages, transfer_pages):
@@ -213,14 +221,23 @@ class SSD1306:
         self._i2c.writeto(self._address, self._command_buffer)
 
     def flush(self) -> object:
-        """Send the frame one page group per advance; the panel protocol."""
+        """Send the page groups covering the drawn rows, one group per advance; the panel protocol."""
+        x1, y1, x2, y2 = self.frame.take_dirty()
+        if x1 >= x2:
+            return
         i2c = self._i2c
         address = self._address
+        windows = self._windows
+        pages_per_group = len(windows[0][1])
+        index = y1 // _PAGE_HEIGHT // pages_per_group
+        last = (y2 - 1) // _PAGE_HEIGHT // pages_per_group
         first = True
-        for commands, views in self._windows:
+        while index <= last:
             if not first:
                 yield
             first = False
+            commands, views = windows[index]
+            index += 1
             i2c.writeto(address, commands)
             for view in views:
                 i2c.writeto(address, view)

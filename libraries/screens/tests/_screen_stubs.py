@@ -64,9 +64,13 @@ class FramebufStub:
     GS8 = 2
     MONO_HLSB = 3
     MONO_HMSB = 4
+    GS2_HMSB = 5
+    GS4_HMSB = 6
 
     class FrameBuffer:
         def __init__(self, buffer, width, height, pixel_format, stride=None):
+            if pixel_format in (FramebufStub.GS2_HMSB, FramebufStub.GS4_HMSB):
+                raise ValueError("the stub stores mono, GS8, and RGB565 pixels only")
             self.buffer = buffer
             self.width = width
             self.height = height

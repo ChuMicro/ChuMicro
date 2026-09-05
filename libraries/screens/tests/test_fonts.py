@@ -1,9 +1,10 @@
-"""Host-lane tests for ``chumicro_screens.fonts.Font`` over a framebuf canvas.
+"""Host-lane tests for ``chumicro_screens.fonts.Font`` over the framebuf canvas.
 
 Runs on CPython and both unix ports.  Where the runtime ships
 ``framebuf`` (the MicroPython port) the real C blit draws, which is
-the path a board takes; elsewhere the shared stub stands in.  Every
-assert reads the palette indexes a glyph leaves in an 8-bit frame.
+the path a board takes; elsewhere the shared stub stands in.  The
+asserts read the values a glyph leaves in an 8-bit frame, a 1-bit
+``MONO_VLSB`` frame like the OLED's, and a 16-bit ``RGB565`` frame.
 """
 
 __chumicro_host_only__ = True
@@ -20,15 +21,21 @@ except ImportError:
 
 from _font_stubs import FontModuleStub  # noqa: E402
 from chumicro_screens.fonts import Font  # noqa: E402
+from chumicro_screens.framebuf_canvas import FramebufCanvas  # noqa: E402
 from chumicro_test_harness import raises  # noqa: E402
 
 WIDTH = 20
 HEIGHT = 8
 
 
-def make_canvas() -> tuple:
-    buffer = bytearray(WIDTH * HEIGHT)
-    return framebuf.FrameBuffer(buffer, WIDTH, HEIGHT, framebuf.GS8), buffer
+def make_canvas(pixel_format: int | None = None) -> tuple:
+    """A canvas over a fresh buffer: 8-bit by default, or the mono or 16-bit format asked for."""
+    if pixel_format is None:
+        pixel_format = framebuf.GS8
+    size = {framebuf.GS8: WIDTH * HEIGHT, framebuf.MONO_VLSB: WIDTH * (HEIGHT // 8),
+            framebuf.RGB565: WIDTH * HEIGHT * 2}[pixel_format]
+    buffer = bytearray(size)
+    return FramebufCanvas(buffer, WIDTH, HEIGHT, pixel_format), buffer
 
 
 def row(buffer: bytearray, y: int, x_start: int, count: int) -> list:  # noqa: CHU001 - framebuf's own names
@@ -106,6 +113,51 @@ def test_a_vertically_mapped_module_is_refused() -> None:
     """A module reporting hmap() False raises ValueError naming the -x conversion."""
     with raises(ValueError, match="horizontal"):
         Font(FontModuleStub(hmap=False))
+
+
+def test_text_on_a_mono_frame_sets_bits_and_leaves_the_rest() -> None:
+    """On a MONO_VLSB frame a glyph's set bits land as 1 on a dark fill and as 0 on a lit one."""
+    canvas, _ = make_canvas(framebuf.MONO_VLSB)
+    font = Font(FontModuleStub())
+    font.text(canvas, "A", 1, 1, 1)
+    assert [canvas.pixel(x, 1) for x in range(7)] == [0, 0, 1, 1, 1, 0, 0]
+    assert [canvas.pixel(x, 2) for x in range(7)] == [0, 1, 0, 0, 0, 1, 0]
+    assert [canvas.pixel(x, 0) for x in range(7)] == [0] * 7
+    canvas.fill(1)
+    font.text(canvas, "C", 0, 0, 0)
+    assert [canvas.pixel(x, 0) for x in range(4)] == [0, 0, 0, 1]
+    assert [canvas.pixel(x, 1) for x in range(4)] == [0, 1, 1, 1]
+
+
+def test_text_on_a_16_bit_frame_draws_the_color_value() -> None:
+    """On an RGB565 frame the set bits carry the value given, black and white included."""
+    canvas, _ = make_canvas(framebuf.RGB565)
+    font = Font(FontModuleStub())
+    font.text(canvas, "A", 1, 1, 0xABCD)
+    assert canvas.pixel(2, 1) == 0xABCD
+    assert canvas.pixel(1, 1) == 0
+    assert canvas.pixel(1, 2) == 0xABCD
+    font.text(canvas, "C", 10, 0, 0xFFFF)
+    assert canvas.pixel(10, 0) == 0xFFFF
+    assert canvas.pixel(11, 1) == 0
+    canvas.fill(0x1234)
+    font.text(canvas, "C", 0, 0, 0)
+    assert canvas.pixel(0, 0) == 0
+    assert canvas.pixel(1, 1) == 0x1234
+
+
+def test_one_font_follows_each_canvas_it_draws_on() -> None:
+    """The palette is rebuilt for a canvas of another format and the earlier one still draws right."""
+    font = Font(FontModuleStub())
+    indexed, _ = make_canvas()
+    mono, _ = make_canvas(framebuf.MONO_VLSB)
+    font.text(indexed, "A", 0, 0, 9)
+    font.text(mono, "A", 0, 0, 1)
+    font.text(indexed, "A", 10, 0, 7)
+    assert indexed.pixel(1, 0) == 9
+    assert mono.pixel(1, 0) == 1
+    assert indexed.pixel(11, 0) == 7
+    assert indexed.pixel(10, 0) == 0
 
 
 def test_a_bit_reversed_module_draws_the_same_pixels() -> None:

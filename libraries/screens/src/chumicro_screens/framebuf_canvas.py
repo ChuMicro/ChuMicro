@@ -21,8 +21,10 @@ class FramebufCanvas(framebuf.FrameBuffer):
     """A ``framebuf.FrameBuffer`` that records the bounds of everything drawn on it.
 
     The methods are framebuf's own, with the same arguments and the
-    same clipping, and ``width`` and ``height`` are readable, which
-    framebuf leaves out.  Each call costs one Python frame and its
+    same clipping, and ``width``, ``height``, and ``pixel_format`` are
+    readable, which framebuf leaves out; the format is what lets
+    ``chumicro_screens.fonts.Font`` build its palette to match the
+    frame.  Each call costs one Python frame and its
     bookkeeping on top of the C primitive, about 110 us on an RP2040
     against 28 us for a bare ``pixel``, so per-pixel loops should batch
     through ``blit`` as they should on the CircuitPython canvas.  A new
@@ -47,6 +49,7 @@ class FramebufCanvas(framebuf.FrameBuffer):
             super().__init__(buffer, width, height, pixel_format, stride)
         self.width = width
         self.height = height
+        self.pixel_format = pixel_format
         self._left = 0
         self._top = 0
         self._right = width
@@ -183,7 +186,7 @@ class FramebufCanvas(framebuf.FrameBuffer):
         if isinstance(source, FramebufCanvas):
             width = source.width
             height = source.height
-        elif isinstance(source, (list, tuple)):
+        elif isinstance(source, list) or isinstance(source, tuple):
             width = source[1]
             height = source[2]
         else:

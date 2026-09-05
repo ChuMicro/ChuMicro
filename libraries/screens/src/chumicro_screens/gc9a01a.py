@@ -269,13 +269,16 @@ class GC9A01A:
 
     ``frame`` stores pixels in the panel's on-wire byte order, so
     colors come from ``color565``, never from raw RGB565 literals.  On
-    MicroPython it is a ``framebuf.FrameBuffer`` with framebuf's
-    drawing methods; on CircuitPython it is a ``displayio.Bitmap`` for
-    ``bitmaptools`` to draw on.  Either way the frame is 115,200 bytes,
-    so this class wants a PSRAM-class board on MicroPython and leaves a
-    Pi Pico W about 43 KB under CircuitPython once the driver's own code
-    is loaded; the portable ``GC9A01AIndexed`` is the smaller shape on
-    MicroPython.
+    MicroPython it is a ``chumicro_screens.framebuf_canvas.FramebufCanvas``
+    in ``RGB565``: framebuf's drawing methods, ``Font`` text in a
+    ``color565`` value, and a flush that sends only the strips
+    covering the rows drawn since the last one, at full width.  On
+    CircuitPython it is a ``displayio.Bitmap`` for ``bitmaptools`` to
+    draw on, and every flush sends the whole frame.  Either way the
+    frame is 115,200 bytes, so this class wants a PSRAM-class board on
+    MicroPython and leaves a Pi Pico W about 43 KB under CircuitPython
+    once the driver's own code is loaded; the portable
+    ``GC9A01AIndexed`` is the smaller shape on MicroPython.
 
     ``transfer_rows`` bounds one flush advance.  Sizing datum from the
     LOLIN S2 Mini bench at 40 MHz SPI: a 10-row strip averages 3.3 ms
@@ -322,24 +325,36 @@ class GC9A01A:
             gc.collect()
             self._buffer = bytearray(WIDTH * HEIGHT * 2)
             view = memoryview(self._buffer)
-            self.frame = framebuf.FrameBuffer(self._buffer, WIDTH, HEIGHT,
-                                              framebuf.RGB565)
+            self.frame = FramebufCanvas(self._buffer, WIDTH, HEIGHT, framebuf.RGB565)
         self._strips = _strip_views(view, transfer_rows, HEIGHT)
         if sleep_ms is None:
             sleep_ms = _sleep_ms
         _bring_up(spi, chip_select, data_command, reset, sleep_ms, self._locking)
 
     def flush(self) -> object:
-        """Send the frame one strip per advance; the panel protocol."""
+        """Send the strips covering the drawn rows, one per advance; the panel protocol."""
+        strips = self._strips
+        if framebuf is None:
+            index = 0
+            last = len(strips) - 1
+        else:
+            x1, y1, x2, y2 = self.frame.take_dirty()
+            if x1 >= x2:
+                return
+            transfer_rows = strips[0][1]
+            index = y1 // transfer_rows
+            last = (y2 - 1) // transfer_rows
         spi = self._spi
         chip_select = self._chip_select
         data_command = self._data_command
         locking = self._locking
         first = True
-        for _, _, window, view in self._strips:
+        while index <= last:
             if not first:
                 yield
             first = False
+            _, _, window, view = strips[index]
+            index += 1
             _write_strip(spi, chip_select, data_command, _FULL_WIDTH_WINDOW,
                          window, view, locking)
 

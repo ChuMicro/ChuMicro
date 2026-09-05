@@ -15,12 +15,15 @@ Convert a font on the host and ship the module beside the app::
     font_to_py -x DejaVuSans.ttf 20 sans20.py
 
 Each runtime blits glyphs in C.  On MicroPython a glyph goes straight
-from the module's read-only buffer through a two-entry palette, since
-``FrameBuffer.blit`` accepts a ``(buffer, width, height, format)``
-source.  On CircuitPython the glyphs are loaded once at construction
-into a 1-bit ``displayio.Bitmap`` sheet, each through
-``bitmaptools.readinto`` and one blit, and ``bitmaptools`` draws from
-the sheet through a scratch bitmap.
+from the module's read-only buffer through a two-entry palette built
+in the canvas's own pixel format, since ``FrameBuffer.blit`` accepts a
+``(buffer, width, height, format)`` source and a palette in the
+destination's format, so the same call draws on the indexed frame,
+the mono OLED's 1-bit frame, and the full-color 16-bit frame.  On
+CircuitPython the glyphs are loaded once at construction into a 1-bit
+``displayio.Bitmap`` sheet, each through ``bitmaptools.readinto`` and
+one blit, and ``bitmaptools`` draws from the sheet through a scratch
+bitmap.
 """
 
 import array
@@ -29,6 +32,17 @@ try:
     import framebuf
 except ImportError:
     framebuf = None
+    _VALUE_MASKS = None
+else:
+    # The largest pixel value each format holds, so the transparent
+    # entry can be any other value the frame can store.
+    _VALUE_MASKS = {
+        framebuf.MONO_VLSB: 1,
+        framebuf.MONO_HLSB: 1,
+        framebuf.MONO_HMSB: 1,
+        framebuf.GS8: 0xFF,
+        framebuf.RGB565: 0xFFFF,
+    }
 
 
 class Font:
@@ -48,10 +62,12 @@ class Font:
     draw.  Construct the panel before the font: the panel's frame wants
     the heap's largest free block.
 
-    ``text`` targets the indexed canvas, ``GC9A01AIndexed.frame``: on
-    MicroPython the palette it blits through is built for an 8-bit
-    frame, so a 16-bit ``GC9A01A.frame`` or the mono OLED frame renders
-    wrong.  A Pi Pico W draws a 7-glyph word in a 20-pixel font in
+    ``text`` draws on any canvas this library's panels expose:
+    ``GC9A01AIndexed.frame`` in a palette index, ``SSD1306.frame`` in
+    0 or 1, and on MicroPython ``GC9A01A.frame`` in a ``color565``
+    value, since the palette it blits through is built in the canvas's
+    own ``pixel_format`` and rebuilt when a canvas of another format
+    arrives.  A Pi Pico W draws a 7-glyph word in a 20-pixel font in
     4.0 ms on MicroPython, allocating 80 bytes a glyph inside the
     module's ``get_ch``, and in 7.4 ms on CircuitPython allocating
     nothing, so ``text`` is redraw work rather than something to call
@@ -87,8 +103,11 @@ class Font:
             # FrameBuffer.blit reads; each glyph fills its first two slots.
             self._source = [None, 0, self.height,
                             framebuf.MONO_HMSB if module.reverse() else framebuf.MONO_HLSB]
-            self._palette_buffer = bytearray(2)
-            self._palette = framebuf.FrameBuffer(self._palette_buffer, 2, 1, framebuf.GS8)
+            # The two-entry palette is built for the first canvas drawn
+            # on, in that canvas's format, and again if the format changes.
+            self._palette = None
+            self._palette_format = None
+            self._palette_mask = 0
             self._sheet = None
 
     def _slot_character(self, slot: int) -> str:
@@ -150,17 +169,21 @@ class Font:
         return total
 
     def text(self, canvas: object, string: str, x: int, y: int, index: int) -> None:  # noqa: CHU001 - framebuf's own names
-        """Draw ``string`` on ``canvas`` in palette index ``index``, top-left at (x, y).
+        """Draw ``string`` on ``canvas`` in pixel value ``index``, top-left at (x, y).
 
         Only the glyphs' set pixels are drawn; the canvas shows through
         the rest.  Text clips at the canvas edges.
 
         Args:
-            canvas: ``GC9A01AIndexed.frame`` on either runtime.
+            canvas: A panel's ``frame``: ``GC9A01AIndexed.frame`` on
+                either runtime, or on MicroPython ``SSD1306.frame`` and
+                ``GC9A01A.frame`` too.
             string: The text to draw.
             x: Column of the first glyph's left edge.
             y: Row of the glyphs' top edge.
-            index: Palette index to draw in.
+            index: The value to draw in, as the canvas stores it: a
+                palette index, 0 or 1 on the mono OLED, a ``color565``
+                value on the full-color frame.
         """
         if self._sheet is None:
             self._text_framebuf(canvas, string, x, y, index)
@@ -169,12 +192,22 @@ class Font:
 
     def _text_framebuf(self, canvas: object, string: str, x: int, y: int,  # noqa: CHU001 - framebuf's own names
                        index: int) -> None:
-        """Blit each glyph from the module's buffer through a palette of ``index`` over a skipped key."""
-        background = (index + 1) & 0xFF
-        palette_buffer = self._palette_buffer
-        palette_buffer[0] = background
-        palette_buffer[1] = index
+        """Blit each glyph from the module's buffer through a palette of ``index`` over a skipped key.
+
+        The palette is a two-pixel ``FrameBuffer`` in the canvas's own
+        format, since framebuf reads a palette in the destination's
+        format; the transparent entry is any other value the format
+        holds, and the blit's key is that value after the lookup.
+        """
+        pixel_format = canvas.pixel_format
         palette = self._palette
+        if pixel_format != self._palette_format:
+            palette = self._palette = framebuf.FrameBuffer(bytearray(4), 2, 1, pixel_format)
+            self._palette_format = pixel_format
+            self._palette_mask = _VALUE_MASKS[pixel_format]
+        background = (index + 1) & self._palette_mask
+        palette.pixel(0, 0, background)
+        palette.pixel(1, 0, index)
         source = self._source
         get_ch = self._get_ch
         cursor = x

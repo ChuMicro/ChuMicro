@@ -168,6 +168,50 @@ def test_drawing_mid_flush_lands_only_in_pages_still_to_send():
     assert i2c.writes[15][1][1 + 3] == 0b1000_0000
 
 
+def test_the_frame_is_a_canvas_in_the_panels_own_format():
+    panel, _, _ = build_panel()
+
+    assert panel.frame.pixel_format == sys.modules["framebuf"].MONO_VLSB
+    assert (panel.frame.width, panel.frame.height) == (128, 64)
+
+
+def test_a_flush_with_nothing_drawn_puts_nothing_on_the_bus():
+    panel, i2c, _ = build_panel()
+    drain(panel)
+    del i2c.writes[:]
+
+    for _ in panel.flush():
+        raise AssertionError("an empty flush must not advance")
+
+    assert i2c.writes == []
+
+
+def test_a_drawn_pixel_flushes_its_page_alone():
+    panel, i2c, _ = build_panel()
+    drain(panel)
+    del i2c.writes[:]
+    panel.frame.pixel(5, 9, 1)                   # row 9 is page 1, bit 1
+
+    drain(panel)
+
+    assert len(i2c.writes) == 2                  # one window, one page
+    assert i2c.writes[0][1] == bytes((0x00, 0x21, 0, 127, 0x22, 1, 1))
+    assert i2c.writes[1][1][1 + 5] == 0b10
+
+
+def test_a_page_group_goes_whole_when_any_of_its_rows_changed():
+    panel, i2c, _ = build_panel(transfer_pages=3)
+    drain(panel)
+    del i2c.writes[:]
+    panel.frame.pixel(3, 63, 1)                  # page 7, in the group of pages 6 and 7
+
+    drain(panel)
+
+    assert len(i2c.writes) == 3                  # one window, two pages
+    assert i2c.writes[0][1][-2:] == bytes((6, 7))
+    assert i2c.writes[2][1][1 + 3] == 0b1000_0000
+
+
 def test_set_contrast_sends_the_level_and_refuses_an_out_of_range_one():
     panel, i2c, _ = build_panel()
 
