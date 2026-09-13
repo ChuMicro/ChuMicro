@@ -1,13 +1,13 @@
-"""``Font``: proportional text on the portable canvas from a font-to-py module.
+"""``Font``: proportional text for ``Text`` items from a font-to-py module.
 
 A font module is what ``font_to_py -x`` writes from a TrueType or
 OpenType file: every glyph as a horizontally mapped 1-bit bitmap, one
 row per ``(width + 7) // 8`` bytes, behind ``height()``,
 ``baseline()``, ``max_width()``, ``min_ch()``, ``max_ch()``, and
 ``get_ch(character)``, which returns the glyph's buffer, height, and
-width.  ``Font`` draws such a module on the canvas in a palette index
-with one call shape on both device runtimes, and lays text out at the
-same pixels on both, so an app centers a label once.
+width.  A ``Text`` item built with a ``Font`` lays its string out at
+the same pixels on both device runtimes, so an app centers a label
+once with ``font.width()``.
 
 Convert a font on the host and ship the module beside the app::
 
@@ -15,15 +15,13 @@ Convert a font on the host and ship the module beside the app::
     font_to_py -x DejaVuSans.ttf 20 sans20.py
 
 Each runtime blits glyphs in C.  On MicroPython a glyph goes straight
-from the module's read-only buffer through a two-entry palette built
-in the canvas's own pixel format, since ``FrameBuffer.blit`` accepts a
-``(buffer, width, height, format)`` source and a palette in the
-destination's format, so the same call draws on the indexed frame,
-the mono OLED's 1-bit frame, and the full-color 16-bit frame.  On
-CircuitPython the glyphs are loaded once at construction into a 1-bit
-``displayio.Bitmap`` sheet, each through ``bitmaptools.readinto`` and
-one blit, and ``bitmaptools`` draws from the sheet through a scratch
-bitmap.
+from the module's read-only buffer into the strip through a two-entry
+palette in the strip's own pixel format, since ``FrameBuffer.blit``
+accepts a ``(buffer, width, height, format)`` source and a palette in
+the destination's format.  On CircuitPython the glyphs are loaded once
+at construction into a 1-bit ``displayio.Bitmap`` sheet, each through
+``bitmaptools.readinto`` and one blit, and a string is rendered from
+the sheet into a sprite in the strip's format once per change.
 """
 
 import array
@@ -35,7 +33,7 @@ except ImportError:
     _VALUE_MASKS = None
 else:
     # The largest pixel value each format holds, so the transparent
-    # entry can be any other value the frame can store.
+    # entry can be any other value the strip can store.
     _VALUE_MASKS = {
         framebuf.MONO_VLSB: 1,
         framebuf.MONO_HLSB: 1,
@@ -46,32 +44,23 @@ else:
 
 
 class Font:
-    """A font-to-py module drawn on the portable canvas in a palette index.
+    """A font-to-py module a ``Text`` item draws in.
 
-    ``text(canvas, string, x, y, index)`` draws with the top-left of the
-    first glyph at (x, y), and ``width(string)`` returns the pixels a
-    string spans, so a label centers as ``x = (canvas.width -
-    font.width(label)) // 2`` on either runtime.  Characters outside
-    the module's range draw as the glyph the module substitutes for
-    them, ``?`` unless the module was converted with another.
+    ``width(string)`` returns the pixels a string spans, so a label
+    centers as ``x = (screen.width - font.width(label)) // 2`` on either
+    runtime.  Characters outside the module's range draw as the glyph
+    the module substitutes for them, ``?`` unless the module was
+    converted with another.
 
     RAM: on MicroPython the font costs its module plus a few hundred
     bytes; on CircuitPython the sheet adds ``height`` rows of the glyph
     widths summed, in bits, about 3 KB for a 20-pixel ASCII font, and
-    the canvas grows its scratch bitmap to the widest glyph on the first
-    draw.  Construct the panel before the font: the panel's frame wants
-    the heap's largest free block.
-
-    ``text`` draws on any canvas this library's panels expose:
-    ``GC9A01AIndexed.frame`` in a palette index, ``SSD1306.frame`` in
-    0 or 1, and on MicroPython ``GC9A01A.frame`` in a ``color565``
-    value, since the palette it blits through is built in the canvas's
-    own ``pixel_format`` and rebuilt when a canvas of another format
-    arrives.  A Pi Pico W draws a 7-glyph word in a 20-pixel font in
-    4.0 ms on MicroPython, allocating 80 bytes a glyph inside the
-    module's ``get_ch``, and in 7.4 ms on CircuitPython allocating
-    nothing, so ``text`` is redraw work rather than something to call
-    on every tick.
+    each ``Text`` item holds a sprite of its string in the strip's
+    format.  A Pi Pico W draws a 7-glyph word in a 20-pixel font in
+    about 4 ms on MicroPython, allocating 80 bytes a glyph inside the
+    module's ``get_ch``, so a strip that crosses such a label pays that
+    on every paint; on CircuitPython the sprite renders once per change
+    and blits in one call per strip.
 
     Args:
         module: A font-to-py module converted with ``-x`` (horizontal
@@ -103,8 +92,8 @@ class Font:
             # FrameBuffer.blit reads; each glyph fills its first two slots.
             self._source = [None, 0, self.height,
                             framebuf.MONO_HMSB if module.reverse() else framebuf.MONO_HLSB]
-            # The two-entry palette is built for the first canvas drawn
-            # on, in that canvas's format, and again if the format changes.
+            # The two-entry palette is built for the first strip drawn
+            # on, in that strip's format, and again if the format changes.
             self._palette = None
             self._palette_format = None
             self._palette_mask = 0
@@ -168,46 +157,33 @@ class Font:
             total += widths[self._slot(ord(character))]
         return total
 
-    def text(self, canvas: object, string: str, x: int, y: int, index: int) -> None:  # noqa: CHU001 - framebuf's own names
-        """Draw ``string`` on ``canvas`` in pixel value ``index``, top-left at (x, y).
+    def draw(self, framebuffer: object, pixel_format: int, string: str, x: int, y: int,  # noqa: CHU001 - framebuf's own names
+             value: int) -> None:
+        """Blit ``string`` into a ``framebuf.FrameBuffer`` in pixel value ``value``, top-left at (x, y).
 
-        Only the glyphs' set pixels are drawn; the canvas shows through
-        the rest.  Text clips at the canvas edges.
+        Each glyph goes from the module's buffer through a two-pixel
+        palette ``FrameBuffer`` in ``pixel_format``, since framebuf
+        reads a palette in the destination's format; the transparent
+        entry is any other value the format holds, and the blit's key
+        is that value after the lookup.  Text clips at the buffer's
+        edges.
 
         Args:
-            canvas: A panel's ``frame``: ``GC9A01AIndexed.frame`` on
-                either runtime, or on MicroPython ``SSD1306.frame`` and
-                ``GC9A01A.frame`` too.
+            framebuffer: The strip's ``FrameBuffer``.
+            pixel_format: The framebuf format it was built with.
             string: The text to draw.
             x: Column of the first glyph's left edge.
-            y: Row of the glyphs' top edge.
-            index: The value to draw in, as the canvas stores it: a
-                palette index, 0 or 1 on the mono OLED, a ``color565``
-                value on the full-color frame.
+            y: Row of the glyphs' top edge, in the buffer's rows.
+            value: The pixel value to draw in.
         """
-        if self._sheet is None:
-            self._text_framebuf(canvas, string, x, y, index)
-        else:
-            self._text_bitmap(canvas, string, x, y, index)
-
-    def _text_framebuf(self, canvas: object, string: str, x: int, y: int,  # noqa: CHU001 - framebuf's own names
-                       index: int) -> None:
-        """Blit each glyph from the module's buffer through a palette of ``index`` over a skipped key.
-
-        The palette is a two-pixel ``FrameBuffer`` in the canvas's own
-        format, since framebuf reads a palette in the destination's
-        format; the transparent entry is any other value the format
-        holds, and the blit's key is that value after the lookup.
-        """
-        pixel_format = canvas.pixel_format
         palette = self._palette
         if pixel_format != self._palette_format:
             palette = self._palette = framebuf.FrameBuffer(bytearray(4), 2, 1, pixel_format)
             self._palette_format = pixel_format
             self._palette_mask = _VALUE_MASKS[pixel_format]
-        background = (index + 1) & self._palette_mask
+        background = (value + 1) & self._palette_mask
         palette.pixel(0, 0, background)
-        palette.pixel(1, 0, index)
+        palette.pixel(1, 0, value)
         source = self._source
         get_ch = self._get_ch
         cursor = x
@@ -216,21 +192,44 @@ class Font:
             if width:
                 source[0] = glyph
                 source[1] = width
-                canvas.blit(source, cursor, y, background, palette)
+                framebuffer.blit(source, cursor, y, background, palette)
             cursor += width
 
-    def _text_bitmap(self, canvas: object, string: str, x: int, y: int,  # noqa: CHU001 - framebuf's own names
-                     index: int) -> None:
-        """Blit each glyph's sheet region through the canvas's 1-bit path."""
+    def render(self, string: str, value: int, values: int, key: int) -> object:
+        """Return a ``displayio.Bitmap`` of ``string`` in ``value`` over ``key``, the sprite a strip blits.
+
+        Each glyph's sheet region is stamped into the sprite through a
+        scratch bitmap, three ``bitmaptools`` calls per glyph and no
+        Python per pixel.
+
+        Args:
+            string: The text to render.
+            value: The pixel value the glyphs' set bits take.
+            values: Distinct values per pixel of the strip's format,
+                65536 for a 16-bit strip.
+            key: The value the sprite's background holds, which the
+                strip skips when it blits; any value other than
+                ``value``.
+        """
+        import bitmaptools
+        import displayio
+
+        from chumicro_screens.bitmap_strip import stamp_glyph
+
         sheet = self._sheet
         sheet_x = self._sheet_x
         widths = self._widths
         height = self.height
-        cursor = x
+        sprite = displayio.Bitmap(self.width(string), height, values)
+        if key:
+            bitmaptools.fill_region(sprite, 0, 0, sprite.width, height, key)
+        scratch = displayio.Bitmap(self.max_width, height, values)
+        cursor = 0
         for character in string:
             slot = self._slot(ord(character))
             width = widths[slot]
             if width:
-                canvas.blit_bits(sheet, sheet_x[slot], 0, width, height,
-                                 cursor, y, index)
+                stamp_glyph(sprite, scratch, sheet, sheet_x[slot], 0, width, height,
+                            cursor, value, key)
             cursor += width
+        return sprite

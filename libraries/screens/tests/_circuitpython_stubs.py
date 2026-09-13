@@ -60,6 +60,12 @@ class DisplayioStub:
             if 0 <= x < self.width and 0 <= y < self.height:
                 self[x, y] = value
 
+        def fill(self, value):
+            """Set every pixel to ``value``, as the firmware's word-wise fill does."""
+            for y in range(self.height):
+                for x in range(self.width):
+                    self[x, y] = value
+
 
 class BitmaptoolsStub:
     """Stand-in for ``bitmaptools`` with the firmware's validation and clipping."""

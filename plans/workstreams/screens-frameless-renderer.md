@@ -1,6 +1,7 @@
 # Workstream: screens frameless renderer
 
-Status: **active**, Phase 0 shipped, Phase 1 next.
+Status: **active**, Phases 0 and 1 shipped, Phase 2 folded into Phase 1
+for the OLED's MicroPython half, Phase 3 next.
 [Decision 0129](../decisions/0129-frameless-strip-renderer.md) pins the
 design: no frame in RAM, a scene of bounded items painted per dirty
 strip into one small buffer through each runtime's C primitives and
@@ -93,27 +94,32 @@ The three passes above on CircuitPython and one on MicroPython.
 Decision 0129 accepted, Decision 0126 superseded, Decision 0125's
 canvas paragraph edited in place.
 
-## Phase 1. The library
+## Phase 1. The library: shipped
 
-`Screen`, `FramebufStrip`, `BitmapStrip`, the five item types, and
-`gc9a01a.GC9A01A` reduced to bring-up plus `write_rows`.  Delete
-`framebuf_canvas.py`, `bitmap_canvas.py`, `GC9A01AIndexed`, the old
-`GC9A01A`, `frame_bits`, `bitmap=`, and the expansion passes; `Font`
-renders into a `Text` sprite on both runtimes.  Tests on CPython through
-fakes and on both unix ports through the real primitives.  Rewrite
-`gc9a01a_card.py`, `gc9a01a_counter.py`, and `gc9a01a_font_counter.py`
-as scenes, the guide and README with them, and drop the framebuf
-subclass entry from `plans/patterns.md`.  Screens bumps to 0.4.0.  Gate:
-the card and the counter by eye on both Pico W cells with the panel
-wired, per-strip timing within the spike's numbers, zero bytes per
-advance on MicroPython, and the CircuitPython per-strip allocation
-named.
+`Screen` with `Rect`, `Box`, `Line`, `Ring`, `Text`, and `Sprite`;
+`FramebufStrip` and `BitmapStrip`; `gc9a01a.GC9A01A` reduced to
+bring-up plus `write_strip`; `ssd1306.SSD1306` as a page-strip panel
+on MicroPython under the same `Screen` (the OLED half of Phase 2,
+pulled forward because that panel was on the bench first); `Font`
+drawing into a strip on MicroPython and into a `Text` sprite on
+CircuitPython.  `framebuf_canvas.py`, `bitmap_canvas.py`,
+`GC9A01AIndexed`, the old full-color `GC9A01A`, `frame_bits`,
+`bitmap=`, the expansion passes, and `micropython_gc9a01a_round.py`
+are gone.  The examples are scenes, the guide and README describe the
+scene, `plans/patterns.md` carries the strip-canvas entry in place of
+the framebuf-subclass one, and screens is 0.4.0.  Two design rules
+came out of the bench: rendering that costs C calls per glyph or per
+vertex happens at mark time (`prepare_text`, `prepare_ring` on the
+strip), so an advance is the bus plus one call per item; and the
+CircuitPython strip clears with `displayio.Bitmap.fill`, since
+`bitmaptools` costs per pixel touched rather than per call.  Bench
+gate: by-eye checks on the OLED and the round TFT on both Pico W
+cells, recorded in the validation history.
 
-## Phase 2. The mono OLED as a page-strip panel
+## Phase 2. The mono OLED on CircuitPython
 
-`ssd1306.SSD1306` on MicroPython under the same `Screen` with a 1-bit
-strip, `micropython_ssd1306_font_counter.py` as a scene, the displayio
-factories unchanged.
+Open only if a C packer for the panel's vertical byte order appears;
+until then the displayio factory is the CircuitPython path.
 
 ## Phase 3. Narrow flushes and the allocation floor
 
@@ -147,3 +153,28 @@ its strip is a third wider and its `color` packs differently.
   passes on the CircuitPython Pico W (4.5 and 8.2 ms, 5.9 and 6.7 ms,
   3.9 and 4.5 ms mean and worst per strip) and once on the MicroPython
   Pico W (2.6 and 2.8 ms).  Phase 0 closed; Decision 0129 accepted.
+- 2026-09-13: Phase 1 shipped and benched.  MicroPython Pico W
+  (1.28.0), SSD1306 on GP4 and GP5, through `mpremote run`: the
+  counter and the font counter ran clean for twelve frames each; the
+  probe (`.scratch/probe_oled_strips_mp.py`) measured 8 pages at
+  4.07 ms mean and 4.22 ms worst, 32 ms a frame, the count line at 2
+  pages and 8 ms, 144 bytes a frame and nothing per advance.  Round
+  TFT through the shipped package (`.scratch/probe_gc9a01a_screen.py`,
+  nothing wired): MicroPython 2.6 ms mean and 2.9 ms worst per 8-row
+  strip, 78 ms a frame, count strips 2 at 2.9 ms, the eleven-item
+  card at 2.9 and 3.3 ms, 144 bytes a frame; CircuitPython (10.2.1,
+  staged through `chumicro-deploy deploy --directory`) 2.8 and 3.7 ms,
+  84 ms, count strips 2 at 3.5 ms, the card at 3.6 and 4.7 ms, 176
+  bytes a frame by the step probe (`.scratch/probe_strip_alloc_cp.py`;
+  the timing probe's own `monotonic_ns` integers add 5 KB).  The
+  per-call probes (`.scratch/probe_strip_cost_cp.py`, `_mp.py`) gave
+  the cost model in the patterns entry: `bitmaptools` per pixel
+  (`fill_region` 1,330 us for a 240 by 8 clear against 130 us for
+  `Bitmap.fill`), `framebuf` 60 to 370 us a call, the bus 1.2 to
+  1.6 ms per strip.  Two CircuitPython quirks found on the way:
+  `fill_region` and `blit` raise on coordinates past the bitmap, so
+  the strip clips in Python, and the first pass rendered text and cut
+  arcs inside the first flush (8 to 14 ms worst), which moved to mark
+  time.  88 tests on CPython, 85 on each unix port.  By-eye checks:
+  pending the maintainer's read of the OLED counter and font counter
+  under MicroPython, and of the round TFT on both cells once wired.

@@ -46,13 +46,16 @@ and 181 KB free, where the canvas leaves a CircuitPython Pico W 45 KB.
 - **One C call per item per strip.** That is the budget rule each item
   type meets: a rectangle is one fill, a sprite one blit, text one blit,
   a ring one or two polylines from vertex rows pre-shifted per band.
-  Rows per strip is the only tuning knob. On an RP2040 a `bitmaptools`
-  call costs about 120 us and a `framebuf` call about 30 us, and an
-  8-row strip of a 240-wide panel spends about 2 ms on the bus.
-- **Panel-native colors.** `color(red, green, blue)` returns the value
-  the panel's format stores, pre-swapped for a 16-bit SPI panel, and an
-  item holds it. There is no palette layer; a recolor sets the value and
-  marks the item.
+  Rendering that costs more than that, a string into its sprite or a
+  ring into its arcs, happens when the item is marked, never inside an
+  advance. Rows per strip is the only tuning knob. On an RP2040 an
+  8-row strip of a 240-wide panel spends about 2 ms on the bus; a
+  `framebuf` call costs 60 to 370 us, and a `bitmaptools` call costs
+  per pixel touched, about 0.7 us for a fill and 1.5 us for a blit.
+- **Panel-native colors.** A packer such as `gc9a01a.color565` returns
+  the value the panel's format stores, pre-swapped for a 16-bit SPI
+  panel, and an item holds it. There is no palette layer; a recolor sets
+  the value and marks the item.
 - **Firmware quirks stay inside the strip canvas.** `bitmaptools.draw_circle`
   clamps a center outside the bitmap, so curves are polylines. The mono
   OLED on CircuitPython keeps its displayio factory, since nothing in C

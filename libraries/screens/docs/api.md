@@ -4,17 +4,29 @@
 
 ::: chumicro_screens
 
+## `chumicro_screens.screen`
+
+::: chumicro_screens.screen
+
+## `chumicro_screens.core`
+
+::: chumicro_screens.core
+
 ## `chumicro_screens.gc9a01a`
 
 ::: chumicro_screens.gc9a01a
 
-## `chumicro_screens.framebuf_canvas`
+## `chumicro_screens.ssd1306`
 
-::: chumicro_screens.framebuf_canvas
+::: chumicro_screens.ssd1306
 
-## `chumicro_screens.bitmap_canvas`
+## `chumicro_screens.framebuf_strip`
 
-::: chumicro_screens.bitmap_canvas
+::: chumicro_screens.framebuf_strip
+
+## `chumicro_screens.bitmap_strip`
+
+::: chumicro_screens.bitmap_strip
 
 ## `chumicro_screens.fonts`
 
@@ -23,10 +35,6 @@
 ## `chumicro_screens.gc9a01a_displayio`
 
 ::: chumicro_screens.gc9a01a_displayio
-
-## `chumicro_screens.ssd1306`
-
-::: chumicro_screens.ssd1306
 
 ## `chumicro_screens.ssd1306_displayio`
 

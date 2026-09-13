@@ -2,7 +2,7 @@
 
 Status: `accepted`
 Date: `2026-09-05`
-Summary: A canvas font is a font-to-py module drawn by `chumicro_screens.fonts.Font` through framebuf's read-only blit source and a 1-bit `displayio.Bitmap` sheet; no chumicro font format or converter.
+Summary: A screens font is a font-to-py module drawn by `chumicro_screens.fonts.Font` through framebuf's read-only blit source and a 1-bit `displayio.Bitmap` sheet; no chumicro font format or converter.
 Related: [Decision 0129](0129-frameless-strip-renderer.md) (the renderer whose text items draw these fonts), [Decision 0126](0126-SUPERSEDED-BY-0129-canvas-indexed-palette.md) (the canvas this first extended), [Decision 0125](0125-display-libraries.md) (the firmware-layer criterion), [Decision 0092](0092-no-backwards-compat-before-publication.md)
 
 ## Context
@@ -21,16 +21,17 @@ one.
   <name>.py` writes: horizontally mapped glyph rows behind `height()`,
   `baseline()`, `max_width()`, `min_ch()`, `max_ch()`, and `get_ch()`. The
   module ships beside the app; `chumicro_screens.fonts.Font(module)` is the
-  only chumicro surface, with `text(canvas, string, x, y, index)` and
-  `width(string)`.
-- Both backends blit that layout unchanged, in C. MicroPython's
+  only chumicro surface, given to a `Text` item, with `width(string)` for
+  layout.
+- Both runtimes blit that layout unchanged, in C. MicroPython's
   `FrameBuffer.blit` takes a `(buffer, width, height, MONO_HLSB)` sequence
   as a read-only source, so a glyph goes straight from the module's bytes
-  through a two-entry palette whose background entry is the skipped key.
-  CircuitPython loads the glyphs once, at construction, into a 1-bit
-  `displayio.Bitmap` sheet, each through `bitmaptools.readinto` and one
-  blit, and draws regions of it through `BitmapCanvas.blit_bits`, the
-  scratch-and-recolor path the built-in `text` shares.
+  into the strip through a two-entry palette in the strip's format whose
+  background entry is the skipped key. CircuitPython loads the glyphs once,
+  at construction, into a 1-bit `displayio.Bitmap` sheet, each through
+  `bitmaptools.readinto` and one blit, and renders a string from it into a
+  sprite once per change through the scratch-and-recolor stamp the
+  built-in text shares.
 - A character the module lacks draws as the module's own substitute glyph
   on both runtimes, so text and `width` agree everywhere.
 - There is no chumicro glyph format and no in-repo converter. The
@@ -56,12 +57,12 @@ Rejected alternatives:
 
 ## Consequences
 
-- `chumicro-screens` gains `fonts.Font` and `BitmapCanvas.blit_bits`; the
-  canvas's own `text` keeps its per-runtime built-in font.
+- `chumicro-screens` gains `fonts.Font` and the glyph stamp in
+  `bitmap_strip`; a `Text` item without a font keeps its runtime's
+  built-in face.
 - Fonts convert on the host with the external tool (`pip install
   font_to_py`, which needs freetype). A font module checked in beside an
   example is the tool's output plus an attribution header and the lint
   suppressions its index lambda needs, so it can be regenerated.
-- On MicroPython `Font` blits through a `GS8` palette, so it draws on the
-  indexed frame only; the mono OLED frame and the 16-bit frame need a
-  palette in their own format, which nothing ships yet.
+- On MicroPython `Font` builds its palette in the strip's own format, so
+  it draws on the 16-bit TFT strip and the OLED's 1-bit page alike.

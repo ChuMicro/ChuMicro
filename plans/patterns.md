@@ -642,7 +642,7 @@ The zero-cost fix: the driver's `color565` helper pre-swaps the packed
 value so the little-endian buffer bytes land on the wire in panel
 order.  Byte-swapping at flush time in Python is never the answer (a
 per-pixel pass blows the tick budget).  Consequence: raw RGB565
-literals like `0xF800` render wrong on such a driver's `frame`; colors
+literals like `0xF800` render wrong through such a driver; colors
 must come from the helper, and the driver docstring says so.  A
 labeled test card (color bars captioned with their names) is the bench
 check that catches this class; solid fills cannot, because a rotation
@@ -650,90 +650,47 @@ maps every primary onto another clean primary.
 
 Reference implementation: `chumicro_screens.gc9a01a.color565`.
 
-## Indexed frames convert at C speed through blit's palette, not viper
+## Viper breaks arch-neutral compilation
 
-When a full-color frame buffer exceeds a 256 KB board's heap, hold the
-frame at `framebuf.GS8` (one byte per pixel) plus a palette that is
-itself a FrameBuffer: 256 x 1 in the destination format.
-`destination.blit(frame, 0, -row_start, -1, palette)` then expands one
-strip per flush advance, mapping every source byte through the palette
-in C (`modframebuf.c` reads `palette.pixel(value, 0)` per pixel), and
-clipping to the destination bounds so only the strip's pixels are
-touched.  A 240 x 10 strip expands in well under a millisecond where
-the equivalent Python loop takes tens of milliseconds.  Bonus: editing
-a palette entry recolors every drawn pixel holding that index on the
-next flush.
+Viper code anywhere in a module breaks arch-neutral compilation:
+`mpy-cross` without `-march` refuses it (`SyntaxError: invalid arch`,
+measured on 1.27.0), which fails the `check-size` gate and would force
+the bundle's `.mpy` channel per-arch.  A nested def keeps CPython
+imports working but not `mpy-cross`, which compiles the whole file.
+Reach for a C primitive with the right clipping first; the strip
+canvases below are what that looks like for pixels.
 
-Reach for viper only after this fails, because viper code anywhere in
-a module breaks arch-neutral compilation: `mpy-cross` without `-march`
-refuses it (`SyntaxError: invalid arch`, measured on 1.27.0), which
-fails the `check-size` gate and would force the bundle's `.mpy`
-channel per-arch.  A nested def keeps CPython imports working but not
-`mpy-cross`, which compiles the whole file.
+## A strip canvas paints a few rows at a time; each runtime's primitives clip differently
 
-On CircuitPython the same 8-bit frame expands through `bitmaptools`:
-`blit` copies the strip's indexes raw into a 16-bit strip bitmap, then
-one `replace_color(strip, index, color)` pass per assigned color
-rewrites them in place, allocation-free, about 0.29 us per pixel per
-pass on an RP2040 plus 1.5 us per pixel for the copy.  Two traps: a
-pass rewrites *values*, so a color below 256 can be mistaken for an
-index by a later pass (move those indexes to temporaries above 255
-that no color uses first, and map the temporaries last, after every
-index value has left the strip); and `ulab` is not the shortcut it
-looks like, because every ndarray operation allocates (slice
-assignment copies its source, operators allocate stride scratch,
-comparisons allocate the mask), 12 KB per strip measured.
+A panel over SPI or I2C holds its own picture, so a driver keeps a
+strip of a few rows and paints the scene items that cross it with the
+row offset applied, then streams the strip.  RAM stops depending on
+the panel, and the primitives do the clipping.  What each runtime's
+layer actually does at the edges:
 
-Reference implementation: `chumicro_screens.gc9a01a._expansion_passes`.
+- MicroPython `framebuf` clips every primitive, `ellipse`, `text`, and
+  `blit` included, so a strip is a plain `FrameBuffer` and a circle
+  whose center lies outside it draws its visible arc.  A call costs 60
+  to 370 us on an RP2040 and allocates nothing.
+- CircuitPython `bitmaptools` is mixed.  `draw_line` and
+  `draw_polygon` clip through the bounds-checked pixel writer, but
+  `fill_region` and `blit` raise `ValueError` on any coordinate past
+  the bitmap, and `draw_circle` moves a center outside the bitmap
+  inside it rather than clipping, so the strip clips rectangles and
+  blits in Python first and draws a ring as the polyline arcs that
+  cross each band, cut once at mark time from vertex rows pre-shifted
+  per band.  A call allocates nothing but costs per pixel touched,
+  about 0.7 us for a fill and 1.5 us for a blit on an RP2040, so
+  `displayio.Bitmap.fill` (130 us for a 240 by 8 strip) clears the
+  strip where `fill_region` takes 1.3 ms, and text renders once into a
+  sprite the strip blits in one call.
 
-## A framebuf subclass records what it draws; super() is the only way back to C
+Rendering that costs C calls per glyph or per vertex happens at mark
+time, never inside a flush advance, so every advance is the bus plus
+one call per item and the first paint costs the same as any other.
 
-`framebuf.FrameBuffer` subclasses in Python on MicroPython (the stock
-`ssd1306.py` driver does it), so a canvas can wrap every primitive with
-bookkeeping and stay a real framebuf: `blit` takes the subclass as a
-source because `get_readonly_framebuffer` casts through
-`mp_obj_cast_to_native_base` (1.27.0), so a strip expands from it with
-no wrapper.  Two facts shape the overrides:
-
-- Reach the base through `super().method(...)`, never
-  `framebuf.FrameBuffer.method(self, ...)`.  The instance is an
-  `mp_obj_instance_t` whose native framebuf lives in `subobj[0]`;
-  `super()` and attribute lookup substitute it, while an explicit
-  unbound call hands the instance itself to C code that reads it as a
-  framebuf struct.  The compiler emits `LOAD_SUPER_METHOD` for the
-  `super().name(...)` form, so the call allocates nothing.
-- The native methods take positional arguments only
-  (`MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN`), so forward `key` and
-  `palette` positionally; a keyword raises `TypeError`.
-
-Each override costs one Python frame and its bookkeeping, about 110 us
-on an RP2040 over the 28 us bare call, which is why `pixel` inlines
-its bookkeeping and per-pixel loops belong in `blit`.  Load the
-subclass's module with the driver rather than at construction: its
-class objects otherwise land in the free region the frame is about to
-take.
-
-The frame itself goes before the driver.  A module's compile grows its
-parse tree in place at the bottom of the heap's largest free region,
-and a large allocation made while the tree is alive (a big function's
-bytecode, a qstr pool doubling) lands above the tree and stays, so
-importing a 13 KB driver on a Pi Pico W under CircuitPython leaves
-115,072 bytes in one block where 166,720 were free at boot, and no
-trimming short of removing a class moves that plateau
-(plans/field-notes/hardware-traps.md, "A large module's compile pins
-the top of the heap").  A frame that needs the block is allocated by
-the app as its first statement and handed to the driver, which is what
-`GC9A01AIndexed(..., bitmap=)` is for.
-
-A column window streams from a strip laid out at the frame's width
-without slicing on CircuitPython, because `busio.SPI.write(buffer,
-start=, end=)` bounds the write in the buffer's own items (pixels, for
-a 16-bit `displayio.Bitmap` view).  `machine.SPI.write` has no bounds,
-so the MicroPython driver re-lays the strip at the window's width
-through a per-flush `FrameBuffer` over the same buffer instead.
-
-Reference implementation: `chumicro_screens.framebuf_canvas.FramebufCanvas`
-and `chumicro_screens.gc9a01a.GC9A01AIndexed.flush`.
+Reference implementation: `chumicro_screens.framebuf_strip.FramebufStrip`,
+`chumicro_screens.bitmap_strip.BitmapStrip`, and `chumicro_screens.screen.Screen.flush`.
 
 ## Packed 1-bit glyphs blit in C on both runtimes without a copy
 
@@ -760,7 +717,7 @@ both runtimes:
   glyph as a region of the sheet.
 
 Reference implementation: `chumicro_screens.fonts.Font` and
-`chumicro_screens.bitmap_canvas.BitmapCanvas.blit_bits`.
+`chumicro_screens.bitmap_strip.stamp_glyph`.
 
 When a module exists on CPython but not on MicroPython/CircuitPython
 (or vice versa), write a thin shim with runtime detection.
