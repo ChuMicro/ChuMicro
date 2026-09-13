@@ -6,14 +6,17 @@ An app builds items (``Rect``, ``Box``, ``Line``, ``Ring``, ``Text``,
 the ``ScreenService`` panel protocol: each advance paints one strip of
 the panel, the rows the marked items cover, into the panel's strip
 buffer through the runtime's C drawing primitives and sends it as one
-bus transfer.  RAM is the strip plus the scene, whatever the panel's
-size, and the panel's own memory holds the picture.
+bus transfer, windowed to the columns the marked items cover where
+the panel takes a column window.  RAM is the strip plus the scene,
+whatever the panel's size, and the panel's own memory holds the
+picture.
 
 Every item costs one C call per strip it crosses, so a strip's paint
-time is the bus transfer plus that many calls: about 120 us each on an
-RP2040 under CircuitPython and 30 us under MicroPython.  A panel's
-``rows`` is the one knob: fewer rows per strip means less time per
-advance and more advances per frame.
+time is the bus transfer plus those calls: on an RP2040 a framebuf
+call is 60 to 370 us and a bitmaptools call costs per pixel touched,
+about 0.7 us for a fill and 1.5 us for a blit.  A panel's ``rows`` is
+the one knob: fewer rows per strip means less time per advance and
+more advances per frame.
 """
 
 
@@ -229,8 +232,10 @@ class Screen:
     Args:
         panel: A panel driver: ``width``, ``height``, ``strip`` (the
             strip canvas it writes from), and
-            ``write_strip(top, count)``, which sends ``count`` rows of
-            the strip as one transfer to the panel rows from ``top``.
+            ``write_strip(top, count, left, right)``, which sends
+            columns ``left`` to ``right`` of ``count`` rows of the
+            strip as one transfer to the panel rows from ``top``, or
+            the full rows where the panel takes no column window.
         background: The pixel value the strip is cleared to before its
             items paint.
     """
@@ -300,9 +305,16 @@ class Screen:
             self._bottom = bottom
 
     def flush(self) -> object:
-        """Paint and send the strips the dirty rectangle touches, one per advance; the panel protocol."""
+        """Paint and send the strips the dirty rectangle touches, one per advance; the panel protocol.
+
+        Each strip is windowed to the rectangle's columns: the strip
+        lays itself out for them where its panel can send a column
+        window, and the panel sends those columns of each row.
+        """
         if self._right <= self._left:
             return
+        left = self._left
+        right = self._right
         top = self._top
         bottom = self._bottom
         self._left = 0
@@ -313,6 +325,7 @@ class Screen:
         height = self.height
         items = self._items
         background = self.background
+        strip.window(left, right)
         row = top - top % rows
         while row < bottom:
             count = rows if row + rows <= height else height - row
@@ -322,6 +335,6 @@ class Screen:
             for item in items:
                 if item.top < stop and item.bottom > row:
                     item.draw(strip)
-            panel.write_strip(row, count)
+            panel.write_strip(row, count, left, right)
             row = stop
             yield

@@ -27,11 +27,10 @@ WIDTH = 16
 ROWS = 8
 
 
-def make_strip(top: int = 8) -> tuple:
+def make_strip(top: int = 8, narrowable: bool = False) -> tuple:
     """An 8-bit strip over a fresh buffer with its row 0 at panel row ``top``."""
     buffer = bytearray(WIDTH * ROWS)
-    strip = FramebufStrip(framebuf.FrameBuffer(buffer, WIDTH, ROWS, framebuf.GS8),
-                          WIDTH, ROWS, framebuf.GS8)
+    strip = FramebufStrip(buffer, WIDTH, ROWS, framebuf.GS8, narrowable=narrowable)
     strip.top = top
     return strip, buffer
 
@@ -82,6 +81,29 @@ def test_ring_draws_the_part_of_the_circle_inside_the_strip() -> None:
     assert row(buffer, 6)[8] == 3
     assert row(buffer, 7)[8] == 0
     assert row(buffer, 0) == [0] * WIDTH
+
+
+def test_window_narrows_a_narrowable_strip_and_offsets_columns() -> None:
+    """A 6-column window lays the strip out 6 wide: column 10 of the panel is column 0 of the view."""
+    strip, buffer = make_strip(top=8, narrowable=True)
+    strip.window(10, 16)
+    assert (strip.left, strip.window_width) == (10, 6)
+    assert len(strip.view) == 6 * ROWS
+    strip.clear(0)
+    strip.fill_rect(10, 9, 2, 1, 7)
+    strip.fill_rect(16, 9, 2, 1, 9)          # past the window: clipped
+    assert list(strip.view[6:12]) == [7, 7, 0, 0, 0, 0]
+
+    strip.window(0, WIDTH)
+    assert (strip.left, strip.window_width) == (0, WIDTH)
+    assert len(strip.view) == WIDTH * ROWS
+
+
+def test_window_leaves_a_fixed_width_strip_alone() -> None:
+    strip, _ = make_strip(narrowable=False)
+    strip.window(10, 16)
+    assert (strip.left, strip.window_width) == (0, WIDTH)
+    assert len(strip.view) == WIDTH * ROWS
 
 
 def test_prepare_ring_and_prepare_text_touch_nothing() -> None:

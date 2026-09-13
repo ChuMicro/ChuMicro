@@ -126,9 +126,8 @@ class SSD1306:
         # the buffer as a single write.
         self._buffer = bytearray(1 + width)
         self._buffer[0] = _CONTROL_DATA
-        framebuffer = framebuf.FrameBuffer(memoryview(self._buffer)[1:], width,
-                                           _PAGE_HEIGHT, framebuf.MONO_VLSB)
-        self.strip = FramebufStrip(framebuffer, width, _PAGE_HEIGHT, framebuf.MONO_VLSB)
+        self.strip = FramebufStrip(memoryview(self._buffer)[1:], width, _PAGE_HEIGHT,
+                                   framebuf.MONO_VLSB)
         # One address window per page, columns and page in a single
         # write, so each transfer is self-contained and a dropped frame
         # leaves no half-set window behind.
@@ -168,12 +167,17 @@ class SSD1306:
         self._command_buffer[1] = value
         self._i2c.writeto(self._address, self._command_buffer)
 
-    def write_strip(self, top: int, count: int) -> None:
-        """Send the strip as the page holding panel row ``top``; the ``Screen`` panel protocol.
+    def write_strip(self, top: int, count: int, left: int, right: int) -> None:
+        """Send the strip as the whole page holding panel row ``top``; the ``Screen`` panel protocol.
+
+        The page always goes in full: its bytes follow the control byte
+        in one buffer, so a column window would cost a copy per page.
 
         Args:
             top: Panel row the strip's row 0 holds, a multiple of 8.
             count: Rows to send, always the full page here.
+            left: First dirty column, not used.
+            right: One past the last dirty column, not used.
         """
         self._i2c.writeto(self._address, self._page_windows[top // _PAGE_HEIGHT])
         self._i2c.writeto(self._address, self._buffer)

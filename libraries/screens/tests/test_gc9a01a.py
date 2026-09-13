@@ -74,7 +74,7 @@ def test_the_strip_is_rows_of_rgb565_at_the_panel_width() -> None:
     panel, _, _, _, _, _ = make_panel(rows=6)
     assert (panel.width, panel.height) == (240, 240)
     assert (panel.strip.width, panel.strip.rows) == (240, 6)
-    assert len(panel.strip.framebuffer.buffer) == 240 * 6 * 2
+    assert len(panel.strip.buffer) == 240 * 6 * 2
 
 
 def test_rows_must_divide_the_panel_height() -> None:
@@ -92,7 +92,7 @@ def test_write_strip_sends_the_window_then_the_strip_as_one_transfer() -> None:
     del chip_select.states[:]
     del data_command.states[:]
 
-    panel.write_strip(16, 8)
+    panel.write_strip(16, 8, 0, 240)
 
     assert spi.writes == [b"\x2a", b"\x00\x00\x00\xef", b"\x2b", b"\x00\x10\x00\x17", b"\x2c",
                           bytes(8)]
@@ -107,6 +107,28 @@ def test_write_strip_sends_what_the_strip_holds() -> None:
     panel.strip.fill_rect(0, 8, 2, 1, 0xABCD)
     del spi.writes[:]
 
-    panel.write_strip(8, 8)
+    panel.write_strip(8, 8, 0, 240)
 
     assert spi.writes[-1][:4] == b"\xcd\xab\xcd\xab"
+
+
+def test_a_column_window_narrows_the_strip_and_the_transfer() -> None:
+    """A 60-column window lays the strip out at 60 wide and sends 60 pixels a row after its column bytes."""
+    panel, spi, _, _, _, _ = make_panel(rows=8)
+    strip = panel.strip
+    strip.window(40, 100)
+    strip.top = 8
+    strip.clear(0)
+    strip.fill_rect(40, 8, 1, 1, 0xABCD)
+    strip.fill_rect(100, 8, 1, 1, 0x1234)        # past the window: clipped
+    del spi.writes[:]
+    del spi.lengths[:]
+
+    panel.write_strip(8, 8, 40, 100)
+
+    assert spi.writes[1] == b"\x00\x28\x00\x63"
+    assert spi.lengths[-1] == 60 * 8 * 2
+    assert spi.writes[-1][:4] == b"\xcd\xab\x00\x00"
+    strip.window(0, 240)
+    assert strip.left == 0
+    assert strip.window_width == 240

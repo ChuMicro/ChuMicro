@@ -92,7 +92,7 @@ def test_write_strip_addresses_the_page_and_sends_it_behind_the_data_control_byt
     strip.clear(0)
     strip.fill_rect(3, 13, 1, 1, 1)              # panel row 13 is row 5 of page 1
 
-    panel.write_strip(8, 8)
+    panel.write_strip(8, 8, 3, 4)
 
     assert i2c.writes[0] == (0x3C, bytes((0x00, 0x21, 0, 127, 0x22, 1, 1)))
     address, payload = i2c.writes[1]
@@ -105,7 +105,7 @@ def test_write_strip_addresses_the_page_and_sends_it_behind_the_data_control_byt
 
 def test_the_last_page_of_a_short_panel_is_addressable():
     panel, i2c, _, _ = build_panel(height=32)
-    panel.write_strip(24, 8)
+    panel.write_strip(24, 8, 0, 128)
     assert i2c.writes[0][1][-2:] == bytes((3, 3))
 
 

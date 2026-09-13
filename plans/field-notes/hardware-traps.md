@@ -183,6 +183,23 @@ and stored tracebacks; on a split pool the request fails and the
 firmware falls back to 8 KB silently; and the deploy evicts a board
 `settings.toml` on every clean push.
 
+## A hand-copied /lib leaves the board's main.py to crash at the next replug
+
+A MicroPython Pico W whose `/lib/chumicro_screens` was replaced with
+`mpremote fs cp -r` while its `main.py` stayed the example an earlier
+`deploy-example` wrote boots into that `main.py` on a replug and dies
+on the first call the new library no longer has (2026-09-13, the
+5 September `micropython_ssd1306_font_counter.py` against the 0129
+package).  `mpremote run` writes nothing to flash, so a bench session
+of runs leaves flash exactly as the last deploy left it.  The SSD1306
+on that board showed its previous image through the replug: the
+controller's RAM holds through a short power dip and the stale
+`main.py` switched the charge pump on before it crashed, so a mono
+OLED showing an old frame after a replug is not a sign that anything
+drew it.  A deploy through `chumicro-deploy deploy --transport
+micropython --entrypoint /main.py` puts the current example on flash
+and is the fix.
+
 ## CircuitPython board builds lack the two-argument next()
 
 `next(iterator, default)` works on the CircuitPython unix port and on

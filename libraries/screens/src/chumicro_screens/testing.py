@@ -60,8 +60,13 @@ class FakeStrip:
         self.width = width
         self.rows = rows
         self.top = 0
+        self.left = 0
         self.calls: list = []
         self.prepared: list = []
+        self.windows: list = []
+
+    def window(self, left: int, right: int) -> None:
+        self.windows.append((left, right))
 
     def clear(self, value: int) -> None:
         self.calls.append(("clear", self.top, value))
@@ -96,9 +101,9 @@ class FakeStrip:
 class FakeScreenPanel:
     """Panel fake for a ``Screen``: a ``FakeStrip`` and a record of every strip write.
 
-    ``writes`` holds one ``(top, count)`` pair per ``write_strip`` call,
-    and ``fail_on_write`` set to an index raises ``OSError`` in place of
-    that write.
+    ``writes`` holds one ``(top, count, left, right)`` tuple per
+    ``write_strip`` call, and ``fail_on_write`` set to an index raises
+    ``OSError`` in place of that write.
 
     Args:
         width: Panel width in pixels.
@@ -113,7 +118,7 @@ class FakeScreenPanel:
         self.writes: list = []
         self.fail_on_write: int | None = None
 
-    def write_strip(self, top: int, count: int) -> None:
+    def write_strip(self, top: int, count: int, left: int, right: int) -> None:
         if len(self.writes) == self.fail_on_write:
             raise OSError("injected bus fault")
-        self.writes.append((top, count))
+        self.writes.append((top, count, left, right))

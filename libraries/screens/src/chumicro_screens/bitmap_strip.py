@@ -21,6 +21,17 @@ import bitmaptools
 import displayio
 import terminalio
 
+try:
+    from micropython import const
+except ImportError:
+    def const(value):
+        return value
+
+# A ring's polygon has one vertex per pixel of radius within these
+# bounds, which keeps every chord within a quarter pixel of the circle.
+_MIN_VERTICES = const(12)
+_MAX_VERTICES = const(64)
+
 
 def stamp_glyph(sprite: object, scratch: object, sheet: object, sheet_x: int, sheet_y: int,
                 width: int, height: int, x: int, value: int, key: int) -> None:  # noqa: CHU001 - framebuf's own names
@@ -81,6 +92,9 @@ class BitmapStrip:
         self.glyph_width, self.glyph_height = font.get_bounding_box()
         self._tiles_per_row = font.bitmap.width // self.glyph_width
         self._scratch = displayio.Bitmap(self.glyph_width, self.glyph_height, values)
+
+    def window(self, left: int, right: int) -> None:
+        """Nothing to lay out: the strip paints full width and the panel bounds each row it sends."""
 
     def clear(self, value: int) -> None:
         self.bitmap.fill(value)
@@ -215,19 +229,17 @@ class BitmapStrip:
 def _cut_arcs(cache: dict, x_center: int, y_center: int, radius: int, rows: int) -> None:
     """Fill ``cache`` with the polyline pieces of the ring's polygon per strip band.
 
-    The polygon has one vertex per pixel of radius, 12 to 64, which
-    keeps every chord within a quarter pixel of the circle.  Walking
-    the edges once, each edge's two vertices join the run in progress
+    Walking the edges once, each edge's two vertices join the run in progress
     for every band the edge crosses, so a band ends up with the arcs
     that cross it as ``(xs, ys)`` pairs of ``array.array('h')``, rows
     shifted so the band's first row is 0, the form
     ``bitmaptools.draw_polygon`` takes.
     """
     count = radius
-    if count < 12:
-        count = 12
-    elif count > 64:
-        count = 64
+    if count < _MIN_VERTICES:
+        count = _MIN_VERTICES
+    elif count > _MAX_VERTICES:
+        count = _MAX_VERTICES
     xs = [0] * count
     ys = [0] * count
     step = 2 * math.pi / count

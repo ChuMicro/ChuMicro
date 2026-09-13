@@ -74,9 +74,9 @@ from chumicro_compat.wiring import digital_output, spi_bus
 from chumicro_screens import Ring, Screen, ScreenService, Text
 from chumicro_screens.gc9a01a import GC9A01A, color565
 
-spi = spi_bus(0, sck=6, mosi=7, miso=4, baudrate=40_000_000)
+spi = spi_bus(0, sck=6, mosi=7, miso=16, baudrate=40_000_000)
 panel = GC9A01A(spi,
-                digital_output(5, value=1),    # CS
+                digital_output(10, value=1),   # CS
                 digital_output(8, value=0),    # DC
                 digital_output(9, value=1))    # RST
 screen = Screen(panel)
@@ -131,6 +131,8 @@ Pixel values are 0 for dark and 1 for lit, and `set_contrast(value)` sets the dr
 
 Each advance clears the strip, paints every item whose bounds cross it, and sends it, so an advance costs the bus transfer plus one C call per item in the band.  The bus is about 2 ms for an 8-row strip of the round TFT at 24 MHz on an RP2040; on MicroPython a `framebuf` call is 60 to 370 us, and on CircuitPython `bitmaptools` costs about 0.7 us per pixel it touches for a fill and 1.5 us for a blit, so a 160-pixel-wide bar adds about 0.9 ms to each strip it crosses there.  `rows` is the one knob: fewer rows per strip shorten every advance and add advances to a frame.  A first paint is elapsed time across ticks, never a stall; the loop keeps running through it.
 
+A flush is also windowed to the dirty rectangle's columns where the panel can send a column window, which the round TFT can: a count 56 pixels wide sends 56 columns of each strip it touches rather than 240, so its bus time falls to about a quarter.  On MicroPython the strip lays itself out at the window's width for that flush, one `FrameBuffer` and one view per narrow flush; on CircuitPython the strip paints full width and the panel sends each row bounded to the window.  The page panels always send whole pages.
+
 ## The panel protocol
 
 A panel for a `Screen` is three attributes and one method:
@@ -143,11 +145,11 @@ class MyPanel:
     def __init__(self, bus):
         self.strip = ...                 # a FramebufStrip or BitmapStrip, rows tall
 
-    def write_strip(self, top, count):
-        """Send count rows of the strip to the panel rows from top, as one transfer."""
+    def write_strip(self, top, count, left, right):
+        """Send columns left to right of count strip rows to the panel rows from top, as one transfer."""
 ```
 
-The strip is `chumicro_screens.framebuf_strip.FramebufStrip` over a `framebuf.FrameBuffer` you build in the panel's pixel format on MicroPython, or `chumicro_screens.bitmap_strip.BitmapStrip` on CircuitPython, whose `buffer` is the bytes to stream.  A panel with its own window write needs nothing else; `GC9A01A` and `SSD1306` are the two shapes.
+The strip is `chumicro_screens.framebuf_strip.FramebufStrip` over the bytes you send in the panel's framebuf format on MicroPython, built `narrowable=True` when the panel takes a column window, or `chumicro_screens.bitmap_strip.BitmapStrip` on CircuitPython, whose `buffer` is the bytes to stream.  A panel that takes no column window ignores `left` and `right`.  `GC9A01A` is the windowed shape and `SSD1306` the page shape.
 
 `ScreenService` itself drives anything with a `flush()` that returns an iterator and performs one bounded transfer per advance, which is what `Screen.flush()` is.  A panel that manages its own frame can still implement `flush()` directly and skip the scene.
 
@@ -223,7 +225,7 @@ assert panel.strip.calls == [("clear", 8, 0), ("fill_rect", 8, 0, 10, 4, 4, 1)]
 
 ## Platform notes
 
-`Screen`, the items, and `ScreenService` behave identically on CPython, MicroPython, and CircuitPython; the strip is where the runtimes differ.  `GC9A01A` runs on both device runtimes over a `FramebufStrip` or a `BitmapStrip`.  `SSD1306` is MicroPython-only, and its CircuitPython counterpart is `ssd1306_displayio.make_display`, since nothing in `bitmaptools` packs the panel's vertical byte order.  `bitmaptools.draw_circle` moves a center outside the bitmap instead of clipping, which is why a `Ring` on CircuitPython is drawn as the arcs of a polygon per strip.  Drivers are added per controller as each passes bench validation.
+`Screen`, the items, and `ScreenService` behave identically on CPython, MicroPython, and CircuitPython; the strip is where the runtimes differ.  `GC9A01A` runs on both device runtimes over a `FramebufStrip` or a `BitmapStrip`.  `SSD1306` is MicroPython-only, since nothing in `bitmaptools` packs its vertical byte order, and its CircuitPython counterpart is `ssd1306_displayio.make_display`.  `bitmaptools.draw_circle` moves a center outside the bitmap instead of clipping, which is why a `Ring` on CircuitPython is drawn as the arcs of a polygon per strip.  Drivers are added per controller as each passes bench validation.
 
 ## Examples
 

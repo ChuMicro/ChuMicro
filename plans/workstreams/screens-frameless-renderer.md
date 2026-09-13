@@ -1,7 +1,7 @@
 # Workstream: screens frameless renderer
 
-Status: **active**, Phases 0 and 1 shipped, Phase 2 folded into Phase 1
-for the OLED's MicroPython half, Phase 3 next.
+Status: **active**, Phases 0, 1, and 3 shipped, Phase 2 folded into
+Phase 1 for the OLED's MicroPython half, Phase 4 waiting on a panel.
 [Decision 0129](../decisions/0129-frameless-strip-renderer.md) pins the
 design: no frame in RAM, a scene of bounded items painted per dirty
 strip into one small buffer through each runtime's C primitives and
@@ -121,20 +121,34 @@ cells, recorded in the validation history.
 Open only if a C packer for the panel's vertical byte order appears;
 until then the displayio factory is the CircuitPython path.
 
-## Phase 3. Narrow flushes and the allocation floor
+## Phase 3. Narrow flushes: shipped
 
-Window each strip to the dirty rectangle's columns (row-wise `busio`
-writes on CircuitPython, a re-laid strip on MicroPython, as the canvas
-did), and take the CircuitPython per-strip allocation to zero.  Document
-`rows` with the cost model so an app with many items per strip knows
-which way to turn it.
+`Screen.flush` windows every strip to the dirty rectangle's columns:
+`strip.window(left, right)` at the start of a flush and
+`write_strip(top, count, left, right)` per strip.  `FramebufStrip`
+built `narrowable=True` lays a `FrameBuffer` of the window's width
+over the same bytes, so its `view` is the whole transfer and
+`machine.SPI.write` sends it as it is, one `FrameBuffer` and one view
+per narrow flush; `BitmapStrip` paints full width and `GC9A01A` on
+CircuitPython sends each row through `busio.SPI.write`'s `start` and
+`end`, allocating nothing.  The page panels ignore the columns, since
+their page bytes sit behind a control byte in one buffer and a column
+window would cost a copy per page.  The allocation floor turned out
+to be the timing probe's own `monotonic_ns` integers: the shipped
+flush allocates its generator and nothing per advance on either
+runtime.  A `PCD8544` driver for the Nokia 5110 LCD, the SSD1306's
+shape over SPI with six 84-byte banks, is written with its example and
+tests and parked in `.scratch/pcd8544_pending/` until its module is on
+the bench, since Decision 0125 ships a driver only once it has passed
+on hardware.
 
-## Phase 4. A second SPI panel
+## Phase 4. A second SPI TFT
 
 A 320 by 240 or 480 by 320 TFT (ST7789, ILI9341, ILI9488) when one is
-on the bench: a driver of bring-up plus `write_rows`, a strip width from
-the panel, and the same scene.  ILI9488 over SPI takes 18-bit pixels, so
-its strip is a third wider and its `color` packs differently.
+on the bench: a driver of bring-up plus `write_strip`, a strip width
+from the panel, and the same scene.  ILI9488 over SPI takes 18-bit
+pixels, so its strip is a third wider and its `color565` packs
+differently.  No such panel is on the bench, so this phase waits.
 
 ## Rejected
 
@@ -175,6 +189,22 @@ its strip is a third wider and its `color` packs differently.
   `fill_region` and `blit` raise on coordinates past the bitmap, so
   the strip clips in Python, and the first pass rendered text and cut
   arcs inside the first flush (8 to 14 ms worst), which moved to mark
-  time.  88 tests on CPython, 85 on each unix port.  By-eye checks:
-  pending the maintainer's read of the OLED counter and font counter
-  under MicroPython, and of the round TFT on both cells once wired.
+  time.  88 tests on CPython, 85 on each unix port.
+- 2026-09-13: Phase 3 shipped and the bench closed on both cells.
+  Column windows on the round TFT, `PCD8544` as a second page-strip
+  panel, the strip write's lock inlined, screens back to 0.1.0 as the
+  version of first publication (the branch had laddered 0.2.0 to
+  0.4.0 across phases on a package never released).  97 tests on
+  CPython, 95 on each unix port.  By eye, the maintainer's read:
+  MicroPython Pico W with the OLED on GP4 and GP5 and the TFT on
+  GP6 to GP10 at once, the card's labels each on their own color in a
+  white ring, the counter ticking inside a steady ring, the font
+  counter's digits centered in the 20-pixel face, the OLED counters
+  right; the TFT counter then deployed as `main.py` through
+  `chumicro-deploy deploy --transport micropython` and counting from
+  flash.  CircuitPython Pico W (10.2.1) with the TFT moved over, the
+  same three through `chumicro-deploy deploy --directory`, all clean
+  to frame 19 in their tails, the counter read by eye, the font
+  counter's 20-pixel text the same bitmaps and its built-in tag
+  narrower and taller as documented.  The PCD8544 driver waits in
+  `.scratch/pcd8544_pending/` for its module to be wired.

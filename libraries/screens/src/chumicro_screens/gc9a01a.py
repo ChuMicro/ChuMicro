@@ -173,34 +173,42 @@ class GC9A01A:
             self.strip = BitmapStrip(WIDTH, rows)
             self._view = self.strip.buffer
         else:
-            buffer = bytearray(WIDTH * rows * 2)
-            self.strip = FramebufStrip(framebuf.FrameBuffer(buffer, WIDTH, rows, framebuf.RGB565),
-                                       WIDTH, rows, framebuf.RGB565)
-            self._view = buffer
+            self.strip = FramebufStrip(bytearray(WIDTH * rows * 2), WIDTH, rows, framebuf.RGB565,
+                                       narrowable=True)
+            self._view = None
+        self._column_window = bytearray(4)
         self._row_window = bytearray(4)
-        self._lock()
+        if self._locking:
+            while not spi.try_lock():
+                pass
         try:
             _reset_panel(reset, sleep_ms)
             _run_init(spi, chip_select, data_command, sleep_ms)
         finally:
-            self._unlock()
+            if self._locking:
+                spi.unlock()
 
-    def _lock(self) -> None:
-        if self._locking:
-            while not self._spi.try_lock():
-                pass
+    def write_strip(self, top: int, count: int, left: int, right: int) -> None:
+        """Send columns ``left`` to ``right`` of the strip to ``count`` panel rows from ``top``.
 
-    def _unlock(self) -> None:
-        if self._locking:
-            self._spi.unlock()
-
-    def write_strip(self, top: int, count: int) -> None:
-        """Send the strip to ``count`` panel rows from ``top`` as one transfer; the ``Screen`` panel protocol.
+        One self-contained transfer: column and row window, then the
+        pixels.  On CircuitPython a narrowed window goes one bounded
+        ``busio`` write per row from the full-width strip; on
+        MicroPython the strip laid itself out at the window's width,
+        so its view is the whole transfer.
 
         Args:
             top: Panel row the strip's row 0 holds.
             count: Rows to send, the strip's full height.
+            left: First column to send.
+            right: One past the last column to send.
         """
+        columns = self._column_window
+        column_end = right - 1
+        columns[0] = left >> 8
+        columns[1] = left & 0xFF
+        columns[2] = column_end >> 8
+        columns[3] = column_end & 0xFF
         window = self._row_window
         row_end = top + count - 1
         window[0] = top >> 8
@@ -210,13 +218,16 @@ class GC9A01A:
         spi = self._spi
         chip_select = self._chip_select
         data_command = self._data_command
-        self._lock()
+        locking = self._locking
+        if locking:
+            while not spi.try_lock():
+                pass
         try:
             chip_select(0)
             data_command(0)
             spi.write(_COLUMN_ADDRESS_COMMAND)
             data_command(1)
-            spi.write(_FULL_WIDTH_WINDOW)
+            spi.write(columns)
             data_command(0)
             spi.write(_ROW_ADDRESS_COMMAND)
             data_command(1)
@@ -224,7 +235,19 @@ class GC9A01A:
             data_command(0)
             spi.write(_MEMORY_WRITE_COMMAND)
             data_command(1)
-            spi.write(self._view)
+            if framebuf is not None:
+                spi.write(self.strip.view)
+            elif right - left == WIDTH:
+                spi.write(self._view)
+            else:
+                view = self._view
+                offset = left
+                row = 0
+                while row < count:
+                    spi.write(view, start=offset, end=offset + right - left)
+                    offset += WIDTH
+                    row += 1
             chip_select(1)
         finally:
-            self._unlock()
+            if locking:
+                spi.unlock()

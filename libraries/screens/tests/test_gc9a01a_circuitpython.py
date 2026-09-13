@@ -59,9 +59,10 @@ class FakeBusioSpi:
         self.unlock_count += 1
         self.locked = False
 
-    def write(self, data):
+    def write(self, data, *, start=0, end=None):
+        """``start`` and ``end`` count the buffer's items; the stub bitmap's items are bytes."""
         assert self.locked, "write outside the lock"
-        view = memoryview(data)
+        view = memoryview(data)[start:end]
         self.lengths.append(len(view))
         self.writes.append(bytes(view[:8]))
 
@@ -89,7 +90,7 @@ def test_write_strip_locks_around_one_transfer_and_streams_the_bitmap():
     del spi.writes[:]
     del spi.lengths[:]
 
-    panel.write_strip(8, 8)
+    panel.write_strip(8, 8, 0, 240)
 
     assert spi.lock_count == 2
     assert spi.unlock_count == 2
@@ -98,8 +99,27 @@ def test_write_strip_locks_around_one_transfer_and_streams_the_bitmap():
     assert spi.writes[-1][:4] == b"\xcd\xab\xcd\xab"
 
 
+def test_a_column_window_sends_each_row_bounded_to_its_columns():
+    """A 60-column window is 8 bounded writes of 60 items after the column bytes for 40 to 99.
+
+    The driver bounds each row in the view's items, pixels on the
+    board; the stub's view counts bytes, so item 40 here is pixel 20.
+    """
+    panel, spi = make_panel(rows=8)
+    panel.strip.top = 8
+    panel.strip.fill_rect(20, 8, 1, 1, 0xABCD)
+    del spi.writes[:]
+    del spi.lengths[:]
+
+    panel.write_strip(8, 8, 40, 100)
+
+    assert spi.writes[1] == b"\x00\x28\x00\x63"
+    assert spi.lengths[5:] == [60] * 8
+    assert spi.writes[5][:2] == b"\xcd\xab"
+
+
 def test_a_refused_lock_is_retried_until_it_is_granted():
     panel, spi = make_panel(rows=8, refusals=3)
     assert spi.lock_count == 4
-    panel.write_strip(0, 8)
+    panel.write_strip(0, 8, 0, 240)
     assert spi.unlock_count == 2

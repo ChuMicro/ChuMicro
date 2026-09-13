@@ -38,14 +38,15 @@ def test_a_new_screen_flushes_nothing() -> None:
     assert panel.writes == []
 
 
-def test_add_paints_only_the_bands_the_item_covers() -> None:
-    """A 4-row rectangle at rows 10 to 14 paints the second band alone, cleared first."""
+def test_add_paints_only_the_bands_and_columns_the_item_covers() -> None:
+    """A 4-row rectangle at rows 10 to 14 paints the second band alone, windowed to its columns."""
     panel = FakeScreenPanel(width=32, height=32, rows=8)
     screen = Screen(panel, background=3)
     screen.add(Rect(2, 10, 5, 4, 9))
 
     assert drain(screen) == 1
-    assert panel.writes == [(8, 8)]
+    assert panel.writes == [(8, 8, 2, 7)]
+    assert panel.strip.windows == [(2, 7)]
     assert panel.strip.calls == [("clear", 8, 3), ("fill_rect", 8, 2, 10, 5, 4, 9)]
 
 
@@ -55,7 +56,7 @@ def test_an_item_across_a_band_edge_paints_both_bands() -> None:
     screen.add(Rect(0, 6, 4, 4, 1))
 
     assert drain(screen) == 2
-    assert panel.writes == [(0, 8), (8, 8)]
+    assert panel.writes == [(0, 8, 0, 4), (8, 8, 0, 4)]
     assert [call[1] for call in calls(panel, "fill_rect")] == [0, 8]
 
 
@@ -87,7 +88,7 @@ def test_mark_repaints_where_the_item_was_and_where_it_is() -> None:
     screen.mark(rect)
     drain(screen)
 
-    assert panel.writes == [(0, 8), (8, 8), (16, 8), (24, 8)]
+    assert panel.writes == [(0, 8, 0, 4), (8, 8, 0, 4), (16, 8, 0, 4), (24, 8, 0, 4)]
     assert [call[1] for call in calls(panel, "fill_rect")] == [24]
 
 
@@ -103,7 +104,7 @@ def test_remove_repaints_where_the_item_was_painted() -> None:
     screen.remove(rect)
     drain(screen)
 
-    assert panel.writes == [(16, 8)]
+    assert panel.writes == [(16, 8, 0, 4)]
     assert len(calls(panel, "fill_rect")) == painted
 
 
@@ -113,7 +114,7 @@ def test_mark_all_paints_every_band_including_a_short_last_one() -> None:
     screen.mark_all()
 
     assert drain(screen) == 3
-    assert panel.writes == [(0, 8), (8, 8), (16, 4)]
+    assert panel.writes == [(0, 8, 0, 32), (8, 8, 0, 32), (16, 4, 0, 32)]
 
 
 def test_bounds_outside_the_panel_clip_and_an_empty_mark_is_ignored() -> None:
@@ -125,7 +126,7 @@ def test_bounds_outside_the_panel_clip_and_an_empty_mark_is_ignored() -> None:
     screen.add(Rect(30, 30, 40, 40, 1))
     assert panel.writes == []
     assert drain(screen) == 1
-    assert panel.writes == [(24, 8)]
+    assert panel.writes == [(24, 8, 30, 32)]
 
 
 def test_a_flush_clears_the_dirty_rectangle_so_the_next_is_empty() -> None:
@@ -164,7 +165,7 @@ def test_screen_service_drives_a_screen_one_band_per_handle() -> None:
     for tick in range(4):
         assert service.check(tick)
         service.handle(tick)
-    assert panel.writes == [(0, 8), (8, 8), (16, 8), (24, 8)]
+    assert panel.writes == [(0, 8, 0, 32), (8, 8, 0, 32), (16, 8, 0, 32), (24, 8, 0, 32)]
     assert service.check(4)
     service.handle(4)
     assert not service.check(5)

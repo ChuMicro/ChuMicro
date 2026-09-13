@@ -1,11 +1,12 @@
 """Draw a labeled color card on a GC9A01A round TFT: one file, both runtimes.
 
-Wiring for a Pi Pico W: SCK=GP6, MOSI=GP7, CS=GP5, DC=GP8, RST=GP9,
-VCC=3V3, GND=GND.  The panel's SCL/SDA silk is SPI clock and data,
-not I2C.  For a LOLIN S2 Mini wire SCL=IO7, SDA=IO11, CS=IO12,
-DC=IO9, RST=IO5 and make the numbers below controller 1, sck=7,
-mosi=11, miso=3, and pins 12, 9, 5.  The same numbers serve
-MicroPython and CircuitPython, and so does every line after them.
+Wiring for a Pi Pico W: SCK=GP6, MOSI=GP7, CS=GP10, DC=GP8, RST=GP9,
+VCC=3V3, GND=GND, which leaves GP4 and GP5 free for an I2C panel on
+the same board.  The panel's SCL/SDA silk is SPI clock and data, not
+I2C.  For a LOLIN S2 Mini wire SCL=IO7, SDA=IO11, CS=IO12, DC=IO9,
+RST=IO5 and make the numbers below controller 1, sck=7, mosi=11,
+miso=3, and pins 12, 9, 5.  The same numbers serve MicroPython and
+CircuitPython, and so does every line after them.
 
 Run this first after wiring a panel.  Each bar carries its own name,
 which catches the mistakes a solid fill cannot: swapped color
@@ -31,9 +32,9 @@ from chumicro_screens import Rect, Ring, Screen, ScreenService, Text
 from chumicro_screens.gc9a01a import GC9A01A, color565
 from chumicro_timing import ticks_ms
 
-spi = spi_bus(0, sck=6, mosi=7, miso=4, baudrate=40_000_000)
+spi = spi_bus(0, sck=6, mosi=7, miso=16, baudrate=40_000_000)
 panel = GC9A01A(spi,
-                digital_output(5, value=1),
+                digital_output(10, value=1),
                 digital_output(8, value=0),
                 digital_output(9, value=1))
 screen = Screen(panel)
