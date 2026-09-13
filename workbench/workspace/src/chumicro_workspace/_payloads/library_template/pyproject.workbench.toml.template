@@ -11,6 +11,7 @@ description = ""
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
+license-files = ["LICENSE"]
 authors = [
     {{ name = "{author}" }},
 ]
@@ -33,6 +34,11 @@ dependencies = [
     # libraries (pyserial, pyyaml, ruamel, rich, etc.) because workbench
     # packages are CPython-only.  Don't depend on the chumicro device
     # libraries; those are built for the board.
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest",
 ]
 
 {project_urls}[project.scripts]

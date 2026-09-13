@@ -13,6 +13,9 @@
       <sourceFolder url="file://$MODULE_DIR$/libraries/buttons/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/buttons/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/buttons/functional_tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/libraries/charlcd/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/libraries/charlcd/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/libraries/charlcd/functional_tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/compat/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/compat/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/compat/functional_tests" isTestSource="true" />
@@ -43,6 +46,9 @@
       <sourceFolder url="file://$MODULE_DIR$/libraries/runner/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/runner/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/runner/functional_tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/libraries/screens/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/libraries/screens/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/libraries/screens/functional_tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/sockets/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/sockets/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/sockets/functional_tests" isTestSource="true" />

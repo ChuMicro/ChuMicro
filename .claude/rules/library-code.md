@@ -49,6 +49,7 @@ Applies to `libraries/` and `support/<name>/src/`, cross-runtime by default. Not
 - Mark runtime-specific files `__chumicro_runtimes__ = ("circuitpython",)`. Mark `testing.py` fakes `__chumicro_test_support__ = True` with no runtime marker.
 - f-strings for formatting. `const()`, `memoryview`, and pre-allocated buffers here only.
 - No `__slots__`; neither device runtime implements it.
+- No two-argument `next(iterator, default)` on a board path. CircuitPython board builds raise `TypeError` on it while the unix port accepts it, so the port suite passes and the board fails. Catch `StopIteration`, or select the form at import the way `chumicro_screens.core` does.
 - No pure-passthrough `@property`. Properties that compute or transform stay.
 - Descriptive names, no single letters except `_`, abbreviations expanded (`environment`, `buffer`, `source`, `command`, `message`, `error`, `reference`, `address`, `exception`, `execute`). `CHU001` enforces it. Suppress only to match an upstream API.
 - Prefer pure-Python implementations that run on all three runtimes.
@@ -62,4 +63,4 @@ Applies to `libraries/` and `support/<name>/src/`, cross-runtime by default. Not
 
 ## Before calling it done
 
-Changes touching I/O, hot paths, or runtime-specific behavior need a real board. Deploy to the tier the library targets (Pico W at minimum), run a one-minute REPL tail under load, and confirm no traceback, safe-mode banner, or silent stall. `chumicro-workspace deploy-example`, `chumicro-workspace deploy <project> --tail <seconds>`, or `chumicro-workspace repl --tail <seconds>`.
+Changes touching I/O, hot paths, or runtime-specific behavior need a real board. The matrix is one cell per chip family per runtime ([Decision 0015](../../plans/decisions/0015-board-architecture-support.md)): the ESP32 family and RP2040/RP2350 are separate cells, and a pass on one says nothing about the rest. Tier 2 boards (Pico W, bare ESP32-S2) are that matrix's constrained floor rather than a substitute for it, so a Pico-W-only run is a partial result and gets reported as one. Run a one-minute REPL tail under load on each cell and confirm no traceback, safe-mode banner, or silent stall. `chumicro-workspace deploy-example`, `chumicro-workspace deploy <project> --tail <seconds>`, or `chumicro-workspace repl --tail <seconds>`.

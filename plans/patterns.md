@@ -628,7 +628,96 @@ from chumicro_sockets import UnsupportedSSLConfigError  # noqa: E402
 Related: AGENTS.md "Production tolerance that paper-overs a fake's hardcoded value" (sibling rule about production not bending to tests), `_SwapAttribute` helper in `libraries/sockets/tests/test_cp_adapter.py`.
 
 
-## Cross-runtime shim
+## framebuf RGB565 is little-endian; SPI color panels read big-endian
+
+MicroPython's `framebuf.FrameBuffer` stores RGB565 pixels low byte
+first, while GC9A01A/ST77xx-class panels read the high byte first, so
+a buffer flushed raw shows channel-rotated colors (intended red shows
+blue, green shows red, blue shows green) even though hand-built
+big-endian test fills looked correct on the same wiring.  Bench-bitten
+2026-08-23 on the GC9A01A: the smoke script's hand-packed fills passed,
+the framebuf-backed driver rotated.
+
+The zero-cost fix: the driver's `color565` helper pre-swaps the packed
+value so the little-endian buffer bytes land on the wire in panel
+order.  Byte-swapping at flush time in Python is never the answer (a
+per-pixel pass blows the tick budget).  Consequence: raw RGB565
+literals like `0xF800` render wrong through such a driver; colors
+must come from the helper, and the driver docstring says so.  A
+labeled test card (color bars captioned with their names) is the bench
+check that catches this class; solid fills cannot, because a rotation
+maps every primary onto another clean primary.
+
+Reference implementation: `chumicro_screens.gc9a01a.color565`.
+
+## Viper breaks arch-neutral compilation
+
+Viper code anywhere in a module breaks arch-neutral compilation:
+`mpy-cross` without `-march` refuses it (`SyntaxError: invalid arch`,
+measured on 1.27.0), which fails the `check-size` gate and would force
+the bundle's `.mpy` channel per-arch.  A nested def keeps CPython
+imports working but not `mpy-cross`, which compiles the whole file.
+Reach for a C primitive with the right clipping first; the strip
+canvases below are what that looks like for pixels.
+
+## A strip canvas paints a few rows at a time; each runtime's primitives clip differently
+
+A panel over SPI or I2C holds its own picture, so a driver keeps a
+strip of a few rows and paints the scene items that cross it with the
+row offset applied, then streams the strip.  RAM stops depending on
+the panel, and the primitives do the clipping.  What each runtime's
+layer actually does at the edges:
+
+- MicroPython `framebuf` clips every primitive, `ellipse`, `text`, and
+  `blit` included, so a strip is a plain `FrameBuffer` and a circle
+  whose center lies outside it draws its visible arc.  A call costs 60
+  to 370 us on an RP2040 and allocates nothing.
+- CircuitPython `bitmaptools` is mixed.  `draw_line` and
+  `draw_polygon` clip through the bounds-checked pixel writer, but
+  `fill_region` and `blit` raise `ValueError` on any coordinate past
+  the bitmap, and `draw_circle` moves a center outside the bitmap
+  inside it rather than clipping, so the strip clips rectangles and
+  blits in Python first and draws a ring as the polyline arcs that
+  cross each band, cut once at mark time from vertex rows pre-shifted
+  per band.  A call allocates nothing but costs per pixel touched,
+  about 0.7 us for a fill and 1.5 us for a blit on an RP2040, so
+  `displayio.Bitmap.fill` (130 us for a 240 by 8 strip) clears the
+  strip where `fill_region` takes 1.3 ms, and text renders once into a
+  sprite the strip blits in one call.
+
+Rendering that costs C calls per glyph or per vertex happens at mark
+time, never inside a flush advance, so every advance is the bus plus
+one call per item and the first paint costs the same as any other.
+
+Reference implementation: `chumicro_screens.framebuf_strip.FramebufStrip`,
+`chumicro_screens.bitmap_strip.BitmapStrip`, and `chumicro_screens.screen.Screen.flush`.
+
+## Packed 1-bit glyphs blit in C on both runtimes without a copy
+
+A font-to-py module stores each glyph as rows of `(width + 7) // 8`
+bytes, most significant bit first, which is framebuf's `MONO_HLSB`
+layout.  Two firmware facts let one Python layer draw it at C speed on
+both runtimes:
+
+- `FrameBuffer.blit` accepts a `(buffer, width, height, format[,
+  stride])` tuple or list as its source and reads the buffer read-only
+  (`get_readonly_framebuffer` in `modframebuf.c`, 1.27.0), so a
+  `bytes` glyph blits with no `bytearray` copy and no `FrameBuffer`
+  object; reuse one list and assign its first two slots per glyph.
+  With a palette, `key` compares against the *mapped* value, so the
+  transparent entry is whatever the palette maps the background bit
+  to, chosen to differ from the foreground index.
+- A CircuitPython 10.2 `displayio.Bitmap` with two values per pixel
+  stores rows byte-packed most significant bit first (rows padded to
+  32 bits), and `bitmaptools.readinto(bitmap, io.BytesIO(rows), 1,
+  element_size=1, reverse_pixels_in_element=True)` loads exactly those
+  packed rows through a public call, no per-pixel Python.  Read each
+  glyph into a stamp bitmap of its own width and blit the stamp into
+  one sheet, a few C calls per glyph, and `bitmaptools.blit` draws any
+  glyph as a region of the sheet.
+
+Reference implementation: `chumicro_screens.fonts.Font` and
+`chumicro_screens.bitmap_strip.stamp_glyph`.
 
 When a module exists on CPython but not on MicroPython/CircuitPython
 (or vice versa), write a thin shim with runtime detection.

@@ -8,6 +8,7 @@
     "python.analysis.extraPaths": [
         "support/test_harness/src",
         "libraries/buttons/src",
+        "libraries/charlcd/src",
         "libraries/compat/src",
         "libraries/config/src",
         "libraries/http_server/src",
@@ -18,6 +19,7 @@
         "libraries/ntp/src",
         "libraries/requests/src",
         "libraries/runner/src",
+        "libraries/screens/src",
         "libraries/sockets/src",
         "libraries/timing/src",
         "libraries/websockets/src",

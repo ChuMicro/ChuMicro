@@ -4,9 +4,9 @@ title: "chumicro-compat: standard-library polyfills for CircuitPython and MicroP
 
 # chumicro-compat
 
-**Cross-runtime compatibility polyfills for CircuitPython, MicroPython, and CPython.**
+**Cross-runtime compatibility polyfills for CircuitPython, MicroPython, and CPython, and pins by GPIO number on both device runtimes.**
 
-Lightweight reimplementations of the standard-library pieces CircuitPython and MicroPython leave out. Import the polyfill submodule (`from chumicro_compat.functools import partial`) and the same code runs on all three runtimes: on CPython the real C implementation is re-exported, so the import costs nothing there.
+Lightweight reimplementations of the standard-library pieces CircuitPython and MicroPython leave out. Import the polyfill submodule (`from chumicro_compat.functools import partial`) and the same code runs on all three runtimes: on CPython the real C implementation is re-exported, so the import costs nothing there.  `chumicro_compat.wiring` turns an MCU GPIO number into the runtime's pin or bus object, so one construction block runs on MicroPython and CircuitPython alike.
 
 ## Install
 
@@ -40,8 +40,8 @@ set_status_led(100)  # pin 13 → 100%
 
 ## Documentation
 
-- [User Guide](guide.md): `functools.partial` across runtimes, platform notes, examples
-- [API Reference](api.md): `partial` and its `func` / `args` / `keywords` attributes
+- [User Guide](guide.md): `functools.partial` across runtimes, pins and buses by GPIO number, platform notes, examples
+- [API Reference](api.md): `partial` and its `func` / `args` / `keywords` attributes; `digital_output`, `spi_bus`, `i2c_bus`
 
 ---
 

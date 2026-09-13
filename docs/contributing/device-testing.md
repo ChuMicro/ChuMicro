@@ -14,6 +14,8 @@ Use it when you want to:
 
 Host-side `tests/` still run through normal CPython pytest. Real-board validation is an extra layer for behavior that mocks and unix-port checks cannot prove.
 
+The bench holds one board at a time, and the person at the bench swaps boards and wires the panel or sensor to each. `devices.yml` reflects that: the Pi Pico W entries for both runtimes share one serial port, and `chumicro-workspace probe` tells you which board is plugged in now. A matrix cell on another board is a hand-off, so an agent driving the bench names the swap and the wiring it needs and waits, and a check that needs eyes on a panel says so before the run rather than reporting the run as unverified afterwards.
+
 ## What gets configured
 
 `python scripts/run.py setup` creates three gitignored files at the repo root when they do not already exist:

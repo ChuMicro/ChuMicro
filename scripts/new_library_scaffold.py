@@ -50,6 +50,10 @@ def _scaffold_library(name: str, *, workbench: bool = False) -> int:
     except LibraryAlreadyExistsError as exception:
         print(f"Directory already exists: {exception}")
         return 1
+    # The sdist gate requires every package to carry the canonical
+    # license text; the shared scaffolder can't do this because a
+    # downstream workspace has no ChuMicro root LICENSE to copy.
+    (created / "LICENSE").write_bytes((ROOT / "LICENSE").read_bytes())
     print(f"Created {created.relative_to(ROOT)}/")
     return 0
 

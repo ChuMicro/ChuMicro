@@ -18,7 +18,7 @@
      don't have to invent their own mocks.  Delete this comment when
      you're done. -->
 
-`{import_name}.testing` provides `FakeCountdown`, a stand-in for `Countdown` whose fire state is controlled directly by the test, so downstream code that owns a `Countdown` can be driven through deadlines without managing real ticks.  The module declares `__chumicro_runtimes__ = ("cpython",)`, so the deploy filter keeps it on the host and it never lands on a device.
+`{import_name}.testing` provides `FakeCountdown`, a stand-in for `Countdown` whose fire state is controlled directly by the test, so downstream code that owns a `Countdown` can be driven through deadlines without managing real ticks.  The module declares `__chumicro_test_support__ = True`, so the deploy filter keeps it on the host and it never lands on a device.
 
 ## Usage
 

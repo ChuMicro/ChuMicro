@@ -5,13 +5,19 @@ from pathlib import Path
 from new_library_scaffold import _scaffold_library
 
 
+def _make_root(tmp_path: Path, monkeypatch, parent: str = "libraries") -> None:
+    """Point the scaffolder at a fake repo root with a LICENSE to copy."""
+    monkeypatch.setattr("new_library_scaffold.ROOT", tmp_path)
+    (tmp_path / "LICENSE").write_text("MIT License\n")
+    (tmp_path / parent).mkdir(parents=True)
+
+
 class TestScaffoldLibrary:
     """Tests for _scaffold_library."""
 
     def test_creates_expected_structure(self, tmp_path: Path, monkeypatch):
         """Scaffolding creates the full directory tree."""
-        monkeypatch.setattr("new_library_scaffold.ROOT", tmp_path)
-        (tmp_path / "libraries").mkdir()
+        _make_root(tmp_path, monkeypatch)
 
         result = _scaffold_library("example")
         assert result == 0
@@ -34,10 +40,17 @@ class TestScaffoldLibrary:
         assert (library_dir / "examples" / "basic_usage.py").exists()
         assert (library_dir / "functional_tests" / ".gitkeep").exists()
 
+    def test_copies_the_root_license(self, tmp_path: Path, monkeypatch):
+        """The package carries the repo root LICENSE, byte for byte."""
+        _make_root(tmp_path, monkeypatch)
+
+        _scaffold_library("example")
+        packaged = (tmp_path / "libraries" / "example" / "LICENSE").read_bytes()
+        assert packaged == (tmp_path / "LICENSE").read_bytes()
+
     def test_version_starts_at_0_1_0(self, tmp_path: Path, monkeypatch):
         """VERSION file starts at 0.1.0."""
-        monkeypatch.setattr("new_library_scaffold.ROOT", tmp_path)
-        (tmp_path / "libraries").mkdir()
+        _make_root(tmp_path, monkeypatch)
 
         _scaffold_library("example")
         version = (tmp_path / "libraries" / "example" / "VERSION").read_text()
@@ -45,8 +58,7 @@ class TestScaffoldLibrary:
 
     def test_pyproject_contains_name(self, tmp_path: Path, monkeypatch):
         """pyproject.toml contains the library name."""
-        monkeypatch.setattr("new_library_scaffold.ROOT", tmp_path)
-        (tmp_path / "libraries").mkdir()
+        _make_root(tmp_path, monkeypatch)
 
         _scaffold_library("mylib")
         pyproject = (tmp_path / "libraries" / "mylib" / "pyproject.toml").read_text()
@@ -61,8 +73,7 @@ class TestScaffoldLibrary:
         libraries live, so the emitted package resolves its Homepage / Source
         / bundle links.
         """
-        monkeypatch.setattr("new_library_scaffold.ROOT", tmp_path)
-        (tmp_path / "libraries").mkdir()
+        _make_root(tmp_path, monkeypatch)
 
         _scaffold_library("mylib")
         library_dir = tmp_path / "libraries" / "mylib"
@@ -74,8 +85,7 @@ class TestScaffoldLibrary:
 
     def test_init_exports_class(self, tmp_path: Path, monkeypatch):
         """__init__.py exports the generated class name."""
-        monkeypatch.setattr("new_library_scaffold.ROOT", tmp_path)
-        (tmp_path / "libraries").mkdir()
+        _make_root(tmp_path, monkeypatch)
 
         _scaffold_library("my-thing")
         init_content = (
@@ -88,8 +98,8 @@ class TestScaffoldLibrary:
 
     def test_existing_directory_fails(self, tmp_path: Path, monkeypatch, capsys):
         """Scaffolding fails if the library directory already exists."""
-        monkeypatch.setattr("new_library_scaffold.ROOT", tmp_path)
-        (tmp_path / "libraries" / "existing").mkdir(parents=True)
+        _make_root(tmp_path, monkeypatch)
+        (tmp_path / "libraries" / "existing").mkdir()
 
         result = _scaffold_library("existing")
         assert result == 1
@@ -97,8 +107,7 @@ class TestScaffoldLibrary:
 
     def test_hyphenated_name(self, tmp_path: Path, monkeypatch):
         """Hyphenated library names are converted to underscores in imports."""
-        monkeypatch.setattr("new_library_scaffold.ROOT", tmp_path)
-        (tmp_path / "libraries").mkdir()
+        _make_root(tmp_path, monkeypatch)
 
         _scaffold_library("data-store")
         assert (
@@ -114,8 +123,7 @@ class TestScaffoldLibrary:
         scaffolder, workbench parent + ``package_kind="workbench"``,
         which yields the CLI-entry-point ``[project.scripts]`` block.
         """
-        monkeypatch.setattr("new_library_scaffold.ROOT", tmp_path)
-        (tmp_path / "workbench").mkdir()
+        _make_root(tmp_path, monkeypatch, parent="workbench")
 
         result = _scaffold_library("mytool", workbench=True)
         assert result == 0
@@ -129,8 +137,7 @@ class TestScaffoldLibrary:
 
     def test_test_file_has_tests(self, tmp_path: Path, monkeypatch):
         """Generated test file contains test methods."""
-        monkeypatch.setattr("new_library_scaffold.ROOT", tmp_path)
-        (tmp_path / "libraries").mkdir()
+        _make_root(tmp_path, monkeypatch)
 
         _scaffold_library("example")
         test_content = (
