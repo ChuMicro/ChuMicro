@@ -127,47 +127,61 @@ is its own `time.monotonic_ns()` integers; a driver with pre-sliced views
 has none.  After a displayio session had churned the heap, the same
 115,200-byte allocation failed, so the frame has to be allocated first.
 
-## The boot straight after a host write sometimes starts 52 KB short
+## A run that dies holding a large heap splits the pool for the next boot
 
-A Pi Pico W under CircuitPython 10.2.1 boots with either 178,544 bytes
-free and a largest block of 166,720, or 124,880 free and 115,072
-largest, exactly 53,248 bytes apart, measured by a `code.py` that
-prints `gc.mem_free()` and the largest `bytearray` it can allocate
-before importing anything.  The short boot has followed a hand `cp`
-onto CIRCUITPY (which also leaves `._code.py`, the AppleDouble file
-the section above warns about) and it has followed
-`chumicro-deploy deploy --directory` with nothing copied by hand; the
-next Ctrl-D with no write in between has started long every time.  A
-16-bit `GC9A01AIndexed` frame needs 115,200 bytes in one block, 128
-more than the short boot holds before a single import, so on that
-boot it fails whatever the app does, and a `MemoryError` at that
-allocation on a deploy's own boot is this and not the driver.  The
-next section is the other reason the same allocation fails.
+Measured 2026-09-13 on a Pi Pico W under CircuitPython 10.2.1 with a
+`code.py` that prints `gc.mem_free()`, bisects the largest `bytearray`
+it can allocate before importing anything, and alternates how it ends
+(`.scratch/probe_reboot_ending_cp.py`, `.scratch/probe_reboot_hold_cp.py`,
+rebooted with `.scratch/cp_reboot_tail2.py`).  On this build
+`gc.mem_free()` is the heap's free bytes plus the outer pool's largest
+free block, so it counts memory the heap has not taken yet, and the
+board build has no `micropython.mem_info`.
 
-## A large module's compile pins the top of the heap
+| Previous run ended | Largest block at the next boot |
+|---|---|
+| clean return (three boots) | 166,720 |
+| exception from a small heap (two boots) | 166,720 |
+| exception while holding a 100 KB `bytearray` | 111,104 |
+| exception from a small heap, the boot after that | 123,072 |
 
-Importing `chumicro_screens.gc9a01a` on a long boot leaves the largest
-free block at 115,072 bytes: 166,720 at boot, 158,784 after
-`chumicro_compat.wiring`, 115,072 after the driver, and there it stays
-through the rest of the chain (Pi Pico W, CircuitPython 10.2.1, the
-Phase 4 driver at 13,338 stripped bytes).  The Phase 3a driver, at
-11,744, left 142,912, and a 16-bit frame plus the counter example fit
-with 45 KB spare.  The parser grows one chunk in place at the bottom of
-the largest free region, and any allocation too big for the holes
-below it while the tree is alive, the bytecode of a big function or a
-qstr pool (pools start at 10 entries and double, so the 320-entry pool
-arrives near the 300th name absent from the firmware's ROM table),
-lands right above the tree and stays after the tree is freed.  Neither
-trimming the driver's identifiers to the old count nor cutting 1.3 KB
-of its source moved the plateau; removing a 2 KB class did, so the
-step is a placement threshold and not a smooth cost.  The fix that
-holds is to allocate the frame before importing the driver:
-`displayio.Bitmap(240, 240, 65536)` as the app's first statement,
-handed in through `GC9A01AIndexed(..., frame_bits=16, bitmap=...)`,
-leaves 41,680 free after the panel on the same boot.  The per-import
-probe is `.scratch/probe_heap_steps.py`, and
-`.scratch/qstr_budget.py` counts the non-ROM names an import chain
-interns against the Pico W build's `qstrdefs.generated.h`.
+`cleanup_after_vm` in `main.c` stores the traceback with `port_malloc`
+from the outer pool before it frees the dying run's heap areas, so the
+string lands above them and splits the pool there; the next boot's
+largest block is about the size of the heap the run died holding, and
+the split stays until a run returns cleanly and the string is freed.
+A run that raises from a small heap drops the string into a hole the
+pool already had and the next boot is whole.  A deploy interrupts a
+running app with Ctrl-C, which is the exception behind the earlier
+short boots straight after a host write, and a Ctrl-D after a clean
+probe run is why the boot after one always started long.
+
+## The heap grows by carving areas a large import's objects then pin
+
+The Python heap starts at 8 KB and grows by carving areas from the
+outer pool, doubling until the pool cannot give the double (`gc.c`,
+`gc_try_add_heap`), and an area returns to the pool only when nothing
+in it is alive.  On a whole boot the counter example's import chain
+reads 166,720 at boot, 158,784 after `chumicro_compat.wiring`, 115,072
+after `chumicro_screens.gc9a01a`, and flat after that
+(`.scratch/probe_import_segments_cp.py`, 2026-09-13).  At the driver's
+step `gc.mem_free()` minus the largest block rose from 15,808 to
+56,080 while `gc.mem_free()` fell 3.4 KB: the driver's compile carved
+about 44 KB of growth areas, its live objects stayed in them, and the
+pool's remaining region is what a 16-bit frame then asks for, 128
+bytes short.  On a split boot the driver's areas came out of the
+smaller region and the largest block stayed at 111,104 down the chain.
+
+With `CIRCUITPY_HEAP_START_SIZE = 163840` in `settings.toml`, read at
+every VM start, the chain stays inside one area: 154,496 at boot,
+122,144 after the driver, and the counter chain followed by a 16-bit
+`GC9A01AIndexed` with no handed-in bitmap allocated on both boots with
+45,072 free after (`.scratch/probe_start_size_cp.py`).  That leaves the
+outer pool about 10 KB after the pystack, whose other users on this
+port are keypad, usb_hid, usb_cdc, rp2pio, the supervisor display,
+and stored tracebacks; on a split pool the request fails and the
+firmware falls back to 8 KB silently; and the deploy evicts a board
+`settings.toml` on every clean push.
 
 ## CircuitPython board builds lack the two-argument next()
 

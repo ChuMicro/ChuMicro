@@ -1,9 +1,10 @@
 # Decision 0126: The portable canvas is indexed-palette
 
-Status: `accepted`
+Status: `superseded`
 Date: `2026-08-24`
 Summary: Portable canvas: framebuf vocabulary with palette indexes and `set_color`; an 8-bit frame on both runtimes, expanded per strip in C, with a 16-bit CircuitPython opt-in.
 Related: [Decision 0125](0125-display-libraries.md) (the firmware-layer criterion and the protocol this refines), [Decision 0080](0080-runner-reactor.md) (tick budget), [Decision 0051](0051-runner-shaped-as-project-policy.md) (runner shape), [Decision 0092](0092-no-backwards-compat-before-publication.md) (pre-1.0 reshaping), [Decision 0127](0127-pins-by-gpio-number.md) (portable pin references)
+Superseded by: [Decision 0129](0129-frameless-strip-renderer.md)
 
 ## Context
 

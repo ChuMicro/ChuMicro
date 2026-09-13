@@ -3,7 +3,7 @@
 Status: `accepted`
 Date: `2026-09-05`
 Summary: A canvas font is a font-to-py module drawn by `chumicro_screens.fonts.Font` through framebuf's read-only blit source and a 1-bit `displayio.Bitmap` sheet; no chumicro font format or converter.
-Related: [Decision 0126](0126-canvas-indexed-palette.md) (the canvas this extends), [Decision 0125](0125-display-libraries.md) (the firmware-layer criterion), [Decision 0092](0092-no-backwards-compat-before-publication.md)
+Related: [Decision 0129](0129-frameless-strip-renderer.md) (the renderer whose text items draw these fonts), [Decision 0126](0126-SUPERSEDED-BY-0129-canvas-indexed-palette.md) (the canvas this first extended), [Decision 0125](0125-display-libraries.md) (the firmware-layer criterion), [Decision 0092](0092-no-backwards-compat-before-publication.md)
 
 ## Context
 

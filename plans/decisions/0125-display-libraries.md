@@ -2,8 +2,8 @@
 
 Status: `accepted`
 Date: `2026-08-23`
-Summary: Displays ship as `chumicro-screens` (framebuf-shaped protocol over firmware layers) and `chumicro-segments`; drivers are first-party, MIT-credited where copied; no external Python dependencies.
-Related: [Decision 0042](0042-library-dependency-policy.md) (intra-chumicro dependency classes; this adds the external-package axis), [Decision 0124](0124-buttons-and-knobs-libraries.md) (per-family device libraries, no base library), [Decision 0080](0080-runner-reactor.md) (tick budget), [Decision 0087](0087-generators-for-sequential-io.md) (generator I/O), [Decision 0010](0010-library-testability.md) (constructor injection), [Decision 0090](0090-deploy-strips-docstrings-and-comments.md) (attribution placement)
+Summary: Displays ship as `chumicro-screens` (a frameless strip renderer) and `chumicro-segments`; drivers are first-party, MIT-credited where copied; no external Python dependencies.
+Related: [Decision 0042](0042-library-dependency-policy.md) (intra-chumicro dependency classes; this adds the external-package axis), [Decision 0124](0124-buttons-and-knobs-libraries.md) (per-family device libraries, no base library), [Decision 0129](0129-frameless-strip-renderer.md) (the shared surface), [Decision 0080](0080-runner-reactor.md) (tick budget), [Decision 0087](0087-generators-for-sequential-io.md) (generator I/O), [Decision 0010](0010-library-testability.md) (constructor injection), [Decision 0090](0090-deploy-strips-docstrings-and-comments.md) (attribution placement)
 
 ## Context
 
@@ -24,19 +24,19 @@ standards.
 
 - **`chumicro-screens`** covers pixel-addressable panels; monochrome and color
   are one library with pixel format as an axis, matching how both firmware
-  layers model it. The drawing protocol adopts `framebuf`'s method vocabulary
-  rather than inventing a new API; its portable color contract is
-  indexed-palette, pinned in [Decision 0126](0126-canvas-indexed-palette.md). On MicroPython the surface is a firmware
-  `framebuf.FrameBuffer` and the flush is a generator that yields between page
-  writes so each resume fits the tick budget. On CircuitPython the same surface
-  is implemented over a `displayio.Bitmap` with `bitmaptools` ops and
-  `terminalio.FONT`, and flush costs the library nothing under background
-  refresh: the firmware repaints from its background hook, which stalls the
-  app loop for the whole transfer (11.4 ms at worst on a 128x64 OLED at
-  400 kHz, 29.8 ms at 100 kHz), so an app that keeps the 5 ms tick passes
-  `auto_refresh=False` and refreshes from a handler of its own.
-  Full-RGB scene-graph work on CircuitPython stays native `displayio` code,
-  outside the protocol.
+  layers model it. The shared surface is a scene painted per strip with no
+  frame in RAM, pinned in [Decision 0129](0129-frameless-strip-renderer.md):
+  the strip is a firmware `framebuf.FrameBuffer` on MicroPython and a
+  `displayio.Bitmap` drawn with `bitmaptools` on CircuitPython, and the
+  flush is a generator that yields between strip writes so each resume fits
+  the tick budget. The displayio factories stay the CircuitPython-native
+  path, where flush costs the library nothing under background refresh: the
+  firmware repaints from its background hook, which stalls the app loop for
+  the whole transfer (11.4 ms at worst on a 128x64 OLED at 400 kHz, 29.8 ms
+  at 100 kHz), so an app that keeps the 5 ms tick passes
+  `auto_refresh=False` and refreshes from a handler of its own. Full-RGB
+  scene-graph work on CircuitPython stays native `displayio` code, outside
+  the shared surface.
 - **`chumicro-segments`** covers segment controllers (TM1637, HT16K33, MAX7219
   class): plain owned drivers with a `show(str)`-shaped surface, since no
   firmware layer exists for them. Character-cell LCDs are a third family,
@@ -63,18 +63,18 @@ Rejected alternatives:
 - **A cross-channel external-dependency mechanism** (pinning, mirroring,
   deploy staging, template and CI support) — a full workstream serving files
   of ~100 lines each. Revisit only for a need absorption cannot meet.
-- **Bypassing `displayio` for one cross-runtime driver body** — discards the
-  C-level scanline rendering that makes color panels viable in the 256 KB
-  board class.
+- **Rendering the shared surface through `displayio`**: its refresh repaints
+  every dirty pixel in one stall, about 6 us per pixel on an RP2040, so the
+  shared surface paints strips itself and displayio's scanline renderer
+  stays reachable through the factories.
 - **A base display library** — Decision 0124 already rejects the shape for
   device families; protocols are documented duck typing.
 
 ## Consequences
 
 - The two libraries enter `libraries/` through the `new-library` skill once
-  the bench hardware list exists; each MicroPython color panel picks a RAM
-  strategy (full RGB565 buffer, indexed buffer converted at flush, or windowed
-  writes) from its actual resolution.
+  the bench hardware list exists; every panel streams windowed strip writes
+  from one small buffer, whatever its resolution.
 - Consumers on any install channel need nothing beyond chumicro packages, and
   the workspace deploy stages everything it ships.
 - Both budget numbers are bench-measured: CircuitPython refresh jitter under

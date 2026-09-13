@@ -1,13 +1,17 @@
 # Workstream: screens capability slices
 
-Status: **active**, Phases 1 to 4 shipped and Phases 5 to 7 parked
-until a project wants them.  Planned during the
+Status: **superseded** by
+[screens-frameless-renderer.md](screens-frameless-renderer.md), which
+replaces the canvas Phases 2 to 4 built with a renderer that holds no
+frame.  Phase 1 (the pin resolvers) and Phase 3's font format stand;
+Phases 5 to 7 stay parked.  Planned during the
 GC9A01A matrix validation session so a cold pickup has the shapes, the
 measured constraints, and the order.  The goal, set by the maintainer the
 same day: one app's rendering and construction code runs on both device
 runtimes with at most wiring-fact edits.
-[Decision 0126](../decisions/0126-canvas-indexed-palette.md) pins the canvas
-contract; [Decision 0127](../decisions/0127-pins-by-gpio-number.md) pins the
+[Decision 0126](../decisions/0126-SUPERSEDED-BY-0129-canvas-indexed-palette.md)
+pinned the canvas contract;
+[Decision 0127](../decisions/0127-pins-by-gpio-number.md) pins the
 pin-reference contract.
 
 ## Why
@@ -461,3 +465,12 @@ actually wants on-device images.
   loading the canvas module at 120K, and 128K is the smallest green
   budget.  130 tests on CPython, 91 on the MicroPython port (real
   framebuf on every format), 79 on the CircuitPython port.
+- 2026-09-13: superseded.  Three heap runs on the CircuitPython Pico W
+  settled why the 16-bit frame needed `bitmap=`: a run that dies holding
+  a large heap leaves its traceback high in the outer pool and splits it
+  for the next boot, and the driver's import carves growth areas its
+  objects pin (hardware-traps.md carries both).  A frameless strip
+  renderer spiked on both Pico W cells the same day paints the counter
+  scene from a 3.8 KB buffer inside the tick, so the canvas, the
+  palette expansion, the 16-bit opt-in, and the allocation-order recipes
+  all go; the work continues in screens-frameless-renderer.md.

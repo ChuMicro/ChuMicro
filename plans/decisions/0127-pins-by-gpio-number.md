@@ -3,7 +3,7 @@
 Status: `accepted`
 Date: `2026-08-24`
 Summary: Apps name pins by MCU GPIO number; `chumicro-compat` resolvers turn the number into the runtime's pin or bus object; physical-pin numbers and board alias names are out of scope.
-Related: [Decision 0126](0126-canvas-indexed-palette.md) (the canvas whose construction seam this shrinks), [Decision 0010](0010-library-testability.md) (constructor injection), [Decision 0007](0007-cross-platform-dependency-strategy.md) (runtime shims live in compat)
+Related: [Decision 0129](0129-frameless-strip-renderer.md) (the renderer whose panel construction seam this shrinks), [Decision 0010](0010-library-testability.md) (constructor injection), [Decision 0007](0007-cross-platform-dependency-strategy.md) (runtime shims live in compat)
 
 ## Context
 
