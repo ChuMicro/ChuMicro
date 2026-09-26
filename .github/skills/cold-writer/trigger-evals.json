@@ -1,0 +1,13 @@
+{
+  "skill_name": "cold-writer",
+  "evals": [
+    {"query": "docs/start-here.md is exhausting. Rewrite it from checked facts with a fresh writer that never sees the old prose.", "should_trigger": true},
+    {"query": "Rebuild libraries/timing/docs/guide.md as a focused, professional quickstart. Research it, then cold-write the page.", "should_trigger": true},
+    {"query": "I want a clean-room rewrite of the install guide. Keep it as a draft so Chuck can judge the voice.", "should_trigger": true},
+    {"query": "Audit README.md for confusing wording and report the problems. Don't rewrite it yet.", "should_trigger": false, "expected_route": "audit-docs"},
+    {"query": "The timing library has a new exported class. Update docs/guide.md using the normal library guide structure.", "should_trigger": false, "expected_route": "guide-generation"},
+    {"query": "Audit the comments in libraries/timing/src/chumicro_timing/rate.py for readability.", "should_trigger": false, "expected_route": "audit-comments"},
+    {"query": "Create a new skill for writing hardware troubleshooting guides.", "should_trigger": false, "expected_route": "new-skill"},
+    {"query": "Fix the misspelled library name in docs/install.md. Keep the rest of the page as it is.", "should_trigger": false, "expected_route": "none"}
+  ]
+}

@@ -12,6 +12,14 @@
 
 ## Next
 
+- [ ] Review the [cold-writer](../.github/skills/cold-writer/TESTPLAN.md) start-here calibration for professional tone, concise coverage, and reading order; the trial-4 candidate is `.scratch/cold-writer/calibration/writer-4b/draft.md` with the plain control beside it, and `comparison-4.md` there lists the twelve requirements for the next brief. Obtain owner, beginner, and authorized hardware acceptance before applying anything.
+
+- [ ] Make the shared skill trigger-evaluation runner report failed model calls and unparsed replies as errors, including negative queries.
+
+- [ ] **The firmware-floor warning recommends a command that fails.** `firmware_support.py` tells the user to run `python3 run.py install-firmware --device <id>` when a board's firmware is below the supported floor, and `cli/firmware.py` rejects that invocation because `--method` is required; found by the cold-writer brief review while checking the registration recovery path. Fix the hint text or give `--method` a default.
+
+- [ ] Cold-writer follow-ups: ablate the remaining writer-prompt sentences against `--voice plain` controls at five or more runs each, calibrate `echo_check.py --max-share` from owner-approved pages instead of the provisional half-of-rejected figure, and add a `chumicro-docs` preview to `voices.json` so the shared voice menus show a taste of it.
+
 - [ ] **`chumicro_test_harness.markers.marker` has no caller left.**  Decision 0123 moved every demo `app.py` to plain `print` for its `NAME key=value` lines, and the demos were the helper's only consumer; the sole remaining reference is `support/test_harness/tests/test_markers.py`.  Decide between deleting it with its lazy export in `chumicro_test_harness/__init__.py` and keeping it documented for people writing their own on-device tests.  Either way `markers.py` can join `_DEMO_UNUSED_HARNESS_MODULES` in `deploy_api.py`, which is flash back on a 256 KB board.  Note the guarantee that goes with it: `marker()` raised at develop time on a value carrying whitespace or `=`, where a hand-written print fails silently on the host parser instead.
 
 - [ ] **No lint rule gates tick math, so `ticks_diff` is convention-only.**  `.claude/rules/library-code.md` requires all time math through `chumicro_timing`, but its named offenders are tick *sources* (`time.monotonic`, `supervisor.ticks_ms`), not the naive `now_ms >= deadline_ms` compare that `ticks_diff` exists to prevent; the style guide omits the rule entirely and no CHU rule covers it.  A violation passes every CPython test and every board run until `TICKS_PERIOD` (`1 << 29` ms, ~6.2 days) wraps and the compare inverts.  Library sources are clean today (grepped 2026-08-17); scope a CHU rule plus a style-guide entry, and watch false positives on size/index/count compares.

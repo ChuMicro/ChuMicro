@@ -121,6 +121,7 @@ Style for prose docs: the root README, every library's README and `docs/guide.md
 
 How the prose in this project's docs should sound:
 
+- **Professional and approachable, for the audience above.** Plain words in complete, connected sentences, the way you would explain the project at a desk to someone capable who is new to it. Precision and a clear sequence reassure the reader. Encouragement, jokes, mascot asides, and celebrations are not part of the voice. Explain what is unfamiliar about ChuMicro at first use and respect what the reader already knows. This section defines the voice once. The writing skills and their review contracts cite it instead of restating it, and the register excerpt in [`voice_samples/chumicro-docs.md`](https://github.com/ChuMicro/ChuMicro/blob/main/.github/skills/_shared/voices/voice_samples/chumicro-docs.md), paragraphs from the root README, is the passage that sets the bar.
 - **No em-dashes.** Anywhere, including code comments, table cells, and quoted output that doesn't actually contain one. Use a period, a comma, a colon, or parentheses.
 - **Plain words over clever ones.** If a phrase needs decoding (*"the runtime split"*, *"transport wiring"*), spell out what it means instead. Clever wording that costs the reader a second read is a defect, not style.
 - **Say what the project believes, straight.** When the project holds a position (blocking code is a bad foundation for a device), state it. Don't pad it with *"that's fine for many projects"* diplomacy the project doesn't actually believe.
