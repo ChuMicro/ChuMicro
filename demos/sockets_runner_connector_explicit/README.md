@@ -16,8 +16,8 @@ changes for a real custom protocol.
 
 ## What it shows
 
-- **User-defined runner-service.**  `runner.add(echo)` where `echo`
-  is the user's `EchoService` class, same registration shape as
+- **User-defined runner-service.** `runner.add(echo)` where `echo`
+  is an `EchoService` instance, same registration shape as
   `runner.add(wifi)` / `runner.add(mqtt)`.  The class is local to
   the app; no library scaffolding involved.
 - **The service drives its own connector.**  `EchoService.start()`
@@ -32,13 +32,12 @@ changes for a real custom protocol.
   service's own `io_socket` / `io_interest(now_ms)`
   describe the send and receive phases.  The connector goes inert
   (terminal state, `io_interest` returns `0`) and the runner ignores it.
-- **Real send loop, not a one-shot.**  `_handle_sending` loops on
-  `send()` and tracks `_send_offset` so a short return (including
-  `EAGAIN`) resumes from the right byte on the next wake.  The
-  shape any custom-protocol service uses for outbound bytes.
-- **Single `while not echo.done` loop at the end.**  Everything else
-  is declarative: services register before the loop, and the loop
-  is just `now_ms = runner.tick(); runner.wait(now_ms)`.
+- **Partial sends and retries.** `_handle_sending` advances
+  `_send_offset` after each successful `send()`. An `EAGAIN` exception
+  returns to the runner; the next turn resumes from that offset.
+- **One `while True` loop at the end.** Services register before the
+  loop, which calls `runner.tick()` and `runner.wait(now_ms)`. WiFi and
+  the heartbeat continue after the echo service reaches `done`.
 
 ## Run it
 
@@ -95,21 +94,25 @@ libraries instead: they own the wire-format codec and the runner
 integration for you.  See `demos/mqtt_pub_sub` for the
 already-built-in-client equivalent.
 
-One-shot by design: this demo exits after one round trip.  For
-reconnect-capable adapters (wifi-up / wifi-down cycles), add a small
-`reset()` to clear `connector` / `_socket` / buffers back to `idle`
-and call it from the wifi `DISCONNECTED` callback.
+The echo service performs one round trip; the board loop continues.
+The laptop driver exits after `DEMO_COMPLETE`. A reconnecting service
+needs a policy for closing an unfinished connection and resetting its
+state and buffers; this demo does not implement that policy.
 
-## Substrate honesty for the connect phase
+<span id="substrate-honesty-for-the-connect-phase"></span>
 
-- **CPython** (host pytest, sim runs): truly non-blocking via
-  `BlockingIOError`(EINPROGRESS) + `select.select(POLLOUT)` + `SO_ERROR`.
-- **MicroPython rp2 / esp32**: truly non-blocking via
-  `OSError(EINPROGRESS)` + `select.poll(POLLOUT)`.
-- **CircuitPython**: `socketpool` does not expose a non-blocking
-  connect, so the TCP step blocks for the handshake duration.
-  Honest documented compromise on CP; other runner tasks pause for
-  the duration of that one call.
+## Runtime behavior
+
+All three adapters perform DNS resolution synchronously. Other runner tasks
+wait for that call to return.
+
+- **CPython**: the TCP step uses a nonblocking socket, checks write
+  readiness with `select.select`, and reads `SO_ERROR`.
+- **MicroPython rp2 / esp32**: the TCP step uses a nonblocking socket
+  and checks connection events with `select.poll`.
+- **CircuitPython**: the adapter calls blocking `connect`. After connection,
+  `EchoService` calls `setblocking(False)` so sending and receiving can
+  return control when the socket needs another turn.
 
 ## Related
 

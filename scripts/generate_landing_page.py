@@ -15,7 +15,7 @@ to PyPI only and are never bundled.
 
 Usage (from repository root)::
 
-    python scripts/generate_landing_page.py > /tmp/index.html
+    python scripts/generate_landing_page.py > .scratch/index.html
 
 The docs-deploy workflow calls this to regenerate the page on every push.
 """
@@ -173,13 +173,14 @@ def _render_library_install(first_library: dict) -> str:
     package = first_library["package"]
     import_name = package.replace("-", "_")
     description = (
-        "Library packages run on devices and ship through three channels:"
+        "Install libraries on a board, or in CPython for host tests. "
+        "The installation guide covers setup and supported firmware."
     )
     return f"""    <div class="install">
       <h2>Install: libraries</h2>
       <p class="section-description">{description}</p>
       <div class="install-block">
-        <h3>pip (CPython, host-side use)</h3>
+        <h3>pip (CPython host tests)</h3>
         <pre>pip install {package}</pre>
       </div>
       <div class="install-block">
@@ -362,8 +363,8 @@ def _structured_data() -> str:
                     "Python libraries for microcontrollers: WiFi, MQTT, HTTP "
                     "client and server, WebSockets, sockets, network time, "
                     "timers, settings, and storage that survives a reboot.  "
-                    "One codebase runs on CircuitPython, MicroPython, and "
-                    "CPython."
+                    "CircuitPython and MicroPython run on boards; "
+                    "CPython provides host tests."
                 ),
                 "url": SITE_ROOT + "/",
                 "codeRepository": "https://github.com/ChuMicro/ChuMicro",
@@ -425,12 +426,12 @@ def generate_llms_txt() -> str:
         "",
         "> Python libraries for microcontrollers: WiFi, MQTT, HTTP client and "
         "server, WebSockets, sockets, network time, timers, settings, and "
-        "storage that survives a reboot.  One codebase runs on CircuitPython, "
-        "MicroPython, and CPython.",
+        "storage that survives a reboot. CircuitPython and MicroPython run on "
+        "boards; CPython provides host tests.",
         "",
-        "Every library keeps the main loop running: slow network work happens "
-        "a step at a time between ticks, so an LED keeps blinking while WiFi "
-        "reconnects.  Each library installs on its own.",
+        "Applications own their main loop. Services and generators share work "
+        "through explicit ticks; blocking calls delay other work. Libraries "
+        "accept supplied dependencies through their documented interfaces.",
         "",
         "Install `chumicro-mqtt` (any library follows the same shape):",
         "",
@@ -458,6 +459,18 @@ def generate_llms_txt() -> str:
         "",
         "## Guides",
         "",
+        f"- [First board program]({SITE_ROOT}/{GUIDES_PREFIX}/start-here/): "
+        "setup, complete code, a visible while True loop, and an edit to observe.",
+        f"- [Choose an example]({SITE_ROOT}/{GUIDES_PREFIX}/examples/): "
+        "programs to run, change, or study, with prerequisites and instructions.",
+        f"- [Cooperative multitasking]({SITE_ROOT}/{GUIDES_PREFIX}/"
+        "cooperative-multitasking/): generator scheduling, failure handling, "
+        "and cleanup in an application-owned loop.",
+        f"- [Inspect a board]({SITE_ROOT}/{GUIDES_PREFIX}/using-a-board/): "
+        "live output, runtime state, and recovery of deployed files.",
+        f"- [Quality and resource costs]({SITE_ROOT}/{GUIDES_PREFIX}/"
+        "quality-and-resource-costs/): tests, measured costs, and contribution "
+        "and publication responsibilities.",
         f"- [Questions people ask]({SITE_ROOT}/{GUIDES_PREFIX}/faq/): why a board "
         "freezes on the network, whether the libraries use async, what they cost "
         "in flash, and how to test without hardware.",
@@ -504,8 +517,8 @@ def generate() -> str:
     if libraries:
         blocks.append(_render_section(
             "Libraries",
-            "Cross-runtime Python libraries for CircuitPython, MicroPython, "
-            "and CPython.",
+            "Python libraries for CircuitPython and MicroPython boards, "
+            "with CPython host tests.",
             libraries,
         ))
         blocks.append(_render_library_install(libraries[0]))

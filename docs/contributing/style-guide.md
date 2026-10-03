@@ -106,7 +106,15 @@ The published API reference is generated from these docstrings, which is why the
 
 Style for prose docs: the root README, every library's README and `docs/guide.md`, every workbench README, and contributing pages. (Docstrings are covered above.)
 
-**The audience is the Adafruit Learn crowd.**  Beginners and hobbyists, sometimes kids, who have flashed a board, followed a guide or two, and want code that keeps working.  Write so that reader can follow every sentence; serve veterans with receipts (measured numbers, decision links) inside the same sentences, never with jargon.  The best claims are moments the reader can reproduce at a desk: *"pull your router's plug and watch the LED keep blinking."*
+**Choose one primary reader task for each page, example, and demo.** State its prerequisites and observable result. A reader may follow a first-project tutorial today and use a library-authoring reference later; the documentation must make both paths easy to find.
+
+| Reader task | Teach first | Link to separately |
+|---|---|---|
+| Run a first program | Complete code, a visible `while True`, expected output, and one edit whose result the reader can observe. Teach the Python needed for those steps. | Generator mechanics, protocol internals, library authoring |
+| Adapt a working project | A concrete variation: combine components, change behavior, substitute a dependency, or inspect a failure. | Initial setup and full implementation contracts |
+| Build a library or scheduling component | Generator suspension and resumption, loop ownership, service and wait contracts, cleanup, injected dependencies, tests, and measured costs. | First-project setup when needed |
+
+Keep specialized examples specialized. An advanced generator example needs an explicit prerequisite and a direct discovery link; it does not need to teach terminal setup. A beginner demo needs a visible program and a recognizable result; host harness assertions can have their own explanation. Each route should offer a next task without inserting that task's entire lesson.
 
 - **Anchor on a concrete user-visible promise, not an abstract design principle.** *"Keep a status LED blinking through a slow network call"* beats *"transparent state matters more than syntactic concurrency."* First-time readers don't share the vocabulary; they share the LED. Design philosophy belongs in ADRs, not in the project's top-level README.
 - **Address the reader directly when it helps.** *"You decide how long to wait"* beats a passive construction. Don't invent the reader's situation, though: a conditional (*"if you've ever watched a board hang"*) or a capability (*"keep a status LED blinking through a slow network call"*) is honest; *"you're building a weather station"* narrates at someone who isn't there.
@@ -121,13 +129,13 @@ Style for prose docs: the root README, every library's README and `docs/guide.md
 
 How the prose in this project's docs should sound:
 
-- **Professional and approachable, for the audience above.** Plain words in complete, connected sentences, the way you would explain the project at a desk to someone capable who is new to it. Precision and a clear sequence reassure the reader. Encouragement, jokes, mascot asides, and celebrations are not part of the voice. Explain what is unfamiliar about ChuMicro at first use and respect what the reader already knows. This section defines the voice once. The writing skills and their review contracts cite it instead of restating it, and the register excerpt in [`voice_samples/chumicro-docs.md`](https://github.com/ChuMicro/ChuMicro/blob/main/.github/skills/_shared/voices/voice_samples/chumicro-docs.md), paragraphs from the root README, is the passage that sets the bar.
+- **Professional and approachable, for the audience above.** Plain words in complete, connected sentences, the way you would explain the project at a desk to someone capable who is new to it. Precision and a clear sequence reassure the reader. Encouragement, jokes, mascot asides, and celebrations are not part of the voice. Explain what is unfamiliar about ChuMicro at first use and respect what the reader already knows. This section defines the voice once. The writing skills and their review contracts cite it instead of restating it, and the pages the owner has accepted, recorded under the cold-writer skill's [`labels/`](https://github.com/ChuMicro/ChuMicro/tree/main/.github/skills/cold-writer/labels) directory, are the samples that set the bar.
 - **No em-dashes.** Anywhere, including code comments, table cells, and quoted output that doesn't actually contain one. Use a period, a comma, a colon, or parentheses.
 - **Plain words over clever ones.** If a phrase needs decoding (*"the runtime split"*, *"transport wiring"*), spell out what it means instead. Clever wording that costs the reader a second read is a defect, not style.
-- **Say what the project believes, straight.** When the project holds a position (blocking code is a bad foundation for a device), state it. Don't pad it with *"that's fine for many projects"* diplomacy the project doesn't actually believe.
+- **Distinguish project choices from measured behavior.** Explain why ChuMicro uses an owned loop and generator tasks. Claims about another scheduler's memory, performance, or debugging behavior need a named runtime, version, and workload. Treat async alternatives respectfully and describe their actual tradeoffs.
 - **Concrete beats rhetorical.** Measured numbers (80 lines vs 7), named hardware (Pico W, ESP32), real failure moments (a board hanging because the router was unplugged). Every claim traces to code, a measurement, or a decision record, or it doesn't ship.
 - **Don't over-compress.** Staccato fragment chains (*"Write it once. Test it. Ship it."*), *"the whole X"*, and symmetrical triads read as performance, not information. Normal sentences, varied length, one idea flowing into the next.
-- **Behavior over mechanics.** What the reader can do and what happens when they do it. How it's built inside belongs in ADRs and library guides.
+- **Match depth to the task.** First-project pages teach actions and observations. Advanced explanations teach the mechanism needed to build or adapt a component. Decision records explain why the project chose that design.
 - **At most one metaphor per page, and never the same one twice.**
 - **Gloss jargon at first use in beginner-facing docs** (TLS, MQTT, mpremote, venv), then use it freely. Terms sitting in reference tables the reader reaches later don't need glossing.
 - **Positive claims carry the page.**  Say what happens and who does it for you (*"the wifi service and the mqtt client handle the reconnecting"*).  Contrast frames (*"x, not y"*, *"you never have to..."*, *"there is no..."*) are seasoning at most once per page; a paragraph built from them is a rewrite signal.
@@ -262,11 +270,11 @@ class PacketReader:
 
 ## Cooperative concurrency
 
-`chumicro-runner` is the only sanctioned scheduler.  Services register via `runner.add(service)` (check / handle), `runner.add_periodic(handler, period_ms=...)` (periodic), or `runner.add_generator(gen)` (generator function for sequential I/O, see the [runner guide](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner/docs/guide.md#generator-driven)).
+`chumicro-runner` is the only sanctioned scheduler. Services register via `runner.add(service)` (check / handle), `runner.add_periodic(handler, period_ms=...)` (periodic), or `runner.add_generator(gen)` (a fresh generator instance for sequential I/O, see the [runner guide](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner/docs/guide.md#generator-driven)).
 
-Two facts drive the concurrency rule, both verified against the runtimes' compiler sources in [Decision 0087](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0087-generators-for-sequential-io.md): CircuitPython compiles every `await` into an `__await__` method dispatch that allocates a fresh generator on each resume (MicroPython compiles the same `await` to a single `YIELD_FROM` bytecode), and Adafruit's CircuitPython asyncio port has had a broken socket/stream layer since 2021.  Building on `async` means paying per-await heap churn on one runtime and inheriting an unmaintained stream layer, or quietly targeting only the other runtime.  `yield from` is one bytecode on both, and the wait objects it drives are reusable.
+The application owns the loop and decides when to call `tick()` and `wait()`. Generators express sequential work through the same service dispatch. A helper hands control back only when it actually yields; work between yields runs synchronously. Keep that work bounded so other jobs can make progress. [Decision 0087](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0087-generators-for-sequential-io.md) records the design rationale and its original runtime investigation. New performance or allocation comparisons need measurements of the implementations being compared.
 
-So: **`async` / `await` and the `asyncio` module are banned across `libraries/` / `support/` / `workbench/`.**  Specifically:
+**Project policy excludes `async` / `await` and asyncio from first-party code under `libraries/`, `support/`, and `workbench/`.** Specifically:
 
 - `async def`, `await`, `async with`, `async for`.
 - `import asyncio` / `from asyncio import …`.

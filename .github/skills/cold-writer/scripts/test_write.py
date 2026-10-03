@@ -120,8 +120,8 @@ class WriterTests(unittest.TestCase):
             write.check_review(self.save_review(self.review), self.digest)
 
     def test_register_sample_is_excerpt_prose_only(self):
-        sample = write.load_register_sample(write.DEFAULT_VOICE)
-        source = (write.VOICES / "voice_samples" / f"{write.DEFAULT_VOICE}.md").read_text(encoding="utf-8")
+        sample = write.load_register_sample(write.EXCERPT_VOICE)
+        source = (write.VOICES / "voice_samples" / f"{write.EXCERPT_VOICE}.md").read_text(encoding="utf-8")
         self.assertTrue(sample)
         self.assertIn(sample.splitlines()[0], source)
         for header in ("- Person:", "- Source:", "- Rights:", "## Excerpt"):
@@ -129,6 +129,7 @@ class WriterTests(unittest.TestCase):
             self.assertNotIn(header, sample)
 
     def test_plain_voice_sends_no_sample(self):
+        self.assertEqual(write.DEFAULT_VOICE, PLAIN)
         self.assertEqual(write.load_register_sample(PLAIN), "")
         self.assertEqual(write.system_prompt(""), write.WRITER_PROMPT)
         self.assertNotIn("passage", write.WRITER_PROMPT)
@@ -282,22 +283,22 @@ class WriterTests(unittest.TestCase):
 
     def test_run_artifacts_and_failures(self):
         brief, digest = write.read_brief(self.brief)
-        sample = write.load_register_sample(write.DEFAULT_VOICE)
+        sample = write.load_register_sample(write.EXCERPT_VOICE)
         for outcome in ("success", "failure", "timeout"):
             with self.subTest(outcome=outcome):
                 directory = self.case / outcome
                 with patch.object(write.shutil, "which", return_value="claude"):
                     with patch.object(write.subprocess, "run", side_effect=self.fake_cli(outcome)):
                         if outcome == "success":
-                            write.run_writer(brief, digest, directory, "opus", 1, write.DEFAULT_VOICE)
+                            write.run_writer(brief, digest, directory, "opus", 1, write.EXCERPT_VOICE)
                         else:
                             with self.assertRaises(RuntimeError):
-                                write.run_writer(brief, digest, directory, "opus", 1, write.DEFAULT_VOICE)
+                                write.run_writer(brief, digest, directory, "opus", 1, write.EXCERPT_VOICE)
                 receipt = json.loads((directory / "receipt.json").read_text())
                 self.assertEqual(receipt["status"], "success" if outcome == "success" else "failed")
                 self.assertEqual(receipt["setting_sources"], [])
                 self.assertEqual(receipt["session_settings"], write.SESSION_SETTINGS)
-                self.assertEqual(receipt["voice"], write.DEFAULT_VOICE)
+                self.assertEqual(receipt["voice"], write.EXCERPT_VOICE)
                 self.assertEqual(receipt["sample_sha256"], hashlib.sha256(sample.encode()).hexdigest())
                 prompt = (directory / "system-prompt.txt").read_text(encoding="utf-8")
                 self.assertEqual(receipt["system_prompt_sha256"], hashlib.sha256(prompt.encode()).hexdigest())
@@ -321,16 +322,24 @@ class WriterTests(unittest.TestCase):
         self.assertEqual((directory / "system-prompt.txt").read_text(encoding="utf-8"), write.WRITER_PROMPT)
 
     def test_check_mode_reports_voice_and_sample(self):
-        sample = write.load_register_sample(write.DEFAULT_VOICE)
         out = io.StringIO()
         with patch.object(write.sys, "argv", ["write.py", "--brief", str(self.brief), "--check"]):
             with redirect_stdout(out):
                 self.assertEqual(write.main(), 0)
         report = json.loads(out.getvalue())
         self.assertEqual(report["brief_sha256"], self.digest)
-        self.assertEqual(report["voice"], write.DEFAULT_VOICE)
-        self.assertEqual(report["sample_sha256"], hashlib.sha256(sample.encode()).hexdigest())
+        self.assertEqual(report["voice"], PLAIN)
+        self.assertIsNone(report["sample_sha256"])
         self.assertFalse(report["review_checked"])
+        sample = write.load_register_sample(write.EXCERPT_VOICE)
+        out = io.StringIO()
+        with patch.object(write.sys, "argv",
+                          ["write.py", "--brief", str(self.brief), "--check", "--voice", write.EXCERPT_VOICE]):
+            with redirect_stdout(out):
+                self.assertEqual(write.main(), 0)
+        report = json.loads(out.getvalue())
+        self.assertEqual(report["voice"], write.EXCERPT_VOICE)
+        self.assertEqual(report["sample_sha256"], hashlib.sha256(sample.encode()).hexdigest())
 
     def test_malformed_response_records_failure(self):
         brief, digest = write.read_brief(self.brief)

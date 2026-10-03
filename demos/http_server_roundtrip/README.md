@@ -9,8 +9,9 @@ another window, no IP discovery.
 
 - `chumicro_wifi.WifiService` + `chumicro_http_server.HttpServer`
   registered with one `chumicro_runner.Runner` on the board, driven by a
-  hand-written `while` loop that ticks, waits, and carries a deadline so
-  the demo gives up instead of hanging.
+  `while True` loop that calls `tick()` and `wait()`. The board keeps
+  serving after `DEMO_COMPLETE`; the laptop driver owns the timeouts
+  for waiting on board output and HTTP responses.
 - Three registered routes (`GET /hello`, `GET /uptime`,
   `POST /echo`) with a `@server.route(...)` decorator.
 - The host driver reads the `SERVER_READY` marker the board prints

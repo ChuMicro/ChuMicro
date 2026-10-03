@@ -52,9 +52,9 @@ class EchoService:
 
     ``self.state`` is where this object keeps its place: it walks
     ``idle`` → ``connecting`` → ``sending`` → ``receiving`` → ``done``.
-    Each turn from the runner advances it as far as it can go without
-    waiting, and then returns.  That is the rule the whole project runs
-    on: do a little, give the turn back.
+    Each turn dispatches the current phase. Runtime calls made during
+    connection can block; send and receive retry nonblocking sockets
+    on later turns when they raise EAGAIN.
 
     Call ``start()`` once the wifi link is up.
     """
@@ -120,7 +120,7 @@ class EchoService:
             self.state = "done"
 
     def _handle_sending(self):
-        # A short send is normal; EAGAIN means resume next tick when writable.
+        # A short send is normal; EAGAIN means retry on a later tick.
         payload = memoryview(self.PROBE_PAYLOAD)
         while self._send_offset < len(payload):
             try:
@@ -146,7 +146,7 @@ class EchoService:
                 self._buffer, self.RECV_BUFFER_SIZE,
             )
         except OSError as error:
-            # EAGAIN means no bytes yet: wait for the next read-ready tick.
+            # EAGAIN means no bytes yet: retry on a later tick.
             if error.args[0] != errno.EAGAIN:
                 print(f"RECV_FAILED error={type(error).__name__}")
                 print(f"  detail: {error!r}")
@@ -191,7 +191,7 @@ class EchoService:
 
 
 def heartbeat(now_ms):
-    """Runs once a second, whatever else is going on."""
+    """Print a heartbeat when the runner dispatches this periodic task."""
     print("  ...still ticking")
 
 

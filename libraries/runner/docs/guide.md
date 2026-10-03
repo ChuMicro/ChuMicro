@@ -115,7 +115,7 @@ Each call to `wait`:
 
 1. **Syncs the poll set** from each service's optional `io_socket` and `io_interest(now_ms)` bitmask (register newly wanted sockets, modify changed interest, unregister sockets that have gone away).  Idempotent: a no-change loop touches the poller zero times.
 2. **Computes the timeout** as the minimum across every entry's `next_due_ms` and every service's optional `next_deadline(now_ms)`, minus `now_ms`.
-3. **Blocks** in `ipoll(timeout_ms)` over the registered sockets when any are registered; otherwise sleeps the timeout via `time.sleep_ms`.  Returns immediately when the nearest deadline has already passed or no deadline applies.
+3. **Waits** in `ipoll(timeout_ms)` when sockets are registered, or sleeps until the next deadline when there are no sockets. A socket wait without a deadline can block indefinitely. A due deadline, or the absence of both sockets and deadlines, returns immediately.
 
 Errors on a registered socket (`POLLERR` / `POLLHUP`) are routed to the owning service's optional `io_error(now_ms, eventmask)` hook so the service can transition cleanly to a failure state.  `POLLIN` / `POLLOUT` are wake signals only: `check` and `next_deadline` decide what runs on the next `tick`.
 
@@ -264,7 +264,9 @@ runner.add_periodic(
 
 ### Generator-driven
 
-Write the I/O as a generator function and register it with `runner.add_generator(gen)`.  Each `yield from connect(...)` / `send_all(...)` / `recv_until(...)` hands control back to the runner between steps, so the body reads top-to-bottom while other services keep ticking.  Import the helpers explicitly from `chumicro_sockets.generators`; plain-runner consumers pay nothing.
+Write sequential I/O as a generator function and register a fresh generator with `runner.add_generator(gen)`. Registration runs it up to its first yield. When a helper yields a wait, control returns to the runner so other services can run. A helper that completes immediately returns to its caller without a scheduler handoff. Import socket helpers from `chumicro_sockets.generators` when you use them; their allocations and deployed files depend on the helpers and deployment configuration.
+
+This advanced example needs a connected network and a reachable echo server. Replace `echo.example` and port `7` with that server's address. Set `wifi_radio` to the connected CircuitPython radio, or `None` on MicroPython and CPython.
 
 ```python
 from chumicro_runner import Runner
@@ -275,6 +277,7 @@ from chumicro_sockets import connector
 def echo_run(host, port, radio):
     sock = yield from connect(connector(host, port, radio=radio))
     try:
+        sock.setblocking(False)
         yield from send_all(sock, b"hello\n")
         reply = yield from recv_until(sock, b"\n", max_bytes=4096)
         print(f"got {reply!r}")
@@ -288,18 +291,20 @@ handle = runner.add_generator(echo_run("echo.example", 7, radio=wifi_radio))
 while True:
     now_ms = runner.tick()
     if handle.done:
-        break            # check before wait(): a finished task re-arms nothing
+        break
     runner.wait(now_ms)
 
 if handle.error is not None:
     raise handle.error   # the generator died; say so instead of exiting clean
 ```
 
-That is the same `while True` loop as everywhere else, with a finish line in it.  Check `handle.done` *before* `wait()`: once the task is finished nothing re-arms a deadline, so `wait()` would idle on a socket with no event coming.
+Check `handle.done` before `wait()` so completion can exit the loop immediately. Remaining services determine whether a subsequent wait would sleep, poll, or return at once.
 
-`runner.run_until(handle)` is the one-call form of that loop.  It drives tick/wait until the generator finishes and re-raises `handle.error` for you.  Pass a callable instead for arbitrary conditions, or just `timeout_ms=` to run for a fixed window (a QoS-ack drain, a settling period).
+`runner.run_until(handle)` drives tick/wait until the generator finishes and re-raises `handle.error`. Pass a callable instead to stop when a condition becomes true. `timeout_ms=` supplies a budget checked between ticks; it does not bound `wait()`. A socket wait can exceed the budget or block indefinitely when no service publishes a deadline.
 
-Each `yield from` is a scheduler checkpoint; between yields, other services registered on the same runner get their turn.  A bare `yield` suspends for exactly one tick.  `handle.done` flips True the moment the generator returns, dies, or is cancelled; `handle.error` holds the exception when the body raised (`None` otherwise), so a `while not handle.done` loop can report *why* a task ended: check it after the loop, or wire `Runner(on_handler_error=...)` for a loud callback at the moment of death.  `handle.cancel()` raises `GeneratorExit` inside the body so any `finally` block runs the cleanup.
+An actual yield returns control to the runner. `send_all` and `recv_until` yield when a nonblocking operation reports `EAGAIN`; successful operations can continue within the same turn. Keep work between yields bounded. A bare `yield` resumes on the next tick.
+
+`handle.done` becomes true on return, failure, or cancellation. Inspect `handle.error` to distinguish failure from normal completion, or supply `Runner(on_handler_error=...)` for handler-fault reporting. Errors during initial registration propagate from `add_generator` before it returns a handle. `handle.cancel()` closes the generator, allowing its `finally` blocks to release resources.
 
 #### What a generator yields, and driving one without the runner
 
@@ -309,16 +314,18 @@ A suspended generator yields a **wait**: a small object describing why it stoppe
 |---|---|---|
 | `ready(now_ms) -> bool` | The wait judges its own condition, with no clock involved | any driver |
 | `next_deadline(now_ms)` | Resume once this tick lands | any driver, and `Runner.wait()` to bound its idle timeout |
-| `io_socket` + `io_interest(now_ms)` | Resume when this socket is readable or writable | `Runner.wait()`, to sleep on `ipoll` |
+| `io_socket` + `io_interest(now_ms)` | Wake the outer loop for socket readiness | `Runner.wait()`, to wait on `ipoll` |
 
-No wait compares times itself, and that is deliberate: the deadline is published, and whoever drives the generator compares it with the clock it was built on.  A wait that reached for its own clock would measure a `Runner(ticks=...)` sleep in the wrong units.  So the gate is three cases, in order: honour `ready` when it answers `True`, resume once `next_deadline` lands, otherwise resume on any pass.
+The driver compares published deadlines with its own clock. Use the same tick arithmetic to construct and compare them, especially with `Runner(ticks=...)`. Socket waits resume on every tick, including when they carry a future deadline. Other waits resume when `ready` returns true or their deadline arrives. A wait with neither condition resumes on the next tick.
 
-Socket waits carry no `ready` and no deadline, so they fall to that last case.  Their helpers retry the syscall and re-suspend on `EAGAIN`, which makes an early resume cost a wasted pass and nothing else.
+Socket readiness wakes the outer loop; it does not gate generator eligibility. On each retry, a socket helper either makes progress or suspends again on `EAGAIN`.
 
 That gate is the whole cost of lifting `chumicro_sockets.generators` into a project with no runner:
 
 ```python
 def should_resume(wait, now_ms, ticks):
+    if getattr(wait, "io_socket", None) is not None:
+        return True
     ready = getattr(wait, "ready", None)
     if ready is not None and ready(now_ms):
         return True
@@ -329,17 +336,20 @@ def should_resume(wait, now_ms, ticks):
     return ready is None
 
 
-wait = generator.send(None)                 # prime it to the first suspension
-while True:
-    now_ms = ticks.ticks_ms()
-    if should_resume(wait, now_ms, ticks):
-        try:
-            wait = generator.send(now_ms)
-        except StopIteration:
-            break
+def drive(generator, ticks):
+    try:
+        wait = generator.send(None)
+        while True:
+            now_ms = ticks.ticks_ms()
+            if should_resume(wait, now_ms, ticks):
+                wait = generator.send(now_ms)
+    except StopIteration:
+        pass
+    finally:
+        generator.close()
 ```
 
-This spins where `Runner.wait()` would sleep, which costs battery on a device, and it produces identical results.  `tests/test_socket_generators.py` runs a full connect, send, and receive through exactly this loop, and a `sleep_until` through its deadline branch.
+Call `drive` with a fresh generator and a clock exposing `ticks_ms` and `ticks_diff`. It handles completion during priming or a later turn, propagates other errors, and closes the generator on exit. This minimal driver busy-polls. `Runner.wait()` can idle on registered sockets and deadlines; use it when the application needs that behavior.
 
 #### Waiting on a callback-completed event
 
@@ -371,16 +381,13 @@ def main_run(wifi):
 
 Default to `check` / `handle` for reactive work; reach for `add_generator` when the work is naturally sequential I/O.  "Everything is a generator" is the drift to avoid: reactive services read more clearly in the gated shape, and two service models coexisting is genuinely lower overhead than forcing all work into one or the other.
 
-#### What the runner does NOT use
+<span id="what-the-runner-does-not-use"></span>
 
-The runner deliberately does not use `async` / `await` or the `asyncio` module.  Generators were picked over async syntax for four reasons in declining order of weight:
+#### Scheduling choices
 
-1. **Yield-point hygiene.**  `yield from helper()` raises `TypeError` if `helper` isn't a generator, so the syntax enforces that every yield-point is a deliberate scheduler checkpoint.  `await helper()` against a regular function silently produces a *coroutine-without-await*, and the asyncio community already has a class of linters chasing that footgun.
-2. **Transparency.**  A `yield` is one bytecode that hands control to the scheduler: single-steppable, breakpoint-able, visible in a traceback.  `await` hides the same handoff behind compile-time machinery that differs per runtime.
-3. **Allocation budget on CircuitPython.**  CircuitPython compiles `await x` to `load_method __await__; call; YIELD_FROM`; every `await` allocates a fresh generator from the `__await__()` call.  `yield from x` is one bytecode on every runtime.
-4. **Smaller lint surface.**  A user who has never seen `async def` cannot reach for `import asyncio`.
+ChuMicro uses generators to express sequential jobs while the application owns the `tick()` / `wait()` loop. Services and yielded waits provide explicit contracts, clocks and pollers can be supplied by the caller, and task handles expose completion and errors.
 
-`async def` / `await` / `async with` / `async for` and `import asyncio` / `import uasyncio` are banned across every ChuMicro package, device-side and host-side alike.
+The choice is project policy. Repository lint rejects async syntax and asyncio imports in first-party code under `libraries/`, `support/`, and `workbench/`. Comparing memory use or debugging behavior with an async implementation requires a specified runtime and workload; generator syntax alone establishes neither an allocation guarantee nor a performance advantage.
 
 ## Period-gated services
 

@@ -52,6 +52,20 @@ class TestParseQuestions:
         )
         assert questions[0][1] == "Call handle() on the client, once per pass."
 
+    @pytest.mark.parametrize("tag", ["a", "span"])
+    def test_legacy_anchors_never_become_answers(self, tag):
+        page = (
+            "## First question?\n\nFirst answer.\n\n"
+            f'<{tag} id="old-second-question"></{tag}>\n\n'
+            "## Second question?\n\nSecond answer.\n\n"
+            f'<{tag} id="old-details"></{tag}>\n\n'
+            "More detail.\n"
+        )
+        assert faq_schema.parse_questions(page) == [
+            ("First question?", "First answer."),
+            ("Second question?", "Second answer. More detail."),
+        ]
+
 
 class TestRender:
     """The block replaces itself rather than accumulating."""

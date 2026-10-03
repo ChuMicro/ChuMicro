@@ -13,7 +13,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[4]
 VOICES = ROOT / ".github" / "skills" / "_shared" / "voices"
-DEFAULT_VOICE = "chumicro-docs"
+DEFAULT_VOICE = "plain"
+EXCERPT_VOICE = "chumicro-docs"
 CHECKS = {"accuracy", "coverage", "reader_sequence", "prose_independence"}
 REQUIRED_FLAGS = (
     "--safe-mode", "--system-prompt", "--tools", "--disable-slash-commands",
@@ -27,8 +28,10 @@ WRITER_PROMPT = (
     "Write the documentation page the brief describes, for the reader it names, the "
     "way you would explain it to that person at their desk. Use the brief's commands, "
     "code, output lines, warnings, and link targets exactly, and say everything else "
-    "in your own sentences. Return only the finished page in Markdown. If a fact the "
-    "page needs is missing, return BRIEF_INCOMPLETE followed by what is missing."
+    "in your own sentences. Keep the page inside the brief's length range; items the "
+    "brief marks Supporting are optional and belong only where a required sentence "
+    "needs them. Return only the finished page in Markdown. If a fact the page needs "
+    "is missing, return BRIEF_INCOMPLETE followed by what is missing."
 )
 REGISTER_PROMPT = (
     "Match the register of the passage below, which comes from a different page: its "
@@ -281,7 +284,8 @@ def main() -> int:
     parser.add_argument("--check", action="store_true", help="validate input and print its digest; no model call")
     parser.add_argument("--model", default="opus", help="Claude model, default opus")
     parser.add_argument("--voice", default=DEFAULT_VOICE,
-                        help=f"registry voice whose excerpt sets the register (default {DEFAULT_VOICE}); plain sends none")
+                        help=f"registry voice whose excerpt is added to the prompt; the default {DEFAULT_VOICE} sends none, "
+                             f"and {EXCERPT_VOICE} adds the README register excerpt for experiments")
     # Ten minutes bounds a single long draft without requiring repeated prompts.
     parser.add_argument("--timeout", type=int, default=600, help="model call deadline in seconds (default 600)")
     arguments = parser.parse_args()

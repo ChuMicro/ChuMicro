@@ -42,8 +42,8 @@ configuration separate from the writer's tool-free isolation configuration.
    `.claude/skills/`. Keep these files under `.scratch/`.
 3. Read the receipt and response stream. Tools, MCP servers, skills, and plugins
    must be empty; the result must report success and identify its actual model.
-   `system-prompt.txt` carries the register excerpt and none of its attribution
-   header lines.
+   With `--voice chumicro-docs`, `system-prompt.txt` carries the excerpt and none
+   of its attribution header lines; a default run carries the instructions alone.
 4. Read the draft. The exercise must match the brief and contain no canary.
    This checks observed behavior; it does not establish an operating-system
    security boundary or expose provider-managed instructions.
@@ -88,6 +88,7 @@ Include these cases in brief and reader reviews; keep them outside writer inputs
 
 - **Owner voice approval:** Chuck reads the sample and decides whether its focus,
   fluency, and professional accessibility fit ChuMicro. An agent cannot decide this.
+  Record the verdict in `labels/` with the draft hash and the critique verbatim.
 - **Beginner usability:** someone new to ChuMicro follows the page and marks the
   first instruction that requires help or guessing.
 - **Hardware execution:** with explicit permission and a backed-up supported

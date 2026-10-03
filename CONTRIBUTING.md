@@ -129,7 +129,7 @@ It takes a minute or two, so it isn't meant for every edit.  Use focused pytest 
 - **`check-version`.**  You changed a library's source without bumping its `VERSION` file (see [VERSION bumps](#version-bumps-and-publishing)).  Test-only, docs-only, and infrastructure changes don't need bumps.
 - **A cross-runtime test failure.**  Passes on CPython, fails on a device runtime.  Reproduce with `pytest libraries/<name>/tests --target unix-port --runtime <micropython|circuitpython>`.  Usual culprits: `typing` or `__future__` imports (absent on devices) and relative imports in library code.
 
-Docs-only changes can skip local preflight; CI still runs its full suite either way.  When unsure, run it.
+Run preflight before every commit, including documentation and planning changes.
 
 ## Your first change: a worked example
 

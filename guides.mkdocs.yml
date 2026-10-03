@@ -7,9 +7,9 @@
 # per-library sites use.
 site_name: ChuMicro guides
 site_description: >-
-  Answers and fixes for CircuitPython and MicroPython projects: why a board
-  freezes on the network, why WiFi will not connect, what to do when a deploy
-  is refused, and how to keep data across a reboot.
+  Run a first board program, adapt a project, or build a library with
+  CircuitPython and MicroPython. Guides to deployment, board inspection,
+  cooperative multitasking, testing, and troubleshooting.
 site_url: https://chumicro.com/ChuMicro/guides/
 repo_url: https://github.com/ChuMicro/ChuMicro
 repo_name: Source
@@ -34,9 +34,20 @@ extra:
 
 nav:
   - Guides: index.md
-  - Start here: start-here.md
-  - Installing libraries: install.md
-  - Questions: faq.md
+  - Start a project:
+      - First board program: start-here.md
+      - Choose an example: examples.md
+  - Build and run:
+      - Install libraries: install.md
+      - Supply WiFi credentials: wiring-wifi-credentials.md
+      - Install firmware: troubleshooting/firmware-onto-a-new-board.md
+      - Inspect a board and recover files: using-a-board.md
+      - Deploys and file persistence: troubleshooting/deploys-and-file-persistence.md
+  - Understand the libraries:
+      - Cooperative multitasking: cooperative-multitasking.md
+      - Supply your own dependencies: contributing/standalone-integration.md
+      - Choose deployment contents: contributing/slimming-your-deploy.md
+      - Quality and resource costs: quality-and-resource-costs.md
   - Troubleshooting:
       - Start here: troubleshooting/README.md
       - Board not found: troubleshooting/board-not-found.md
@@ -44,20 +55,16 @@ nav:
       - TLS and HTTPS failures: troubleshooting/tls-https-failures.md
       - Out of memory: troubleshooting/out-of-memory.md
       - Deploy refused for an import: troubleshooting/deploy-refused-importerror.md
-      - Deploys and file persistence: troubleshooting/deploys-and-file-persistence.md
       - Persisting data: troubleshooting/persisting-data.md
-      - Firmware onto a new board: troubleshooting/firmware-onto-a-new-board.md
       - CIRCUITPY on macOS: troubleshooting/macos-circuitpy.md
       - Board quirks: troubleshooting/board-quirks.md
       - CircuitPython ringio: troubleshooting/circuitpython-ringio.md
-  - Wiring WiFi credentials: wiring-wifi-credentials.md
+  - Questions: faq.md
   - Contributing:
       - Cheat sheet: contributing/cheat-sheet.md
       - Pull requests: contributing/pull-requests.md
       - Style guide: contributing/style-guide.md
       - Writing a new library: contributing/new-library.md
-      - Standalone integration: contributing/standalone-integration.md
-      - Slimming your deploy: contributing/slimming-your-deploy.md
       - Config files: contributing/config-files.md
       - Device testing: contributing/device-testing.md
       - Adding a workbench package: contributing/workbench.md

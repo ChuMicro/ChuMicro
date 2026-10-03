@@ -6,9 +6,9 @@ The voice is defined once, in
 [style-guide.md § Documentation tone](../../../docs/contributing/style-guide.md#documentation-tone),
 with its audience and register. This file adds the craft a writer applies on top
 of it: reading order, page format, composition, and layout. The isolated writer
-receives the register excerpt from `_shared/voices/voice_samples/chumicro-docs.md`
-and a short positive instruction set; reviewers judge the draft against the style
-guide section.
+receives a short positive instruction set; reviewers judge the draft against the
+style guide section and the owner verdicts in [labels/](labels/). A registry
+excerpt (`--voice chumicro-docs`) is an experiment, not the default.
 
 Put architecture rationale in an explanation page when it helps the reader make
 a decision. Use affirmative instructions where possible. Necessary prohibitions
@@ -106,7 +106,6 @@ a concrete question about sequencing, navigation, or layout. Adafruit Learn can
 inform a diagram or physical setup sequence; it supplies no default voice or
 requirement for encouragement. A page may need no external model.
 
-The launcher gives the writer the register excerpt and a short positive
-instruction set. Source prose, style complaints, and phrase-ban catalogs stay with
-reviewers. Reviewers assess focus and fluency together: removing necessary
+The launcher gives the writer a short positive instruction set. Source prose,
+style complaints, and phrase-ban catalogs stay with reviewers. Reviewers assess focus and fluency together: removing necessary
 connections makes prose shorter without making it easier to read.

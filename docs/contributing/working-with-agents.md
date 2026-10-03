@@ -10,7 +10,7 @@ This project is set up to work well with AI coding agents. The rules are documen
 
 An AI coding agent reads code, proposes changes, runs tests, and iterates, like a fast pair programmer that doesn't get tired. In this project, agents handle a lot of the repetitive work:
 
-- **Writing tests** to hit the coverage gate
+- **Writing tests** for behavior, failures, and boundary cases
 - **Generating documentation** from code and docstrings
 - **Scaffolding** new libraries, examples, and boilerplate
 - **Fixing lint errors** and formatting issues
@@ -24,7 +24,9 @@ Agents are capable tools, but some things still need a human in the loop:
 
 - **Design direction:** choosing the right abstraction matters more than generating code quickly
 - **Code review:** agent-generated PRs get the same scrutiny as any other
-- **Hardware testing:** agents can't plug in an ESP32
+- **Physical setup:** people connect boards and wiring. Agents can run tests
+  and inspect output on an available board after you authorize the target
+  and device operation.
 - **Judgment calls:** whether an API *feels* right to use, whether a tradeoff is worth it
 
 ## How to set up an agent for this project
@@ -42,7 +44,7 @@ If you're using an AI coding tool (Claude Code, Cursor, GitHub Copilot, etc.), p
 Human: "Add a test for ticks_add with a negative delta at the wraparound boundary"
 
 Agent: reads the codebase, writes the test, runs it, checks coverage,
-       commits with a proper message, done.
+       presents the change and test results for review.
 ```
 
 ```
@@ -82,7 +84,9 @@ For longer sessions, periodically restating *"what we're solving here is X"* pul
 
 Agents working under this project's rule set behave somewhat differently than agents in a generic workspace. Worth knowing as a collaborator:
 
-- **Agents commit after each coherent unit of work** via the `task-checkpoint` skill: preflight, plans-doc refresh, commit, push. The tree stays clean across collaboration boundaries.
+- **Agents check each coherent unit of work** with `task-checkpoint`: preflight,
+  plans, and documentation. They commit only when asked. Pushes and other
+  outward-facing actions require confirmation under `AGENTS.md`.
 - **Coverage gate runs at 94 % on agent invocations** (humans target the 85 % pyproject baseline). A coverage failure showing `94.0%` is from this gate, per [Decision 0025](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0025-dual-coverage-thresholds.md).
 - **Agents restate your message when a terse reply could mean multiple things.** If you say "yes" or "option 2" after a few exchanges, expect a "confirming you mean X" before action. That's the rule firing, not the agent being slow.  It prevents acting on the wrong referent.
 - **Agents surface tradeoffs before executing multi-option choices.** They name approaches and call out ambiguity. Rule firing, not indecision.

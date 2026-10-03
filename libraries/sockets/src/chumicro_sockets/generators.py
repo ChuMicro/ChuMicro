@@ -26,7 +26,8 @@ def connect(
         The connector itself, repeatedly, until terminal.
 
     Returns:
-        The connected, non-blocking socket; the caller owns its lifecycle.
+        The connected socket, with its mode unchanged; the caller owns its
+        lifecycle. Set nonblocking mode before using ``send_all`` or ``recv_until``.
 
     Raises:
         OSError: The connector reached ``failed``, or ``ETIMEDOUT`` on timeout.

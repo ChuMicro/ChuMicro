@@ -1,8 +1,8 @@
 # sockets_runner_connector: sockets via runner with a generator
 
 End-to-end demo of a **custom TCP protocol running under the
-runner**: write a generator that yields wait-tokens between each
-I/O step, hand it to `runner.add_generator`, and let the runner
+runner**: write a generator that yields waits when I/O needs another
+turn, hand it to `runner.add_generator`, and let the runner
 schedule it across ticks.  Start from this demo for any TCP
 protocol `HttpClient` / `MQTTClient` / `WebSocketClient` don't
 already cover.
@@ -23,26 +23,25 @@ fan-out, complex error recovery, long-lived multi-phase sessions).
   generator waits for the wifi link with `yield from wait_for(link_up)`
   (a `Signal` the wifi state-change callback sets), then connects,
   sends, and receives top-to-bottom, returning when the round trip
-  completes.  No user-defined class, no `io_*` plumbing, no polled
-  boolean flag: the `Signal` resumes the generator without polling.
+  completes. The runner checks `Signal.ready()` each tick; the callback
+  sets the signal when WiFi connects.
 - **`connect` drives the connector across ticks.**  Wraps the
   existing `SocketConnector` lifecycle (DNS -> TCP -> ready) and
-  yields `WriteReady` / `ReadReady` so the runner sleeps on the
-  right socket-ready event instead of polling.  PEP 380's `return`
+  yields the connector itself while connection is pending. Its socket
+  and interest hooks let the runner wait for I/O. PEP 380's `return`
   hands the connected socket back via `sock = yield from connect(...)`.
-- **`send_all` and `recv_until` carry their own EAGAIN loops.**  Each
-  caches its wait-token outside the EAGAIN retry path so the
-  steady-state allocation is zero: the helpers are safe for hot
-  loops on a 256 KB device.
+- **`send_all` and `recv_until` carry their own EAGAIN loops.** Each
+  reuses a `WriteWait` or `ReadWait` within one invocation. The helpers
+  also create buffers, views, or result bytes. A helper can finish
+  immediately; control returns to the runner only when it yields.
 - **`try / finally` for cleanup.**  `sock.close()` in the finally
   runs whether the generator returns normally, raises, or gets
   cancelled mid-flight via `handle.cancel()`.  No separate teardown
   path.
-- **One `while True` loop at the end.**  The runner flips
-  `echo_handle.done` to True the moment `echo_run` returns, and the
-  loop breaks on it.  Same two lines (`tick`, `wait`) any ChuMicro
-  program runs, with a finish line and a deadline added because a demo
-  has to end.
+- **One `while True` loop at the end.** After `echo_run` prints
+  `DEMO_COMPLETE` and closes its socket, the board loop keeps running
+  WiFi and the heartbeat. The laptop driver owns the marker timeouts
+  and exits after observing completion.
 
 ## Run it
 
@@ -100,20 +99,26 @@ libraries instead: they own the wire-format codec and the runner
 integration for you.  See `demos/mqtt_pub_sub` for the
 already-built-in-client equivalent.
 
-One-shot by design: this demo exits after one round trip.  For
-reconnect-capable services, register a new generator from the wifi
-`DISCONNECTED` / `CONNECTED` callback each time the link comes back.
+The generator performs one round trip. A reconnecting application must
+decide when to cancel an unfinished attempt and register a fresh generator;
+this demo does not implement that retry policy.
 
-## Substrate honesty for the connect phase
+<span id="substrate-honesty-for-the-connect-phase"></span>
 
-- **CPython** (host pytest, sim runs): truly non-blocking via
-  `BlockingIOError`(EINPROGRESS) + `select.select(POLLOUT)` + `SO_ERROR`.
-- **MicroPython rp2 / esp32**: truly non-blocking via
-  `OSError(EINPROGRESS)` + `select.poll(POLLOUT)`.
-- **CircuitPython**: `socketpool` does not expose a non-blocking
-  connect, so the TCP step blocks for the handshake duration.
-  Honest documented compromise on CP; other runner tasks pause for
-  the duration of that one call.
+## Runtime behavior
+
+All three adapters perform DNS resolution synchronously. Other runner tasks
+wait for that call to return.
+
+- **CPython**: the TCP step uses a nonblocking socket, checks write
+  readiness with `select.select`, and reads `SO_ERROR`.
+- **MicroPython rp2 / esp32**: the TCP step uses a nonblocking socket
+  and checks connection events with `select.poll`.
+- **CircuitPython**: the adapter calls blocking `connect`. The connected
+  socket also retains its blocking mode in this generator demo, so sending
+  or receiving can pause other runner tasks. To use the helpers
+  cooperatively, call `sock.setblocking(False)` inside `echo_run`'s `try`
+  block before `send_all`. The explicit-service demo already sets this mode.
 
 ## Related
 

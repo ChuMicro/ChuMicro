@@ -10,13 +10,14 @@ prints its SHA-256 without calling a model. Supply a review to validate readines
 as well. A normal run requires `--brief`, `--review`, and a new `--run-dir` beneath
 the repository's `.scratch/` directory. Use `--model` only for an explicit model
 choice. `--voice` names an entry in `_shared/voices/voices.json` whose
-`voice_samples/<key>.md` excerpt goes into the system prompt as the register
-sample; the default is `chumicro-docs`, and `plain` sends no excerpt, for control
-runs. A named voice without an excerpt is a setup error. The default timeout is
-ten minutes for one bounded drafting call.
+`voice_samples/<key>.md` excerpt goes into the system prompt as a register
+sample; the default `plain` sends no excerpt, and `chumicro-docs` adds the README
+excerpt for experiments. A named voice without an excerpt is a setup error. The
+default timeout is ten minutes for one bounded drafting call.
 
 The script invokes Claude with `--safe-mode`, a custom system prompt (the writer
-instructions followed by the register excerpt), an empty tool list, disabled skills, an empty MCP configuration, and no session persistence.
+instructions, followed by a register excerpt when a voice is requested), an empty
+tool list, disabled skills, an empty MCP configuration, and no session persistence.
 It excludes user, project, and local settings with an empty `--setting-sources`
 value. Session-only `enabledPlugins` settings disable the built-in `agents-md`
 and `telemetry` plugins. Global preferences remain unchanged. The response check
@@ -48,7 +49,7 @@ Each successful run contains:
 | File | Contents |
 |---|---|
 | `brief.md` | Exact reviewed input |
-| `system-prompt.txt` | Writer instructions plus the register excerpt, exactly as sent |
+| `system-prompt.txt` | Writer instructions, plus the register excerpt when one was requested, exactly as sent |
 | `response.jsonl` | Complete Claude response stream |
 | `stderr.txt` | CLI diagnostics |
 | `receipt.json` | Input hash, voice and excerpt hash, CLI version, requested and observed models, controls, result |

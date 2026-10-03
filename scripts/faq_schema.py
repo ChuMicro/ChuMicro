@@ -40,6 +40,8 @@ END_MARKER = "<!-- /faq-schema -->"
 _LINK = re.compile(r"\[([^\]]+)\]\([^)]+\)")
 _CODE = re.compile(r"`([^`]+)`")
 _BOLD = re.compile(r"\*\*([^*]+)\*\*")
+#: Legacy section anchors are navigation markup, not answer paragraphs.
+_ANCHOR = re.compile(r'<(a|span) id="[^"]+"></\1>')
 
 
 def _plain_text(markdown: str) -> str:
@@ -77,6 +79,8 @@ def parse_questions(page: str) -> list[tuple[str, str]]:
         prose_parts: list[str] = []
         for paragraph in rest.split("\n\n"):
             stripped = paragraph.strip()
+            if _ANCHOR.fullmatch(stripped):
+                continue
             if not stripped or stripped.startswith(("```", "- ", "| ")):
                 if prose_parts:
                     break

@@ -60,9 +60,8 @@ map from required IDs to sections and identify verification that needs hardware.
 
 Inputs: draft, audience, outcome, the voice definition in
 [style-guide.md § Documentation tone](../../../docs/contributing/style-guide.md#documentation-tone),
-the register excerpt in `_shared/voices/voice_samples/chumicro-docs.md`, and the
-editorial criteria. Exclude the old page, the evidence ledger, writer
-deliberation, and other reviewers' findings.
+the owner verdicts in `labels/`, and the editorial criteria. Exclude the old
+page, the evidence ledger, writer deliberation, and other reviewers' findings.
 
 Read once, top-down, tracking only the audience's starting knowledge and what the
 page has supplied. At first mention of an unfamiliar thing, can the reader name
@@ -83,8 +82,8 @@ the record as a simulated reading exercise; command execution and hardware
 observations have their own verification records. Use the uncertain steps to
 identify concrete requirements for the next brief.
 
-Assess the voice against the style guide's definition and the register excerpt:
-professional, approachable, precise, and fluent. Flag terse fragments that remove
+Assess the voice against the style guide's definition and the accepted drafts in
+`labels/`: professional, approachable, precise, and fluent. Flag terse fragments that remove
 necessary context as well as bloated prose. Judge articles
 by their referents; counts of “the” or “is” cannot establish a defect.
 Check for historical debris, litotes, unnecessary contrast, invented compound

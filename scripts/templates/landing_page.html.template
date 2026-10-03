@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ChuMicro: CircuitPython and MicroPython libraries for WiFi, MQTT, HTTP, and more</title>
-  <meta name="description" content="Documentation for ChuMicro: Python libraries for CircuitPython, MicroPython, and CPython boards.  WiFi, MQTT, HTTP client and server, WebSockets, sockets, network time, timers, settings, and storage that survives a reboot.">
+  <meta name="description" content="Run a first board program, adapt a project, or build a library with ChuMicro. CircuitPython and MicroPython libraries, laptop tools, and CPython host tests.">
   <link rel="canonical" href="https://chumicro.com/ChuMicro/">
 $verification  <meta property="og:type" content="website">
   <meta property="og:site_name" content="ChuMicro">
   <meta property="og:title" content="ChuMicro: CircuitPython and MicroPython libraries">
-  <meta property="og:description" content="Python libraries for CircuitPython, MicroPython, and CPython boards: WiFi, MQTT, HTTP, WebSockets, timers, settings, and storage that survives a reboot.">
+  <meta property="og:description" content="CircuitPython and MicroPython libraries for WiFi, MQTT, HTTP, timers, and storage. Start a project, adapt an example, or understand cooperative multitasking.">
   <meta property="og:url" content="https://chumicro.com/ChuMicro/">
   <meta property="og:image" content="$assets/chumicro.png">
   <meta name="twitter:card" content="summary_large_image">
@@ -96,7 +96,10 @@ $structured_data  <link rel="icon" href="$assets/favicon.png">
       border-radius: .75rem; padding: 1.25rem 1.5rem; margin: 2rem 0;
     }
     .channels h2 { font-size: 1.1rem; margin-bottom: .5rem; }
-    .channels table { width: 100%; font-size: .9rem; border-collapse: collapse; }
+    .channels table {
+      display: block; width: 100%; overflow-x: auto;
+      font-size: .9rem; border-collapse: collapse;
+    }
     .channels th, .channels td { text-align: left; padding: .5rem .6rem; }
     .channels th { color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--border); }
     .channels td { border-bottom: 1px solid var(--border); }
@@ -117,13 +120,42 @@ $topbar
     <header>
       <img class="hero" src="$assets/chumicro.png" alt="ChuMicro">
       <h1>ChuMicro</h1>
-      <p>Cross-runtime Python libraries for CircuitPython, MicroPython, and CPython, built for ESP32, RP2040, and other microcontrollers.</p>
+      <p>Python libraries for CircuitPython and MicroPython boards. Write your own loop, connect a project, and test its behavior on your laptop and board.</p>
       <div class="badges">
         <span class="badge badge-cream">CircuitPython</span>
         <span class="badge badge-amber">MicroPython</span>
-        <span class="badge badge-orange">CPython</span>
+        <span class="badge badge-orange">CPython host tests</span>
       </div>
     </header>
+
+    <nav class="section libraries" aria-label="Choose a documentation task">
+      <div class="card">
+        <h2><a href="guides/start-here/">Run your first board program</a></h2>
+        <p>Set up a board, run a complete program, and change its while True loop. No Python experience required.</p>
+      </div>
+      <div class="card">
+        <h2><a href="guides/examples/">Change a working program</a></h2>
+        <p>Choose an example, change a timer, response, or component, and observe the result.</p>
+      </div>
+      <div class="card">
+        <h2><a href="guides/cooperative-multitasking/">Understand cooperative multitasking</a></h2>
+        <p>Schedule generator jobs, handle failures, and release resources while keeping control of your loop.</p>
+        <div class="card-links">
+          <a href="guides/contributing/standalone-integration/">Supply your own dependencies</a>
+          <span class="sep">&middot;</span>
+          <a href="guides/contributing/new-library/">Write a library</a>
+        </div>
+      </div>
+      <div class="card">
+        <h2><a href="guides/using-a-board/">Inspect a board and recover files</a></h2>
+        <p>Watch output, inspect program state, and copy deployed files to your laptop.</p>
+        <div class="card-links">
+          <a href="guides/troubleshooting/firmware-onto-a-new-board/">Install firmware</a>
+          <span class="sep">&middot;</span>
+          <a href="guides/troubleshooting/">Troubleshooting</a>
+        </div>
+      </div>
+    </nav>
 
 $content
 
@@ -143,4 +175,3 @@ $content
   </div>
 </body>
 </html>
-

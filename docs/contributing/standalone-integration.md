@@ -6,18 +6,18 @@ It is the companion to [Slimming your deploy](slimming-your-deploy.md): that pag
 
 ## The claim, measured
 
-**Every networked library imports zero ChuMicro siblings at import time.**  `import chumicro_mqtt` pulls no `chumicro_sockets`, no `chumicro_timing`, no `chumicro_config`: nothing but itself.  You can check it yourself:
+`import chumicro_mqtt` loads its own modules without importing other ChuMicro packages. Check this in a fresh Python process so earlier imports do not affect the result:
 
 ```python
 import sys
 import chumicro_mqtt
 
-siblings = [m for m in sys.modules
-            if m.startswith("chumicro_") and m != "chumicro_mqtt"]
-assert siblings == []          # nothing else came along
+packages = {name.split(".", 1)[0] for name in sys.modules
+            if name.startswith("chumicro_")}
+assert packages == {"chumicro_mqtt"}
 ```
 
-Siblings arrive only when you *ask* for them: by using the default transport factory, or by letting the default `ticks=` fall back to `chumicro_timing`.  Supply your own for both and the closure stays empty:
+The table describes runtime imports for bare imports and direct constructors supplied with the indicated dependencies. It does not describe package installation or the deployment file map:
 
 | Library | bare `import` | your transport **+** `ticks=` | your transport, default ticks |
 |---|:--:|:--:|:--:|
@@ -30,9 +30,11 @@ Siblings arrive only when you *ask* for them: by using the default transport fac
 
 The one sibling in the third column is deliberate: skip `ticks=` and you inherit the tiny `chumicro_timing` leaf as your clock.  That is the ergonomic default, not a bug: most adopters want it.  Reach for `ticks=` only when you already have a monotonic clock and want the empty closure.
 
-Contrast the ergonomic entry point.  `MQTTClient.from_config(...)` wires the default `chumicro_sockets` transport *and* reads config, so its deploy closure is the full declared set: `{chumicro_config, chumicro_sockets, chumicro_timing}` for mqtt (the other four land `{chumicro_sockets, chumicro_timing}`, plus `chumicro_config` where the factory reads keys).  That is the default gravity well.  The recipe below is how you opt out of it, one constructor argument at a time.
+`MQTTClient.from_config(...)` imports the shared sockets factory and config support when neither `socket=` nor `transport_factory=` is supplied. An explicit transport bypasses both imports. Supply a clock too to avoid the constructor's timing fallback.
 
-(The measured on-device cost of keeping these injection seams, across flash, heap, and hot-path frames, is in the [DI cost measurement](https://github.com/ChuMicro/ChuMicro/blob/main/plans/reviews/2026-07-03-di-cost-measurement.md); it is sub-1% of a 264 KB / ~800 KB board.)
+MQTT's package metadata still declares config, sockets, and timing dependencies. The deployment scanner also follows imports inside conditional branches without analyzing constructor arguments. Even with an explicit factory skip, timing, config, and msgpack can remain in an MQTT file map. [Slimming your deploy](slimming-your-deploy.md) explains the marker and dry-run check.
+
+The [DI cost experiment](https://github.com/ChuMicro/ChuMicro/blob/main/plans/reviews/2026-07-03-di-cost-measurement.md) records its tested workloads and measurements. Measure your target and workload before assigning that result to a different application.
 
 ## Recipe: adopt mqtt, websockets, or requests standalone
 
@@ -40,7 +42,7 @@ Three moves: bring your transport, bring your ticks, drive the tick loop.
 
 ### 1. Bring your own transport
 
-Every networked client takes its transport through the constructor instead of importing `chumicro_sockets` itself.  Two forms:
+MQTT, requests, and websockets accept a supplied transport through the constructor. Two forms:
 
 * **`socket=<a connected socket>`**: you already own a connected, non-blocking socket.  The library takes ownership and drives I/O on it.  Simplest for one-shot scripts and desktop code.
 * **`transport_factory=<callable>`**: you hand over a factory the library calls to build (and, after a drop, *re*build) its own non-blocking connect state machine.  This is the form that gets you self-heal reconnect.
@@ -49,15 +51,16 @@ The factory's shape depends on the transport role (the two arities are fixed by 
 
 | Library | `transport_factory` signature | returns |
 |---|---|---|
-| `chumicro_mqtt`, `chumicro_ntp` | `() -> connector` (zero-arg, endpoint is baked in) | a connect state machine |
+| `chumicro_mqtt` | `() -> connector` (zero-arg, endpoint is baked in) | a connect state machine |
+| `chumicro_ntp` | `() -> socket` (zero-arg) | a nonblocking UDP socket |
 | `chumicro_requests`, `chumicro_websockets` | `(host: str, port: int, use_tls: bool) -> connector` (per-call) | a connect state machine |
 | `chumicro_http_server` | `() -> listener` (zero-arg) | a listening socket |
 
-Whatever your factory returns must expose the `chumicro_sockets` connector surface (`check` / `handle` / `state` / `socket` / `io_*`): the same shape [`chumicro_sockets.connector(...)`](#recipe-adopt-sockets-alone-the-leaf) returns.  If instead you pass a ready `socket=`, it only needs the four-method socket contract (`recv_into` / `send` / `close` / `setblocking`) documented in each library's guide under *Bring your own transport*.  There are no `isinstance` checks against ChuMicro types: the contract is the methods, so a stdlib `socket.socket`, an upstream-library wrapper, or a hand-rolled fake all work.
+A connection factory returns a tick-driven connector, not a callback that blocks until connected. MQTT drives its `tick(now_ms)` method and reads `state`, `socket`, and `last_error`; cancellation uses `cancel()`. The runner's optional I/O hooks support idling. NTP's factory returns a UDP socket with `sendto`, `recvfrom_into`, `close`, and `setblocking`; a server's listener factory has another contract. For either a ready socket or a factory, implement the interface specified in that library's *Bring your own transport* guide.
 
 ### 2. Bring your own ticks
 
-Pass `ticks=<yours>`, any object with three wrap-safe methods.  This is what lets the library share your existing clock instead of importing `chumicro_timing`:
+Pass `ticks=<yours>`, an object with three consistent, wrap-safe methods. This CPython example uses the laptop's monotonic clock. On a board, supply that runtime's tick arithmetic or retain ChuMicro's default clock:
 
 ```python
 import time
@@ -78,6 +81,9 @@ class Ticks:
 
     def ticks_diff(self, end, start):
         return end - start
+
+
+ticks = Ticks()
 ```
 
 Skip `ticks=` entirely and the library imports `chumicro_timing`'s wrap-safe `ticks` submodule for you, the deliberate default in the closure table above.
@@ -94,7 +100,7 @@ mqtt = MQTTClient(
     client_id="sensor-1",
     ticks=ticks,                               # your clock, from step 2
 )
-mqtt.connect()                                 # non-blocking; no I/O happens here
+mqtt.connect()                                 # start the connection attempt
 
 # The runner-less drive loop, you own the loop:
 while True:
@@ -104,9 +110,9 @@ while True:
     # ... tick your own tasks here too ...
 ```
 
-`handle()` always does a non-blocking recv and bails on `EAGAIN`, so this loop never blocks; a slow broker just means more passes.  Call `mqtt.publish(...)` / `mqtt.subscribe(...)` from anywhere in the loop: publishes issued before the connection is up buffer in a small queue and flush on connect (the default `when_disconnected="queue"` policy).
+`handle()` advances the client's current state, including transport setup, deadlines, inbound packets, and queued output. It may return before receiving anything. Your transport and callbacks run synchronously, so keep their work bounded and their socket operations nonblocking. Call `mqtt.publish(...)` / `mqtt.subscribe(...)` from the application loop; the default `when_disconnected="queue"` policy queues publishes until a connection is available.
 
-If you'd rather not hand-write the dispatch, adopt `chumicro_runner` too.  Register the client once; the runner calls `check`/`handle` for you and `wait()` parks the CPU between events (it reads each service's `io_interest` / `io_socket` to poll the right sockets):
+To share dispatch with other services, register the client with `chumicro_runner`. `wait()` uses registered sockets and deadlines to idle between turns; it returns immediately when there is nothing to wait for or a deadline is due:
 
 ```python
 from chumicro_runner import Runner
@@ -126,11 +132,13 @@ while True:
 
 ### The generator helpers, without the runner
 
-The sequential helpers (`chumicro_sockets.generators`, `MQTTClient.next_message`, `chumicro_requests.generators`) suspend by yielding a **wait**, and `runner.add_generator` is one driver for those rather than the only one.  No wait compares times itself: it publishes `next_deadline` and *you* compare, which is what keeps a sleep measured in your clock's units rather than a clock the library reached for.  `io_socket` / `io_interest` exist only so a scheduler can sleep instead of spin, and this loop ignores both:
+Sequential helpers can yield a wait describing their next opportunity to run. A helper that completes without yielding returns immediately to its caller. You can drive these generators yourself, comparing published deadlines with your clock. Socket waits need a retry each turn even when they also carry a future timeout. This minimal driver handles that distinction:
 
 ```python
 def should_resume(wait, now_ms, ticks):
-    """The whole resumption gate: three cases, all in your own clock."""
+    """Check socket, readiness, and deadline conditions."""
+    if getattr(wait, "io_socket", None) is not None:
+        return True
     ready = getattr(wait, "ready", None)
     if ready is not None and ready(now_ms):
         return True
@@ -143,17 +151,19 @@ def should_resume(wait, now_ms, ticks):
 
 def drive(generator, ticks):
     """Run a chumicro generator to completion on a loop you own."""
-    wait = generator.send(None)                 # prime it to the first suspension
-    while True:
-        now_ms = ticks.ticks_ms()
-        if should_resume(wait, now_ms, ticks):
-            try:
+    try:
+        wait = generator.send(None)
+        while True:
+            now_ms = ticks.ticks_ms()
+            if should_resume(wait, now_ms, ticks):
                 wait = generator.send(now_ms)
-            except StopIteration:
-                return
+    except StopIteration:
+        return
+    finally:
+        generator.close()
 ```
 
-The socket helpers retry on `EAGAIN` and re-suspend, so an early resume costs one wasted pass.  What you give up is the sleep: `Runner.wait()` parks the CPU on `ipoll` until a socket is ready or a deadline lands, while this loop spins.  On mains power that difference is invisible; on a battery it is most of your runtime budget, which is the case for adopting `chumicro_runner` once the rest of the integration is working.
+Socket helpers suspend again when a retry reports `EAGAIN`. This driver busy-polls; it handles completion during priming or a later turn and propagates other errors. Use `Runner.wait()` when you want registered sockets and deadlines to control idling. Energy consumption requires measurement on the actual board and workload.
 
 ## Recipe: adopt sockets alone (the leaf)
 
@@ -162,19 +172,22 @@ The socket helpers retry on `EAGAIN` and re-suspend, so an early resume costs on
 ```python
 from chumicro_sockets import connector
 
-# Non-blocking connect: DNS -> TCP -> (TLS) advanced one tick at a time.
-# On CircuitPython, pass radio=wifi.radio; MicroPython / CPython ignore it.
-conn = connector("example.com", 443, tls=True)
+# Supply a connected CircuitPython radio, or None on MicroPython/CPython.
+conn = connector("example.com", 443, tls=True, radio=radio)
 
-while conn.check(now):                          # now = your own ticks_ms()
-    conn.handle(now)                            # advance one connect phase
+while True:
+    now = ticks.ticks_ms()
+    if conn.check(now):
+        conn.handle(now)
+    if conn.state == "ready":
+        break
     if conn.state == "failed":
-        raise RuntimeError(conn.last_error)
+        raise conn.last_error
 
-sock = conn.socket                              # ready: send/recv on it directly
+sock = conn.socket
 ```
 
-`listener(host, port, tls=...)` returns a non-blocking listening socket for a server; `udp_socket(...)` returns a UDP socket (what `chumicro_ntp` builds on).  Because it is a leaf, `chumicro_sockets` is the one library you never reach the "empty closure" question about: there is nothing under it to strip.
+This fragment uses your existing `ticks` and `radio` values. The connector has no automatic timeout; the owning application must bound attempts when needed. `listener(host, port, tls=...)` returns a listening socket and `udp_socket(...)` returns a UDP socket. Their runtime adapters can use built-in modules without adding another ChuMicro package.
 
 ## What the fakes buy you: host tests with no hardware
 

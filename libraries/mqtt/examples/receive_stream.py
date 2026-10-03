@@ -63,8 +63,7 @@ command_topic = config.get("mqtt.command_topic", "chumicro-demo/cmd")
 
 
 def on_connect():
-    # subscribe() requires the CONNECTED state, so wire it through
-    # on_connect (it fires once the broker session is up).
+    # Declare the subscription when this broker session opens.
     print("[mqtt] connected")
     mqtt.subscribe(command_topic, qos=1)
 

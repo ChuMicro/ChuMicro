@@ -43,8 +43,8 @@ quotations, repository instructions, or access to browsing and file tools. Keep
 code, commands, necessary error strings, and link targets exact. Express every
 other fact as a telegraphic note, never a finished sentence: the writer relays
 finished sentences, and the page then inherits the researcher's register. The
-writer's only register input is the excerpt in
-`_shared/voices/voice_samples/chumicro-docs.md`, which the launcher sends.
+writer's register comes from the launcher's instruction set; a registry excerpt
+is an opt-in experiment, never a default input.
 
 The orchestrator retains repository rules and responsibility for verification,
 permissions, file changes, and delivery. Its familiarity with the sources biases
@@ -119,9 +119,10 @@ in research.
 Read [execution.md](execution.md). From the repository root with its virtual
 environment active, run `python .github/skills/cold-writer/scripts/write.py --help`.
 Use that same script path with `--brief`, `--review`, and a new `--run-dir` beneath
-`.scratch/` for the drafting call. `--voice` defaults to `chumicro-docs`, the
-register excerpt the writer matches; `--voice plain` sends no excerpt and exists
-for control runs only.
+`.scratch/` for the drafting call. `--voice` defaults to `plain`: the writer gets
+the instruction set alone, which is the register the owner accepted on the
+start-here trial. `--voice chumicro-docs` adds the README register excerpt, for
+experiments only.
 Use a background execution handle for the model call and continue independent
 work while it runs. Report progress when a stage changes.
 
@@ -132,8 +133,8 @@ candidate. Infrastructure failure returns to execution diagnosis, not writing.
 
 **Success criteria:** a new draft and receipt exist, the receipt records a
 successful response with no tools or extensions, the saved system prompt holds
-only the writer instructions and the register excerpt, and the run's `brief.md`
-matches the reviewed bytes.
+only the writer instructions (plus the excerpt when a voice was requested), and
+the run's `brief.md` matches the reviewed bytes.
 
 ### 5. Review the draft independently
 
@@ -187,7 +188,10 @@ inbound anchors, and templates only where the changed page requires it. Follow
 repository gates and task-checkpoint requirements for the changed unit.
 
 Show the result, important structural choices, tests performed, and any remaining
-hardware or human checks. Link the maintenance index when one was produced.
+hardware or human checks. Record the owner's verdict on each candidate in
+[labels/](labels/), with the draft's hash and the critique verbatim; those
+records are the calibration set reviewers read. Link the maintenance index when
+one was produced.
 Commit, push, and publish only with the required user
 authorization. The writer process itself never edits the destination document.
 

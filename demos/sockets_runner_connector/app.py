@@ -1,17 +1,15 @@
-"""Send a line to a server and read the reply, without blocking the board.
+"""Exchange one line with a TCP server while sharing a Runner loop.
 
 This is the file that runs on the board.  It waits for wifi, opens a TCP
 connection to a small echo server running on your laptop, sends one
-line, reads the line that comes back, and closes up.  A heartbeat prints
-once a second through all of it, so you can see that none of those steps
-froze the program.
+line, reads the reply, and closes the socket. A heartbeat is scheduled
+once a second alongside the exchange. Synchronous work between yields,
+including a runtime's blocking connection calls, delays other tasks.
 
 ``echo_run`` below is the whole conversation as one function you read top
-to bottom.  Every ``yield from`` marks a place it pauses and the rest of
-the board gets its turn; it picks up on that same line when the socket is
-ready.  The sibling demo ``sockets_runner_connector_explicit`` does the
-identical thing written out as a state machine, if you want to see what
-these five lines are standing in for.
+to bottom. ``yield from`` delegates to a helper. When that helper yields,
+control returns to the runner; a helper that finishes immediately lets
+this function continue in the same turn.
 
 What you will see::
 
@@ -48,11 +46,7 @@ MAX_REPLY_BYTES = 256
 
 
 def echo_run(wifi, link_up, host, port):
-    """The whole round trip, top to bottom.
-
-    Each ``yield from`` is a place this pauses and the rest of the board
-    runs.  It picks up on that same line when the socket is ready.
-    """
+    """Wait for WiFi, exchange one line, and close the connected socket."""
     yield from wait_for(link_up)
     print(f"WIFI_OK ip={wifi.ip}")
 
@@ -74,7 +68,7 @@ def echo_run(wifi, link_up, host, port):
 
 
 def heartbeat(now_ms):
-    """Runs once a second, whatever else is going on."""
+    """Print a heartbeat when the runner dispatches this periodic task."""
     print("  ...still ticking")
 
 

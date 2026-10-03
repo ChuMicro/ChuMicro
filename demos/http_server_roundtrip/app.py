@@ -1,8 +1,8 @@
 """Serve web pages from a board, and answer three requests from a laptop.
 
 This is the file that runs on the board.  It waits for wifi, starts a
-small HTTP server, prints the address it is listening on, and answers
-requests until the demo is done.
+small HTTP server, prints its listening address, and continues answering
+requests after the three-request demonstration completes.
 
 Three routes are registered with the ``@server.route(...)`` decorator.
 Each one is a plain function that takes a request and returns a
@@ -87,7 +87,7 @@ def echo(request):
 
 
 def heartbeat(now_ms):
-    """Runs once a second, whatever else is going on."""
+    """Print a heartbeat when the runner dispatches this periodic task."""
     print("  ...still ticking")
 
 
