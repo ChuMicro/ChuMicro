@@ -3,7 +3,7 @@
 Status: `accepted`
 Date: `2026-08-18`
 Summary: Demos, library examples, and workbench-template projects spell their main loop as `while ...: runner.tick(); runner.wait(now_ms)`; `run_until` stays on `Runner` for application code.
-Related: Decision [0102](0102-runner-run-until.md) (`run_until` is bounded, not the main loop), Decision [0080](0080-runner-reactor.md) (the loop's two beats), Decision [0014](0014-runner-pattern.md) (the runner contract).
+Related: Decision [0102](0102-runner-run-until.md) (`run_until` is bounded, not the main loop), Decision [0080](0080-runner-reactor.md) (the loop's two beats), Decision [0014](0014-runner-pattern.md) (the runner contract), Decision [0130](0130-examples-and-demos-never-exit.md) (the loop never ends).
 
 ## Context
 
@@ -22,8 +22,8 @@ while True:
 ```
 
 - **`runner.wait(now_ms)` is what makes it correct, not `run_until`.** A `while True: runner.tick()` with no `wait()` is the busy-spin to reject. The two-line loop above parks the CPU on the same code path `run_until` uses, because `run_until` is that loop. Guidance that warns against hand-written loops must name the missing `wait()`, not the `while`.
-- **Everything the program needs to notice is an `if` inside the loop, before the `wait()`.** A finished generator (`if handle.done: break`), an exhausted wifi reconnect policy, a demo deadline (`if give_up.expired(now_ms):`). Check completion *before* `wait()`: a finished task re-arms no deadline, so `wait()` would idle on a socket with no event coming.
-- **Demos carry their deadline as a `chumicro_timing.Deadline`.** `Deadline(_DEMO_DEADLINE_MS, ticks_ms())` plus `give_up.expired(now_ms)` reads as English and is a primitive the reader will use again, where `timeout_ms=` was an argument to a call they could not open.
+- **Everything the program needs to notice is an `if` inside the loop, before the `wait()`.** A finished generator to start again, an exhausted wifi reconnect policy to report. Check completion *before* `wait()`: a finished task re-arms no deadline, so `wait()` would idle on a socket with no event coming.
+- **The loop never ends** in a demo or a library example; see [Decision 0130](0130-examples-and-demos-never-exit.md).
 - **`run_until` stays.** It remains on `Runner`, documented in the runner README and guide as the one-call form of the loop, and is the right call in application code nobody is reading to learn from. Decision 0102's contract is unchanged; only its audience is narrowed.
 
 ## Rejected

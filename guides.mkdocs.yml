@@ -35,6 +35,7 @@ extra:
 nav:
   - Guides: index.md
   - Start here: start-here.md
+  - Coming from Arduino: coming-from-arduino.md
   - Installing libraries: install.md
   - Questions: faq.md
   - Troubleshooting:

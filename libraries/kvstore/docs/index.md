@@ -4,9 +4,9 @@ title: "chumicro-kvstore: storage that survives a reboot on CircuitPython and Mi
 
 # chumicro-kvstore
 
-**Tiny mutable key-value store for runtime state that survives reboot.**
+**A dict that keeps its values through a reset or a power cut.**
 
-Counters, timestamps, tokens, and retry budgets that your program writes while it runs and still finds after a power cycle, on CircuitPython, MicroPython, and CPython.  You get a dict you assign to and `commit()` when the change matters; the backend is chosen for the runtime you are on (NVM with CRC framing on CircuitPython, NVS on ESP32 MicroPython, LittleFS elsewhere, in-memory on a host).
+Counters, last readings, calibration values, and tokens that your program changes while it runs and still finds after the board restarts.  `KVStore` works like a Python dict: change it as often as you like, then call `commit()` when you want the change saved.  It saves to `microcontroller.nvm` on CircuitPython, which works even while the CIRCUITPY drive is mounted on your computer, and to NVS or a flash file on MicroPython.
 
 ## Install
 
@@ -25,19 +25,26 @@ No board running yet?  [Start here](https://chumicro.com/ChuMicro/guides/start-h
 
 ## Quick example
 
-```python
-from chumicro_kvstore import KVStore
-from chumicro_timing import ticks_ms  # separate install: chumicro-timing
+Count how many times the board has started.  Press reset and the count goes up by one:
 
-store = KVStore(backend="auto")              # picks the right backend per runtime
+```python
+import time
+
+from chumicro_kvstore import KVStore
+
+store = KVStore(backend="auto")            # picks NVM, NVS, or flash for this board
 store["boot_count"] = store.get("boot_count", 0) + 1
-store["last_seen_ms"] = ticks_ms()
-store.commit()                                # one flush per logical change
+store.commit()                             # saved: survives a reset or power cut
+print(f"Boot count: {store['boot_count']}")
+
+while True:
+    time.sleep(5)
+    print(f"Boot {store['boot_count']}, still running")
 ```
 
 ## Documentation
 
-- [User Guide](guide.md): backends and `auto` selection, commit semantics, sizing and full-store handling, corruption handling, platform notes
+- [User Guide](guide.md): where each board saves, when to call `commit()` versus `commit_if_changed()`, how much fits, what happens to damaged data, platform notes
 - [API Reference](api.md): `KVStore` methods, `commit_if_changed`, and the `KVStoreFull` / `KVStoreCorrupt` exceptions
 - [Testing Helpers](testing.md): using `FakeKVStore` in your tests
 

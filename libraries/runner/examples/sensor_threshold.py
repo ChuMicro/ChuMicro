@@ -1,20 +1,29 @@
-"""Sensor threshold alert: gate-based check/handle pattern.
+"""Watch a temperature and print an alert whenever it runs over a limit.
 
-``check()`` reads the sensor and returns whether the handler should
-fire.  The runner calls ``check()`` on schedule.  When it returns
-True, ``handle()`` fires.
+Once a second the program reads a pretend sensor, and it prints an alert
+each time the reading is above 30 C.  The readings cycle through a fixed
+list, so alerts appear for two seconds out of every eight, forever.
 
-On a real board, ``read_temperature()`` would be a fast I2C or ADC
-read.  Here it cycles through simulated values.
+``TemperatureAlarm`` is a service: an object with two methods the runner
+calls for you.  ``check()`` reads the sensor and answers "is there anything
+to do?".  ``handle()`` does it, and the runner calls it only on the ticks
+where ``check()`` returned ``True``.
+
+Setup:
+1. Install ``chumicro_runner`` and ``chumicro_timing``.
+2. Run ``python sensor_threshold.py`` on your computer, or save this file as
+   ``code.py`` (CircuitPython) or ``main.py`` (MicroPython) on a board.
+3. On a board with a real sensor, make ``read_temperature()`` return the
+   sensor's reading, such as ``sensor.temperature`` from an Adafruit
+   sensor driver.
 
 Example output::
 
-    Monitoring temperature...
-
-    [4002 ms] ALERT: 31.0°C exceeds 30.0°C
-    [5003 ms] ALERT: 35.0°C exceeds 30.0°C
-    [12008 ms] ALERT: 31.0°C exceeds 30.0°C
-    [13004 ms] ALERT: 35.0°C exceeds 30.0°C
+    Watching the temperature (alert above 30.0 C)...
+    ALERT: 31.0 C is above the 30.0 C limit
+    ALERT: 35.0 C is above the 30.0 C limit
+    ALERT: 31.0 C is above the 30.0 C limit
+    ALERT: 35.0 C is above the 30.0 C limit
     ...
 
 Runs on CPython, MicroPython, and CircuitPython.
@@ -22,81 +31,46 @@ Runs on CPython, MicroPython, and CircuitPython.
 
 from chumicro_runner import Runner
 
-# Simulated readings that cycle.  Replace with hardware reads.
-_READINGS = [22.0, 25.0, 28.0, 31.0, 35.0, 29.0, 24.0, 20.0]
+LIMIT_C = 30.0
+READINGS = [22.0, 25.0, 28.0, 31.0, 35.0, 29.0, 24.0, 20.0]
+
+reading_index = 0
 
 
-class TemperatureSensor:
-    """Alert when temperature exceeds a threshold.
+def read_temperature() -> float:
+    """Return the next pretend reading in degrees C, cycling through READINGS."""
+    global reading_index
+    value = READINGS[reading_index % len(READINGS)]
+    reading_index += 1
+    return value
 
-    ``check()`` calls ``read_temperature()``, a fast non-blocking
-    sensor read, and returns True when the threshold is exceeded.
-    ``handle()`` reacts (print here, or a fan / network alert on a
-    real board).
-    """
 
-    def __init__(self, threshold: float = 30.0) -> None:
-        """Create a sensor with the given alert threshold (°C).
+class TemperatureAlarm:
+    """Print an alert whenever the temperature is above ``limit_c``."""
 
-        Args:
-            threshold: Temperature in °C above which ``check()``
-                returns True.
-        """
-        self._threshold = threshold
-        self._last_reading = 0.0
-        self._index = 0
-
-    def read_temperature(self) -> float:
-        """Read temperature from hardware.
-
-        Returns:
-            Temperature in degrees Celsius.
-
-        On a real board::
-
-            return self._i2c_device.temperature
-        """
-        value = _READINGS[self._index % len(_READINGS)]
-        self._index += 1
-        return value
+    def __init__(self, limit_c: float) -> None:
+        self.limit_c = limit_c
+        self.reading = 0.0
 
     def check(self, now_ms: int) -> bool:
-        """Read the sensor and check against the threshold.
+        """Read the sensor and return ``True`` when the reading is over the limit.
 
-        Args:
-            now_ms: Current tick value.
-
-        Returns:
-            True if the reading exceeds the threshold.
+        The runner passes ``now_ms``, the time of the current tick in
+        milliseconds.  This service has no use for it.
         """
-        self._last_reading = self.read_temperature()
-        return self._last_reading > self._threshold
+        self.reading = read_temperature()
+        return self.reading > self.limit_c
 
     def handle(self, now_ms: int) -> None:
-        """React to a threshold breach.
-
-        Args:
-            now_ms: Current tick value.
-        """
-        print(
-            f"  [{now_ms} ms] ALERT: {self._last_reading}°C "
-            f"exceeds {self._threshold}°C"
-        )
+        """Print the alert for the reading ``check()`` just took."""
+        print(f"ALERT: {self.reading} C is above the {self.limit_c} C limit")
 
 
 runner = Runner()
-sensor = TemperatureSensor(threshold=30.0)
+runner.add(TemperatureAlarm(LIMIT_C), period_ms=1000)   # check once a second
 
-# Register the sensor as an object-based task.  The runner
-# calls sensor.check(now_ms) on each tick (gated by period_ms).
-# When check() returns True, sensor.handle(now_ms) fires.
-runner.add(sensor, period_ms=1000)
-
-print("Monitoring temperature...\n")
+print(f"Watching the temperature (alert above {LIMIT_C} C)...")
 
 while True:
-    now_ms = runner.tick()
-
-    # In a real project, the rest of your main loop goes here.
-    # wait() sleeps until the next 1 s sensor read is due.
-    runner.wait(now_ms)
+    now_ms = runner.tick()   # check every service that is due right now
+    runner.wait(now_ms)      # sleep until the next check is due

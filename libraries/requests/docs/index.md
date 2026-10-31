@@ -4,9 +4,9 @@ title: "chumicro-requests: non-blocking HTTP client for CircuitPython and MicroP
 
 # chumicro-requests
 
-**Non-blocking HTTP/1.1 client for CircuitPython, MicroPython, and CPython.**
+**Fetch web pages and call web APIs from your board while your main loop keeps running.**
 
-An LED keeps blinking on the same board while a request is in flight, in a TLS handshake, or mid-timeout against a stalled peer.  Built on `chumicro-sockets` and `chumicro-timing`.
+With `adafruit_requests`, `response = requests.get(url)` holds your program on that line until the server answers.  With `chumicro-requests`, `client.get(url)` returns a request handle at once, your `while True` loop moves the request forward a small step on each pass, and `request.done` turns `True` when the response is in.  Your LED keeps blinking while the server works on its answer, while the page downloads, and while a stalled server runs out its timeout.  Opening the connection is the exception: [Platform notes](guide.md#platform-notes) lists which connect steps hold the loop on each runtime.  Built on `chumicro-sockets` and `chumicro-timing`.
 
 ## Install
 
@@ -25,54 +25,72 @@ No board running yet?  [Start here](https://chumicro.com/ChuMicro/guides/start-h
 
 ## Quick example
 
+A CircuitPython `code.py` that fetches a page every 30 seconds.  Put your network name and password in the `connect()` call.
+
 ```python
+import wifi
 from chumicro_requests import HttpClient
 from chumicro_sockets.sockets_factory import connector_factory
-from chumicro_timing import ticks_ms
-from chumicro_wifi import WifiConfig, WifiService
+from chumicro_timing import Rate, ticks_ms
 
-wifi = WifiService(WifiConfig(ssid="home-wifi", password="s3cret"))
-client = HttpClient(transport_factory=connector_factory(radio=wifi.adapter.radio))
-handle = client.get("http://api.example.com/now", timeout_ms=5000)
+wifi.radio.connect("your-network", "your-password")
+client = HttpClient(transport_factory=connector_factory(radio=wifi.radio))
+every_30_s = Rate(30_000, ticks_ms())
+request = client.get("http://example.com/")  # starts the fetch and returns at once
 
-while not handle.done:
-    now = ticks_ms()
-    if client.check(now):
-        client.handle(now)
+while True:
+    now_ms = ticks_ms()
+    if client.check(now_ms):    # True while a request is in flight
+        client.handle(now_ms)   # one small step: connect, send, or read
 
-response = handle.result   # raises HttpError on failure
-print(response.status_code, response.headers["content-type"])
-print(response.text)       # decoded str (charset sniffed from Content-Type)
-print(response.json())     # parsed JSON when Content-Type is application/json
+    if request is not None and request.done:
+        if request.error is not None:
+            print("failed:", request.error)
+        else:
+            print(request.response.status_code, len(request.response.body), "bytes")
+        request = None
+
+    if request is None and every_30_s.due(now_ms):
+        request = client.get("http://example.com/")
 ```
 
-`wifi.adapter.radio` is the board radio on CircuitPython and `None` on MicroPython and CPython, where the connector needs no radio.  Bringing your own socket instead of `chumicro-sockets` works too: `transport_factory` takes any `(host, port, use_tls)` callable.
+On MicroPython, join wifi with `network.WLAN` as usual and call `connector_factory()` with no `radio`.  `request.response` carries `status_code`, `headers`, `body`, `text`, and `json()`; a failed request sets `request.error` instead.
 
-On the runner, the same fetch is a generator that runs top to bottom while other services keep the CPU between yields:
+## The same fetch, written top to bottom
+
+A generator function lets the fetch read like `adafruit_requests` code.  `yield from get(...)` pauses only `fetch_forever` until the response is in, and the `Runner` loop at the bottom keeps the rest of the board running meanwhile:
 
 ```python
+from chumicro_requests import HttpError
 from chumicro_requests.generators import get
 from chumicro_runner import Runner
+from chumicro_runner.generators import sleep_until
+from chumicro_timing import ticks_add, ticks_ms
+
+connector = connector_factory(radio=wifi.radio)
 
 
-def fetch_once():
-    response = yield from get(
-        connector_factory(radio=wifi.adapter.radio),
-        "http://api.example.com/now",
-    )
-    print(response.status_code, response.text)
+def fetch_forever():
+    while True:
+        try:
+            response = yield from get(connector, "http://example.com/")
+            print(response.status_code, len(response.body), "bytes")
+        except (HttpError, OSError) as error:
+            print("failed:", error)
+        yield from sleep_until(ticks_add(ticks_ms(), 30_000))
 
 
 runner = Runner()
-handle = runner.add_generator(fetch_once())
-while not handle.done:
-    now = runner.tick()
-    runner.wait(now)
+runner.add_generator(fetch_forever())
+
+while True:
+    now_ms = runner.tick()  # fetch_forever runs when what it waits for is ready
+    runner.wait(now_ms)     # the CPU rests until then
 ```
 
 ## Documentation
 
-- [User Guide](guide.md): generator flows and the `HttpClient` service, the POST / PUT / PATCH / DELETE verbs, redirects, body framing and decoding, streaming large bodies, bringing your own transport
+- [User Guide](guide.md): the request loop, reading responses, generator functions, running beside other services, sending data, timeouts and errors, redirects, streaming large bodies, HTTPS, bringing your own transport
 - [API Reference](api.md): `HttpClient`, `RequestHandle`, and `Response`, plus the `yield from` generator helpers
 - [Testing Helpers](testing.md): using `FakeHttpClient` in your tests
 

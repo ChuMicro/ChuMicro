@@ -21,8 +21,6 @@ except ImportError:  # pragma: no cover
     _POLLERR = 0x008
     _POLLHUP = 0x010
 
-_POLL_ERROR_MASK = _POLLERR | _POLLHUP
-
 # Poll-interest bits a service returns from io_interest(); a pinned contract, so keep the numbers stable.
 IO_READ = 1
 IO_WRITE = 2
@@ -390,7 +388,12 @@ class Runner:
                 # Unpack now, before the next iteration, in case the reused buffer rotates.
                 obj = item[0]
                 eventmask = item[1]
-                if eventmask & _POLL_ERROR_MASK:
+                # POLLHUP alongside POLLIN is a peer that sent its last bytes and
+                # closed: the reader still has data, then end-of-stream, to collect.
+                # Only POLLERR, or a hang-up with nothing left to read, is a fault.
+                if eventmask & _POLLERR or (
+                    eventmask & _POLLHUP and not eventmask & _POLLIN
+                ):
                     self._dispatch_io_error(obj, eventmask, now_ms)
         else:
             if timeout_ms is None:

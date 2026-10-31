@@ -146,7 +146,7 @@ workspaces rather than here. To put code on a board from this repo, use
 | `probe` | Prints the runtime identity the board reports | `chumicro-workspace probe --device pi-pico-w-micropython-board` |
 | `add-device [id]` | Probes a board and registers it | `chumicro-workspace add-device back-porch-mp --runtime micropython` |
 | `status` / `doctor` | Health snapshot; `doctor` adds a Python-version and `run()` AST scan | `chumicro-workspace doctor --fix-fskit-wedge` |
-| `demo` | Built-in hello-world to the active device, about 5 seconds | `chumicro-workspace demo` |
+| `demo` | Built-in hello-world that counts forever; prints its first 10 seconds | `chumicro-workspace demo` |
 | `dump-config` | Prints the merged runtime config a project would receive | `chumicro-workspace dump-config <project>` |
 | `config-validate` | Validates merged config against every reachable library manifest | `chumicro-workspace config-validate <project>` |
 | `install-firmware` | Downloads and flashes firmware | `chumicro-workspace install-firmware --device tinys3-cp` |

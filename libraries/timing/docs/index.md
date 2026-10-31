@@ -4,9 +4,9 @@ title: "chumicro-timing: timers and deadlines without sleep, for CircuitPython a
 
 # chumicro-timing
 
-**Cross-runtime millisecond tick helpers and periodic timing for CircuitPython, MicroPython, and CPython.**
+**Timers that don't block, for CircuitPython, MicroPython, and CPython.**
 
-Capture `ticks_ms()` once per pass through your loop and hand it to a `Rate` (a drift-free periodic cadence) or a `Deadline` (a single armed timeout).  Both are built on wrap-safe tick arithmetic, so the counter rollover on a board that has been up for weeks changes nothing.  All timing is non-blocking: nothing on the device path calls `time.sleep()` (the host-test `sleep_ms` shim in `chumicro_timing.testing` is the one exception, and it never deploys).
+`time.sleep(1)` stops your whole program for a second, and a button pressed during that second goes unnoticed.  `chumicro-timing` keeps the loop running and tells you when it is time to act: a `Rate` comes due every N milliseconds, and a `Deadline` expires once, N milliseconds after you set it.  Read the clock once per pass with `ticks_ms()`, Arduino's `millis()` under another name, and hand that reading to each timer.  The millisecond counter rolls back to zero every few days, and every timer here stays correct across that rollover.
 
 ## Install
 
@@ -25,21 +25,29 @@ No board running yet?  [Start here](https://chumicro.com/ChuMicro/guides/start-h
 
 ## Quick example
 
+Blink the onboard LED on a CircuitPython board, with a loop that never sleeps:
+
 ```python
+import board
+import digitalio
 from chumicro_timing import Rate, ticks_ms
 
-rate = Rate(1000, ticks_ms())
+led = digitalio.DigitalInOut(board.LED)
+led.direction = digitalio.Direction.OUTPUT
+
+blink = Rate(500, ticks_ms())       # comes due every 500 ms, counting from now
 
 while True:
-    now = ticks_ms()
-    if rate.due(now):
-        print("one second elapsed")
-    # ... do other work ...
+    now = ticks_ms()                # read the clock once per pass
+    if blink.due(now):              # True once every 500 ms, False otherwise
+        led.value = not led.value
+
+    # Nothing above waits, so code you add here runs on every pass.
 ```
 
 ## Documentation
 
-- [User Guide](guide.md): periodic cadence with `Rate`, sharing one timestamp across a loop, deadlines, choosing a wait, using the tick helpers directly, wraparound details, pairing with `chumicro-runner`
+- [User Guide](guide.md): blinking without `sleep`, several timers in one loop, giving up with a `Deadline`, what happens when the loop runs late, the tick functions and their rollover, pairing with `chumicro-runner`
 - [API Reference](api.md): the wrap-safe `ticks_ms` / `ticks_diff` / `ticks_add` helpers, the `Deadline` and `Rate` value objects, and the `Signal` / `wait_for` wait vocabulary
 - [Testing Helpers](testing.md): using `FakeTicks` in your tests
 

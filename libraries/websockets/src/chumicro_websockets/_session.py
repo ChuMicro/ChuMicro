@@ -103,8 +103,18 @@ class _InboundWait:
 
     io_socket = None
 
+    def __init__(self, session) -> None:
+        self._session = session
 
-_INBOUND_WAIT = _InboundWait()
+    def next_deadline(self, now_ms):
+        # Due now once a message is queued or the session has closed, so
+        # Runner.wait() returns instead of sleeping until the next socket
+        # event; the generator may have been checked before the session
+        # read the message on the same tick.
+        session = self._session
+        if session._inbound_queue or session.state == WebSocketState.CLOSED:
+            return now_ms
+        return None
 
 
 class _BaseSession:
@@ -160,6 +170,7 @@ class _BaseSession:
         self._inbound_oversized = False
         self._inbound_queue = None
         self._inbound_to_queue = False
+        self._inbound_wait = _InboundWait(self)
         # Peer-reported size of the in-progress message; load-bearing on tier-3 oversize.
         self._inbound_reported_length = 0
         self._inbound_empty_fragment_run = 0
@@ -305,7 +316,7 @@ class _BaseSession:
                 return self._inbound_queue.popleft()
             if self.state == WebSocketState.CLOSED:
                 return None
-            yield _INBOUND_WAIT
+            yield self._inbound_wait
 
     def _outbound_mask(self):  # pragma: no cover - abstract
         raise NotImplementedError

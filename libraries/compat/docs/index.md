@@ -1,12 +1,12 @@
 ---
-title: "chumicro-compat: standard-library polyfills for CircuitPython and MicroPython"
+title: "chumicro-compat: functools.partial for CircuitPython and MicroPython"
 ---
 
 # chumicro-compat
 
-**Cross-runtime compatibility polyfills for CircuitPython, MicroPython, and CPython.**
+**`functools.partial` for CircuitPython and MicroPython, which leave it out.**
 
-Lightweight reimplementations of the standard-library pieces CircuitPython and MicroPython leave out. Import the polyfill submodule (`from chumicro_compat.functools import partial`) and the same code runs on all three runtimes: on CPython the real C implementation is re-exported, so the import costs nothing there.
+`partial(set_led, 13)` gives you a new function with some of its arguments already filled in: the tidy way to hand a callback the pin, sensor, or name it should work on.  Import it from `chumicro_compat.functools` and the same code runs on CircuitPython, MicroPython, and CPython.  On CPython the import hands you the standard library's own `functools.partial`.
 
 ## Install
 
@@ -25,22 +25,39 @@ No board running yet?  [Start here](https://chumicro.com/ChuMicro/guides/start-h
 
 ## Quick example
 
+Make one function per LED, then fade both pretend LEDs up and down forever:
+
 ```python
+import time
+
 from chumicro_compat.functools import partial
 
-def set_led(pin: int, brightness: int) -> None:
-    """Set an LED pin to a brightness level."""
-    print(f"pin {pin} → {brightness}%")
 
-# Freeze the pin, vary the brightness later.
-set_status_led = partial(set_led, 13)
-set_status_led(50)   # pin 13 → 50%
-set_status_led(100)  # pin 13 → 100%
+def set_led(pin, brightness, label="LED"):
+    print(f"{label} on pin {pin}: {brightness}%")
+
+
+# set_status_led(50) now runs set_led(13, 50, label="status LED").
+set_status_led = partial(set_led, 13, label="status LED")
+set_power_led = partial(set_led, 2, label="power LED")
+leds = [set_status_led, set_power_led]
+
+brightness = 0
+step = 25
+while True:
+    for set_brightness in leds:
+        set_brightness(brightness)
+
+    brightness += step
+    if brightness == 0 or brightness == 100:
+        step = -step
+
+    time.sleep(0.5)
 ```
 
 ## Documentation
 
-- [User Guide](guide.md): `functools.partial` across runtimes, platform notes, examples
+- [User Guide](guide.md): filling in positional and keyword arguments, callbacks, the `func` / `args` / `keywords` attributes, platform notes
 - [API Reference](api.md): `partial` and its `func` / `args` / `keywords` attributes
 
 ---

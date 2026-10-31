@@ -16,7 +16,7 @@ An AI coding agent reads code, proposes changes, runs tests, and iterates, like 
 - **Fixing lint errors** and formatting issues
 - **Exploring the codebase** to answer "how does X work?" questions
 
-Agents follow the same rules as human contributors: they run preflight, their code goes through review, and their PRs must pass CI. The difference is that agents have a stricter rule set ([`AGENTS.md`](https://github.com/ChuMicro/ChuMicro/blob/main/AGENTS.md)) because they need explicit instructions for things humans intuit, like "don't reformat code you didn't change" or "check whether this was already decided."
+Agents follow the same rules as human contributors: they run preflight, their code goes through review, and their PRs must pass CI.  They also follow a stricter rule set, [`AGENTS.md`](https://github.com/ChuMicro/ChuMicro/blob/main/AGENTS.md), because they need explicit instructions for things people do by instinct, like "fix only what was asked" or "check whether this was already decided."
 
 ## What agents don't replace
 
@@ -42,15 +42,15 @@ If you're using an AI coding tool (Claude Code, Cursor, GitHub Copilot, etc.), p
 Human: "Add a test for ticks_add with a negative delta at the wraparound boundary"
 
 Agent: reads the codebase, writes the test, runs it, checks coverage,
-       commits with a proper message, done.
+       runs preflight, and commits when you ask it to.
 ```
 
 ```
-Human: "Create a new library called 'settings' for persistent key-value storage"
+Human: "Add a timing example that blinks two LEDs at different rates"
 
-Agent: runs the scaffold command, generates starter code following the
-       project patterns, writes tests to pass the coverage gate, builds docs,
-       ready for review.
+Agent: reads the timing guide and the existing examples, writes the file
+       with both blinks inside one while True: loop, runs verify-examples
+       and preflight, ready for review.
 ```
 
 The agent does the mechanical work. You steer the design and review the result.
@@ -82,17 +82,17 @@ For longer sessions, periodically restating *"what we're solving here is X"* pul
 
 Agents working under this project's rule set behave somewhat differently than agents in a generic workspace. Worth knowing as a collaborator:
 
-- **Agents commit after each coherent unit of work** via the `task-checkpoint` skill: preflight, plans-doc refresh, commit, push. The tree stays clean across collaboration boundaries.
-- **Coverage gate runs at 94 % on agent invocations** (humans target the 85 % pyproject baseline). A coverage failure showing `94.0%` is from this gate, per [Decision 0025](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0025-dual-coverage-thresholds.md).
+- **Agents close each unit of work with the `task-checkpoint` skill**: preflight, then the docs and planning files the change touched.  They commit only when you ask, staging files by name so your own uncommitted work stays out.
+- **Agents hold the libraries they change to 94 % coverage** (humans target the 85 % `pyproject.toml` baseline, and untouched libraries keep it).  A coverage failure showing `94.0%` comes from this gate, per [Decision 0025](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0025-dual-coverage-thresholds.md).
 - **Agents restate your message when a terse reply could mean multiple things.** If you say "yes" or "option 2" after a few exchanges, expect a "confirming you mean X" before action. That's the rule firing, not the agent being slow.  It prevents acting on the wrong referent.
 - **Agents surface tradeoffs before executing multi-option choices.** They name approaches and call out ambiguity. Rule firing, not indecision.
 - **Agents push back when something looks wrong.** A factual disagreement followed by reasoning is the rule working as intended.
 
 ## Tips for productive collaboration
 
-- **Be specific about what to ask for.** "Add edge-case tests for heartbeat near wraparound" is better than "improve tests."
-- **Push back with reasoning, not just "no."** "No" bounces a recommendation. "No because X" teaches the agent your model, which is much higher-leverage feedback.
-- **Restate when you'd reply tersely.** A 3-word answer like "yes" or "option 2" assumes you and the agent still share the same model. After a few turns, that model can drift.  Restating the referent prevents the agent acting on the wrong one.
+- **Be specific about what to ask for.** "Add edge-case tests for `Rate` near tick wraparound" beats "improve tests."
+- **Give your reason when you say no.** "No" bounces a recommendation.  "No, because X" teaches the agent how you think, and the next proposal lands closer.
+- **Name the thing when you'd reply tersely.** A 3-word answer like "yes" or "option 2" assumes you and the agent still mean the same thing.  After a few turns that drifts, and "yes, split the file" keeps the agent from acting on the wrong option.
 - **Grant broader autonomy after small wins.** Reversible local work is fine on a short leash; reserve confirmation for destructive or scope-expanding moves. Trust builds across turns.
 - **Let the agent read first.** Output quality goes up significantly when the agent reads `AGENTS.md` and the relevant library code before writing.
 - **Review what it produces.** Agents write plausible code quickly. That's not the same as *correct* code. Read the diff like any other PR.
@@ -100,24 +100,20 @@ Agents working under this project's rule set behave somewhat differently than ag
 
 ## When a session feels off
 
-When the agent keeps missing the point (repeated misinterpretations, output that doesn't land, you correcting more than producing), usually one of these is happening:
+When the agent keeps missing the point (repeated misinterpretations, output that doesn't land, you correcting more than producing), check the tips above first: terse replies and unexplained "no"s cause most of it.  Two more causes:
 
-- **Terse replies assuming shared context that drifted.** A 3-word answer like "yes" or "option 2" assumes you and the agent share the same model of what's being asked. After a few turns, that model drifts. Restate the referent before continuing.
-- **Pushback without reasoning.** "No" bounces a recommendation. "No because X" teaches the agent your model. The first wastes a round; the second teaches.
 - **Underspecified task.** "Fix this" assumes the agent knows what "this" and "fix" mean. Naming the actual problem and what good looks like takes one sentence and saves several rounds.
-- **Conversation has drifted too far to recover.** Sometimes the right move is to start a fresh session with clear initial framing rather than try to course-correct.
+- **A conversation drifted too far to recover.** Start a fresh session with a clear opening statement of the goal rather than steering the old one back.
 
-If none of the above apply and the agent still isn't tracking, try restating the actual goal explicitly ("I want to accomplish X. What's blocking that?"). That usually catches the disconnect.
+If the agent still isn't tracking, state the goal outright: "I want to accomplish X. What's blocking that?"
 
 ## First time using an agent
 
-For contributors who haven't used an AI coding agent, this project is a good place to start. The `AGENTS.md` file and skills system mean the agent already knows the project's rules, so no manual onboarding is needed. Try something small:
+If you haven't used an AI coding agent before, this project is a good place to start: `AGENTS.md` and the skills already teach the agent the project's rules.  Try something small:
 
 - Ask it to explain how a library works
 - Ask it to write a test for an uncovered code path
-- Ask it to generate an example script
-
-Much of the "getting started" friction disappears once a question can simply be asked.
+- Ask it to write an example that does one thing, then keeps blinking or printing inside a `while True:` loop
 
 ## Why this is set up this way
 

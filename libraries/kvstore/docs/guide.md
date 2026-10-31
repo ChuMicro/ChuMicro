@@ -2,83 +2,79 @@
 
 ## Overview
 
-`chumicro-kvstore` is a tiny mutable key-value store for runtime state that needs to survive a reboot (boot counters, last-seen timestamps, retry budgets, refreshed access tokens).  It exposes a familiar `dict`-shaped API (`store[key] = value`, `del store[key]`, `"key" in store`, iteration) plus three explicit lifecycle methods: `commit`, `commit_if_changed`, `reload`.
+`chumicro-kvstore` keeps a small dict of values on the board where they survive a reset or a power cut: boot counters, the last reading, calibration values, refreshed access tokens.  `KVStore` behaves like a dict (`store[key] = value`, `del store[key]`, `"key" in store`, `for key in store`).  Changes stay in memory until you call `commit()` or `commit_if_changed()`, which pack the dict into msgpack bytes and save them.  `reload()` throws away unsaved changes and reads the saved copy again.
 
-State is read-write at runtime, flat, and lives in the right per-runtime persistent backend (CP NVM with CRC framing, MP NVS, MP LittleFS, or in-memory).  You write to the in-memory dict as you go and call a `commit*` method when you want the change to survive the next reboot.
+On CircuitPython the store saves into `microcontroller.nvm`, a few kilobytes of memory kept apart from the CIRCUITPY drive.  Your code cannot write files while CIRCUITPY is mounted on your computer, but it can always write NVM, so saving works with the board plugged in.
 
 ## Getting started
 
-The "boot counter that survives reboot" pattern in five lines:
+Count how many times the board has started, then keep running.  Press reset and the count goes up by one:
 
 ```python
+import time
+
 from chumicro_kvstore import KVStore
-from chumicro_timing import ticks_ms  # separate install: chumicro-timing
 
-store = KVStore(backend="auto")
+store = KVStore(backend="auto")            # picks NVM, NVS, or flash for this board
 store["boot_count"] = store.get("boot_count", 0) + 1
-store["last_seen_ms"] = ticks_ms()
-store.commit_if_changed()
+store.commit()                             # saved: survives a reset or power cut
+print(f"Boot count: {store['boot_count']}")
+
+while True:
+    time.sleep(5)
+    print(f"Boot {store['boot_count']}, still running")
 ```
 
-`backend="auto"` picks the right backend per runtime (see below).  Reads are pure-memory after the constructor's auto-load, with no I/O on the hot path.  Writes update the in-memory dict immediately; persistence happens on the next `commit*` call.
+`KVStore(backend="auto")` reads the saved values once, when you create it.  After that every read comes from memory and never touches flash.  Assigning a value changes memory only; `commit()` saves.  On a laptop the `auto` choice is plain memory, so the count starts at 1 on every run there.
 
-## Backends and `auto` selection
+## Where each board saves
 
-| Backend | Where the bytes live | Selected on |
+| Backend | Where the bytes live | Picked by `auto` on |
 |---|---|---|
-| `nvm` | CircuitPython `microcontroller.nvm` byte slab with CRC32 framing | CircuitPython on every supported board |
-| `nvs` | MicroPython `esp32.NVS` namespaced K-V (single `payload` blob in the `chu_kv` namespace) | MicroPython on ESP32-family boards (auto-detected via `import esp32`) |
-| `littlefs` | MicroPython LittleFS file at `/_chu_kv.msgpack`, atomic via tmp-file + rename | MicroPython on non-NVS boards (Pi Pico W, etc.) |
-| `memory` | In-process `bytes` that does **not** survive process exit | CPython default, plus `FakeKVStore` for tests |
+| `nvm` | CircuitPython's `microcontroller.nvm`, with a checksum to catch a half-written save | CircuitPython, every board |
+| `nvs` | MicroPython's `esp32.NVS`, the ESP32's built-in settings storage (one entry named `payload` in the `chu_kv` namespace) | MicroPython on ESP32-family boards |
+| `littlefs` | The file `/_chu_kv.msgpack` in MicroPython's flash filesystem, written to a temporary file first and then renamed into place | MicroPython on other boards, such as Pi Pico W |
+| `memory` | Plain memory, gone when the program ends | CPython on a laptop, and `FakeKVStore` in tests |
 
-The auto-select ladder is one short function:
-
-```python
-import sys
-
-def _select_backend():
-    if sys.implementation.name == "circuitpython":
-        return CpNvmBackend()
-    if sys.implementation.name == "micropython":
-        try:
-            import esp32          # ESP32-family probe
-            return MpNvsBackend()
-        except ImportError:
-            return MpLittlefsBackend()
-    return MemoryBackend()        # CPython
-```
-
-If you want a specific backend regardless of runtime (for tests, or to force `littlefs` on an ESP32 with NVS issues), pass it by name:
+To use one backend whatever the runtime (in tests, or to use `littlefs` on an ESP32 whose NVS gives trouble), pass its name:
 
 ```python
 store = KVStore(backend="littlefs")
 store = KVStore(backend="memory")
 ```
 
-Or pass a `Backend` instance directly (a `MemoryBackend`, or your own `load`/`save` pair).  In tests, construct a `FakeKVStore()` in place of the whole store; it is a `KVStore`, not a backend (see [Testing Helpers](testing.md)).
+You can also pass your own backend object: anything with a `name`, a `capacity` in bytes (0 for no limit), a `load()` that returns the saved bytes, and a `save(payload)` that stores them.  In tests, create a `FakeKVStore()` in place of the whole store; it is a `KVStore`, not a backend (see [Testing Helpers](testing.md)).
 
-## Commit semantics
+## Saving: `commit()` and `commit_if_changed()`
 
-Three lifecycle methods, distinct intents:
+Every save writes flash, and flash wears out after a limited number of writes, so save when a value changes rather than on a fast timer.
 
 | Method | What it does | When to use |
 |---|---|---|
-| `commit()` | Always re-encode + write. | After a logical change you know is significant. |
-| `commit_if_changed()` | Re-encode; skip the write if bytes match the last persisted payload. | Hot loops or once-per-tick "save current state" calls, the first-line defense against flash wear on the raw NVM backend. |
-| `reload()` | Discard in-memory state, reread from backend, raise on corruption. | Recovery: explicit re-read after suspicion of external write or corruption. |
+| `commit()` | Packs and saves the dict every time. | Right after a change you know matters, such as a new boot count. |
+| `commit_if_changed()` | Saves only when a value changed since the last save, and returns `True` when it wrote. | In a loop or on a timer, where most calls have nothing new to save. |
+| `reload()` | Throws away unsaved changes and reads the saved copy again; raises `KVStoreCorrupt` on damaged data. | When you suspect something else changed the saved data. |
+
+Saving once a second with a runner costs a flash write only when a value changed.  The runner passes the current time to each handler, so wrap the call:
 
 ```python
-# Safe to call every tick; only writes when something actually changed.
-runner.add_periodic(store.commit_if_changed, period_ms=1000)
+def save_changes(now_ms):
+    store.commit_if_changed()
+
+runner.add_periodic(save_changes, period_ms=1000)
 ```
 
-## Sizing and full-store handling
+## How much fits
 
-Each backend exposes a `capacity` (bytes-of-encoded-payload).  `KVStore.bytes_used` reports the current encoded size; `KVStore.capacity` reports the backend's limit.
+`store.capacity` is how many bytes the store can save, and `store.bytes_used` is how many the current values take once packed.  A boot counter, a timestamp, and a few flags take a few dozen bytes.
 
-CP NVM is the smallest, typically 256 bytes on SAMD21 boards, ~4 KB on RP2040 (the reference Pi Pico W), and 8 KB on SAMD51 / ESP32 boards (it's per-chip; check your board's `microcontroller.nvm`).  After CRC framing overhead (10 bytes), you have your usable budget.  `commit()` raises `KVStoreFull` if the encoded payload won't fit; the in-memory dict is unchanged so you can drop a key and retry:
+CircuitPython NVM is the smallest backend, and its size depends on the chip: 256 bytes on SAMD21 boards, 4 KB on RP2040 boards such as Pi Pico W, and 8 KB on SAMD51 and ESP32 boards.  The store keeps 10 of those bytes for its header, and `len(microcontroller.nvm)` tells you the size on your board.  On MicroPython, `littlefs` holds 16 KB by default and `nvs` holds 512 bytes.
+
+When the values do not fit, `commit()` raises `KVStoreFull` and saves nothing.  The values in memory stay as they were, so you can drop a key and try again:
 
 ```python
+from chumicro_kvstore import KVStoreFull
+
 try:
     store.commit()
 except KVStoreFull:
@@ -86,28 +82,23 @@ except KVStoreFull:
     store.commit()
 ```
 
-A few keys with short string / int values (boot counters, timestamps, simple flags) easily fit in 256 B.  Larger state (captured sensor traces, queued telemetry) wants the LittleFS or NVS backend, which give you tens of KB.
+## Damaged data
 
-## Corruption handling
+A save that a reset or power cut interrupts halfway can leave damaged data behind.  The `nvm` backend stores a checksum with every save and checks it on load.  The `nvs` and `littlefs` backends replace the old save in one step, so a reader sees either the old save or the new one.  A blank NVM, as it comes from the factory, reads as an empty store.
 
-The CP NVM backend is the only one with explicit framing (magic `b"CKVS"` + length + CRC32 + payload).  A blank slab from `storage.erase_filesystem()` reads as empty.  A bad-magic or CRC-mismatch reads as corrupt.
-
-Construction never raises *on corruption*: the store resets to empty and reports the event via `is_corrupt` (a backend that cannot reach its substrate at all, e.g. NVM missing, still raises):
+Creating a `KVStore` never raises on damaged data.  The store starts empty instead and sets `is_corrupt`, so your program keeps running:
 
 ```python
 store = KVStore(backend="auto")
 if store.is_corrupt:
-    log.warning("kvstore was corrupt; starting fresh")
-    # store["boot_count"] etc. starts at 0
+    print("Saved data was damaged; starting from empty.")
 ```
 
-`reload()` is the explicit form that *does* raise (`KVStoreCorrupt`); use it when you want to surface the failure rather than silently reset.
-
-NVS is atomic-on-commit at the backend level (no CRC needed).  LittleFS uses tmp-file + rename for atomicity (no CRC needed).  Memory backend can't corrupt.
+`reload()` raises `KVStoreCorrupt` on damaged data instead, for code that wants to stop and report it.  `KVStoreFull` and `KVStoreCorrupt` both subclass `KVStoreError`, so one `except KVStoreError:` catches either.  A board that has no NVM at all still raises when you create the store, because there is nowhere to save.
 
 ## Iteration and update
 
-Standard mapping API works:
+The usual dict methods work:
 
 ```python
 for key, value in store.items():
@@ -117,32 +108,28 @@ store.update({"counter_a": 42, "counter_b": 99})
 store.commit_if_changed()
 ```
 
-`clear()`, `pop(key, default)`, `keys()`, `values()`, `items()` follow `dict` semantics.  `commit` is **not** implied by mutating methods; you call it explicitly when you want the change persisted.
+`clear()`, `pop(key, default)`, `keys()`, `values()`, and `items()` behave as they do on a dict.  None of them save: call `commit()` or `commit_if_changed()` when you want a change kept.
 
 ## Value types
 
-Values are stored via msgpack in the chumicro subset: `None`, `bool`, `int` (32-bit), `str`, `bytes`, and nested `list` / `dict` up to 8 levels deep.  Floats encode as **32-bit** (`float32`), so a value like a `time.time()` timestamp loses precision through a commit / reload round-trip (e.g. `1751414400.5` reads back as `1751414400.0`).  Store timestamps and durations as integer milliseconds or seconds, not floats.
+The store saves values with msgpack, so a value can be `None`, a `bool`, an `int` from -2,147,483,648 to 4,294,967,295, a `str`, `bytes`, or a `list` or `dict` of those, nested up to 8 levels deep.  A `float` saves as a 32-bit float, which keeps about 7 significant digits: a `time.time()` timestamp such as `1751414400.5` reads back as `1751414400.0`.  Store timestamps and durations as whole milliseconds or seconds instead.
 
 ## Platform notes
 
 | Runtime | Backend chosen by `auto` | Capacity (typical) |
 |---|---|---|
-| CircuitPython | `nvm` (with CRC framing) | 256 B – 8 KB depending on chip |
-| MicroPython on ESP32-family | `nvs` (single blob in `chu_kv` namespace) | 512 B default; raise it with `KVStore(backend=MpNvsBackend(capacity=N))` (~24 KB partition headroom) |
-| MicroPython on Pi Pico W (rp2) | `littlefs` (atomic file at `/_chu_kv.msgpack`) | 16 KB default; raise it with `KVStore(backend=MpLittlefsBackend(capacity=N))` (then filesystem-bounded) |
-| CPython | `memory` (in-process bytes) | unbounded |
+| CircuitPython | `nvm` (with a checksum) | 256 B to 8 KB depending on the chip |
+| MicroPython on ESP32-family | `nvs` (one entry in the `chu_kv` namespace) | 512 B default; raise it with `KVStore(backend=MpNvsBackend(capacity=N))` (the default NVS partition is 24 KB) |
+| MicroPython on Pi Pico W (rp2) | `littlefs` (the file `/_chu_kv.msgpack`) | 16 KB default; raise it with `KVStore(backend=MpLittlefsBackend(capacity=N))`, up to the free space on the filesystem |
+| CPython | `memory` | no limit |
 
-`MemoryBackend` is **lazy-imported**, so device runtimes that resolve `auto` to `nvm` / `nvs` / `littlefs` never pay the ~700 B import cost.
-
-### USB-MSC read-only window (CircuitPython)
-
-While the host has CIRCUITPY mounted, the device can't `storage.remount(readonly=False)` to write to flash.  The default `nvm` backend on CircuitPython writes to NVM (not the FAT volume) so it's unaffected; the boot-counter pattern continues to persist across reboots even with the drive mounted.
+Each backend's code is imported only when the store picks it, so a board loads only the one it uses.
 
 ## Examples
 
 | Example | What it shows |
 |---|---|
-| [`examples/boot_counter.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/kvstore/examples/boot_counter.py) | Boot-counter pattern: `commit_if_changed`, `bytes_used`, `backend_name`.  Runs on every runtime; on CPython the count resets each invocation, on a real device it survives reboot. |
+| [`examples/boot_counter.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/kvstore/examples/boot_counter.py) | Counts board starts with `commit()`, prints `backend_name`, `bytes_used`, and `capacity`, then prints the count every five seconds.  Runs on every runtime; on a board the count survives a reset, on CPython it starts at 1 every run. |
 
 ---
 

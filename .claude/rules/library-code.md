@@ -19,7 +19,7 @@ Applies to `libraries/` and `support/<name>/src/`, cross-runtime by default. Not
 
 ## Time
 
-- Route all time math through `chumicro_timing` (`ticks_ms`, `ticks_diff`, `ticks_add`, `Heartbeat`). Never call `time.monotonic`, `time.ticks_ms`, or `supervisor.ticks_ms` directly. Mixing a tick deadline with a wall clock reads as a stalled service.
+- Route all time math through `chumicro_timing` (`ticks_ms`, `ticks_diff`, `ticks_add`, `Rate`, `Deadline`). Never call `time.monotonic`, `time.ticks_ms`, or `supervisor.ticks_ms` directly. Mixing a tick deadline with a wall clock reads as a stalled service.
 - A class taking `ticks=` compares every deadline through that clock (`self._ticks.ticks_diff(...)`), never through a module-level `ticks_diff` import in a helper. `FakeTicks` agrees with the hardcoded call and misses the swap, so test with a clock that disagrees.
 - A suspended object publishes its deadline through `next_deadline(now_ms)` and judges no time itself, which leaves `ready(now_ms)` for conditions needing no clock. Reproduction and the disagreeing clock: [`plans/patterns.md`](../../plans/patterns.md) "Injected clocks".
 
@@ -56,8 +56,11 @@ Applies to `libraries/` and `support/<name>/src/`, cross-runtime by default. Not
 ## Examples and demos
 
 - Examples import the public package only. No `if __name__ == "__main__":` guard. Hardware examples are prefixed `circuitpython_*.py` / `micropython_*.py`. Gated by `python scripts/run.py verify-examples`.
-- A demo's `app.py` imports only what it demonstrates, prints its own `NAME key=value` lines, and never exits: it prints `DEMO_COMPLETE` when the work is done and lets the written-out loop carry on ([Decision 0123](../../plans/decisions/0123-demos-read-like-a-first-project.md)). No `chumicro_test_harness` import in board-side demo code.
-- Demos and examples write the main loop out: `while ...:`, then `runner.tick()`, then `runner.wait(now_ms)` ([Decision 0122](../../plans/decisions/0122-demos-and-examples-write-the-loop-out.md)). `run_until` hides the loop from the reader they exist to teach.
+- Examples and demos never exit ([Decision 0130](../../plans/decisions/0130-examples-and-demos-never-exit.md), `CHU038`). The file reads imports, setup, then a module-level `while True:` with no `break`, the shape of an Adafruit Learn or Arduino program. No `raise SystemExit`, `sys.exit()`, `exit()`, or `quit()`, and no running off the end on success.
+- After the one-shot part (connect, query, round trip), the loop repeats the work the file teaches on a timer. A failure prints what went wrong and retries on the next pass. A bare heartbeat is the fallback for work that cannot repeat.
+- A script that runs once by design, such as a benchmark, opts out with a comment-only `# noqa: CHU038 - <reason>` line.
+- A demo's `app.py` imports only what it demonstrates and prints its own `NAME key=value` lines. It prints `DEMO_COMPLETE` after its first full pass and keeps repeating the work ([Decision 0123](../../plans/decisions/0123-demos-read-like-a-first-project.md)). No `chumicro_test_harness` import in board-side demo code.
+- A demo or example that uses a `Runner` writes its loop out: `while True:`, then `runner.tick()`, then `runner.wait(now_ms)` ([Decision 0122](../../plans/decisions/0122-demos-and-examples-write-the-loop-out.md)). `run_until` hides the loop from the reader they exist to teach.
 - Never deploy a `code.py` / `main.py` containing `microcontroller.reset()` or `machine.reset()`.
 
 ## Before calling it done

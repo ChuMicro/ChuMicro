@@ -5,7 +5,7 @@ align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
 **Rotary encoders and analog knobs, read as a number that holds still.**
 
-Turn a shaft and `encoder.position` counts the clicks.  Turn a potentiometer and `knob.value` lands on a step and stays there.  A fast spin arrives whole even when your loop was busy elsewhere, a parked wiper keeps reporting the same number, and the same code runs on CircuitPython, MicroPython, and your laptop.
+Turn a rotary encoder and `encoder.position` counts the clicks.  Turn a potentiometer and `knob.value` lands on a step and stays there.  A fast spin is counted in full even when your loop was busy elsewhere, a knob you have let go of keeps reporting the same number, and the same code runs on CircuitPython, MicroPython, and your laptop.
 
 <br clear="left">
 
@@ -15,39 +15,44 @@ Turn a shaft and `encoder.position` counts the clicks.  Turn a potentiometer and
 
 ```bash
 # CircuitPython (after `circup bundle-add ChuMicro/ChuMicro-Bundle`)
-circup install chumicro_knobs
+circup install chumicro_knobs chumicro_timing
 
 # MicroPython
 mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_knobs
+mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_timing
 
 # CPython
-pip install chumicro-knobs
+pip install chumicro-knobs chumicro-timing
 ```
+
+`chumicro-knobs` needs no other library.  The examples read the clock with `chumicro-timing`, so install it alongside.
 
 For bundle setup, pre-compiled `.mpy` bundles, the experimental channel, and details on PyPI naming, see the [ChuMicro install guide](https://chumicro.com/ChuMicro/guides/install/).
 
 ## Quick example
 
-Wire the encoder's two signal pins to GPIO pins and its common pin to GND.  The internal pull-ups are switched on for you, so no extra parts are needed.
+Turn a rotary encoder to change a number on a CircuitPython board.  On a Pi Pico W, wire the encoder's two signal pins (often labelled CLK and DT) to GP16 and GP17 and its common pin to GND; on an ESP32-S2 board, use IO16 and IO17.  The pins' internal pull-ups are switched on for you.
 
 ```python
 import board
 from chumicro_knobs import Encoder
 from chumicro_timing import ticks_ms
 
-volume = Encoder(board.GP16, board.GP17, bounds=(0, 20))
+volume = Encoder(board.GP16, board.GP17, bounds=(0, 20))    # holds the number between 0 and 20
 
 while True:
     now = ticks_ms()
-    volume.check(now)
+    volume.check(now)                       # read how far the shaft turned; never waits
 
-    if volume.just_moved:                    # true only on the tick the shaft moved
-        print("volume", volume.position)     # walks 0 to 20 and stops at both ends
+    if volume.just_moved:                   # True on exactly one pass per change
+        print("volume", volume.position)
 ```
 
-The loop never pauses, so the rest of your program keeps running between turns.  `just_moved` is true for exactly one pass, which means you can read it as many times as you like without it firing twice.
+Each click you feel as the shaft turns is a *detent*, and `position` moves by one per detent.  If yours moves only on every other click, pass `detent_steps=2`.  If you have used `rotaryio.IncrementalEncoder`, `position` here is its `position`, and `check()` does the `if position != last_position` bookkeeping for you.
 
-In a program with more going on, hand the loop to [`chumicro-runner`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner) and let the callback do the reading:
+On MicroPython, pass `machine.Pin` objects: `Encoder(Pin(16), Pin(17), bounds=(0, 20))`.
+
+In a program with more going on, hand the loop to [`chumicro-runner`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner) and let a callback react to the turn:
 
 ```python
 from chumicro_runner import Runner
@@ -55,25 +60,25 @@ from chumicro_runner import Runner
 volume.on_change = lambda detents: print("volume", volume.position)
 
 runner = Runner()
-runner.add(volume)
+runner.add(volume, period_ms=20)        # read the encoder fifty times a second
 
 while True:
     now = runner.tick()
     runner.wait(now)
 ```
 
-Every service in your program shares those same two lines.
+`runner.tick()` checks the encoder and calls `on_change` on the pass it turned.  `runner.wait(now)` rests the CPU until the next job is due, and turning a knob cannot wake it, so `period_ms=20` has the runner read the encoder fifty times a second, faster than a hand turns.
 
-## A fast spin arrives whole
+## A fast spin is counted in full
 
-An encoder reports movement as pulses on two signal pins, and one brisk flick of the wrist sends dozens of them.  If your loop stalls on a socket read or a flash write, a plain pin read looks at the wrong moments and most of the turn is gone.  The counting here happens outside your loop, so a tick that arrives late still reads the whole spin.
+An encoder reports turning as pulses on its two signal pins, and one quick flick of the wrist sends dozens of them.  If your loop is busy with a network request or a flash write while they arrive, a plain pin read misses most of the turn.  Here the counting happens outside your loop, so a pass that comes round late still sees the whole spin.
 
-On CircuitPython that counting is `rotaryio`, running in the firmware's own C, which on RP2040 boards is a state machine in the PIO block.  On MicroPython the library installs an interrupt on both signal pins and decodes the pulses itself.  Your program sets up neither one; it reads `position` on whichever runtime it happens to be on.
+On CircuitPython the firmware's `rotaryio` module does the counting.  On MicroPython the library puts an interrupt on both signal pins and counts the pulses itself.  You set up neither one:
 
 ```python
 volume.check(now)
 if volume.just_moved:
-    print(volume.delta)      # every detent of the spin, even the ones during the stall
+    print(volume.delta)      # every detent of the spin, including any your loop was too busy to see
 ```
 
 ## What's included
@@ -85,7 +90,7 @@ if volume.just_moved:
 | `Encoder(pin_a, pin_b, detent_steps=4, bounds=None, wrap=False)` | One rotary encoder on two signal pins, counted in detents |
 | `AnalogKnob(pin, steps=100, deadband=512)` | One potentiometer or slider on one analog pin, read as a step number |
 | `knob.check(now_ms)` | Take one reading; returns `True` when the number changed |
-| `knob.handle(now_ms)` | Call `on_change` when the tick earned it |
+| `knob.handle(now_ms)` | Call `on_change` when this pass's `check()` found a change |
 | `knob.deinit()` | Hand the pins back, along with any interrupt the library installed |
 
 ### Readings, refreshed by `check(now_ms)`
@@ -93,12 +98,12 @@ if volume.just_moved:
 | Symbol | Description |
 |---|---|
 | `encoder.position` | Detents counted so far, held inside `bounds` when there are any.  Assign to it to restore a saved value |
-| `encoder.delta` | Detents this tick added to `position`, negative the other way round |
-| `encoder.just_moved` | `True` only on the tick `position` changed |
+| `encoder.delta` | Detents this pass added to `position`, negative the other way round |
+| `encoder.just_moved` | `True` only on the pass `position` changed |
 | `knob.value` | Where the knob points, `0` at one end of the sweep and `steps - 1` at the other |
-| `knob.delta` | Steps this tick added to `value`, negative the other way round |
-| `knob.raw` | The settled 0 to 65535 reading `value` was worked out from |
-| `knob.just_moved` | `True` only on the tick `value` changed |
+| `knob.delta` | Steps this pass added to `value`, negative the other way round |
+| `knob.raw` | The smoothed 0 to 65535 reading `value` was worked out from |
+| `knob.just_moved` | `True` only on the pass `value` changed |
 
 ### Callbacks, dispatched by `handle(now_ms)`
 
@@ -111,7 +116,7 @@ if volume.just_moved:
 
 | Symbol | Description |
 |---|---|
-| `DEFAULT_DETENT_STEPS` | `4`, the pulses one click of a detented encoder produces |
+| `DEFAULT_DETENT_STEPS` | `4`, the steps one click of a typical encoder produces |
 | `DEFAULT_STEPS` | `100` positions across a full sweep of an analog knob |
 | `DEFAULT_DEADBAND` | `512`, how far a reading moves before `value` follows it |
 | `RAW_RANGE` | `65536`, the raw scale every runtime reports a conversion on |
@@ -123,27 +128,39 @@ if volume.just_moved:
 | `chumicro_knobs.testing.FakeEncoderSource` | A shaft your test turns by hand, so encoder logic runs with no board |
 | `chumicro_knobs.testing.FakeAnalogSource` | A wiper your test parks where it likes, so the deadband is testable too |
 
-## The reading holds still
+## A potentiometer that holds still
 
-A potentiometer's voltage is never exactly steady.  The low bits of a 12-bit converter wander a couple of counts under a parked wiper, which is 32 counts once the reading is scaled to the 0 to 65535 range every runtime reports on, and a noisier part on a long lead wanders several times that.  A program that prints the raw reading shows a knob somebody is fiddling with.
-
-`deadband` is how far the reading has to move before `value` follows it, and quantizing into `steps` gives the number a size a person can aim at:
+Wire the potentiometer's outer legs to 3V3 and GND and its middle leg to an analog pin, such as `board.A0` (GP26 on a Pi Pico W).  `steps` divides its travel into numbered positions, and `value` reports which one the knob points at:
 
 ```python
-brightness = AnalogKnob(board.A0, steps=10)                # reports 0 to 9
-fine = AnalogKnob(board.A1, steps=256, deadband=128)       # a finer sweep, a tighter deadband
+from chumicro_knobs import AnalogKnob
+
+brightness = AnalogKnob(board.A0, steps=10)     # reports 0 to 9
+
+while True:
+    now = ticks_ms()
+    brightness.check(now)
+
+    if brightness.just_moved:
+        print("brightness", brightness.value)
 ```
 
-The default 512 sits well above the wander and well under the 655 counts one step spans at 100 steps.  Keep `deadband` under the width of one step, which is `65536 // steps` counts, so every step stays reachable including the ones at the ends of the sweep.
+An analog reading is never exactly steady, and printed as it comes it looks like a knob somebody is fiddling with.  `AnalogKnob` throws away lone bad samples, smooths the rest, and moves `value` only when the reading has moved by more than `deadband`, so a knob you have let go of keeps its number.  `knob.raw` is that smoothed reading, on the same 0 to 65535 scale as `analogio.AnalogIn.value`.
+
+The default `deadband` of 512 suits the default 100 steps.  Keep it below the width of one step, `65536 // steps`, so every step stays reachable, which means a finer sweep wants a tighter deadband:
+
+```python
+fine = AnalogKnob(board.A1, steps=256, deadband=128)
+```
 
 ## Where this fits
 
-Depends on nothing.  The timestamp you hand to `check()` comes from wherever your loop already gets one, and [`chumicro-timing`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/timing)'s `ticks_ms()` is the usual source.  Used directly in user apps; nothing downstream depends on it.
+Needs no other library.  The time you hand to `check()` comes from wherever your loop already gets one, usually `ticks_ms()` from [`chumicro-timing`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/timing).  Used directly in your programs; no other ChuMicro library depends on it.
 
-Pairs with [`chumicro-runner`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner), which deals out turns to every service in your program:
+Pairs with [`chumicro-runner`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner), which runs every service in your program from one loop:
 
 ```python
-runner.add(volume)      # check() and handle() are the runner's contract
+runner.add(volume, period_ms=20)    # the runner calls check() and handle() every 20 ms
 ```
 
 A rotary encoder's push switch is a button on its own pin, so an encoder with a click reads its shaft here and its switch with [`chumicro-buttons`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/buttons).
@@ -152,9 +169,9 @@ A rotary encoder's push switch is a button on its own pin, so an encoder with a 
 
 Works on CPython, MicroPython, and CircuitPython.
 
-### RP2040 wants adjacent pins
+### A Pico wants its encoder pins side by side
 
-`rotaryio` on RP2040 boards reads the two signal pins with one PIO state machine, which requires them to sit next to each other in GPIO numbering.  `board.GP16` and `board.GP17` work; `board.GP16` and `board.GP20` do not.  Other CircuitPython ports and every MicroPython port take any two pins.
+On RP2040 boards such as the Pi Pico W, CircuitPython's `rotaryio` counts with the chip's PIO hardware, which needs the two signal pins next to each other in GPIO numbering.  `board.GP16` and `board.GP17` work; `board.GP16` and `board.GP20` do not.  Other CircuitPython boards and every MicroPython board take any two pins.
 
 `pin_a`, `pin_b`, and `pin` need real hardware, so on a laptop they raise and point you at the fakes below.
 
@@ -179,8 +196,8 @@ assert volume.position == 3
 
 | Example | What it shows |
 |---|---|
-| [`circuitpython_encoder_volume.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/knobs/examples/circuitpython_encoder_volume.py) | An encoder for volume and a potentiometer for brightness on CircuitPython |
-| [`micropython_encoder_volume.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/knobs/examples/micropython_encoder_volume.py) | The same two knobs on MicroPython |
+| [`circuitpython_encoder_volume.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/knobs/examples/circuitpython_encoder_volume.py) | The quick example as a full program: an encoder sets a volume from 0 to 20 and a potentiometer sets a brightness from 0 to 9, on CircuitPython |
+| [`micropython_encoder_volume.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/knobs/examples/micropython_encoder_volume.py) | The same program on MicroPython |
 
 ## Contributing
 

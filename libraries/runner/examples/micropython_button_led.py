@@ -1,30 +1,32 @@
-"""Button-controlled LED: MicroPython gate pattern.
+"""Toggle the built-in LED each time you press a button.
 
-Reads a button and toggles an LED using the runner's check/handle
-gate pattern.  The runner scans the button every 20 ms (the debounce
-window).  When the
-button is pressed, ``handle()`` fires and toggles the LED.  Prints
-a startup banner and a line on every accepted press so a serial
-console (or a sweep harness) can verify the loop without a probe.
+Every press flips the LED and prints a line on the serial console.  Holding
+the button down counts as one press.  The program keeps watching the button
+forever.
+
+``ButtonToggle`` is a service: the runner calls ``check()`` every 20 ms to
+ask "was the button just pressed?", and calls ``handle()`` to flip the LED
+only when the answer is yes.  Reading the button every 20 ms also debounces
+it: a switch stops bouncing well inside that window, so one press reads as
+one press.
+
+Setup:
+1. Install ``chumicro_runner`` and ``chumicro_timing`` on the board
+   (``mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_runner``,
+   or copy both packages into ``lib/``).
+2. The defaults suit most ESP32 dev boards: GPIO 0 is the BOOT button and
+   pin 2 is the built-in LED, so nothing needs wiring.  On another board,
+   wire a push button between a GPIO pin and GND and set ``BUTTON_PIN`` to
+   it; set ``LED_PIN`` to your LED (``"LED"`` on a Pico W).
+3. Save this file as ``main.py`` on the board.
 
 Example output::
 
-    Button toggle: press button to flip the LED.
-
-      [  815 ms] press → toggle
-      [ 1407 ms] press → toggle
-      ...
-
-Setup:
-1. Install ``chumicro_runner`` and ``chumicro_timing``
-   (``mpremote mip install chumicro-runner`` or copy both
-   packages to the board).
-2. Wire a momentary button between ``GPIO 0`` and ``GND``.
-   The internal pull-up keeps the pin high when the button is
-   open.  Pin 2 (built-in LED on most ESP32 boards) needs no
-   extra wiring.  Change ``Pin(2)`` to match your board.
-3. Save this file as ``main.py`` on the board.
-
+    Press the button to toggle the LED.
+    press 1: LED on
+    press 2: LED off
+    press 3: LED on
+    ...
 
 Runs on MicroPython.
 """
@@ -36,56 +38,44 @@ __chumicro_runtimes__ = ("micropython",)
 from chumicro_runner import Runner
 from machine import Pin
 
-# Set up the onboard LED.
-led = Pin(2, Pin.OUT)
+BUTTON_PIN = 0   # the BOOT button on most ESP32 dev boards
+LED_PIN = 2      # the built-in LED on most ESP32 dev boards
 
-# Set up a button with an internal pull-up resistor.
-# Pressing the button connects GPIO 0 to GND, so value reads 0.
-button = Pin(0, Pin.IN, Pin.PULL_UP)
+led = Pin(LED_PIN, Pin.OUT)
+button = Pin(BUTTON_PIN, Pin.IN, Pin.PULL_UP)   # reads 0 while the button is held
 
 
 class ButtonToggle:
-    """Toggle an LED each time a button is pressed.
-
-    Uses edge detection so the LED toggles once per press,
-    not continuously while held.
-    """
+    """Flip the LED once per button press."""
 
     def __init__(self) -> None:
-        """Track the previous button state for edge detection."""
-        self._was_pressed = False
+        self.was_pressed = False
+        self.presses = 0
 
     def check(self, now_ms: int) -> bool:
-        """Return True on the falling edge (button just pressed).
+        """Return ``True`` only on the read where the button goes from up to down.
 
-        Args:
-            now_ms: Current tick value.
-
-        Returns:
-            True if the button was just pressed.
+        The runner passes ``now_ms``, the time of the current tick in
+        milliseconds.  This service has no use for it.
         """
-        pressed = not button.value()  # active-low
-        just_pressed = pressed and not self._was_pressed
-        self._was_pressed = pressed
+        pressed = not button.value()
+        just_pressed = pressed and not self.was_pressed
+        self.was_pressed = pressed
         return just_pressed
 
     def handle(self, now_ms: int) -> None:
-        """Toggle the LED and print a marker line.
-
-        Args:
-            now_ms: Current tick value.
-        """
+        """Flip the LED and print the press count."""
         led.value(not led.value())
-        print(f"  [{now_ms:>5} ms] press → toggle")
+        self.presses += 1
+        state = "on" if led.value() else "off"
+        print(f"press {self.presses}: LED {state}")
 
 
 runner = Runner()
-# A button is not pollable like a socket, so scan it on a 20 ms period —
-# the debounce window — and let wait() sleep between scans.
-runner.add(ButtonToggle(), period_ms=20)
+runner.add(ButtonToggle(), period_ms=20)   # read the button every 20 ms
 
-print("Button toggle: press button to flip the LED.\n")
+print("Press the button to toggle the LED.")
 
 while True:
-    now_ms = runner.tick()
-    runner.wait(now_ms)
+    now_ms = runner.tick()   # check every service that is due right now
+    runner.wait(now_ms)      # sleep until the next button read is due

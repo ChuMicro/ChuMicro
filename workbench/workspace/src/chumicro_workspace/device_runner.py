@@ -25,6 +25,7 @@ collection layer that drives functional tests).
 from __future__ import annotations
 
 import threading
+from collections.abc import Callable
 from types import TracebackType
 
 from chumicro_deploy import ExtendedTransportProtocol, TransportProtocol
@@ -65,9 +66,24 @@ class DeviceBootstrapRunner:
         self,
         transport: TransportProtocol,
         bootstrap: str | list[str],
+        *,
+        on_line: Callable[[str], None] | None = None,
     ) -> None:
+        """Hold the transport and bootstrap; nothing runs until :meth:`start`.
+
+        Args:
+            transport: Connected, staged transport the bootstrap executes on.
+            bootstrap: Bootstrap source, or a list of chunks for a
+                CircuitPython RAM-mode run.
+            on_line: Optional callback given every line the board prints,
+                on the background thread, after the line reaches the marker
+                queue.  A demo driver passes one to show the board's output
+                as it happens.  An exception it raises is swallowed so it
+                cannot stop marker delivery.
+        """
         self._transport = transport
         self._bootstrap = bootstrap
+        self._on_line = on_line
         self._marker_queue: MarkerQueue = MarkerQueue()
         self._thread: threading.Thread | None = None
         self._captured_output: str | None = None
@@ -154,8 +170,8 @@ class DeviceBootstrapRunner:
     def shutdown(self, *, timeout_s: float | None = None) -> None:
         """Best-effort join the bg thread.  Idempotent; safe to call any time.
 
-        Does not interrupt the bootstrap.  The board is expected to
-        carry its own deadline and exit on its own.
+        Does not interrupt the bootstrap.  A board program keeps running
+        after the host lets go; this only reaps the host-side thread.
 
         Args:
             timeout_s: Optional bound on the join.  ``None`` (default)
@@ -195,8 +211,15 @@ class DeviceBootstrapRunner:
         """Background-thread body.  Calls transport.execute with the marker
         dispatcher wired to on_line, captures stdout and any error."""
 
+        extra_on_line = self._on_line
+
         def on_line(line: str) -> None:
             self._marker_queue.offer_line(line)
+            if extra_on_line is not None:
+                try:
+                    extra_on_line(line)
+                except Exception:  # noqa: BLE001, S110 - a display hook must not stop marker delivery
+                    pass
 
         try:
             if isinstance(self._bootstrap, list):

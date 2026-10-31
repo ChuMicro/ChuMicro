@@ -1,32 +1,38 @@
-"""Button debounce on CircuitPython.
+"""Toggle the onboard LED with a button, debounced by hand, on CircuitPython.
 
-Reads a physical button with software debounce using ``ticks_ms``
-and ``ticks_diff``.  Toggles the onboard LED on each accepted press.
-Prints a startup banner and a line on every accepted press so a serial
-console (or a sweep harness) can verify the loop without a probe.
+Each press of the button flips the onboard LED and prints a line.  A button's
+metal contacts bounce for a few milliseconds when they meet, and without
+debouncing one press reads as several.  This loop accepts a change only when
+at least 20 ms have passed since the last change it accepted, measured with
+``ticks_diff``, and ignores the bounces in between.
+
+This file shows how debouncing works.  ``chumicro_buttons`` does it for you,
+and also catches a tap that is over before your loop gets round to reading
+the pin.
+
+Wiring: a momentary button from GP14 to GND on a Pi Pico W.  The pin's
+internal pull-up is switched on below, so the button is the only part.  On an
+ESP32-S2 board, wire it to IO14 and change ``board.GP14`` to ``board.IO14``,
+or use a built-in button with ``board.BUTTON`` where the board has one, such
+as the Lolin S2 Mini.
 
 Example output::
 
-    Button debounce: press button to flip the LED.
+    Press the button to flip the LED.
 
-      [  815 ms] press → toggle
-      [ 1407 ms] press → toggle
+      press, LED on
+      press, LED off
+      press, LED on
       ...
 
 Setup:
-1. Install ``chumicro_timing`` (``circup install chumicro_timing``
-   or copy the package to ``lib/``).
-2. Wire a momentary button between the chosen GPIO and **GND**;
-   the internal pull-up is enabled below.  Many boards (Feather,
-   QT Py, Metro) expose the built-in user button as
-   ``board.BUTTON``.  See ``BOARD_BUTTON_PINS`` below.
-3. Save this file as ``code.py`` on the board.
+1. Install the library: ``circup install chumicro_timing``.
+2. Save this file as ``code.py`` on the CIRCUITPY drive.
 
 Runs on CircuitPython.
 """
 
-#: CircuitPython-only.  Uses ``board`` + ``digitalio`` (CP API).
-#: Pair: ``micropython_debounce.py`` for the MP equivalent (``machine.Pin``).
+# ChuMicro's example tools read this line: this file needs CircuitPython.
 __chumicro_runtimes__ = ("circuitpython",)
 
 import board
@@ -35,66 +41,33 @@ from chumicro_timing import ticks_diff, ticks_ms
 
 DEBOUNCE_MS = 20
 
-# Set BUTTON_PIN to the pin attribute on the `board` module
-# (e.g. "D5", "GP14", "BUTTON") to override autodetection.
-# Leave empty to look up your board in BOARD_BUTTON_PINS below.
-BUTTON_PIN = ""
-
-# Per-board fallback used when BUTTON_PIN is empty.  Key is the
-# string ``board.board_id`` returns on each board (find yours
-# at the REPL with ``import board; print(board.board_id)``).
-# One entry per line.  Add your board if it isn't listed.
-BOARD_BUTTON_PINS = {
-    "raspberry_pi_pico_w":     "GP14",
-    "raspberry_pi_pico2_w":    "GP14",
-    "lolin_s2_mini":           "D5",
-    "lolin_s2_pico":           "D5",
-    "adafruit_feather_esp32s2":               "BUTTON",
-    "adafruit_feather_esp32s3_4mbflash_2mbpsram": "BUTTON",
-}
-
-
-def _resolve_button_pin():
-    """Return the ``board`` attribute for the configured button pin."""
-    pin_name = BUTTON_PIN or BOARD_BUTTON_PINS.get(board.board_id)
-    if not pin_name:
-        raise RuntimeError(
-            f"no button pin for board {board.board_id!r}: set BUTTON_PIN "
-            f"at the top of this file (e.g. \"D5\") or add an entry to "
-            f"BOARD_BUTTON_PINS.",
-        )
-    pin = getattr(board, pin_name, None)
-    if pin is None:
-        raise RuntimeError(
-            f"board has no pin named {pin_name!r}: check your "
-            f"BUTTON_PIN setting / BOARD_BUTTON_PINS mapping.",
-        )
-    return pin
-
-
-# --- Button setup (active-low with internal pull-up) ---
-button = digitalio.DigitalInOut(_resolve_button_pin())
+# The button reads True while released and False while pressed, because the
+# pull-up holds the pin high until the button connects it to GND.
+button = digitalio.DigitalInOut(board.GP14)
 button.direction = digitalio.Direction.INPUT
 button.pull = digitalio.Pull.UP
 
-# --- LED setup ---
 led = digitalio.DigitalInOut(board.LED)
 led.direction = digitalio.Direction.OUTPUT
 
-# --- Debounce state ---
-last_stable = button.value
+# The last level the debouncer accepted, and when it accepted it.
+accepted_level = button.value
 last_change_ms = ticks_ms()
 
-print("Button debounce: press button to flip the LED.\n")
+print("Press the button to flip the LED.\n")
 
 while True:
     now = ticks_ms()
-    raw = button.value  # False when pressed (active-low)
+    level = button.value
 
-    if raw != last_stable and ticks_diff(now, last_change_ms) >= DEBOUNCE_MS:
-        last_stable = raw
+    # A change counts only when it comes DEBOUNCE_MS or more after the last
+    # accepted one.  Anything sooner is the contacts bouncing.
+    if level != accepted_level and ticks_diff(now, last_change_ms) >= DEBOUNCE_MS:
+        accepted_level = level
         last_change_ms = now
 
-        if not raw:  # button just pressed
+        if not level:   # False means pressed
             led.value = not led.value
-            print(f"  [{now:>5} ms] press → toggle")
+            print("  press, LED on" if led.value else "  press, LED off")
+
+    # Nothing above waits, so code you add here runs on every pass.

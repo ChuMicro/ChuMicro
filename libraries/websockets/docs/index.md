@@ -6,7 +6,7 @@ title: "chumicro-websockets: WebSocket client and server for CircuitPython and M
 
 **Non-blocking WebSocket (RFC 6455) client and server for CircuitPython, MicroPython, and CPython.**
 
-An LED keeps blinking through the handshake, frame I/O, and the close handshake. Both sides take small turns on every runner tick instead of holding the loop.
+A WebSocket is a network connection that stays open, so a board and a laptop, browser, or server can each send messages whenever they like.  `WebSocketClient` connects your board to a server, and `WebSocketServer` lets other devices connect to your board.  Both do their network work in small steps, so an LED or a button check in the same program keeps running while messages come and go.
 
 ## Install
 
@@ -21,50 +21,53 @@ mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_websockets
 pip install chumicro-websockets
 ```
 
+The quick example below also uses `chumicro_runner` and `chumicro_wifi`; install them the same way.
+
 No board running yet?  [Start here](https://chumicro.com/ChuMicro/guides/start-here/) goes from a new board to your own code running on it.  [Installing libraries](https://chumicro.com/ChuMicro/guides/install/) covers registering the bundle, the experimental channel, and the pre-compiled `.mpy` packages.
 
 ## Quick example
 
-```python
-from chumicro_websockets import WebSocketClient, WebSocketState
-from chumicro_sockets.sockets_factory import connector_factory
-from chumicro_timing import ticks_ms
-from chumicro_wifi import WifiConfig, WifiService
-
-wifi = WifiService(WifiConfig(ssid="home-wifi", password="s3cret"))
-
-client = WebSocketClient(
-    transport_factory=connector_factory(radio=wifi.adapter.radio),
-)
-client.on_text = lambda text: print(text)
-client.connect("ws://api.example.com/stream")
-
-while client.state != WebSocketState.CLOSED:
-    now = ticks_ms()
-    if client.check(now):
-        client.handle(now)
-```
-
-`wifi.adapter.radio` is the board radio on CircuitPython and `None` on MicroPython and CPython, where the connector needs no radio.  Bringing your own socket instead of `chumicro-sockets` works too: `transport_factory` takes any `(host, port, use_tls)` callable.
-
-In a program with more going on, hand the loop to `chumicro-runner`:
+This client joins wifi, connects to a WebSocket server, sends `hello` every five seconds, and prints every message the server sends back:
 
 ```python
 from chumicro_runner import Runner
+from chumicro_sockets.sockets_factory import connector_factory
+from chumicro_websockets import WebSocketClient, WebSocketState
+from chumicro_wifi import WifiConfig, WifiService
 
 runner = Runner()
+
+# Join wifi first.  WifiService also rejoins on its own after a drop.
+wifi = WifiService(WifiConfig(ssid="home-wifi", password="s3cret"))
+runner.add(wifi)
+while not wifi.connected:
+    now_ms = runner.tick()
+    runner.wait(now_ms)
+
+# radio= is the CircuitPython radio; MicroPython and CPython ignore it.
+client = WebSocketClient(transport_factory=connector_factory(radio=wifi.adapter.radio))
+client.on_text = lambda text: print("received:", text)
+client.connect("ws://192.168.1.42:8765/")
 runner.add(client)
 
+
+def send_hello(now_ms):
+    if client.state == WebSocketState.OPEN:
+        client.send_text("hello")
+
+
+runner.add_periodic(send_hello, period_ms=5000)
+
 while True:
-    now = runner.tick()
-    runner.wait(now)
+    now_ms = runner.tick()  # wifi, the client, and the timer each take a turn
+    runner.wait(now_ms)     # then the CPU idles until a message arrives or the timer is due
 ```
 
-`wait()` parks the CPU until frames arrive or the next ping is due.
+A `Runner` keeps a list of tasks.  `runner.tick()` gives each one a short turn, and `runner.wait()` then idles the CPU until a message arrives or the timer is due.  The [User Guide](guide.md) covers the server side, reconnecting after a drop, and reading messages with a generator.  Each [example](guide.md#examples) has a one-line command to run the other end on your laptop.
 
 ## Documentation
 
-- [User Guide](guide.md): generator flows, client and server services, callbacks, bring-your-own transport, memory notes, and per-tick knobs
+- [User Guide](guide.md): clients, servers, reconnecting, generators, callbacks, errors, bring-your-own transport, memory notes, and per-tick knobs
 - [API Reference](api.md): `WebSocketClient`, `WebSocketServer`, and the close codes and errors they raise
 - [Testing Helpers](testing.md): using `FakeConnection` and `FakeListener` in your tests
 

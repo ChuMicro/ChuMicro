@@ -1,178 +1,196 @@
-"""Periodic MQTT telemetry on a real CircuitPython / MicroPython board.
+"""Publish a temperature reading over MQTT every five seconds, forever.
 
-Brings wifi up via the local ``helpers`` module, connects to a
-configured MQTT broker, publishes a synthetic reading to ``<topic>``
-every ``PUBLISH_INTERVAL_S`` seconds with QoS 1.  Subscribes to a
-control topic alongside so the device receives commands inbound as
-round-trip proof, not publish-only fire-and-forget.
+The board joins your wifi, connects to an MQTT broker, and publishes a
+reading to the topic ``chumicro-demo/telemetry`` every five seconds
+until you unplug it.  It also subscribes to ``chumicro-demo/cmd`` and
+prints every message sent there.
 
-Demonstrates the runner-shaped client driving real MQTT traffic
-while a simple LED-style counter keeps incrementing as proof that
-the in-flight publish never block-calls the loop while waiting
-for PUBACK.
+MQTT is a publish/subscribe protocol.  The board and your laptop each
+connect to a broker, a small server that passes messages along.  The
+board publishes to a named topic, and every client subscribed to that
+topic gets a copy.
 
-Configuration
-=============
+Readings go out at QoS 1 ("quality of service" level 1): the broker
+confirms each one, and the client sends it again until it does.  The
+``sent`` lines print when that confirmation arrives.
 
-Reads the deployed ``runtime_config.msgpack`` (baked from
-``secrets.toml`` + per-example ``examples/config.toml`` by the
-deploy pipeline) via the flat-key API:
+Stop the broker while this runs.  The board prints that it lost the
+connection and holds each new reading.  Start the broker again and the
+board reconnects on its own and sends what it held.  Nothing in this
+file reconnects by hand; ``mqtt.handle()`` does it.
 
-* WiFi (read by ``helpers.wifi_up``): ``wifi.ssid`` / ``wifi.password``.
-* MQTT (read by ``MQTTClient.from_config``): ``mqtt.broker.host`` /
-  ``mqtt.broker.port`` / ``mqtt.client_id`` / ``mqtt.keep_alive_seconds``
-  plus optional auth.
-* App-level (this example's own concerns, not the library's):
-  ``telemetry.topic`` / ``telemetry.command_topic`` /
-  ``telemetry.sensor_id``.
+If you have used ``adafruit_minimqtt``, ``mqtt.handle(now_ms)`` plays
+the part of ``loop()``, and returns as soon as it has done one small
+step of network work, so the rest of your loop never waits on it.
 
-When ``runtime_config.msgpack`` isn't present (raw single-file
-deploys), wifi creds fall back to the placeholder constants below
-(edit them first).  The MQTT broker has no fallback: set
-``BROKER_HOST`` and ``BROKER_PORT`` (raw deploy) or
-``mqtt.broker.host`` / ``mqtt.broker.port`` in your
-``runtime_config.msgpack`` (workspace deploy) before running.  The
-library refuses to silently dial a third-party broker on your behalf.
+Run a broker on your laptop
+===========================
 
-Deploying
-=========
+1. Install Mosquitto: ``brew install mosquitto`` on a Mac, or
+   ``sudo apt install mosquitto mosquitto-clients`` on Debian or
+   Ubuntu.  On Linux the package starts a broker that only answers the
+   laptop itself; stop it with ``sudo systemctl stop mosquitto``.
+2. Save these two lines as ``mosquitto.conf``.  They let clients on
+   your wifi connect without a password::
 
-Deploy with ``chumicro-workspace``::
+       listener 1883
+       allow_anonymous true
+
+3. Start the broker and leave it running.  ``-v`` prints every
+   connection and message::
+
+       mosquitto -c mosquitto.conf -v
+
+4. In a second terminal, watch everything under ``chumicro-demo/``::
+
+       mosquitto_sub -h localhost -t 'chumicro-demo/#' -v
+
+5. To send the board a command, run this from a third terminal::
+
+       mosquitto_pub -h localhost -t chumicro-demo/cmd -m ping
+
+Run it on the board
+===================
+
+Set ``WIFI_SSID``, ``WIFI_PASSWORD``, and ``BROKER_HOST`` below.
+``BROKER_HOST`` is your laptop's IP address on the wifi network:
+``ipconfig getifaddr en0`` prints it on a Mac, ``hostname -I`` on
+Linux.  When you deploy with ``chumicro-workspace``, the values under
+``[wifi]`` and ``[mqtt.broker]`` in your ``secrets.toml`` are used
+instead::
 
     chumicro-workspace deploy-example mqtt telemetry --device <id>
 
-Example output::
+What you will see
+=================
+
+::
 
     WIFI_OK ip=10.0.0.42
-    MQTT_CONNECTED broker=10.0.0.5:1883
-    Subscribed to chumicro-demo/cmd
-    [tx 1] {"sensor": "demo-temp", "value": 21.4} led_ticks=27
-    [tx 2] {"sensor": "demo-temp", "value": 21.6} led_ticks=24
-    [rx]  chumicro-demo/cmd <- b'ping'
+    Connecting to MQTT broker 10.0.0.5:1883
+    MQTT connected
+    sent chumicro-demo/telemetry 21.2
+    sent chumicro-demo/telemetry 21.6
+    command on chumicro-demo/cmd: b'ping'
+    sent chumicro-demo/telemetry 22.0
+    MQTT connection lost: broker closed connection
+    holding 22.4 until the broker is back (connector failed: [Errno 104] ECONNRESET)
+    holding 22.8 until the broker is back (connector failed: [Errno 104] ECONNRESET)
+    MQTT connected
+    sent chumicro-demo/telemetry 22.4
+    sent chumicro-demo/telemetry 22.8
+    sent chumicro-demo/telemetry 23.1
+
+The text in parentheses is why the last reconnect attempt failed, and
+its wording depends on the board.  The client holds up to eight
+readings while the broker is away.  A longer outage prints ``dropped``
+for each reading that does not fit.
+
+Try swapping ``read_temperature()`` for a real sensor, or making
+``on_message`` switch an LED when ``on`` or ``off`` arrives.
 """
 
-#: Cross-runtime: wifi-up via :mod:`helpers` dispatches per
-#: ``sys.implementation.name`` (CP / MP) and the MQTT client is
-#: pure-Python.  The marker tells :func:`scripts.verify_examples`
-#: + ``deploy-example`` to allow this file on either runtime.
+# Runs on CircuitPython and MicroPython boards.  helpers.wifi_up picks
+# the right wifi calls for each.
 __chumicro_runtimes__ = ("circuitpython", "micropython")
 
-import json
 import math
-import time
 
-from chumicro_mqtt import MQTTClient
-from helpers import runtime_config, ticks_add, ticks_diff, ticks_ms, wifi_up
+from chumicro_mqtt import MQTTBackpressureError, MQTTClient, ProtocolState
+from chumicro_timing import Rate, ticks_ms
+from helpers import runtime_config, wifi_up
 
 WIFI_SSID = "your-wifi-ssid"  # noqa: S105 - replace before deploying
 WIFI_PASSWORD = "your-wifi-password"  # noqa: S105 - replace before deploying
-BROKER_HOST = ""  # required for raw single-file deploys, e.g. "10.0.0.5"
+BROKER_HOST = ""  # your laptop's IP address, for example "192.168.1.20"
 BROKER_PORT = 1883
 TOPIC = "chumicro-demo/telemetry"
 COMMAND_TOPIC = "chumicro-demo/cmd"
-SENSOR_ID = "demo-temp"
-PUBLISH_INTERVAL_S = 5
+PUBLISH_EVERY_S = 5
 
-config = runtime_config()
+# Join wifi.  wifi_up waits until the board has an IP address.
 radio, ip = wifi_up(WIFI_SSID, WIFI_PASSWORD)
 print(f"WIFI_OK ip={ip}")
 
-topic = config.get("telemetry.topic", TOPIC)
-command_topic = config.get("telemetry.command_topic", COMMAND_TOPIC)
-sensor_id = config.get("telemetry.sensor_id", SENSOR_ID)
+# Settings deployed by chumicro-workspace win over the constants above.
+# A file copied to the board by hand gets an empty config here.
+config = runtime_config()
+config.setdefault("mqtt.broker.host", BROKER_HOST)
+config.setdefault("mqtt.broker.port", BROKER_PORT)
+if not config["mqtt.broker.host"]:
+    raise RuntimeError("set BROKER_HOST at the top of this file to your broker's IP address")
+print(f"Connecting to MQTT broker {config['mqtt.broker.host']}:{config['mqtt.broker.port']}")
 
-# Resolve broker host/port from config first, then example constants.
-# MQTTClient.from_config refuses to construct without them, so the
-# dial-target is loud, not implicit.
-if "mqtt.broker.host" not in config:
-    if not BROKER_HOST:
-        print("STATUS: FAIL_MQTT_BROKER_NOT_CONFIGURED")
-        print("ERROR: set mqtt.broker.host in runtime_config.msgpack "
-              "or BROKER_HOST in this file before deploying.")
-        raise SystemExit(1)
-    config["mqtt.broker.host"] = BROKER_HOST
-    config["mqtt.broker.port"] = BROKER_PORT
-
+# from_config builds a client that dials the broker through this board's
+# wifi radio, and dials again by itself whenever the connection drops.
 mqtt = MQTTClient.from_config(config, radio=radio)
 
 
-def on_message(topic, payload):
-    print(f"[rx]  {topic} <- {payload!r}")
-
-
 def on_connect():
-    # Connect-time setup, fired once the broker session is up: subscribe
-    # to the command topic.  (subscribe() requires CONNECTED; publish()
-    # instead buffers pre-connect, so the loop below can publish without
-    # waiting.)
-    print(f"MQTT_CONNECTED broker={config['mqtt.broker.host']}:{config['mqtt.broker.port']}")
-    mqtt.subscribe(command_topic, qos=1)
-    print(f"Subscribed to {command_topic}")
+    # Runs each time the broker accepts the board, reconnects included.
+    print("MQTT connected")
 
 
-mqtt.on_message = on_message
+def on_disconnect():
+    # Runs when a working connection drops.  handle() then reconnects on
+    # its own: at once, then 1, 2, 4... seconds apart, at most a minute.
+    print(f"MQTT connection lost: {mqtt.last_error}")
+
+
+def on_publish(topic, payload):
+    # Runs when the broker confirms it received a QoS 1 message.
+    print(f"sent {topic} {payload.decode()}")
+
+
+def on_message(topic, payload):
+    # Runs for every message that arrives on a subscribed topic.
+    print(f"command on {topic}: {payload}")
+
+
 mqtt.on_connect = on_connect
+mqtt.on_disconnect = on_disconnect
+mqtt.on_publish = on_publish
+mqtt.on_message = on_message
+
+# Ask the broker for COMMAND_TOPIC.  The client sends the request once
+# connected, and again after every reconnect.
+mqtt.subscribe(COMMAND_TOPIC, qos=1)
 mqtt.connect()
-# No drive-until-connected gate: the first publish below buffers in the
-# client's pre-connect queue (when_disconnected="queue", the default)
-# and the publish loop drives the connection up and flushes it.
 
 
-def _synthetic_reading(elapsed_seconds: float) -> float:
-    """Synthetic sine-wave reading.  Replace with your real sensor."""
-    return round(20.0 + 5.0 * math.sin(elapsed_seconds / 30.0), 2)
+def read_temperature():
+    # A stand-in for a real sensor: drifts slowly between 15 and 25.
+    return 20 + 5 * math.sin(ticks_ms() / 20_000)
 
 
-attempt = 0
-start_ticks = ticks_ms()
+def publish_reading():
+    reading = f"{read_temperature():.1f}"
+    try:
+        # publish() never waits.  While the broker is unreachable, the
+        # client holds the reading and sends it after reconnecting.
+        mqtt.publish(TOPIC, reading, qos=1)
+    except MQTTBackpressureError:
+        print(f"dropped {reading}: eight readings already wait for the broker")
+        return
+    if mqtt.state != ProtocolState.CONNECTED:
+        reason = mqtt.last_error or "still connecting"
+        print(f"holding {reading} until the broker is back ({reason})")
+
+
+publish_timer = Rate(PUBLISH_EVERY_S * 1000, ticks_ms())
 
 while True:
-    attempt += 1
-    elapsed_s = ticks_diff(ticks_ms(), start_ticks) / 1000
-    payload = json.dumps({
-        "sensor": sensor_id,
-        "value": _synthetic_reading(elapsed_s),
-        "uptime_s": round(elapsed_s, 1),
-    })
+    now_ms = ticks_ms()
 
-    publish_done = [False]
+    # check() is True while the client has work to do.  handle() takes
+    # one small step of it (connect, send, read what has arrived, keep
+    # the connection alive, or reconnect) and returns without waiting.
+    if mqtt.check(now_ms):
+        mqtt.handle(now_ms)
 
-    def _on_publish(_topic, _payload, flag=publish_done):
-        # flag[0] = True as a statement: CircuitPython / MicroPython don't
-        # expose list.__setitem__ as an attribute, so the lambda form
-        # (flag.__setitem__(0, True)) raises AttributeError on-device.
-        flag[0] = True
+    # Every PUBLISH_EVERY_S seconds, publish a reading.
+    if publish_timer.due(now_ms):
+        publish_reading()
 
-    mqtt.publish(
-        topic,
-        payload.encode(),
-        qos=1,
-        on_publish=_on_publish,
-    )
-
-    led_counter = 0
-    # A permanent CONNACK rejection (bad credentials, rejected id) parks
-    # check() at False forever; bound the wait so the board reports the
-    # failure instead of hanging silently.
-    publish_deadline = ticks_add(ticks_ms(), 30 * 1000)
-    while not publish_done[0]:
-        now = ticks_ms()
-        if ticks_diff(publish_deadline, now) <= 0:
-            print(
-                f"[tx {attempt}] gave up after 30 s: "
-                f"state={mqtt.state} error={mqtt.last_error}"
-            )
-            break
-        if mqtt.check(now):
-            mqtt.handle(now)
-        led_counter += 1
-        time.sleep(0.02)
-
-    if publish_done[0]:
-        print(f"[tx {attempt}] {payload} led_ticks={led_counter}")
-
-    next_due = ticks_add(ticks_ms(), PUBLISH_INTERVAL_S * 1000)
-    while ticks_diff(next_due, ticks_ms()) > 0:
-        if mqtt.check(ticks_ms()):
-            mqtt.handle(ticks_ms())
-        time.sleep(0.02)
+    # Anything else you add here, such as blinking an LED or reading a
+    # button, runs on every pass, even while the broker is away.

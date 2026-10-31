@@ -49,8 +49,16 @@ class SocketConnector:
         """Alias for :meth:`tick` so ``Runner.add(connector)`` works directly."""
         self.tick(now_ms)
 
-    def next_deadline(self, now_ms):  # noqa: ARG002 (runner contract)
-        """``None``: the connector never times out on its own."""
+    def next_deadline(self, now_ms):
+        """``now_ms`` while the DNS lookup has yet to run, else ``None``.
+
+        The lookup runs inside :meth:`tick` before any socket exists, so no
+        socket event would wake ``Runner.wait()`` for it; reporting it due
+        now sends the loop straight back round.  Past that step the socket
+        wakes the loop, and the connector never times out on its own.
+        """
+        if self.state == STATE_AWAITING_DNS:
+            return now_ms
         return None
 
     def tick(self, now_ms):  # noqa: ARG002 (subclass contract)

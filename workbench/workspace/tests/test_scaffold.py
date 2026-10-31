@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 from pathlib import Path
 
 import pytest
@@ -98,6 +99,18 @@ class TestScaffoldLibrary:
         init_text = (created / "src" / "gpio" / "__init__.py").read_text()
         assert "from gpio.core import Gpio" in init_text
         assert '__all__ = ["Gpio"]' in init_text
+
+    def test_basic_usage_example_ends_in_a_forever_loop(self, tmp_path: Path) -> None:
+        """examples/basic_usage.py imports the starter class, never raises
+        `SystemExit`, and ends in a module-level `while True:`."""
+        created = scaffold_library(tmp_path / "libraries", "gpio")
+        example_text = (created / "examples" / "basic_usage.py").read_text()
+        assert "from gpio import Gpio" in example_text
+        assert "SystemExit" not in example_text
+        last_statement = ast.parse(example_text).body[-1]
+        assert isinstance(last_statement, ast.While)
+        assert isinstance(last_statement.test, ast.Constant)
+        assert last_statement.test.value is True
 
     def test_hyphen_name_translates_to_snake_case_imports(
         self, tmp_path: Path,

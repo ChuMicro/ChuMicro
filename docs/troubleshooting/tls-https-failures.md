@@ -1,74 +1,76 @@
 # TLS and HTTPS failures
 
-This page is for failures when a board opens an HTTPS request or a secure WebSocket (`wss://`).  TLS is the encryption behind HTTPS; on a microcontroller it fails for reasons you never see on a laptop, most often an unset clock.  The traps are ordered by how often they bite in the first week.
+TLS is the encryption behind `https://` web requests, secure MQTT, and `wss://` websockets. Before a board trusts a server, it checks the server's certificate: who signed it, and whether today falls inside the dates it is valid for. A laptop always knows the date. A microcontroller usually doesn't, which causes most of the failures on this page.
 
 ## `ValueError: certificate validity starts in the future`
 
-A fresh board with no real-time-clock (RTC) battery boots at 2021 (or the Unix epoch).  mbedTLS, the TLS engine on both runtimes, checks the certificate's validity window against that clock, so a perfectly valid cert reads as "not yet valid".  On MicroPython the connection can instead just stop silently.
+Most boards have no clock battery, so each power-up starts the clock at a date years in the past. The certificate looks like it isn't valid yet, and the board refuses it.
 
-**Fix.** After wifi connects and before the first TLS handshake, set the RTC from network time (NTP) with `chumicro-ntp`.  Run one query to get the time, then write it into the RTC:
+Set the board's clock from an internet time server once wifi is up and before the first HTTPS request. `chumicro-ntp` asks the server; then copy the answer into the board's real-time clock (RTC). With `config` from `load_runtime_config()` and `radio` set to `wifi.radio` on CircuitPython (MicroPython ignores it):
 
 ```python
 from chumicro_ntp import NTPClient
-from chumicro_sockets import udp_socket
 from chumicro_timing import ticks_ms
-import time
 
-sock = udp_socket(radio=wifi.adapter.radio)
-sock.setblocking(False)
-client = NTPClient(socket=sock, server="pool.ntp.org")
+client = NTPClient.from_config(config, radio=radio)
 request = client.query()
-while not request.done:
-    now = ticks_ms()
-    if client.check(now):
-        client.handle(now)
-
-utc = time.gmtime(request.unix_seconds)   # server time, before any TLS handshake
+while not request.done:          # check() and handle() collect the reply
+    now_ms = ticks_ms()
+    if client.check(now_ms):
+        client.handle(now_ms)
+unix_seconds = request.unix_seconds   # raises the error if no reply came back
 ```
 
-Then set the board clock.  On CircuitPython:
+On CircuitPython:
 
 ```python
 import rtc
-rtc.RTC().datetime = utc
+import time
+
+rtc.RTC().datetime = time.localtime(unix_seconds)
 ```
 
 On MicroPython:
 
 ```python
 import machine
-machine.RTC().datetime((utc[0], utc[1], utc[2], 0, utc[3], utc[4], utc[5], 0))
+import time
+
+if time.gmtime(0)[0] == 2000:    # ESP32 boards count seconds from 2000, not 1970
+    unix_seconds -= 946_684_800
+year, month, day, hour, minute, second, weekday, _ = time.gmtime(unix_seconds)
+machine.RTC().datetime((year, month, day, weekday, hour, minute, second, 0))
 ```
 
-For local development only, you can instead backdate the cert's `notBefore` so the unset clock still falls inside the window.
+The `while` loop above waits for the answer, up to five seconds, which is fine once at startup. In a program that must keep moving, run the same `check()` and `handle()` calls inside your main loop instead; the `ntp_query.py` example in `chumicro-ntp` shows that version.
 
-## `OSError(12)` inside `wrap_socket()` on a Pi Pico W
+## An HTTPS request fails against a site whose certificate is valid
 
-`OSError(12)` is ENOMEM, out of memory.  In RAM deploy mode the library bootstrap stays on the heap and leaves under 50 KB free, but the mbedTLS handshake needs about 25 KB on top of an already-loaded heap.  Flash mode (the default) bootstraps from disk instead and leaves roughly 150 KB free.
+A board can only trust a certificate signed by an authority it already knows. CircuitPython firmware carries a list of the common public authorities. On MicroPython, `chumicro-sockets` ships a smaller list of 17 widely used ones (Let's Encrypt, DigiCert, Amazon, Google, GlobalSign, Sectigo, and a few more), because the full list costs too much memory on a small board. A site signed by an authority outside that list, or your own server with a self-made certificate, fails the check.
 
-**Fix.** If you pinned RAM mode, deploy HTTPS and `wss://` workloads in flash mode:
-
-```
-chumicro-workspace deploy <project> --deploy-mode flash
-```
-
-or set `deploy_mode: flash` for the device in `devices.yml`.  An ESP32-S3 with more than 200 KB of free heap after wifi can do HTTPS in RAM mode.
-
-## The handshake against a real certificate fails even though the cert is valid
-
-The CPython intuition that "the default context loads the system trust store" does not hold on device.  Neither MicroPython (which has no `ssl.create_default_context()`) nor CircuitPython (whose context carries no CAs) bundles a trust store, so nothing on the board can validate the server's certificate.
-
-**Fix.** On both runtimes, pass a context with a certificate authority (CA) pinned.  The CA is the root that signs the server's cert; load its PEM:
+Give the connection the authority that signed the server's certificate, as PEM text (the `-----BEGIN CERTIFICATE-----` format):
 
 ```python
+from chumicro_requests import HttpClient
 from chumicro_sockets import ssl_context_with_ca
-context = ssl_context_with_ca(pem)   # returns CERT_REQUIRED with the CA loaded
+
+context = ssl_context_with_ca(pem)   # trusts this authority and checks the certificate against it
+client = HttpClient.from_config(config, radio=radio, ssl_context=context)
 ```
 
-(background: [Decision 0067](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0067-mp-tls-default-trust.md))
+`MQTTClient.from_config` and `WebSocketClient.from_config` take the same `ssl_context=` argument. On MicroPython, `chumicro_sockets.set_default_ca_bundle(pem)` replaces the shipped list for every connection instead. Set the board's clock first (previous section): with the clock unset, even a certificate from a known authority fails.
 
-## `UnsupportedSSLConfigError`, or a wedged chip, when serving HTTPS or `wss://` on a Pi Pico W
+## `OSError: [Errno 12]` during the TLS handshake
 
-The CYW43 TLS-server handshake path is broken on CircuitPython on the rp2 (adafruit/circuitpython#10339).  `listener(tls=True)` raises `UnsupportedSSLConfigError` up front; if you force it, `wrap_socket(server_side=True)` plus `accept()` raises `OSError(32)` mid-handshake and wedges station mode until a USB power-cycle (`microcontroller.reset()` does not recover it).  The TLS client path on the same board is fine.
+`Errno 12` means the board ran out of memory. The handshake needs about 25 KB of free memory in one piece, on top of everything your program already holds.
 
-**Fix.** Serve HTTPS and `wss://` from an ESP32-family board on CircuitPython, or run MicroPython on the same Pico W.  Or terminate TLS in a front proxy (Caddy, nginx, a Cloudflare Tunnel) and serve plain HTTP behind it.
+- Deploy in flash mode, the default. RAM mode keeps your whole program in memory and leaves too little for the handshake on a Pi Pico W, so the deploy switches HTTPS projects to flash automatically unless you passed `--force-deploy-mode ram`.
+- Create your network clients at the start of your program, before it fills memory with other objects. Memory on these boards never gets rearranged, so after a while of running the free space is scattered in small gaps and a 25 KB block no longer fits anywhere.
+
+[Running out of memory](out-of-memory.md) covers memory errors in general.
+
+## Serving HTTPS or `wss://` from a Pi Pico W on CircuitPython fails with `UnsupportedSSLConfigError`
+
+CircuitPython on the Pi Pico W (and Pico 2 W) can't act as a TLS server: forcing it past the error locks up the wifi chip until you unplug the board. HTTPS requests *from* the same board work.
+
+Serve HTTPS from an ESP32 board on CircuitPython, or run MicroPython on the Pico W. Another route is a reverse proxy on another machine (Caddy, nginx, a Cloudflare Tunnel) that handles TLS and forwards plain HTTP to the board.

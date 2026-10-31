@@ -1,10 +1,10 @@
 # Testing Helpers
 
-`chumicro_http_server.testing` provides `FakeListener` and `request_bytes`. Together they drive a real `HttpServer` through a full request and response without opening a socket, binding a port, or waiting on a real clock. The module declares the `__chumicro_test_support__` marker, and the deploy tool drops every module carrying it, so these fakes never ship to a board.
+`chumicro_http_server.testing` provides `FakeListener` and `request_bytes`. Together they push a request through a real `HttpServer` and your real routes on a laptop, without opening a socket, binding a port, or waiting on a real clock. The module declares the `__chumicro_test_support__` marker, and the deploy tool drops every module carrying it, so these fakes never ship to a board.
 
 ## `FakeListener`
 
-`FakeListener(connections)` stands in for a listening socket. Each `accept()` pops one entry off *connections* and returns it; once the queue is empty, `accept()` raises `OSError(EAGAIN)`, which is what a real non-blocking listener does between clients. Every entry is the `(socket, peer)` pair the server expects, where *socket* is anything with the client-socket surface (`send`, `recv_into`, `close`, `setblocking`) and *peer* is the `(host, port)` tuple the request carries as `request.peer`. `chumicro_sockets.testing.FakeSocket` is the usual socket to hand it. `close()` and `setblocking()` are accepted and do nothing.
+`FakeListener(connections)` stands in for a listening socket. Each `accept()` pops one entry off *connections* and returns it; once the queue is empty, `accept()` raises `OSError(EAGAIN)`, which is what a real non-blocking listener does between clients. Every entry is the `(socket, peer)` pair the server expects, where *socket* is anything with the client-socket methods (`send`, `recv_into`, `close`, `setblocking`) and *peer* is the `(host, port)` tuple the request carries as `request.peer`. `chumicro_sockets.testing.FakeSocket` is the usual socket to hand it. `close()` and `setblocking()` are accepted and do nothing.
 
 ## `request_bytes`
 
@@ -87,7 +87,7 @@ def test_sensor_route_reads_the_posted_json():
 
 ## Testing the quiet path
 
-A `FakeListener` with an empty queue raises `EAGAIN` on every `accept()`, which is the shape of a server nobody has connected to yet. Use it to assert that an idle tick does nothing expensive:
+A `FakeListener` with an empty queue raises `EAGAIN` on every `accept()`, which is what a server sees before anyone connects. Use it to assert that an idle `handle()` call opens no connection:
 
 ```python
 def test_idle_tick_opens_no_connection():
@@ -108,8 +108,6 @@ from chumicro_http_server.testing import FakeListener, request_bytes
 ```
 
 That is all the setup there is. Your route handlers run against real parsing and real response writing, and the test needs no network, no free port, and no waiting.
-
-Project convention: libraries that expose injectable services ship their own test fakes alongside the production code.
 
 ## API Reference
 

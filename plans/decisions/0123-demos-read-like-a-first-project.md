@@ -3,7 +3,7 @@
 Status: `accepted`
 Date: `2026-08-18`
 Summary: A demo's `app.py` imports only what it demonstrates, prints its own `NAME key=value` markers, opens with a learner-facing docstring, and never exits: it ends in a plain `while True`.
-Related: Decision [0122](0122-demos-and-examples-write-the-loop-out.md) (demos write the main loop out), Decision [0090](0090-deploy-strips-docstrings-and-comments.md) (device deploys strip docstrings).
+Related: Decision [0122](0122-demos-and-examples-write-the-loop-out.md) (demos write the main loop out), Decision [0090](0090-deploy-strips-docstrings-and-comments.md) (device deploys strip docstrings), Decision [0130](0130-examples-and-demos-never-exit.md) (examples and demos never exit and keep repeating their work).
 
 ## Context
 
@@ -20,7 +20,7 @@ A demo's `app.py` is written for the person reading it, and carries nothing that
 - **Import only what the demo demonstrates.** No `chumicro_test_harness`, no workbench internals. (`driver.py` keeps its free run of the mono-repo; that rule is unchanged.)
 - **Marker lines are plain `print` calls** in the parser's `NAME key=value` shape. Bytes are hex-encoded at the call site with `payload.hex()`, which shows the reader the encoding instead of performing it for them. Anything free-form — a URL that might carry a `?a=b` query string, a received message body — goes on its own indented line, which the parser ignores by design.
 - **The docstring says what the board does and what you will see**, pastes the real output, and ends with something to try. Comparisons against sibling demos move to the demo's `README.md`.
-- **The demo does not exit.** It prints `DEMO_COMPLETE` at the point the work is finished and then keeps turning the same four-line loop. No board-side deadline, no `SystemExit`, no completion flag threaded through the loop. `DeployedProject.shutdown()` is documented safe while the bootstrap is still running, so the driver sees its marker and tears the transport down.
+- **The demo does not exit** ([Decision 0130](0130-examples-and-demos-never-exit.md)). It prints `DEMO_COMPLETE` when its first pass of work is finished, with no board-side deadline and no completion flag threaded through the loop. `DeployedProject.shutdown()` is documented safe while the bootstrap is still running, so the driver sees its marker and tears the transport down.
 - **Module constants drop the leading underscore**, and nothing exists in the file that only the harness needs.
 
 ## Rejected

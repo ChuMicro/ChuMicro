@@ -5,7 +5,7 @@ align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
 **Lint rules for the things ruff has no check for: naming discipline, prose and doc-tree hygiene, and the policies a project decides for itself.**
 
-A CLI and a rule set, `CHU001`-`CHU037` (`CHU021`-`CHU023` are retired), covering checks that live outside Python syntax: descriptive naming, whitespace and line-ending hygiene in the doc and plan trees ruff never reads, docstrings that promise capabilities the module doesn't ship, examples that import a module one of their declared runtimes doesn't have, and standing policies such as the ban on `async` in library code.  Drop it on any CPython 3.11+ workspace and run it with no configuration.  The table below lists every rule.
+A CLI and a rule set, `CHU001`-`CHU038` (`CHU021`-`CHU023` are retired), covering checks that live outside Python syntax: descriptive naming, whitespace and line-ending hygiene in the doc and plan trees ruff never reads, docstrings that promise capabilities the module doesn't ship, examples that import a module one of their declared runtimes doesn't have, and standing policies such as the ban on `async` in library code.  Drop it on any CPython 3.11+ workspace and run it with no configuration.  The table below lists every rule.
 
 <br clear="left">
 
@@ -81,6 +81,7 @@ Each rule walks the paths it targets.  When a rule's target paths aren't there, 
 | `CHU035` | Example `helpers.py` copies must stay byte-identical to `scripts/templates/examples_helpers.py` |
 | `CHU036` | Device code must use subscript syntax, not `.__setitem__` / `.__getitem__` / `.__delitem__` (unavailable on CircuitPython / MicroPython built-ins) |
 | `CHU037` | No em-dashes in user-facing prose: markdown docs and the templates that scaffold them |
+| `CHU038` | Library examples and demo apps never exit: no `SystemExit` / `sys.exit()`, and each ends in a module-level `while True:` loop |
 
 ### Configuration
 

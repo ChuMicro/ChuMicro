@@ -40,32 +40,35 @@ from chumicro_workspace.workspace import WorkspaceLayout, runner_invocation
 # ---------------------------------------------------------------------------
 
 
-#: Built-in demo payload.  Runtime-agnostic so it deploys cleanly on
-#: any registered board.
+#: Built-in demo payload: a ``while True`` loop that prints a count
+#: once a second until the board loses power, the shape every first
+#: board program has.
 #:
 #: Cross-runtime safe (CircuitPython + MicroPython): only ``time.sleep``
 #: and ``print``.  No hardware access, so every supported board reaches
 #: the print path identically and the demo runs without runtime-config
-#: or pin pickers.  Runs for ~5 seconds and exits cleanly so the deploy
-#: command's synchronous-execute path doesn't appear to hang.
+#: or pin pickers.
 DEMO_PAYLOAD: str = (
     "import time\n"
+    "\n"
     "print('Hello from ChuMicro!')\n"
-    "print('Your board is alive.')\n"
-    "for index in range(5):\n"
+    "print('Your board is alive. It counts once a second until you unplug it.')\n"
+    "\n"
+    "count = 0\n"
+    "while True:\n"
+    "    count += 1\n"
+    "    print('  tick ' + str(count))\n"
     "    time.sleep(1)\n"
-    "    print('  tick ' + str(index + 1) + '/5')\n"
-    "print('demo complete!')\n"
 )
 
 
 def _cmd_demo(args: argparse.Namespace) -> int:
-    """Deploy a baked-in LED-blink-shaped "hello world" to the active device.
+    """Deploy :data:`DEMO_PAYLOAD` to the active device and print its first output.
 
     Gives a user with a freshly-registered board something to ship
     on day one without having to write code, configure wifi, or pick
-    a project.  Runs synchronously: deploys :data:`DEMO_PAYLOAD`,
-    captures execute output, prints it.  Total wall-clock ~5 seconds.
+    a project.  The deploy captures the first ten seconds of output,
+    prints it, and returns while the board keeps counting.
     """
     workspace = _resolve_workspace(args)
     device = _resolve_device(workspace, args)
@@ -86,6 +89,11 @@ def _cmd_demo(args: argparse.Namespace) -> int:
     if not result.success:
         _emit_failure_hints(result)
         return 1
+    device_flag = f" --device {args.device_id}" if args.device_id else ""
+    print(
+        "demo: the board keeps counting.  Watch it with "
+        f"`{runner_invocation(workspace.root)} repl --tail 30{device_flag}`.",
+    )
     return 0
 
 
@@ -527,8 +535,9 @@ def _add_demo_parser(subparsers: argparse._SubParsersAction) -> None:
     demo_parser = subparsers.add_parser(
         "demo",
         help=(
-            "Deploy a built-in 'hello world' payload to the active "
-            "device.  Cross-runtime safe; ~5 seconds to run."
+            "Deploy a built-in 'hello world' that counts once a second "
+            "on the active device, forever.  Cross-runtime safe; prints "
+            "the first ten seconds of output and leaves it running."
         ),
     )
     _add_workspace_arg(demo_parser)

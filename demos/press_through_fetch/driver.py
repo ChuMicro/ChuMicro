@@ -24,6 +24,7 @@ from chumicro_workspace.deploy_api import (
     DeployApiError,
     DeviceNotFoundError,
     deploy_project,
+    echo_board_line,
 )
 from chumicro_workspace.markers import MarkerTimeoutError
 
@@ -118,6 +119,7 @@ def main(argv: list[str] | None = None) -> int:
                     "buttons.demo.pin": button_pin,
                 },
                 workspace_root=_REPO_ROOT,
+                on_line=echo_board_line,
             )
         except DeviceNotFoundError as device_error:
             print(f"driver: {device_error}", file=sys.stderr)

@@ -4,9 +4,9 @@ title: "chumicro-ntp: network time (SNTP) for CircuitPython and MicroPython"
 
 # chumicro-ntp
 
-**Non-blocking SNTP client for CircuitPython, MicroPython, and CPython.**
+**Ask an internet time server what time it is, without pausing your `while True:` loop.**
 
-Pure-Python, takes a UDP socket you provide, returns the server's transmit timestamp without blocking your tick loop.
+A board with no battery-backed clock starts every boot with the wrong date.  `chumicro-ntp` asks a time server such as `pool.ntp.org` for the current time and hands it back as Unix seconds, the count of seconds since 1 January 1970 UTC.  You send the question, then check for the answer on each pass of your loop, so an LED keeps blinking while the reply is on its way.  The same pure-Python code runs on CircuitPython, MicroPython, and CPython.
 
 ## Install
 
@@ -25,48 +25,53 @@ No board running yet?  [Start here](https://chumicro.com/ChuMicro/guides/start-h
 
 ## Quick example
 
+This `code.py` asks for the time once a minute and prints it, for as long as the board has power.  It assumes CircuitPython has already joined your wifi, which it does at startup when `settings.toml` sets `CIRCUITPY_WIFI_SSID` and `CIRCUITPY_WIFI_PASSWORD`.
+
 ```python
+import time
+
+import wifi
 from chumicro_ntp import NTPClient
 from chumicro_sockets import udp_socket
-from chumicro_timing import ticks_ms
-from chumicro_wifi import WifiConfig, WifiService
+from chumicro_timing import ticks_add, ticks_diff, ticks_ms
 
-# The board has to be on the network first; this is the chumicro-wifi
-# service from the ChuMicro quick start.  Drive it from your loop until
-# wifi.connected is True, then open the socket.  CircuitPython takes the
-# radio from the service; MicroPython and CPython take no radio at all.
-wifi = WifiService(WifiConfig(ssid="home-wifi", password="…"))
-sock = udp_socket(radio=wifi.adapter.radio)
+# The client polls for its reply, so the socket must not block.
+sock = udp_socket(radio=wifi.radio)
 sock.setblocking(False)
+client = NTPClient(socket=sock)  # asks pool.ntp.org unless you pass server=
 
-client = NTPClient(socket=sock, server="pool.ntp.org")
-request = client.query()
-while not request.done:
-    now = ticks_ms()
-    if client.check(now):
-        client.handle(now)
-print("unix seconds:", request.unix_seconds)
+request = None             # the query waiting for a reply, or None
+next_sync_ms = ticks_ms()  # due now, so the first query goes out right away
+
+while True:
+    now_ms = ticks_ms()
+
+    # Once a minute, send a query.
+    if ticks_diff(now_ms, next_sync_ms) >= 0:
+        request = client.query()
+        next_sync_ms = ticks_add(now_ms, 60_000)
+
+    # check() is True while a reply is pending; handle() reads it when it lands.
+    if client.check(now_ms):
+        client.handle(now_ms)
+
+    if request is not None and request.done:
+        if request.error is None:
+            print("unix seconds:", request.unix_seconds)
+        else:
+            print("no answer this time, retrying in a minute:", request.error)
+        request = None
+
+    # Your own work, such as blinking an LED, goes in this loop too.
+    time.sleep(0.02)  # rest 20 ms between passes
 ```
 
-In a program with more going on, hand the loop to `chumicro-runner`:
-
-```python
-from chumicro_runner import Runner
-
-runner = Runner()
-runner.add(client)
-
-while not request.done:
-    now = runner.tick()
-    runner.wait(now)
-```
-
-`wait()` parks the CPU until the reply lands.
+On MicroPython, join wifi with `network.WLAN` first, drop `import wifi`, and pass `radio=None`.
 
 ## Documentation
 
-- [User Guide](guide.md): getting started, bringing your own UDP transport, the runner pattern, and the failure modes a query can end in
-- [API Reference](api.md): `NTPClient`, the `NTPResult` handle `query()` returns, and `NTPError`
+- [User Guide](guide.md): the polling loop explained, turning Unix seconds into a date, running under `chumicro-runner`, bringing your own UDP socket, and every way a query can fail
+- [API Reference](api.md): `NTPClient`, the `NTPResult` that `query()` returns, and `NTPError`
 
 ---
 

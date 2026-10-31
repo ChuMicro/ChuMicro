@@ -1,87 +1,70 @@
-"""Runtime task control: advanced ecosystem patterns.
+"""Change jobs while they run: speed one up, run one once, remove another.
 
-Demonstrates how the runner and timing libraries work together:
+For the first 10 s the program logs a reading every second and checks the
+Wi-Fi every 2 s.  At 10 s a one-shot job switches to fast mode: logging
+speeds up to every 250 ms and the Wi-Fi check goes away.  Fast logging then
+carries on forever.
 
-- Adjusting task periods at runtime via ``TaskHandle``
-- Removing tasks dynamically
-- Using ``Rate`` alongside ``Runner`` for custom timing
-  logic that lives outside the runner
-- Using the runner's ``now_ms`` return value for external decisions
+Each ``add_periodic`` call returns a ``TaskHandle`` for its job.  Keep it,
+and you can change the job later: ``set_period()`` gives it a new period and
+``remove()`` takes it off the runner.  ``run_count=1`` registers a job that
+runs once and then removes itself.
 
-After 10 seconds, the example switches to "fast mode": logging
-speeds up and the Wi-Fi check is removed.
+Setup:
+1. Install ``chumicro_runner`` and ``chumicro_timing``.
+2. Run ``python runtime_control.py`` on your computer, or save this file as
+   ``code.py`` (CircuitPython) or ``main.py`` (MicroPython) on a board.
 
 Example output::
 
-    Running...
-
-    [1005 ms] logged sensor data
-    [2003 ms] Wi-Fi: connected
-    [2003 ms] logged sensor data
-    [3008 ms] logged sensor data
+    Logging every 1 s, Wi-Fi check every 2 s...
+    logged a reading
+    logged a reading
+    Wi-Fi: connected
+    logged a reading
+    logged a reading
+    Wi-Fi: connected
     ...
-
-    >> Switching to fast mode: logging every 250 ms, Wi-Fi removed
-
-    [10102 ms] logged sensor data
-    [10354 ms] logged sensor data
-    [10605 ms] logged sensor data
+    >> fast mode: logging every 250 ms, Wi-Fi check removed
+    logged a reading
+    logged a reading
+    logged a reading
     ...
 
 Runs on CPython, MicroPython, and CircuitPython.
 """
 
-import time
-
 from chumicro_runner import Runner
-from chumicro_timing import Rate, ticks_ms
 
 
-def log_data(now_ms: int) -> None:
-    """Log sensor data.
-
-    Args:
-        now_ms: Current tick value.
-    """
-    print(f"  [{now_ms} ms] logged sensor data")
+def log_reading(now_ms: int) -> None:
+    """Print a log line."""
+    print("logged a reading")
 
 
 def check_wifi(now_ms: int) -> None:
-    """Check Wi-Fi connectivity.
+    """Print a pretend Wi-Fi status line."""
+    print("Wi-Fi: connected")
 
-    Args:
-        now_ms: Current tick value.
+
+def switch_to_fast_mode(now_ms: int) -> None:
+    """Speed up logging and drop the Wi-Fi check.
+
+    ``now_ms`` is the time of the current tick in milliseconds.  Passing it to
+    ``set_period()`` counts the new 250 ms from this tick.
     """
-    print(f"  [{now_ms} ms] Wi-Fi: connected")
+    print(">> fast mode: logging every 250 ms, Wi-Fi check removed")
+    log_job.set_period(250, now_ms)
+    wifi_job.remove()
 
 
 runner = Runner()
+log_job = runner.add_periodic(log_reading, period_ms=1000)
+wifi_job = runner.add_periodic(check_wifi, period_ms=2000)
+runner.add_periodic(switch_to_fast_mode, period_ms=10000, run_count=1)   # once, at 10 s
 
-# Register tasks and keep their handles for runtime control.
-log_handle = runner.add_periodic(log_data, period_ms=1000)
-wifi_handle = runner.add_periodic(check_wifi, period_ms=2000)
-
-# Rate used standalone, not registered with the runner.
-# Use it for timing decisions outside the runner's task model,
-# like switching operating modes after a duration.
-mode_timer = Rate(10000, ticks_ms())
-
-switched = False
-
-print("Running...\n")
+print("Logging every 1 s, Wi-Fi check every 2 s...")
 
 while True:
-    # tick() returns the shared timestamp.
-    now = runner.tick()
-
-    # Use now_ms with an independent Rate for a timed mode switch.
-    if not switched and mode_timer.due(now):
-        print("\n  >> Switching to fast mode: "
-              "logging every 250 ms, Wi-Fi removed\n")
-        log_handle.set_period(250, now)
-        wifi_handle.remove()
-        switched = True
-
-    # In a real project, the rest of your main loop goes here.
-    # The sleep just keeps this demo from flooding the console.
-    time.sleep(0.1)
+    now_ms = runner.tick()   # run every job that is due right now
+    runner.wait(now_ms)      # sleep until the next job is due

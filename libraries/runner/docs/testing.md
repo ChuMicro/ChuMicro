@@ -1,10 +1,12 @@
 # Testing Helpers
 
-`chumicro_runner.testing` ships three host-side helpers: `CallRecorder` records handler invocations, `validate_service` asserts an object has the shape `Runner.add` expects, and `FakePoller` stands in for `select.poll().ipoll` so tests can drive `Runner.wait()` without real file descriptors.  The module declares itself test support, so the deploy walker and the bundle builder drop it and it never lands on a microcontroller.
+`chumicro_runner.testing` holds three helpers for tests that run on your computer: `CallRecorder` records each call the runner makes to a job, `validate_service` checks that an object has the methods `Runner.add` expects, and `FakePoller` stands in for `select.poll()` so tests can drive `Runner.wait()` without real sockets.  ChuMicro's deploy tools and bundles leave this module off the board, so it costs a device no flash.
+
+The `CallRecorder` and `FakePoller` examples build the runner on `FakeTicks` from `chumicro_timing.testing`, a clock that moves only when the test calls `advance()`.
 
 ## `CallRecorder`
 
-`CallRecorder` is a callable, so it registers anywhere a handler does:
+`CallRecorder` is a callable, so it registers anywhere a job function does:
 
 ```python
 from chumicro_runner import Runner
@@ -36,7 +38,7 @@ recorder.clear()
 assert len(recorder) == 0
 ```
 
-A handler registered without a period fires on every tick:
+A job registered without a period runs on every tick:
 
 ```python
 recorder = CallRecorder()
@@ -47,7 +49,7 @@ assert len(recorder) == 1
 
 ## `validate_service`
 
-`validate_service(service)` reads which contract members your service exposes and raises `ValueError` naming the offending one when the set is incoherent.  It checks shape only: it never calls `check`, `handle`, or any hook, so it is safe to run against a service that would talk to hardware.
+`validate_service(service)` looks at which of the runner's methods and attributes your service defines, and raises `ValueError` naming the one at fault when they do not fit together.  It only looks: it never calls `check`, `handle`, or any other method, so it is safe to run against a service that would talk to hardware.
 
 ```python
 from chumicro_runner.testing import validate_service
@@ -81,7 +83,7 @@ validate_service(HalfWired())
 
 ## `FakePoller`
 
-`Runner.wait()` hands its poll set to a poller object.  CPython's real `select.poll` needs live file descriptors, which in-memory fake sockets do not have, so pass `poller=FakePoller()` and assert on what the runner did with the poll set.  `register_calls`, `modify_calls`, `unregister_calls`, and `ipoll_calls` record every call; `set_ready(obj, eventmask)` queues a pair for the next `ipoll()` return.
+`Runner.wait()` watches network services' sockets through a poller object.  CPython's real `select.poll` needs live file descriptors, which in-memory fake sockets do not have, so pass `poller=FakePoller()` and assert on what the runner asked it to watch.  `register_calls`, `modify_calls`, `unregister_calls`, and `ipoll_calls` record every call; `set_ready(obj, eventmask)` queues a pair for the next `ipoll()` return.
 
 ```python
 import select
@@ -122,7 +124,7 @@ Your test suite imports them straight from the installed package, the same way t
 from chumicro_runner.testing import CallRecorder, FakePoller, validate_service
 ```
 
-Project convention: libraries that expose injectable services ship their own test fakes alongside the production code.
+ChuMicro libraries that take a clock, socket, or other dependency as an argument ship fakes for it in a `testing` module like this one.
 
 ## API Reference
 

@@ -137,7 +137,7 @@ Your own test suite imports the helpers the same way, and needs nothing beyond t
 from chumicro_mqtt.testing import canned_connack_bytes, canned_publish_bytes
 ```
 
-Project convention: libraries that expose injectable services ship their own test fakes alongside the production code.
+`FakeSocket` comes from `chumicro_sockets.testing` and `FakeTicks` from `chumicro_timing.testing`, both installed alongside `chumicro-mqtt` as its dependencies.
 
 ## API Reference
 

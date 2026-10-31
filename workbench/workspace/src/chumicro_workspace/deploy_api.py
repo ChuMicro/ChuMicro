@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import shutil
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -338,6 +339,16 @@ def _resolve_project_deploy_mode(
     return mode
 
 
+def echo_board_line(line: str) -> None:
+    """Print one line of board output, prefixed ``board |``, and flush.
+
+    The ``on_line`` callback demo drivers pass to :func:`deploy_project`,
+    so a person running a demo sees what the board prints, marker lines
+    and its own commentary alike, interleaved with the driver's lines.
+    """
+    print(f"board | {line}", flush=True)
+
+
 def deploy_project(
     project_dir: Path,
     *,
@@ -348,6 +359,7 @@ def deploy_project(
     boot_shim: bool = True,  # noqa: ARG001 - reserved for future use
     import_graph: bool = True,  # noqa: ARG001 - reserved for future use
     workspace_root: Path | None = None,
+    on_line: Callable[[str], None] | None = None,
 ) -> DeployedProject:
     """Deploy *project_dir*'s ``app.py`` to a registered board, start the bootstrap.
 
@@ -379,6 +391,9 @@ def deploy_project(
         workspace_root: Optional explicit workspace root.  Defaults to
             walking *project_dir*'s parents for ``secrets.toml`` /
             ``devices.yml``.
+        on_line: Optional callback given every line the board prints,
+            as it arrives.  Pass :func:`echo_board_line` to show the
+            board's output alongside the caller's own.
 
     Returns:
         A live :class:`DeployedProject` session.
@@ -442,7 +457,7 @@ def deploy_project(
         bootstrap = build_device_bootstrap(
             device_entry, transport, app_file, function_filter=None,
         )
-        runner = DeviceBootstrapRunner(transport, bootstrap)
+        runner = DeviceBootstrapRunner(transport, bootstrap, on_line=on_line)
         runner.start()
     except BaseException:
         # Best-effort transport cleanup if any of the staging or

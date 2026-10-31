@@ -18,31 +18,32 @@ def test_my_service_waits_for_wifi():
     my_service = MyService(wifi=wifi)
     my_service.start()
 
-    ticks.advance(0)
     wifi.tick()                    # one runner-style check + handle
     assert wifi.state == "connected"
     assert my_service.ready
 ```
 
-`FakeWifi` ships with sensible defaults (`ssid="testnet"`, `password="password"`, short reconnect backoffs).  Pass `config=` a custom `WifiConfig` if your test needs different settings.
+`FakeWifi` defaults to `ssid="testnet"` and `password="password"`, with a 10 ms first reconnect pause capped at 100 ms so tests never wait long.  Pass `config=` a custom `WifiConfig` if your test needs different settings.
 
 ## Test hooks
 
-The hooks below live on `FakeWifiAdapter` and are forwarded to `FakeWifi` for ergonomic test code:
+The hooks below live on `FakeWifiAdapter`, and `FakeWifi` forwards each one so a test can call it on the service directly:
 
 | Hook | What it does |
 |---|---|
-| `set_connect_outcome(True)` | Next `connect()` succeeds. |
-| `set_connect_outcome(False)` | Next `connect()` returns a clean refusal. |
-| `set_connect_outcome(OSError)` | Next `connect()` raises the named exception class. |
-| `set_connect_outcomes([True, False, True])` | Queue a one-shot sequence of outcomes; the default takes over after the queue drains. |
+| `set_connect_outcome(True)` | Every `connect()` from now on succeeds. |
+| `set_connect_outcome(False)` | Every `connect()` from now on returns a clean refusal. |
+| `set_connect_outcome(OSError)` | Every `connect()` from now on raises the given exception class. |
+| `set_connect_outcomes([True, False, True])` | Queues outcomes for the next few `connect()` calls, one each; `set_connect_outcome` takes over once the queue is empty. |
+| `set_connect_blocks(False)` | Switches between a blocking `connect()` (`True`, the default, like CircuitPython) and a non-blocking one (`False`, like MicroPython). |
+| `set_deferred_link(link_after=3)` | Models a MicroPython-style background join: `connect()` returns `False`, and `is_linked()` turns `True` on its third call. |
 | `drop_link()` | Simulates a link-down event: the next `is_linked()` returns `False`, which sends the service into its reconnect path. |
 | `restore_link()` | Simulates the access point coming back on its own, with no `connect()` call. |
-| `calls` | List of recorded adapter calls (`("configure", config)`, `("connect", config)`).  Assert on this to verify call ordering. |
+| `calls` | List of recorded adapter calls, `("configure", config)` and `("connect", config, timeout_ms)`.  Assert on it to check call order. |
 
 ## Simulating a reconnect
 
-Use `drop_link()` plus `FakeTicks.advance()` to step through a real reconnect cycle:
+Use `drop_link()` to step through a reconnect.  After a drop, the service sends its first reconnect try straight away:
 
 ```python
 def test_reconnect_after_link_drop():
@@ -55,11 +56,13 @@ def test_reconnect_after_link_drop():
 
     wifi.drop_link()               # simulate link-down
     wifi.tick()                    # service notices, enters RECONNECTING
+    assert wifi.state == "reconnecting"
 
-    ticks.advance(200)             # past the first backoff window
-    wifi.tick()                    # reconnect attempt fires
+    wifi.tick()                    # first reconnect try succeeds
     assert wifi.state == "connected"
 ```
+
+To test the pause between failed tries, queue failures with `set_connect_outcomes` and move the clock with `ticks.advance(milliseconds)` between `tick()` calls.
 
 ## `FakeWifiAdapter` (lower level)
 

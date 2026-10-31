@@ -3,9 +3,9 @@
 <img src="https://raw.githubusercontent.com/ChuMicro/ChuMicro/main/support/docs/chumicro_tip.png"
 align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
-**Runtime config from one shared dotted-key shape (`wifi.ssid`, `mqtt.broker.host`).**
+**Read your project's settings by name, from one file on the board.**
 
-Each library exposes a `<Name>Config.from_config()` factory that reads its own dotted-prefix section from a shared dict (`wifi.*`, `mqtt.broker.*`, etc.) and returns typed configuration.  Apps load one `runtime_config.msgpack` at boot; libraries pull their slice out.  No global registry, no hand-written `if "key" in config:` walls.
+Keep the wifi network, the broker address, and how often to take a reading out of `code.py`.  A ChuMicro project keeps its settings in one file on the board, `/runtime_config.msgpack`, and gives each one a dotted name: `wifi.ssid`, `mqtt.broker.host`, `sensor.period_ms`.  `load_runtime_config()` reads that file, and you look settings up the way you would in a dict.  ChuMicro libraries take the same object and read their own settings out of it, so `WifiService.from_config(config)` finds `wifi.ssid` and `wifi.password` without you passing them one at a time.
 
 <br clear="left">
 
@@ -28,48 +28,61 @@ For bundle setup, pre-compiled `.mpy` bundles, the experimental channel, and det
 
 ## Quick example
 
-User-app pattern (the 2-line bring-up):
+Read two settings and use them in the main loop:
 
 ```python
-from chumicro_config import load_runtime_config
-from chumicro_wifi import WifiConfig, WifiService
+import time
 
-config = load_runtime_config()                          # reads /runtime_config.msgpack
-wifi = WifiService(WifiConfig.from_config(config))      # reads + types the wifi.* keys
+from chumicro_config import RuntimeConfig
+
+# On a board deployed with chumicro-workspace, read the settings file instead:
+#     from chumicro_config import load_runtime_config
+#     config = load_runtime_config()
+config = RuntimeConfig({"sensor.name": "back-porch", "sensor.period_ms": 2000})
+
+name = config["sensor.name"]                       # raises MissingConfigKey if absent
+period_ms = config.get("sensor.period_ms", 5000)   # 5000 if absent
+
+while True:
+    print(f"{name}: taking a reading")
+    time.sleep(period_ms / 1000)
 ```
 
-Library-side pattern (`load_section` builds a typed config from the flat-key payload, used today by `chumicro-wifi`):
+To turn a group of settings into one object, give it a class and let `load_section` fill in the arguments from every `sensor.*` key:
 
 ```python
 from chumicro_config import load_section
 
-class WifiConfig:
-    def __init__(self, ssid, password, hostname=None, connect_timeout_ms=15_000): ...
+class SensorConfig:
+    def __init__(self, name, period_ms=5000, units="C"):
+        self.name = name
+        self.period_ms = period_ms
+        self.units = units
 
-    @classmethod
-    def from_config(cls, config):
-        return load_section(
-            cls, config,
-            prefix="wifi",
-            required=("ssid", "password"),
-            optional={"hostname": None, "connect_timeout_ms": 15_000},
-        )
+sensor = load_section(
+    SensorConfig, config,
+    prefix="sensor",
+    required=("name",),
+    optional={"period_ms": 5000, "units": "C"},
+)
 ```
+
+ChuMicro libraries ship the same kind of class with a `from_config()` method, so `WifiService.from_config(config)` reads `wifi.ssid`, `wifi.password`, and the other `wifi.*` settings in one call.
 
 ## What's included
 
 | Symbol | What it does |
 |---|---|
-| `load_runtime_config(path=…)` | Read + decode `/runtime_config.msgpack` into a flat-key `RuntimeConfig` (dict-shaped) |
-| `config` | Lazily-loaded module attribute: the deployed `RuntimeConfig`, or `None` when the file is absent.  First attribute access reads the file once and caches the result |
-| `RuntimeConfig` | Lookup wrapper over the flat-key payload: `get(key[, default])`, `[key]` / `require(key)`, `in` check |
-| `load_section(cls, config, *, prefix, required=…, optional=…)` | Build `cls(**kwargs)` by reading flat-prefix keys.  Used today by `chumicro-wifi`'s `WifiConfig.from_config`; available to any library whose constructor signature maps 1:1 to its config subkeys |
-| `try_load_section(...)` | Soft variant: returns `None` instead of raising when `config` is `None`, the wrong type, or missing a required key |
-| `MissingConfigKey` / `InvalidConfigType` / `ConfigError` | Targeted exceptions: single-inheritance from `ConfigError` (MicroPython forbids multi-parent layouts) |
+| `load_runtime_config(path=None)` | Read `/runtime_config.msgpack` (or the file at `path`) and return a `RuntimeConfig` |
+| `chumicro_config.config` | The same settings, read from the file the first time you use it; `None` when the board has no settings file |
+| `RuntimeConfig` | The settings object: `config.get(key, default)`, `config[key]` or `config.require(key)` (raise `MissingConfigKey` when absent), and `key in config` |
+| `load_section(cls, config, *, prefix, required=(), optional=None)` | Build `cls(...)` from every `<prefix>.*` setting, passing each one as a keyword argument |
+| `try_load_section(...)` | Like `load_section`, but returns `None` instead of raising when a required setting is missing or `config` is `None` or not a dict |
+| `MissingConfigKey`, `InvalidConfigType` | Raised when a required setting is absent, or when `config` is not a `RuntimeConfig` or dict; catch `ConfigError` for both |
 
 ## Where this fits
 
-Depends on [`chumicro-msgpack`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/msgpack) for decode.  Most ChuMicro libraries with a `<Name>Config.from_config()` factory read their slice off the shared `RuntimeConfig` via `config.get(...)`; [`chumicro-wifi`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/wifi) additionally uses the `load_section` helper here.  Other consumers: [`chumicro-mqtt`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/mqtt), [`chumicro-ntp`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/ntp), [`chumicro-requests`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/requests), [`chumicro-websockets`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/websockets), [`chumicro-http_server`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/http_server).
+Depends on [`chumicro-msgpack`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/msgpack) to read the settings file; `circup` and `mip` install it for you.  [`chumicro-wifi`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/wifi), [`chumicro-mqtt`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/mqtt), [`chumicro-ntp`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/ntp), [`chumicro-requests`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/requests), [`chumicro-websockets`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/websockets), and [`chumicro-http_server`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/http_server) each read their settings from a `RuntimeConfig` through a `from_config()` method.  `chumicro-workspace` writes `/runtime_config.msgpack` from TOML files on your laptop when it deploys a project.
 
 ## Platform support
 
@@ -77,7 +90,9 @@ Works on CPython, MicroPython, and CircuitPython.
 
 ## Examples
 
-[`examples/end_to_end.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/config/examples/end_to_end.py) shows the full read → `load_section` → typed-config flow on CPython; see any consumer library (starting with `chumicro-wifi`) for the integrated usage shape.
+| Example | What it shows |
+|---|---|
+| [`end_to_end.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/config/examples/end_to_end.py) | Reads settings with `config.get`, builds a `SensorConfig` with `load_section`, catches `MissingConfigKey`, then takes a pretend reading every `sensor.period_ms` forever.  Runs on every runtime without a settings file. |
 
 ## Contributing
 

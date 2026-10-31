@@ -261,7 +261,7 @@ class PacketReader:
 
 ## Cooperative concurrency
 
-`chumicro-runner` is the only sanctioned scheduler.  Services register via `runner.add(service)` (check / handle), `runner.add_periodic(handler, period_ms=...)` (periodic), or `runner.add_generator(gen)` (generator function for sequential I/O, see the [runner guide](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner/docs/guide.md#generator-driven)).
+`chumicro-runner` is the only sanctioned scheduler.  Services register via `runner.add(service)` (check / handle), `runner.add_periodic(handler, period_ms=...)` (periodic), or `runner.add_generator(gen)` (generator function for sequential I/O, see the [runner guide](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner/docs/guide.md#generator-tasks)).
 
 Two facts drive the concurrency rule, both verified against the runtimes' compiler sources in [Decision 0087](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0087-generators-for-sequential-io.md): CircuitPython compiles every `await` into an `__await__` method dispatch that allocates a fresh generator on each resume (MicroPython compiles the same `await` to a single `YIELD_FROM` bytecode), and Adafruit's CircuitPython asyncio port has had a broken socket/stream layer since 2021.  Building on `async` means paying per-await heap churn on one runtime and inheriting an unmaintained stream layer, or quietly targeting only the other runtime.  `yield from` is one bytecode on both, and the wait objects it drives are reusable.
 
@@ -283,6 +283,33 @@ def fetch():                            # what you write here
 ```
 
 Enforced by lint rule `CHU033` (AST-based, so the keywords inside string literals don't trip it; `functional_tests/` are excluded because host-only test servers may reach asyncio through a host package).  The ban covers `workbench/` too, where the tools are CPython-only and none of the device-side reasons apply.  That's a deliberate tax: one concurrency model in the repo means host-tree patterns can't drift into device trees, and a contributor moving between them never switches paradigms.
+
+## Examples and demos
+
+A library example or a demo's `app.py` is often the first program a reader copies onto a board, and a board runs its program until the power goes.  So each one reads the way an Adafruit Learn guide or an Arduino sketch does: imports, then setup, then a `while True:` loop at the bottom that keeps working.
+
+```python
+import time
+
+from chumicro_msgpack import packb, unpackb
+
+settings = {"name": "lamp", "brightness": 0}
+
+while True:
+    settings["brightness"] = (settings["brightness"] + 25) % 125
+    data = packb(settings)
+    print(f"packed {len(data)} bytes, restored {unpackb(data)}")
+    time.sleep(2)
+```
+
+- **The loop repeats the work the file teaches, on a timer.**  The one-shot part (join wifi, ask for the time, open a connection) runs first, and then the loop does that work again every few seconds, so the reader watches the library work more than once.
+- **A failure prints what went wrong and tries again on the next pass.**  The program never stops itself: no `raise SystemExit`, no `sys.exit()`, no `exit()`, and no running off the end after the work succeeds.
+- **The loop sits at module level**, not inside a `main()` function, where a reader expects to find it.
+- **A demo prints `DEMO_COMPLETE` after its first full pass** and keeps repeating the same work.  The host-side driver watches for that line.
+
+A script that runs once by design, such as a benchmark that prints a summary table, says so with a comment-only line naming the reason: `# noqa: CHU038 - benchmark: runs each scenario once, then prints a summary`.
+
+Enforced by lint rule `CHU038`, which flags each exit call and each file without a module-level `while True:` free of `break`.  [Decision 0130](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0130-examples-and-demos-never-exit.md) records the reasoning.
 
 ## Coverage exclusions
 

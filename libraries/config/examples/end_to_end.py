@@ -1,118 +1,95 @@
-"""End-to-end demo of ``chumicro-config``: both library-author and user-app patterns.
+"""Look up settings by name, build a settings object from them, and use it.
 
-Runs on CPython, MicroPython, and CircuitPython.  Self-contained:
-constructs an in-memory flat-key config, exercises the section
-loader, then shows how a real user app would wire everything once
-``/runtime_config.msgpack`` is on device.
+A ChuMicro project keeps its settings (the wifi network, the broker address,
+how often to take a reading) in one file on the board,
+``/runtime_config.msgpack``.  Every setting has a dotted name such as
+``wifi.ssid`` or ``sensor.period_ms``.  This example builds the same lookup
+object from a dict written in this file, so it runs without that file, and:
+
+1. reads single settings with ``config.get``,
+2. builds a ``SensorConfig`` object from every ``sensor.*`` setting with
+   ``load_section``,
+3. shows the error you get when a required setting is missing,
+4. takes a pretend reading every ``sensor.period_ms`` milliseconds, forever.
+
+Setup:
+
+1. Install the library.  On CircuitPython run
+   ``circup install chumicro_config``; on MicroPython run
+   ``mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_config``.
+2. No wiring needed.
+3. Save this file as ``code.py`` (CircuitPython) or ``main.py``
+   (MicroPython) on the board.
 
 Example output::
 
-    Library-author pattern: WifiConfig.from_config(...) → ssid='HomeNet', timeout=15000
-    User-app pattern: 3 sections wired (wifi, mqtt, app)
-    Missing-key error caught: required config key 'wifi.password' is missing
-    Wrong-type error caught: load_section requires a RuntimeConfig or dict, got int
+    wifi.ssid = HomeNet
+    mqtt.broker.host = not set
+    sensor: name=back-porch period_ms=2000 units=C
+    Missing setting: required config key 'sensor.name' is missing
+    back-porch reading 1 (C)
+    back-porch reading 2 (C)
+    back-porch reading 3 (C)
+
+Runs on CPython, MicroPython, and CircuitPython.
 """
 
-from chumicro_config import (
-    ConfigError,
-    InvalidConfigType,
-    MissingConfigKey,
-    load_section,
-)
+import time
 
-# Library-author pattern. Every consumer library defines a typed
-# Config class with a `from_config` classmethod that calls
-# `load_section` against the deployer's flat-key RuntimeConfig.
+from chumicro_config import MissingConfigKey, RuntimeConfig, load_section
 
-
-class WifiConfig:
-    """Stand-in for what `chumicro-wifi` ships."""
-
-    def __init__(self, ssid, password, hostname=None, connect_timeout_ms=15_000):
-        self.ssid = ssid
-        self.password = password
-        self.hostname = hostname
-        self.connect_timeout_ms = connect_timeout_ms
-
-    @classmethod
-    def from_config(cls, config):
-        return load_section(
-            cls,
-            config,
-            prefix="wifi",
-            required=("ssid", "password"),
-            optional={"hostname": None, "connect_timeout_ms": 15_000},
-        )
-
-
-class MqttConfig:
-    """Stand-in for what `chumicro-mqtt` ships."""
-
-    def __init__(self, broker, port=1883, client_id=None):
-        self.broker = broker
-        self.port = port
-        self.client_id = client_id
-
-    @classmethod
-    def from_config(cls, config):
-        return load_section(
-            cls,
-            config,
-            prefix="mqtt",
-            required=("broker",),
-            optional={"port": 1883, "client_id": None},
-        )
-
-
-# A typical merged runtime config. The deployer writes one of these
-# to /runtime_config.msgpack at deploy time. Flat dotted keys are the
-# wire shape every consumer library reads from.  In production:
+# On a board deployed with chumicro-workspace, read the real settings file:
 #
 #     from chumicro_config import load_runtime_config
 #     config = load_runtime_config()
 #
-# but for this self-contained demo we just inline the dict.
-config = {
+# This example builds the same kind of object from a dict instead.
+config = RuntimeConfig({
     "wifi.ssid": "HomeNet",
-    "wifi.password": "secret",
-    "mqtt.broker": "mqtt.local",
-    "mqtt.client_id": "back-porch",
-    "app.sample_period_ms": 5000,
-}
+    "sensor.name": "back-porch",
+    "sensor.period_ms": 2000,
+})
 
 
-# 1. Library-author pattern: the library wraps load_section so users
-#    don't think about prefix / required / optional themselves.
-wifi = WifiConfig.from_config(config)
-print(
-    f"Library-author pattern: WifiConfig.from_config(...) → "
-    f"ssid={wifi.ssid!r}, timeout={wifi.connect_timeout_ms}"
-)
+class SensorConfig:
+    """Settings for one sensor, built from the ``sensor.*`` keys."""
+
+    def __init__(self, name, period_ms=5000, units="C"):
+        self.name = name
+        self.period_ms = period_ms
+        self.units = units
+
+    @classmethod
+    def from_config(cls, config):
+        # load_section reads sensor.name, sensor.period_ms, and sensor.units,
+        # then calls SensorConfig(name=..., period_ms=..., units=...).
+        return load_section(
+            cls,
+            config,
+            prefix="sensor",
+            required=("name",),
+            optional={"period_ms": 5000, "units": "C"},
+        )
 
 
-# 2. User-app pattern: explicitly wire each section to its library.
-mqtt = MqttConfig.from_config(config)
-app_sample_period_ms = config["app.sample_period_ms"]
-print("User-app pattern: 3 sections wired (wifi, mqtt, app)")
+# 1. Read single settings.  get() returns the default when a key is absent.
+print(f"wifi.ssid = {config.get('wifi.ssid')}")
+print(f"mqtt.broker.host = {config.get('mqtt.broker.host', 'not set')}")
 
+# 2. Build one object from every sensor.* setting.  units was not set,
+#    so it takes the default "C".
+sensor = SensorConfig.from_config(config)
+print(f"sensor: name={sensor.name} period_ms={sensor.period_ms} units={sensor.units}")
 
-# 3. Missing required key raises MissingConfigKey (subclass of ConfigError).
+# 3. A required setting that is missing raises MissingConfigKey.
 try:
-    WifiConfig.from_config({"wifi.ssid": "incomplete"})  # missing wifi.password
+    SensorConfig.from_config(RuntimeConfig({"sensor.period_ms": 1000}))
 except MissingConfigKey as error:
-    print(f"Missing-key error caught: {error}")
+    print(f"Missing setting: {error}")
 
-
-# 4. Config of the wrong type raises InvalidConfigType.
-try:
-    WifiConfig.from_config(42)  # not a RuntimeConfig / dict
-except InvalidConfigType as error:
-    print(f"Wrong-type error caught: {error}")
-
-
-# 5. Both targeted exceptions also subclass ConfigError, so a single
-#    catch-all works for callers that don't need to discriminate.
-try:
-    WifiConfig.from_config({})  # missing both required keys
-except ConfigError:
-    pass
+# 4. Use the settings: take a pretend reading every period_ms, forever.
+reading_number = 0
+while True:
+    reading_number += 1
+    print(f"{sensor.name} reading {reading_number} ({sensor.units})")
+    time.sleep(sensor.period_ms / 1000)

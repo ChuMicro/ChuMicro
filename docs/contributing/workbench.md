@@ -2,11 +2,11 @@
 
 <img src="https://chumicro.com/assets/chumicro-head.png" alt="" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
-Workbench packages are host-only CPython tools that ship to PyPI but never reach the device: `chumicro-deploy`, `chumicro-repl`, `chumicro-workspace`, `chumicro-pytest-device`, `chumicro-checks`.  This page documents how to add a new one and how the lifecycle differs from a [device library](new-library.md).
+Workbench packages are the laptop-side tools: CPython programs that ship to PyPI and never run on a board.  Five exist: `chumicro-deploy`, `chumicro-repl`, `chumicro-workspace`, `chumicro-pytest-device`, and `chumicro-checks`.  This page covers adding a new one and how its lifecycle differs from a [device library](new-library.md).
 
 <br clear="left">
 
-For what workbench is and which tools currently ship, see [`workbench/`](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/).  For the design rationale behind splitting workbench from `libraries/`, see [Decision 0032](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0032-workbench-host-tools.md).
+For what each tool does and how to install it, see [`workbench/`](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/).  For the design rationale behind splitting workbench from `libraries/`, see [Decision 0032](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0032-workbench-host-tools.md).
 
 ## Conventions shared with libraries
 
@@ -27,7 +27,7 @@ Workbench packages follow the same per-library conventions as code under `librar
 
 Same as libraries, minus the bundle steps:
 
-- Every change that touches a workbench package bumps its `VERSION` (SemVer); `check-version` catches forgotten bumps.
+- The [VERSION bump rules](releases.md#when-to-bump-version) are the same: one bump per PR that changes the package's behavior or API, none for tests, docs, or docstring-only edits.  `check-version` catches forgotten bumps.
 - `check-api` gates API-breakage the same way it does for libraries.
 - On every VERSION bump on `main`, the workbench package publishes to PyPI under its **experimental** name (e.g. `chumicro-deploy-experimental`).
 - Promotion to **stable** publishes the base name (`chumicro-deploy`), the same `promote.yml` flow libraries use.
@@ -40,7 +40,7 @@ Same `mkdocs.yml` + `docs/` layout as device libraries (Zensical + mkdocstrings 
 ## Differences from libraries
 
 - **Host-side `functional_tests/`, not on-device.**  Workbench tools drive devices from the host rather than running on the device.  A workbench package can still ship a `functional_tests/` directory for host-side tests that touch hardware (see [`workbench/deploy/functional_tests/`](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/deploy/functional_tests/) for the deploy happy paths against a real board through the public `chumicro_deploy` API).  The root `conftest.py` excludes these from default host collection the same way it does for library functional tests; run them with `python scripts/run.py test-workbench-functional` (the workbench counterpart to `test-libraries-functional`).  Each suite's own `conftest.py` owns device selection.
-- **No cross-runtime tests.**  Workbench packages target only CPython, so `test-micropython` and `test-circuitpython` don't apply.
+- **No cross-runtime tests.**  Workbench packages target only CPython, and the `test-micropython` and `test-circuitpython` preflight phases cover `libraries/` only.
 - **No `.mpy` compilation, no bundle staging.**  Workbench packages do not appear in `ChuMicro-Bundle` or `ChuMicro-Bundle-Experimental`.
 - **Third-party CPython dependencies are fine.**  `pyserial`, `ruamel.yaml`, `rich`, anything that ships on PyPI.  `libraries/` avoids them because a CPython-only dep can't be `import`ed on a device; workbench doesn't target devices, so the constraint never applied.
 
@@ -57,4 +57,4 @@ Only split into a separate `libraries/` entry if a real third-party demand appea
 - [`workbench/`](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/): what workbench is, current tool list, install commands
 - [Decision 0032](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0032-workbench-host-tools.md): full rationale and alternatives
 - [Adding a New Library](new-library.md): the parallel guide for device libraries
-- [`AGENTS.md`](https://github.com/ChuMicro/ChuMicro/blob/main/AGENTS.md): workspace structure rule, file routing table
+- [`AGENTS.md`](https://github.com/ChuMicro/ChuMicro/blob/main/AGENTS.md): the repository's trees and the rules agents follow in each

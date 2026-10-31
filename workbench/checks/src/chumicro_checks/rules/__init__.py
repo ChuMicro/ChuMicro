@@ -43,6 +43,7 @@ from chumicro_checks.rules.chu034 import CHU034
 from chumicro_checks.rules.chu035 import CHU035
 from chumicro_checks.rules.chu036 import CHU036
 from chumicro_checks.rules.chu037 import CHU037
+from chumicro_checks.rules.chu038 import CHU038
 
 
 def registered_rules() -> dict[str, Rule]:
@@ -86,4 +87,5 @@ def registered_rules() -> dict[str, Rule]:
         CHU035.code: CHU035,
         CHU036.code: CHU036,
         CHU037.code: CHU037,
+        CHU038.code: CHU038,
     }

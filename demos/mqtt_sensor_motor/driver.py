@@ -7,19 +7,21 @@ CPython-side :class:`MQTTClient` as the counterparty.
 
 The host subscribes to the board's wildcard topics
 (``demo/+/availability``, ``demo/+/telemetry``, ``demo/+/motor/state``)
-*before* the board reaches the broker: the board's first telemetry
-samples drain from its pre-connect queue at CONNACK, and a late
-subscriber misses them.  Then it drives the round trip:
+before the board reaches the broker, so it sees the live ``"online"``
+and every reading from the first one.  Then it drives the round trip:
 
-1. expect the retained/live ``"online"`` availability;
+1. expect the ``"online"`` availability;
 2. expect >= 3 telemetry samples with plausible celsius and a
    strictly increasing ``seq``;
 3. publish ``motor/set`` = ``75`` (QoS 1) and expect both the board's
    ``MOTOR_APPLIED speed=75`` marker and a retained ``motor/state`` of
    ``75``;
 4. publish ``motor/set`` = ``0`` and expect ``motor/state`` = ``0``;
-5. at shutdown, expect the retained ``"offline"`` availability and the
-   board's ``DEMO_COMPLETE`` marker.
+5. expect availability to still read ``"online"`` and the board's
+   ``DEMO_COMPLETE`` marker.
+
+The board keeps publishing a reading every two seconds after the driver
+leaves.
 
 Any miss exits non-zero with a message aimed at a transcript reader.
 
@@ -49,6 +51,7 @@ from chumicro_workspace.deploy_api import (
     DeployApiError,
     DeviceNotFoundError,
     deploy_project,
+    echo_board_line,
 )
 from chumicro_workspace.markers import MarkerTimeoutError
 
@@ -198,6 +201,7 @@ def main(argv: list[str] | None = None) -> int:
                     "mqtt.client_id": _BOARD_CLIENT_ID,
                 },
                 workspace_root=_REPO_ROOT,
+                on_line=echo_board_line,
             )
         except DeviceNotFoundError as device_error:
             print(f"driver: {device_error}", file=sys.stderr)
@@ -247,10 +251,9 @@ def main(argv: list[str] | None = None) -> int:
 
         host_client.on_message = _on_host_message
 
-        # Subscribe to every board topic BEFORE the board reaches the
-        # broker: its first telemetry drains from the pre-connect queue
-        # at CONNACK, and a late subscriber misses it.  The board is
-        # still doing wifi bring-up while these SUBACKs land.
+        # Subscribe to every board topic before the board reaches the
+        # broker, so the host sees the live "online" and every reading.
+        # The board is still doing wifi bring-up while these SUBACKs land.
         subscribed = [0]
         for topic_filter in (
             "demo/+/availability", "demo/+/telemetry", "demo/+/motor/state",
@@ -387,7 +390,7 @@ def main(argv: list[str] | None = None) -> int:
             return 8
         session.wait_for("DEMO_COMPLETE", timeout_s=15.0, pump=pump)
 
-        print("driver: demo completed cleanly.")
+        print("driver: demo completed cleanly; the board keeps publishing.")
         return 0
     except MarkerTimeoutError as marker_error:
         print(f"driver: {marker_error}", file=sys.stderr)

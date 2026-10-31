@@ -1,120 +1,77 @@
-"""Timeout check using tick functions directly.
+"""Give up on a slow sensor after half a second, without pausing the loop.
 
-Shows how to use ``ticks_ms`` / ``ticks_diff`` / ``ticks_add`` for
-deadline enforcement, the kind of one-shot timing logic that doesn't
-fit the periodic ``Rate`` pattern.
+Once a second the program starts asking a pretend sensor whether it has a
+reading.  A ``Deadline`` set for 500 ms decides when to stop asking: some
+attempts get an answer in time and print how long it took, and the slow ones
+print a timeout.  The loop checks the sensor and the deadline on every pass
+and never waits for either.
 
-A ``wait_for_sensor()`` helper polls until a sensor is ready or a
-deadline expires.  On a real board, ``poll_sensor()`` would be a fast
-non-blocking check (GPIO pin, status register, etc.), and the deadline
-test would run inside your main loop, one pass per tick — the sleeps
-below only pace the simulated console output on a host.
+``Rate`` starts the attempts and ``Deadline`` ends them, which is the usual
+pairing: a ``Rate`` comes due again and again, and a ``Deadline`` expires once
+until you ``reset()`` it.
 
 Example output::
 
-    Running timeout checks...
+    Asking the sensor once a second, giving up after 500 ms.
 
-      Waiting for sensor (500 ms deadline)...
-      [105 ms] not ready...
-      [210 ms] not ready...
-      [316 ms] not ready...
-      [420 ms] sensor ready after 420 ms
-
-      Waiting for sensor (500 ms deadline)...
-      [104 ms] not ready...
-      [209 ms] not ready...
-      [315 ms] not ready...
-      [421 ms] not ready...
-      TIMEOUT: sensor not ready after 500 ms
-
+      attempt 1: ready after 300 ms
+      attempt 2: no answer in 500 ms, giving up
+      attempt 3: ready after 150 ms
+      attempt 4: no answer in 500 ms, giving up
+      attempt 5: ready after 450 ms
       ...
 
 Runs on CPython, MicroPython, and CircuitPython.
 """
 
-import time
-
-from chumicro_timing import ticks_add, ticks_diff, ticks_ms
+from chumicro_timing import Deadline, Rate, ticks_diff, ticks_ms
 
 TIMEOUT_MS = 500
 
-# Simulated sensor: becomes ready after this many polls.
-# Cycles through values so some attempts succeed and some time out.
-_READY_AFTER = [4, 99, 3, 99, 2]
-_cycle_index = 0
+# How long the pretend sensor takes to answer on each attempt, in turn.
+# 900 is slower than the timeout, so those attempts give up.
+ANSWER_AFTER_MS = (300, 900, 150, 900, 450)
+
+attempt = 0
+attempt_started_ms = ticks_ms()
+waiting = False
 
 
-def poll_sensor(poll_count: int) -> bool:
-    """Check whether the sensor is ready.
+def sensor_is_ready(now_ms: int) -> bool:
+    """Return True once this attempt has waited as long as the pretend sensor takes.
 
-    Args:
-        poll_count: Number of polls completed so far.
-
-    Returns:
-        True when the sensor is ready.
-
-    On a real board::
-
-        return sensor_pin.value  # or status_register & READY_BIT
+    On a board this is one quick read of a pin or a status register, such as
+    ``return ready_pin.value``.
     """
-    threshold = _READY_AFTER[_cycle_index % len(_READY_AFTER)]
-    return poll_count >= threshold
+    answer_after_ms = ANSWER_AFTER_MS[(attempt - 1) % len(ANSWER_AFTER_MS)]
+    return ticks_diff(now_ms, attempt_started_ms) >= answer_after_ms
 
 
-def wait_for_sensor(timeout_ms: int) -> int:
-    """Poll the sensor until ready or *timeout_ms* expires.
+# A new attempt comes due once a second.
+next_attempt = Rate(1000, ticks_ms())
 
-    Demonstrates ``ticks_add`` for computing a deadline and
-    ``ticks_diff`` for checking it.
+# Expires TIMEOUT_MS after it is set.  Each attempt sets it again with reset().
+give_up = Deadline(TIMEOUT_MS, ticks_ms())
 
-    Args:
-        timeout_ms: Maximum time to wait in milliseconds.
-
-    Returns:
-        Elapsed time in ms on success, or ``-1`` on timeout.
-    """
-    # Record the start time and compute the absolute deadline.
-    start = ticks_ms()
-    deadline = ticks_add(start, timeout_ms)
-    polls = 0
-
-    # Read the clock fresh at the top of every iteration and test the
-    # deadline on that value.  ticks_diff handles wraparound.  Checking a
-    # timestamp captured at the end of the previous iteration (before the
-    # poll + sleep) could report success after the deadline had already
-    # passed.
-    while True:
-        now = ticks_ms()
-        if ticks_diff(now, deadline) >= 0:
-            return -1  # timed out
-
-        elapsed = ticks_diff(now, start)
-        if poll_sensor(polls):
-            return elapsed
-
-        print(f"    [{elapsed} ms] not ready...")
-        polls += 1
-
-        # Simulation pacing only — never sleep between polls on a board.
-        # There, this deadline check runs inside your non-blocking main
-        # loop and the loop itself provides the pacing.
-        time.sleep(0.1)
-
-
-print("Running timeout checks...\n")
+print(f"Asking the sensor once a second, giving up after {TIMEOUT_MS} ms.\n")
 
 while True:
-    print(f"  Waiting for sensor ({TIMEOUT_MS} ms deadline)...")
+    now = ticks_ms()
 
-    result = wait_for_sensor(TIMEOUT_MS)
-    if result >= 0:
-        print(f"    sensor ready after {result} ms\n")
-    else:
-        print(f"    TIMEOUT: sensor not ready after "
-              f"{TIMEOUT_MS} ms\n")
+    # Once a second, start a new attempt and give it TIMEOUT_MS from now.
+    if next_attempt.due(now):
+        attempt += 1
+        attempt_started_ms = now
+        give_up.reset(now)
+        waiting = True
 
-    _cycle_index += 1
+    if waiting and sensor_is_ready(now):
+        waited_ms = ticks_diff(now, attempt_started_ms)
+        print(f"  attempt {attempt}: ready after {waited_ms} ms")
+        waiting = False
 
-    # In a real project, the rest of your main loop goes here.
-    # The sleep just keeps this demo readable.
-    time.sleep(1)
+    if waiting and give_up.expired(now):
+        print(f"  attempt {attempt}: no answer in {TIMEOUT_MS} ms, giving up")
+        waiting = False
+
+    # Nothing above waits, so code you add here runs on every pass.

@@ -42,23 +42,15 @@ python scripts/prepare_workspace.py
 
 Then select the `.venv` interpreter from the Command Palette.
 
-### 5. Run workspace setup
+### 5. Refresh after a pull
 
-Open the integrated terminal (`⌃\`` / `` Ctrl+` ``) and run:
+The bootstrap in step 1 already installed everything, regenerated the IDE configs, and wrote three gitignored starter files at the repo root: `devices.yml`, `workspace.yml`, and `secrets.toml`.  After a `git pull` that adds a library or changes dependencies, open the integrated terminal (`` ⌃` `` / `` Ctrl+` ``) and run:
 
 ```bash
 python scripts/run.py setup
 ```
 
-This installs dependencies, runs editable installs for every library and support package, and regenerates IDE configs.  It also materializes three gitignored starter files at the repo root if they're missing: `devices.yml`, `workspace.yml`, and `secrets.toml`.  If you plan to run functional tests on real hardware, see [Device Testing](device-testing.md) for board registration and `secrets.toml` setup.
-
-`setup` produces a lot of output.  Look for this at the end:
-
-```
-============================================================
-  Workspace is ready
-============================================================
-```
+It re-runs the editable installs and regenerates the IDE configs.  If you plan to run functional tests on real hardware, see [Device Testing](device-testing.md) for board registration and `secrets.toml` setup.
 
 ## Import resolution
 
@@ -82,8 +74,8 @@ The project provides pre-configured tasks in `.vscode/tasks.json`. Open the Comm
 
 | Task | What it runs |
 |------|-------------|
-| **Preflight** | Full CI gate: lint, test, build, docs, examples, compat |
-| **Lint** | Ruff across the workspace |
+| **Preflight** | Every check CI runs on a PR: lint, tests on all three runtimes, build, docs, examples, size and version checks |
+| **Lint** | Ruff plus the project's own `chumicro-checks` rules |
 | **Test** | CPython tests for all libraries |
 | **Test Scripts** | Infrastructure tests for `scripts/` |
 | **Build** | Build all package distributions |
@@ -97,6 +89,7 @@ The project provides pre-configured tasks in `.vscode/tasks.json`. Open the Comm
 | **Test All Runtimes** | Unit tests on CPython + MicroPython + CircuitPython (parallelized) |
 | **Setup** | `python scripts/run.py setup`: installs dev deps, runs editable installs, regenerates IDE configs, generates starter device configs |
 | **Prepare Workspace** | Lower-level workspace prep: invokes `scripts/prepare_workspace.py` directly (advanced users; `Setup` is usually what you want) |
+| **Sync IDE** | Regenerates `pyrightconfig.json` and the `.vscode/` and `.idea/` configs |
 | **Test Functional** | Run all hardware-gated functional suites: `test-libraries-functional` then `test-workbench-functional` against `devices.yml` defaults |
 | **Test Libraries Functional** | Run defaults-backed real-board functional tests for library code |
 | **Test Workbench Functional** | Run hardware-gated functional tests for every `workbench/*/functional_tests/` suite |
@@ -139,13 +132,13 @@ pytest libraries/timing/tests/
 
 Command Palette → **Tasks: Run Task** → **Preflight**.
 
-**When it passes,** the terminal shows:
+**When it passes,** the terminal ends with:
 
 ```
-Preflight passed.  Required CI checks should pass.
+Preflight passed.  Required CI checks should pass.  <N> tests ran across all phases.
 ```
 
-**When it fails,** the terminal shows the failing step. [The development loop](https://github.com/ChuMicro/ChuMicro/blob/main/CONTRIBUTING.md#the-development-loop) in the contributing guide covers how to read the common failures (coverage gaps, `ruff` style violations, `griffe` docstring warnings, a missed VERSION bump, cross-runtime breaks) and how to reproduce each. Terminal links are clickable: `Ctrl+click` / `⌘+click` a `file:line` reference to jump straight to it.
+**When it fails,** the `Phase summary:` table marks the failing phase `FAIL`, and the last line reads `Preflight failed at: <phase>`. [The development loop](https://github.com/ChuMicro/ChuMicro/blob/main/CONTRIBUTING.md#the-development-loop) in the contributing guide covers how to read the common failures (coverage gaps, `ruff` style violations, `griffe` docstring warnings, a missed VERSION bump, cross-runtime breaks) and how to reproduce each. Terminal links are clickable: `Ctrl+click` / `⌘+click` a `file:line` reference to jump straight to it.
 
 ### Step-by-step validation
 
@@ -163,7 +156,7 @@ Or use the terminal for more control:
 python scripts/run.py test --libraries timing
 
 # Day-to-day iteration (no coverage gate)
-pytest libraries/timing/tests/ -k heartbeat -x -v
+pytest libraries/timing/tests/ -k rate -x -v
 ```
 
 ### Device functional tests from the terminal or task runner
@@ -210,4 +203,4 @@ For the HTML report and the rest of the coverage workflow, see [Browsing coverag
 - **If a new library is added**, run `python scripts/run.py sync-ide` to regenerate `pyrightconfig.json` and `.vscode/settings.json`. Reload the window afterward.
 - **`.vscode/tasks.json` and `.vscode/settings.json` are committed** and shared. Workspace-specific settings (`.vscode/launch.json`, etc.) are gitignored if not present.
 - **Terminal links are clickable.** When a lint error or test failure shows `file.py:42`, `Ctrl+click` / `⌘+click` to jump directly to that line.
-- **Device-testing support is wired through ordinary pytest.** The committed VS Code settings and tasks are generated from `sync-ide`, and explicit `functional_tests/` targets go through the same plugin path PyCharm uses. A dedicated live VS Code validation pass remains on the project plan, so VS Code-specific bugs are worth reporting.
+- **Device testing runs through ordinary pytest.** `sync-ide` generates the committed VS Code settings and tasks, and explicit `functional_tests/` targets go through the same plugin PyCharm uses.  PyCharm gets more day-to-day use, so please report a problem that shows up only in VS Code.

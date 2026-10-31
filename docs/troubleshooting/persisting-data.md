@@ -1,46 +1,63 @@
-# Persisting data (KV store and config)
+# Persisting data
 
-This page is for keeping data (boot counters, tokens, small config) across a reboot with `chumicro-kvstore` or the config library.  Most surprises here come from three facts about microcontroller storage: the running code and the USB host can't both write the filesystem at once, the non-volatile memory (NVM) slab is small and fixed per chip, and the on-device serializer keeps floats to 32 bits.
+This page is for keeping small values (a boot counter, a token, a setting the user changed) across a reset or a power cut, with `chumicro-kvstore` or with files your program writes itself.
 
-## `storage.remount("/", readonly=False)` raises `Cannot remount path when visible via USB.`
+`chumicro-kvstore` picks where to save on its own. On CircuitPython it writes to `microcontroller.nvm`, a small block of storage outside the filesystem. On MicroPython it uses the ESP32's built-in key-value storage (NVS), or a file named `/_chu_kv.msgpack` on boards without it, such as the Pi Pico W. A deploy keeps that file; only `reset-board` and `deploy --wipe` erase it.
 
-CircuitPython gives the USB host and the running Python code mutually exclusive write access to the filesystem, and the USB drive holds it by default.  So `code.py` cannot write to flash while your laptop has CIRCUITPY mounted.  (MicroPython has no such restriction.)
+## `RuntimeError: Cannot remount path when visible via USB.`
 
-**Fix.** Hand write access to the running code by disabling the USB drive at boot.  In `boot.py`:
+Your CircuitPython program tried to write a file while your laptop had the CIRCUITPY drive open. CircuitPython lets only one side write to its filesystem: your laptop, through the CIRCUITPY drive (the default), or your program. The deploy also writes through the CIRCUITPY drive, so it needs the laptop side too.
+
+First check whether you need file writes at all. `chumicro-kvstore` writes to `microcontroller.nvm`, outside the filesystem, so a boot counter or saved setting works without any of this.
+
+To write files from your program, hand write access to it in `boot.py`, which runs before USB connects. Put the switch on a button so the board can still take deploys: Adafruit's [CircuitPython Storage guide](https://learn.adafruit.com/circuitpython-essentials/circuitpython-storage) shows a `boot.py` that gives your program write access only when a button is held at power-up. Put that `boot.py` in your project folder and the deploy sends it.
+
+While your program holds write access, CIRCUITPY shows up read-only on your laptop and deploys fail. To get the drive back, reset without holding the button, or open the board's REPL with `python3 run.py repl`, delete `boot.py`, and press RESET:
 
 ```python
-import storage
-storage.disable_usb_drive()   # CircuitPython 9 and later
+import os
+os.remove("/boot.py")
 ```
 
-or gate a remount on a GPIO pin in `boot.py`.  Note that the default kvstore `nvm` backend writes off-FAT and is unaffected; only filesystem-backed backends hit this window.  App config is deploy-time read-only by design.  (background: [Decision 0030](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0030-config-and-state.md))
+MicroPython has no CIRCUITPY drive, so programs there write files freely.
 
 ## `commit()` raises `KVStoreFull`
 
-On CircuitPython the KV store lives in `microcontroller.nvm`, a fixed per-chip byte slab: 256 B on a SAMD21, 4 KB on an RP2040, 8 KB on ESP32 and SAMD51.  On a SAMD21 that leaves 256 B minus 10 B of CRC framing, which fills fast.
+On CircuitPython the store lives in `microcontroller.nvm`, whose size is fixed by the chip: 4 KB on an RP2040, 8 KB on an ESP32. The store keeps 10 bytes of that for its own bookkeeping, and `store.capacity` tells you how much is left for your data.
 
-**Fix.** Respect `store.capacity`.  Drop a key and retry (the in-memory dict is left unchanged when the commit raises), or move larger state to a LittleFS-backed or NVS-backed board.
+Store less: drop a key you no longer need and commit again. A failed `commit()` leaves your values in memory untouched, so nothing is lost by retrying. For more room, save the larger data to a file instead.
 
-## Persisted state reads back empty after a bad shutdown
+## Saved data comes back empty after a power cut
 
-On a bad-magic or CRC mismatch, or a blank slab left by `erase_filesystem()`, construction does not raise.  It resets to empty and reports the problem through `is_corrupt`.  A power cut mid-write can corrupt the whole ESP32 NVM blob, because erase-then-rewrite is not byte-atomic.
+If power drops while the store is writing, the saved copy can be cut short. On the next start the store notices, starts empty instead of raising, and sets `store.is_corrupt` to `True`. On an ESP32 the whole saved block can be lost this way, because the chip erases it before rewriting.
 
-**Fix.** Check `store.is_corrupt` right after construction (or use `reload()`, which raises `KVStoreCorrupt` instead of resetting).  Use `commit_if_changed()` to cut flash wear.
+Check `store.is_corrupt` right after creating the store and react to it, for example by restoring defaults and committing them. If you'd rather get an exception, call `store.reload()`, which raises `KVStoreCorrupt`. Writing less often shrinks the window: `store.commit_if_changed()` skips the write when nothing changed.
 
-## A stored float like `1751414400.5` reads back as `1751414400.0`
+```python
+from chumicro_kvstore import KVStore
 
-Values persist through msgpack (a compact binary serialization format) as 32-bit float32, which cannot hold that many significant digits.
+store = KVStore()
+if store.is_corrupt:
+    print("saved data was damaged; counting from zero again")
+store["boots"] = store.get("boots", 0) + 1
+store.commit_if_changed()
+```
 
-**Fix.** Store timestamps and durations as integer milliseconds or seconds, not floats.
+## A stored number comes back different, or `commit()` refuses it
 
-## `ValueError("float64 (0xcb) not in chumicro msgpack subset; encode with msgpack.packb(obj, use_single_float=True)")`
+The store saves values in msgpack, a compact binary format, and keeps numbers small to suit the boards:
 
-The PyPI `msgpack` package encodes floats as float64 by default, which is outside the subset the device decoder accepts.
+- **Decimals** are saved with about seven significant digits, so `1751414400.5` comes back as `1751414400.0`.
+- **Whole numbers** must fit in 32 bits on MicroPython, and in 31 bits (up to 1,073,741,823) on CircuitPython. A Unix timestamp in milliseconds is too large everywhere: MicroPython raises `OverflowError`. A Unix timestamp in seconds already passes the CircuitPython limit, where `commit()` raises `ValueError: no default packer`.
 
-**Fix.** Encode host-side with single floats:
+Store times as seconds counted from a recent date you choose, or as a string, and keep large counters below a billion.
+
+## `ValueError: float64 (0xcb) not in chumicro msgpack subset`
+
+You packed msgpack on your laptop with the `msgpack` package from PyPI, which saves decimals at full 64-bit precision by default. The boards only read the 32-bit form. Pack with single precision:
 
 ```python
 msgpack.packb(obj, use_single_float=True)
 ```
 
-The workspace deploy tool already does this for `runtime_config.msgpack`, so you only hit this when packing msgpack yourself.
+The deploy already does this for the config file it sends, so you only meet this error with msgpack you pack yourself.

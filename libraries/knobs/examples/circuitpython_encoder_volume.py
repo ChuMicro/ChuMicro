@@ -1,65 +1,79 @@
-"""A rotary encoder for volume and a potentiometer for brightness, on CircuitPython.
+"""Set a volume with a rotary encoder and a brightness with a knob, on CircuitPython.
 
-Turning the encoder walks a volume figure between 0 and 20 and stops at either
-end, so the number never runs off into nonsense.  The potentiometer reports a
-brightness step out of 10, held still by the deadband so a parked wiper stops
-reporting a new number every pass of the loop.
+Turning the encoder walks a volume number between 0 and 20, one step per
+click of the shaft, and stops at either end.  Turning the potentiometer picks
+a brightness from 0 to 9.  The console prints each new number once: a
+potentiometer you have let go of keeps its number instead of flickering
+between two.  The first line is usually the brightness, as the program reads
+where the knob already sits.
 
-Setup:
-1. Install ``chumicro_knobs`` (``circup install chumicro_knobs``).
-2. Wire the encoder's two signal pins to the chosen GPIOs and its common pin to
-   **GND**.  The internal pull-ups are switched on for you.  On RP2040 boards the
-   two signal pins must be **next to each other** in GPIO numbering.
-3. Wire the potentiometer's outer legs to **3V3** and **GND**, and its wiper to
-   an analog-capable pin such as ``board.A0``.
-4. Save this file as ``code.py`` on the board.
+Wiring on a Pi Pico W:
 
-The push switch built into most encoders is a button on its own pin.  Read it
-with a button library alongside this one; it has nothing to do with the shaft.
+- Encoder: its two signal pins (often labelled CLK and DT, or A and B) to GP16
+  and GP17, and its common pin (C or GND) to GND.  The internal pull-ups are
+  switched on for you.  On a Pico the two signal pins must be next to each
+  other in GPIO numbering, as GP16 and GP17 are.  If the module has a ``+``
+  pin, wire it to 3V3.
+- Potentiometer: the outer legs to 3V3 and GND, the middle leg to GP26, which
+  CircuitPython also calls ``board.A0``.
+
+On an ESP32-S2 board such as the Lolin S2 Mini, set the encoder pins to
+``board.IO16`` and ``board.IO17``.  ``board.A0`` is GPIO 3 there, and the
+brightness may top out below 9, because an ESP32's converter stops reading
+before 3.3 V.
 
 Example output::
 
-    Turn the encoder for volume.  Turn the pot for brightness.
+    Turn the encoder for volume.  Turn the knob for brightness.
 
+      brightness 4
+      volume 1
+      volume 2
       volume 3
-      volume 4
-      brightness 7
-      volume 5
+      brightness 5
+
+Setup:
+1. Install the libraries: ``circup install chumicro_knobs chumicro_timing``.
+2. Save this file as ``code.py`` on the CIRCUITPY drive.
+
+The push switch built into many encoders is an ordinary button on its own pin.
+Read it with ``chumicro_buttons``.
 
 Runs on CircuitPython.
 """
 
-#: CircuitPython-only.  Uses ``board`` (CP API).
-#: Pair: ``micropython_encoder_volume.py`` for the MP equivalent.
+# ChuMicro's example tools read this line: this file needs CircuitPython.
 __chumicro_runtimes__ = ("circuitpython",)
 
 import board
 from chumicro_knobs import AnalogKnob, Encoder
 from chumicro_timing import ticks_ms
 
-# Set these to the pin attributes on the `board` module for your wiring.
-ENCODER_PIN_A = "GP16"
-ENCODER_PIN_B = "GP17"
-BRIGHTNESS_PIN = "A0"
+ENCODER_PIN_A = board.GP16     # board.IO16 on an ESP32-S2
+ENCODER_PIN_B = board.GP17     # board.IO17 on an ESP32-S2
+BRIGHTNESS_PIN = board.A0
 
-volume = Encoder(
-    getattr(board, ENCODER_PIN_A),
-    getattr(board, ENCODER_PIN_B),
-    bounds=(0, 20),
-)
-brightness = AnalogKnob(getattr(board, BRIGHTNESS_PIN), steps=10)
+# bounds holds the volume between 0 and 20.  If it takes two clicks to move
+# the volume by one, your encoder sends 2 steps per click: add detent_steps=2.
+volume = Encoder(ENCODER_PIN_A, ENCODER_PIN_B, bounds=(0, 20))
 
-print("Turn the encoder for volume.  Turn the pot for brightness.\n")
+# steps divides the knob's travel, end to end, into 10 positions numbered 0 to 9.
+brightness = AnalogKnob(BRIGHTNESS_PIN, steps=10)
+
+print("Turn the encoder for volume.  Turn the knob for brightness.\n")
 
 while True:
     now = ticks_ms()
+
+    # Read both knobs.  Neither call waits.
     volume.check(now)
     brightness.check(now)
 
+    # just_moved is True on exactly one pass per change.
     if volume.just_moved:
         print(f"  volume {volume.position}")
 
     if brightness.just_moved:
         print(f"  brightness {brightness.value}")
 
-    # Everything else your device does goes here, one small step at a time.
+    # Nothing above waits, so code you add here runs on every pass.

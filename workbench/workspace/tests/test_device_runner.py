@@ -63,6 +63,42 @@ class TestDeviceBootstrapRunnerHappyPath:
         assert "PASS test_ok" in captured
         runner.shutdown()
 
+    def test_on_line_sees_every_line_and_markers_still_arrive(self) -> None:
+        """``on_line`` gets each printed line in order, markers included,
+        and the marker queue still delivers the marker to ``wait_for``."""
+        transport = FakeTransport(
+            execute_output="WIFI_OK ip=10.0.0.1\n  fetched 512 bytes\n",
+        )
+        seen: list[str] = []
+        runner = DeviceBootstrapRunner(transport, "boot", on_line=seen.append)
+        runner.start()
+
+        marker = runner.wait_for("WIFI_OK", timeout_s=2.0)
+        runner.wait_for_completion(timeout_s=2.0)
+        runner.shutdown()
+
+        assert marker.values == {"ip": "10.0.0.1"}
+        assert seen == ["WIFI_OK ip=10.0.0.1", "  fetched 512 bytes"]
+
+    def test_on_line_that_raises_does_not_stop_markers(self) -> None:
+        """A raising ``on_line`` is swallowed; the marker after it still arrives."""
+        transport = FakeTransport(
+            execute_output="first line\nDEMO_COMPLETE\n",
+        )
+
+        def broken_display(line: str) -> None:
+            raise ValueError(line)
+
+        runner = DeviceBootstrapRunner(transport, "boot", on_line=broken_display)
+        runner.start()
+
+        marker = runner.wait_for("DEMO_COMPLETE", timeout_s=2.0)
+        captured = runner.wait_for_completion(timeout_s=2.0)
+        runner.shutdown()
+
+        assert marker.name == "DEMO_COMPLETE"
+        assert "first line" in captured
+
     def test_chunked_bootstrap_routes_to_execute_scripts(self) -> None:
         # A list bootstrap is the CircuitPython RAM-mode shape; runner
         # has to recognise it and call execute_scripts instead.

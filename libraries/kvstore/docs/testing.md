@@ -124,8 +124,6 @@ Installing `chumicro-kvstore` puts `chumicro_kvstore.testing` on your path, so y
 from chumicro_kvstore.testing import FakeKVStore
 ```
 
-Project convention: libraries that expose injectable services ship their own test fakes alongside the production code.
-
 ## API Reference
 
 ::: chumicro_kvstore.testing

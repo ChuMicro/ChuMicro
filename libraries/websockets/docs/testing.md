@@ -2,13 +2,13 @@
 
 `chumicro_websockets.testing` ships two in-memory fakes so your tests can drive `WebSocketClient` and `WebSocketServer` end to end without real sockets. The fakes stay on the host: `chumicro-deploy` reads the test-support marker at the top of the module and leaves it out of every device bundle it builds.
 
-For the ticks domain, use `chumicro_timing.testing.FakeTicks` and pass it through the client's or server's `ticks=` argument.
+To control time in a test, pass `chumicro_timing.testing.FakeTicks` as the client's or server's `ticks=` argument.
 
 ## Usage
 
 ### `FakeConnection`
 
-Bidirectional in-memory pipe satisfying the `TCPClientSocket` shape:
+An in-memory socket.  Bytes the code under test sends collect in it (`read_outbound()` takes them, `peek_outbound()` looks without taking), and bytes you hand to `feed_inbound()` come back out of `recv_into()`:
 
 ```python
 from chumicro_timing.testing import FakeTicks
@@ -26,14 +26,14 @@ def test_client_handshake():
         ticks=clock,
     )
     client.connect("ws://example.com/")
-    # First two ticks drive the connector; third sends the upgrade request.
+    # The first two handle() calls open the fake connection; the third sends the upgrade request.
     client.handle(clock.ticks_ms())
     client.handle(clock.ticks_ms())
     client.handle(clock.ticks_ms())
     assert b"GET / HTTP/1.1\r\n" in socket.peek_outbound()
 ```
 
-Inject errors via `raise_on_send` / `raise_on_recv`:
+Make the next send or receive fail with `raise_on_send` / `raise_on_recv`:
 
 ```python
 socket = FakeConnection()
@@ -48,7 +48,7 @@ socket = FakeConnection()
 socket.send_chunk_cap = 16  # at most 16 bytes per send
 ```
 
-Signal peer-EOF (recv returns 0 instead of EAGAIN):
+Make the far end hang up, so `recv_into()` returns 0 instead of raising `EAGAIN`:
 
 ```python
 socket.close_inbound()
@@ -56,7 +56,7 @@ socket.close_inbound()
 
 ### `FakeListener`
 
-Stand-in for `chumicro_sockets.listener`:
+A listening socket you fill by hand: `queue_accept(peer)` makes the next `accept()` return that `FakeConnection`.  Pass it as the server's `listener=`:
 
 ```python
 from chumicro_timing.testing import FakeTicks
@@ -77,9 +77,9 @@ def test_server_accepts():
     assert server.connection_count == 1
 ```
 
-### Ticks domain
+### Controlling time
 
-For ticks-domain fakes use `chumicro_timing.testing.FakeTicks`.  `clock.advance(ms)` jumps the simulated clock forward to drive timeouts, auto-ping cadences, and pong-overdue watchdogs:
+`clock.advance(ms)` moves a `FakeTicks` clock forward, so a test reaches a handshake timeout, an automatic PING, or a missing PONG without waiting for it:
 
 ```python
 from chumicro_sockets.testing import FakeSocketConnector
@@ -98,7 +98,7 @@ client = WebSocketClient(
 client.connect("ws://example.com/")
 clock.advance(2000)  # past the handshake deadline
 client.handle(clock.ticks_ms())
-# Client now CLOSED with WebSocketTimeoutError.
+# client.state is now "closed", and client.last_error is a WebSocketTimeoutError.
 ```
 
 ## Client and server loopback
@@ -157,7 +157,7 @@ from chumicro_timing.testing import FakeTicks
 from chumicro_websockets.testing import FakeConnection, FakeListener
 ```
 
-Project convention: libraries that expose injectable services ship their own test fakes alongside the production code.
+They need no board and no network, so these tests run under plain `pytest` on a laptop.
 
 ## API Reference
 

@@ -23,6 +23,9 @@ SERVER_MODE = const(4)
 # Max stale datagrams discarded per query() call; a flooded socket must not spin.
 _DRAIN_LIMIT = const(8)
 
+# How often next_deadline asks for a turn while a reply is outstanding.
+_REPLY_POLL_MS = const(20)
+
 _CLIENT_REQUEST = bytes([CLIENT_FIRST_BYTE]) + b"\x00" * (PACKET_SIZE - 1)
 
 # Only some runtimes (e.g. CPython) also define EWOULDBLOCK.
@@ -90,10 +93,10 @@ class NTPResult:
 
 
 class NTPClient:
-    """Runner-shaped SNTP client over an injected UDP socket.
+    """SNTP client that your loop drives one step at a time over an injected UDP socket.
 
     Args:
-        socket: Non-blocking UDP object with sendto/recvfrom_into/close/setblocking.
+        socket: UDP object with sendto/recvfrom_into/close, already set non-blocking.
         server: NTP server hostname. Defaults to ``"pool.ntp.org"``.
         port: NTP server UDP port. Defaults to ``123``.
         timeout_ms: Tick budget for the recv side. Defaults to ``5000``.
@@ -241,6 +244,21 @@ class NTPClient:
             now_ms: Current tick value (unused; required by the runner).
         """
         return self.busy
+
+    def next_deadline(self, now_ms: int) -> int | None:
+        """Return the tick by which :meth:`handle` must run next, or ``None`` when idle.
+
+        ``Runner.wait()`` sleeps until the earliest deadline its services
+        report.  While a reply is outstanding this asks for a turn every
+        20 ms; :meth:`handle` reads the socket on that turn and fails the
+        query once ``timeout_ms`` has passed.
+
+        Args:
+            now_ms: Current tick value.
+        """
+        if self.busy:
+            return self._ticks.ticks_add(now_ms, _REPLY_POLL_MS)
+        return None
 
     def handle(self, now_ms: int) -> None:
         """Drain one tick of work for the in-flight query.

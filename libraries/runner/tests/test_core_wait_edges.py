@@ -55,6 +55,38 @@ def test_wait_io_error_skips_services_with_io_socket_none() -> None:
     assert target.io_error_calls == [(0, select.POLLHUP)]
 
 
+def test_wait_hangup_with_data_left_to_read_is_not_an_error() -> None:
+    """POLLIN with POLLHUP is a peer that sent and closed: no io_error, so
+    the reader collects the data and end-of-stream on its next turn.
+    """
+    poller = FakePoller()
+    runner = Runner(ticks=FakeTicks(), poller=poller)
+    sock = object()
+    service = _IOServiceWithErrorHook(sock=sock, wants_read=True)
+    runner.add(service, period_ms=100)
+    runner.wait(0)
+
+    poller.set_ready(sock, select.POLLIN | select.POLLHUP)
+    runner.wait(0)
+
+    assert service.io_error_calls == []
+
+
+def test_wait_pollerr_with_pollin_is_still_an_error() -> None:
+    """POLLERR dispatches io_error even when POLLIN is also set."""
+    poller = FakePoller()
+    runner = Runner(ticks=FakeTicks(), poller=poller)
+    sock = object()
+    service = _IOServiceWithErrorHook(sock=sock, wants_read=True)
+    runner.add(service, period_ms=100)
+    runner.wait(0)
+
+    poller.set_ready(sock, select.POLLIN | select.POLLERR)
+    runner.wait(0)
+
+    assert service.io_error_calls == [(0, select.POLLIN | select.POLLERR)]
+
+
 def test_wait_io_error_for_unknown_socket_is_silent() -> None:
     """A POLLERR for an obj that matches no registered service exits the
     dispatcher cleanly — the loop walks every entry and returns without

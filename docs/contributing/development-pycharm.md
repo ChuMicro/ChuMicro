@@ -18,33 +18,25 @@ Follow steps 1–4 of the [setup walkthrough](https://github.com/ChuMicro/ChuMic
 
 ### 3. Configure the Python interpreter
 
-**File → Settings → Project → Python Interpreter**
+The bootstrap in step 1 created `.venv` in the project root.  Point PyCharm at it rather than creating a new one:
 
-- Click the gear icon → **Add Interpreter → Add Local Interpreter**
-- Select **Virtualenv Environment → New**
-- Base interpreter: Python ≥ 3.11
-- Location: leave as default (`.venv` in project root)
+**File → Settings → Project → Python Interpreter** (**PyCharm → Settings** on macOS)
+
+- Click **Add Interpreter → Add Local Interpreter**
+- Choose the existing virtualenv and select `.venv/bin/python` in the project root (`.venv\Scripts\python.exe` on Windows)
 - Click **OK**
 
 PyCharm names the SDK `Python <major>.<minor> (chumicro)` by default. `sync-ide` seeds `.idea/misc.xml` with that same name so the committed run configurations and `chumicro.iml` resolve with no extra clicks. If you attach an interpreter that is already registered under a different name (a shared `uv` env, a system Python, or a reused SDK from another project), just pick it; PyCharm rewrites `misc.xml` with the correct name.
 
-### 4. Run workspace setup
+### 4. Re-sync the IDE config
 
-Open the built-in terminal (**View → Tool Windows → Terminal**, or `⌥F12` / `Alt+F12`) and run:
+Picking an interpreter can make PyCharm rewrite `.idea/chumicro.iml`.  Open the built-in terminal (**View → Tool Windows → Terminal**, or `⌥F12` / `Alt+F12`) and restore the managed layout:
 
 ```bash
-python scripts/run.py setup
+python scripts/run.py sync-ide
 ```
 
-This installs dependencies, runs editable installs for every library and support package, and regenerates IDE configs.  It also materializes three gitignored starter files at the repo root if they're missing: `devices.yml`, `workspace.yml`, and `secrets.toml`.  If you plan to run functional tests on real hardware, see [Device Testing](device-testing.md) for board registration and `secrets.toml` setup.
-
-`setup` produces a lot of output.  Look for this at the end:
-
-```
-============================================================
-  Workspace is ready
-============================================================
-```
+The bootstrap in step 1 already installed everything and wrote three gitignored starter files at the repo root: `devices.yml`, `workspace.yml`, and `secrets.toml`.  After a `git pull` that adds a library or changes dependencies, run `python scripts/run.py setup` to refresh the installs and IDE config together.  If you plan to run functional tests on real hardware, see [Device Testing](device-testing.md) for board registration and `secrets.toml` setup.
 
 ## Import resolution
 
@@ -66,8 +58,8 @@ The project includes pre-configured run configurations in `.idea/runConfiguratio
 
 | Configuration | What it runs |
 |--------------|-------------|
-| **Preflight** | Full CI gate: lint, test, build, docs, examples, compat |
-| **Lint** | Ruff across the workspace |
+| **Preflight** | Every check CI runs on a PR: lint, tests on all three runtimes, build, docs, examples, size and version checks |
+| **Lint** | Ruff plus the project's own `chumicro-checks` rules |
 | **Test** | CPython tests for all libraries |
 | **Test Scripts** | Infrastructure tests for `scripts/` |
 | **Build** | Build all package distributions |
@@ -81,6 +73,7 @@ The project includes pre-configured run configurations in `.idea/runConfiguratio
 | **Test All Runtimes** | Unit tests on CPython + MicroPython + CircuitPython (parallelized) |
 | **Setup** | `python scripts/run.py setup`: installs dev deps, runs editable installs, regenerates IDE configs, generates starter device configs |
 | **Prepare Workspace** | Lower-level workspace prep: invokes `scripts/prepare_workspace.py` directly (advanced users; `Setup` is usually what you want) |
+| **Sync IDE** | Regenerates `.idea/chumicro.iml`, the run configurations, `pyrightconfig.json`, and the `.vscode/` config |
 | **Test Functional** | Run all hardware-gated functional suites: `test-libraries-functional` then `test-workbench-functional` against `devices.yml` defaults |
 | **Test Libraries Functional** | Run defaults-backed real-board functional tests for library code |
 | **Test Workbench Functional** | Run hardware-gated functional tests for every `workbench/*/functional_tests/` suite |
@@ -138,15 +131,15 @@ Bare `test-libraries-functional` uses the `defaults:` section in `devices.yml` t
 
 Select **Preflight** from the run dropdown and click ▶.
 
-**When it passes,** the Run panel shows:
+**When it passes,** the Run panel ends with:
 
 ```
-Preflight passed.  Required CI checks should pass.
+Preflight passed.  Required CI checks should pass.  <N> tests ran across all phases.
 
 Process finished with exit code 0
 ```
 
-**When it fails,** the Run panel shows the failing step. Look for lines starting with `FAIL` or `ERROR`. [The development loop](https://github.com/ChuMicro/ChuMicro/blob/main/CONTRIBUTING.md#the-development-loop) in the contributing guide covers how to read the common failures (coverage gaps, `ruff` style violations, `griffe` docstring warnings, a missed VERSION bump, cross-runtime breaks) and how to reproduce each.
+**When it fails,** the Run panel's `Phase summary:` table marks the failing phase `FAIL`, and the last line reads `Preflight failed at: <phase>`. [The development loop](https://github.com/ChuMicro/ChuMicro/blob/main/CONTRIBUTING.md#the-development-loop) in the contributing guide covers how to read the common failures (coverage gaps, `ruff` style violations, `griffe` docstring warnings, a missed VERSION bump, cross-runtime breaks) and how to reproduce each.
 
 If the output isn't enough to pinpoint the problem, run the individual configurations (Lint, Test, Docs, etc.) from the dropdown to isolate the failing step.
 

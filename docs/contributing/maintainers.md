@@ -76,5 +76,5 @@ Every action in `.github/workflows/` is pinned to a commit SHA with the version 
 
 - **`main` is broken and the fix cannot pass a required check** (say, the check itself is what broke): open the fix as a PR anyway and use ruleset bypass at merge time.  Bypass works through the PR merge button only; direct pushes stay blocked even for admins.
 - **A required check is stuck on infrastructure** (runner outage, cache corruption): re-run the job first.  Bypassing a merge on a red check should be rare enough to feel uncomfortable.
-- **A release run half-finished:** every leg is idempotent and the git tag is written last, so re-dispatching the same run with the same inputs finishes what remains.  [Releases and Promotion](releases.md) has the per-failure-mode detail, including first-release PyPI bootstrapping.
+- **A release run half-finished:** every leg is safe to run twice and the git tag is written last, so re-dispatching the same run with the same inputs finishes what remains.  [Releases and Promotion § For maintainers](releases.md#for-maintainers) has the per-failure-mode detail, including first-release PyPI bootstrapping.
 - **Settings drift or emergency loosening:** admins can always edit rulesets and Actions policy.  Treat any loosening as temporary, and restore against the table above when the incident closes.

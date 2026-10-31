@@ -2,99 +2,91 @@
 
 ## Overview
 
-`chumicro-mqtt` is a non-blocking MQTT 3.1.1 client (QoS 0 + 1) for CircuitPython, MicroPython, and CPython.  MQTT is the lightweight publish/subscribe protocol most IoT brokers speak.  Built on `chumicro-sockets` and `chumicro-timing`; no `async`, no threads, no blocking on network I/O.  An LED keeps blinking on the same board while a publish or subscribe is in flight, because `client.check(now_ms)` / `client.handle(now_ms)` do at most one tick of work per call.
+`chumicro-mqtt` is an MQTT 3.1.1 client for CircuitPython, MicroPython, and CPython.  MQTT is a publish/subscribe protocol: every device connects to a *broker*, publishes messages to named *topics*, and subscribes to the topics it wants to hear.  Devices never talk to each other directly.
 
-QoS 2 raises `UnsupportedQoSError`.  Last-will, retained messages, wildcard topic matching, and a structured oversized-message policy are built in.
+`MQTTClient` never makes your program wait on the network.  Your main loop asks `mqtt.check(now_ms)` whether the client has work to do, and `mqtt.handle(now_ms)` does one small step of it: dial the broker, send a queued message, read what has arrived, keep the connection alive, or reconnect after a drop.  Then it returns, so an LED keeps blinking and a button keeps answering while a message is on its way.  No threads, no `async`.
 
-## Getting started with generators
+The client supports QoS 0 and QoS 1, retained messages, a last will, wildcard subscriptions, and TLS.  QoS 2 raises `UnsupportedQoSError`.
 
-The receive-stream surface reads inbound messages as a linear loop: `message = yield from client.next_message()` waits for the next message, acts on it, and loops until the client parks for good.  Register the client (it does the socket I/O each tick) and the consumer generator side by side.
+## Getting started
+
+This program publishes a reading every five seconds and prints every message sent to `demo/cmd`.  It is the shape of `examples/telemetry.py`, which adds wifi setup, a broker on your laptop, and visible reconnects.
 
 ```python
+import wifi  # CircuitPython joins wifi from settings.toml at startup
+
 from chumicro_mqtt import MQTTClient
-from chumicro_runner import Runner
-from chumicro_sockets.sockets_factory import fixed_connector_factory
+from chumicro_timing import Rate, ticks_ms
 
-client = MQTTClient(
-    transport_factory=fixed_connector_factory("broker.example.com", 1883),
-    client_id="sensor-1",
+mqtt = MQTTClient.from_config(
+    {"mqtt.broker.host": "192.168.1.20", "mqtt.broker.port": 1883},
+    radio=wifi.radio,
 )
-client.subscribe("commands/+")
-client.connect()
 
 
-def consume():
-    while True:
-        message = yield from client.next_message()   # InboundPublish
-        if message is None:
-            break                                    # client parked for good
-        print(message.topic, message.payload)
+def on_message(topic, payload):
+    print(topic, payload)
+
+
+mqtt.on_message = on_message
+mqtt.subscribe("demo/cmd")
+mqtt.connect()
+
+publish_timer = Rate(5000, ticks_ms())
+
+while True:
+    now_ms = ticks_ms()
+    if mqtt.check(now_ms):
+        mqtt.handle(now_ms)
+    if publish_timer.due(now_ms):
+        mqtt.publish("demo/temperature", "21.5", qos=1)
+```
+
+What each piece does:
+
+- `MQTTClient.from_config(...)` reads the broker address and builds a client that dials the broker without stopping your loop, and dials again after a drop.  On CircuitPython it needs `radio=wifi.radio`; on MicroPython (connect `network.WLAN` first) and CPython, leave `radio` out.  The client id comes from the board's chip id (see [Client ids](#client-ids)).
+- `on_message(topic, payload)` runs for every message that arrives on a subscribed topic.  `payload` is `bytes`.
+- `subscribe()` can come before `connect()`.  The client remembers the topic, asks the broker for it as soon as the broker accepts the board, and asks again after every reconnect.
+- `connect()` starts dialing and returns at once.  The `handle()` calls in the loop carry the connection through.
+- `publish()` works at any moment.  Before the broker has answered, the message waits in a queue and goes out on connect (see [Publishing before connected](#publishing-before-connected)).
+- `Rate(5000, ticks_ms())` is a `chumicro-timing` timer whose `due(now_ms)` turns `True` once every 5000 ms.
+
+Create the client near the top of your program.  The first use of `MQTTClient` loads the client code into RAM, and that load fits best while the heap is still empty.
+
+### With a runner
+
+[`chumicro-runner`](https://chumicro.com/ChuMicro/runner/stable/) turns the same loop for you, runs several services side by side, and lets the CPU rest until the broker sends something or a timer is due:
+
+```python
+from chumicro_runner import Runner
+
+
+def publish_reading(now_ms):
+    mqtt.publish("demo/temperature", "21.5", qos=1)
 
 
 runner = Runner()
-runner.add(client)
-runner.add_generator(consume())
+runner.add(mqtt)                                      # calls check() and handle() for you
+runner.add_periodic(publish_reading, period_ms=5000)  # every five seconds
 
 while True:
-    now_ms = runner.tick()   # the client does its frame I/O, the consumer drains
-    runner.wait(now_ms)      # then the CPU idles until the next event or deadline
+    now_ms = runner.tick()   # every added task takes one small step
+    runner.wait(now_ms)      # then the CPU rests until broker traffic or the next timer
 ```
 
-`MQTTClient.from_config(config, radio=...)` wires the same `fixed_connector_factory` for you from `mqtt.broker.host` / `mqtt.broker.port` and derives a per-device `client_id`.  The first `next_message()` call switches inbound delivery from the `on_message` callback to a bounded drop-oldest queue the generator drains; pick one inbound surface per client.  See `examples/receive_stream.py`.
-
-## Getting started with a service
-
-Reach for the callback service when you fan out across topics with `on_message` and `topic_matches`, or when you drive the client from your own tick loop.
-
-```python
-from chumicro_timing import ticks_ms
-from chumicro_mqtt import MQTTClient
-
-# The transport factory dials the broker for you (non-blocking, one
-# connect phase per tick) and rebuilds the socket after a wifi drop.
-# On CircuitPython pass `radio=wifi.adapter.radio` (your WifiService's
-# board radio) to `from_config`; on MicroPython / CPython the kwarg is
-# ignored.
-client = MQTTClient.from_config(
-    {"mqtt.broker.host": "broker.example.com", "mqtt.broker.port": 1883},
-    radio=None,
-)
-
-client.on_message = lambda topic, payload: print(topic, payload)
-
-# subscribe() is a declaration: call it before connect().  The client
-# records the topic and sends the SUBSCRIBE on the first CONNACK, and
-# replays it after any self-heal reconnect.  Declaring in on_connect is
-# equally valid, just no longer required.
-client.subscribe("commands/+")
-client.connect()
-
-# publish() can be called straight away: before CONNECTED it buffers in
-# a small pre-connect queue and flushes on CONNACK (the default
-# when_disconnected="queue" policy, no state guard needed).
-client.publish("status/online", b"true", retain=True)
-
-# Drive from your tick loop, no threads, no async.
-while True:
-    now = ticks_ms()
-    if client.check(now):
-        client.handle(now)
-```
-
-Build your client at startup. The first `MQTTClient` reference imports the client module, so let that one-time cost land on a fresh heap.
-
-`connect()` queues the CONNECT packet; the first few `handle()` calls drive it through CONNECTING → CONNECTED.  `publish()` called before then buffers into a bounded pre-connect queue and flushes on CONNACK, the default `when_disconnected="queue"` policy (`"raise"` restores the raise-if-not-connected behavior).  `subscribe()` and `unsubscribe()` are declarations valid in any state: call them before `connect()` and the first CONNACK puts them on the wire (a self-heal reconnect replays them). Calling `subscribe()` while already CONNECTED still sends immediately, and placing it in `on_connect` is equally valid, just no longer required.
-
-`MQTTClient` enforces non-blocking mode on every socket it acquires (force-`setblocking(False)`).  MP plain TCP defaults to blocking, and a blocking `recv` against a silent peer (broker that's hung mid-handshake, network blackholing returning packets) stalls the tick loop indefinitely on Pi Pico W RP2.  Bench-tested with a stalled TCP listener: recv was still blocked at the 3-minute mark, with no TCP keepalive timeout fired within that window.  Whole-app freeze, not a recoverable hiccup.
+`runner.wait()` is the line that lets the CPU rest.  A loop that calls `runner.tick()` without it spins at full speed.
 
 ## Client ids
 
 Every MQTT connection carries a client id, and brokers treat it as the
 identity of the session.  Pass your own when you have a meaningful name
-for the device:
+for the device, as `client_id=` or as `mqtt.client_id` in the config:
 
 ```python
-client = MQTTClient(sock, client_id="greenhouse-sensor-1")
+mqtt = MQTTClient.from_config(
+    {"mqtt.broker.host": "192.168.1.20", "mqtt.broker.port": 1883},
+    client_id="greenhouse-sensor-1",
+)
 ```
 
 When you don't, `default_client_id()` builds one from the board's
@@ -113,10 +105,9 @@ its own previous connection.  The UID comes from
 `microcontroller.cpu.uid` on CircuitPython, `machine.unique_id()` on
 MicroPython, and the host MAC via `uuid.getnode()` on CPython.
 
-Each of those lookups is guarded, and when none of them works the
-function falls back to `<prefix>-mqtt`.  That fallback is worth knowing
-about, because it is a fixed string: two boards that both hit it connect
-as the same client, and an MQTT broker resolves a duplicate client id by
+When none of those lookups works, the function returns the fixed string
+`<prefix>-mqtt`.  Two boards that both fall back to it connect as the
+same client, and an MQTT broker resolves a duplicate client id by
 disconnecting the earlier session.  The symptom is a pair of devices that
 keep kicking each other off the broker while each one looks healthy on
 its own.  If you see that, print `default_client_id()` on both boards.
@@ -125,46 +116,48 @@ pass an explicit `client_id` per device.
 
 ## Publishing
 
+`publish(topic, payload)` sends `payload` (`bytes`, or a `str` the client encodes as UTF-8) to `topic`.  The `qos` argument picks the quality of service.  QoS 0 sends the message once and moves on.  QoS 1 keeps the message until the broker confirms it with a PUBACK packet, and resends it when the confirmation is late.  `retain=True` asks the broker to keep the message and hand it to anyone who subscribes to the topic later, which suits a status such as "online".
+
 ```python
-# QoS 0, fire-and-forget
-client.publish("sensors/temp", b"21.5", qos=0)
+# QoS 0: send once, no confirmation
+mqtt.publish("sensors/temp", b"21.5", qos=0)
 
-# QoS 1, at-least-once with PUBACK round-trip
+# QoS 1: the broker confirms, and acked() runs when it does
 def acked(topic, payload):
-    print("publish acked:", topic, payload)
+    print("broker has it:", topic, payload)
 
-client.publish("sensors/temp", b"21.5", qos=1, on_publish=acked)
+mqtt.publish("sensors/temp", b"21.5", qos=1, on_publish=acked)
 
-# Retained
-client.publish("status/online", b"true", retain=True)
+# Retained: a later subscriber gets this value straight away
+mqtt.publish("status/online", b"true", retain=True)
 ```
 
-The `on_publish=` callback is invoked as `on_publish(topic, payload_bytes)`, the same topic and payload passed to `publish()`.  For QoS 1 it fires once the broker's PUBACK lands; for QoS 0 it fires once the bytes hit the wire.  `chumicro-mqtt` tracks every in-flight QoS-1 packet by `packet_id` so re-deliveries (from `publish_retry_max`-driven retransmits) don't double-fire callbacks.
+`on_publish(topic, payload)` receives the topic and payload you published.  For QoS 1 it runs when the broker's PUBACK arrives; for QoS 0 it runs once the bytes are sent.  A QoS 1 message the client had to resend still runs `on_publish` once.  Assign a function to `mqtt.on_publish` to hear about every message you publish.
 
 ### Publishing before connected
 
-Connect is asynchronous, so `publish()` can be called while the client is still coming up (or during a self-heal outage).  The `when_disconnected=` constructor policy governs what happens:
+Connecting takes several passes of the loop, so `publish()` can run while the client is still coming up or reconnecting after a drop.  The `when_disconnected=` constructor argument decides what happens then:
 
 | `when_disconnected` | Before CONNECTED |
 |---|---|
-| `"queue"` (default) | Buffer in a bounded pre-connect queue (`pre_connect_queue_size`, default 8), drained on CONNACK in receipt order ahead of any publish `on_connect` issues.  A full queue raises `MQTTBackpressureError`, the same signal a full tx queue gives. |
-| `"raise"` | Raise `MQTTError` immediately, the strict "must be connected" behavior. |
+| `"queue"` (default) | Hold the message in a pre-connect queue of `pre_connect_queue_size` messages (default 8) and send the queue, oldest first, as soon as the broker accepts the board, ahead of anything `on_connect` publishes.  A full queue raises `MQTTBackpressureError`. |
+| `"raise"` | Raise `MQTTError` at once. |
 
-Queued publishes preserve their `qos` / `retain` and fire their `on_publish` callback when they eventually reach the wire.  `subscribe()` / `unsubscribe()` don't use this queue; they are declarations recorded in the subscription set and (re)sent on CONNACK (see [Subscribing and routing](#subscribing-and-routing)).
+A queued message keeps its `qos` and `retain`, and its `on_publish` runs once it is finally sent.  `subscribe()` and `unsubscribe()` skip this queue: the client keeps a list of wanted topics and sends it on every connect (see [Subscribing and routing](#subscribing-and-routing)).
 
 ## Subscribing and routing
 
-`on_message(topic, payload)` is the catch-all callback:
+`subscribe(topic)` asks the broker for every message on `topic`, and `on_message(topic, payload)` runs for each one that arrives.  A topic filter can hold wildcards: `+` matches one level and `#` matches every level below it.
 
 ```python
-client.on_message = lambda topic, payload: print(topic, "=>", payload)
-client.subscribe("commands/+")             # MQTT wildcard
-client.subscribe("status/#", qos=1)        # multi-level wildcard
+mqtt.on_message = lambda topic, payload: print(topic, "=>", payload)
+mqtt.subscribe("commands/+")             # commands/set, commands/reset, ...
+mqtt.subscribe("status/#", qos=1)        # status/door, status/door/battery, ...
 ```
 
-`subscribe()` is a declaration valid in any state: call it before `connect()`, inside `on_connect`, or any time while CONNECTED. It records the topic in the client's subscription set; the SUBSCRIBE goes on the wire immediately when already CONNECTED, otherwise on the first CONNACK. Either way the `on_subscribe(topic, granted_qos)` callback fires once, on the SUBACK that grants the topic. A self-heal reconnect replays the set to restore the inbound stream, without re-firing `on_subscribe`. `unsubscribe()` mirrors this: it retracts the declaration in any state and sends the UNSUBSCRIBE when CONNECTED.
+Call `subscribe()` whenever you like: before `connect()`, inside `on_connect`, or while connected.  The client adds the topic to its list of wanted topics and sends the request at once when connected, otherwise as soon as the broker accepts the board.  After a reconnect it sends the whole list again, so messages keep arriving without any code from you.  The optional `on_subscribe(topic, granted_qos)` callback runs once, when the broker first grants the topic.  `unsubscribe(topic)` removes a topic from the list and tells the broker when connected.
 
-For structured routing, branch inside `on_message` with the public `topic_matches(topic, pattern)` matcher: `+` matches one segment, `#` matches the trailing tail:
+To handle several topics differently, branch inside `on_message` with `topic_matches(topic, pattern)`, which applies the same wildcard rules:
 
 ```python
 from chumicro_mqtt import topic_matches
@@ -175,118 +168,124 @@ def route(topic, payload):
     elif topic_matches(topic, "commands/reset"):
         reset_now()
 
-client.on_message = route
-client.subscribe("commands/+")             # one wire-level subscribe covers both
+mqtt.on_message = route
+mqtt.subscribe("commands/+")             # one subscription covers both
 ```
 
-`on_message` + `topic_matches` and `next_message()` (below) are the two inbound surfaces; pick one per client.
+`on_message` and `next_message()` (below) are the two ways to receive.  A client uses one or the other.
 
 ### Receive stream (`next_message`)
 
-For a single-subscription consumer, `next_message()` reads inbound messages as a linear generator loop instead of a callback.  Register the client (it does the I/O each tick) and the consumer generator side by side:
+`next_message()` lets a generator task read messages in a plain loop instead of a callback.  A generator is a function with `yield` in it, and `chumicro-runner` runs it a step at a time alongside everything else.  `message = yield from mqtt.next_message()` pauses the generator until a message arrives, without pausing the board:
 
 ```python
-runner.add(client)
+from chumicro_mqtt import MQTTClient
+from chumicro_runner import Runner
 
-def consume(client):
+mqtt = MQTTClient.from_config(
+    {"mqtt.broker.host": "192.168.1.20", "mqtt.broker.port": 1883},
+)  # add radio=wifi.radio on CircuitPython
+mqtt.subscribe("commands/+")
+mqtt.connect()
+
+
+def print_commands():
     while True:
-        message = yield from client.next_message()   # InboundPublish
+        message = yield from mqtt.next_message()   # wait for the next message
         if message is None:
-            break                                    # client parked for good
-        act_on(message.topic, message.payload)
+            return                                 # the client stopped for good
+        print(message.topic, message.payload)
 
-runner.add_generator(consume(client))
+
+runner = Runner()
+runner.add(mqtt)                         # the client's network work
+runner.add_generator(print_commands())   # the receiving loop above
+
+while True:
+    now_ms = runner.tick()   # each added task takes one small step
+    runner.wait(now_ms)      # then the CPU rests until a message or timer is due
 ```
 
-The first `next_message()` call switches inbound data delivery from the `on_message` callback to a bounded queue the generator drains (16 messages, drop-oldest; a slow consumer loses the oldest messages rather than growing the heap).  Lifecycle callbacks (`on_connect`, `on_disconnect`, `on_oversized`) keep firing either way; `on_disconnect` fires when an established session ends, on an explicit `disconnect()` call or on link loss (the client has already settled into `FAILED` with `last_error` set when it fires).  Failed connect attempts and self-heal retries stay silent, so an outage fires it once, not once per backoff.  Pick one inbound surface per client: the stream for a linear single-topic consumer, `on_message` for multi-topic fan-out.  See `examples/receive_stream.py`.
+The first `next_message()` call turns `on_message` off and delivers messages to a queue the generator reads instead.  The queue holds 16 messages; when the generator falls behind, the oldest message is dropped rather than the heap growing.  `next_message()` returns `None` only once the client has stopped for good: after `disconnect()`, after the broker refuses the board outright (bad credentials, for example), or after a drop on a client that has no way to reconnect.  `examples/receive_stream.py` is the full program.
 
-## Last-will
+`on_connect`, `on_disconnect`, and `on_oversized` keep firing either way.  `on_disconnect()` runs when a working connection ends, through `disconnect()` or a dropped link, and by then `mqtt.last_error` says why.  Failed attempts to reconnect stay quiet, so one outage fires it once.
 
-Configured at construction time; the broker publishes the will when the connection is uncleanly dropped (network loss, device hard-reset, etc.):
+## Last will
+
+A last will is a message the board leaves with the broker when it connects.  If the board later drops off without a clean `disconnect()` (power cut, wifi loss, crash), the broker publishes the will on its behalf.  Paired with a retained `online` published from `on_connect`, it tells anything watching whether the board is there:
 
 ```python
-client = MQTTClient(
-    sock,
-    client_id="my-thing",
-    will_topic="status/online",
-    will_message=b"false",
-    will_qos=1,
-    will_retain=True,
-)
+STATUS_TOPIC = "devices/sensor-1/status"
+
+mqtt.set_will(STATUS_TOPIC, b"offline", qos=1, retain=True)
+
+
+def on_connect():
+    mqtt.publish(STATUS_TOPIC, b"online", qos=1, retain=True)
+
+
+mqtt.on_connect = on_connect
+mqtt.connect()
 ```
 
-A clean `client.disconnect()` suppresses the will.
-
-To change the will after construction (e.g. swap "online" for "offline" before a graceful shutdown), use `set_will`:
-
-```python
-client.set_will("status/online", b"offline", qos=1, retain=True)
-# Next CONNECT (or self-heal reconnect) carries the new will.
-```
-
-`set_will(topic=None)` disables the will entirely.  The change applies to the next CONNECT packet.  The broker already has the will from the in-flight session and can't be modified mid-connection.
+A clean `disconnect()` cancels the will.  `set_will()` takes effect on the next connect, reconnects included, because the broker keeps the will it received for the current connection.  `set_will(None)` turns the will off.  A client built with `MQTTClient(...)` can also take the will as `will_topic=`, `will_message=`, `will_qos=`, and `will_retain=` arguments.
 
 ## TLS connections
 
-Pass an `ssl_context=` to `from_config` and the auto-built transport
-factory dials with `tls=True`:
+Pass an `ssl_context=` to `from_config` and the client dials the broker over TLS:
 
 ```python
 from chumicro_sockets import ssl_context_with_ca
 
 with open("/ca.pem", "rb") as handle:
     ca_pem = handle.read()
-ssl_context = ssl_context_with_ca(ca_pem)         # CERT_REQUIRED by default
-client = MQTTClient.from_config(
+ssl_context = ssl_context_with_ca(ca_pem)         # checks the broker's certificate
+mqtt = MQTTClient.from_config(
     {"mqtt.broker.host": "broker.example.com", "mqtt.broker.port": 8883},
     ssl_context=ssl_context,
-    radio=wifi.adapter.radio,                      # CP only
+    radio=wifi.radio,                              # CircuitPython only
 )
 ```
 
-A few platform realities:
+What to expect on a board:
 
-* On MP rp2 (Pi Pico W), `chumicro-sockets` automatically converts PEM to DER for `load_verify_locations`, because the rp2 firmware ships without `MBEDTLS_PEM_PARSE_C`.
-* **The TLS handshake blocks the whole reactor, not just this client.** It runs synchronously inside `wrap_socket(...)`, so for its full duration every other runner-registered service (a sensor sample, a watchdog feed, an LED heartbeat) gets no tick. Bench-tested against `test.mosquitto.org:8883`: 2–3 ms on Lolin S2 CP and 10–11 ms on Pi Pico W CP on a good link, but tens of ms (or seconds against a slow or unreachable broker) on a high-latency uplink. Connect before you start time-critical services, or budget for the stall.
-* **DNS resolution also blocks the reactor.** The connector's `awaiting_dns` phase calls a synchronous `getaddrinfo`, which hangs for the resolver's own timeout when DNS is slow or down. Pre-resolve and pass an IP if a stall there is unacceptable.
-* For server-side TLS handshake heap sizes per board, see the `chumicro-http-server` guide's TLS-server table.
+* On MicroPython for Pi Pico W, `chumicro-sockets` converts the PEM certificate to DER for you, because that firmware cannot parse PEM.
+* **The TLS handshake stops your whole loop while it runs.**  It happens inside one `handle()` call, so a sensor read, a watchdog feed, or a blinking LED waits until it finishes.  Against `test.mosquitto.org:8883` on a good wifi link it took 2 to 3 ms on a Lolin S2 and 10 to 11 ms on a Pi Pico W, both on CircuitPython; on a slow link or against an unreachable broker it can take seconds.  Connect before you start anything timing-critical, or allow for the pause.
+* **The DNS lookup stops your loop too.**  Turning `broker.example.com` into an address waits on the board's resolver, which can hang until its own timeout when DNS is slow or down.  Put the broker's IP address in `mqtt.broker.host` if that pause is unacceptable.
 
-## Wifi-drop self-heal
+## Reconnecting after a drop
 
-Pass a `transport_factory` callable instead of a bare socket and the client will rebuild its socket automatically after a wifi-drop / socket-death. The TCP-connect phase advances one tick at a time, but DNS and the TLS handshake still block the reactor for their duration (see the TLS-connections platform realities above):
+A client built with `from_config()` reconnects by itself.  When the broker goes away or the wifi drops, the client notices (the socket closes, or an expected reply misses its deadline), runs `on_disconnect()`, and starts dialing again from inside `handle()`.  The first attempt goes out at once.  After that, the wait between attempts doubles from 1 second up to once a minute, so a long outage neither floods the broker nor drains a battery.  A successful connect resets the wait, runs `on_connect()` again, re-sends the subscriptions, and sends what `publish()` queued in the meantime.
+
+The client stops retrying when the broker refuses it for a reason that retrying cannot fix: the broker's reply to a connect (CONNACK) carries return code 1, 2, 4, or 5 (unacceptable protocol version, identifier rejected, bad username or password, not authorized).  `mqtt.last_error` says which, and the next `connect()` call tries again.  Return code 3 (server unavailable) keeps retrying.  A subscription the broker refuses is dropped from the list of wanted topics, so a reconnect does not ask for it again.
+
+To reconnect, the client needs a way to open a fresh connection.  `from_config()` gives it a *transport factory*: a function that returns a new connector for the broker each time it is called.  To build one yourself, pass `transport_factory=` to `MQTTClient(...)`:
 
 ```python
 from chumicro_sockets import connector
 
 def make_connector():
-    return connector("broker.example.com", 1883, radio=wifi.adapter.radio)
+    return connector("broker.example.com", 1883, radio=wifi.radio)
 
-client = MQTTClient(transport_factory=make_connector, client_id="my-thing")
-client.connect()
-# … socket dies mid-session …
-# Next handle() after FAILED enters AWAITING_TRANSPORT; subsequent ticks
-# drive a fresh connector through DNS / TCP / TLS one phase per tick.
+mqtt = MQTTClient(transport_factory=make_connector, client_id="my-thing")
+mqtt.connect()
 ```
 
-Reconnects are paced by exponential backoff: the first retry after a fresh failure fires immediately, then each subsequent attempt doubles its wait from 1 s up to a 60 s ceiling, so a persistent outage doesn't storm the broker or drain the battery. A successful `CONNACK` resets the schedule. Rejections that reconnecting can't fix, namely `CONNACK` return codes 1, 2, 4, and 5 (unacceptable protocol version, identifier rejected, bad username/password, not authorized), latch the client `FAILED` and stop self-heal until the next explicit `connect()`. Return code 3 (server unavailable) stays transient and keeps retrying. A `SUBACK` rejection (granted QoS `0x80`) evicts that filter from the client's subscription set before it faults, so the reconnect's subscription replay doesn't re-issue the rejected topic and re-earn the same rejection forever.
+A client built on a bare socket has no way to reconnect.  When that socket dies, the client stops in the `FAILED` state until you build a new one.
 
-Without a factory the client transitions to `FAILED` on socket death and stays there until the caller manually tears down + reconstructs.
+Each connection attempt moves one step per `handle()` call, except the DNS lookup and the TLS handshake, which each run to completion inside one call (see [TLS connections](#tls-connections)).
 
-The factory is also the recommended way to wire up the **initial** connect: the runner is not blocked for the round-trip, and the same code path serves both initial-connect and reconnect.  `MQTTClient.from_config(...)` builds the connector factory for you from `mqtt.broker.host` / `mqtt.broker.port` (and `ssl_context=` for TLS).
+### Telling the client when wifi drops or returns
 
-### `connect()` is an intent; `hold()` is its mate
+`connect()` is safe to call in any state:
 
-`connect()` means "be connected", acting on it now.  It is safe to call in any state and does the least-surprising thing for the one it finds:
+- **Disconnected**: starts connecting.
+- **`FAILED`**: reconnects at once, skipping whatever is left of the wait between attempts.
+- **Connected or connecting**: does nothing, so a second dial never races the first.
 
-- **DISCONNECTED**: starts the connect sequence (as above).
-- **FAILED**: reconnects **immediately**, short-circuiting any remaining self-heal backoff.  It fires the same reconnect the timer would (queued, in-flight, and clean-session fate are identical); it just skips the wait.  Call it whenever you KNOW the link is back rather than letting the client sit out residual backoff.
-- **CONNECTED / CONNECTING / AWAITING_TRANSPORT**: idempotent no-op.  The intent is already being satisfied, so nothing is disturbed and no second dial races the one in flight.
+`hold()` does the opposite: it pauses automatic reconnects until the next `connect()`.  While held, the client stays `FAILED` and keeps `last_error`, `publish()` still queues, and a runner's `wait()` stops waking up for retries that cannot succeed.
 
-So re-issuing `mqtt.connect()` on wifi-recovery is not just safe, it is the recommended wiring: it dials the moment the link returns instead of waiting out the backoff.
-
-The symmetric primitive is **`hold()`**.  When your app KNOWS the link is down (its wifi service just reported the radio dropped), call `mqtt.hold()` to suspend the self-heal timer so it stops dialing into a dead radio (on ESP-IDF those doomed dials can even contend with the radio's own re-association).  While held, the client stays `FAILED` with `last_error` intact, publishes still buffer per `when_disconnected`, and the runner parks cleanly instead of spinning on retries.  `connect()` releases the hold and dials.
-
-`MQTTClient` never watches wifi itself (it runs on hosts with no radio, and it stays transport-agnostic), so the app that owns both services composes them.  The canonical `chumicro-wifi` wiring is one line each way:
+`MQTTClient` never watches the wifi itself, but your program can.  When it knows the link is down, `hold()` stops the client dialing through a dead radio (on ESP32 boards those dials can get in the way of the radio rejoining the network).  When the link is back, `connect()` dials at once instead of waiting out the backoff.  With `chumicro-wifi`, that is one line each way:
 
 ```python
 from chumicro_wifi import WifiState
@@ -303,14 +302,16 @@ def on_wifi_state(old, new):
 wifi.on_state_change(on_wifi_state)
 ```
 
-You can still wire the callback to nothing and let self-heal reconnect on its own; `hold()` / `connect()` only *tighten* the timing when the app has better information than the timer does.
+Leaving this out is fine: the client still reconnects on its own.  `hold()` and `connect()` only make it react sooner when your program knows more than its timer does.
 
-What happens to publishes issued during the outage depends on the state the client is in when `publish()` runs, and this is worth understanding because it decides which publishes survive a wifi drop:
+### Which messages survive a drop
 
-- Issued while still `CONNECTED`, when the link is physically down but the client hasn't detected it yet (detection lags by up to `ack_timeout_seconds`, longer if a blocked reactor starves its ticks): a QoS-1 publish opens an in-flight entry sent on the doomed socket.  It is never acked, and with the default `clean_session=True` the self-heal reconnect resets the in-flight table, so that publish is **dropped**.  This is ordinary clean-session semantics (the broker forgets the session too); set `clean_session=False` for a persistent broker to have these redelivered with `DUP=1` instead.
-- Issued once the client is `FAILED` / `AWAITING_TRANSPORT` (after the drop is detected), the publish buffers into the bounded pre-connect queue and **flushes** on the reconnect `CONNACK`, oldest first.
+The client takes a moment to notice a dead link, because a missing reply has to time out first.  What happens to a message depends on whether `publish()` ran before or after the client noticed:
 
-So a wifi outage can lose the last publish or two that raced the drop-detection window while flushing everything queued after it.  That is not a bug, but a reason to keep the reactor tick-healthy (a substrate call that blocks the loop widens the raced-and-dropped window) and to choose `clean_session` deliberately.
+- **Before**, while `mqtt.state` still reads `CONNECTED`: the message goes out on the dead connection and never gets its PUBACK.  With the default `clean_session=True`, the reconnect starts a fresh session on both ends and the message is lost.  Set `clean_session=False`, with a broker that keeps sessions, to have the client resend it instead.
+- **After**, once the state is `FAILED` or the client is reconnecting: the message waits in the pre-connect queue and goes out, oldest first, as soon as the broker accepts the board again.
+
+So an outage can lose the last message or two published before the client noticed, while everything after it arrives.  Keeping long blocking calls out of your loop shortens that window, because the client notices sooner.
 
 ## Bring your own transport
 
@@ -332,10 +333,10 @@ import socket
 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 sock.connect(("broker.example.com", 1883))
 sock.setblocking(False)
-client = MQTTClient(sock, client_id="desktop-demo")
+mqtt = MQTTClient(sock, client_id="desktop-demo")
 ```
 
-This pre-built-socket form is the right shape for one-shot scripts or tests where the caller already owns the connect.  The runner-shape (no synchronous network I/O from a tick) only matters when the client lives inside a runner, and there the `transport_factory` form above is what you want.
+A pre-built socket suits a desktop script or a test that already owns the connect.  It blocks while `sock.connect()` runs and cannot reconnect, so a board program that must keep its loop moving uses the `transport_factory` form from [Reconnecting after a drop](#reconnecting-after-a-drop).
 
 The library has no `isinstance` checks against `chumicro_sockets` types; the contract is the four methods above.  Runtime errors surface at first call, not at construction time, so a misshaped object fails on the first `recv_into` / `send` rather than silently misbehaving.
 
@@ -348,20 +349,20 @@ __chumicro_skip_factories__ = ("sockets_factory",)
 
 The constant accepts a family form (the bare stem, matches every `chumicro_*.sockets_factory`) or an exact dotted path (`chumicro_sockets.sockets_factory`).  An unmatched entry fails the deploy with a typo message rather than silently shipping the default.  Calling `MQTTClient.from_config(...)` when `chumicro_sockets.sockets_factory` is missing (skipped at deploy time, or not installed by `circup` / `mip`) raises `RuntimeError` naming the bypass kwarg, so the failure mode is loud rather than mysterious.
 
-The pieces of the runner-less, single-library path are all above: your own transport (the four-method contract), your own `ticks=`, and driving `check()` / `handle()` from a plain loop, which is the same shape host tests use with no board.
+With your own transport, your own clock passed as `ticks=`, and `check()` / `handle()` called from a plain loop, the client needs no other ChuMicro library.  Host tests drive it the same way with no board attached.
 
-## Tuning for tick-latency vs throughput
+## Tuning responsiveness against throughput
 
-`handle()` does exactly one `recv_into` and one packet `send` per tick, so each call yields back to the runner after a bounded slice of socket work.  (On ticks that dispatched inbound QoS-1 publishes there is one extra send: the tick's PUBACKs coalesce into a single batch flushed ahead of the packet budget without consuming it, so the ack rate always keeps up with the inbound rate.  If the socket can't take the batch, the client stops reading until it lands; the unread bytes throttle the broker through the TCP window.)  Three constructor knobs let you tune the trade-off:
+Each `handle()` call does exactly one `recv_into` and one packet `send`, so it returns after a small, fixed amount of socket work.  (A call that received QoS 1 messages makes one extra send: that call's PUBACKs coalesce into a single batch flushed ahead of the packet budget without consuming it, so the ack rate always keeps up with the inbound rate.  If the socket can't take the batch, the client stops reading until it lands; the unread bytes throttle the broker through the TCP window.)  Three constructor knobs let you tune the trade-off:
 
 | Knob | Default | What it bounds |
 |---|---|---|
 | `recv_budget_per_tick` | `1024` (bytes) | Cap on the single per-tick `recv_into` call.  It binds only when `rx_buffer_size` exceeds it: each recv is already limited to the RX buffer's free space, so at the default 256-byte `rx_buffer_size` the budget never engages.  With a large `rx_buffer_size`, it bounds tick latency on a multi-KB inbound PUBLISH (the payload arrives across several ticks instead of monopolizing one), how many packets one tick can dispatch, and the size of the per-tick PUBACK batch. |
-| `max_tx_queue_size` | `20` packets | Hard cap on pending outbound packets.  Sized for the runner-shaped sensor profile (publish every N seconds; queue stays near zero).  Appending past the cap raises `MQTTBackpressureError`; protocol-internal traffic (PUBACK responses, retransmits, PINGREQ) bypasses the cap so QoS-1 / keepalive contracts hold.  Failed QoS-1 publishes roll back the `packet_id` allocation cleanly so the id pool isn't leaked on backpressure.  Raise for bursty publishers; each slot pins ~8 bytes long-lived on MP / CP. |
-| `send_timeout_seconds` | inherits `ack_timeout_seconds` (5 s) | Maximum time the socket can stay non-writable with a packet queued before the client transitions to `FAILED` and self-heal fires.  Re-arms on every successful send: a steady drip never trips it, only a stalled socket does.  Catches NAT-style silent-drops on the outbound path that would otherwise let the queue grow until `MQTTBackpressureError`. |
+| `max_tx_queue_size` | `20` packets | Hard cap on pending outbound packets.  Sized for a sensor that publishes every few seconds, whose queue stays near zero.  Appending past the cap raises `MQTTBackpressureError`; protocol-internal traffic (PUBACK responses, retransmits, PINGREQ) bypasses the cap so QoS-1 / keepalive contracts hold.  Failed QoS-1 publishes roll back the `packet_id` allocation cleanly so the id pool isn't leaked on backpressure.  Raise for bursty publishers; each slot pins ~8 bytes long-lived on MP / CP. |
+| `send_timeout_seconds` | inherits `ack_timeout_seconds` (5 s) | Maximum time the socket can stay non-writable with a packet queued before the client moves to `FAILED` and starts reconnecting.  Re-arms on every successful send: a steady drip never trips it, only a stalled socket does.  Catches NAT-style silent-drops on the outbound path that would otherwise let the queue grow until `MQTTBackpressureError`. |
 
 ```python
-client = MQTTClient(
+mqtt = MQTTClient(
     sock,
     client_id="my-thing",
     recv_budget_per_tick=4096,             # faster big-blob ingestion per syscall
@@ -388,7 +389,7 @@ To receive a larger PUBLISH intact, size `rx_buffer_size` up to cover it (a few 
 ```python
 from chumicro_mqtt import MQTTClient, WhenOversized
 
-client = MQTTClient(
+mqtt = MQTTClient(
     sock,
     client_id="my-thing",
     rx_buffer_size=4096,                             # deliver up to 4 KB intact
@@ -402,7 +403,7 @@ Three policies:
 |---|---|
 | `DROP_SILENT` | Drain via rolling discard, no event, stay connected. |
 | `DROP_WITH_EVENT` (default) | Drain via rolling discard, fire `on_oversized(reported_length, topic)` for telemetry, stay connected.  `topic` is `None` when the topic itself was too long to parse from the RX buffer. |
-| `DISCONNECT` | Raise `MQTTProtocolError`, transition to `FAILED`, appropriate when oversized inputs indicate a misconfiguration.  Socket-factory self-heal kicks in if configured. |
+| `DISCONNECT` | Raise `MQTTProtocolError`, transition to `FAILED`, appropriate when oversized inputs indicate a misconfiguration.  A client with a transport factory then reconnects. |
 
 No payload bytes survive the oversized tier: the bytes drain through the RX buffer without any payload-sized allocation.  Diagnostic information (`reported_length` + `topic`) is enough for application-side reaction; if you need the actual bytes, raise `rx_buffer_size` so the message parses inline in the steady tier instead.
 
@@ -414,26 +415,35 @@ When `max_tx_queue_size` is reached, user-initiated publish/subscribe calls rais
 from chumicro_mqtt import MQTTBackpressureError
 
 try:
-    client.publish("burst/data", payload, qos=1)
+    mqtt.publish("burst/data", payload, qos=1)
 except MQTTBackpressureError:
-    # Drain via handle() and retry next tick.
+    # The queue is full.  Let handle() send some of it, then try again
+    # on a later pass of the loop.
     pass
 ```
 
-Internally the queue carries some headroom over `max_tx_queue_size` (~64 packets) so QoS-1 retries and protocol-internal traffic don't trigger the cap.
+The queue keeps 64 extra slots above `max_tx_queue_size` for the client's own packets (resends, PUBACKs, keepalive pings), so those never hit the cap.
 
-## State machine
+## Connection state
+
+`mqtt.state` holds one of five `ProtocolState` values, and `mqtt.last_error` holds the most recent failure.  You rarely need to check the state before calling anything, because `publish()` and `subscribe()` work in every state.  It is useful for showing status:
 
 ```python
 from chumicro_mqtt import ProtocolState
 
-if client.state == ProtocolState.CONNECTED:
-    client.publish(...)
-elif client.state == ProtocolState.FAILED:
-    log.warning("mqtt failed; reconnecting in 30 s")
+if mqtt.state == ProtocolState.FAILED:
+    print("MQTT is down:", mqtt.last_error)
 ```
 
-Five states: `DISCONNECTED`, `AWAITING_TRANSPORT`, `CONNECTING`, `CONNECTED`, `FAILED`.  `AWAITING_TRANSPORT` appears only when a `transport_factory` is driving the transport up (DNS / TCP / TLS) before the MQTT CONNECT goes out; a client built with a ready socket skips straight to `CONNECTING`.  `disconnect()` is synchronous (DISCONNECT packet + close), so there is no intermediate "disconnecting" state to observe.
+| State | Meaning |
+|---|---|
+| `DISCONNECTED` | Before the first `connect()`, or after `disconnect()`. |
+| `AWAITING_TRANSPORT` | Opening the network connection (DNS, TCP, TLS).  A client built on a ready socket skips this state. |
+| `CONNECTING` | Connection open, waiting for the broker to accept the board. |
+| `CONNECTED` | The broker accepted the board. |
+| `FAILED` | The connection dropped or was refused.  With a transport factory the client keeps retrying unless the refusal was final (see [Reconnecting after a drop](#reconnecting-after-a-drop)). |
+
+`disconnect()` sends the goodbye packet and closes the socket in one call, so there is no "disconnecting" state.
 
 ## Memory notes
 
@@ -441,9 +451,9 @@ The client actively manages its memory footprint with four caps tunable at const
 
 | Cap | Default | What it bounds |
 |---|---|---|
-| `recv_budget_per_tick` | `1024` bytes | Per-tick read ceiling.  See [Tuning](#tuning-for-tick-latency-vs-throughput). |
+| `recv_budget_per_tick` | `1024` bytes | Per-tick read ceiling.  See [Tuning](#tuning-responsiveness-against-throughput). |
 | `rx_buffer_size` | `256` bytes | Pre-allocated steady-state RX buffer, and the steady/oversized boundary.  Inbound PUBLISHes at or below this size parse inline and deliver intact with no further allocation; above it, the [`WhenOversized` policy](#oversized-message-policy) applies and the payload drains without a payload-sized allocation. |
-| `pre_connect_queue_size` | `8` packets | Bound on the pre-connect publish queue (the `when_disconnected="queue"` buffer).  See [Publishing](#publishing). |
+| `pre_connect_queue_size` | `8` packets | Bound on the pre-connect publish queue (the `when_disconnected="queue"` buffer).  See [Publishing before connected](#publishing-before-connected). |
 | `max_tx_queue_size` | `20` packets | Outbound packet queue cap.  See [Backpressure](#backpressure). |
 
 The QoS-1 in-flight table (keyed by `packet_id`, one entry per outstanding QoS-1 PUBLISH waiting for PUBACK) grows with your usage and has no hard cap.  On memory-tight boards, keep `rx_buffer_size` at your actual largest expected broker payload; anything bigger routes through the oversized tier where it can't blow the heap.
@@ -470,16 +480,19 @@ So **plain sensor data, small-to-medium JSON readings (payload ≤ ~200 B on a �
 |---|---|---|---|
 | CPython | ✅ | ✅ | Reference runtime; works against any broker. |
 | MicroPython | ✅ | ✅ | mbedTLS PEM→DER conversion on rp2 (handled by `chumicro-sockets`). |
-| CircuitPython | ✅ (requires `radio=wifi.adapter.radio`) | ✅ | TLS handshake is synchronous, bench-tested under 15 ms on both Lolin S2 and Pi Pico W against `test.mosquitto.org:8883` over a good wifi link. |
+| CircuitPython | ✅ (requires `radio=wifi.radio`) | ✅ | TLS handshake runs inside one `handle()` call, measured under 15 ms on both Lolin S2 and Pi Pico W against `test.mosquitto.org:8883` over a good wifi link. |
 
-`MQTTClient` enforces non-blocking mode on every socket it acquires.  MicroPython plain TCP defaults to blocking, and a blocking `recv` against a silent peer on a Pi Pico W stalls the tick loop indefinitely, so set `sock.setblocking(False)` explicitly to make the contract visible at the call site.
+MicroPython sockets start out blocking, and a blocking `recv` against a silent broker on a Pi Pico W stalls your loop indefinitely.  `MQTTClient` switches every socket it receives to non-blocking mode.  When you pass your own socket, call `sock.setblocking(False)` yourself as well, so the requirement shows where the socket is made.
 
 ## Examples
 
+Each example's docstring explains how to run a Mosquitto broker on your laptop and watch the traffic.
+
 | Example | What it shows |
 |---|---|
-| [`examples/telemetry.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/mqtt/examples/telemetry.py) | Periodic QoS-1 publish on a real CP/MP board.  Brings wifi up, connects to a broker, subscribes to a command topic, publishes a synthetic reading every N seconds while an LED-blink counter verifies the publish never blocks waiting for PUBACK.  Cross-runtime (CP + MP). |
-| [`examples/bench.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/mqtt/examples/bench.py) | Self-driving validation bench: deploy and watch serial.  Runs the scenarios (steady inline, oversized drain, oversize-topic, QoS-1 round-trip, sustained burst, keepalive) against a real broker and prints a pass/fail summary with per-scenario heap deltas + tick latency.  Companion [`examples/bench_host.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/mqtt/examples/bench_host.py) captures the verdict from the broker and can publish a 64 KB hostile payload for extra oversized-tier stress (host-side, needs `pip install paho-mqtt`). |
+| [`examples/telemetry.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/mqtt/examples/telemetry.py) | Start here.  Publishes a reading every five seconds at QoS 1, prints each broker confirmation, and prints any command sent to `chumicro-demo/cmd`.  Stop the broker and it holds readings, then reconnects and sends them.  CircuitPython and MicroPython. |
+| [`examples/receive_stream.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/mqtt/examples/receive_stream.py) | Receives with `next_message()` in a generator task run by `chumicro-runner`, printing each command as it arrives.  CircuitPython and MicroPython. |
+| [`examples/bench.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/mqtt/examples/bench.py) | A one-shot test run against a real broker: small and oversized incoming messages, an oversized topic, a QoS 1 round trip, a burst, and keepalive, then a pass/fail table with heap use and loop latency per scenario.  The laptop-side [`examples/bench_host.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/mqtt/examples/bench_host.py) (needs `pip install paho-mqtt`) collects the verdict and can send a 64 KB message to test the oversized path. |
 
 ---
 

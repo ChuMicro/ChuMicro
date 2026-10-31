@@ -4,6 +4,14 @@ import sys
 
 from chumicro_wifi.config import WifiConfig
 
+#: How often ``next_deadline`` asks for a turn while a non-blocking join is
+#: in flight, so ``handle()`` reads ``is_linked()`` soon after association lands.
+_JOIN_POLL_MS = 100
+
+#: How often ``next_deadline`` asks for a turn while connected, so a dropped
+#: link is noticed within this window even when nothing else wakes the loop.
+_LINK_POLL_MS = 1_000
+
 
 class WifiState:
     """State-name constants for :class:`WifiService`."""
@@ -134,6 +142,25 @@ class WifiService:
         if self._attempt_deadline_ms is not None:
             return True
         return self._ticks.ticks_diff(now_ms, self._next_attempt_due_ms) >= 0
+
+    def next_deadline(self, now_ms):
+        """Return the tick by which ``handle()`` must run next, or ``None`` once FAILED.
+
+        ``Runner.wait()`` sleeps until the earliest deadline its services
+        report.  A wifi service with no deadline would leave a wifi-only
+        runner spinning, and a runner with slower jobs would give wifi a
+        turn only at their pace.  This reports the next reconnect attempt
+        while backing off, a short poll while a join is in flight (the
+        poll that lands past the join's timeout settles it as failed), and
+        a link check while connected.
+        """
+        if self.state == WifiState.FAILED:
+            return None
+        if self.state == WifiState.CONNECTED:
+            return self._ticks.ticks_add(now_ms, _LINK_POLL_MS)
+        if self._attempt_deadline_ms is not None:
+            return self._ticks.ticks_add(now_ms, _JOIN_POLL_MS)
+        return self._next_attempt_due_ms
 
     def handle(self, now_ms):
         """Drive the state machine forward."""

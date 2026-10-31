@@ -2,7 +2,7 @@
 
 You do not have to adopt the whole ChuMicro stack.  Each networked library is built to drop into an existing codebase that already has its own transport and its own clock: you bring those, the library brings the protocol.  This page is the recipe for that path: which siblings a library actually pulls, how to supply your own transport and ticks, and how to drive the library from whatever loop you already have.
 
-It is the companion to [Slimming your deploy](slimming-your-deploy.md): that page strips the default `chumicro_sockets` wiring off the *device*; this page shows how to write the *code* that no longer needs it.
+It is the companion to [Slimming your deploy](slimming-your-deploy.md): that page strips the default `chumicro_sockets` wiring off the *board*, and this page shows how to write *code* that doesn't need it.
 
 ## The claim, measured
 
@@ -166,11 +166,15 @@ from chumicro_sockets import connector
 # On CircuitPython, pass radio=wifi.radio; MicroPython / CPython ignore it.
 conn = connector("example.com", 443, tls=True)
 
-while conn.check(now):                          # now = your own ticks_ms()
+while True:
+    now = ticks.ticks_ms()                      # your own clock, read every pass
+    if not conn.check(now):                     # False once "ready" or "failed"
+        break
     conn.handle(now)                            # advance one connect phase
-    if conn.state == "failed":
-        raise RuntimeError(conn.last_error)
+    # ... tick your own tasks here too ...
 
+if conn.state == "failed":
+    raise RuntimeError(conn.last_error)
 sock = conn.socket                              # ready: send/recv on it directly
 ```
 
@@ -217,7 +221,7 @@ def test_publishes_and_receives():
 
 **`async` / `await` is banned *inside* the libraries, but not in your app.**  ChuMicro libraries never `await`; they make progress through `check`/`handle` ticks so many of them can share one loop without a scheduler.  That is a rule about the library internals, not about you.  Your application can be an `asyncio` program, a thread, or a bare `while True:` loop.  You just have to tick the client from wherever your loop lives (`await`-ing between ticks is fine; call `client.handle(now)` on each pass).  The workspace deployer does enforce the rule at its own boundary: a project whose `app.py` defines `async def run()` is refused with a pointer to the tick pattern, because the on-device boot shim calls `run()` synchronously.
 
-**If the ~3 KB of dependency-injection ceremony ever costs you, there is a recorded escape.**  Keeping these constructor seams costs a few KB of flash and one extra frame per connect (details in the [DI cost measurement](https://github.com/ChuMicro/ChuMicro/blob/main/plans/reviews/2026-07-03-di-cost-measurement.md)).  If a materially smaller target class ever makes that matter, deploy-time static resolution (rewriting the injection to direct calls in the deploy artifact while keeping every source seam) is recorded in §5 of that report as the pre-approved (currently unscheduled) fallback, and noted as such in the [design workstream](https://github.com/ChuMicro/ChuMicro/blob/main/plans/workstreams/core-design-realignment.md).  You do not need it today; it exists so a future flash scare does not re-litigate the seams themselves.
+**If the ~3 KB of dependency-injection plumbing ever costs you, a fallback is on record.**  Keeping these constructor seams costs a few KB of flash and one extra frame per connect (details in the [DI cost measurement](https://github.com/ChuMicro/ChuMicro/blob/main/plans/reviews/2026-07-03-di-cost-measurement.md)).  If a much smaller class of board ever makes that matter, §5 of that report approves deploy-time static resolution: the deployer rewrites the injection to direct calls in what it ships, and every seam stays in the source.  No board this project targets needs it; the plan exists so a future flash squeeze does not reopen the case for the seams themselves.
 
 ## See also
 

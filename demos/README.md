@@ -1,66 +1,54 @@
 # Demos
 
-End-to-end first-impression artifacts that show ChuMicro libraries
-working as a system, not just as code. Run a demo and the full round
-trip lands on your screen in one command: no curl in another terminal,
-no IP discovery, no setup beyond `secrets.toml` and a registered board
-(`chumicro-workspace add-device`). Two exceptions: the mqtt demos need
-`mosquitto` on PATH (`brew install mosquitto`), and
-`sockets_tls_roundtrip` needs `pip install cryptography`. One demo,
-[`laptop_roundtrip`](laptop_roundtrip/), needs no board at all.
+Each demo is a small project you run with one command. It puts code on
+your board, starts whatever the board needs on your laptop (a web
+server, an echo server, an MQTT broker), and shows you both sides as
+they talk. You need a board registered with
+`chumicro-workspace add-device` and your wifi details in `secrets.toml`
+([wiring wifi credentials](../docs/wiring-wifi-credentials.md)). The
+MQTT demos also need `mosquitto` on your PATH (`brew install mosquitto`).
+[`laptop_roundtrip`](laptop_roundtrip/) needs no board at all.
 
-## What demos are (and aren't)
+Every demo keeps running once it has shown you its work. The board
+repeats it on a timer, the way a project on your desk would, until you
+unplug it or deploy something else.
 
-A demo is a self-contained directory under `demos/<name>/` with:
+## Which demo first
 
-- `app.py`, the on-device code (deployed to a registered board,
-  named to match the `ChuMicro-Workbench-Template/projects/<name>/app.py`
-  convention so demos read like real projects).
-- `driver.py`, the host-side script that deploys `app.py`, drives it,
-  prints the round trip, and exits. Run with
-  `.venv/bin/python demos/<name>/driver.py`.
-- `README.md`: what this demo shows, how to run it, what to expect.
+Simplest first. Each line says what you will see.
 
-`laptop_roundtrip` is the exception to the pair: its `app.py` runs
-entirely on the host (`python app.py` from its directory), so there is
-no `driver.py` and no board in the loop. Its README explains the split.
-
-**Demos break the examples' import rule on purpose.** A demo's
-`driver.py` is allowed to reach into `workbench/`,
-`chumicro_pytest_device.fixtures.*`, internal helpers, anywhere in
-the mono-repo. Demos are mono-repo native artifacts that demonstrate
-how the pieces fit together; constraining them to "library imports
-only" would defeat the point.
-
-**Demos are not published.** They live in this repo, are run from a
-clone, and are never packaged or pushed to PyPI. The audience is
-someone evaluating the ecosystem, or a contributor who wants to see a
-library working end-to-end against real hardware.
-
-## What's the difference between a demo and an example?
-
-| | Example | Demo |
-|---|---|---|
-| Purpose | Read this to learn a library | Run this to be impressed |
-| Location | `libraries/<lib>/examples/` | `demos/<name>/` (root) |
-| Spans libraries | No, one library at a time | Often: wifi + http_server + msgpack ... |
-| Imports allowed | Just the library being demoed | Anything in the mono-repo |
-| Runs on | Board (host just tails serial) | Board + host (`laptop_roundtrip`: host only) |
-| Shipped to PyPI | Yes, with the library | No, mono-repo only |
-
-## When to add a demo vs. just enhance an example docstring
-
-If the library is **client-side** and the user can replicate the
-other end on their laptop with a one-liner (`curl ...`,
-`python -m http.server`, `nc -ul ...`), a docstring "Try it locally"
-section in the example file is usually enough.
-
-If the library is **server-side** (`http_server`,
-`websockets`-server) or **needs non-trivial host infrastructure**
-(an MQTT broker, a websocket server, an orchestrated multi-step
-handshake), a demo carries its weight: the demo's `driver.py` packs
-the discovery, the setup, and the assertions so the user doesn't
-have to compose any of it.
+1. [`laptop_roundtrip`](laptop_roundtrip/): no board. A pretend LED keeps
+   flipping on and off while your laptop fetches a slow web page from
+   itself, over and over.
+2. [`sockets_tcp_roundtrip`](sockets_tcp_roundtrip/): the board sends a
+   line of text to your laptop every five seconds and reads it back,
+   with plain socket calls.
+3. [`requests_fetch`](requests_fetch/): the board fetches a web page from
+   your laptop every five seconds and prints what came back.
+4. [`http_server_roundtrip`](http_server_roundtrip/): the board serves
+   web pages, your laptop requests three of them, and the board keeps
+   serving and printing a status line.
+5. [`sockets_tls_roundtrip`](sockets_tls_roundtrip/): the
+   `sockets_tcp_roundtrip` echo over an encrypted link, trusting a
+   certificate made on the spot.
+6. [`mqtt_pub_sub`](mqtt_pub_sub/): the board and your laptop trade MQTT
+   messages through a broker on your laptop; the board publishes every
+   two seconds.
+7. [`websockets_stream`](websockets_stream/): the board opens a websocket
+   to your laptop, prints each message that streams in, and reconnects
+   for another stream five seconds later.
+8. [`press_through_fetch`](press_through_fetch/): wire a button. The
+   board fetches a page every three seconds, and every press you make
+   lands on time, mid-fetch included.
+9. [`mqtt_sensor_motor`](mqtt_sensor_motor/): a temperature-controlled
+   fan over MQTT. The board publishes its temperature and drives a motor
+   signal, with the onboard LED standing in for the motor.
+10. [`sockets_runner_connector`](sockets_runner_connector/): the echo
+    from demo 2, written so the board never sits waiting, with a
+    heartbeat to prove it. Start here for your own TCP protocol.
+11. [`sockets_runner_connector_explicit`](sockets_runner_connector_explicit/):
+    the same echo as a service class with `check` and `handle`, the
+    shape every ChuMicro service has.
 
 ## Running a demo
 
@@ -71,24 +59,69 @@ have to compose any of it.
 cd demos/laptop_roundtrip && ../../.venv/bin/python app.py
 ```
 
-Each demo's `driver.py --help` documents its options (which device
-to target, timeouts, etc.). Most demos pick a sensible default
-device from `devices.yml`.
+Each driver picks a default board from `devices.yml`. Pass
+`--device <id>` for a specific board or `--runtime micropython` for the
+first MicroPython one; `driver.py --help` lists every option. Lines
+starting `board |` are what the board prints, and `driver:` lines come
+from the script on your laptop.
+
+## What a demo is
+
+A directory under `demos/<name>/` holding three files:
+
+- `app.py` runs on the board. It is named like the
+  `projects/<name>/app.py` in a workspace made from the workbench
+  template, so a demo reads like a real project.
+- `driver.py` runs on your laptop. It deploys `app.py`, starts the
+  laptop side, prints every line the board prints, and waits on the
+  board's marker lines to check each step. Once it has seen what it came
+  to check, it stops the laptop side and exits. The board keeps running.
+- `README.md` says what you will see, what you need, the command to
+  run, and what to try next.
+
+`laptop_roundtrip` is the exception: its `app.py` runs on your laptop
+with `python app.py`, so it has no `driver.py`.
+
+A driver may import anything in this repo: `workbench/` packages,
+`chumicro_pytest_device.fixtures.*`, internal helpers. A demo shows how
+the pieces fit together, and limiting its driver to library imports
+would hide that. Demos are never packaged or published to PyPI; they
+run from a clone of this repo.
+
+## Demo or example?
+
+| | Example | Demo |
+|---|---|---|
+| Purpose | Read it to learn one library | Run it to watch libraries work together |
+| Location | `libraries/<lib>/examples/` | `demos/<name>/` |
+| Libraries | One | Often several: wifi, http_server, msgpack, ... |
+| Imports | Only the library it teaches | Anything in this repo (driver side) |
+| Runs on | A board; your laptop tails its output | A board plus your laptop (`laptop_roundtrip`: laptop only) |
+| Ships to PyPI | Yes, with the library | No |
+
+## When to add a demo instead of an example
+
+If the library is a client and a reader can stand up the other end with
+a one-liner (`curl ...`, `python -m http.server`, `nc -ul ...`), a
+"Try it locally" section in the example's docstring is enough.
+
+If the library is a server (`http_server`, a websockets server), or the
+other end needs real setup (an MQTT broker, a TLS certificate, a
+multi-step handshake), write a demo. Its `driver.py` does the setup,
+finds the addresses, and checks the result, so the reader runs one
+command.
 
 ## Adding a demo
 
-1. Create `demos/<name>/` with `README.md`, `app.py`,
-   `driver.py`.
-2. Write `app.py` for someone learning, because that is who reads
-   it. Four rules, all of them things a reader would otherwise trip
-   over:
+1. Create `demos/<name>/` with `README.md`, `app.py`, and `driver.py`.
+2. Write `app.py` for someone learning, because that is who reads it.
 
    **The docstring says what the board does and what you will see.**
-   Open with the behaviour, paste the actual output, and end with
-   something to try. Comparisons to sibling demos go in this
+   Open with what the board does, paste the real output, and end with
+   something to try. Comparisons to sibling demos go in the demo's
    `README.md`, not in the file a beginner opens first.
 
-   **Only import what the demo is demonstrating.** No
+   **Import only what the demo is demonstrating.** No
    `chumicro_test_harness`, no workbench internals. Marker lines are
    plain `print` calls:
 
@@ -98,42 +131,59 @@ device from `devices.yml`.
    ```
 
    The host parser reads `NAME key=value` and drops the whole line if
-   any value contains a space or an `=`, so hex-encode bytes and keep
-   anything free-form (a URL with a query string, a message body) on
-   its own indented line. Indented and lowercase lines are ignored by
-   the parser, so they are free for the human.
+   any value holds a space or an `=`, so hex-encode bytes and put
+   anything free-form (a URL with a query string, a message body) on its
+   own indented line. The parser ignores indented and lowercase lines, so
+   they are free for the human.
 
-   **The demo does not exit.** It ends the way every board program
-   ends, which is that it doesn't:
+   **The demo never exits, and it keeps working.** The file ends in a
+   module-level `while True:` with no `break`, and nothing raises
+   `SystemExit` or calls `sys.exit()`; a lint check enforces both. Print
+   `DEMO_COMPLETE` after the first full pass, then repeat the visible
+   work on a timer: send another line, fetch the page again, publish the
+   next reading. Each repeat prints an indented line a person can read,
+   and a failure prints what went wrong and is retried on the next pass
+   ([Decision 0130](../plans/decisions/0130-examples-and-demos-never-exit.md)).
 
    ```python
+   def echo_forever(wifi, link_up, host, port):
+       yield from wait_for(link_up)
+       while True:
+           try:
+               payload = yield from echo_once(wifi.adapter.radio, host, port)
+               print(f"  echo: {payload.decode()!r} came back")
+           except Exception as error:
+               print(f"ECHO_FAILED error={type(error).__name__}")
+           yield from sleep_until(ticks_add(ticks_ms(), 5000))
+
+
+   runner.add_generator(echo_forever(wifi, link_up, host, port))
+
    while True:
        now_ms = runner.tick()
        runner.wait(now_ms)
    ```
 
-   Print `DEMO_COMPLETE` at the point the work is actually finished,
-   then let the loop carry on. No board-side deadline and no
-   `SystemExit`: the driver already has timeouts on every `wait_for`,
-   and `session.shutdown()` is safe while the board is still running.
-   A demo that self-terminates teaches the one thing about boards that
-   is not true.
+   Give the timer to the runner, through `sleep_until` in a generator or
+   `runner.add_periodic(...)`, so `runner.wait()` wakes for it. An `if`
+   on a `Deadline` in the loop body fires only when something else
+   happens to wake the loop.
 
    **No scaffolding beyond that.** No timeout constants, no completion
-   flags, no state dicts. If a demo needs something to prove the loop
-   is shared, a one-second heartbeat is enough:
+   flags, no state dicts: the driver already has a timeout on every
+   wait, and `session.shutdown()` is safe while the board keeps running.
+   A one-second heartbeat that prints `  ...still ticking` is the
+   fallback for work that cannot repeat, or the proof when the demo's
+   point is that the loop never freezes.
 
-   ```python
-   def heartbeat(now_ms):
-       """Runs once a second, whatever else is going on."""
-       print("  ...still ticking")
-   ```
-
-3. The `driver.py` deploys and runs the on-device code via
-   `chumicro_workspace.deploy_api.deploy_project`, which returns a
-   session; wait on the board's marker lines with `session.wait_for(...)`
-   and use whatever fixture helpers it needs from
-   `chumicro_pytest_device.fixtures.*` to drive the round trip.
+3. Write `driver.py` around
+   `chumicro_workspace.deploy_api.deploy_project(...,
+   on_line=echo_board_line)`, which deploys `app.py`, prints every board
+   line as `board | ...`, and returns a session. Wait on the board's
+   markers with `session.wait_for(...)`, and use the helpers in
+   `chumicro_pytest_device.fixtures.*` for the laptop side. If the driver
+   hosts the other end (an echo server, a broker), keep it up for a few
+   repeat rounds before stopping it, and say in the README what the
+   board prints once it is gone.
 4. `python scripts/run.py verify-demos` parses every `.py` under
-   `demos/` and fails on syntax errors or empty files; preflight
-   runs it automatically.
+   `demos/` and fails on syntax errors or empty files; preflight runs it.

@@ -1,29 +1,27 @@
 # Known board quirks
 
-This page collects the hardware and firmware quirks that make one board fail where another, running the same code, succeeds.  When a board behaves oddly, find its row here before you suspect your own code.  Most entries link to the page with the full fix.
+Sometimes one board fails where another, running the same code, works. Find your board in the table before you start debugging your own code: each row is something a real board did on the test bench, with what to do about it.
 
-| Board | Quirk | What to do |
+| Board | What you see | What to do |
 |---|---|---|
-| Raspberry Pi Pico W (RP2040) | HTTPS and `wss://` need flash deploy mode | Deploy those workloads in flash mode.  See [TLS and HTTPS failures](tls-https-failures.md). |
-| Raspberry Pi Pico W (RP2040) | Silent wifi drop, `last_error` stays `None` | Check `wifi.state` and `wifi.connected`, not `last_error`.  See [WiFi won't connect](wifi-wont-connect.md). |
-| Raspberry Pi Pico W (RP2040) | CYW43 idle power-save causes 30 to 100 ms tick stalls | Keep the `power_save = false` default; do not set `power_save = true`. |
-| Raspberry Pi Pico W (RP2040) | CircuitPython wifi fails `Unknown failure 1` in some demos | Known rp2 CircuitPython radio-state quirk; retry, or run the board on MicroPython. |
-| Raspberry Pi Pico W (RP2040) | CircuitPython TLS server bricks the CYW43 chip | Do not serve HTTPS or `wss://` from a Pico W on CircuitPython; use an ESP32 board or MicroPython.  See [TLS and HTTPS failures](tls-https-failures.md). |
-| Raspberry Pi Pico W (RP2040) | No NVS on MicroPython | Use `chumicro-kvstore`, which falls back to a LittleFS file (`/_chu_kv.msgpack`).  See [Persisting data](persisting-data.md). |
-| Raspberry Pi Pico W (RP2040) | Onboard LED sits on the wifi coprocessor and can't PWM | Drive it as a plain on/off pin, not with PWM. |
-| Raspberry Pi Pico W (RP2040) | Slower USB mass-storage controller | More prone to a read-only CIRCUITPY after a mid-write teardown; reset and replug before you redeploy. |
-| Lolin S2 Mini (ESP32-S2) | `machine.bootloader()` leaves the chip half-running, no ROM bootloader appears | Enter the bootloader by hand: hold BOOT (GPIO0), tap RESET, release BOOT. |
-| Lolin S2 Mini (ESP32-S2) | CircuitPython raw-paste (Ctrl-E) hangs on CP 10.1.4 | Upgrade firmware past 10.1.4. |
-| Lolin S2 Mini (ESP32-S2) | Very slow CircuitPython flash writes, 30 to 60 s per example | Not a hang; wait it out. |
-| Lolin S2 Mini (ESP32-S2) | TCP stack coalesces fragments differently | Size websocket and HTTP frame buffers with headroom. |
-| Lolin S2 Mini (ESP32-S2) | USB-CDC serial can drop mid-telemetry | Reset and replug; keep runs short. |
-| Lolin S2 Mini (ESP32-S2) | Ships with a corrupted FAT, or demotes CIRCUITPY to read-only on a flaky cable | Swap to a known-good cable; `reset-board` to rebuild the filesystem. |
-| ESP32-S3 (incl. UM FeatherS3 P4) | Unstable wifi at full transmit power on pre-2024 P4 and P7 revisions | Set `wifi.tx_power_dbm = 15`.  See [WiFi won't connect](wifi-wont-connect.md). |
-| ESP32-S3 (incl. UM FeatherS3 P4) | Half-open station slow-fails with `Unknown failure 205` | Upgrade `chumicro-wifi` to 0.7.1 or later (it calls `stop_station()` before each attempt) and retry. |
-| ESP32-S3 (incl. UM FeatherS3 P4) | Individual RF-dud units (all-zeros-prefix MAC is the tell) | Reseat or replace the board, or add an external antenna. |
-| ESP32-S3 (incl. UM FeatherS3 P4) | Enough free heap for HTTPS in RAM mode (over 200 KB after wifi) | No flash-mode requirement for HTTPS on this board, unlike the Pico W. |
-| Classic ESP32 (TinyPICO, no native USB) | CircuitPython 10.2.0 corrupts the running program non-deterministically (`'Runner' object has no attribute 'tick'`, NUL bytes in attribute names) | Keep classic ESP32 on MicroPython; it is off the CircuitPython matrix until re-tested at CP 10.3.0. |
-| SAMD21, nRF52, SAMD51-CP (below the 256 KB floor) | No `collections.deque`, so ChuMicro libraries won't import | Use a supported chip (ESP32, RP2040, RP2350, STM32).  See [Running out of memory](out-of-memory.md). |
-| SAMD21, nRF52, SAMD51-CP (below the 256 KB floor) | SAMD21 NVM is only 256 B | Expect `KVStoreFull` quickly; keep persisted state tiny or use a larger-NVM board.  See [Persisting data](persisting-data.md). |
-
-These below-floor boards are unsupported, not buggy.  The quirks above are hardware and firmware facts, not defects in your code or in the libraries.
+| Raspberry Pi Pico W (RP2040) | HTTPS or `wss://` runs out of memory | Keep the default flash deploy mode; RAM mode leaves too little memory for the handshake. See [TLS and HTTPS failures](tls-https-failures.md). |
+| Raspberry Pi Pico W (RP2040) | Wifi never joins or drops, and `wifi.last_error` stays `None` | Watch `wifi.state` and `wifi.connected` instead. See [WiFi won't connect](wifi-wont-connect.md). |
+| Raspberry Pi Pico W (RP2040) | The loop stalls for 30 to 100 ms at a time | The radio's power-saving mode causes it. On MicroPython, `chumicro-wifi` turns power saving off unless you set `power_save = true`, so leave that key out. |
+| Raspberry Pi Pico W (RP2040) | CircuitPython wifi fails with `Unknown failure 1` in some programs | A CircuitPython radio fault on this chip. Retry, or run the board on MicroPython. |
+| Raspberry Pi Pico W (RP2040) | Serving HTTPS or `wss://` on CircuitPython raises `UnsupportedSSLConfigError`, or locks up the wifi chip | Serve TLS from an ESP32 board, or run MicroPython on the Pico W. See [TLS and HTTPS failures](tls-https-failures.md). |
+| Raspberry Pi Pico W (RP2040) | No NVS storage on MicroPython | Nothing to do: `chumicro-kvstore` saves to a file, `/_chu_kv.msgpack`, instead. See [Persisting data](persisting-data.md). |
+| Raspberry Pi Pico W (RP2040) | The onboard LED won't dim with PWM | That LED hangs off the wifi chip, not a normal pin. Switch it on and off; wire your own LED to a GP pin for dimming. |
+| Raspberry Pi Pico W (RP2040) | `CIRCUITPY` turns read-only after a deploy was interrupted | Press RESET and replug before deploying again. See [CIRCUITPY on macOS](macos-circuitpy.md). |
+| Lolin S2 Mini (ESP32-S2) | Flashing firmware on MicroPython: the board goes silent and no bootloader port appears | Enter the bootloader by hand: hold BOOT (labelled `0`), tap RESET, release BOOT. See [Getting firmware onto a new board](firmware-onto-a-new-board.md). |
+| Lolin S2 Mini (ESP32-S2) | Deploys hang on CircuitPython 10.1.4 | Upgrade CircuitPython past 10.1.4. |
+| Lolin S2 Mini (ESP32-S2) | Each CircuitPython deploy takes 30 to 60 seconds | The board writes flash slowly. Wait it out; it isn't hung. |
+| Lolin S2 Mini (ESP32-S2) | Websocket or HTTP messages arrive split differently than on other boards | Give receive buffers some headroom over your largest message. |
+| Lolin S2 Mini (ESP32-S2) | The USB serial connection drops in the middle of long output | Reset and replug, and keep tail sessions short. |
+| Lolin S2 Mini (ESP32-S2) | `CIRCUITPY` arrives corrupted, or turns read-only on a flaky cable | Swap to a cable you trust, then rebuild the filesystem with `python3 run.py reset-board --device <id> --yes`. |
+| ESP32-S3 from Unexpected Maker, P4 and P7 revisions made before 2024 (FeatherS3, TinyS3) | Every wifi join fails with status 202 or 205 at full transmit power | Set `tx_power_dbm = 15` under `[wifi]` in `secrets.toml`. See [WiFi won't connect](wifi-wont-connect.md). |
+| ESP32-S3 | A failed join leaves the radio half-connected, and the next try fails slowly with `Unknown failure 205` | `chumicro-wifi` resets the radio before every join attempt to clear this. Code that calls `wifi.radio.connect()` itself should call `wifi.radio.stop_station()` first. |
+| ESP32-S3 | Some individual boards have weak radios; a MAC address starting with zeros is the tell | Reseat or replace the board, or use one with an external antenna. |
+| ESP32-S3 | More than 200 KB of memory free after wifi joins | Room enough for HTTPS even in RAM mode, unlike the Pico W. |
+| Classic ESP32 (TinyPICO, no native USB) | CircuitPython 10.2.0 corrupts the running program at random (`'Runner' object has no attribute 'tick'`, garbage in attribute names) | Run classic ESP32 boards on MicroPython. |
+| SAMD21, nRF52, and SAMD51 on CircuitPython | ChuMicro libraries fail to import, naming `deque` | CircuitPython builds for these chips leave out `deque`, and most of the chips have less than the 256 KB of RAM ChuMicro needs. Use an ESP32, RP2040, RP2350, or STM32 board. See [Running out of memory](out-of-memory.md). |
+| SAMD21 | `KVStoreFull` after a few values | Its NVM holds only 256 bytes. Keep saved state tiny, or move to a board with more. See [Persisting data](persisting-data.md). |

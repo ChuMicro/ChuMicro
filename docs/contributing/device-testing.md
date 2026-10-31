@@ -2,17 +2,21 @@
 
 <img src="https://chumicro.com/assets/chumicro-head.png" alt="" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
-This guide covers the real-board testing workflow for ChuMicro libraries.
+This guide covers running ChuMicro's tests on a real MicroPython or CircuitPython board.
 
 <br clear="left">
 
 Use it when you want to:
 
-- run `functional_tests/` on a connected MicroPython or CircuitPython board
-- understand how `devices.yml` and `workspace.yml` are structured
+- run a library's `functional_tests/` on a connected board
+- run the unit suite on a board instead of your laptop
+- register a board and understand `devices.yml`
 - use IDE play buttons for `functional_tests/`
 
-Host-side `tests/` still run through normal CPython pytest. Real-board validation is an extra layer for behavior that mocks and unix-port checks cannot prove.
+Every library's `tests/` folder runs on your laptop under plain pytest, and preflight also runs it under the MicroPython and CircuitPython *unix ports* (desktop builds of each runtime).  Board testing is an extra layer for behavior neither can prove.  Two terms come up throughout:
+
+- A **functional test** lives in `libraries/<name>/functional_tests/` and runs *inside the board's Python*.  Pytest copies the test onto the board, runs it there, and reports the result back like any other test.
+- The **deploy mode** decides how code reaches the board.  A *flash* deploy copies files onto the board's filesystem, the way a finished project runs.  A *RAM* deploy sends the code over the serial cable and runs it from memory, leaving the board's files untouched.  Flash is the default.
 
 ## What gets configured
 
@@ -22,7 +26,7 @@ Host-side `tests/` still run through normal CPython pytest. Real-board validatio
 - `workspace.yml`: host-side machinery (library_sources, deploy_targets, quality knobs); not a credentials file
 - `secrets.toml`: workspace-wide credentials + device-bound defaults (wifi SSID/password, broker host/port/auth) that flow into `runtime_config.msgpack` at deploy time.  Per-library `functional_tests/config.toml` overrides land on top via deep-merge.
 
-Full per-file detail (shape, purpose, who edits what) lives in [config-files.md](config-files.md).  The split lands per [Decision 0057](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0057-two-file-config.md).
+[config-files.md](config-files.md) has each file's shape and who edits what.  [Decision 0057](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0057-two-file-config.md) records why the settings are split this way.
 
 ## Generate the starter files
 
@@ -32,7 +36,7 @@ python scripts/run.py setup
 
 If the files already exist, setup leaves them alone.
 
-The first-materialized `devices.yml` ships with an empty `devices: []` registry.  Use the `add-device` flow (next section) to populate it; hand-editing the YAML is still supported but no longer the primary path.
+A new `devices.yml` starts with an empty `devices: []` list.  `add-device` (next section) fills it in.  You can also edit the YAML by hand.
 
 ## Register your boards via `add-device`
 
@@ -40,16 +44,16 @@ The first-materialized `devices.yml` ships with an empty `devices: []` registry.
 python scripts/run.py add-device pi-pico-w-mp --address /dev/cu.usbmodem1101
 ```
 
-This is a thin shim around `chumicro-workspace add-device`.  It probes the connected board (UID, machine type, board_id), writes the entry to `devices.yml`, and fills in `defaults.{micropython,circuitpython}` on first registration of each runtime.
+This forwards to `chumicro-workspace add-device`.  It probes the connected board (UID, machine type, board_id), writes the entry to `devices.yml`, and fills in `defaults.{micropython,circuitpython}` on first registration of each runtime.  Both arguments are optional: leave out the id and one is derived from the board's name, leave out `--address` and the command picks the only serial port it sees or asks you to choose.
 
-Pass `--runtime` if you want to skip the auto-detect probe (faster), or `--description "Desk board"` to add a free-form note.  See `python scripts/run.py add-device --help` for the full flag set.
+Pass `--runtime` to skip the runtime auto-detect (faster), or `--description "Desk board"` to add a free-form note.  See `python scripts/run.py add-device --help` for the full flag set.
 
 ### Re-probing, replacing, and deleting entries
 
 Three verbs cover an entry's later life, differing by how much they keep:
 
 - `chumicro-workspace add-device <id> --force`: **update.** Re-probes and refreshes the address + hardware-once fields, but keeps everything you typed (description, deploy_mode). The everyday "this board moved ports / I reflashed it" path.
-- `chumicro-workspace reset-device <id> --yes`: **replace.** Re-probes the connected board and rebuilds the entry from silicon, dropping accumulated hand edits (description, deploy_mode, serial_baudrate) and re-deriving the hardware identity. The id and its `defaults.<runtime>` binding survive. Use it when an entry has drifted and you want it rebuilt from truth. The board must be connected; a probe failure points you back here.
+- `chumicro-workspace reset-device <id> --yes`: **replace.** Re-probes the connected board and rebuilds the entry from silicon, dropping accumulated hand edits (description, deploy_mode, serial_baudrate) and re-deriving the hardware identity. The id and its `defaults.<runtime>` binding survive. Use it when an entry has drifted and you want it rebuilt from what the board reports. The board must be connected; if the probe fails, the command points you to `remove-device` or `add-device`.
 - `chumicro-workspace remove-device <id> --yes`: **delete.** Drops the entry and nulls any `defaults:` pointer to it so the file stays loadable. No board needed.
 
 `reset-device` and `remove-device` are `--yes`-gated because they discard user-owned metadata a probe cannot regenerate.
@@ -115,7 +119,7 @@ devices:
     deploy_mode: ram      # opt out of the flash default for this board
 ```
 
-Supported fields today:
+Fields:
 
 | Field | Required | Meaning |
 |---|---|---|
@@ -123,7 +127,9 @@ Supported fields today:
 | `runtime` | yes | `micropython` or `circuitpython` |
 | `address` | yes | Serial port / device address used by the transport |
 | `description` | no | Free-form label for humans |
-| `connection_type` | no | Currently `serial` |
+| `hardware` | no | Board identity (`uid`, `machine`, `board_id`) that `add-device` writes from the probe |
+| `connection_type` | no | `serial`, the only transport |
+| `serial_baudrate` | no | Serial speed, default `115200` |
 | `deploy_mode` | no | Per-device *preference* override for `ram` or `flash` |
 | `supports_ram_mode` | no | Board *capability* (default `true`). Set `false` only for a board that cannot run RAM mode at all; a requested `ram` deploy then switches to `flash` with a message. Distinct from `deploy_mode`: preference is what you want, capability is what's possible. A board where RAM is merely tight (Pi Pico W's 256 KB) stays `true`: tightness is handled per-library via `requires_flash`, not by disabling the board |
 
@@ -237,10 +243,10 @@ python scripts/run.py test-libraries-functional --circuitpython-device office-es
 python scripts/run.py test-libraries-functional --library timing
 
 # Scope to files whose name contains the substring
-python scripts/run.py test-libraries-functional --library timing --file test_heartbeat
+python scripts/run.py test-libraries-functional --library timing --file test_rate
 
 # Scope to functions whose name contains the substring
-python scripts/run.py test-libraries-functional --library timing --function heartbeat_fires
+python scripts/run.py test-libraries-functional --library timing --function due_fires
 
 # Force flash mode
 python scripts/run.py test-libraries-functional --library timing --deploy-mode flash
@@ -251,7 +257,7 @@ python scripts/run.py test-libraries-functional --library timing --deploy-mode f
 - `--library <name>`: restrict to one library.
 - `--file <substring>`: match test file names (not function names).
 - `--function <substring>`: match test function names (not file names).
-- Flags compose as AND: `--library timing --file test_heartbeat --function fires_on_interval` runs only `fires_on_interval` inside `test_heartbeat.py` in `timing/`.
+- Flags compose as AND: `--library timing --file test_rate --function rejects_zero_period` runs only `test_rate_rejects_zero_period` inside `test_rate.py` in `timing/`.
 - Any filter that matches nothing exits 2 so typos don't silently pass.
 
 `devices.yml` is always resolved at `<workspace_root>/devices.yml`.  CI environments or unusual local layouts just need to drop a `devices.yml` at the workspace root before running tests.
@@ -265,13 +271,13 @@ python scripts/run.py test-libraries-functional --library timing --deploy-mode f
 pytest libraries/timing/functional_tests/
 
 # One file
-pytest libraries/timing/functional_tests/test_heartbeat.py
+pytest libraries/timing/functional_tests/test_rate.py
 
 # One function
-pytest libraries/timing/functional_tests/test_heartbeat.py::test_heartbeat_fires
+pytest libraries/timing/functional_tests/test_rate.py::test_rate_due_fires_and_re_phases
 
 # Keyword filter (pytest-native)
-pytest libraries/timing/functional_tests/ -k heartbeat
+pytest libraries/timing/functional_tests/ -k rate
 ```
 
 Target device selection still follows `devices.yml` defaults. Without a populated `devices.yml`, the tests skip with a clear message rather than failing.
@@ -282,13 +288,16 @@ Driving pytest directly gives you access to the same overrides `test-libraries-f
 
 | Flag | Purpose |
 |---|---|
-| `--target {device,unix-port}` | Pick the execution backend.  Default `device` (real board via `chumicro-deploy`).  `unix-port` runs each test file in a MicroPython / CircuitPython unix-port subprocess instead. |
+| `--target {device,device-unit,unix-port}` | Pick the execution backend.  Default `device`: `functional_tests/` on a real board via `chumicro-deploy`.  `device-unit` runs the `tests/` unit suite on a real board (the on-device sweep).  `unix-port` runs each `tests/` file in a MicroPython / CircuitPython unix-port subprocess. |
 | `--runtime {micropython,circuitpython,both}` | Under `--target device`: override `defaults.ide_runtime` from `devices.yml`.  Under `--target unix-port`: pick which runtime(s) to spawn, defaults to `both`. |
 | `--micropython-device <id>` | Override `defaults.micropython` for this run (device target only). |
 | `--circuitpython-device <id>` | Override `defaults.circuitpython` for this run (device target only). |
 | `--micropython-binary <path>` | Unix-port MicroPython binary override (unix-port target only).  Otherwise resolved via `.tools/micropython.path` then `PATH`. |
 | `--circuitpython-binary <path>` | Unix-port CircuitPython binary override (unix-port target only).  Same resolution order. |
-| `--deploy-mode {ram,flash}` | Override each device's `deploy_mode` (device target only). |
+| `--unix-port-timeout <seconds>` | Per-file time limit for a unix-port subprocess, default 120 (unix-port target only). |
+| `--unix-port-heapsize <size>` | Heap ceiling for unix-port subprocesses, such as `192K`; `0` or `off` uses the port's native multi-MB heap (unix-port target only). |
+| `--deploy-mode {ram,flash}` | Override each device's `deploy_mode` (board targets only). |
+| `--per-file` | Soft-reset the board before each test file rather than each library (`device-unit` target, flash mode only). |
 | `--pr-summary` | Print the Markdown PR block at session end (paste-ready).  Opt-in so IDE play-button runs stay quiet. |
 | `--pr-summary-command <str>` | Literal command string rendered inside the PR block's `- Command:` line.  `test-libraries-functional` passes its reconstructed CLI invocation here; direct pytest runs can supply their own label or omit it and get a bare `pytest`. |
 
@@ -301,17 +310,17 @@ Pytest is the single front door for every runtime: bare `pytest libraries/<name>
 pytest libraries/timing/tests --target unix-port --runtime micropython
 
 # One file under both unix-port runtimes (parametrized once per runtime).
-pytest libraries/timing/tests/test_heartbeat.py --target unix-port --runtime both
+pytest libraries/timing/tests/test_deadline.py --target unix-port --runtime both
 
 # One function under CircuitPython unix-port.
-pytest libraries/timing/tests/test_heartbeat.py::test_heartbeat_fires_on_real_clock --target unix-port --runtime circuitpython
+pytest libraries/timing/tests/test_deadline.py::test_rate_fires_across_tick_wraparound --target unix-port --runtime circuitpython
 ```
 
 IDE play buttons that target `libraries/<name>/tests/` files go through CPython pytest by default.  To click play and get the unix-port path instead, add a dedicated run configuration that passes `--target unix-port --runtime <X>` (and `--no-cov`, since coverage isn't collected through a subprocess).  The `--target` flag is opt-in by design.  The default `pytest libraries/timing/tests/` invocation is unchanged.
 
 ## Run workbench functional tests
 
-Workbench packages (`workbench/<name>/`, Decision 0032) can ship their own `functional_tests/` directories.  Unlike library functional tests, these run host-side.  The workbench tool is the project *driving* a connected board through its public API rather than code that ships onto the device.
+Workbench packages, the laptop-only tools under `workbench/<name>/` ([Decision 0032](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0032-workbench-host-tools.md)), can ship their own `functional_tests/` directories.  These run on your laptop: the tool *drives* a connected board through its public API, and nothing in the test ships onto the board.
 
 ```bash
 # Run every workbench's functional_tests/ suite.
@@ -342,13 +351,13 @@ PyCharm is the most-exercised IDE path. Once `devices.yml` is configured, play b
 
 ### VS Code
 
-VS Code uses the same pytest entrypoint and committed workspace settings/tasks as PyCharm. The structural support is present:
+VS Code uses the same pytest entrypoint as PyCharm, plus committed settings and tasks:
 
 - `.vscode/settings.json` enables pytest and points Pylance at all workspace source roots
 - `.vscode/tasks.json` includes a `Test Libraries Functional` task
 - explicit `functional_tests/` targets go through the same pytest plugin
 
-A dedicated live end-to-end VS Code validation pass remains on `plans/next-up.md`, so if you hit a VS Code-only issue, treat that as a real bug rather than user error.
+PyCharm gets more day-to-day use, so a problem that shows up only in VS Code is more likely a project bug than a mistake on your end.  Please file it.
 
 ## How functional tests differ from host tests
 
@@ -361,26 +370,20 @@ A dedicated live end-to-end VS Code validation pass remains on `plans/next-up.md
 
 ## Wiping a board's filesystem
 
-Functional-test runs accumulate stage residue on the device filesystem.
-`mpremote fs cp -r` (and `circup install`) are append-only, nothing
-pre-cleans.  Pi Pico W MP boards in particular fill up over time
-because the LittleFS partition is only ~850 KB; lolin-s2-mp is
-better-off at 2 MB but still eventually hits the wall.  When this
-happens, deploys fail with cryptic `mpremote: cp: ...: No space left
-on device` errors mid-test.
+Flash-mode test runs copy files onto the board and never delete the old ones, so the board's filesystem slowly fills.  A Pi Pico W on MicroPython fills first, with roughly 850 KB of filesystem; a board with 2 MB lasts longer and still fills eventually.  A full board fails mid-test with `mpremote: cp: ...: No space left on device`.
 
 Two ways to wipe a board:
 
 ```bash
-# Wipe + redeploy in one step.
-chumicro-workspace deploy --wipe <project> [--device <id>]
+# Erase everything, then deploy an example onto the clean board.
+chumicro-workspace deploy-example timing rate_blink --device <id> --wipe
 
-# Wipe only, leave the board idle, no follow-up deploy.
-# --yes is required; no flag = exit 2 + safety message.
+# Erase everything and leave the board empty.
+# Without --yes the command exits 2 and touches nothing.
 chumicro-workspace reset-board --device <id> --yes
 ```
 
-Both routes share one implementation.  Per-runtime recipe matrix:
+`chumicro-workspace deploy <project> --wipe` does the same in a workspace that has a `projects/` folder.  All three share one implementation.  Per-runtime recipe matrix:
 
 | Runtime / board family | Recipe |
 |---|---|
@@ -389,20 +392,11 @@ Both routes share one implementation.  Per-runtime recipe matrix:
 | **MicroPython on esp32** (Lolin S2 family) | `os.umount('/'); os.VfsLfs2.mkfs(esp32.Partition.find(TYPE_DATA, label='vfs')[0]); machine.soft_reset()` |
 | Other MicroPython substrates | `RuntimeError` until a verified recipe lands |
 
-The MicroPython path uses `mkfs` rather than a recursive `os.remove`
-walk: LittleFS metadata + wear-leveling artifacts survive a
-file-by-file delete, so a board with a small partition can still
-hit `ENOSPC` mid-deploy after a non-mkfs "wipe."  `mkfs` recovers
-the full block budget every time.  Verified on hardware
-(pi-pico-w-mp, lolin-s2-mp).
+The MicroPython path reformats with `mkfs` instead of deleting files one by one.  LittleFS keeps metadata and wear-leveling blocks that survive a file-by-file delete, so a small board can still run out of space after such a "wipe"; `mkfs` recovers every block.  Verified on a Pi Pico W and a Lolin S2 under MicroPython.
 
-Destructive on every runtime: wipes both managed scope (`/lib/*`,
-`/code.py` / `/main.py`, `runtime_config.msgpack`) **and** out-of-scope
-files (`settings.toml`, hand-edited `boot.py`, uploaded assets).
-Firmware partitions are untouched.
+The wipe erases every file the runtime can see: `/lib`, `code.py` / `main.py`, `runtime_config.msgpack`, and also `settings.toml`, a hand-edited `boot.py`, and anything else you uploaded.  The firmware itself is untouched.
 
-RAM / mount mode is a no-op (printed).  Those modes never wrote to
-flash so there's nothing persistent to wipe.
+A RAM-mode board has nothing to wipe, so the command prints a note and does nothing.
 
 ## Troubleshooting
 
@@ -414,7 +408,7 @@ flash so there's nothing persistent to wipe.
 | Flash mode cannot find CIRCUITPY | Host has no `CIRCUITPY*` mount visible | Replug the board's USB cable and confirm Finder / `mount` shows the drive; see [docs/troubleshooting/macos-circuitpy.md](../troubleshooting/macos-circuitpy.md) |
 | A normal `python scripts/run.py test` run ignores `functional_tests/` | Expected behavior | Use `test-libraries-functional` or explicitly target the `functional_tests/` path from your IDE |
 | `mpremote: cp: ...: No space left on device` mid-deploy | LittleFS partition full of stage residue from prior runs | `chumicro-workspace reset-board --device <id> --yes` (see "Wiping a board's filesystem" above) |
-| Lolin S2 CircuitPython deploys take 30–60 s per example | The board's flash write speed is the floor, not a recovery or retry signal | Expected; use Pi Pico W as the faster CP development target when iterating. Lolin S2 CP rsync slowness is a baseline characteristic, not a regression |
+| Lolin S2 CircuitPython deploys take 30–60 s per example | The board writes flash slowly; nothing is retrying | Expected.  A Pi Pico W deploys faster under CircuitPython if you're iterating |
 | CIRCUITPY drive visible but every write fails with `Read-only file system` | Drive is mounted RO: either the device-side FS flipped read-only, or FSKit handed the mount up with the RO flag.  Distinct from the FSKit wedge, where the drive never appears at all | `chumicro-workspace reset-board --device <id> --yes` or unplug-and-replug; see [docs/troubleshooting/macos-circuitpy.md](../troubleshooting/macos-circuitpy.md) |
 
 ## Related guides

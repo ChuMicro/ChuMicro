@@ -1,59 +1,51 @@
-"""Multiple Rate timers at different rates.
+"""Run three jobs at three different speeds from one loop.
 
-Demonstrates the shared-timestamp pattern: capture ``ticks_ms()`` once
-per loop iteration and pass the same value to every timer.  This
-ensures all components see the same moment in time, with no drift between
-calls.
+The console prints ``fast`` five times a second, ``medium`` once a second,
+and ``slow`` every five seconds, all from one loop that never pauses.  Each
+``Rate`` keeps its own schedule.  On a board the three jobs might blink an
+LED, read a sensor, and send a report.
 
-On a real board, each timer could drive a different LED or sensor
-polling rate.
+The loop reads the clock once at the top of each pass and hands that one
+reading to every timer.  Timers that come due at the same moment then fire on
+the same pass, instead of one of them slipping to the next.
 
 Example output::
 
-    Running multiple timers...
+    Running three timers: every 200 ms, every second, every 5 seconds.
 
-      fast (200 ms)
-      fast (200 ms)
-      fast (200 ms)
-      fast (200 ms)
-      fast (200 ms)
-      medium (1 s)
-      fast (200 ms)
+      fast
+      fast
+      fast
+      fast
+      fast
+      medium
+      fast
       ...
-      slow (5 s)
+      slow
       ...
 
 Runs on CPython, MicroPython, and CircuitPython.
 """
 
-import time
-
 from chumicro_timing import Rate, ticks_ms
 
-# Create Rate timers at different rates.  Each one tracks its own
-# drift-free schedule independently.  Share one timestamp so every
-# timer phase-aligns to the same starting moment.
+# Start all three timers from the same reading so their schedules line up.
 now = ticks_ms()
 fast = Rate(200, now)
 medium = Rate(1000, now)
 slow = Rate(5000, now)
 
-print("Running multiple timers...\n")
+print("Running three timers: every 200 ms, every second, every 5 seconds.\n")
 
 while True:
-    # Capture time once and share it with all timers.
-    # This is the "shared-timestamp pattern": all components
-    # see the same moment, so two timers that happen to
-    # fire on the same tick will both see the same now value.
+    # One clock reading per pass, shared by every timer below.
     now = ticks_ms()
 
     if fast.due(now):
-        print("  fast (200 ms)")
+        print("  fast")
     if medium.due(now):
-        print("  medium (1 s)")
+        print("  medium")
     if slow.due(now):
-        print("  slow (5 s)")
+        print("  slow")
 
-    # In a real project, the rest of your main loop goes here.
-    # The sleep just keeps this demo from flooding the console.
-    time.sleep(0.01)
+    # Nothing above waits, so code you add here runs on every pass.

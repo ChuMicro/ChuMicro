@@ -51,15 +51,16 @@ from repo_layout import ROOT
 from shared import install_workspace, running_on_native_windows
 
 VENV_DIR = ROOT / ".venv"
-#: Minimum Python for the workspace.  Pytest 8, hatchling, and griffe
-#: require 3.8+, and 3.9 is the oldest version with broad community
-#: support.  The ``tomli`` backport covers ``tomllib`` on 3.9 / 3.10.
+#: Minimum Python for the workspace: every package's ``pyproject.toml``
+#: declares ``requires-python = ">=3.11"``, so an older interpreter
+#: fails at the editable install.  Checking here fails first, with a
+#: message that names the version to install.
 #:
 #: The version check runs against the *resolved* interpreter after venv
 #: creation, not the system Python, so ``uv`` can create a suitable venv
 #: even when the system default is older.  This script itself runs on
 #: 3.7+ so it can deliver a friendly error on any interpreter.
-MIN_PYTHON = (3, 9)
+MIN_PYTHON = (3, 11)
 
 
 # ---------------------------------------------------------------------------

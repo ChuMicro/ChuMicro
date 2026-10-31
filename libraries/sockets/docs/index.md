@@ -4,9 +4,9 @@ title: "chumicro-sockets: TCP, TLS, and UDP for CircuitPython and MicroPython"
 
 # chumicro-sockets
 
-**One TCP, TLS, and UDP socket surface across CircuitPython, MicroPython, and CPython.**
+**TCP, TLS, and UDP sockets that work the same way on CircuitPython, MicroPython, and CPython.**
 
-Three entry points cover the shapes a device needs: `connector` dials out, `listener` accepts inbound connections, and `udp_socket` sends and receives datagrams.  TLS is a `tls=` flag on each, and custom-CA trust and server-side certificates work the same way everywhere.  Underneath, each entry picks the runtime's own substrate (CircuitPython's `socketpool`, MicroPython's `socket` plus `ssl`, CPython's stdlib) so your code never names one.
+Three functions cover what a board does on a network: `connector` opens a connection to a server, `listener` accepts connections from other devices, and `udp_socket` sends and receives single messages.  Each one picks the runtime's own networking modules for you (CircuitPython's `socketpool`, MicroPython's `socket` and `ssl`, CPython's standard library), so one program runs on all three.  Encryption is one argument: `tls=True`.
 
 ## Install
 
@@ -25,28 +25,49 @@ No board running yet?  [Start here](https://chumicro.com/ChuMicro/guides/start-h
 
 ## Quick example
 
+Fetch a web page every 30 seconds, forever.  A failed attempt prints the error and the next one runs on schedule.
+
 ```python
+import time
+
 from chumicro_sockets import connector
 
-# CircuitPython needs the board radio: with chumicro-wifi, pass
-# radio=wifi.adapter.radio.  MicroPython and CPython ignore the argument.
-dial = connector("broker.example.com", 1883, radio=None)
-while dial.state not in ("ready", "failed"):  # or register with a runner
-    dial.tick(0)
-if dial.state == "failed":
-    raise dial.last_error
-sock = dial.socket
-sock.send(b"PING\r\n")
-buffer = bytearray(64)
-nbytes = sock.recv_into(buffer, 64)
-sock.close()
+# CircuitPython needs the wifi radio: `import wifi`, then radio = wifi.radio.
+# MicroPython and CPython ignore radio, so None works there.
+radio = None
+
+buffer = bytearray(256)
+
+while True:
+    # connector() returns at once.  Each tick() takes the next step (look up
+    # the address, then connect) until the state is "ready" or "failed".
+    dial = connector("example.com", 80, radio=radio)
+    while dial.state not in ("ready", "failed"):
+        dial.tick(0)  # the time in ms; a connector keeps no deadlines, so 0 works
+        time.sleep(0.01)
+
+    if dial.state == "failed":
+        print(f"connect failed: {dial.last_error!r}")
+    else:
+        sock = dial.socket
+        try:
+            sock.settimeout(5)  # wait at most 5 s on each send and read
+            sock.send(b"GET / HTTP/1.0\r\nHost: example.com\r\n\r\n")
+            count = sock.recv_into(buffer)
+            first_line = bytes(buffer[:count]).split(b"\r\n")[0]
+            print(f"reply: {first_line.decode()}")
+        except OSError as error:
+            print(f"send or receive failed: {error!r}")
+        sock.close()
+
+    time.sleep(30)
 ```
 
 ## Documentation
 
-- [User Guide](guide.md): plain TCP, TLS defaults, TLS with a custom CA, driving a connector from a runner, per-runtime and per-chip quirks
-- [API Reference](api.md): `connector` / `listener` / `udp_socket` and the SSL-context builders, plus the transport factories, the generator helpers, and the wait objects
-- [Testing Helpers](testing.md): using `FakeSocket` in your tests
+- [User Guide](guide.md): the connect loop step by step, choosing how a socket waits, TLS and your own certificate authority, UDP, accepting connections, running alongside other work with a runner, and per-runtime and per-chip notes
+- [API Reference](api.md): `connector` / `listener` / `udp_socket` and the TLS context builders, plus the transport factories, the generator helpers, and the wait objects
+- [Testing Helpers](testing.md): testing your socket code with `FakeSocket`, `FakeUDPSocket`, and `FakeSocketConnector`
 
 ---
 

@@ -2,201 +2,226 @@
 
 ## Overview
 
-`chumicro-timing` provides two things:
+A board program is one loop that runs until the power goes.  `time.sleep()` stops that loop, so while it sleeps nothing else happens: no button is read, no sensor is checked, no message is answered.  `chumicro-timing` lets the loop keep going.  Each pass reads the clock once and asks a timer whether it is time to act.
 
-1. **Tick helpers**: `ticks_ms()`, `ticks_diff()`, and `ticks_add()` that handle counter wraparound correctly across all three Python runtimes.
-2. **Value objects** built on those helpers:
-    - `Deadline`, a single armed timeout: check `expired(now)` / `remaining(now)`, `reset(now)` to re-arm.
-    - `Rate`, a drift-free periodic cadence: `due(now)` returns `True` at most once per period.
+Two timers cover most programs:
 
-These are the building blocks for non-blocking timing on microcontrollers. Instead of calling `time.sleep()` (which blocks everything), you capture a timestamp once per loop and hand it to each timer.
+- `Rate` comes due again and again, every `period_ms`.  Use it for "blink every half second" or "read the sensor every 200 ms".
+- `Deadline` expires once, `period_ms` after you set it, until you `reset()` it.  Use it for "give up if there is no answer in 5 seconds".
 
-For generator-based flows that suspend until a completion event, the opt-in `chumicro_timing.waits` submodule adds `Signal` and `wait_for`, the completion-wait vocabulary.  Import it explicitly: `from chumicro_timing.waits import Signal, wait_for`.
+Both are built on three tick functions, `ticks_ms()`, `ticks_diff()`, and `ticks_add()`.  A *tick* is a reading of a millisecond counter, like Arduino's `millis()`.  If you have used `adafruit_ticks`, these three behave the same way, rollover included.
 
 ## Getting started
 
-### Basic periodic cadence
-
-The most common pattern is a periodic action in a main loop:
+Blink the onboard LED on a CircuitPython board, with a loop that never sleeps:
 
 ```python
+import board
+import digitalio
 from chumicro_timing import Rate, ticks_ms
 
-led_rate = Rate(500, ticks_ms())
+led = digitalio.DigitalInOut(board.LED)
+led.direction = digitalio.Direction.OUTPUT
+
+blink = Rate(500, ticks_ms())       # comes due every 500 ms, counting from now
 
 while True:
-    now = ticks_ms()
-    if led_rate.due(now):
-        # This runs twice per second
-        toggle_led()
+    now = ticks_ms()                # read the clock once per pass
+    if blink.due(now):              # True once every 500 ms, False otherwise
+        led.value = not led.value
+
+    # Nothing above waits, so code you add here runs on every pass.
 ```
 
-`Rate(period_ms, now_ms)` takes the current time at construction so it can phase-align its schedule. `due(now_ms)` returns `True` at most once per elapsed period and advances the internal schedule. Calling it again with the same timestamp returns `False` until the next period elapses.
+This is Arduino's BlinkWithoutDelay.  `Rate` keeps the `previousMillis` bookkeeping, so the loop body is one `if`.
 
-### Shared timestamps
+`Rate(period_ms, now_ms)` takes the current time so it knows where its first period starts.  `due(now_ms)` returns `True` on the first pass after each period ends, and `False` on every other pass, including a second call with the same `now`.
 
-**Always capture `ticks_ms()` once per loop iteration** and pass the same value to every component. This prevents drift between independent clock reads:
+On MicroPython the timing lines are the same and only the LED setup changes:
+
+```python
+from machine import Pin
+
+led = Pin("LED", Pin.OUT)           # Pi Pico W; on an ESP32, the LED's GPIO number
+...
+        led.value(not led.value())
+```
+
+## Several timers in one loop
+
+Give each job its own `Rate`, and read the clock once at the top of the pass:
 
 ```python
 from chumicro_timing import Rate, ticks_ms
 
 now = ticks_ms()
-fast = Rate(100, now)   # 10 Hz
-slow = Rate(5000, now)  # every 5 seconds
+fast = Rate(100, now)       # 10 times a second
+slow = Rate(5000, now)      # every 5 seconds
 
 while True:
-    now = ticks_ms()  # ONE reading per iteration
+    now = ticks_ms()        # one reading per pass, shared by every timer
     if fast.due(now):
-        read_sensor()
+        print("read the sensor")
     if slow.due(now):
-        send_report()
+        print("send a report")
 ```
 
-On a slow microcontroller, calling `ticks_ms()` separately for each component would return slightly different values. A timer that should fire at the same moment as another might not. Sharing the timestamp eliminates this class of bug.
+Handing every timer the same `now` means timers that come due at the same moment fire on the same pass.  Reading the clock separately for each one can put one reading just before the boundary and the next just after, and two timers meant to fire together land on different passes.
 
-### Resetting
+## Giving up after a while
 
-`reset(now_ms)` restarts the cadence from the given timestamp:
-
-```python
-now = ticks_ms()
-led_rate.reset(now)
-# The next fire is now period_ms from this moment,
-# regardless of when the last fire was.
-```
-
-### Behavior under late polls
-
-`Rate` is **drift-free / phase-aligned**.  When the loop runs late, `due(now)` fires and advances the *scheduled* tick by whole periods.  It does not re-anchor to `now`.  A 200 ms cadence keeps landing on 200, 400, 600 … even when individual polls arrive a few milliseconds late, and that jitter never accumulates.  If the loop stalls for longer than one period, the missed fires are skipped rather than replayed back-to-back: `due(now)` returns `True` once and the schedule jumps forward to the next period boundary after `now`.
-
-`Rate` gives you this phase-locked behavior by default.  If you want to see the mechanics spelled out by hand, [`examples/phase_locked_tick.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/timing/examples/phase_locked_tick.py) carries the deadline manually, which is exactly what `Rate` does for you internally.
-
-## Deadlines
-
-A `Deadline` is a single armed timeout. Arm it with the current time, then poll it:
+A `Deadline` answers "has this much time passed since I set it?".  Set it when you start waiting, and check it on every pass alongside whatever you are waiting for:
 
 ```python
 from chumicro_timing import Deadline, ticks_ms
 
-deadline = Deadline(500, ticks_ms())  # due 500 ms from now
+give_up = Deadline(500, ticks_ms())     # expires 500 ms from now
 
-while not deadline.expired(ticks_ms()):
-    if sensor_ready():
-        break
-    do_other_work()
+while True:
+    now = ticks_ms()
 
-left = deadline.remaining(ticks_ms())  # ms until due, clamped at 0
+    if sensor_ready():                  # your own quick check: a pin, a status register
+        print("ready, with", give_up.remaining(now), "ms to spare")
+        give_up.reset(now)
+    elif give_up.expired(now):
+        print("no answer in 500 ms")
+        give_up.reset(now)              # wait another 500 ms
 ```
 
-`expired(now)` reports whether the deadline has passed; `remaining(now)` returns the milliseconds left (clamped at `0`). `reset(now)` re-arms the same period from a new moment.
+`expired(now)` is `True` once the time is up.  `remaining(now)` is the milliseconds left, and `0` once it has expired.  `reset(now)` starts the same wait over from `now`.
 
-## Choosing a wait
+## Starting a timer over
 
-Every ChuMicro wait answers one question.  Pick by the question, not the type.
+Both timers take `reset(now_ms)`.  On a `Rate` it restarts the schedule, so the next `due()` comes one full period after `now`, whenever the last one was:
 
-| You want | Reach for | Lives in |
-|---|---|---|
-| "run this every N ms" | `Rate` | `chumicro_timing` |
-| "give up after N ms" | `Deadline` | `chumicro_timing` |
-| "a flag one place sets, another awaits" | `Signal` + `wait_for` | `chumicro_timing` |
-| "pause this generator until the socket is readable/writable" | `ReadWait` / `WriteWait` | `chumicro_sockets` |
-| "tell the runner when my service next needs the CPU" | `next_deadline` / `io_interest` on your service | the runner service contract |
-| "block the loop until a task finishes, with a timeout" | `runner.run_until` | `chumicro_runner` |
+```python
+blink.reset(ticks_ms())     # next blink in 500 ms, from this moment
+```
 
-`Signal` and `wait_for` live in the opt-in `chumicro_timing.waits` submodule; `ReadWait` and `WriteWait` in `chumicro_sockets.waits`.  A service reports `next_deadline` and `io_interest` as methods the runner reads each tick, not something you import.
+## When the loop runs late
+
+A pass of the loop takes time, so `due()` is usually called a few milliseconds after a period actually ends.  `Rate` schedules each period from the moment the last one was *due*, not from the moment your loop noticed it.  A 200 ms rate fires at 200, 400, 600 ms and onward, even when single passes arrive a few milliseconds late, and those few milliseconds never add up.
+
+The simpler approach, starting each wait from the moment you noticed the last one, *drifts*: every late check pushes all the later ones back, and over an hour the delays pile up.  Arduino's BlinkWithoutDelay does it that way.  [`periodic_tick.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/timing/examples/periodic_tick.py) shows the drift by hand, and [`phase_locked_tick.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/timing/examples/phase_locked_tick.py) shows the one-line change `Rate` makes to stop it.
+
+When the loop stalls for longer than a whole period, `Rate` skips the periods it missed rather than firing them back to back.  `due()` returns `True` once, and the schedule jumps to the next period boundary after `now`.
 
 ## Using ticks directly
 
-For custom timing logic, you can use the tick functions directly:
+For timing that fits neither timer, use the tick functions:
 
 ```python
-from chumicro_timing import ticks_ms, ticks_diff, ticks_add
+from chumicro_timing import ticks_add, ticks_diff, ticks_ms
 
-# Record a timestamp
 start = ticks_ms()
 
-# ... do work ...
+# ... later ...
+elapsed = ticks_diff(ticks_ms(), start)     # milliseconds since start
 
-# Check elapsed time (handles wraparound correctly)
-elapsed = ticks_diff(ticks_ms(), start)
-
-# Compute a deadline
-deadline = ticks_add(start, 3000)  # 3 seconds from start
+due_at = ticks_add(start, 3000)             # the tick 3 seconds after start
+if ticks_diff(ticks_ms(), due_at) >= 0:
+    print("3 seconds are up")
 ```
 
-**Important**: Do not use plain subtraction (`end - start`) on tick values, and never compute a deadline as `now + delta`. The counter wraps every ~6.2 days, and plain arithmetic gives wrong results near the boundary. Use `ticks_diff()` to measure elapsed time and `ticks_add()` to offset a timestamp.
+Never subtract ticks with `-` or add to them with `+`.  The counter rolls back to zero, and plain arithmetic gives the wrong answer across that point.  `ticks_diff()` measures between two ticks and `ticks_add()` moves a tick forward, both correctly across the rollover.
 
-The safe default is to reach for `Deadline` rather than arm a timeout by hand.  `Deadline(timeout_ms, ticks_ms())` arms via `ticks_add` internally, so the `now + delta` footgun is simply unrepresentable.  You never write the wrapping arithmetic yourself.  Keep `ticks_add` / `ticks_diff` for the cases where you genuinely need the raw tick values.
+When you find yourself writing `ticks_add` to set up a timeout, reach for `Deadline` instead.  It does the `ticks_add` for you, so the mistake has nowhere to go.
 
-## Wraparound details
+## How the rollover works
 
-The tick counter uses a 2²⁹ ms period (~6.2 days). This keeps all arithmetic within small integers, avoiding heap-allocated big integers on boards without big-int support.
+Every tick is folded into a range of 2²⁹ milliseconds, about 6.2 days, after which the count starts again from zero.  On CircuitPython the first rollover comes about 65 seconds after power-on, on purpose, so code that subtracts ticks directly breaks in its first minute rather than its first week.  The small range also keeps tick arithmetic inside a board's small integers, so it never overflows on a board without big integers and never allocates memory on a board with them.
 
-`ticks_diff()` is correct as long as the two timestamps are no more than ~3.1 days apart (half the period). For any practical embedded timing, this is more than sufficient.
-
-`ticks_add()` rejects deltas at or beyond the half-period (±2²⁸ ms) with an `OverflowError`.
+`ticks_diff()` is correct for two ticks up to about 3.1 days apart, half the range.  Any timer a board program sets fits easily.  `ticks_add()` raises `OverflowError` for a step of 3.1 days or more, and `Rate` refuses such a period with `ValueError`, because a period that long could never come due.
 
 ## Using with chumicro-runner
 
-`Rate` is designed to be polled from a main loop or tick-based scheduler, and it never blocks.  A typical pattern:
+[`chumicro-runner`](https://chumicro.com/ChuMicro/runner/stable/) runs a program built from several services in one loop.  It reads the clock once per pass and hands that reading to every service, and its `add_periodic()` does the job of a `Rate`:
 
 ```python
-from chumicro_timing import Rate, ticks_ms
+from chumicro_runner import Runner
 
-rate = Rate(1000, ticks_ms())
 
-def on_tick() -> None:
-    """Called once per scheduler tick."""
-    now = ticks_ms()
-    if rate.due(now):
-        do_periodic_work()
+def blink(now_ms: int) -> None:
+    led.value = not led.value
+
+
+runner = Runner()
+runner.add_periodic(blink, period_ms=500)
+
+while True:
+    now = runner.tick()
+    runner.wait(now)
 ```
 
-For applications with many components, [`chumicro-runner`](https://chumicro.com/ChuMicro/runner/stable/) captures the timestamp once per tick and dispatches it to every registered service.
+When a service keeps its own `Rate` or `Deadline`, hand it the `now_ms` the runner passes in rather than calling `ticks_ms()` again, so every service agrees on the time.
+
+## Choosing a wait
+
+Every wait in ChuMicro answers one question.  Pick by the question:
+
+| You want | Use | From |
+|---|---|---|
+| "run this every N ms" | `Rate` | `chumicro_timing` |
+| "give up after N ms" | `Deadline` | `chumicro_timing` |
+| "a flag one place sets, another waits on" | `Signal` + `wait_for` | `chumicro_timing.waits` |
+| "pause this generator until the socket is readable or writable" | `ReadWait` / `WriteWait` | `chumicro_sockets.waits` |
+| "tell the runner when my service next needs the CPU" | a `next_deadline` method on your service | the runner's service contract |
+| "run the loop until a task finishes, with a timeout" | `runner.run_until` | `chumicro_runner` |
+
+The last four belong to programs built on `chumicro-runner`.  `Signal` and `wait_for` pause a generator task until something else in the program finishes, and live in the `chumicro_timing.waits` module, which you import explicitly.  `next_deadline` is a method the runner looks for on your service, not something you import.
+
+## Testing
+
+`chumicro_timing.testing.FakeTicks` is a clock your test moves by hand, so timing logic runs on your laptop with no real waiting:
+
+```python
+from chumicro_timing import Rate
+from chumicro_timing.testing import FakeTicks
+
+fake = FakeTicks()
+rate = Rate(100, fake.ticks_ms())
+
+fake.advance(100)
+assert rate.due(fake.ticks_ms()) is True
+```
+
+The [testing page](testing.md) covers `Deadline` and using the fake with a runner.
 
 ## Platform notes
 
-The tick source is selected automatically at import time:
+The library picks a clock when it is imported, trying these in order and using the first your runtime has:
 
-| Priority | Source | Runtime |
+| Order | Source | Runtime |
 |---|---|---|
 | 1 | `supervisor.ticks_ms` | CircuitPython 7+ |
 | 2 | `time.ticks_ms` | MicroPython, some CircuitPython builds |
 | 3 | `time.monotonic_ns` | CPython, some CircuitPython boards |
-| 4 | `time.monotonic` | Final fallback (float seconds → int ms) |
+| 4 | `time.monotonic` | Last resort, float seconds turned into whole milliseconds |
 
-All sources are masked to the 2²⁹ period, so behavior is identical regardless of which source is used.
+Every source is folded into the same 2²⁹ ms range, so your code behaves the same whichever one is in use.
 
 ## Examples
 
-The [examples](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/timing/examples) directory contains complete runnable scripts:
+The [examples](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/timing/examples) are listed in reading order, simplest first.  The `circuitpython_` and `micropython_` files need a board; the rest also run on your laptop.
 
 | Example | What it shows |
 |---|---|
-| `rate_blink.py` | Basic periodic Rate in a main loop (the embedded hello world) |
-| `multiple_rates.py` | Several Rate timers at different rates sharing one timestamp |
-| `timeout_check.py` | Using `ticks_diff()` for deadline-based timeout detection |
-| `debounce.py` | Button debounce using `ticks_ms()` and `ticks_diff()` |
-| `periodic_tick.py` | Manual periodic action, the same logic `Rate` wraps |
-| `phase_locked_tick.py` | Drift-free deadline carrier by hand, the phase-locked schedule `Rate` provides built-in |
-| `circuitpython_blink.py` | LED blink on CircuitPython hardware |
-| `circuitpython_debounce.py` | Button debounce on CircuitPython hardware |
-| `micropython_blink.py` | LED blink on MicroPython hardware |
-| `micropython_debounce.py` | Button debounce on MicroPython hardware |
+| `circuitpython_blink.py`, `micropython_blink.py` | Getting started as a full program: the onboard LED blinks once a second |
+| `rate_blink.py` | The same loop printing `LED on` and `LED off`, so it runs without a board |
+| `multiple_rates.py` | Three `Rate` timers at three speeds in one loop |
+| `timeout_check.py` | A `Deadline` that gives up on a slow sensor, with a `Rate` that starts a new attempt each second |
+| `circuitpython_debounce.py`, `micropython_debounce.py` | A button that toggles the LED, debounced by hand with `ticks_diff` |
+| `debounce.py` | The same debounce on a pretend bouncing button, printing each bounce it ignores |
+| `periodic_tick.py` | Arduino's BlinkWithoutDelay written by hand, and how its schedule slips a little more each second |
+| `phase_locked_tick.py` | The one-line change that stops the slip, which is what `Rate` does inside |
 
-Simulated examples run on CPython.  Hardware examples (`circuitpython_*` / `micropython_*`) require a real board.  See the setup notes in each file.
+### Giving up on a slow sensor (`timeout_check.py`)
 
-### Sensor timeouts (`timeout_check.py`)
+A `Rate` starts a new attempt once a second, and each attempt calls `give_up.reset(now)` on a 500 ms `Deadline`.  Every pass of the loop asks the pretend sensor whether it is ready and asks the deadline whether it has expired, and whichever answers first ends the attempt.  The same shape fits any "fail after N ms" check: waiting for a handshake, a status bit, or a reply.
 
-Shows `ticks_add` for computing an absolute deadline and `ticks_diff` for checking it.  A `wait_for_sensor(timeout_ms)` helper polls a simulated sensor until it reads ready or the deadline expires, returning the elapsed time on success or `-1` on timeout.  The deadline is computed once with `ticks_add(start, timeout_ms)`; each iteration returns `-1` once `ticks_diff(now, deadline) >= 0`.
+### Debouncing by hand (`debounce.py`)
 
-The same pattern generalises to any "fail after N ms" check: handshake completion, status-register polling, button-hold detection.
-
-### Button debounce (`debounce.py`)
-
-Shows `ticks_ms` and `ticks_diff` for the classic debounce pattern.  A raw button signal bounces for a few ms after each press; the debouncer records the timestamp of the last accepted transition and rejects further changes until a quiet period (`DEBOUNCE_MS`) has elapsed.
-
-The same shape applies any time you need to suppress rapid signal changes: button presses, sensor readings near a threshold, motion-detector pulses.
+A button's contacts bounce for a few milliseconds when they meet or part, so one press reads as several.  The loop remembers when it last accepted a change and ignores any further change for `DEBOUNCE_MS` after it, using `ticks_diff` to measure.  The same idea quiets any signal that flickers as it changes: a sensor reading near a threshold, a motion detector's pulse.  For buttons in a real project, [`chumicro-buttons`](https://chumicro.com/ChuMicro/buttons/stable/) does this and catches taps a busy loop would miss.
 
 ---
 

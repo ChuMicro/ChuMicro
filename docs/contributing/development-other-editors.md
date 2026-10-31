@@ -15,9 +15,9 @@ cd ChuMicro
 python scripts/prepare_workspace.py
 ```
 
-This auto-detects or creates `.venv`, installs dependencies, runs **editable installs** (`pip install -e`) for every library and support package, then runs lint + host tests to verify the install. Look for `Workspace is ready` at the end.
+This reuses an active venv or creates `.venv`, installs dependencies, runs **editable installs** (`pip install -e`) for every library and tool so your edits take effect without reinstalling, then runs lint and the laptop unit tests to verify the install. Look for `Workspace is ready` at the end.
 
-After the first run, `python scripts/run.py setup` is what refreshes the workspace day-to-day: same install + IDE sync + starter device-config generation.
+After a `git pull` that adds a library or changes dependencies, `python scripts/run.py setup` refreshes the workspace: the same installs, IDE sync, and starter config files, against the venv you already have.
 
 Activate the venv before opening your editor so it picks up the right interpreter:
 
@@ -100,7 +100,7 @@ Install `LSP-pyright` via Package Control. It reads `pyrightconfig.json` automat
 
 ### Any other editor
 
-If your editor has a terminal, you're ready. The CLI workflow is the primary path.  The PyCharm and VS Code guides are convenience wrappers around the same `scripts/run.py` commands.
+If your editor has a terminal, you're ready.  Every task runs from the command line, and the PyCharm and VS Code run buttons call the same `scripts/run.py` commands.
 
 ## Browsing coverage reports
 

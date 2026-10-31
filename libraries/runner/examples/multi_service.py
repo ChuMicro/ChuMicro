@@ -1,150 +1,112 @@
-"""Multiple services: combining patterns in one runner (advanced).
+"""Run two services and two timed jobs side by side, each at its own pace.
 
-Shows how object-based, callable, and periodic registration patterns
-coexist in a single ``Runner``:
+Four jobs share one loop, forever:
 
-- **Periodic** health check (every 2 s)
-- **Object-based** motion detector (gate-based, checked every tick)
-- **Handler-only** light sensor with the gate inside the handler
-- **Periodic** data logger (every 5 s)
+- a health line every 2 s (a timed job),
+- a motion alarm that reads its sensor every 100 ms (a service),
+- a night light that reads its light sensor every 500 ms (a service),
+- a log line every 5 s (a timed job).
 
-All simulation lives inside the task objects.  On a real board,
-``detect_motion()`` and ``read_level()`` would read GPIO/ADC pins.
+The sensors are pretend.  The motion sensor trips every 8 s, and the room
+goes dark from 4 s to 8 s of every 10 s, so the night light switches on and
+off on that schedule.  Each job runs on its own period, and none of them
+waits for another.
+
+Setup:
+1. Install ``chumicro_runner`` and ``chumicro_timing``.
+2. Run ``python multi_service.py`` on your computer, or save this file as
+   ``code.py`` (CircuitPython) or ``main.py`` (MicroPython) on a board.
 
 Example output::
 
-    Running services...
-
-    [2005 ms] health: OK
-    [4001 ms] health: OK
-    [4102 ms] lights ON (level=12)
-    [4204 ms] lights ON (level=12)
-    ...
-    [5003 ms] logging data
-    [6001 ms] health: OK
-    [6001 ms] lights ON (level=12)
-    ...
-    [8005 ms] MOTION: activating alarm
-    [8005 ms] health: OK
+    Running four jobs...
+    health: OK
+    health: OK
+    lights on
+    logging data
+    health: OK
+    health: OK
+    lights off
+    MOTION: alarm
+    logging data
+    health: OK
     ...
 
 Runs on CPython, MicroPython, and CircuitPython.
 """
 
-import time
-
 from chumicro_runner import Runner
 
 
-class MotionDetector:
-    """PIR motion sensor as an object-based gate task.
-
-    ``check()`` performs a fast digital pin read via
-    ``detect_motion()``.  On a real board this reads a GPIO input.
-    Here it simulates occasional triggers.
-    """
+class MotionAlarm:
+    """Sound the alarm when the motion sensor trips."""
 
     def __init__(self) -> None:
-        """Create a detector.
-
-        On a real board: ``self._pin = digitalio.DigitalInOut(board.D5)``
-        """
-        self._check_count = 0
+        self.reads = 0
 
     def detect_motion(self) -> bool:
-        """Read the PIR sensor pin (fast digital read).
+        """Read the pretend sensor: it trips on every 80th read, every 8 s at 100 ms.
 
-        Returns:
-            True if motion is detected.
-
-        On a real board: ``return self._pin.value``
+        On a board, return the sensor's pin instead, such as ``pir.value``.
         """
-        # Simulated: triggers every ~80 checks (~8 s at 0.1 s ticks).
-        self._check_count += 1
-        return self._check_count % 80 == 0
+        self.reads += 1
+        return self.reads % 80 == 0
 
     def check(self, now_ms: int) -> bool:
-        """Check for motion (fast pin read).
-
-        Args:
-            now_ms: Current tick value.
-
-        Returns:
-            True if motion is detected.
-        """
+        """Return ``True`` when the sensor has tripped."""
         return self.detect_motion()
 
     def handle(self, now_ms: int) -> None:
-        """React to detected motion.
-
-        Args:
-            now_ms: Current tick value.
-        """
-        print(f"  [{now_ms} ms] MOTION: activating alarm")
+        """Sound the alarm."""
+        print("MOTION: alarm")
 
 
-class LightSensor:
-    """Ambient light sensor, registered with the callable pattern.
-
-    On a real board, ``read_level()`` would sample an ADC pin.
-    Here it simulates a dark period so the light handler fires.
-    """
+class NightLight:
+    """Switch the lights on when the room goes dark and off when it brightens."""
 
     def __init__(self) -> None:
-        """Create a sensor with a default bright reading."""
-        self._check_count = 0
+        self.reads = 0
+        self.lights_on = False
 
-    def read_level(self) -> int:
-        """Read ambient light level (0=dark, 100=bright).
+    def read_light_level(self) -> int:
+        """Read the pretend sensor, 0 dark to 100 bright: dark for reads 8 to 15 of every 20.
 
-        Returns:
-            Light level reading.
-
-        On a real board: ``return self._adc.value // 256``
+        On a board, return the sensor's reading instead, such as an analog pin's value.
         """
-        # Simulated: dark for checks 40–80 (~4–8 s), bright otherwise.
-        self._check_count += 1
-        if 40 <= self._check_count <= 80:
+        self.reads += 1
+        if 8 <= self.reads % 20 < 16:
             return 12
         return 60
 
+    def check(self, now_ms: int) -> bool:
+        """Return ``True`` when the lights are in the wrong state for the room."""
+        dark = self.read_light_level() < 20
+        return dark != self.lights_on
+
+    def handle(self, now_ms: int) -> None:
+        """Flip the lights."""
+        self.lights_on = not self.lights_on
+        print("lights on" if self.lights_on else "lights off")
+
+
+def report_health(now_ms: int) -> None:
+    """Print a health line."""
+    print("health: OK")
+
+
+def log_data(now_ms: int) -> None:
+    """Print a log line."""
+    print("logging data")
+
 
 runner = Runner()
+runner.add_periodic(report_health, period_ms=2000)   # every 2 s
+runner.add(MotionAlarm(), period_ms=100)              # read the motion sensor every 100 ms
+runner.add(NightLight(), period_ms=500)               # read the light sensor every 500 ms
+runner.add_periodic(log_data, period_ms=5000)         # every 5 s
 
-# 1. Periodic health check, fires every 2 seconds.
-runner.add_periodic(
-    lambda now_ms: print(f"  [{now_ms} ms] health: OK"),
-    period_ms=2000,
-)
-
-# 2. Object-based motion detector, checked every tick.
-runner.add(MotionDetector())
-
-# 3. Handler-only with the gate inside (light sensor).
-light = LightSensor()
-
-
-def lights_on_when_dark(now_ms):
-    level = light.read_level()
-    if level < 20:
-        print(f"  [{now_ms} ms] lights ON (level={level})")
-
-
-runner.add(handler=lights_on_when_dark)
-
-# 4. Periodic data logger.
-runner.add_periodic(
-    lambda now_ms: print(f"  [{now_ms} ms] logging data"),
-    period_ms=5000,
-)
-
-print("Running services...\n")
+print("Running four jobs...")
 
 while True:
-    # tick() checks every registered task (periodic, object-based,
-    # callable) then fires any whose conditions are met.
-    runner.tick()
-
-    # In a real project, the rest of your main loop goes here.
-    # The sleep just keeps this demo from flooding the console.
-    time.sleep(0.1)
+    now_ms = runner.tick()   # run every job that is due right now
+    runner.wait(now_ms)      # sleep until the next job is due

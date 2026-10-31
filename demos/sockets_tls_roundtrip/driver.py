@@ -1,11 +1,15 @@
 """Host-side driver for the sockets_tls_roundtrip demo.
 
-Generates a fresh self-signed cert + key in a temp directory, spins up
-a TLS echo server on the host's LAN IP using that cert, deploys the
-board's ``app.py`` via :func:`chumicro_workspace.deploy_api.deploy_project`
-with the echo coords AND the cert PEM bytes baked into the
-runtime_config payload, and waits for the board's marker sequence to
-confirm the TLS handshake + round trip.
+Generates a fresh self-signed certificate and key in a temp directory,
+starts a TLS echo server on the host's LAN IP with them, deploys the
+board's ``app.py`` with :func:`chumicro_workspace.deploy_api.deploy_project`
+and both the server's address and the certificate PEM in its runtime
+config, then prints every line the board prints (``board | ...``)
+while it waits on the board's markers through the first TLS round
+trip.  The board repeats the round trip every five seconds, so the
+driver keeps the echo server up for ``--watch-rounds`` more echoes
+before it stops the server and exits.  The board keeps running after
+that.
 
 Pinned ``deploy_mode="flash"`` so the demo always runs the
 production-shaped path regardless of any per-device override in
@@ -29,6 +33,7 @@ from chumicro_workspace.deploy_api import (
     DeployApiError,
     DeviceNotFoundError,
     deploy_project,
+    echo_board_line,
 )
 from chumicro_workspace.markers import MarkerTimeoutError
 
@@ -55,6 +60,11 @@ def main(argv: list[str] | None = None) -> int:
         "--completion-timeout-s", type=float, default=60.0,
         help="seconds to wait for DEMO_COMPLETE after WIFI_OK "
              "(TLS handshakes are slower than plain TCP)",
+    )
+    parser.add_argument(
+        "--watch-rounds", type=int, default=2,
+        help="echoes to watch after DEMO_COMPLETE before stopping the echo "
+             "server (default: 2; 0 stops at the first round trip)",
     )
     args = parser.parse_args(argv)
 
@@ -93,6 +103,7 @@ def main(argv: list[str] | None = None) -> int:
                     "sockets.echo.ca_pem": ca_pem_bytes.decode("ascii"),
                 },
                 workspace_root=_REPO_ROOT,
+                on_line=echo_board_line,
             )
         except DeviceNotFoundError as device_error:
             print(f"driver: {device_error}", file=sys.stderr)
@@ -107,30 +118,23 @@ def main(argv: list[str] | None = None) -> int:
             f"{session.device_entry.address})",
         )
 
-        wifi_marker = session.wait_for("WIFI_OK", timeout_s=args.wifi_timeout_s)
-        print(f"driver: board WIFI_OK ip={wifi_marker.values.get('ip')}")
-
-        connecting_marker = session.wait_for("CONNECTING", timeout_s=10.0)
-        print(
-            f"driver: board CONNECTING host={connecting_marker.values.get('host')} "
-            f"port={connecting_marker.values.get('port')}",
-        )
-
+        # The board's own lines print as they arrive; each wait below fails
+        # the run if the next step does not show up in time.
+        session.wait_for("WIFI_OK", timeout_s=args.wifi_timeout_s)
+        session.wait_for("CONNECTING", timeout_s=10.0)
         session.wait_for("CONNECTED", timeout_s=30.0)
-        print("driver: board CONNECTED")
-
-        sent_marker = session.wait_for("SENT", timeout_s=5.0)
-        print(f"driver: board SENT bytes={sent_marker.values.get('bytes')}")
-
-        echo_marker = session.wait_for("ECHO_RECEIVED", timeout_s=10.0)
-        print(
-            f"driver: board ECHO_RECEIVED "
-            f"bytes={echo_marker.values.get('bytes')} "
-            f"payload_hex={echo_marker.values.get('payload_hex')}",
-        )
-
+        session.wait_for("SENT", timeout_s=5.0)
+        session.wait_for("ECHO_RECEIVED", timeout_s=10.0)
         session.wait_for("DEMO_COMPLETE", timeout_s=args.completion_timeout_s)
-        print("driver: demo completed cleanly.")
+        print(f"driver: first round trip done; watching {args.watch_rounds} more")
+
+        for _ in range(args.watch_rounds):
+            session.wait_for("ECHO_RECEIVED", timeout_s=40.0)
+
+        print(
+            "driver: done, stopping the echo server.  The board keeps running; "
+            "its next rounds print ECHO_FAILED and retry.",
+        )
         return 0
     except MarkerTimeoutError as marker_error:
         print(f"driver: {marker_error}", file=sys.stderr)

@@ -1,67 +1,85 @@
 # Board not found
 
-When a board is plugged in but the deploy or REPL tools can't reach it, the cause is almost always the cable, the port, or which program is holding it, not the board itself.  This page covers the ways a board goes missing from `chumicro-workspace discover` and the serial-port errors you hit before any code reaches the device, in the order a first-week user tends to meet them.  The macOS-only failures around the CIRCUITPY drive (the USB drive a CircuitPython board mounts) are covered separately in [macOS CIRCUITPY deploy troubleshooting](macos-circuitpy.md).
+Your board is plugged in, but `python3 run.py discover` lists nothing for it, or a deploy or REPL session can't reach it. The cause is nearly always the cable, the port name, or another program holding the board. Problems with the CIRCUITPY drive on a Mac have their own page: [CIRCUITPY on macOS](macos-circuitpy.md).
 
-## The board never shows up in `chumicro-workspace discover`
+## Nothing shows up in `discover`
 
-A charge-only USB cable carries power but no data, so the board runs while never enumerating as a serial port.  A board sitting in its UF2 bootloader (a firmware-flashing mode where it mounts as a USB drive instead of a serial port) or a port that macOS dropped after an unclean unplug produces the same empty list.
+Run `python3 run.py discover` with the board unplugged, then again with it plugged in. A new line in the second list is your board's serial port.
 
-- Swap to a known-good data cable and replug.  Plenty of cheap cables are charge-only.
-- Look for a mass-storage drive named `RPI-RP2` (or a similar `<BOARD>BOOT` volume).  If one is mounted, the board is in its bootloader with no runtime, so flash firmware first (see [Getting firmware onto a new board](firmware-onto-a-new-board.md)).
-- Re-seat the board once.  On macOS, `ls /dev/cu.*` shows the raw port list when `discover` comes up empty.
+If no new line appears:
+
+- Swap the USB cable for one you know carries data. Many cheap cables carry only power: the board lights up but your laptop never sees it.
+- Plug straight into the laptop rather than through a hub.
+- Look for a new drive named `RPI-RP2`, or a name ending in `BOOT`. That drive means the board is sitting in its bootloader with no Python runtime yet. [Getting firmware onto a new board](firmware-onto-a-new-board.md) takes it from there.
+- On Linux, a port that appears but refuses to open is a permissions problem; see the section on `Permission denied` below.
 
 ## `PORT_UNAVAILABLE`, or `OSError: [Errno 16] Resource busy`
 
-Another program is holding the board's USB serial port, which is claimed exclusively.  Mu, Thonny, a `screen` or `minicom` session, a second `chumicro-workspace` command, or an editor's serial console (VS Code, PyCharm) each hold it, as can an earlier deploy you stopped with Ctrl-C.
-
-Run the doctor to see which program has the port:
+Only one program at a time can hold a board's serial port, and something else has it.
 
 ```bash
-chumicro-workspace doctor
+python3 run.py doctor
 ```
 
-It lists the held ports and the process IDs holding them.  Close that program, tap the board's RESET button, and wait 2-3 seconds for the port to re-enumerate before retrying.
+The `SERIAL PORTS` line names each registered board whose port is held, with the process ID and name of the program holding it. The usual holders are Mu, Thonny, a `screen` or `minicom` session, CoolTerm, the serial monitor in VS Code or PyCharm, or an earlier deploy you stopped with Ctrl-C. Close that program, tap the board's RESET button, wait two or three seconds for the port to come back, and retry.
+
+If `doctor` reports no holder, the board has probably moved to a different port name; see the section on boards that worked yesterday.
 
 ## `[Errno 13] Permission denied: '/dev/ttyACM0'` on Linux
 
-On Linux the serial port is owned by a group (`dialout` on Debian and Ubuntu, `uucp` on Arch), and your user account isn't in it.
+Linux lets only members of one group open serial ports: `dialout` on Debian and Ubuntu, `uucp` on Arch. Add yourself to it:
 
 ```bash
 sudo usermod -a -G dialout $USER   # Debian/Ubuntu; use uucp on Arch
 ```
 
-Log out and back in for the group change to take effect, then replug.
+Log out and back in so the new group takes effect, then replug the board.
 
 ## `RAW_REPL_UNRESPONSIVE`: the board's REPL did not respond
 
-The board's interactive Python prompt (its REPL) isn't answering, usually because the board is wedged, sitting in CircuitPython safe mode (a recovery state it enters after a crash), or running code that ignores Ctrl-C.
+The tools drive a board through its REPL, the `>>>` Python prompt it offers over USB. That prompt is not answering.
 
-Tap RESET.  If the board is in CircuitPython safe mode, press any key over the serial connection to leave it.  If it stays silent, hold RESET for two seconds, or unplug and replug.
+Tap RESET and retry. A CircuitPython board that crashed into safe mode prints `Press reset to exit safe mode.`, and RESET is the way out. If the board runs code that ignores Ctrl-C, hold RESET for two seconds, or unplug it and plug it back in.
 
-## The deploy hangs for 120 seconds, then retries into the same hang (`COMMAND_TIMED_OUT`)
+## The deploy hangs, then fails with `COMMAND_TIMED_OUT`
 
-The board's USB serial link has wedged, and a wedged link never clears on its own, so each retry meets the identical timeout.
+The board's USB serial link has locked up. It never recovers on its own, so retrying meets the same timeout.
 
-Physically unplug and replug the board.  A soft reset over serial will not clear this.  If the board is still dead after a replug, wipe its filesystem or reflash its runtime:
-
-```bash
-chumicro-workspace reset-board --device <id> --yes
-```
-
-`reset-board` erases every user file on the board, so back up anything that lives only there first (see the warning on [Getting firmware onto a new board](firmware-onto-a-new-board.md)).  If a wipe doesn't help, reflash the firmware.
-
-## `runtime mismatch: probe says micropython, entry says circuitpython`
-
-The `--runtime` you passed to `add-device` disagrees with what the board reports about itself when the tool probes it.
-
-Re-run `add-device` with the runtime the probe found, or omit `--runtime` to let it auto-detect:
+Unplug the board and plug it back in; a software reset can't clear this. If the board is still unresponsive after a replug, wipe its files:
 
 ```bash
-chumicro-workspace add-device <id> --address <port> --runtime circuitpython
+python3 run.py reset-board --device <id> --yes
 ```
 
-## A deploy lands on the wrong board, or a board seems to move between ports
+`reset-board` erases every file on the board, including `settings.toml` and `boot.py`, so copy off anything that exists only there first. If the board still won't answer after the wipe, reflash its firmware ([Getting firmware onto a new board](firmware-onto-a-new-board.md)).
 
-macOS reassigns the same `/dev/cu.usbmodem<N>` name to different boards on the same root port, so the port name is not a stable identity for one specific board.
+## A board that worked yesterday is "unavailable" today, or a deploy reaches the wrong board
 
-You don't need to do anything, and you shouldn't pin a port.  The tooling identifies each board by its hardware UID (a unique id burned into the chip), updates the cached address on its own when a board drifts to a new port, and fails loudly on a UID mismatch rather than deploying to the wrong board.
+Your laptop names serial ports as boards arrive (`/dev/cu.usbmodem1101` on a Mac, `/dev/ttyACM0` on Linux), so replugging, switching USB sockets, or adding a second board can hand a board a new name, or hand its old name to a different board. `devices.yml` still holds the name the board had when you registered it.
+
+Compare the two lists:
+
+```bash
+python3 run.py devices     # the port each registered board had
+python3 run.py discover    # the ports that exist right now
+```
+
+When they disagree, refresh the stored port. `add-device` with `--force` keeps the board's id, asks which port to use, checks the board on it, and saves the new port:
+
+```bash
+python3 run.py add-device <id> --force
+```
+
+CircuitPython deploys that copy files through the CIRCUITPY drive already match the drive to the board by the chip's unique ID; [CIRCUITPY on macOS](macos-circuitpy.md#two-circuitpython-boards-and-the-deploy-picks-the-wrong-drive) covers that case.
+
+## Deploys stopped working after you reflashed the board with the other runtime
+
+Moving a board from CircuitPython to MicroPython, or back, leaves its entry in `devices.yml` naming the old runtime, so the tools talk to it the wrong way. `python3 run.py devices` shows the runtime each entry records.
+
+Rebuild the entry from the board itself:
+
+```bash
+python3 run.py reset-device <id> --yes
+```
+
+`reset-device` keeps the id and its place as a default board, probes the board to find out which runtime it now runs, and rewrites the rest of the entry. A `description` or `deploy_mode` you set by hand is dropped, so add those back afterwards.

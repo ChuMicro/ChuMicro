@@ -1,29 +1,31 @@
-"""Button-controlled LED: CircuitPython gate pattern.
+"""Toggle the built-in LED each time you press a button.
 
-Reads a button and toggles an LED using the runner's check/handle
-gate pattern.  The runner scans the button every 20 ms (the debounce
-window).  When the button is pressed, ``handle()`` fires and toggles
-the LED.  Prints
-a startup banner and a line on every accepted press so a serial
-console (or a sweep harness) can verify the loop without a probe.
+Every press flips the LED and prints a line on the serial console.  Holding
+the button down counts as one press.  The program keeps watching the button
+forever.
 
-Example output::
-
-    Button toggle: press button to flip the LED.
-
-      [  815 ms] press → toggle
-      [ 1407 ms] press → toggle
-      ...
+``ButtonToggle`` is a service: the runner calls ``check()`` every 20 ms to
+ask "was the button just pressed?", and calls ``handle()`` to flip the LED
+only when the answer is yes.  Reading the button every 20 ms also debounces
+it: a switch stops bouncing well inside that window, so one press reads as
+one press.
 
 Setup:
 1. Install ``chumicro_runner`` and ``chumicro_timing``
-   (``circup install chumicro_runner`` or copy both packages
-   to ``lib/``).
-2. Wire a momentary button between the chosen GPIO and **GND**.
-   The internal pull-up keeps the pin high when the button is
-   open.  The built-in LED (``board.LED``) needs no extra wiring.
+   (``circup install chumicro_runner``, or copy both packages into ``lib/``).
+2. Wire a push button between a GPIO pin and GND.  The pin's internal
+   pull-up holds it high until the button pulls it low.  Boards listed in
+   ``BOARD_BUTTON_PINS`` find their pin on their own; on any other board, set
+   ``BUTTON_PIN`` to the pin name, such as ``"D5"`` or ``"GP14"``.
 3. Save this file as ``code.py`` on the board.
 
+Example output::
+
+    Press the button to toggle the LED.
+    press 1: LED on
+    press 2: LED off
+    press 3: LED on
+    ...
 
 Runs on CircuitPython.
 """
@@ -36,94 +38,72 @@ import board
 import digitalio
 from chumicro_runner import Runner
 
-# Set BUTTON_PIN to the pin attribute on the `board` module
-# (e.g. "D5", "GP14", "BUTTON") to override autodetection.
-# Leave empty to look up your board in BOARD_BUTTON_PINS below.
+# The pin your button is wired to, by its name on the board module.
+# Leave it empty to look your board up in BOARD_BUTTON_PINS.
 BUTTON_PIN = ""
 
-# Per-board fallback used when BUTTON_PIN is empty.  Key is the
-# string ``board.board_id`` returns on each board (find yours
-# at the REPL with ``import board; print(board.board_id)``).
-# One entry per line.  Add your board if it isn't listed.
+# Button pins for boards this example has been wired up on, keyed by
+# board.board_id (print it at the REPL with: import board; board.board_id).
 BOARD_BUTTON_PINS = {
-    "raspberry_pi_pico_w":     "GP14",
-    "raspberry_pi_pico2_w":    "GP14",
-    "lolin_s2_mini":           "D5",
-    "lolin_s2_pico":           "D5",
-    "adafruit_feather_esp32s2":               "BUTTON",
+    "raspberry_pi_pico_w": "GP14",
+    "raspberry_pi_pico2_w": "GP14",
+    "lolin_s2_mini": "D5",
+    "lolin_s2_pico": "D5",
+    "adafruit_feather_esp32s2": "BUTTON",
     "adafruit_feather_esp32s3_4mbflash_2mbpsram": "BUTTON",
 }
 
 
-def _resolve_button_pin():
-    """Return the ``board`` attribute for the configured button pin."""
+def find_button_pin():
+    """Return the ``board`` pin named by BUTTON_PIN or by this board's BOARD_BUTTON_PINS entry."""
     pin_name = BUTTON_PIN or BOARD_BUTTON_PINS.get(board.board_id)
     if not pin_name:
         raise RuntimeError(
-            f"no button pin for board {board.board_id!r}: set BUTTON_PIN "
-            f"at the top of this file (e.g. \"D5\") or add an entry to "
-            f"BOARD_BUTTON_PINS.",
+            f"no button pin known for {board.board_id!r}: set BUTTON_PIN "
+            f"at the top of this file, for example BUTTON_PIN = \"D5\"",
         )
-    pin = getattr(board, pin_name, None)
-    if pin is None:
-        raise RuntimeError(
-            f"board has no pin named {pin_name!r}: check your "
-            f"BUTTON_PIN setting / BOARD_BUTTON_PINS mapping.",
-        )
-    return pin
+    return getattr(board, pin_name)
 
 
-# Set up the onboard LED.
 led = digitalio.DigitalInOut(board.LED)
 led.direction = digitalio.Direction.OUTPUT
 
-button = digitalio.DigitalInOut(_resolve_button_pin())
+button = digitalio.DigitalInOut(find_button_pin())
 button.direction = digitalio.Direction.INPUT
 button.pull = digitalio.Pull.UP
 
 
 class ButtonToggle:
-    """Toggle an LED each time a button is pressed.
-
-    Uses edge detection so the LED toggles once per press,
-    not continuously while held.
-    """
+    """Flip the LED once per button press."""
 
     def __init__(self) -> None:
-        """Track the previous button state for edge detection."""
-        self._was_pressed = False
+        self.was_pressed = False
+        self.presses = 0
 
     def check(self, now_ms: int) -> bool:
-        """Return True on the falling edge (button just pressed).
+        """Return ``True`` only on the read where the button goes from up to down.
 
-        Args:
-            now_ms: Current tick value.
-
-        Returns:
-            True if the button was just pressed.
+        The runner passes ``now_ms``, the time of the current tick in
+        milliseconds.  This service has no use for it.
         """
-        pressed = not button.value  # active-low
-        just_pressed = pressed and not self._was_pressed
-        self._was_pressed = pressed
+        pressed = not button.value   # the pull-up reads False while the button is held
+        just_pressed = pressed and not self.was_pressed
+        self.was_pressed = pressed
         return just_pressed
 
     def handle(self, now_ms: int) -> None:
-        """Toggle the LED and print a marker line.
-
-        Args:
-            now_ms: Current tick value.
-        """
+        """Flip the LED and print the press count."""
         led.value = not led.value
-        print(f"  [{now_ms:>5} ms] press → toggle")
+        self.presses += 1
+        state = "on" if led.value else "off"
+        print(f"press {self.presses}: LED {state}")
 
 
 runner = Runner()
-# A button is not pollable like a socket, so scan it on a 20 ms period —
-# the debounce window — and let wait() sleep between scans.
-runner.add(ButtonToggle(), period_ms=20)
+runner.add(ButtonToggle(), period_ms=20)   # read the button every 20 ms
 
-print("Button toggle: press button to flip the LED.\n")
+print("Press the button to toggle the LED.")
 
 while True:
-    now_ms = runner.tick()
-    runner.wait(now_ms)
+    now_ms = runner.tick()   # check every service that is due right now
+    runner.wait(now_ms)      # sleep until the next button read is due

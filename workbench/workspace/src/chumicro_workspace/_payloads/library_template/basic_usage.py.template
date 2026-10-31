@@ -1,26 +1,32 @@
 """{display_name}: basic usage.
 
-Shows basic usage of the {class_name} class.
+Creates a {class_name}, then raises its value by one every second,
+forever.  On a laptop, press Ctrl-C to stop it.
 
 Runs on CPython, MicroPython, and CircuitPython.
 
 Rewrite the script below for your real class, then update the Example
 output block so it matches what the rewritten script actually prints.
+Keep the ``while True:`` loop at the bottom, doing your class's real
+work on each pass: a board runs its program until the power goes, so
+an example never exits.
 
 Example output::
 
-    Created {display_name} with value=42
-    Current value: 42
-    Value after update: 100
+    Created {display_name} with value=0
+    Value: 1
+    Value: 2
+    Value: 3
 """
+
+import time
 
 from {import_name} import {class_name}
 
-thing = {class_name}(value=42)
+thing = {class_name}(value=0)
 print(f"Created {display_name} with value={{thing.value}}")
 
-print(f"Current value: {{thing.value}}")
-
-thing.update(100)
-print(f"Value after update: {{thing.value}}")
-
+while True:
+    thing.update(thing.value + 1)
+    print(f"Value: {{thing.value}}")
+    time.sleep(1)

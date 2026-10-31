@@ -104,8 +104,9 @@ class TestInstallCommand:
         assert isinstance(result, list)
         assert all(isinstance(part, str) for part in result)
 
-    def test_ends_with_install(self):
-        """Command ends with 'install'."""
+    def test_pip_fallback_ends_with_install(self, monkeypatch):
+        """Without uv, the command ends with 'install' so package args follow it."""
+        monkeypatch.setattr(shutil, "which", lambda _name: None)
         result = install_command()
         assert result[-1] == "install"
 
@@ -113,8 +114,15 @@ class TestInstallCommand:
         """Uses uv pip install when uv is on PATH."""
         monkeypatch.setattr(shutil, "which", lambda name: "/usr/bin/uv" if name == "uv" else None)
         result = install_command()
-        assert result[0] == "uv"
-        assert "pip" in result
+        assert result[:3] == ["uv", "pip", "install"]
+
+    def test_uv_default_names_the_running_interpreter(self, monkeypatch):
+        """With no python argument, uv still gets --python sys.executable, so
+        an inherited $VIRTUAL_ENV cannot redirect the install."""
+        monkeypatch.setattr(shutil, "which", lambda name: "/usr/bin/uv" if name == "uv" else None)
+        monkeypatch.setenv("VIRTUAL_ENV", "/some/other/checkout/.venv")
+        result = install_command()
+        assert result[3:] == ["--python", sys.executable]
 
     def test_falls_back_to_pip(self, monkeypatch):
         """Falls back to pip install when uv is not available."""

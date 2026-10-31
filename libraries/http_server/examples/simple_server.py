@@ -1,114 +1,134 @@
-"""Simple HTTP server on CircuitPython / MicroPython.
+"""Serve a web page from your board.
 
-Brings wifi up via the local ``helpers`` module, opens an HTTP server
-on ``0.0.0.0:8080`` with three routes, and prints requests as they
-arrive.  Single-board demo: drive it from your laptop with ``curl``
-or a browser; for a two-physical-board pattern see the
-``two_board_handshake/`` example in the workspace template.
+The board joins your wifi, prints its address, and answers web requests
+for as long as it has power.  Open that address in a browser on the
+same network and the board sends back a page saying how many requests
+it has answered and how much memory it has free.  Every 30 seconds it
+prints the same numbers to the serial console, which shows the main
+loop stays free for your own code while the server waits for visitors.
 
-Routes:
+Before you run it:
 
-* ``GET /`` returns an HTML hello page (open in a browser).
-* ``GET /api/uptime`` returns JSON ``{"uptime_ms": <int>}``; it updates
-  between hits so you can see the server is live.
-* ``POST /api/echo`` accepts any JSON body and returns it wrapped as
-  ``{"echoed": <body>}``.
+1. Install ``chumicro_http_server`` on the board, and copy
+   ``helpers.py`` from this folder onto the board beside this file.
+2. Set ``WIFI_SSID`` and ``WIFI_PASSWORD`` below.
+3. Save this file to the board as ``code.py`` (CircuitPython) or
+   ``main.py`` (MicroPython), and open the serial console.
 
-Configuration
-=============
+From a ChuMicro workspace, ``chumicro-workspace deploy-example
+http_server simple_server`` does all three steps and takes the wifi
+details from ``secrets.toml``.
 
-Reads ``/runtime_config.msgpack`` via ``helpers.runtime_config()``:
+Then use the address the board printed.  Open
+``http://<board-ip>:8080/`` in a browser, or from a terminal::
 
-* WiFi: ``wifi.ssid`` / ``wifi.password``.
-* HTTP server: ``http_server.bind_host`` / ``bind_port`` /
-  ``max_connections`` / ``request_timeout_ms`` / ``max_request_body_bytes``
-  plus the optional TLS pair ``http_server.tls.cert_path`` /
-  ``http_server.tls.key_path``, all optional with library defaults
-  (``0.0.0.0:8080``, plain TCP).
+    curl http://<board-ip>:8080/status
+    curl -d '{"hello": "board"}' http://<board-ip>:8080/echo
 
-When ``runtime_config.msgpack`` isn't present (raw single-file deploy),
-edit the ``WIFI_SSID`` / ``WIFI_PASSWORD`` constants below.  The server
-falls back to ``0.0.0.0:8080``.
+What you will see on the serial console::
 
-Try it
-======
+    Joining wifi...
+    Serving at http://10.0.0.42:8080/
+    GET /
+    GET /status
+    POST /echo
+      received {'hello': 'board'}
+    Requests answered: 3, free memory: 151232 bytes.  Serving at http://10.0.0.42:8080/
 
-Deploy the example, watch its serial output for the IP it prints,
-then from your laptop::
-
-    curl http://<board-ip>:8080/
-    curl http://<board-ip>:8080/api/uptime
-    curl -X POST -H 'Content-Type: application/json' \\
-         -d '{"hello": "board"}' http://<board-ip>:8080/api/echo
-
-Example output (board side)::
-
-    WIFI_OK ip=10.0.0.42
-    Server listening on http://10.0.0.42:8080/
-    [+] GET /
-    [+] GET /api/uptime
-    [+] POST /api/echo  body={"hello": "board"}
+Something to try: send ``/echo`` a body that is not JSON.  The route
+raises an error, the server answers ``500`` with the error message,
+and the board carries on serving.
 """
 
-#: Cross-runtime: wifi-up via :mod:`helpers` dispatches per
-#: ``sys.implementation.name`` (CP / MP) and the HTTP server is
-#: pure-Python.  The marker tells :func:`scripts.verify_examples`
-#: + ``deploy-example`` to allow this file on either runtime.
+# Runs on CircuitPython and MicroPython; the deploy tools read this line.
 __chumicro_runtimes__ = ("circuitpython", "micropython")
 
+import gc
 import time
 
 from chumicro_http_server import HttpServer, build_response
-from helpers import runtime_config, ticks_diff, ticks_ms, wifi_up
+from helpers import runtime_config, ticks_add, ticks_diff, ticks_ms, wifi_up
 
 WIFI_SSID = "your-wifi-ssid"  # noqa: S105 - replace before deploying
 WIFI_PASSWORD = "your-wifi-password"  # noqa: S105 - replace before deploying
+REPORT_EVERY_MS = 30_000
 
+# Join wifi.  wifi_up() waits until the board has an address.  When a
+# deploy put wifi settings on the board, those win over the two above.
+print("Joining wifi...")
 config = runtime_config()
 radio, ip = wifi_up(WIFI_SSID, WIFI_PASSWORD)
-print(f"WIFI_OK ip={ip}")
 
+# Make the server.  It listens on port 8080 unless the deployed settings
+# name another.  On CircuitPython it opens its sockets through the radio.
 server = HttpServer.from_config(config, radio=radio)
+port = config.get("http_server.bind_port", 8080)
+address = f"http://{ip}:{port}/"
+requests_answered = 0
 
-start_ticks = ticks_ms()
+
+def log_request(request):
+    """Print each request as it arrives and add it to the count."""
+    global requests_answered
+    requests_answered += 1
+    print(request.method, request.path)
 
 
+# Each route is a function the server calls when a request for its path
+# arrives.  It gets the request and returns the response to send back.
 @server.route("/")
-def index(_request):
-    print("[+] GET /")
-    body = (
-        "<html><body><h1>chumicro http_server demo</h1>"
-        "<p>Try <code>GET /api/uptime</code> and "
-        "<code>POST /api/echo</code>.</p></body></html>"
+def home(request):
+    log_request(request)
+    page = (
+        "<h1>Hello from your board</h1>"
+        f"<p>Requests answered: {requests_answered}<br>"
+        f"Free memory: {gc.mem_free()} bytes</p>"
+        '<p>The same numbers as JSON: <a href="/status">/status</a></p>'
     )
-    return build_response(200, html=body)
+    return build_response(200, html=page)
 
 
-@server.route("/api/uptime")
-def uptime(_request):
-    print("[+] GET /api/uptime")
-    # ticks_ms wraps every ~6.2 days; ticks_diff handles the
-    # signed wraparound math correctly.
-    uptime_ms = ticks_diff(ticks_ms(), start_ticks)
-    return build_response(200, json={"uptime_ms": uptime_ms})
+@server.route("/status")
+def status(request):
+    log_request(request)
+    return build_response(
+        200, json={"requests_answered": requests_answered, "free_bytes": gc.mem_free()},
+    )
 
 
-@server.route("/api/echo", methods=["POST"])
+@server.route("/echo", methods=["POST"])
 def echo(request):
-    payload = request.json()
-    print(f"[+] POST /api/echo  body={payload!r}")
-    return build_response(200, json={"echoed": payload})
+    log_request(request)
+    data = request.json()
+    print("  received", data)
+    return build_response(200, json={"echoed": data})
 
 
-bound_host = config.get("http_server.bind_host", "0.0.0.0")
-bound_port = config.get("http_server.bind_port", 8080)
-
-# The listener opens on the first handle(), so drive one tick before
-# announcing the port; a bind failure surfaces here, not mid-loop.
+# The first handle() opens the listening socket, so by the time the
+# address prints, the board is already answering on it.
 server.handle(ticks_ms())
-print(f"Server listening on http://{ip}:{bound_port}/  (bound {bound_host}:{bound_port})")
+print(f"Serving at {address}")
+
+next_report_ms = ticks_add(ticks_ms(), REPORT_EVERY_MS)
 
 while True:
-    if server.check(ticks_ms()):
-        server.handle(ticks_ms())
-    time.sleep(0.02)
+    now_ms = ticks_ms()
+
+    # Give the server its turn.  check() asks whether it has work, and a
+    # server always does, since a visitor can arrive at any moment.
+    # handle() accepts a waiting visitor, moves every open request one
+    # step along, and returns within a few milliseconds.
+    if server.check(now_ms):
+        server.handle(now_ms)
+
+    # The rest of your program goes here.  This part prints a status line
+    # every 30 seconds.  ticks_diff() and ticks_add() do the arithmetic,
+    # because the millisecond counter wraps back to zero about every six days.
+    if ticks_diff(now_ms, next_report_ms) >= 0:
+        print(
+            f"Requests answered: {requests_answered}, "
+            f"free memory: {gc.mem_free()} bytes.  Serving at {address}",
+        )
+        next_report_ms = ticks_add(now_ms, REPORT_EVERY_MS)
+
+    time.sleep(0.01)  # a short rest so the loop does not spin flat out

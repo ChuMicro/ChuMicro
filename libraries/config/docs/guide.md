@@ -2,38 +2,54 @@
 
 ## Overview
 
-`chumicro-config` is how ChuMicro libraries read their settings on a device.  Apps read the deployed `runtime_config.msgpack` once with `load_runtime_config()`, then hand the whole config to each consuming library.  Each library pulls its own prefix's keys (`wifi.*`, `mqtt.broker.*`, …) off the shared dict.
+`chumicro-config` reads a project's settings on the board.  The settings live in one file, `/runtime_config.msgpack`, as a flat dict whose keys are dotted names: `wifi.ssid`, `mqtt.broker.host`, `sensor.period_ms`.  `load_runtime_config()` reads the file and returns a `RuntimeConfig`, which you query like a dict.  Each ChuMicro library has a `from_config(config)` method that reads the settings under its own prefix (`wifi.*`, `mqtt.*`), so your code hands one object to every library instead of passing each setting by hand.
 
-Most consumer libraries (mqtt, ntp, requests, websockets, http_server) read their slice with plain `config.get("<prefix>.<key>", <default>)` calls inside their `<Name>Config.from_config` classmethod.  When a library's constructor signature maps 1:1 onto a flat-prefix subkey set, `load_section` packages the boilerplate; `chumicro-wifi` uses it today.
-
-Every library reads its keys using the same `<prefix>.<subkey>` dotted-key layout, so the on-wire shape stays uniform regardless of which API a library uses to parse it.
+`load_section` builds an object of your own class from every setting under one prefix.  Use it to give your own code, or a library you write, the same kind of `from_config` method.
 
 ## Getting started
 
-In an app, the read is one line:
+Read two settings and use them in the main loop:
 
 ```python
-from chumicro_config import load_runtime_config
-from chumicro_wifi import WifiConfig, WifiService
+import time
 
-config = load_runtime_config()                       # /runtime_config.msgpack
-wifi = WifiService(WifiConfig.from_config(config))   # reads + types wifi.* keys
+from chumicro_config import RuntimeConfig
+
+# On a board deployed with chumicro-workspace, read the settings file instead:
+#     from chumicro_config import load_runtime_config
+#     config = load_runtime_config()
+config = RuntimeConfig({"sensor.name": "back-porch", "sensor.period_ms": 2000})
+
+name = config["sensor.name"]                       # raises MissingConfigKey if absent
+period_ms = config.get("sensor.period_ms", 5000)   # 5000 if absent
+
+while True:
+    print(f"{name}: taking a reading")
+    time.sleep(period_ms / 1000)
 ```
 
-`load_runtime_config()` opens `/runtime_config.msgpack` (the default path, `chumicro_config.runtime.DEFAULT_RUNTIME_CONFIG_PATH`), msgpack-decodes it, and returns a `RuntimeConfig`, a thin lookup wrapper over the flat-key payload.  Every chumicro library reads its own prefix's keys (`wifi.ssid`, `mqtt.broker.host`, …) from that one object.
+`RuntimeConfig(dict)` builds the settings object from a dict, which lets you try the code without a settings file.  On a deployed board, `load_runtime_config()` opens `/runtime_config.msgpack`, unpacks it, and returns the same kind of object; it raises `OSError` when the file is missing.  `chumicro_config.config` gives you the same object without the call: it reads the file the first time you use it and is `None` when the board has no settings file.
 
-## Writing a `from_config` for your own library
+Pass that one object to each ChuMicro library you use, and each reads its own settings:
 
-Two shapes, picked by what's being constructed.  The picker rule:
+```python
+from chumicro_wifi import WifiService
 
-- **Pattern A, value-object.**  When every `__init__` kwarg maps 1:1 from a flat-prefix subkey *and* nothing else is injected at construction time, use `load_section`.  This is the WifiConfig shape.
-- **Pattern B, client-with-injection.**  When `__init__` mixes config-derived kwargs with **non-config injectables** (sockets, radios, TLS contexts, listeners, factories, event handlers) or has **call-site logic** (mode-conditional sub-key reads, broker-required guards, half-TLS guards, computed defaults), skip `load_section` and read keys directly with `config.get` / `config.require`.  This is the shape used by mqtt, ntp, requests, websockets, http_server.
+wifi = WifiService.from_config(config)   # reads wifi.ssid, wifi.password, ...
+```
 
-Reading both `__init__` and the planned `from_config` side-by-side usually settles which shape applies.  When in doubt, start with Pattern A; if you find yourself adding non-config kwargs or call-site `if`s, that's the signal to flip to Pattern B.
+## Writing a `from_config` for your own class
 
-### Pattern A, value-object (`load_section`)
+A `from_config(config)` class method builds your object from the settings, the way every ChuMicro library does.  Which way to write it depends on what `__init__` takes:
 
-When the constructor's keyword arguments line up exactly with a flat-prefix subkey set, `load_section` cuts the boilerplate down to ~10 lines:
+- **Every argument is a setting: use `load_section`.**  When each `__init__` argument matches one setting under a prefix and nothing else gets passed in, `load_section` does the work.  `WifiConfig` in `chumicro-wifi` works this way.
+- **Some arguments are objects, or the method needs logic: read the keys yourself.**  When `__init__` also takes objects that cannot live in a settings file (a socket, a radio, a clock, a callback), or the method has to decide something (which keys to read depends on a mode, one setting requires another), call `config.get` and `config.require` directly.  The mqtt, ntp, requests, websockets, and http_server clients work this way.
+
+Start with `load_section`, and switch to reading keys yourself once you need an argument that is not a setting or an `if` inside the method.
+
+### Every argument is a setting: `load_section`
+
+When the constructor's keyword arguments line up with the settings under one prefix, `load_section` builds the object in one call:
 
 ```python
 from chumicro_config import load_section
@@ -64,13 +80,13 @@ class WifiConfig:
 3. For each `optional` subkey, pulls `config[f"{prefix}.{subkey}"]` if present, else uses the default.
 4. Calls `cls(**kwargs)` and returns the instance.  Each kwarg name is the bare subkey (no prefix), so `WifiConfig` gets `ssid=…`, `password=…`, etc.
 
-Unknown keys are **ignored**, which is deliberate forward-compat.  An older library version reads a config file that has newer libraries' keys in it without exploding on the unfamiliar prefixes.
+`load_section` ignores keys it was not asked for, so an older library keeps working when the settings file holds keys that only a newer library reads.
 
-There is no type coercion.  `"1883"` stays a string; the `__init__` does any conversion the library wants.
+`load_section` converts nothing: `"1883"` stays a string, and `__init__` does any conversion the class wants.
 
-### Pattern B, client-with-injection (direct `config.get`)
+### Objects or logic: read keys with `config.get`
 
-When the class being constructed is a runner / client / service that takes both config-derived fields and non-config injectables (or has per-class guards), don't wrap `load_section`; it has no slot for the injectables and no hook for the guards.  Read keys directly:
+When the class also takes objects that do not come from the settings file, or its method needs an `if`, `load_section` has no place for either.  Read the keys directly:
 
 ```python
 class NTPClient:
@@ -85,9 +101,9 @@ class NTPClient:
         )
 ```
 
-No upfront `isinstance` guard is required.  Some Pattern B factories add a one-line `hasattr(config, "get")` check that raises the library's own error (`MQTTClient.from_config` raises `ValueError`); the rest let a `None` / `str` / `int` fail on the first `.get(...)` with `AttributeError`, clear enough at the call site to diagnose.
+This method needs no type check up front.  Passing `None` or a number in place of the settings fails on the first `.get(...)` with `AttributeError`, which points straight at the call.  `MQTTClient.from_config` adds a one-line `hasattr(config, "get")` check that raises `ValueError` instead.
 
-Pattern B's freedom to mix is exactly its point: `MQTTClient.from_config` reads `mqtt.broker.host` *and* takes an injectable `socket` factory *and* enforces a broker-required guard; trying to express any of that through `load_section`'s `required` / `optional` mapping bends it into a less-readable shape than the inline reads.
+`MQTTClient.from_config` shows why this form exists: it reads `mqtt.broker.host`, takes a `socket` object from the caller, and refuses to build a client with no broker set.  None of that fits `load_section`'s `required` and `optional` lists.
 
 ## Soft loading with `try_load_section`
 
@@ -124,12 +140,13 @@ Three classes, one base:
 from chumicro_config import ConfigError, MissingConfigKey
 
 try:
-    wifi = WifiConfig.from_config(config)
+    wifi_config = WifiConfig.from_config(config)
 except MissingConfigKey as error:
-    print(f"Add wifi.* keys to your config: {error}")
-    raise
-except ConfigError:
-    raise  # let it propagate; logs higher up
+    print(f"Add the missing setting to your project config: {error}")
+    wifi_config = None
+except ConfigError as error:
+    print(f"The settings could not be read: {error}")
+    wifi_config = None
 ```
 
 `MissingConfigKey` and `InvalidConfigType` are **single-inheritance only**.  They do not also subclass `KeyError` or `TypeError`.  MicroPython rejects multiple inheritance from `Exception` subclasses with differing memory layouts, so the natural CPython idiom (`class MissingConfigKey(ConfigError, KeyError)`) doesn't load on device.  Catch via `ConfigError` if you want broad handling.
@@ -184,7 +201,7 @@ Works identically on CPython, MicroPython, and CircuitPython.  Only dependency: 
 
 | Example | What it shows |
 |---|---|
-| [`examples/end_to_end.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/config/examples/end_to_end.py) | Both patterns (`<Name>Config.from_config()` for library authors, multi-section app wiring for users) plus `MissingConfigKey` / `InvalidConfigType` error handling.  Runs on every runtime; no device or `runtime_config.msgpack` needed. |
+| [`examples/end_to_end.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/config/examples/end_to_end.py) | Reads settings with `config.get`, builds a `SensorConfig` through a `from_config()` method that calls `load_section`, catches `MissingConfigKey`, then takes a pretend reading every `sensor.period_ms` forever.  Runs on every runtime without a settings file. |
 
 ---
 

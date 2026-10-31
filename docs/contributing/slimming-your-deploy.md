@@ -1,6 +1,6 @@
 # Slimming your deploy
 
-When you deploy a project, `chumicro-workspace` copies every chumicro library that anything in your project imports onto the board, including the small helper each library uses to build its default transport (typically a `chumicro_sockets` socket).
+When you deploy a project, `chumicro-workspace` copies every chumicro library that anything in your project imports onto the board, including the small helper the networking libraries share to build their default transport, `chumicro_sockets.sockets_factory`.
 
 Most of the time that's fine.  But if you're passing your own socket into a library (say `MQTTClient(transport_factory=my_factory, ...)`), the default-builder helper is dead code on your board, and so is `chumicro_sockets` underneath it.  The deployer can't tell at deploy time which path your code will take at runtime, so it ships both.
 
@@ -14,17 +14,17 @@ The deployer reads that constant, leaves the named factory helpers out of the de
 
 ## Family form and exact form
 
-The skip constant accepts two entry shapes, mix freely:
+The skip constant accepts two entry shapes, and you can mix them:
 
 ```python
 # app.py
 __chumicro_skip_factories__ = (
     "sockets_factory",                       # family: skip every <library>.sockets_factory
-    "chumicro_websockets.tls_factory",       # exact: skip just this one
+    "chumicro_sockets.sockets_factory",      # exact: skip just this one module
 )
 ```
 
-A bare stem like `"sockets_factory"` (no dot) matches every library's `sockets_factory.py`.  A dotted path like `"chumicro_websockets.tls_factory"` matches one module only.
+A bare stem like `"sockets_factory"` (no dot) matches every library's `sockets_factory.py`.  A dotted path like `"chumicro_sockets.sockets_factory"` matches one module only.  `chumicro_sockets.sockets_factory` is the only factory module the libraries ship, so both forms select that one file.
 
 ## Two failure modes that surface loudly, not silently
 
@@ -32,8 +32,7 @@ A bare stem like `"sockets_factory"` (no dot) matches every library's `sockets_f
 
 ```
 ValueError: __chumicro_skip_factories__ entries did not match any discovered
-factory module: ['socet_factory'].  Discovered families: ['sockets_factory',
-'tls_factory'].
+factory module: ['socet_factory'].  Discovered families: ['sockets_factory'].
 ```
 
 A silent skip that shipped the unwanted library would be a worse outcome than refusing to deploy.
@@ -64,12 +63,12 @@ This catches the contradiction between "I want to skip this" and "I'm using it d
 **Dead skip.**  If a user-written entry matches discovered modules, but none of their parent libraries are imported anywhere in the deploy:
 
 ```
-__chumicro_skip_factories__ entry 'chumicro_websockets.tls_factory'
-matches ['chumicro_websockets.tls_factory'] but none of those
-libraries are imported; skip entry has no effect.
+__chumicro_skip_factories__ entry 'sockets_factory' matches
+['chumicro_sockets.sockets_factory'] but none of those libraries are
+imported; skip entry has no effect.
 ```
 
-The `sockets_factory` family entry now resolves to the single shared `chumicro_sockets.sockets_factory` module, so it counts as live whenever any networking library's default wiring reaches that module, and goes dead only when nothing in the deploy does.
+The `sockets_factory` family entry matches one module, the shared `chumicro_sockets.sockets_factory`.  It counts as live whenever any networking library's default wiring reaches that module, and goes dead only when nothing in the deploy does.
 
 ## When this matters (and when it doesn't)
 
@@ -77,7 +76,7 @@ The skip mechanism only fires under the `chumicro-workspace` deploy path (`chumi
 
 You'll feel the difference if and only if:
 
-1. Your project's entrypoint imports a chumicro library that has a `<stem>_factory.py` submodule.
+1. Your project imports a chumicro library whose default wiring reaches a `<stem>_factory.py` module (mqtt, requests, websockets, ntp, and http_server all reach `chumicro_sockets.sockets_factory`).
 2. You supply your own version of whatever the factory produces through the constructor (`transport_factory=` / `socket=` / `listener=` on the libraries that take a transport).
 3. You deploy via `chumicro-workspace`.
 
@@ -105,4 +104,4 @@ if factory_kwarg is None:
 
 That is the contract every `from_config` in mqtt, requests, websockets, ntp, and http_server implements; mirror it for new networking libraries.
 
-The walker discovers factory submodules by glob: every file under `chumicro_*/` matching `[a-z][a-z0-9_]*_factory.py` is a candidate, so the same skip mechanism covers a new factory family if you add one.  Place such a file at the package root (`libraries/<name>/src/chumicro_<name>/<stem>_factory.py`), not in a subdirectory like `factories/`, and pick a descriptive stem (`sockets_factory` for TCP/UDP injection, `tls_factory` for SSL-context injection).  The bare stem is what the family-form skip matches.
+The walker discovers factory submodules by glob: every file under `chumicro_*/` matching `[a-z][a-z0-9_]*_factory.py` is a candidate, so the same skip mechanism covers a new factory family if you add one.  Place such a file at the package root (`libraries/<name>/src/chumicro_<name>/<stem>_factory.py`), not in a subdirectory like `factories/`, and pick a stem that names what it builds (`sockets_factory` builds TCP and UDP transports; an SSL-context family might be `tls_factory`).  The bare stem is what the family-form skip matches.
